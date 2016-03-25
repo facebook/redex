@@ -38,11 +38,10 @@ includes = \
 	opt/remove_empty_classes \
 	opt/renameclasses \
 	opt/shorten-srcstrings \
-	opt/staticrelo \
 	opt/simpleinline \
 	opt/singleimpl \
-	opt/staticrelo \
 	opt/static-sink \
+	opt/staticrelo \
 	opt/synth \
 	opt/unterface \
 	tools/redex-all \
@@ -114,7 +113,6 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/singleimpl/SingleImplUtil.cpp \
-	opt/staticrelo/StaticRelo.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
 	opt/synth/Synth.cpp \
