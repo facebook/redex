@@ -558,18 +558,18 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                 print(line.rstrip(), file=output)
 
 
-def copy_filename_map_to_out_dir(apk_output_path):
+def copy_filename_map_to_out_dir(tmp, apk_output_path):
     output_dir = os.path.dirname(apk_output_path)
     output_filemap_path = os.path.join(output_dir, "redex-src-strings-map.txt")
-    if os.path.isfile('/tmp/filename_mappings.txt'):
-        subprocess.check_call(['cp', '/tmp/filename_mappings.txt', output_filemap_path])
+    if os.path.isfile(tmp + '/filename_mappings.txt'):
+        subprocess.check_call(['cp', tmp + '/filename_mappings.txt', output_filemap_path])
         log('Copying src string map to output dir')
     else:
         log('Skipping src string map copy, since no file found to copy')
 
     output_methodmap_path = os.path.join(output_dir, "redex-method-id-map.txt")
-    if os.path.isfile('/tmp/method_mapping.txt'):
-        subprocess.check_call(['cp', '/tmp/method_mapping.txt', output_methodmap_path])
+    if os.path.isfile(tmp + '/method_mapping.txt'):
+        subprocess.check_call(['cp', tmp + '/method_mapping.txt', output_methodmap_path])
         log('Copying method id map to output dir')
     else:
         log('Skipping method id map copy, since no file found to copy')
@@ -627,6 +627,19 @@ Given an APK, produce a better APK!
 
     return parser
 
+def relocate_tmp(d, newtmp):
+    """
+    Walks through the config dict and changes and string value that begins with
+    "/tmp/" to our tmp dir for this run. This is to avoid collisions of
+    simultaneously running redexes.
+    """
+    for k, v in d.items():
+        if isinstance(v, dict):
+            relocate_tmp(v, newtmp)
+        else:
+            if isinstance(v, str) and v.startswith("/tmp/"):
+                d[k] = newtmp + "/" + v[5:]
+                log("Replaced {0} in config with {1}".format(v, d[k]))
 
 def run_redex(args):
     debug_mode = args.unpack_only or args.debug
@@ -679,6 +692,18 @@ def run_redex(args):
             config_dict = json.load(config_file)
             passes_list = config_dict['redex']['passes']
 
+    newtmp = tempfile.mkdtemp()
+    log('Replacing /tmp in config with {}'.format(newtmp))
+
+    # Fix up the config dict to relocate all /tmp references
+    relocate_tmp(config_dict, newtmp)
+
+    # Rewrite the relocated config file to our tmp, for use by redex binary
+    if config is not None:
+        config = newtmp + "/rewritten.config"
+        with open(config, 'w') as fp:
+            json.dump(config_dict, fp)
+
     log('Running redex-all on {} dex files '.format(len(dexen)))
     run_pass(binary,
              args,
@@ -704,7 +729,7 @@ def run_redex(args):
             args.keyalias, args.keypass)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
-    copy_filename_map_to_out_dir(args.out)
+    copy_filename_map_to_out_dir(newtmp, args.out)
 
     if 'RenameClassesPass' in passes_list:
         merge_proguard_map_with_rename_output(
@@ -714,6 +739,8 @@ def run_redex(args):
             args.proguard_map)
     else:
         log('Skipping rename map merging, because we didn\'t run the rename pass')
+
+    shutil.rmtree(newtmp)
 
 
 if __name__ == '__main__':
