@@ -22,7 +22,6 @@ includes = \
 	libresource/cutils \
 	libresource/system \
 	libresource/utils \
-	facebook/opt/cleanup_providers \
 	opt \
 	opt/all-static \
 	opt/annoclasskill \
@@ -90,7 +89,6 @@ redex_all_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
-	facebook/opt/cleanup_providers/CleanupProviders.cpp \
 	opt/annoclasskill/AnnoClassKill.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
