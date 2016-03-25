@@ -48,6 +48,9 @@ redex path/to/your.apk -o path/to/output.apk
 With any luck, the result `output.apk` should be smaller and faster than the
 input.  Enjoy!
 
+# More Information
+The blog [Optimizing Android bytecode with ReDex](https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex) provides an overview of the Redex project.
+
 # License
 
 ReDex is BSD-licensed.  We also provide an additional patent grant.
