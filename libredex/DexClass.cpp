@@ -1,0 +1,759 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#include "DexClass.h"
+
+#include <algorithm>
+#include <mutex>
+#include <unordered_map>
+
+#include "Debug.h"
+#include "dexdefs.h"
+#include "DexAccess.h"
+#include "DexDebugOpcode.h"
+#include "DexOutput.h"
+#include "DexUtil.h"
+#include "Warning.h"
+
+int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
+  uint16_t* typep = (uint16_t*)(output + 1);
+  *output = m_list.size();
+  for (auto const& type : m_list) {
+    *typep++ = dodx->typeidx(type);
+  }
+  return (((uint8_t*)typep) - (uint8_t*)output);
+}
+
+void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
+  // FIXME assert if already concrete
+  m_value = v;
+  m_access = access_flags;
+  m_concrete = true;
+}
+
+DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
+  const uint8_t* encdata = idx->get_uleb_data(offset);
+  m_line_start = read_uleb128(&encdata);
+  uint32_t paramcount = read_uleb128(&encdata);
+  while (paramcount--) {
+    DexString* str = decode_noindexable_string(idx, encdata);
+    m_param_names.push_back(str);
+  }
+  DexDebugOpcode* dbgp;
+  while ((dbgp = DexDebugOpcode::make_opcode(idx, encdata)) != nullptr) {
+    m_opcodes.push_back(dbgp);
+  }
+}
+
+DexDebugItem::~DexDebugItem() {
+  for (auto const& dbgop : m_opcodes) {
+    delete dbgop;
+  }
+}
+
+DexDebugItem* DexDebugItem::get_dex_debug(DexIdx* idx, uint32_t offset) {
+  if (offset == 0) return nullptr;
+  return new DexDebugItem(idx, offset);
+}
+
+int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
+  uint8_t* encdata = output;
+  encdata = write_uleb128(encdata, m_line_start);
+  encdata = write_uleb128(encdata, m_param_names.size());
+  for (auto s : m_param_names) {
+    if (s == nullptr) {
+      encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
+      continue;
+    }
+    uint32_t idx = dodx->stringidx(s);
+    encdata = write_uleb128p1(encdata, idx);
+  }
+  for (auto dbgop : m_opcodes) {
+    dbgop->encode(dodx, encdata);
+  }
+  encdata = write_uleb128(encdata, DBG_END_SEQUENCE);
+  return encdata - output;
+}
+
+void DexDebugItem::gather_types(std::vector<DexType*>& ltype) {
+  for (auto dbgop : m_opcodes) {
+    dbgop->gather_types(ltype);
+  }
+}
+
+void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
+  for (auto p : m_param_names) {
+    if (p) lstring.push_back(p);
+  }
+  for (auto dbgop : m_opcodes) {
+    dbgop->gather_strings(lstring);
+  }
+}
+
+DexCode* DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
+  if (offset == 0) return nullptr;
+  const dex_code_item* code = (const dex_code_item*)idx->get_uint_data(offset);
+  DexCode* dc = new DexCode();
+  dc->m_registers_size = code->registers_size;
+  dc->m_ins_size = code->ins_size;
+  dc->m_outs_size = code->outs_size;
+  const uint16_t* cdata = (const uint16_t*)(code + 1);
+  uint32_t tries = code->tries_size;
+  if (code->insns_size) {
+    const uint16_t* end = cdata + code->insns_size;
+    while (cdata < end) {
+      DexOpcode* dop = DexOpcode::make_opcode(idx, cdata);
+      always_assert_log(
+          dop != nullptr, "Failed to parse method at offset 0x%08x", offset);
+      dc->m_insns.push_back(dop);
+    }
+    /*
+     * Padding, see dex-spec.
+     * Per my memory, there are dex-files where the padding is
+     * implemented not according to spec.  Just FYI in case
+     * something weird happens in the future.
+     */
+    if (code->insns_size & 1 && tries) cdata++;
+  }
+
+  if (tries) {
+    const dex_tries_item* dti = (const dex_tries_item*)cdata;
+    const uint8_t* handlers = (const uint8_t*)(dti + tries);
+    for (uint32_t i = 0; i < tries; i++) {
+      DexTryItem* dextry = new DexTryItem();
+      dextry->m_start_addr = dti[i].start_addr;
+      dextry->m_insn_count = dti[i].insn_count;
+      const uint8_t* handler = handlers + dti[i].handler_off;
+      int32_t count = read_sleb128(&handler);
+      bool has_catchall = false;
+      if (count <= 0) {
+        count = -count;
+        has_catchall = true;
+      }
+      while (count--) {
+        uint32_t tidx = read_uleb128(&handler);
+        uint32_t hoff = read_uleb128(&handler);
+        DexType* dt = idx->get_typeidx(tidx);
+        dextry->m_catches.push_back(std::make_pair(dt, hoff));
+      }
+      dextry->m_catchall = DEX_NO_INDEX;
+      if (has_catchall) {
+        dextry->m_catchall = read_uleb128(&handler);
+      }
+      dc->m_tries.push_back(dextry);
+    }
+  }
+  dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off);
+  return dc;
+}
+
+int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
+  dex_code_item* code = (dex_code_item*)output;
+  code->registers_size = m_registers_size;
+  code->ins_size = m_ins_size;
+  code->outs_size = m_outs_size;
+  code->tries_size = 0;
+  /* Debug info is added later */
+  code->debug_info_off = 0;
+  uint16_t* insns = (uint16_t*)(code + 1);
+  for (auto opc : m_insns) {
+    opc->encode(dodx, insns);
+  }
+  code->insns_size = insns - ((uint16_t*)(code + 1));
+  if (m_tries.size() == 0)
+    return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
+  /*
+   * Now the tries..., obscenely messy encoding :(
+   * Pad tries to uint32_t
+   */
+  if (code->insns_size & 1) insns++;
+  int tries = code->tries_size = m_tries.size();
+  dex_tries_item* dti = (dex_tries_item*)insns;
+  uint8_t* handler_base = (uint8_t*)(dti + tries);
+  uint8_t* hemit = handler_base;
+  hemit = write_uleb128(hemit, tries); // ???
+  int tryno = 0;
+  for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
+    DexTryItem* dextry = *it;
+    dti[tryno].start_addr = dextry->m_start_addr;
+    dti[tryno].insn_count = dextry->m_insn_count;
+    dti[tryno].handler_off = hemit - handler_base;
+    int catchcount = dextry->m_catches.size();
+    if (dextry->m_catchall != DEX_NO_INDEX) {
+      catchcount = -catchcount;
+    }
+    hemit = write_sleb128(hemit, catchcount);
+    for (auto const& cit : dextry->m_catches) {
+      DexType* type = cit.first;
+      hemit = write_uleb128(hemit, dodx->typeidx(type));
+      hemit = write_uleb128(hemit, cit.second);
+    }
+    if (dextry->m_catchall != DEX_NO_INDEX) {
+      hemit = write_uleb128(hemit, dextry->m_catchall);
+    }
+  }
+  return hemit - ((uint8_t*)output);
+}
+
+void DexMethod::become_virtual() {
+  assert(!m_virtual);
+  m_virtual = true;
+  auto cls = type_class(m_class);
+  assert(!cls->is_external());
+  auto& dmethods = cls->get_dmethods();
+  auto& vmethods = cls->get_vmethods();
+  dmethods.remove(this);
+  insert_sorted(vmethods, this, compare_dexmethods);
+}
+
+void DexMethod::make_concrete(DexAccessFlags access,
+                              DexCode* dc,
+                              bool is_virtual) {
+  m_access = access;
+  m_code = dc;
+  m_concrete = true;
+  m_virtual = is_virtual;
+}
+
+/*
+ * See class_data_item in Dex spec.
+ */
+void DexClass::load_class_data_item(DexIdx* idx,
+                                    uint32_t cdi_off,
+                                    DexEncodedValueArray* svalues) {
+  if (cdi_off == 0) return;
+  m_has_class_data = true;
+  const uint8_t* encd = idx->get_uleb_data(cdi_off);
+  uint32_t sfield_count = read_uleb128(&encd);
+  uint32_t ifield_count = read_uleb128(&encd);
+  uint32_t dmethod_count = read_uleb128(&encd);
+  uint32_t vmethod_count = read_uleb128(&encd);
+  uint32_t ndex = 0;
+  for (uint32_t i = 0; i < sfield_count; i++) {
+    ndex += read_uleb128(&encd);
+    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    DexField* df = idx->get_fieldidx(ndex);
+    DexEncodedValue* ev = nullptr;
+    if (svalues != nullptr) {
+      ev = svalues->pop_next();
+    }
+    df->make_concrete(access_flags, ev);
+    m_sfields.push_back(df);
+  }
+  ndex = 0;
+  for (uint32_t i = 0; i < ifield_count; i++) {
+    ndex += read_uleb128(&encd);
+    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    DexField* df = idx->get_fieldidx(ndex);
+    df->make_concrete(access_flags);
+    m_ifields.push_back(df);
+  }
+  ndex = 0;
+  for (uint32_t i = 0; i < dmethod_count; i++) {
+    ndex += read_uleb128(&encd);
+    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    uint32_t code_off = read_uleb128(&encd);
+    DexMethod* dm = idx->get_methodidx(ndex);
+    DexCode* dc = DexCode::get_dex_code(idx, code_off);
+    dm->make_concrete(access_flags, dc, false);
+    m_dmethods.push_back(dm);
+  }
+  ndex = 0;
+  for (uint32_t i = 0; i < vmethod_count; i++) {
+    ndex += read_uleb128(&encd);
+    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    uint32_t code_off = read_uleb128(&encd);
+    DexMethod* dm = idx->get_methodidx(ndex);
+    DexCode* dc = DexCode::get_dex_code(idx, code_off);
+    dm->make_concrete(access_flags, dc, true);
+    m_vmethods.push_back(dm);
+  }
+}
+
+int DexClass::encode(DexOutputIdx* dodx,
+                     dexcode_to_offset& dco,
+                     uint8_t* output) {
+  if (m_sfields.size() == 0 && m_ifields.size() == 0 &&
+      m_dmethods.size() == 0 && m_vmethods.size() == 0) {
+    opt_warn(PURE_ABSTRACT_CLASS,
+             "'%s' super '%s' flags 0x%08x\n",
+             m_self->get_name()->c_str(),
+             m_super_class->get_name()->c_str(),
+             m_access_flags);
+  }
+  uint8_t* encdata = output;
+  encdata = write_uleb128(encdata, m_sfields.size());
+  encdata = write_uleb128(encdata, m_ifields.size());
+  encdata = write_uleb128(encdata, m_dmethods.size());
+  encdata = write_uleb128(encdata, m_vmethods.size());
+  uint32_t idxbase;
+  idxbase = 0;
+  for (auto const& f : m_sfields) {
+    uint32_t idx = dodx->fieldidx(f);
+    always_assert_log(idx >= idxbase,
+                      "Illegal ordering for sfield, need to apply sort. "
+                      "Must be done prior to static value emit."
+                      "\nOffending type: %s"
+                      "\nOffending field: %s",
+                      SHOW(this),
+                      SHOW(f));
+    encdata = write_uleb128(encdata, idx - idxbase);
+    idxbase = idx;
+    encdata = write_uleb128(encdata, f->get_access());
+  }
+  idxbase = 0;
+  for (auto const& f : m_ifields) {
+    uint32_t idx = dodx->fieldidx(f);
+    always_assert_log(idx >= idxbase,
+                      "Illegal ordering for ifield, need to apply sort."
+                      "\nOffending type: %s"
+                      "\nOffending field: %s",
+                      SHOW(this),
+                      SHOW(f));
+    encdata = write_uleb128(encdata, idx - idxbase);
+    idxbase = idx;
+    encdata = write_uleb128(encdata, f->get_access());
+  }
+  idxbase = 0;
+  for (auto const& m : m_dmethods) {
+    uint32_t idx = dodx->methodidx(m);
+    always_assert_log(!m->is_virtual(),
+                      "Virtual method in dmethod."
+                      "\nOffending type: %s"
+                      "\nOffending method: %s",
+                      SHOW(this),
+                      SHOW(m));
+    assert(!m->is_virtual());
+    always_assert_log(idx >= idxbase,
+                      "Illegal ordering for dmethod, need to apply sort."
+                      "\nOffending type: %s"
+                      "\nOffending method: %s",
+                      SHOW(this),
+                      SHOW(m));
+    encdata = write_uleb128(encdata, idx - idxbase);
+    idxbase = idx;
+    encdata = write_uleb128(encdata, m->get_access());
+    uint32_t code_off = 0;
+    if (m->get_code() != nullptr && dco.count(m->get_code())) {
+      code_off = dco[m->get_code()];
+    }
+    encdata = write_uleb128(encdata, code_off);
+  }
+  idxbase = 0;
+  for (auto const& m : m_vmethods) {
+    uint32_t idx = dodx->methodidx(m);
+    always_assert_log(m->is_virtual(),
+                      "Direct method in vmethod."
+                      "\nOffending type: %s"
+                      "\nOffending method: %s",
+                      SHOW(this),
+                      SHOW(m));
+    assert(m->is_virtual());
+    always_assert_log(idx >= idxbase,
+                      "Illegal ordering for vmethod, need to apply sort."
+                      "\nOffending type: %s"
+                      "\nOffending method: %s",
+                      SHOW(this),
+                      SHOW(m));
+    encdata = write_uleb128(encdata, idx - idxbase);
+    idxbase = idx;
+    encdata = write_uleb128(encdata, m->get_access());
+    uint32_t code_off = 0;
+    if (m->get_code() != nullptr && dco.count(m->get_code())) {
+      code_off = dco[m->get_code()];
+    }
+    encdata = write_uleb128(encdata, code_off);
+  }
+  return (encdata - output);
+}
+
+void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
+  if (anno_off == 0) return;
+  const dex_annotations_directory_item* annodir =
+    (const dex_annotations_directory_item*)idx->get_uint_data(anno_off);
+  m_anno =
+      DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
+  const uint32_t* annodata = (uint32_t*)(annodir + 1);
+  for (uint32_t i = 0; i < annodir->fields_size; i++) {
+    uint32_t fidx = *annodata++;
+    uint32_t off = *annodata++;
+    DexField* field = idx->get_fieldidx(fidx);
+    DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
+    field->attach_annotation_set(aset);
+  }
+  for (uint32_t i = 0; i < annodir->methods_size; i++) {
+    uint32_t midx = *annodata++;
+    uint32_t off = *annodata++;
+    DexMethod* method = idx->get_methodidx(midx);
+    DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
+    method->attach_annotation_set(aset);
+  }
+  for (uint32_t i = 0; i < annodir->parameters_size; i++) {
+    uint32_t midx = *annodata++;
+    uint32_t xrefoff = *annodata++;
+    if (xrefoff != 0) {
+      DexMethod* method = idx->get_methodidx(midx);
+      const uint32_t* annoxref = idx->get_uint_data(xrefoff);
+      uint32_t count = *annoxref++;
+      for (uint32_t j = 0; j < count; j++) {
+        uint32_t off = annoxref[j];
+        DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
+        if (aset != nullptr) {
+          method->attach_param_annotation_set(j, aset);
+          assert(method->get_param_anno());
+        }
+      }
+    }
+  }
+}
+
+static DexEncodedValueArray* load_static_values(DexIdx* idx, uint32_t sv_off) {
+  if (sv_off == 0) return nullptr;
+  const uint8_t* encd = idx->get_uleb_data(sv_off);
+  return get_encoded_value_array(idx, encd);
+}
+
+DexEncodedValueArray* DexClass::get_static_values() {
+  bool has_static_values = false;
+  for (auto const& f : m_sfields) {
+    if (f->get_static_value() != nullptr) {
+      has_static_values = true;
+      break;
+    }
+  }
+  if (!has_static_values) return nullptr;
+
+  std::list<DexEncodedValue*>* aev = new std::list<DexEncodedValue*>();
+  for (auto const& f : m_sfields) {
+    DexEncodedValue* ev = f->get_static_value();
+    if (ev == nullptr) {
+      has_static_values = false;
+      continue;
+    }
+    always_assert_log(has_static_values, "Hole in static value ordering");
+    aev->push_back(ev);
+  }
+  return new DexEncodedValueArray(aev, true);
+}
+
+DexAnnotationDirectory* DexClass::get_annotation_directory() {
+  /* First scan to see what types of annotations to scan for if any.
+   */
+  DexFieldAnnotations* fanno = nullptr;
+  DexMethodAnnotations* manno = nullptr;
+  DexMethodParamAnnotations* mpanno = nullptr;
+
+  for (auto const& f : m_sfields) {
+    if (f->get_anno_set()) {
+      if (fanno == nullptr) {
+        fanno = new DexFieldAnnotations();
+      }
+      fanno->push_back(std::make_pair(f, f->get_anno_set()));
+    }
+  }
+  for (auto const& f : m_ifields) {
+    if (f->get_anno_set()) {
+      if (fanno == nullptr) {
+        fanno = new DexFieldAnnotations();
+      }
+      fanno->push_back(std::make_pair(f, f->get_anno_set()));
+    }
+  }
+  for (auto const& m : m_dmethods) {
+    if (m->get_anno_set()) {
+      if (manno == nullptr) {
+        manno = new DexMethodAnnotations();
+      }
+      manno->push_back(std::make_pair(m, m->get_anno_set()));
+    }
+    if (m->get_param_anno()) {
+      if (mpanno == nullptr) {
+        mpanno = new DexMethodParamAnnotations();
+      }
+      mpanno->push_back(std::make_pair(m, m->get_param_anno()));
+    }
+  }
+  for (auto const& m : m_vmethods) {
+    if (m->get_anno_set()) {
+      if (manno == nullptr) {
+        manno = new DexMethodAnnotations();
+      }
+      manno->push_back(std::make_pair(m, m->get_anno_set()));
+    }
+    if (m->get_param_anno()) {
+      if (mpanno == nullptr) {
+        mpanno = new DexMethodParamAnnotations();
+      }
+      mpanno->push_back(std::make_pair(m, m->get_param_anno()));
+    }
+  }
+  if (m_anno || fanno || manno || mpanno) {
+    return new DexAnnotationDirectory(m_anno, fanno, manno, mpanno);
+  }
+  return nullptr;
+}
+
+DexClass::DexClass(DexIdx* idx, dex_class_def* cdef) {
+  m_anno = nullptr;
+  m_has_class_data = false;
+  m_external = false;
+  m_self = idx->get_typeidx(cdef->typeidx);
+  m_access_flags = (DexAccessFlags)cdef->access_flags;
+  m_super_class = idx->get_typeidx(cdef->super_idx);
+  m_interfaces = idx->get_type_list(cdef->interfaces_off);
+  m_source_file = idx->get_nullable_stringidx(cdef->source_file_idx);
+  load_class_annotations(idx, cdef->annotations_off);
+  DexEncodedValueArray* deva = load_static_values(idx, cdef->static_values_off);
+  load_class_data_item(idx, cdef->class_data_offset, deva);
+  build_type_system(this);
+  delete (deva);
+}
+
+void DexTypeList::gather_types(std::vector<DexType*>& ltype) {
+  for (auto const& type : m_list) {
+    ltype.push_back(type);
+  }
+}
+
+static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
+  std::stringstream ss;
+  ss << type_shorty(rtype);
+  if (args != nullptr) {
+    for (auto arg : args->get_type_list()) {
+      ss << type_shorty(arg);
+    }
+  }
+  auto type_string = ss.str();
+  return DexString::make_string(type_string.c_str());
+}
+
+DexProto* DexProto::make_proto(DexType* rtype, DexTypeList* args) {
+  auto shorty = make_shorty(rtype, args);
+  return DexProto::make_proto(rtype, args, shorty);
+}
+
+void DexProto::gather_types(std::vector<DexType*>& ltype) {
+  if (m_args) {
+    m_args->gather_types(ltype);
+  }
+  if (m_rtype) {
+    ltype.push_back(m_rtype);
+  }
+}
+
+void DexProto::gather_strings(std::vector<DexString*>& lstring) {
+  if (m_shorty) {
+    lstring.push_back(m_shorty);
+  }
+}
+
+void DexClass::gather_types(std::vector<DexType*>& ltype) {
+  for (auto const& m : m_dmethods) {
+    m->gather_types(ltype);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_types(ltype);
+  }
+  for (auto const& f : m_sfields) {
+    f->gather_types(ltype);
+  }
+  for (auto const& f : m_ifields) {
+    f->gather_types(ltype);
+  }
+  ltype.push_back(m_super_class);
+  ltype.push_back(m_self);
+  if (m_interfaces) m_interfaces->gather_types(ltype);
+  if (m_anno) m_anno->gather_types(ltype);
+}
+
+void DexClass::gather_strings(std::vector<DexString*>& lstring) {
+  for (auto const& m : m_dmethods) {
+    m->gather_strings(lstring);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_strings(lstring);
+  }
+  for (auto const& f : m_sfields) {
+    f->gather_strings(lstring);
+  }
+  for (auto const& f : m_ifields) {
+    f->gather_strings(lstring);
+  }
+  if (m_source_file) lstring.push_back(m_source_file);
+  if (m_anno) m_anno->gather_strings(lstring);
+}
+
+void DexClass::gather_fields(std::vector<DexField*>& lfield) {
+  for (auto const& m : m_dmethods) {
+    m->gather_fields(lfield);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_fields(lfield);
+  }
+  for (auto const& f : m_sfields) {
+    lfield.push_back(f);
+    f->gather_fields(lfield);
+  }
+  for (auto const& f : m_ifields) {
+    lfield.push_back(f);
+    f->gather_fields(lfield);
+  }
+  if (m_anno) m_anno->gather_fields(lfield);
+}
+
+void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) {
+  for (auto const& m : m_dmethods) {
+    lmethod.push_back(m);
+    m->gather_methods(lmethod);
+  }
+  for (auto const& m : m_vmethods) {
+    lmethod.push_back(m);
+    m->gather_methods(lmethod);
+  }
+  for (auto const& f : m_sfields) {
+    f->gather_methods(lmethod);
+  }
+  for (auto const& f : m_ifields) {
+    f->gather_methods(lmethod);
+  }
+  if (m_anno) m_anno->gather_methods(lmethod);
+}
+
+void DexField::gather_types(std::vector<DexType*>& ltype) {
+  if (m_value) m_value->gather_types(ltype);
+  if (m_anno) m_anno->gather_types(ltype);
+}
+
+void DexField::gather_strings(std::vector<DexString*>& lstring) {
+  if (m_value) m_value->gather_strings(lstring);
+  if (m_anno) m_anno->gather_strings(lstring);
+}
+
+void DexField::gather_fields(std::vector<DexField*>& lfield) {
+  if (m_value) m_value->gather_fields(lfield);
+  if (m_anno) m_anno->gather_fields(lfield);
+}
+
+void DexField::gather_methods(std::vector<DexMethod*>& lmethod) {
+  if (m_value) m_value->gather_methods(lmethod);
+  if (m_anno) m_anno->gather_methods(lmethod);
+}
+
+void DexField::gather_types_shallow(std::vector<DexType*>& ltype) {
+  ltype.push_back(m_class);
+  ltype.push_back(m_type);
+}
+
+void DexField::gather_strings_shallow(std::vector<DexString*>& lstring) {
+  lstring.push_back(m_name);
+}
+
+void DexMethod::gather_types(std::vector<DexType*>& ltype) {
+  // We handle m_class and proto in the first-layer gather.
+  if (m_code) m_code->gather_types(ltype);
+  if (m_anno) m_anno->gather_types(ltype);
+  auto param_anno = get_param_anno();
+  if (param_anno) {
+    for (auto pair : *param_anno) {
+      auto anno_set = pair.second;
+      anno_set->gather_types(ltype);
+    }
+  }
+}
+
+void DexMethod::gather_strings(std::vector<DexString*>& lstring) {
+  // We handle m_name and proto in the first-layer gather.
+  if (m_code) m_code->gather_strings(lstring);
+  if (m_anno) m_anno->gather_strings(lstring);
+  auto param_anno = get_param_anno();
+  if (param_anno) {
+    for (auto pair : *param_anno) {
+      auto anno_set = pair.second;
+      anno_set->gather_strings(lstring);
+    }
+  }
+}
+
+void DexMethod::gather_fields(std::vector<DexField*>& lfield) {
+  if (m_code) m_code->gather_fields(lfield);
+  if (m_anno) m_anno->gather_fields(lfield);
+  auto param_anno = get_param_anno();
+  if (param_anno) {
+    for (auto pair : *param_anno) {
+      auto anno_set = pair.second;
+      anno_set->gather_fields(lfield);
+    }
+  }
+}
+
+void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) {
+  if (m_code) m_code->gather_methods(lmethod);
+  if (m_anno) m_anno->gather_methods(lmethod);
+  auto param_anno = get_param_anno();
+  if (param_anno) {
+    for (auto pair : *param_anno) {
+      auto anno_set = pair.second;
+      anno_set->gather_methods(lmethod);
+    }
+  }
+}
+
+void DexMethod::gather_types_shallow(std::vector<DexType*>& ltype) {
+  ltype.push_back(m_class);
+  m_proto->gather_types(ltype);
+}
+
+void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) {
+  lstring.push_back(m_name);
+  m_proto->gather_strings(lstring);
+}
+
+void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {
+  for (auto tryit : m_tries) {
+    for (auto const& it : tryit->m_catches) {
+      if (it.first) {
+        ltype.push_back(it.first);
+      }
+    }
+  }
+}
+
+void DexCode::gather_types(std::vector<DexType*>& ltype) {
+  for (auto opc : m_insns) {
+    opc->gather_types(ltype);
+  }
+  gather_catch_types(ltype);
+  if (m_dbg) m_dbg->gather_types(ltype);
+}
+
+void DexCode::gather_strings(std::vector<DexString*>& lstring) {
+  for (auto opc : m_insns) {
+    opc->gather_strings(lstring);
+  }
+  if (m_dbg) m_dbg->gather_strings(lstring);
+}
+
+void DexCode::gather_fields(std::vector<DexField*>& lfield) {
+  for (auto opc : m_insns) {
+    opc->gather_fields(lfield);
+  }
+}
+
+void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) {
+  for (auto opc : m_insns) {
+    opc->gather_methods(lmethod);
+  }
+}
+
+std::string show_short(const DexMethod* p) {
+  if (!p) return "";
+  std::stringstream ss;
+  ss << p->get_class()->get_name()->c_str() << "." << p->get_name()->c_str();
+  return ss.str();
+}

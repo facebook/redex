@@ -1,0 +1,19 @@
+#!/bin/bash
+
+APK=$1
+DIR=`dirname $APK`/`basename $APK .apk`
+mkdir $DIR
+unzip -d $DIR $APK $(unzip -t $APK | grep \\.dex | awk '{print $2}')
+
+for JAR_XZ in `ls $DIR/assets/secondary-program-dex-jars/*.jar.xz 2>/dev/null`; do
+    xz -d $JAR_XZ
+done
+
+PIDS=
+for i in $DIR/assets/secondary-program-dex-jars/*.dex.jar; do
+    b=$i.dir;
+    mkdir $b;
+    (cd $b; jar xf ../`basename $i`) &
+    PIDS="$PIDS $!"
+done
+wait $PIDS

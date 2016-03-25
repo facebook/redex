@@ -1,0 +1,141 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#include <cstdint>
+#include <cstdio>
+#include <gtest/gtest.h>
+
+#include "DexAnnotation.h"
+
+TEST(EvArgTest, empty) {
+#define EVTEST(expu, exps, len, args...)                     \
+  do {                                                       \
+    uint8_t buf[] = {args};                                  \
+    const uint8_t* bufp = buf;                               \
+    EXPECT_EQ(read_evarg(bufp, len, false), uint64_t(expu)); \
+    bufp = buf;                                              \
+    EXPECT_EQ(read_evarg(bufp, len, true), uint64_t(exps));  \
+  } while (0)
+
+  EVTEST(0xc150af7e, 0xffffffffc150af7e, 3, 0x7e, 0xaf, 0x50, 0xc1);
+  EVTEST(0x00, 0x00, 0, 0x00);
+  EVTEST(0x40, 0x40, 0, 0x40);
+  EVTEST(0x80, 0xffffffffffffff80, 0, 0x80);
+  EVTEST(0xff, 0xffffffffffffffff, 0, 0xff);
+  EVTEST(0x0000, 0x0000, 1, 0x00, 0x00);
+  EVTEST(0x4000, 0x0000000000004000, 1, 0x00, 0x40);
+  EVTEST(0x8000, 0xffffffffffff8000, 1, 0x00, 0x80);
+  EVTEST(0xff80, 0xffffffffffffff80, 1, 0x80, 0xff);
+  EVTEST(0xffff, 0xffffffffffffffff, 1, 0xff, 0xff);
+  EVTEST(0x000000, 0x00, 2, 0x00, 0x00, 0x00);
+  EVTEST(0x400000, 0x400000, 2, 0x00, 0x00, 0x40);
+  EVTEST(0x800000, 0xffffffffff800000, 2, 0x00, 0x00, 0x80);
+  EVTEST(0xff8000, 0xffffffffffff8000, 2, 0x00, 0x80, 0xff);
+  EVTEST(0xffffff, 0xffffffffffffffff, 2, 0xff, 0xff, 0xff);
+  EVTEST(0x00000000, 0x00, 3, 0x00, 0x00, 0x00, 0x00);
+  EVTEST(0x40000000, 0x40000000, 3, 0x00, 0x00, 0x00, 0x40);
+  EVTEST(0x80000000, 0xffffffff80000000, 3, 0x00, 0x00, 0x00, 0x80);
+  EVTEST(0xffffffff, 0xffffffffffffffff, 3, 0xff, 0xff, 0xff, 0xff);
+  EVTEST(0x8000000000, 0xffffff8000000000, 4, 0x00, 0x00, 0x00, 0x00, 0x80);
+  EVTEST(0x8080808080, 0xffffff8080808080, 4, 0x80, 0x80, 0x80, 0x80, 0x80);
+  EVTEST(0x333333333333, 0x333333333333, 5, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33);
+  EVTEST(0x800000000000,
+         0xffff800000000000,
+         5,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x80);
+  EVTEST(0xcccccccccccc,
+         0xffffcccccccccccc,
+         5,
+         0xcc,
+         0xcc,
+         0xcc,
+         0xcc,
+         0xcc,
+         0xcc);
+  EVTEST(0x0a0a0a0a0a0a0a,
+         0x0a0a0a0a0a0a0a,
+         6,
+         0x0a,
+         0x0a,
+         0x0a,
+         0x0a,
+         0x0a,
+         0x0a,
+         0x0a);
+  EVTEST(0xa0a0a0a0a0a0a0,
+         0xffa0a0a0a0a0a0a0,
+         6,
+         0xa0,
+         0xa0,
+         0xa0,
+         0xa0,
+         0xa0,
+         0xa0,
+         0xa0);
+  EVTEST(0x0000000000000000,
+         0x00,
+         7,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00);
+  EVTEST(0x0080000000000000,
+         0x80000000000000,
+         7,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x80,
+         0x00);
+  EVTEST(0x8000000000000000,
+         0x8000000000000000,
+         7,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x00,
+         0x80);
+  EVTEST(0xe0e0e0e0e0e0e0e0,
+         0xe0e0e0e0e0e0e0e0,
+         7,
+         0xe0,
+         0xe0,
+         0xe0,
+         0xe0,
+         0xe0,
+         0xe0,
+         0xe0,
+         0xe0);
+  EVTEST(0xffffffffffffffff,
+         0xffffffffffffffff,
+         7,
+         0xff,
+         0xff,
+         0xff,
+         0xff,
+         0xff,
+         0xff,
+         0xff,
+         0xff);
+}
