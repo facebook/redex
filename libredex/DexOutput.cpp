@@ -838,6 +838,12 @@ void DexOutput::generate_map() {
   m_offset += ((uint8_t*)map) - ((uint8_t*)mapout);
 }
 
+/**
+ * When things move around in redex, we might find ourselves in a situation
+ * where a regular OPCODE_CONST_STRING is now referring to a jumbo string,
+ * or vice versea. This fixup ensures that all const string opcodes agree
+ * with the jumbo-ness of their stridx.
+ */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   auto code = method->get_code();
   if (!code) return; // nothing to do for native methods
