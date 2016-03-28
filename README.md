@@ -17,8 +17,10 @@ package manager.
 
 Mac OS X:
 ```
-brew install boost autoconf automake folly glog double-conversion
+brew install boost autoconf automake glog double-conversion
 ```
+You will also need to build and install
+[folly](https://github.com/facebook/folly) from source.
 
 Ubuntu 14.04 LTS:
 ```
