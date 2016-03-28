@@ -25,15 +25,17 @@
 #include "Transform.h"
 #include "walkers.h"
 
+namespace {
+
 typedef std::unordered_set<DexMethod*> mrefs_t;
 typedef std::unordered_set<DexField*> frefs_t;
 
-size_t global_dmeth_cnt = 0;
-size_t global_smeth_cnt = 0;
-size_t global_vmeth_cnt = 0;
-size_t global_methref_cnt = 0;
-size_t global_fieldref_cnt = 0;
-size_t global_cls_cnt = 0;
+size_t global_dmeth_cnt;
+size_t global_smeth_cnt;
+size_t global_vmeth_cnt;
+size_t global_methref_cnt;
+size_t global_fieldref_cnt;
+size_t global_cls_cnt;
 
 static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
   std::vector<DexMethod*> method_refs;
@@ -205,6 +207,13 @@ static DexClassesVector run_interdex(
   PgoFiles& pgo,
   bool allow_cutting_off_dex
 ) {
+  global_dmeth_cnt = 0;
+  global_smeth_cnt = 0;
+  global_vmeth_cnt = 0;
+  global_methref_cnt = 0;
+  global_fieldref_cnt = 0;
+  global_cls_cnt = 0;
+
   auto interdexorder = pgo.get_coldstart_classes();
   dex_emit_tracker det;
   dex_emit_tracker primary_det;
@@ -299,7 +308,10 @@ static DexClassesVector run_interdex(
   return outdex;
 }
 
+}
+
 void InterDexPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+
   auto first_attempt = run_interdex(dexen, pgo, true);
   if (first_attempt.size() > dexen.size()) {
     fprintf(stderr, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \

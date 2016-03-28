@@ -12,8 +12,8 @@
 #include "Pass.h"
 
 class InterDexPass : public Pass {
- public:
-  InterDexPass() : Pass("InterDexPass") {}
+  public:
+    InterDexPass() : Pass("InterDexPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+    virtual void run_pass(DexClassesVector&, PgoFiles&) override;
 };
