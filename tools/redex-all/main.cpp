@@ -224,7 +224,9 @@ int parse_args(int argc, char* argv[], Arguments& args) {
   // We add these values to the config at the end so that they will always
   // overwrite values read from the config file regardless of the order of
   // arguments
-  args.config["apk_dir"] = apk_dir;
+  if (apk_dir) {
+    args.config["apk_dir"] = apk_dir;
+  }
   for (auto& key_value : json_values_from_command_line) {
     if (!add_value_to_config(args.config, key_value, true)) {
       fprintf(stderr, "Error parsing value -J%s\n", key_value.c_str());
@@ -287,7 +289,7 @@ int main(int argc, char* argv[]) {
     TRACE(MAIN, 1, "Skipping parsing the proguard config file\n");
   }
 
-  if (start == 0) {
+  if (start == 0 || start == argc) {
     usage();
     exit(1);
   }
