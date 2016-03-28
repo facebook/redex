@@ -89,10 +89,10 @@ bool is_object_getClass(DexMethod* mref) {
  * Walk up the hierarchy chain as long as the method is public.
  */
 DexMethod* bind_to_visible_ancestor(
-    DexClass* cls, const DexString* name, const DexProto* proto) {
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
   DexMethod* top_impl = nullptr;
   while (cls) {
-    for (auto& cls_meth : cls->get_vmethods()) {
+    for (const auto& cls_meth : cls->get_vmethods()) {
       if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
         auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
         auto curr_cls_vis = cls->get_access() & VISIBILITY_MASK;
@@ -239,7 +239,7 @@ struct Rebinder {
       DexOpcodeMethod* mop,
       DexMethod* mref,
       DexMethod* real_ref) {
-    if (!real_ref || real_ref == mref) {
+    if (!real_ref || real_ref == mref || real_ref->is_external()) {
       return;
     }
     TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(mref), SHOW(real_ref));

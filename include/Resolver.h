@@ -60,7 +60,7 @@ inline MethodSearch opcode_to_search(DexOpcode* insn) {
  * MethodSearch.
  */
 DexMethod* resolve_method(
-    DexClass*, const DexString*,
+    const DexClass*, const DexString*,
     const DexProto*, MethodSearch search = MethodSearch::Any);
 
 /**
@@ -68,7 +68,7 @@ DexMethod* resolve_method(
  * definition in scope.
  */
 inline DexMethod* resolve_virtual(
-    DexClass* cls, const DexString* name, const DexProto* proto) {
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Virtual);
 }
 
@@ -77,7 +77,7 @@ inline DexMethod* resolve_virtual(
  * definition in class only.
  */
 inline DexMethod* resolve_direct(
-    DexClass* cls, const DexString* name, const DexProto* proto) {
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Direct);
 }
 
@@ -86,7 +86,7 @@ inline DexMethod* resolve_direct(
  * definition in scope.
  */
 inline DexMethod* resolve_static(
-    DexClass* cls, const DexString* name, const DexProto* proto) {
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Static);
 }
 

@@ -60,7 +60,7 @@ DexMethod* resolve_intf_methodref(DexType* intf, DexMethod* meth) {
 }
 
 DexMethod* resolve_method(
-    DexClass* cls, const DexString* name,
+    const DexClass* cls, const DexString* name,
     const DexProto* proto, MethodSearch search) {
   while (cls) {
     if (search == MethodSearch::Virtual || search == MethodSearch::Any) {

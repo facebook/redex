@@ -144,7 +144,7 @@ void change_visibility(DexMethod* callee) {
       auto field = static_cast<DexOpcodeField*>(insn)->field();
       field = resolve_field(field, is_sfield_op(insn->opcode())
           ? FieldSearch::Static : FieldSearch::Instance);
-      if (field != nullptr) {
+      if (field != nullptr && field->is_concrete()) {
         TRACE(MMINL, 6, "changing visibility of %s\nin %s\n",
             SHOW(field), SHOW(type_class(field->get_class())));
         set_public(field);
