@@ -84,11 +84,7 @@ std::string convert_proguard_method(
 }
 
 ProguardMap::ProguardMap(const std::string& filename) {
-  if (filename == "") {
-    fprintf(stderr,
-            "No proguard map specified. "
-            "Hopefully this is an unobfuscated binary.\n");
-  } else {
+  if (!filename.empty()) {
     std::ifstream fp(filename);
     always_assert_log(fp, "Can't open proguard map: %s\n", filename.c_str());
     parse_proguard_map(fp);
