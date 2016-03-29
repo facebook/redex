@@ -37,6 +37,10 @@ struct Tracer {
           const char* strlevel = strtok(nullptr, " ,");
           if (!strlevel) break;
           auto level = strtol(strlevel, nullptr, 10);
+          if (module_id_map.count(module) == 0) {
+            fprintf(stderr, "Unknown trace level %s\n", module);
+            abort();
+          }
           m_traces[module_id_map[module]] = level;
           module = strtok(nullptr, ":");
         }
