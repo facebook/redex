@@ -148,6 +148,7 @@ folly::dynamic default_config() {
          "DelSuperPass",
          "SingleImplPass",
          "SimpleInlinePass",
+         "StaticReloPass",
          "RemoveEmptyClassesPass",
          "ShortenSrcStringsPass"
        )));

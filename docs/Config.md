@@ -8,7 +8,8 @@ be able to tweak settings to get the best results.
 # A Simple Example
 
 A starting point for configuration is to use a configuration similar to the
-default config that's baked in to the `redex` binary.  This config is:
+default config that's baked in to the `redex` binary.  You can find this config
+in `config/default.config`.  This is what it looks like:
 
 ```
 {
@@ -21,6 +22,7 @@ default config that's baked in to the `redex` binary.  This config is:
     "DelSuperPass",
     "SingleImplPass",
     "SimpleInlinePass",
+    "StaticReloPass",
     "RemoveEmptyClassesPass",
     "ShortenSrcStringsPass"
   ]
