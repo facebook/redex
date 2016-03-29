@@ -461,9 +461,17 @@ def should_compress(filename):
 
 def zipalign(unaligned_apk_path, output_apk_path):
     # Align zip and optionally perform good compression.
-    zipalign = [join(find_android_build_tools(), 'zipalign')]
-    subprocess.check_call(zipalign +
-            ['4', unaligned_apk_path, output_apk_path])
+    try:
+        zipalign = [join(find_android_build_tools(), 'zipalign')]
+    except:
+        # We couldn't find zipalign via ANDROID_SDK.  Try PATH.
+        zipalign = ['zipalign']
+    try:
+        subprocess.check_call(zipalign +
+                              ['4', unaligned_apk_path, output_apk_path])
+    except:
+        print("Couldn't find zipalign.  Your APK may not be fully optimized.")
+        shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 
 
