@@ -752,5 +752,14 @@ def run_redex(args):
 
 
 if __name__ == '__main__':
-    args = arg_parser().parse_args()
+    keys = {}
+    try:
+        keystore = join(os.environ['HOME'], '.android', 'debug.keystore')
+        if isfile(keystore):
+            keys['keystore'] = keystore
+            keys['keyalias'] = 'androiddebugkey'
+            keys['keypass'] = 'android'
+    except:
+        pass
+    args = arg_parser(**keys).parse_args()
     run_redex(args)
