@@ -311,7 +311,7 @@ int main(int argc, char* argv[]) {
     locator_index = new LocatorIndex(make_locator_index(dexen));
   }
 
-  const char* methodmapping = args.config.getDefault("method_mapping", "").asString().c_str();
+  auto methodmapping = args.config.getDefault("method_mapping", "").asString();
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";
@@ -319,7 +319,12 @@ int main(int argc, char* argv[]) {
       ss << (i + 1);
     }
     ss << ".dex";
-    write_classes_to_dex(ss.str(), &dexen[i], locator_index, i, methodmapping);
+    write_classes_to_dex(
+      ss.str(),
+      &dexen[i],
+      locator_index,
+      i,
+      methodmapping.c_str());
   }
   print_warning_summary();
   delete g_redex;

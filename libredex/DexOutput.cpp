@@ -499,6 +499,37 @@ void DexOutput::generate_field_data() {
   }
 }
 
+namespace {
+
+void write_method_mapping(
+  const char* filename,
+  const DexOutputIdx* dodx,
+  size_t dex_number
+) {
+  if (!filename || filename[0] == '\0') return;
+  FILE* fd = fopen(filename, "a");
+  if (!fd) {
+    fprintf(stderr, "Can't open method mapping file %s: %s\n",
+            filename,
+            strerror(errno));
+    return;
+  }
+  for (auto& it : dodx->method_to_idx()) {
+    auto method = it.first;
+    auto idx = it.second;
+
+    fprintf(fd,
+            "%u %lu %s %s\n",
+            idx,
+            dex_number,
+            method->get_name()->c_str(),
+            method->get_class()->get_name()->c_str());
+  }
+  fclose(fd);
+}
+
+}
+
 void DexOutput::generate_method_data() {
   constexpr size_t kMaxMethodRefs = 64 * 1024;
   constexpr size_t kMaxFieldRefs = 64 * 1024;
@@ -520,22 +551,7 @@ void DexOutput::generate_method_data() {
     methodids[idx].protoidx = dodx->protoidx(method->get_proto());
     methodids[idx].nameidx = dodx->stringidx(method->get_name());
   }
-
-  if (m_method_mapping_filename[0] != '\0') {
-    FILE* fd = fopen(m_method_mapping_filename, "a");
-    for (auto& it : dodx->method_to_idx()) {
-      auto method = it.first;
-      auto idx = it.second;
-
-      fprintf(fd,
-              "%u %lu %s %s\n",
-              idx,
-              m_dex_number,
-              method->get_name()->c_str(),
-              method->get_class()->get_name()->c_str());
-    }
-    fclose(fd);
-  }
+  write_method_mapping(m_method_mapping_filename, dodx, m_dex_number);
 }
 
 void DexOutput::generate_class_data() {
@@ -980,9 +996,14 @@ write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  std::string method_mapping_filename)
+  const char* method_mapping_filename)
 {
-  DexOutput dout = DexOutput(filename.c_str(), classes, locator_index, dex_number, method_mapping_filename.c_str());
+  DexOutput dout = DexOutput(
+    filename.c_str(),
+    classes,
+    locator_index,
+    dex_number,
+    method_mapping_filename);
   dout.prepare();
   dout.write();
 }

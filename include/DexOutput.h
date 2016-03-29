@@ -59,10 +59,10 @@ class DexOutputIdx {
     delete m_method;
   }
 
-  dextype_to_idx& type_to_idx() { return *m_type; }
-  dexproto_to_idx& proto_to_idx() { return *m_proto; }
-  dexfield_to_idx& field_to_idx() { return *m_field; }
-  dexmethod_to_idx& method_to_idx() { return *m_method; }
+  dextype_to_idx& type_to_idx() const { return *m_type; }
+  dexproto_to_idx& proto_to_idx() const { return *m_proto; }
+  dexfield_to_idx& field_to_idx() const { return *m_field; }
+  dexmethod_to_idx& method_to_idx() const { return *m_method; }
 
   uint32_t stringidx(DexString* s) const { return m_string->at(s); }
   uint16_t typeidx(DexType* t) const { return m_type->at(t); }
@@ -86,4 +86,4 @@ void write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
-  std::string method_mapping_filename);
+  const char* method_mapping_filename);
