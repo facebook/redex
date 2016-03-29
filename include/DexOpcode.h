@@ -557,6 +557,10 @@ inline bool is_sget(DexCodeItemOpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SGET_SHORT;
 }
 
+inline bool is_sput(DexCodeItemOpcode op) {
+  return op >= OPCODE_SPUT && op <= OPCODE_SPUT_SHORT;
+}
+
 inline bool is_sfield_op(DexCodeItemOpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
 }

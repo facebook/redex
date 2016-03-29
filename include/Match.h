@@ -203,7 +203,7 @@ match_t<T, std::tuple<> > is_abstract() {
 }
 
 /** Match classes which are interfaces */
-match_t<DexClass, std::tuple<> > is_interface() {
+inline match_t<DexClass, std::tuple<> > is_interface() {
   return {
     [](const DexClass* cls) {
       return (bool)(cls->get_access() & ACC_INTERFACE);
@@ -314,7 +314,7 @@ match_t<DexMethod, std::tuple<std::tuple<T...> > >
 }
 
 /** Match methods that are default constructors */
-match_t<DexMethod, std::tuple<> > is_default_constructor() {
+inline match_t<DexMethod, std::tuple<> > is_default_constructor() {
   return {
     [](const DexMethod* meth) {
       return !is_static(meth) &&
@@ -330,7 +330,7 @@ match_t<DexMethod, std::tuple<> > is_default_constructor() {
 }
 
 /** Match methods that are constructors. INCLUDES static constructors! */
-match_t<DexMethod, std::tuple<> > is_constructor() {
+inline match_t<DexMethod, std::tuple<> > is_constructor() {
   return {
     [](const DexMethod* meth) {
       return is_constructor(meth);
@@ -339,7 +339,7 @@ match_t<DexMethod, std::tuple<> > is_constructor() {
 }
 
 /** Match classes that are enums */
-match_t<DexClass, std::tuple<> > is_enum() {
+inline match_t<DexClass, std::tuple<> > is_enum() {
   return {
     [](const DexClass* cls) {
       return (bool)(cls->get_access() & ACC_ENUM);

@@ -19,6 +19,7 @@
   TM(DCE)                                       \
   TM(DELINIT)                                   \
   TM(DELMET)                                    \
+  TM(DRAC)                                      \
   TM(EMPTY)                                     \
   TM(FINALINLINE)                               \
   TM(IDEX)                                      \
