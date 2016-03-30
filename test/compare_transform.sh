@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -o pipefail
+
 INPUT=$1
 REDEXOUT=$2
 TEMPDIR=`mktemp -d 2>/dev/null || mktemp -d -t 'extractdexdump'`
