@@ -226,16 +226,14 @@ private:
       m_num_culled_super_not_def++;
       return false;
     }
-
     // If invoked method is not public, make it public
     if (!is_public(invoked_meth)) {
-      if(!type_class_internal(invoked_meth->get_class())) {
+      if (!invoked_meth->is_concrete()) {
         m_num_culled_super_is_non_public_sdk++;
         return false;
-      } else {
-        set_public(invoked_meth);
-        m_num_relaxed_vis++;
       }
+      set_public(invoked_meth);
+      m_num_relaxed_vis++;
     }
 
     return true;
