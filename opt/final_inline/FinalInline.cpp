@@ -21,6 +21,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "Resolver.h"
 #include "Transform.h"
 #include "walkers.h"
 
@@ -87,31 +88,30 @@ std::unordered_set<DexField*> keep_class_members(folly::dynamic config) {
   return keep;
 }
 
-std::unordered_map<DexField*, bool> get_field_map(Scope& scope) {
-  std::vector<DexField*> fieldrefs;
+std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
+  std::vector<DexField*> field_refs;
   walk_methods(scope,
-               [&](DexMethod* method) { method->gather_fields(fieldrefs); });
-  sort_unique(fieldrefs);
+               [&](DexMethod* method) { method->gather_fields(field_refs); });
+  sort_unique(field_refs);
   /* Okay, now we have a complete list of field refs
-   * for this particular dex.  Map-ify it.
+   * for this particular dex.  Map to the def actually invoked.
    */
-  std::unordered_map<DexField*, bool> fmap;
-  for (auto field : fieldrefs) {
-    fmap[field] = true;
+  std::unordered_set<DexField*> field_defs;
+  for (auto field_ref : field_refs) {
+    auto field_def = resolve_field(field_ref);
+    if (field_def == nullptr || !field_def->is_concrete()) continue;
+    field_defs.insert(field_def);
   }
-  return fmap;
+  return field_defs;
 }
 
-std::unordered_map<DexField*, bool> get_field_target(
+std::unordered_set<DexField*> get_field_target(
     Scope& scope, const std::vector<DexField*>& fields) {
-  std::unordered_map<DexField*, bool> frefmap = get_field_map(scope);
-  std::unordered_map<DexField*, bool> ftarget;
+  std::unordered_set<DexField*> field_defs = get_called_field_defs(scope);
+  std::unordered_set<DexField*> ftarget;
   for (auto field : fields) {
-    if (ftarget.count(field)) {
-      continue;
-    }
-    if (frefmap[field]) {
-      ftarget[field] = true;
+    if (field_defs.count(field) > 0) {
+      ftarget.insert(field);
     }
   }
   return ftarget;
@@ -161,12 +161,12 @@ void remove_unused_fields(Scope& scope,
   }
   sort_unique(smallscope);
 
-  std::unordered_map<DexField*, bool> field_target =
+  std::unordered_set<DexField*> field_target =
       get_field_target(scope, moveable_fields);
-  std::unordered_map<DexField*, bool> dead_fields;
+  std::unordered_set<DexField*> dead_fields;
   for (auto field : moveable_fields) {
-    if (!field_target.count(field)) {
-      dead_fields[field] = true;
+    if (field_target.count(field) == 0) {
+      dead_fields.insert(field);
     }
   }
   TRACE(FINALINLINE, 1,
@@ -180,7 +180,7 @@ void remove_unused_fields(Scope& scope,
     auto iter = sfields.begin();
     while (iter != sfields.end()) {
       auto todel = iter++;
-      if (dead_fields.count(*todel)) {
+      if (dead_fields.count(*todel) > 0) {
         sfields.erase(todel);
       }
     }
@@ -200,7 +200,8 @@ static bool validate_sget(DexMethod* context, DexOpcodeField* opfield) {
   case OPCODE_SGET_SHORT:
     return true;
   default:
-    auto field = opfield->field();
+    auto field = resolve_field(opfield->field(), FieldSearch::Static);
+    always_assert_log(field->is_concrete(), "Must be a concrete field");
     auto value = field->get_static_value();
     always_assert_log(
         false,
@@ -222,7 +223,8 @@ void replace_opcode(DexMethod* method, DexOpcode* from, DexOpcode* to) {
 void inline_cheap_sget(DexMethod* method, DexOpcodeField* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto dest = opfield->dest();
-  auto field = opfield->field();
+  auto field = resolve_field(opfield->field(), FieldSearch::Static);
+  always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
   /* FIXME for sget_wide case */
   uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
@@ -245,7 +247,8 @@ void inline_sget(DexMethod* method, DexOpcodeField* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto opcode = OPCODE_CONST;
   auto dest = opfield->dest();
-  auto field = opfield->field();
+  auto field = resolve_field(opfield->field(), FieldSearch::Static);
+  always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
   /* FIXME for sget_wide case */
   uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
@@ -270,23 +273,12 @@ void get_sput_in_clinit(DexClass* clazz,
       auto code = method->get_code();
       auto opcodes = code->get_instructions();
       for (auto opcode : opcodes) {
-        if (opcode->has_fields()) {
+        if (opcode->has_fields() && is_sput(opcode->opcode())) {
           auto fieldop = static_cast<DexOpcodeField*>(opcode);
-          auto field = fieldop->field();
+          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+          if (field == nullptr || !field->is_concrete()) continue;
           if (field->get_class() != clazz->get_type()) continue;
-          auto op = opcode->opcode();
-          switch (op) {
-          case OPCODE_SPUT:
-          case OPCODE_SPUT_WIDE:
-          case OPCODE_SPUT_OBJECT:
-          case OPCODE_SPUT_BOOLEAN:
-          case OPCODE_SPUT_BYTE:
-          case OPCODE_SPUT_CHAR:
-          case OPCODE_SPUT_SHORT:
-            blank_statics[field] = true;
-          default:
-            continue;
-          }
+          blank_statics[field] = true;
         }
       }
     }
@@ -294,8 +286,8 @@ void get_sput_in_clinit(DexClass* clazz,
 }
 
 void inline_field_values(Scope& fullscope) {
-  std::unordered_map<DexField*, bool> inline_field;
-  std::unordered_map<DexField*, bool> cheap_inline_field;
+  std::unordered_set<DexField*> inline_field;
+  std::unordered_set<DexField*> cheap_inline_field;
   std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
   for (auto clazz : fullscope) {
@@ -314,9 +306,9 @@ void inline_field_values(Scope& fullscope) {
       }
       uint64_t v = value != nullptr ? value->value() : 0;
       if ((v & 0xffff) == v || (v & 0xffff0000) == v) {
-        cheap_inline_field[sfield] = true;
+        cheap_inline_field.insert(sfield);
       }
-      inline_field[sfield] = true;
+      inline_field.insert(sfield);
       scope.push_back(clazz);
     }
   }
@@ -326,16 +318,16 @@ void inline_field_values(Scope& fullscope) {
       fullscope,
       [](DexMethod* method) { return true; },
       [&](DexMethod* method, DexOpcode* opcode) {
-        if (opcode->has_fields()) {
+        if (opcode->has_fields() && is_sfield_op(opcode->opcode())) {
           auto fieldop = static_cast<DexOpcodeField*>(opcode);
-          auto field = fieldop->field();
-          if (inline_field[field]) {
-            if (cheap_inline_field[field]) {
-              cheap_rewrites.push_back(std::make_pair(method, fieldop));
-              return;
-            }
-            simple_rewrites.push_back(std::make_pair(method, fieldop));
+          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+          if (field == nullptr || !field->is_concrete()) return;
+          if (inline_field.count(field) == 0) return;
+          if (cheap_inline_field.count(field) > 0) {
+            cheap_rewrites.push_back(std::make_pair(method, fieldop));
+            return;
           }
+          simple_rewrites.push_back(std::make_pair(method, fieldop));
         }
       });
   TRACE(FINALINLINE, 1,
