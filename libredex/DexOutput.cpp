@@ -246,6 +246,8 @@ typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
 typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
 
 class DexOutput {
+public:
+  dex_output_stats_t m_stats;
  private:
   DexClasses* m_classes;
   DexOutputIdx* dodx;
@@ -432,6 +434,7 @@ void DexOutput::generate_string_data() {
     stringids[idx].offset = m_offset;
     str->encode(m_output + m_offset);
     m_offset += str->get_entry_size();
+    m_stats.num_strings++;
   }
 
   if (m_locator_index != nullptr) {
@@ -445,6 +448,7 @@ void DexOutput::generate_type_data() {
     auto t = p.first;
     auto idx = p.second;
     typeids[idx].string_idx = dodx->stringidx(t->get_name());
+    m_stats.num_types++;
   }
 }
 
@@ -472,6 +476,7 @@ void DexOutput::generate_typelist_data() {
     m_tl_emit_offsets[tl] = m_offset;
     int size = tl->encode(dodx, (uint32_t*)(m_output + m_offset));
     m_offset += size;
+    m_stats.num_type_lists++;
   }
   insert_map_item(TYPE_TYPE_LIST, num_tls, tl_start);
 }
@@ -485,6 +490,7 @@ void DexOutput::generate_proto_data() {
     protoids[idx].shortyidx = dodx->stringidx(proto->get_shorty());
     protoids[idx].rtypeidx = dodx->typeidx(proto->get_rtype());
     protoids[idx].param_off = m_tl_emit_offsets.at(proto->get_args());
+    m_stats.num_protos++;
   }
 }
 
@@ -496,6 +502,9 @@ void DexOutput::generate_field_data() {
     fieldids[idx].classidx = dodx->typeidx(field->get_class());
     fieldids[idx].typeidx = dodx->typeidx(field->get_type());
     fieldids[idx].nameidx = dodx->stringidx(field->get_name());
+    if (field->is_concrete()) m_stats.num_fields++;
+    m_stats.num_field_refs++;
+
   }
 }
 
@@ -550,6 +559,8 @@ void DexOutput::generate_method_data() {
     methodids[idx].classidx = dodx->typeidx(method->get_class());
     methodids[idx].protoidx = dodx->protoidx(method->get_proto());
     methodids[idx].nameidx = dodx->stringidx(method->get_name());
+    if (method->is_concrete()) m_stats.num_methods++;
+    m_stats.num_method_refs++;
   }
   write_method_mapping(m_method_mapping_filename, dodx, m_dex_number);
 }
@@ -557,6 +568,7 @@ void DexOutput::generate_method_data() {
 void DexOutput::generate_class_data() {
   dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
+    m_stats.num_classes++;
     DexClass* clz = m_classes->get(i);
     cdefs[i].typeidx = dodx->typeidx(clz->get_type());
     cdefs[i].access_flags = clz->get_access();
@@ -642,6 +654,7 @@ void DexOutput::generate_static_values() {
     /* No alignment requirements */
     deva->encode(dodx, output);
     m_offset += output - outputsv;
+    m_stats.num_static_values++;
     delete deva;
   }
   if (m_static_values.size()) {
@@ -679,6 +692,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
   if (annocnt) {
     insert_map_item(TYPE_ANNOTATION_ITEM, annocnt, mentry_offset);
   }
+  m_stats.num_annotations += annocnt;
 }
 
 void DexOutput::unique_asets(annomap_t& annomap,
@@ -990,7 +1004,7 @@ void DexOutput::write() {
   close(fd);
 }
 
-void
+dex_output_stats_t
 write_classes_to_dex(
   std::string filename,
   DexClasses* classes,
@@ -1006,6 +1020,7 @@ write_classes_to_dex(
     method_mapping_filename);
   dout.prepare();
   dout.write();
+  return dout.m_stats;
 }
 
 LocatorIndex
@@ -1032,4 +1047,20 @@ make_locator_index(const DexClassesVector& dexen)
   }
 
   return index;
+}
+
+dex_output_stats_t&
+  operator+=(dex_output_stats_t& lhs, const dex_output_stats_t& rhs) {
+  lhs.num_types += rhs.num_types;
+  lhs.num_classes += rhs.num_classes;
+  lhs.num_methods += rhs.num_methods;
+  lhs.num_method_refs += rhs.num_method_refs;
+  lhs.num_fields += rhs.num_fields;
+  lhs.num_field_refs += rhs.num_field_refs;
+  lhs.num_strings += rhs.num_strings;
+  lhs.num_protos += rhs.num_protos;
+  lhs.num_static_values += rhs.num_static_values;
+  lhs.num_annotations += rhs.num_annotations;
+  lhs.num_type_lists += rhs.num_type_lists;
+  return lhs;
 }

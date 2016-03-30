@@ -81,7 +81,24 @@ class DexOutputIdx {
   uint32_t get_offset(uint32_t* ptr) { return get_offset((uint8_t*)ptr); }
 };
 
-void write_classes_to_dex(
+struct dex_output_stats_t {
+  int num_types = 0;
+  int num_classes = 0;
+  int num_methods = 0;
+  int num_method_refs = 0;
+  int num_fields = 0;
+  int num_field_refs = 0;
+  int num_strings = 0;
+  int num_protos = 0;
+  int num_static_values = 0;
+  int num_annotations = 0;
+  int num_type_lists = 0;
+};
+
+dex_output_stats_t&
+  operator+=(dex_output_stats_t& lhs, const dex_output_stats_t& rhs);
+
+dex_output_stats_t write_classes_to_dex(
   std::string filename,
   DexClasses* classes,
   LocatorIndex* locator_index /* nullable */,

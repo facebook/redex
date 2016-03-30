@@ -566,6 +566,15 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                 print(line.rstrip(), file=output)
 
 
+def copy_stats_to_out_dir(tmp, apk_output_path):
+    output_dir = os.path.dirname(apk_output_path)
+    output_stats_path = os.path.join(output_dir, "redex-stats.txt")
+    if os.path.isfile(tmp + '/stats.txt'):
+        subprocess.check_call(['cp', tmp + '/stats.txt', output_stats_path])
+        log('Copying stats to output dir')
+    else:
+        log('Skipping stats copy, since no file found to copy')
+
 def copy_filename_map_to_out_dir(tmp, apk_output_path):
     output_dir = os.path.dirname(apk_output_path)
     output_filemap_path = os.path.join(output_dir, "redex-src-strings-map.txt")
@@ -737,6 +746,7 @@ def run_redex(args):
             args.keyalias, args.keypass)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
+    copy_stats_to_out_dir(newtmp, args.out)
     copy_filename_map_to_out_dir(newtmp, args.out)
 
     if 'RenameClassesPass' in passes_list:

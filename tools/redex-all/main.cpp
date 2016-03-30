@@ -22,6 +22,7 @@
 
 #include <folly/dynamic.h>
 #include <folly/json.h>
+#include <folly/FileUtil.h>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -252,6 +253,22 @@ bool dir_is_writable(const std::string& dir) {
   return access(dir.c_str(), W_OK) == 0;
 }
 
+void output_stats(const char* path, const dex_output_stats_t& stats) {
+  folly::dynamic d = folly::dynamic::object;
+  d["num_types"] = stats.num_types;
+  d["num_type_lists"] = stats.num_type_lists;
+  d["num_classes"] = stats.num_classes;
+  d["num_methods"] = stats.num_methods;
+  d["num_method_refs"] = stats.num_method_refs;
+  d["num_fields"] = stats.num_fields;
+  d["num_field_refs"] = stats.num_field_refs;
+  d["num_strings"] = stats.num_strings;
+  d["num_protos"] = stats.num_protos;
+  d["num_static_values"] = stats.num_static_values;
+  d["num_annotations"] = stats.num_annotations;
+  folly::writeFile(folly::toPrettyJson(d), path);
+}
+
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace);
   signal(SIGABRT, crash_backtrace);
@@ -312,7 +329,10 @@ int main(int argc, char* argv[]) {
     locator_index = new LocatorIndex(make_locator_index(dexen));
   }
 
+  dex_output_stats_t totals;
+
   auto methodmapping = args.config.getDefault("method_mapping", "").asString();
+  auto stats_output = args.config.getDefault("stats_output", "").asString();
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";
@@ -320,13 +340,15 @@ int main(int argc, char* argv[]) {
       ss << (i + 1);
     }
     ss << ".dex";
-    write_classes_to_dex(
+    auto stats = write_classes_to_dex(
       ss.str(),
       &dexen[i],
       locator_index,
       i,
       methodmapping.c_str());
+    totals += stats;
   }
+  output_stats(stats_output.c_str(), totals);
   print_warning_summary();
   delete g_redex;
   TRACE(MAIN, 1, "Done.\n");
