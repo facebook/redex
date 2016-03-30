@@ -22,14 +22,17 @@ class ReferencedState {
    * target to be re-evaluated.
    */
   bool m_computed;
+  bool m_seed;
 
  public:
   ReferencedState() {
     m_bytype = m_bystring = false;
     m_computed = true;
+    m_seed = false;
   }
   bool can_delete() const { return !m_bytype; }
   bool can_rename() const { return !m_bystring; }
+  bool is_seed() const { return m_seed; }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
@@ -52,4 +55,10 @@ class ReferencedState {
       m_bytype = m_bystring = false;
     }
   }
+
+  // A class marked to be kept from the list of seedds from ProGuard
+  void ref_by_seed() {
+    m_seed = true;
+  }
+
 };

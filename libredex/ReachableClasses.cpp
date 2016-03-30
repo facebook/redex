@@ -9,8 +9,12 @@
 
 #include "ReachableClasses.h"
 
+#include <chrono>
 #include <string>
 #include <unordered_set>
+#include <iostream>
+#include <fstream>
+#include <string>
 
 #include "walkers.h"
 #include "DexClass.h"
@@ -118,6 +122,31 @@ static void mark_reachable_by_classname(std::string& classname, bool from_code) 
   DexClass* dclass = type_class_internal(dtype);
   mark_reachable_by_classname(dclass, from_code);
 }
+
+static void mark_reachable_by_seed(DexClass* dclass) {
+  if (dclass == nullptr) return;
+  dclass->rstate.ref_by_seed();
+}
+
+static void mark_reachable_by_seed(DexType* dtype) {
+  if (dtype == nullptr) return;
+  mark_reachable_by_seed(type_class_internal(dtype));
+}
+
+/* In case we ever need it.
+ *
+static void mark_reachable_by_seed(std::string& classname) {
+  DexString* dstring =
+      DexString::get_string(classname.c_str(), classname.size());
+  DexType* dtype = DexType::get_type(dstring);
+  if (dtype == nullptr) {
+    TRACE(PGR, 4, "Can't find type for seed class %s\n", classname.c_str());
+    return;
+  }
+  DexClass* dclass = type_class_internal(dtype);
+  mark_reachable_by_seed(dclass);
+}
+**/
 
 template <typename DexMember>
 bool anno_set_contains(
@@ -460,6 +489,39 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
             });
 }
 
+void reportReachableClasses(const Scope& scope, std::string reportFileName) {
+  TRACE(PGR, 4, "Total numner of classes: %d\n", scope.size());
+  // First report keep annotations
+  std::ofstream reportFileDNS(reportFileName + ".dns");
+  for (auto const& dns : do_not_strip_classes) {
+    reportFileDNS << "Do not strip class: " << dns->get_type()->get_name()->c_str() << "\n";
+  }
+  reportFileDNS.close();
+  // Report classes that the reflection filter says can't be deleted.
+  std::ofstream reportFileCanDelete(reportFileName + ".cant_delete");
+  for (auto const& cls : scope) {
+    if (!can_delete(cls)) {
+      reportFileCanDelete << cls->get_name()->c_str() << "\n";
+    }
+  }
+  reportFileCanDelete.close();
+  // Report classes that the reflection filter says can't be renamed.
+  std::ofstream reportFileCanRename(reportFileName + ".cant_rename");
+  for (auto const& cls : scope) {
+    if (!can_rename(cls)) {
+      reportFileCanRename << cls->get_name()->c_str() << "\n";
+    }
+  }
+  reportFileCanRename.close();
+  // Report classes marked for keep from ProGuard flat file list.
+  std::ofstream reportFileKeep(reportFileName + ".must_keep");
+  for (auto const& cls : scope) {
+    if (is_seed(cls)) {
+      reportFileKeep << cls->get_name()->c_str() << "\n";
+    }
+  }
+  reportFileKeep.close();
+}
 
 void init_reachable_classes(const Scope& scope, folly::dynamic& config, const std::vector<KeepRule>& proguard_rules) {
   // Find classes that are reachable in such a way that none of the redex
@@ -471,6 +533,35 @@ void init_reachable_classes(const Scope& scope, folly::dynamic& config, const st
   // example, a class might be instantiated from a method, but if that method
   // is later deleted then it might no longer be reachable.
   recompute_classes_reachable_from_code(scope);
+}
+
+void init_seed_classes(const std::string seeds_filename) {
+    TRACE(PGR, 1, "Reading seed classes from %s\n", seeds_filename.c_str());
+    auto start = std::chrono::high_resolution_clock::now();
+    std::ifstream seeds_file(seeds_filename);
+    uint count = 0;
+    if (!seeds_file) {
+      std::cerr << "Seeds file " << seeds_filename
+                << " was not found (ignoring error)." << std::endl;
+    } else {
+      std::string line;
+      while (getline(seeds_file, line)) {
+        if (line.find(":") == std::string::npos && line.find("$") == std::string::npos) {
+          auto dex_type = get_dextype_from_dotname(line.c_str());
+          if (dex_type != nullptr) {
+            mark_reachable_by_seed(dex_type);
+            count++;
+          } else {
+            TRACE(PGR, 1, "Seed file contains class for which Dex type can't be found: %s\n", line.c_str());
+          }
+        }
+      }
+      seeds_file.close();
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
+          std::chrono::duration<double>(end - start).count());
+    std::cerr  << "Read " << count << " seed classes " << std::endl ;
 }
 
 /**

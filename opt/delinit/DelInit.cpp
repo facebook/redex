@@ -36,7 +36,7 @@ namespace {
  */
 bool filter_class(DexClass* clazz) {
   always_assert(!clazz->is_external());
-  return is_interface(clazz) || is_annotation(clazz) || !can_delete(clazz);
+  return is_interface(clazz) || is_annotation(clazz) || !can_remove_class(clazz) ;
 }
 
 using ClassSet = std::unordered_set<DexClass*>;
@@ -123,7 +123,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       continue;
     }
     auto clazz = type_class(init->get_class());
-    if (!can_delete(clazz)) {
+    if (!can_remove_class(clazz)) {
       init_class_cant_delete++;
       continue;
     }

@@ -42,6 +42,8 @@ PassManager::PassManager(
 void PassManager::run_passes(DexClassesVector& dexen) {
   PgoFiles pgo(m_config);
   init_reachable_classes(build_class_scope(dexen), m_config, m_proguard_rules);
+  Scope scope = build_class_scope(dexen);
+  // reportReachableClasses(scope, "reachable");
   for (auto pass : m_activated_passes) {
     using namespace std::chrono;
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());

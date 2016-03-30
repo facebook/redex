@@ -9,6 +9,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <streambuf>
 #include <string>
@@ -31,6 +32,7 @@
 #include "DexOutput.h"
 #include "PassManager.h"
 #include "ProguardLoader.h"
+#include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Warning.h"
 
@@ -49,6 +51,7 @@ static void usage() {
     "  -o --outdir  output directory for optimized dexes\n"
     "  -j --jarpath Classpath jar\n"
     "  -p --proguard-config proguard config file\n"
+    "  -s --seeds seeds file specifiying roots of classes to kept\n"
     "  -w --warn    warning level:\n"
     "                   0: no warnings\n"
     "                   1: count of warnings\n"
@@ -77,6 +80,7 @@ struct Arguments {
   folly::dynamic config;
   std::string jar_path;
   std::string proguard_config;
+  std::string seeds_filename;
   std::string out_dir;
 };
 
@@ -161,6 +165,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
     { "config",  required_argument, 0, 'c' },
     { "jarpath", required_argument, 0, 'j'},
     { "proguard-config", required_argument, 0, 'p'},
+    { "seeds", required_argument, 0, 's'},
     { "outdir",  required_argument, 0, 'o' },
     { "warn",    required_argument, 0, 'w' },
     { nullptr, 0, nullptr, 0 },
@@ -200,6 +205,11 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       break;
     case 'w':
       g_warning_level = OptWarningLevel(strtol(optarg, nullptr, 10));
+      break;
+    case 's':
+      if (optarg) {
+         args.seeds_filename = optarg;
+      }
       break;
     case 'S':
       if (optarg) {
@@ -315,6 +325,10 @@ int main(int argc, char* argv[]) {
   DexClassesVector dexen;
   for (int i = start; i < argc; i++) {
     dexen.emplace_back(load_classes_from_dex(argv[i]));
+  }
+
+  if (!args.seeds_filename.empty()) {
+    init_seed_classes(args.seeds_filename);
   }
 
   PassManager manager(passes, rules, args.config);
