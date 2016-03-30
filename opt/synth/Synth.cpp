@@ -137,7 +137,8 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
     method = resolve_static(type_class(method->get_class()),
         method->get_name(), method->get_proto());
   }
-  if (!method || method->is_external()) return nullptr;
+  if (!method) return nullptr;
+  if (!method->is_concrete()) return nullptr;
 
   auto collision = find_collision_excepting(method,
                                             method->get_name(),
@@ -177,6 +178,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
  */
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   DexCode* code = m->get_code();
+  if (code == nullptr) return nullptr;
   auto& insns = code->get_instructions();
   auto it = insns.begin();
   auto invoke = static_cast<DexOpcodeMethod*>(*it);
@@ -184,14 +186,14 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s\n", SHOW(m));
     return nullptr;
   }
-  if (!passes_args_through(invoke, m->get_code(), 1)) {
+  if (!passes_args_through(invoke, code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s\n", SHOW(m));
     return nullptr;
   }
   if (++it == insns.end()) return nullptr;
   if ((*it)->opcode() != OPCODE_RETURN_VOID) return nullptr;
   auto method = invoke->get_method();
-  if (!(method->get_access() & ACC_CONSTRUCTOR)) return nullptr;
+  if (!method->is_concrete() || !is_constructor(method)) return nullptr;
   return method;
 }
 
@@ -252,7 +254,7 @@ WrapperMethods analyze(const std::vector<DexClass*>& classes,
         }
         continue;
       }
-      if (is_init(dmethod) || is_clinit(dmethod)) continue;
+      if (is_constructor(dmethod)) continue;
 
       if (is_static_synthetic(dmethod)) {
         auto field = trivial_get_field_wrapper(dmethod);
@@ -284,7 +286,7 @@ WrapperMethods analyze(const std::vector<DexClass*>& classes,
           TRACE(SYNT, 2, "Static trivial method wrapper: %s\n", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls method: %s\n", SHOW(method));
           ssms.wrappers.emplace(dmethod, method);
-          if (!(method->get_access() & ACC_STATIC)) {
+          if (!is_static(method)) {
             auto wrapped = ssms.wrapped.find(method);
             if (wrapped == ssms.wrapped.end()) {
               ssms.wrapped.emplace(method, std::make_pair(dmethod, 1));
@@ -371,6 +373,7 @@ bool replace_getter_wrapper(MethodTransformer& transform,
                             DexOpcode* move_result,
                             DexField* field) {
   TRACE(SYNT, 2, "Optimizing getter wrapper call: %s\n", SHOW(meth_insn));
+  assert(field->is_concrete());
   set_public(field);
 
   auto invoke_src = meth_insn->src(0);
@@ -491,6 +494,7 @@ void replace_ctor_wrapper(MethodTransformer& transform,
                           DexOpcodeMethod* ctor_insn,
                           DexMethod* ctor) {
   TRACE(SYNT, 2, "Optimizing static ctor: %s\n", SHOW(ctor_insn));
+  assert(ctor->is_concrete());
   set_public(ctor);
 
   auto op = ctor_insn->opcode();
@@ -529,7 +533,9 @@ void replace_wrappers(DexMethod* caller_method,
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
       // Replace calls to static getters and wrappers
       auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
-      auto const callee = meth_insn->get_method();
+      auto const callee = resolve_method(
+          meth_insn->get_method(), MethodSearch::Static);
+      if (callee == nullptr) continue;
 
       auto const found_get = ssms.getters.find(callee);
       if (found_get != ssms.getters.end()) {
@@ -555,7 +561,9 @@ void replace_wrappers(DexMethod* caller_method,
     } else if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
                insn->opcode() == OPCODE_INVOKE_DIRECT_RANGE) {
       auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
-      auto const callee = meth_insn->get_method();
+      auto const callee =
+          resolve_method(meth_insn->get_method(), MethodSearch::Direct);
+      if (callee == nullptr) continue;
 
       auto const found_get = ssms.getters.find(callee);
       if (found_get != ssms.getters.end()) {
@@ -592,7 +600,9 @@ void replace_wrappers(DexMethod* caller_method,
     } else if (insn->opcode() == OPCODE_INVOKE_STATIC_RANGE) {
       // We don't handle this yet, but it's not hard.
       auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
-      auto const callee = meth_insn->get_method();
+      auto const callee = resolve_method(
+          meth_insn->get_method(), MethodSearch::Static);
+      if (callee == nullptr) continue;
       ssms.keepers.emplace(callee);
     }
   }
@@ -692,6 +702,7 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
   size_t other_removed = 0;
   size_t pub_meth = 0;
   auto remove_meth = [&](DexMethod* meth) {
+    assert(meth->is_concrete());
     if (!can_remove(meth, synthConfig)) {
       return;
     }
@@ -760,8 +771,6 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
   ssms.next_pass = ssms.next_pass && any_remove;
 }
 
-// TODO(t8483081): instead of virtualizing move the code from the instance
-// method to a static method
 void transform(const std::vector<DexClass*>& classes,
                WrapperMethods& ssms, const SynthConfig& synthConfig) {
   walk_code(
