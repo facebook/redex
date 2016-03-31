@@ -140,23 +140,23 @@ static bool add_value_to_config(folly::dynamic& config, std::string& key_value, 
 }
 
 folly::dynamic default_config() {
-  using namespace folly;
-  return dynamic::object
-    ("redex",
-     dynamic::object(
-       "passes",
-       dynamic::array(
-         "ReBindRefsPass",
-         "BridgePass",
-         "SynthPass",
-         "FinalInlinePass",
-         "DelSuperPass",
-         "SingleImplPass",
-         "SimpleInlinePass",
-         "StaticReloPass",
-         "RemoveEmptyClassesPass",
-         "ShortenSrcStringsPass"
-       )));
+  auto passes = {
+    "ReBindRefsPass",
+    "BridgePass",
+    "SynthPass",
+    "FinalInlinePass",
+    "DelSuperPass",
+    "SingleImplPass",
+    "SimpleInlinePass",
+    "StaticReloPass",
+    "RemoveEmptyClassesPass",
+    "ShortenSrcStringsPass",
+  };
+  auto cfg = folly::parseJson("{\"redex\":{\"passes\":[]}}");
+  for (auto const& pass : passes) {
+    cfg["redex"]["passes"].push_back(pass);
+  }
+  return cfg;
 }
 
 int parse_args(int argc, char* argv[], Arguments& args) {
