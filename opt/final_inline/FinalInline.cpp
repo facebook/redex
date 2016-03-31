@@ -30,23 +30,19 @@ static size_t unhandled_inline = 0;
 /*
  * Format: array of "Lpkg/Class;"
  */
-std::unordered_set<DexType*> keep_class_member_annos(folly::dynamic config) {
+std::unordered_set<DexType*> keep_class_member_annos(
+  const folly::dynamic& config
+) {
   std::unordered_set<DexType*> keep;
-  if (!config.isObject()) {
-    return keep;
-  }
-  auto keep_item = config.find("keep_class_member_annos");
-  if (keep_item == config.items().end()) {
-    return keep;
-  }
-  auto const& keep_list = keep_item->second;
-  for (auto const& keep_anno : keep_list) {
-    if (keep_anno.isString()) {
+  try {
+    for (auto const& keep_anno : config["keep_class_member_annos"]) {
       auto type = DexType::get_type(DexString::get_string(keep_anno.c_str()));
       if (type != nullptr) {
         keep.emplace(type);
       }
     }
+  } catch (...) {
+    // Swallow exception if the field isn't there.
   }
   return keep;
 }
@@ -54,24 +50,16 @@ std::unordered_set<DexType*> keep_class_member_annos(folly::dynamic config) {
 /*
  * Format: array of "Type Lpkg/Class;.fieldName"
  */
-std::unordered_set<DexField*> keep_class_members(folly::dynamic config) {
+std::unordered_set<DexField*> keep_class_members(const folly::dynamic& config) {
   std::unordered_set<DexField*> keep;
-  if (!config.isObject()) {
-    return keep;
-  }
-  auto keep_item = config.find("keep_class_members");
-  if (keep_item == config.items().end()) {
-    return keep;
-  }
-  auto const& keep_list = keep_item->second;
-  for (auto const& keep_thing : keep_list) {
-    if (keep_thing.isString()) {
+  try {
+    for (auto const& keep_thing : config["keep_class_members"]) {
       auto keepstr = keep_thing.asString();
       auto tpos = keepstr.find(' ');
       auto cpos = keepstr.find('.');
       auto type = DexType::get_type(keepstr.substr(0, tpos).c_str());
       auto cls =
-          DexType::get_type(keepstr.substr(tpos + 1, cpos - tpos - 1).c_str());
+        DexType::get_type(keepstr.substr(tpos + 1, cpos - tpos - 1).c_str());
       auto name = DexString::get_string(keepstr.substr(cpos + 1).c_str());
       if (!type || !cls || !name) {
         fprintf(stderr,
@@ -84,6 +72,8 @@ std::unordered_set<DexField*> keep_class_members(folly::dynamic config) {
         keep.emplace(field);
       }
     }
+  } catch (...) {
+    // Swallow exception if the field isn't there.
   }
   return keep;
 }

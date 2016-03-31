@@ -238,25 +238,14 @@ void RenameClassesPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   std::string path;
   std::vector<std::string> pre_whitelist_patterns;
   std::vector<std::string> post_whitelist_patterns;
-  if (m_config.isObject()) {
-    auto fmapit = m_config.find("class_rename");
-    if (fmapit != m_config.items().end()) {
-      path = std::string(fmapit->second.asString().c_str());
-    }
+  path = m_config["class_rename"].asString().toStdString();
+  for (auto config_pkg_name : m_config["pre_filter_whitelist"]) {
+    std::string pattern = toStdString(config_pkg_name.asString());
+    pre_whitelist_patterns.push_back(pattern);
   }
-  auto config_whitelist_patterns = m_config.find("pre_filter_whitelist");
-  if (config_whitelist_patterns != m_config.items().end()) {
-    for (auto config_pkg_name : config_whitelist_patterns->second) {
-      std::string pattern = toStdString(config_pkg_name.asString());
-      pre_whitelist_patterns.push_back(pattern);
-    }
-  }
-  config_whitelist_patterns = m_config.find("post_filter_whitelist");
-  if (config_whitelist_patterns != m_config.items().end()) {
-    for (auto config_pkg_name : config_whitelist_patterns->second) {
-      std::string pattern = toStdString(config_pkg_name.asString());
-      post_whitelist_patterns.push_back(pattern);
-    }
+  for (auto config_pkg_name : m_config["post_filter_whitelist"]) {
+    std::string pattern = toStdString(config_pkg_name.asString());
+    post_whitelist_patterns.push_back(pattern);
   }
   auto scope = build_class_scope(dexen);
   if (path.empty()) {

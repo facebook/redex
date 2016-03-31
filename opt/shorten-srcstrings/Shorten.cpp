@@ -124,15 +124,7 @@ static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
 }
 
 void ShortenSrcStringsPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  const char* path = nullptr;
-  if (m_config.isObject()) {
-    auto fmapit = m_config.find("filename_mappings");
-    if (fmapit != m_config.items().end()) {
-      path = fmapit->second.c_str();
-    }
-  }
-  if (!path) {
-    path = "/tmp/filename_mappings.txt";
-  }
-  return strip_src_strings(dexen, path);
+  auto const& path =
+    m_config.getDefault("filename_mappings", "/tmp/filename_mappings.txt");
+  return strip_src_strings(dexen, path.c_str());
 }
