@@ -47,10 +47,14 @@ void map_interfaces(const std::list<DexType*>& intf_list,
                     TypeToTypes& intfs_to_classes) {
   for (auto& intf : intf_list) {
     const auto intf_cls = type_class(intf);
-    if (intf_cls == nullptr) continue;
-    intfs_to_classes[intf].push_back(cls->get_type());
-    auto intfs = intf_cls->get_interfaces();
-    map_interfaces(intfs->get_type_list(), cls, intfs_to_classes);
+    if (intf_cls == nullptr || intf_cls->is_external()) continue;
+    if (std::find(intfs_to_classes[intf].begin(),
+                  intfs_to_classes[intf].end(), cls->get_type()) ==
+        intfs_to_classes[intf].end()) {
+      intfs_to_classes[intf].push_back(cls->get_type());
+      auto intfs = intf_cls->get_interfaces();
+      map_interfaces(intfs->get_type_list(), cls, intfs_to_classes);
+    }
   }
 };
 
@@ -61,8 +65,7 @@ void build_type_maps(const Scope& scope,
                      TypeToTypes& intfs_to_classes,
                      TypeSet& interfs) {
   for (const auto& cls : scope) {
-    auto flags = cls->get_access();
-    if (flags & DexAccessFlags::ACC_INTERFACE) {
+    if (is_interface(cls)) {
       interfs.insert(cls->get_type());
       continue;
     }
@@ -77,12 +80,11 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
     if (intf_it.second.size() != 1) continue;
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
-    assert(intf_cls);
-    if (intf_cls->is_external()) continue;
+    always_assert(intf_cls && !intf_cls->is_external());
     if (intf_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
     auto impl = intf_it.second[0];
     auto impl_cls = type_class(impl);
-    assert(impl_cls);
+    always_assert(impl_cls && !impl_cls->is_external());
     // I don't know if it's possible but it's cheap enough to check
     if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
     single_impl[intf] = impl;
