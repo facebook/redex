@@ -529,11 +529,11 @@ def merge_proguard_map_with_rename_output(
     redex_rename_map_path = config_dict['RenameClassesPass']['class_rename']
     log('redex map is at ' + str(redex_rename_map_path))
     if os.path.isfile(redex_rename_map_path):
-        redex_pg_file = "/redex-class-rename-map.txt"
+        redex_pg_file = "redex-class-rename-map.txt"
         # find proguard file
         if pg_file:
             output_dir = os.path.dirname(apk_output_path)
-            output_file = output_dir + redex_pg_file
+            output_file = output_file = join(output_dir, redex_pg_file)
             update_proguard_mapping_file(pg_file, redex_rename_map_path, output_file)
             log('merging proguard map with redex class rename map')
             log('pg mapping file input is ' + str(pg_file))
