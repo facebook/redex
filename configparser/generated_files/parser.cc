@@ -208,7 +208,7 @@
 
 
 /* Copy the first part of user declarations.  */
-#line 1 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 1 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
 
 /*
  * This is a subset of the proguard class specification language.
@@ -255,7 +255,6 @@ void keep_rule_end() {
     if (!rules) {
         rules = new std::vector<KeepRule>();
     }
-    printf("KEEPING CLASS: %s\n", keeprule->classname);
     rules->push_back(*keeprule);
     delete keeprule;
     keeprule = nullptr;
@@ -343,7 +342,7 @@ typedef int YYSTYPE;
 
 
 /* Line 216 of yacc.c.  */
-#line 347 "/Users/dtarjan/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
+#line 346 "/Users/satnamsingh/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
 
 #ifdef short
 # undef short
@@ -666,17 +665,17 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   174,   174,   178,   179,   182,   183,   184,   187,   187,
-     192,   194,   196,   198,   200,   202,   205,   207,   210,   211,
-     212,   215,   215,   218,   221,   222,   223,   224,   225,   228,
-     231,   232,   233,   235,   237,   240,   241,   244,   244,   252,
-     254,   256,   258,   259,   260,   262,   264,   267,   268,   271,
-     272,   273,   274,   277,   278,   279,   280,   281,   281,   284,
-     286,   286,   287,   287,   287,   290,   291,   294,   297,   298,
-     299,   300,   301,   302,   303,   304,   305,   306,   307,   308,
-     309,   310,   311,   312,   313,   314,   315,   316,   317,   318,
-     319,   320,   321,   322,   323,   324,   325,   326,   329,   330,
-     333,   334,   337,   338
+       0,   173,   173,   177,   178,   181,   182,   183,   186,   186,
+     191,   193,   195,   197,   199,   201,   204,   206,   209,   210,
+     211,   214,   214,   217,   220,   221,   222,   223,   224,   227,
+     230,   231,   232,   234,   236,   239,   240,   243,   243,   251,
+     253,   255,   257,   258,   259,   261,   263,   266,   267,   270,
+     271,   272,   273,   276,   277,   278,   279,   280,   280,   283,
+     285,   285,   286,   286,   286,   289,   290,   293,   296,   297,
+     298,   299,   300,   301,   302,   303,   304,   305,   306,   307,
+     308,   309,   310,   311,   312,   313,   314,   315,   316,   317,
+     318,   319,   320,   321,   322,   323,   324,   325,   328,   329,
+     332,   333,   336,   337
 };
 #endif
 
@@ -1708,209 +1707,209 @@ yyreduce:
   switch (yyn)
     {
         case 8:
-#line 187 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 186 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keep_rule_start();;}
     break;
 
   case 9:
-#line 189 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 188 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keep_rule_end();;}
     break;
 
   case 10:
-#line 192 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 191 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 11:
-#line 194 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 193 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 12:
-#line 196 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 195 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 13:
-#line 198 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 197 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 14:
-#line 200 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 199 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 15:
-#line 202 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 201 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 18:
-#line 210 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 209 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {WARN("'allowobfuscation' is not supported.\n"); ;}
     break;
 
   case 19:
-#line 211 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 210 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {WARN("'allowoptimization' is not supported.\n");;}
     break;
 
   case 20:
-#line 212 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 211 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;;}
     break;
 
   case 21:
-#line 215 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 214 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags = 0;;}
     break;
 
   case 22:
-#line 215 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 214 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->flags = flags;;}
     break;
 
   case 24:
-#line 221 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 220 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ANY_CLASS_TYPE;;}
     break;
 
   case 25:
-#line 222 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 221 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::CLASS;;}
     break;
 
   case 26:
-#line 223 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 222 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ENUMERATION;;}
     break;
 
   case 27:
-#line 224 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 223 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::INTERFACE;;}
     break;
 
   case 28:
-#line 225 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 224 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ANNOTATION;;}
     break;
 
   case 29:
-#line 228 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 227 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->classname = duplicate(yylval);;}
     break;
 
   case 30:
-#line 231 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 230 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->extends = nullptr;;}
     break;
 
   case 31:
-#line 232 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 231 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->extends = duplicate(yylval);;}
     break;
 
   case 32:
-#line 233 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 232 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->extends = duplicate(yylval);;}
     break;
 
   case 37:
-#line 244 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 243 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_start();;}
     break;
 
   case 38:
-#line 250 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 249 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_end();;}
     break;
 
   case 40:
-#line 254 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 253 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_annotation = duplicate(yylval);;}
     break;
 
   case 42:
-#line 258 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 257 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PUBLIC;;}
     break;
 
   case 43:
-#line 259 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 258 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PRIVATE;;}
     break;
 
   case 44:
-#line 260 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 259 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PROTECTED;;}
     break;
 
   case 49:
-#line 271 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 270 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::STATIC;;}
     break;
 
   case 50:
-#line 272 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 271 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::FINAL;;}
     break;
 
   case 51:
-#line 273 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 272 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::TRANSIENT;;}
     break;
 
   case 52:
-#line 274 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 273 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::NATIVE;;}
     break;
 
   case 56:
-#line 280 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 279 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = "*"; member_name = "*";;}
     break;
 
   case 57:
-#line 281 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 280 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = duplicate(yylval);;}
     break;
 
   case 58:
-#line 281 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 280 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_name = duplicate(yylval);;}
     break;
 
   case 60:
-#line 286 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 285 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_start(); member_args_end();/* Method that takes no args */;}
     break;
 
   case 62:
-#line 287 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 286 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_start(); /* Method with args */;}
     break;
 
   case 63:
-#line 287 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 286 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_end();;}
     break;
 
   case 67:
-#line 294 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 293 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (method_filter) { method_filter->params.push_back(duplicate(yylval));};}
     break;
 
 
 /* Line 1267 of yacc.c.  */
-#line 1914 "/Users/dtarjan/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
+#line 1913 "/Users/satnamsingh/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -2124,7 +2123,7 @@ yyreturn:
 }
 
 
-#line 340 "/Users/dtarjan/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 339 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
 
 
 bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules) {
@@ -2140,7 +2139,7 @@ bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules)
     } while (!feof(yyin));
 
     passed_rules->swap(*rules);
-    
+
     return true;
 }
 

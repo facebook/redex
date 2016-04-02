@@ -44,7 +44,6 @@ void keep_rule_end() {
     if (!rules) {
         rules = new std::vector<KeepRule>();
     }
-    printf("KEEPING CLASS: %s\n", keeprule->classname);
     rules->push_back(*keeprule);
     delete keeprule;
     keeprule = nullptr;
@@ -208,7 +207,7 @@ KEEP_MODIFIERS:
 
 ALLOWED_OPERATION:
     T_ALLOWOBFUSCATION  {WARN("'allowobfuscation' is not supported.\n"); }|
-    T_ALLOWOPTIMIZATION {WARN("'allowoptimization' is not supported.\n");}| 
+    T_ALLOWOPTIMIZATION {WARN("'allowoptimization' is not supported.\n");}|
     T_ALLOWSHRINKING    {keeprule->allow_deletion = true;};
 
 CLASS_FILTER:
@@ -352,7 +351,7 @@ bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules)
     } while (!feof(yyin));
 
     passed_rules->swap(*rules);
-    
+
     return true;
 }
 

@@ -21,7 +21,8 @@
 
 #define RED "\033[0;31m"
 #define NO_COLOR "\033[0m"
-#define DEBUG(x) fprintf(stderr, RED x " %d  %s" NO_COLOR "  \n", line_number, yytext)
+#define WHENDEBUG(x) fprintf(stderr, RED x " %d  %s" NO_COLOR "  \n", line_number, yytext)
+#define DEBUG(x)
 #define YY_DECL extern "C" int yylex()
 
 int line_number = 1;
@@ -199,4 +200,3 @@ T_PATTERN [A-Za-z.*0-9/[\]$_]+
 }
 
 %%
-
