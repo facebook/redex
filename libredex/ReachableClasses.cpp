@@ -12,7 +12,6 @@
 #include <chrono>
 #include <string>
 #include <unordered_set>
-#include <iostream>
 #include <fstream>
 #include <string>
 
@@ -541,8 +540,7 @@ void init_seed_classes(const std::string seeds_filename) {
     std::ifstream seeds_file(seeds_filename);
     uint count = 0;
     if (!seeds_file) {
-      std::cerr << "Seeds file " << seeds_filename
-                << " was not found (ignoring error)." << std::endl;
+      TRACE(PGR, 1, "Seeds file %s was not found (ignoring error).", seeds_filename.c_str());
     } else {
       std::string line;
       while (getline(seeds_file, line)) {
@@ -561,7 +559,6 @@ void init_seed_classes(const std::string seeds_filename) {
     auto end = std::chrono::high_resolution_clock::now();
     TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
           std::chrono::duration<double>(end - start).count());
-    std::cerr  << "Read " << count << " seed classes " << std::endl ;
 }
 
 /**
