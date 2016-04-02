@@ -150,36 +150,52 @@ bool ProguardMap::parse_field(const std::string& line) {
 }
 
 bool ProguardMap::parse_method(const std::string& line) {
-  int line1;
-  int line2;
-  char type[kBufSize];
-  char methodname[kBufSize];
-  char args[kBufSize];
-  char newname[kBufSize];
-  int n;
-  n = sscanf(line.c_str(), " %d:%d:%s %[^(]() -> %s",
-             &line1, &line2, type, methodname, newname);
-  if (n == 5) {
-    add_method_mapping(type, methodname, newname, "");
-    return true;
+  const char* type;
+  const char* methodname;
+  const char* args;
+  const char* newname;
+
+  char* linecopy = strdup(line.c_str());
+  char* p = linecopy;
+
+  while (!isalpha(*p)) {
+    if (!*p) goto no_match;
+    p++;
   }
-  n = sscanf(line.c_str(), " %d:%d:%s %[^(](%[^)]) -> %s",
-             &line1, &line2, type, methodname, args, newname);
-  if (n == 6) {
-    add_method_mapping(type, methodname, newname, args);
-    return true;
+  type = p;
+
+  while (!isspace(*p)) {
+    if (!*p) goto no_match;
+    p++;
   }
-  n = sscanf(line.c_str(), " %s %[^(]() -> %s", type, methodname, newname);
-  if (n == 3) {
-    add_method_mapping(type, methodname, newname, "");
-    return true;
+  *p++ = '\0';
+  methodname = p;
+
+  while (*p != '(') {
+    if (!*p) goto no_match;
+    p++;
   }
-  n = sscanf(line.c_str(), " %s %[^(](%[^)]) -> %s",
-             type, methodname, args, newname);
-  if (n == 4) {
-    add_method_mapping(type, methodname, newname, args);
-    return true;
+  *p++ = '\0';
+  args = p;
+
+  while (*p != ')') {
+    if (!*p) goto no_match;
+    p++;
   }
+  *p++ = '\0';
+
+  if (strncmp(p, " -> ", 4)) {
+    goto no_match;
+  }
+  p += 4;
+  newname = p;
+
+  add_method_mapping(type, methodname, newname, args);
+  free(linecopy);
+  return true;
+
+ no_match:
+  free(linecopy);
   return false;
 }
 
