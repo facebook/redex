@@ -139,6 +139,12 @@ class MultiMethodInliner {
    */
   bool refs_not_in_primary(DexMethod* context);
 
+  /**
+   * Change the visibility of members accessed in a callee as they are moved
+   * to the caller context.
+   */
+  void change_visibility(DexMethod* callee);
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -181,10 +187,11 @@ class MultiMethodInliner {
     size_t need_vmethod{0};
     size_t invoke_super{0};
     size_t write_over_ins{0};
-    size_t uknown_virtual{0};
     size_t escaped_virtual{0};
     size_t non_pub_virtual{0};
     size_t escaped_field{0};
+    size_t non_pub_field{0};
+    size_t non_pub_ctor{0};
     size_t not_in_primary{0};
   };
   InliningInfo info;

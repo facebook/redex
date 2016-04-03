@@ -397,7 +397,7 @@ void Devirtualizer::analyze_methods(std::vector<DexMethod*>& non_virtual) {
   for (const auto& meths_by_name : methods) {
     for (const auto& meths_by_sig : meths_by_name.second) {
       for (const auto& meths : meths_by_sig.second) {
-        if (meths.first->is_external() || !meths.first->is_concrete()) {
+        if (!meths.first->is_concrete()) {
           continue;
         }
         if (meths.second == FINAL) non_virtual.push_back(meths.first);

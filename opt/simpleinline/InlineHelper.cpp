@@ -130,53 +130,6 @@ bool method_ok(DexType* type, DexMethod* meth) {
   return false;
 }
 
-/**
- * Change the visibility of members accessed in a callee as they are moved
- * to the caller context.
- * We make everything public but we could be more precise and only
- * relax visibility as needed.
- */
-void change_visibility(DexMethod* callee) {
-  TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
-      SHOW(callee));
-  for (auto insn : callee->get_code()->get_instructions()) {
-    if (insn->has_fields()) {
-      auto field = static_cast<DexOpcodeField*>(insn)->field();
-      field = resolve_field(field, is_sfield_op(insn->opcode())
-          ? FieldSearch::Static : FieldSearch::Instance);
-      if (field != nullptr && field->is_concrete()) {
-        TRACE(MMINL, 6, "changing visibility of %s\nin %s\n",
-            SHOW(field), SHOW(type_class(field->get_class())));
-        set_public(field);
-        set_public(type_class(field->get_class()));
-      }
-      continue;
-    }
-    if (insn->has_methods()) {
-      auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
-      if (method->is_concrete()) {
-        TRACE(MMINL, 6, "changing visibility of %s\nin %s\n",
-            SHOW(method), SHOW(type_class(method->get_class())));
-        if(!is_public(method))
-          set_public(method);
-        if(!is_public(type_class(method->get_class())))
-          set_public(type_class(method->get_class()));
-      }
-      continue;
-    }
-    if (insn->has_types()) {
-      auto type = static_cast<DexOpcodeType*>(insn)->get_type();
-      auto cls = type_class(type);
-      if (cls != nullptr) {
-        TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(cls));
-        if(!is_public(cls))
-          set_public(cls);
-      }
-      continue;
-    }
-  }
-}
-
 }
 
 MultiMethodInliner::MultiMethodInliner(
@@ -195,7 +148,7 @@ MultiMethodInliner::MultiMethodInliner(
         if (is_invoke(opcode->opcode())) {
           auto mop = static_cast<DexOpcodeMethod*>(opcode);
           auto callee = resolver(mop->get_method(), opcode_to_search(opcode));
-          if (callee != nullptr &&
+          if (callee != nullptr && callee->is_concrete() &&
               candidates.find(callee) != candidates.end()) {
             callee_caller[callee].push_back(meth);
             caller_callee[meth].push_back(callee);
@@ -255,14 +208,17 @@ void MultiMethodInliner::inline_callees(
   auto insns = caller->get_code()->get_instructions();
 
   // walk the caller opcodes collecting all candidates to inline
+  // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, DexOpcodeMethod*>> inlinables;
   for (auto insn = insns.begin(); insn != insns.end(); ++insn) {
     if (!is_invoke((*insn)->opcode())) continue;
     auto mop = static_cast<DexOpcodeMethod*>(*insn);
     auto callee = resolver(mop->get_method(), opcode_to_search(*insn));
+    if (callee == nullptr) continue;
     if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
       continue;
     }
+    always_assert(callee->is_concrete());
     found++;
     inlinables.push_back(std::make_pair(callee, mop));
     if (found == callees.size()) break;
@@ -276,7 +232,9 @@ void MultiMethodInliner::inline_callees(
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
     auto mop = inlinable.second;
+
     if (!is_inlinable(callee, caller)) continue;
+
     auto op = mop->opcode();
     if (is_invoke_range(op)) {
       info.invoke_range++;
@@ -299,13 +257,16 @@ void MultiMethodInliner::inline_callees(
  * Defines the set of rules that determine whether a function is inlinable.
  */
 bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
+  // don't bring anything into primary that is not in primary
   if (primary.count(caller->get_class()) != 0 && refs_not_in_primary(callee)) {
     return false;
   }
   if (is_enum_method(callee)) return false;
   if (over_16regs(caller, callee)) return false;
   if (has_try_catch(callee)) return false;
+
   if (cannot_inline_opcodes(callee)) return false;
+
   return true;
 }
 
@@ -395,15 +356,25 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee) {
  * This step would not be needed if we changed all private instance to static.
  */
 bool MultiMethodInliner::create_vmethod(DexOpcode* insn) {
-  if (insn->has_methods()) {
+  auto opcode = insn->opcode();
+  if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
     auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
-    if (method->is_concrete() && !method->is_virtual()) {
-      if ((method->get_access() & (ACC_STATIC | ACC_CONSTRUCTOR)) == 0) {
-        // it's a private method that would turn into a virtual
-        info.need_vmethod++;
+    method = resolver(method, MethodSearch::Direct);
+    if (method == nullptr) {
+      info.need_vmethod++;
+      return true;
+    }
+    always_assert(method->is_def());
+    if (is_init(method)) {
+      if (!method->is_concrete() && !is_public(method)) {
+        info.non_pub_ctor++;
         return true;
       }
+      // concrete ctors we can handle because they stay invoke_direct
+      return false;
     }
+    info.need_vmethod++;
+    return true;
   }
   return false;
 }
@@ -456,21 +427,18 @@ bool MultiMethodInliner::unknown_virtual(DexOpcode* insn, DexMethod* context) {
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
       insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
     auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
-    if (method_ok(method->get_class(), method)) return false;
-    auto type = method->get_class();
-    auto cls = type_class(type);
-    if (cls == nullptr) {
+    auto res_method = resolver(method, MethodSearch::Virtual);
+    if (res_method == nullptr) {
+      // if it's not known to redex but it's a common java/android API method
+      if (method_ok(method->get_class(), method)) {
+        return false;
+      }
+      auto type = method->get_class();
       if (type_ok(type)) return false;
-      assert(track(method));
-      info.uknown_virtual++;
-      return true;
-    }
-    auto vmeth = resolve_virtual(cls, method->get_name(), method->get_proto());
-    if (vmeth == nullptr) {
+
       // the method ref is bound to a type known to redex but the method does
       // not exist in the hierarchy known to redex. Essentially the method
       // is from an external type i.e. A.equals(Object)
-      auto type = method->get_class();
       auto cls = type_class(type);
       while (cls != nullptr) {
         type = cls->get_super_class();
@@ -482,7 +450,7 @@ bool MultiMethodInliner::unknown_virtual(DexOpcode* insn, DexMethod* context) {
       info.escaped_virtual++;
       return true;
     }
-    if (!method->is_def() || !is_public(method)) {
+    if (res_method->is_external() && !is_public(res_method)) {
       info.non_pub_virtual++;
       return true;
     }
@@ -507,6 +475,10 @@ bool MultiMethodInliner::unknown_field(DexOpcode* insn, DexMethod* context) {
       info.escaped_field++;
       return true;
     }
+    if (field->is_external() && !is_public(field)) {
+      info.non_pub_field++;
+      return true;
+    }
   }
   return false;
 }
@@ -519,7 +491,7 @@ bool MultiMethodInliner::unknown_field(DexOpcode* insn, DexMethod* context) {
 bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
 
   const auto ok_from_primary = [&](DexType* type) {
-    if (primary.count(type) == 0 && type_class(type) != nullptr) {
+    if (primary.count(type) == 0 && type_class_internal(type) != nullptr) {
       info.not_in_primary++;
       return false;
     }
@@ -560,3 +532,51 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
   }
   return false;
 }
+
+/**
+ * Change the visibility of members accessed in a callee as they are moved
+ * to the caller context.
+ * We make everything public but we could be more precise and only
+ * relax visibility as needed.
+ */
+void MultiMethodInliner::change_visibility(DexMethod* callee) {
+  TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
+      SHOW(callee));
+  for (auto insn : callee->get_code()->get_instructions()) {
+    if (insn->has_fields()) {
+      auto field = static_cast<DexOpcodeField*>(insn)->field();
+      field = resolve_field(field, is_sfield_op(insn->opcode())
+          ? FieldSearch::Static : FieldSearch::Instance);
+      if (field != nullptr && field->is_concrete()) {
+        TRACE(MMINL, 6, "changing visibility of %s.%s %s\n",
+            SHOW(field->get_class()), SHOW(field->get_name()),
+            SHOW(field->get_type()));
+        set_public(field);
+        set_public(type_class(field->get_class()));
+      }
+      continue;
+    }
+    if (insn->has_methods()) {
+      auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+      method = resolver(method, opcode_to_search(insn));
+      if (method != nullptr && method->is_concrete()) {
+        TRACE(MMINL, 6, "changing visibility of %s.%s: %s\n",
+            SHOW(method->get_class()), SHOW(method->get_name()),
+            SHOW(method->get_proto()));
+        set_public(method);
+        set_public(type_class(method->get_class()));
+      }
+      continue;
+    }
+    if (insn->has_types()) {
+      auto type = static_cast<DexOpcodeType*>(insn)->get_type();
+      auto cls = type_class(type);
+      if (cls != nullptr && !cls->is_external()) {
+        TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
+        set_public(cls);
+      }
+      continue;
+    }
+  }
+}
+

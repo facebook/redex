@@ -73,13 +73,8 @@ DEBUG_ONLY bool method_breakup(
 }
 
 void SimpleInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  if (m_config.isObject()) {
-    auto it = m_config.find("virtual");
-    if (it != m_config.items().end()) {
-      fprintf(stderr, "virtual inlining: %lld\n", it->second.asInt());
-      virtual_inline = it->second.asInt() == 0 ? false : true;
-    }
-  }
+  virtual_inline = m_config.getDefault("virtual", 1).asInt() == 0 ?
+      false : true;
   auto scope = build_class_scope(dexen);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope);
@@ -110,11 +105,12 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   TRACE(SINL, 3, "virtualizing methods %ld\n", inliner.get_info().need_vmethod);
   TRACE(SINL, 3, "invoke super %ld\n", inliner.get_info().invoke_super);
   TRACE(SINL, 3, "override inputs %ld\n", inliner.get_info().write_over_ins);
-  TRACE(SINL, 3, "unknown virtual %ld\n", inliner.get_info().uknown_virtual);
   TRACE(SINL, 3, "escaped virtual %ld\n", inliner.get_info().escaped_virtual);
   TRACE(SINL, 3, "known non public virtual %ld\n",
       inliner.get_info().non_pub_virtual);
+  TRACE(SINL, 3, "non public ctor %ld\n", inliner.get_info().non_pub_ctor);
   TRACE(SINL, 3, "unknown field %ld\n", inliner.get_info().escaped_field);
+  TRACE(SINL, 3, "non public field %ld\n", inliner.get_info().non_pub_field);
   TRACE(SINL, 3, "throws %ld\n", inliner.get_info().throws);
   TRACE(SINL, 3, "array data %ld\n", inliner.get_info().array_data);
   TRACE(SINL, 3, "multiple returns %ld\n", inliner.get_info().multi_ret);
@@ -198,21 +194,21 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
     }
   }
 
-  TRACE(SINL, 1, "All methods count: %ld\n", all_methods);
-  TRACE(SINL, 1, "Direct methods count: %ld\n", direct_methods);
-  TRACE(SINL, 1, "Virtual methods count: %ld\n", all_methods - direct_methods);
-  TRACE(SINL, 1, "Direct methods no code: %ld\n", direct_no_code);
-  TRACE(SINL, 1, "Direct methods with code: %ld\n",
+  TRACE(SINL, 2, "All methods count: %ld\n", all_methods);
+  TRACE(SINL, 2, "Direct methods count: %ld\n", direct_methods);
+  TRACE(SINL, 2, "Virtual methods count: %ld\n", all_methods - direct_methods);
+  TRACE(SINL, 2, "Direct methods no code: %ld\n", direct_no_code);
+  TRACE(SINL, 2, "Direct methods with code: %ld\n",
       direct_methods - direct_no_code);
-  TRACE(SINL, 1, "Constructors with or without code: %ld\n", init);
-  TRACE(SINL, 1, "Static constructors: %ld\n", clinit);
-  TRACE(SINL, 1, "Static methods: %ld\n", static_methods);
-  TRACE(SINL, 1, "Private methods: %ld\n", private_methods);
-  TRACE(SINL, 1, "Virtual methods non virtual count: %ld\n", non_virt_methods);
-  TRACE(SINL, 1, "Non virtual no code count: %ld\n", non_virtual_no_code);
-  TRACE(SINL, 1, "Non virtual no strip count: %ld\n", non_virt_dont_strip);
-  TRACE(SINL, 1, "Small methods: %ld\n", inlinable.size());
-  TRACE(SINL, 1, "Don't strip inlinable methods count: %ld\n", dont_strip);
+  TRACE(SINL, 2, "Constructors with or without code: %ld\n", init);
+  TRACE(SINL, 2, "Static constructors: %ld\n", clinit);
+  TRACE(SINL, 2, "Static methods: %ld\n", static_methods);
+  TRACE(SINL, 2, "Private methods: %ld\n", private_methods);
+  TRACE(SINL, 2, "Virtual methods non virtual count: %ld\n", non_virt_methods);
+  TRACE(SINL, 2, "Non virtual no code count: %ld\n", non_virtual_no_code);
+  TRACE(SINL, 2, "Non virtual no strip count: %ld\n", non_virt_dont_strip);
+  TRACE(SINL, 2, "Small methods: %ld\n", inlinable.size());
+  TRACE(SINL, 2, "Don't strip inlinable methods count: %ld\n", dont_strip);
   return methods;
 }
 
@@ -232,7 +228,8 @@ void SimpleInlinePass::select_single_called(
           auto mop = static_cast<DexOpcodeMethod*>(opcode);
           auto callee = resolve_method(
               mop->get_method(), opcode_to_search(opcode), resolved_refs);
-          if (callee != nullptr && methods.count(callee) > 0) {
+          if (callee != nullptr && callee->is_concrete()
+              && methods.count(callee) > 0) {
             calls[callee]++;
           }
         }
