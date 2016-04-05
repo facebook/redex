@@ -73,8 +73,12 @@ DEBUG_ONLY bool method_breakup(
 }
 
 void SimpleInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  virtual_inline = m_config.getDefault("virtual", 1).asInt() == 0 ?
-      false : true;
+  virtual_inline = true;
+  try {
+    virtual_inline = m_config.at("virtual").asInt() == 1;
+  } catch (...) {
+    // Swallow exception if no configuration.
+  }
   auto scope = build_class_scope(dexen);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope);

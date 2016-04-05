@@ -25,7 +25,6 @@ std::vector<std::string> PgoFiles::load_coldstart_classes() {
   auto file = m_coldstart_class_filename.c_str();
   FILE* fp = fopen(file, "r");
   if (fp == nullptr) {
-    fprintf(stderr, "Can't open interdexlist `%s'\n", file);
     return std::vector<std::string>();
   }
   std::vector<std::string> coldstart_classes;

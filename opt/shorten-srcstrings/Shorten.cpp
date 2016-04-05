@@ -124,7 +124,11 @@ static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
 }
 
 void ShortenSrcStringsPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  auto const& path =
-    m_config.getDefault("filename_mappings", "/tmp/filename_mappings.txt");
+  folly::dynamic path = "/tmp/filename_mappings.txt";
+  try {
+    path = m_config.at("filename_mappings");
+  } catch (...) {
+    // Swallow exception if no configuration.
+  }
   return strip_src_strings(dexen, path.c_str());
 }
