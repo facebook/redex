@@ -277,6 +277,8 @@ MEMBER_NAME:
     T_FIELDS |
     T_METHODS |
     T_ANY_MEMBER {member_type = "*"; member_name = "*";} |
+    T_ANY_MEMBER {member_type = "*";} T_PATTERN {member_name = duplicate(yylval);} |
+    T_PATTERN {member_type = duplicate(yylval);} T_ANY_MEMBER {member_name = "*";} |
     T_PATTERN {member_type = duplicate(yylval);} T_PATTERN {member_name = duplicate(yylval);}
     ;
 
