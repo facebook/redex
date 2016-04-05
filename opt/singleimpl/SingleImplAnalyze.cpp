@@ -362,11 +362,12 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_IPUT_WIDE:
                  case OPCODE_IPUT_OBJECT: {
                    const auto fop = static_cast<DexOpcodeField*>(opcode);
-                   const auto field =
+                   auto field =
                        resolve_field(fop->field(), FieldSearch::Instance);
-                   if (field != nullptr) {
-                     check_field(field, fop);
+                   if (field == nullptr) {
+                     field = fop->field();
                    }
+                   check_field(field, fop);
                    return;
                  }
                  case OPCODE_SGET:
@@ -376,11 +377,12 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_SPUT_WIDE:
                  case OPCODE_SPUT_OBJECT: {
                    const auto fop = static_cast<DexOpcodeField*>(opcode);
-                   const auto field =
+                   auto field =
                        resolve_field(fop->field(), FieldSearch::Static);
-                   if (field != nullptr) {
-                     check_field(field, fop);
+                   if (field == nullptr) {
+                     field = fop->field();
                    }
+                   check_field(field, fop);
                    return;
                  }
                  // method ref
@@ -407,36 +409,17 @@ void AnalysisImpl::analyze_opcodes() {
                    return;
                  }
 
+                 case OPCODE_INVOKE_DIRECT:
+                 case OPCODE_INVOKE_DIRECT_RANGE:
+                 case OPCODE_INVOKE_STATIC:
+                 case OPCODE_INVOKE_STATIC_RANGE:
                  case OPCODE_INVOKE_VIRTUAL:
                  case OPCODE_INVOKE_VIRTUAL_RANGE:
                  case OPCODE_INVOKE_SUPER:
                  case OPCODE_INVOKE_SUPER_RANGE: {
                    const auto mop = static_cast<DexOpcodeMethod*>(opcode);
-                   const auto meth =
-                       resolve_method(mop->get_method(), MethodSearch::Virtual);
-                   if (meth != nullptr) {
-                     check_sig(meth, mop);
-                   }
-                   return;
-                 }
-                 case OPCODE_INVOKE_STATIC:
-                 case OPCODE_INVOKE_STATIC_RANGE: {
-                   const auto mop = static_cast<DexOpcodeMethod*>(opcode);
-                   const auto meth =
-                       resolve_method(mop->get_method(), MethodSearch::Static);
-                   if (meth != nullptr) {
-                     check_sig(meth, mop);
-                   }
-                   return;
-                 }
-                 case OPCODE_INVOKE_DIRECT:
-                 case OPCODE_INVOKE_DIRECT_RANGE: {
-                   const auto mop = static_cast<DexOpcodeMethod*>(opcode);
-                   const auto meth =
-                       resolve_method(mop->get_method(), MethodSearch::Direct);
-                   if (meth != nullptr) {
-                     check_sig(meth, mop);
-                   }
+                   const auto meth = mop->get_method();
+                   check_sig(meth, mop);
                    return;
                  }
                  default:
