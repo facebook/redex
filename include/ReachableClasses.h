@@ -40,14 +40,14 @@ inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
 // can_delete check.
 inline bool can_remove_class(DexClass* clazz) {
   if (is_seed(clazz) && can_delete(clazz)) {
-      TRACE(PGR,1 , "Catch by seed class: %s\n", clazz->get_type()->get_name()->c_str());
+      TRACE(PGR, 1, "Catch by seed class: %s\n", clazz->get_type()->get_name()->c_str());
   }
   if (!is_seed(clazz) && !can_delete(clazz)) {
     std::string name = clazz->get_type()->get_name()->c_str();
     if (name.find("$") == std::string::npos)
-      TRACE(PGR,1 , "Catch by RF: %s\n", clazz->get_type()->get_name()->c_str());
+      TRACE(PGR, 1, "Catch by RF: %s\n", clazz->get_type()->get_name()->c_str());
   }
-  return !(!can_delete(clazz) || is_seed(clazz));
+  return can_delete(clazz) && !is_seed(clazz);
 }
 
 bool do_not_strip(DexField*);

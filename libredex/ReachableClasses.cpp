@@ -132,21 +132,6 @@ static void mark_reachable_by_seed(DexType* dtype) {
   mark_reachable_by_seed(type_class_internal(dtype));
 }
 
-/* In case we ever need it.
- *
-static void mark_reachable_by_seed(std::string& classname) {
-  DexString* dstring =
-      DexString::get_string(classname.c_str(), classname.size());
-  DexType* dtype = DexType::get_type(dstring);
-  if (dtype == nullptr) {
-    TRACE(PGR, 4, "Can't find type for seed class %s\n", classname.c_str());
-    return;
-  }
-  DexClass* dclass = type_class_internal(dtype);
-  mark_reachable_by_seed(dclass);
-}
-**/
-
 template <typename DexMember>
 bool anno_set_contains(
   DexMember m,
