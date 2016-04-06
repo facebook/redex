@@ -572,7 +572,7 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   // Final report
   TRACE(
     RELO,
-    5,
+    1,
 "\
 RELO :) Deleted %d methods\n\
 RELO :) Moved %d methods\n\
