@@ -22,37 +22,13 @@ namespace {
 
 struct Tracer {
   Tracer() {
-    std::unordered_map<std::string, int> module_id_map;
-#define TM(x) module_id_map[ #x ] = x;
-    TMS
-#undef TM
-    char* tracespec = getenv("TRACE");
+    const char* traceenv = getenv("TRACE");
     const char* envfile = getenv("TRACEFILE");
-    if (tracespec) {
-      m_level = strtol(tracespec, nullptr, 10);
-      if (m_level == 0) {
-        auto module = strtok(tracespec, ":");
-        while (true) {
-          if (!module) break;
-          const char* strlevel = strtok(nullptr, " ,");
-          if (!strlevel) break;
-          auto level = strtol(strlevel, nullptr, 10);
-          if (module_id_map.count(module) == 0) {
-            fprintf(stderr, "Unknown trace level %s\n", module);
-            abort();
-          }
-          m_traces[module_id_map[module]] = level;
-          module = strtok(nullptr, ":");
-        }
-      }
-      if (!envfile) {
-        envfile = "/dev/stderr";
-      }
-      m_file = fopen(envfile, "w");
-      if (!m_file) {
-        m_file = stderr;
-      }
+    if (!traceenv) {
+      return;
     }
+    init_trace_modules(traceenv);
+    init_trace_file(envfile);
   }
 
   ~Tracer() {
@@ -62,17 +38,53 @@ struct Tracer {
   }
 
   bool traceEnabled(TraceModule module, int level) {
-    if (m_level == 0) {
-      if (level > m_traces[module]) return false;
-    } else if (level > m_level) {
-      return false;
-    }
-    return true;
+    return level <= m_level || level <= m_traces[module];
   }
 
   void trace(const char* fmt, va_list ap) {
     vfprintf(m_file, fmt, ap);
     fflush(m_file);
+  }
+
+ private:
+  void init_trace_modules(const char* traceenv) {
+    std::unordered_map<std::string, int> module_id_map;
+#define TM(x) module_id_map[ #x ] = x;
+    TMS
+#undef TM
+    char* tracespec = strdup(traceenv);
+    const char* sep = ",: ";
+    const char* tok = strtok(tracespec, sep);
+    const char* module = nullptr;
+    do {
+      auto level = strtol(tok, nullptr, 10);
+      if (level) {
+        if (module) {
+          if (module_id_map.count(module) == 0) {
+            fprintf(stderr, "Unknown trace level %s\n", module);
+            abort();
+          }
+          m_traces[module_id_map[module]] = level;
+        } else {
+          m_level = level;
+        }
+        module = nullptr;
+      } else {
+        module = tok;
+      }
+      tok = strtok(nullptr, sep);
+    } while (tok);
+    free(tracespec);
+  }
+
+  void init_trace_file(const char* envfile) {
+    if (!envfile) {
+      envfile = "/dev/stderr";
+    }
+    m_file = fopen(envfile, "w");
+    if (!m_file) {
+      m_file = stderr;
+    }
   }
 
  private:

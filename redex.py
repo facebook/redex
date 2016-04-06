@@ -30,18 +30,17 @@ def want_trace():
         trace = os.environ['TRACE']
     except KeyError:
         return False
-    try:
-        return int(trace) > 0
-    except ValueError:
-        pass
-    try:
-        tracemap = dict([t.split(':') for t in trace.split(',')])
-    except ValueError:
-        return False
-    try:
-        return int(tracemap['REDEX']) > 0
-    except Exception:
-        return False
+    for t in trace.split(','):
+        try:
+            return int(t) > 0
+        except ValueError:
+            pass
+        try:
+            (module, level) = t.split(':')
+            if module == 'REDEX' and int(level) > 0:
+                return True
+        except ValueError:
+            pass
     return False
 
 
