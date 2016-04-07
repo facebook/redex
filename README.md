@@ -19,8 +19,6 @@ Mac OS X:
 ```
 brew install boost autoconf automake glog double-conversion
 ```
-You will also need to build and install
-[folly](https://github.com/facebook/folly) from source.
 
 Ubuntu 14.04 LTS:
 ```
@@ -32,13 +30,12 @@ apt-get install \
   libdouble-conversion-dev \
   libgoogle-glog-dev
 ```
-You will also need to build and install
-[folly](https://github.com/facebook/folly) from source.
 
 ### Build and Install
 
-Build ReDex using autoconf and make:
+Build ReDex using autoconf and make.
 ```
+git submodule update --init --recursive
 autoreconf -ivf && ./configure && make && make install
 ```
 

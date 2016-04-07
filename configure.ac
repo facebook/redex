@@ -6,6 +6,7 @@ AC_INIT([redex], [1.0], [not-valid-yet@fb.com])
 AM_INIT_AUTOMAKE(redex, 1.0)
 AC_CONFIG_SRCDIR([configparser/config.l])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_SUBDIRS([third-party/folly/folly])
 
 # Checks for programs.
 AC_PROG_CXX
@@ -24,7 +25,6 @@ AX_BOOST_BASE([1.54.0], [], [AC_MSG_ERROR(
               [Please install boost >= 1.54 (including filesystem)])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
-AC_CHECK_LIB([folly], [main], [], [AC_MSG_ERROR([Please install folly])])
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
 AC_CHECK_LIB([double-conversion], [main], [], [AC_MSG_ERROR([Please install double-conversion])])
 AC_CHECK_LIB([glog], [main], [], [AC_MSG_ERROR([Please install glog])])
