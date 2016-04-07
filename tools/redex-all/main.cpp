@@ -290,6 +290,17 @@ int main(int argc, char* argv[]) {
 
   Arguments args;
   std::vector<KeepRule> rules;
+  // Currently there are two sources that specify the library jars:
+  // 1. The jar_path argument, which may specify one library jar.
+  // 2. The library_jars vector, which lists the library jars specified in
+  //    the ProGuard configuration.
+  // If -jarpath specified a library jar it is appended to the
+  // library_jars vector so this vector can be used to iterate over
+  // all the library jars regardless of whether they were specified
+  // on the command line or ProGuard file.
+  // TODO: Make the command line -jarpath option like a colon separated
+  //       list of library JARS.
+  std::vector<std::string> library_jars;
   auto start = parse_args(argc, argv, args);
   if (!dir_is_writable(args.out_dir)) {
     fprintf(stderr, "outdir %s is not a writable directory\n",
@@ -308,18 +319,26 @@ int main(int argc, char* argv[]) {
   }
 
   if (!args.proguard_config.empty()) {
-    if (!load_proguard_config_file(args.proguard_config.c_str(), &rules)) {
+    if (!load_proguard_config_file(args.proguard_config.c_str(), &rules, &library_jars)) {
       fprintf(stderr, "ERROR: Unable to open proguard config %s\n",
               args.proguard_config.c_str());
       start = 0;
     }
+    for (const auto& library_jar: library_jars) {
+      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+    }
   } else {
-    TRACE(MAIN, 1, "Skipping parsing the proguard config file\n");
+    TRACE(MAIN, 1, "Skipping parsing the proguard config file because no file was specified\n");
   }
 
   if (start == 0 || start == argc) {
     usage();
     exit(1);
+  }
+  // Append the library jar from the command line argument to the
+  // library jars vector.
+  if (!args.jar_path.empty()) {
+    library_jars.push_back(args.jar_path);
   }
 
   DexClassesVector dexen;

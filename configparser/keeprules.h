@@ -176,4 +176,4 @@ bool pattern_match(const char* pattern, const char* name, int pl, int nl);
 
 bool type_matches(const char* pattern, const char* name, int pl, int nl);
 
-bool parse_proguard_file(const char * input, std::vector<KeepRule>* rules);
+bool parse_proguard_file(const char * input, std::vector<KeepRule>* rules, std::vector<std::string>* library_jars);

@@ -75,21 +75,26 @@ T_DONTSHRINK "-dontshrink"
 T_DONTWARN "-dontwarn"
 T_DONTUSEMIXEDCASECLASSNAMES "-dontusemixedcaseclassnames"
 T_FLATTENPACKAGEHIERARCHY "-flattenpackagehierarchy"
+T_INJARS "-injars"
+T_OUTJARS "-outjars"
 T_KEEPATTRIBUTES "-keepattributes"
 T_KEEPPACKAGENAMES "-keeppackagenames"
 T_KEEPPARAMETERNAMES "-keepparameternames"
+T_LIBRARYJARS "-libraryjars"
 T_MERGEINTERFACESAGGRESSIVELY "-mergeinterfacesaggressively"
 T_OBFUSCATIONDICTIONARY "-obfuscationdictionary"
 T_OPTIMIZATIONPASSES "-optimizationpasses"
 T_OPTIMIZATIONS "-optimizations"
 T_OVERLOADAGGRESSIVELY "-overloadaggressively"
 T_PACKAGEOBFUSCATIONDICTIONARY "-packageobfuscationdictionary"
+T_PRINTCONFIGURATION "-printconfiguration"
 T_PRINTMAPPING "-printmapping"
 T_PRINTSEEDS "-printseeds"
 T_PRINTUSAGE "-printusage"
 T_RENAMESOURCEFILEATTRIBUTE "-renamesourcefileattribute"
 T_REPACKAGECLASSES "-repackageclasses"
 T_USEUNIQUECLASSMEMBERNAMES "-useuniqueclassmembernames"
+T_VERBOSE "-verbose"
 T_WHYAREYOUKEEPING "-whyareyoukeeping"
 
 T_STATIC "static"
@@ -104,7 +109,9 @@ T_ARGS_END ")"
 
 T_COMMENT #[^\n]*
 
-T_PATTERN [A-Za-z.*0-9/[\]$_]+
+/* For the moment we conflate tokens for patterns and filenames. TODO: fix. */
+T_PATTERN [A-Za-z*[.0-9/$_]+[A-Za-z*\[\].0-9/$_#-]*
+
 
 %%
 
@@ -160,6 +167,11 @@ T_PATTERN [A-Za-z.*0-9/[\]$_]+
 {T_PRIVATE}                      {DEBUG("private          ");  return T_PRIVATE;}
 {T_PROTECTED}                    {DEBUG("protected        ");  return T_PROTECTED;}
 
+{T_LIBRARYJARS}                  {DEBUG("libraryjars       ");  return T_LIBRARYJARS;}
+
+{T_INJARS}                       {DEBUG("injars            ");  return T_INJARS;}
+{T_OUTJARS}                      {DEBUG("outjars           ");  return T_OUTJARS;}
+
 {T_ADAPTCLASSSTRINGS}            {DEBUG("[ignored rule]   "); return T_ADAPTCLASSSTRINGS;}
 {T_ADAPTRESOURCEFILECONTENTS}    {DEBUG("[ignored rule]   "); return T_ADAPTRESOURCEFILECONTENTS;}
 {T_ADAPTRESOURCEFILENAMES}       {DEBUG("[ignored rule]   "); return T_ADAPTRESOURCEFILENAMES;}
@@ -183,12 +195,14 @@ T_PATTERN [A-Za-z.*0-9/[\]$_]+
 {T_OPTIMIZATIONS}                {DEBUG("[ignored rule]   "); return T_OPTIMIZATIONS;}
 {T_OVERLOADAGGRESSIVELY}         {DEBUG("[ignored rule]   "); return T_OVERLOADAGGRESSIVELY;}
 {T_PACKAGEOBFUSCATIONDICTIONARY} {DEBUG("[ignored rule]   "); return T_PACKAGEOBFUSCATIONDICTIONARY;}
+{T_PRINTCONFIGURATION}           {DEBUG("[ignored rule]   "); return T_PRINTCONFIGURATION;}
 {T_PRINTMAPPING}                 {DEBUG("[ignored rule]   "); return T_PRINTMAPPING;}
 {T_PRINTSEEDS}                   {DEBUG("[ignored rule]   "); return T_PRINTSEEDS;}
 {T_PRINTUSAGE}                   {DEBUG("[ignored rule]   "); return T_PRINTUSAGE;}
 {T_RENAMESOURCEFILEATTRIBUTE}    {DEBUG("[ignored rule]   "); return T_RENAMESOURCEFILEATTRIBUTE;}
 {T_REPACKAGECLASSES}             {DEBUG("[ignored rule]   "); return T_REPACKAGECLASSES;}
 {T_USEUNIQUECLASSMEMBERNAMES}    {DEBUG("[ignored rule]   "); return T_USEUNIQUECLASSMEMBERNAMES;}
+{T_VERBOSE}                      {DEBUG("[ignored rule]   "); return T_VERBOSE;}
 {T_WHYAREYOUKEEPING}             {DEBUG("[ignored rule]   "); return T_WHYAREYOUKEEPING;}
 
 {T_PATTERN}                      {DEBUG("pattern          "); yylval = yytext; return T_PATTERN;}

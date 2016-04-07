@@ -12,6 +12,7 @@
 
 #include "keeprules.h"
 
-bool load_proguard_config_file(const char* location, std::vector<KeepRule>* rules);
+bool load_proguard_config_file(const char* location, std::vector<KeepRule>* rules,
+                               std::vector<std::string>* library_jars);
 
 #endif // __NATIVE_REDEX_SRC_JARLOADER_H__

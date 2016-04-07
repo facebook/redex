@@ -22,7 +22,9 @@ extern "C" int line_number;
 
 void yyerror(const char* msg);
 
+/* TODO: consider conversion to using %parse-param to specify args for yyparse() */
 std::vector<KeepRule>* rules = nullptr;
+std::vector<std::string>* library_jars = nullptr;
 
 // Used for both classes and members
 uint32_t flags;
@@ -41,9 +43,6 @@ void keep_rule_start() {
 }
 
 void keep_rule_end() {
-    if (!rules) {
-        rules = new std::vector<KeepRule>();
-    }
     rules->push_back(*keeprule);
     delete keeprule;
     keeprule = nullptr;
@@ -137,21 +136,26 @@ static char* duplicate(char* original) {
 %token T_DONTWARN
 %token T_DONTUSEMIXEDCASECLASSNAMES
 %token T_FLATTENPACKAGEHIERARCHY
+%token T_INJARS
 %token T_KEEPATTRIBUTES
 %token T_KEEPPACKAGENAMES
 %token T_KEEPPARAMETERNAMES
+%token T_LIBRARYJARS
 %token T_MERGEINTERFACESAGGRESSIVELY
 %token T_OBFUSCATIONDICTIONARY
 %token T_OPTIMIZATIONPASSES
 %token T_OPTIMIZATIONS
+%token T_OUTJARS
 %token T_OVERLOADAGGRESSIVELY
 %token T_PACKAGEOBFUSCATIONDICTIONARY
+%token T_PRINTCONFIGURATION
 %token T_PRINTMAPPING
 %token T_PRINTSEEDS
 %token T_PRINTUSAGE
 %token T_RENAMESOURCEFILEATTRIBUTE
 %token T_REPACKAGECLASSES
 %token T_USEUNIQUECLASSMEMBERNAMES
+%token T_VERBOSE
 %token T_WHYAREYOUKEEPING
 
 %token T_CLASS T_ENUM T_INTERFACE T_AT_INTERFACE
@@ -170,7 +174,8 @@ static char* duplicate(char* original) {
 %%
 
 START:
-    RULE_LIST;
+   RULE_LIST |
+   ;
 
 RULE_LIST:
     /* Note: RULE RULE_LIST is much less efficient */
@@ -180,7 +185,14 @@ RULE_LIST:
 RULE:
     T_COMMENT |
     UNSUPPORTED_PROGUARD_RULE |
-    KEEP_RULE;
+    KEEP_RULE |
+    DIRECTIVE;
+
+DIRECTIVE:
+    T_INJARS T_PATTERN |
+    T_OUTJARS T_PATTERN |
+    T_LIBRARYJARS T_PATTERN { library_jars->push_back(duplicate(yylval)); }
+    ;
 
 KEEP_RULE:
     {keep_rule_start();}
@@ -306,7 +318,7 @@ UNSUPPORTED_PROGUARD_RULE:
     T_DONTOPTIMIZE |
     T_DONTPREVERIFY |
     T_DONTSHRINK |
-    T_DONTWARN T_PATTERN |
+    T_DONTWARN PATTERN_LIST |
     T_DONTUSEMIXEDCASECLASSNAMES |
     T_FLATTENPACKAGEHIERARCHY T_PATTERN |
     T_KEEPATTRIBUTES PATTERN_LIST |
@@ -318,12 +330,14 @@ UNSUPPORTED_PROGUARD_RULE:
     T_OPTIMIZATIONS OPTIMIZATION_LIST |
     T_OVERLOADAGGRESSIVELY |
     T_PACKAGEOBFUSCATIONDICTIONARY T_PATTERN |
+    T_PRINTCONFIGURATION PATTERN_LIST |
     T_PRINTMAPPING T_PATTERN |
     T_PRINTSEEDS T_PATTERN |
     T_PRINTUSAGE T_PATTERN |
     T_RENAMESOURCEFILEATTRIBUTE T_PATTERN |
     T_REPACKAGECLASSES T_PATTERN |
     T_USEUNIQUECLASSMEMBERNAMES |
+    T_VERBOSE |
     T_WHYAREYOUKEEPING T_PATTERN;
 
 OPTIMIZATION_LIST:
@@ -340,19 +354,20 @@ PATTERN_LIST:
 
 %%
 
-bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules) {
+bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules,
+                         std::vector<std::string>* passed_library_jars) {
     FILE *pgfile = fopen(file, "r");
     if (!pgfile) {
         std::cerr << "Couldn't open " << file << std::endl;
         return false;
     }
     yyin = pgfile;
+    rules = passed_rules;
+    library_jars = passed_library_jars;
     // parse through the input until there is no more:
     do {
         yyparse();
     } while (!feof(yyin));
-
-    passed_rules->swap(*rules);
 
     return true;
 }
