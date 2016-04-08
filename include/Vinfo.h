@@ -7,8 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#ifndef __NATIVE_REDEX_INCLUDE_VINFO_H__
-#define __NATIVE_REDEX_INCLUDE_VINFO_H__
+#pragma once
 
 #include "DexClass.h"
 
@@ -101,5 +100,3 @@ public:
 private:
   vinfos_t m_vinfos;
 };
-
-#endif // __NATIVE_REDEX_INCLUDE_VINFO_H__

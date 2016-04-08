@@ -7,8 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#ifndef StaticReloPass_h
-#define StaticReloPass_h
+#pragma once
 
 #include "PassManager.h"
 #include "DexClass.h"
@@ -19,5 +18,3 @@ class StaticReloPass : public Pass {
 
   virtual void run_pass(DexClassesVector&, PgoFiles&) override;
 };
-
-#endif

@@ -7,12 +7,9 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#ifndef __NATIVE_REDEX_SRC_PROGUARDLOADER_H__
-#define __NATIVE_REDEX_SRC_PROGUARDLOADER_H__
+#pragma once
 
 #include "keeprules.h"
 
 bool load_proguard_config_file(const char* location, std::vector<KeepRule>* rules,
                                std::vector<std::string>* library_jars);
-
-#endif // __NATIVE_REDEX_SRC_JARLOADER_H__
