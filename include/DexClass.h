@@ -141,7 +141,11 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
   while (1) {
     uint32_t cpa = mutf8_next_code_point(sa);
     uint32_t cpb = mutf8_next_code_point(sb);
-    if (cpa == cpb) continue;
+    if (cpa == cpb) {
+      if (*sa == '\0') return true;
+      if (*sb == '\0') return false;
+      continue;
+    }
     return (cpa < cpb);
   }
 }
