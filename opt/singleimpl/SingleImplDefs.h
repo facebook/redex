@@ -72,6 +72,8 @@ enum EscapeReason : uint32_t {
   SELF_REFERENCE = 0X200,
   // interface marked DoNotStrip
   DO_NOT_STRIP = 0X400,
+  // create a reference from not-primary into primary
+  NOT_IN_PRIMARY = 0x800,
   // optimization escape reason
   // interface substitution causes a collision with an existing method
   SIG_COLLISION = 0x10000,
@@ -136,7 +138,7 @@ struct SingleImplAnalysis {
    * Create a SingleImplAnalysis from a given Scope.
    */
   static std::unique_ptr<SingleImplAnalysis> analyze(
-      const Scope& scope, const TypeMap& single_impl,
+      const Scope& scope, DexClasses& primary_dex, const TypeMap& single_impl,
       const TypeSet& intfs, const folly::dynamic& config);
 
   /**

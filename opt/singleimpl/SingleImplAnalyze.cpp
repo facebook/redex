@@ -29,7 +29,12 @@
 #include <folly/dynamic.h>
 
 struct AnalysisImpl : SingleImplAnalysis {
-  AnalysisImpl(const Scope& scope) : SingleImplAnalysis(), scope(scope) {}
+  AnalysisImpl(const Scope& scope, DexClasses& primary_dex)
+      : SingleImplAnalysis(), scope(scope) {
+    for (const auto& cls : primary_dex) {
+      primary.insert(cls->get_type());
+    }
+  }
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,
@@ -37,6 +42,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   void collect_field_defs();
   void collect_method_defs();
   void analyze_opcodes();
+  void escape_not_in_primary();
   void remove_escaped();
 
  private:
@@ -51,6 +57,7 @@ struct AnalysisImpl : SingleImplAnalysis {
 
  private:
   const Scope& scope;
+  std::unordered_set<DexType*> primary;
 };
 
 /**
@@ -222,6 +229,19 @@ void AnalysisImpl::escape_with_sfields() {
       if (simpl) {
         escape_interface(simpl, HAS_SFIELDS);
       }
+    }
+  }
+}
+
+/**
+ * If an interface in primary brings a class not in primary drop the
+ * optimization.
+ */
+void AnalysisImpl::escape_not_in_primary() {
+  for (auto const& intf_it : single_impls) {
+    if (primary.count(intf_it.first) == 0) continue;
+    if (primary.count(intf_it.second.cls) == 0) {
+      escape_interface(intf_it.first, NOT_IN_PRIMARY);
     }
   }
 }
@@ -432,13 +452,15 @@ void AnalysisImpl::analyze_opcodes() {
  * Main analysis method
  */
 std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
-    const Scope& scope, const TypeMap& single_impl,
+    const Scope& scope, DexClasses& primary_dex, const TypeMap& single_impl,
     const TypeSet& intfs, const folly::dynamic& config) {
-  std::unique_ptr<AnalysisImpl> single_impls(new AnalysisImpl(scope));
+  std::unique_ptr<AnalysisImpl> single_impls(
+      new AnalysisImpl(scope, primary_dex));
   single_impls->create_single_impl(single_impl, intfs, config);
   single_impls->collect_field_defs();
   single_impls->collect_method_defs();
   single_impls->analyze_opcodes();
+  single_impls->escape_not_in_primary();
   single_impls->remove_escaped();
   return std::move(single_impls);
 }

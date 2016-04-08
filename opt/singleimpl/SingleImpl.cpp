@@ -106,7 +106,8 @@ void SingleImplPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
     collect_single_impl(intfs_to_classes, single_impl);
 
     std::unique_ptr<SingleImplAnalysis> single_impls =
-        SingleImplAnalysis::analyze(scope, single_impl, intfs, m_config);
+        SingleImplAnalysis::analyze(
+            scope, dexen[0], single_impl, intfs, m_config);
     auto optimized = optimize(std::move(single_impls), scope);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
     removed_count += optimized;

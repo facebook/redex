@@ -89,9 +89,7 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   };
 
   // inline candidates
-  DexClasses empty(0);
-  MultiMethodInliner inliner(
-      scope, dexen.size() > 0 ? dexen[0] : empty, inlinable, resolver);
+  MultiMethodInliner inliner(scope, dexen[0], inlinable, resolver);
   inliner.inline_methods();
 
   // delete all methods that can be deleted
