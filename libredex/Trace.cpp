@@ -56,7 +56,7 @@ struct Tracer {
     const char* sep = ",: ";
     const char* tok = strtok(tracespec, sep);
     const char* module = nullptr;
-    do {
+    while (tok) {
       auto level = strtol(tok, nullptr, 10);
       if (level) {
         if (module) {
@@ -73,7 +73,7 @@ struct Tracer {
         module = tok;
       }
       tok = strtok(nullptr, sep);
-    } while (tok);
+    }
     free(tracespec);
   }
 
