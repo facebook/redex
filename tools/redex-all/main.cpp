@@ -322,7 +322,8 @@ int main(int argc, char* argv[]) {
     if (!load_proguard_config_file(args.proguard_config.c_str(), &rules, &library_jars)) {
       fprintf(stderr, "ERROR: Unable to open proguard config %s\n",
               args.proguard_config.c_str());
-      start = 0;
+      // For now tolerate missing or unparseable ProGuard configuration files.
+      // start = 0;
     }
     for (const auto& library_jar: library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
