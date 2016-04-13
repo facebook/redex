@@ -45,6 +45,12 @@ sudo apt-get install \
     libiberty-dev
 ```
 
+Windows 10 Preview 14316:
+
+open `bash` first: https://www.v2ex.com/t/269176
+
+Terminal commands just like `Ubuntu 14.04 LTS`
+
 ### Download, Build and Install
 
 ReDex includes [folly](https://github.com/facebook/folly) as a git submodule.
@@ -52,6 +58,10 @@ Initialize it using:
 ```
 git submodule update --init
 ```
+
+Windows 10 Preview 14316 Tips:
+
+You may install `folly` manually in the directory `third-party/` from [this issues](https://github.com/facebook/redex/issues/11).
 
 Now, build ReDex using autoconf and make.
 ```
