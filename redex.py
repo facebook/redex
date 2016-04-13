@@ -50,7 +50,7 @@ def log(*stuff):
 
 
 def find_android_build_tools():
-    VERSION_REGEXP = '\d+\.\d+(\.\d+)?'
+    VERSION_REGEXP = '\d+\.\d+(\.\d+)$'
     android_home = os.environ['ANDROID_SDK']
     build_tools = join(android_home, 'build-tools')
     version = max(
