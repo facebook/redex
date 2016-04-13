@@ -23,7 +23,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import urllib2
 
 def parse_hprof_dump(instream):
     # Read the tag - a null-terminated string
@@ -52,10 +51,6 @@ def parse_file(instream):
 
 def parse_filename(filename):
     return parse_hprof_dump(open(filename, 'rb'))
-
-def parse_url(url):
-    response = urllib2.urlopen(url)
-    return parse_hprof_dump(response)
 
 class HprofTag(enum.Enum):
     STRING = 0x01
