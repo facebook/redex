@@ -5,7 +5,7 @@ To generate a class list do the following:
 // get the process id of the app
 adb shell ps | grep YOUR_APP_NAME (FIXME: second numeric value is the pid)
 // tell activity manager to dump the heap. You'll need root for this on the phone
-adb shell am dumpheap <pid> > /data/local/tmp/SOMEDUMP.hprof
+adb shell am dumpheap <pid> /data/local/tmp/SOMEDUMP.hprof
 // copy the heap to your host computer
 adb pull /data/local/tmp/SOMEDUMP.hprof YOUR_DIR_HERE/.
 // pass the heap dump to the python script for parsing and printing out the class list
