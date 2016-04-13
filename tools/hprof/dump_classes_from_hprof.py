@@ -1258,14 +1258,6 @@ def java_locals(hprof_data):
         thread_locals[threads[loc.thread_serial]].add(loc.obj)
     return thread_locals
 
-def prune_classes(classes):
-    classes.sort(key=lambda tup: tup[1])
-    for idx, tup in enumerate(classes):
-        if tup[0].startswith('com.facebook'):
-            return classes[idx:]
-    return []
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--hprof",
@@ -1276,7 +1268,6 @@ if __name__ == "__main__":
     for cls_name, cls in hp.class_name_dict.iteritems():
         classes.append((cls_name, hp.class_object_id_to_load_class_record[
                 cls.object_id].class_serial))
-    classes = prune_classes(classes)
     seen = set()
     class_serials = []
     for tup in classes:
