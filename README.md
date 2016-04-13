@@ -18,7 +18,8 @@ package manager.
 Mac OS X:
 ```
 brew install autoconf automake libtool
-brew install boost double-conversion gflags glog libevent
+brew install boost double-conversion gflags glog libevent openssl
+brew link openssl --force
 ```
 
 Ubuntu 14.04 LTS:
