@@ -22,6 +22,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PgoFiles.h"
+#include "ReachableClasses.h"
 #include "Transform.h"
 #include "walkers.h"
 
@@ -36,6 +37,8 @@ size_t global_vmeth_cnt;
 size_t global_methref_cnt;
 size_t global_fieldref_cnt;
 size_t global_cls_cnt;
+size_t cls_skipped_in_primary = 0;
+size_t cls_skipped_in_secondary = 0;
 
 static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
   std::vector<DexMethod*> method_refs;
@@ -202,10 +205,103 @@ static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
   emit_class(det, outdex, clazz, false);
 }
 
+static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
+  const Scope& scope,
+  dex_emit_tracker& det,
+  const std::vector<std::string>& interdexorder,
+  bool static_prune_classes) {
+  int old_no_ref = -1;
+  int new_no_ref = 0;
+  std::unordered_set<DexClass*> coldstart_classes;
+  std::unordered_set<const DexClass*> cold_cold_references;
+  std::unordered_set<const DexClass*> unreferenced_classes;
+  Scope input_scope = scope;
+
+  // don't do analysis if we're not going doing pruning
+  if (!static_prune_classes) {
+    return unreferenced_classes;
+  }
+
+  for (auto const& class_string : interdexorder) {
+    if (det.clookup.count(class_string)) {
+      coldstart_classes.insert(det.clookup[class_string]);
+    }
+  }
+
+  while (old_no_ref != new_no_ref) {
+    old_no_ref = new_no_ref;
+    new_no_ref = 0;
+    cold_cold_references.clear();
+    walk_code(
+      input_scope,
+      [&](DexMethod* meth) {
+        if (coldstart_classes.count(type_class(meth->get_class())) > 0) {
+          return true;
+        }
+        return false;
+      },
+      [&](DexMethod* meth, DexCode* code) {
+        auto base_cls = type_class(meth->get_class());
+        for (auto const& inst : code->get_instructions()) {
+          DexClass* called_cls = nullptr;
+          if (inst->has_methods()) {
+            auto method_access = static_cast<DexOpcodeMethod*>(inst);
+            called_cls = type_class(method_access->get_method()->get_class());
+          } else if (inst->has_fields()) {
+            auto field_access = static_cast<DexOpcodeField*>(inst);
+            called_cls = type_class(field_access->field()->get_class());
+          } else if (inst->has_types()) {
+            auto type_access = static_cast<DexOpcodeType*>(inst);
+            called_cls = type_class(type_access->get_type());
+          }
+          if (called_cls != nullptr &&
+            base_cls != called_cls &&
+            coldstart_classes.count(called_cls) > 0) {
+              cold_cold_references.insert(called_cls);
+          }
+        }
+      }
+    );
+    for (const auto& cls: scope) {
+      // make sure we don't drop classes which
+      // might be called from native code
+      if (!can_rename(cls)) {
+        cold_cold_references.insert(cls);
+      }
+    }
+    // get all classes in the reference
+    // set, even if they are not referenced
+    // by opcodes directly
+    for (const auto& cls: input_scope) {
+      if (cold_cold_references.count(cls)) {
+        std::vector<DexType*> types;
+        cls->gather_types(types);
+        for (const auto& type: types) {
+          auto cls = type_class(type);
+          cold_cold_references.insert(cls);
+        }
+      }
+    }
+    Scope output_scope;
+    for (auto& cls : coldstart_classes) {
+      if (can_rename(cls) && cold_cold_references.count(cls) == 0) {
+        new_no_ref++;
+        unreferenced_classes.insert(cls);
+      } else {
+        output_scope.push_back(cls);
+      }
+    }
+    TRACE(IDEX, 1, "found %d classes in coldstart with no references\n", new_no_ref);
+    input_scope = output_scope;
+  }
+  return unreferenced_classes;
+}
+
 static DexClassesVector run_interdex(
   const DexClassesVector& dexen,
   PgoFiles& pgo,
-  bool allow_cutting_off_dex
+  bool allow_cutting_off_dex,
+  bool static_prune_classes
 ) {
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
@@ -213,6 +309,9 @@ static DexClassesVector run_interdex(
   global_methref_cnt = 0;
   global_fieldref_cnt = 0;
   global_cls_cnt = 0;
+
+  cls_skipped_in_primary = 0;
+  cls_skipped_in_secondary = 0;
 
   auto interdexorder = pgo.get_coldstart_classes();
   dex_emit_tracker det;
@@ -223,6 +322,14 @@ static DexClassesVector run_interdex(
       det.clookup[clzname] = clazz;
     }
   }
+
+  auto scope = build_class_scope(dexen);
+
+  auto unreferenced_classes = find_unrefenced_coldstart_classes(
+      scope,
+      det,
+      interdexorder,
+      static_prune_classes);
 
   DexClassesVector outdex;
 
@@ -248,6 +355,11 @@ static DexClassesVector run_interdex(
       continue;
     }
     auto clazz = it->second;
+    if (unreferenced_classes.count(clazz)) {
+      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
+      cls_skipped_in_primary++;
+      continue;
+    }
     emit_class(primary_det, outdex, clazz, true);
     coldstart_classes_in_primary++;
   }
@@ -279,10 +391,28 @@ static DexClassesVector run_interdex(
       continue;
     }
     auto clazz = it->second;
+    if (unreferenced_classes.count(clazz)) {
+      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
+      cls_skipped_in_secondary++;
+      continue;
+    }
     emit_class(det, outdex, clazz);
   }
 
-  Scope scope = build_class_scope(dexen);
+  /* Now emit the classes we omitted from the original
+   * coldstart set
+   */
+  for (auto& entry : interdexorder) {
+    auto it = det.clookup.find(entry);
+    if (it == det.clookup.end()) {
+      TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
+      continue;
+    }
+    auto clazz = it->second;
+    if (unreferenced_classes.count(clazz)) {
+      emit_class(det, outdex, clazz);
+    }
+  }
 
   /* Now emit the kerf that wasn't specified in the head
    * or primary list.
@@ -305,6 +435,11 @@ static DexClassesVector run_interdex(
     global_dmeth_cnt,
     global_smeth_cnt,
     global_vmeth_cnt);
+  TRACE(IDEX, 1,
+    "removed %d classes from coldstart list in primary dex, \
+%d in secondary dexes due to static analysis\n",
+    cls_skipped_in_primary,
+    cls_skipped_in_secondary);
   return outdex;
 }
 
@@ -312,11 +447,19 @@ static DexClassesVector run_interdex(
 
 void InterDexPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
 
-  auto first_attempt = run_interdex(dexen, pgo, true);
+  bool static_prune = false;
+  if (m_config["static_prune"] != nullptr) {
+    auto prune_str = m_config["static_prune"].asString().toStdString();
+    if (prune_str == "1") {
+      static_prune = true;
+    }
+  }
+
+  auto first_attempt = run_interdex(dexen, pgo, true, static_prune);
   if (first_attempt.size() > dexen.size()) {
     fprintf(stderr, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
         Retrying without cutting off interdex dexes. \n", dexen.size(), first_attempt.size());
-    dexen = run_interdex(dexen, pgo, false);
+    dexen = run_interdex(dexen, pgo, false, static_prune);
   } else {
     dexen = std::move(first_attempt);
   }
