@@ -17,7 +17,7 @@ package manager.
 
 Mac OS X:
 ```
-brew install autoconf automake libtool
+brew install autoconf automake libtool python3
 brew install boost double-conversion gflags glog libevent
 ```
 
