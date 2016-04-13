@@ -12,7 +12,7 @@
 #include <cstdarg>
 #include <cstdio>
 
-OptWarningLevel g_warning_level = WARN_COUNT;
+OptWarningLevel g_warning_level = NO_WARN;
 
 const char* s_warning_text[] = {
 #define OPT_WARN(warn, str) str,
