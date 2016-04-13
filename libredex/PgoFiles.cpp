@@ -31,7 +31,7 @@ std::vector<std::string> PgoFiles::load_coldstart_classes() {
   if (!input.isOpen()){
     return std::vector<std::string>();
   }
-  string clzname;
+  std::string clzname;
   while (input >> clzname) {
     int position = clzname.length() - lentail;
     always_assert_log(position >= 0,
