@@ -249,8 +249,18 @@ class DexAnnotation : public Gatherable {
   virtual void gather_methods(std::vector<DexMethod*>& lmethod);
   virtual void gather_strings(std::vector<DexString*>& lstring);
 
-  bool runtime_visible() {
+  bool runtime_visible() const {
     if (m_viz == DAV_RUNTIME) return true;
+    return false;
+  }
+
+  bool build_visible() const {
+    if (m_viz == DAV_BUILD) return true;
+    return false;
+  }
+
+  bool system_visible() const {
+    if (m_viz == DAV_SYSTEM) return true;
     return false;
   }
 

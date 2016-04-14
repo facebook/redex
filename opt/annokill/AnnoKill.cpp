@@ -68,7 +68,9 @@ std::unordered_set<DexType*> get_annos(const folly::dynamic& config) {
 }
 
 static void cleanup_aset(DexAnnotationSet* aset,
-    std::unordered_set<DexType*>& removable_annos) {
+    std::unordered_set<DexType*>& removable_annos,
+    bool remove_all_build_visible_annos,
+    bool remove_all_system_visible_annos) {
   static DexType* annodefault = DexType::get_type(kAnnoDefault);
 
   s_kcount.annotations += aset->size();
@@ -77,8 +79,11 @@ static void cleanup_aset(DexAnnotationSet* aset,
   while (iter != annos.end()) {
     auto tokill = iter;
     DexAnnotation* da = *iter++;
+    auto match_whitelist = removable_annos.count(da->type());
+    auto match_build = remove_all_build_visible_annos && da->build_visible();
+    auto match_system = remove_all_system_visible_annos && da->system_visible();
     if (!da->runtime_visible() && da->type() != annodefault
-        && removable_annos.count(da->type())) {
+        && (match_build || match_system || match_whitelist)) {
       TRACE(ANNO, 2, "Killing annotation %s\n", SHOW(da));
       annos.erase(tokill);
       s_kcount.annotations_killed++;
@@ -96,7 +101,9 @@ static void cleanup_aset(DexAnnotationSet* aset,
 static const char* kJacksonType =
     "Lcom/fasterxml/jackson/core/type/TypeReference;";
 void kill_annotations(const std::vector<DexClass*>& classes,
-    std::unordered_set<DexType*>& removable_annos) {
+    std::unordered_set<DexType*>& removable_annos,
+    bool remove_build,
+    bool remove_system) {
   static DexType* typeref = DexType::get_type(kJacksonType);
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
@@ -106,7 +113,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
       TRACE(ANNO, 3, "Skipping %s\n", show(clazz->get_type()).c_str());
       continue;
     }
-    cleanup_aset(aset, removable_annos);
+    cleanup_aset(aset, removable_annos, remove_build, remove_system);
     if (aset->size() == 0) {
       TRACE(ANNO, 2, "Clearing annotation for class %s\n", SHOW(clazz));
       clazz->clear_annotations();
@@ -119,7 +126,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = method->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.method_asets++;
-        cleanup_aset(aset, removable_annos);
+        cleanup_aset(aset, removable_annos, remove_build, remove_system);
         if (aset->size() == 0) {
           TRACE(ANNO, 2, "Clearing annotations for method %s\n", SHOW(method));
           method->clear_annotations();
@@ -136,7 +143,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
                  for (auto pa : *pas) {
                    DexAnnotationSet* aset = pa.second;
                    if (aset->size() == 0) continue;
-                   cleanup_aset(aset, removable_annos);
+                   cleanup_aset(aset, removable_annos, remove_build, remove_system);
                    if (aset->size() == 0) {
                      continue;
                    }
@@ -160,7 +167,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = field->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.field_asets++;
-        cleanup_aset(aset, removable_annos);
+        cleanup_aset(aset, removable_annos, remove_build, remove_system);
         if (aset->size() == 0) {
           TRACE(ANNO, 2, "Clearing annotations for field %s\n", SHOW(field));
           field->clear_annotations();
@@ -171,8 +178,24 @@ void kill_annotations(const std::vector<DexClass*>& classes,
 
 void AnnoKillPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   auto scope = build_class_scope(dexen);
+
+  bool remove_build = false;
+  bool remove_system = false;
+  if (m_config["remove_all_build_annos"] != nullptr) {
+    auto build_str = m_config["remove_all_build_annos"].asString().toStdString();
+    if (build_str == "1") {
+      remove_build = true;
+    }
+  }
+  if (m_config["remove_all_system_annos"] != nullptr) {
+    auto system_str = m_config["remove_all_system_annos"].asString().toStdString();
+    if (system_str == "1") {
+      remove_system = true;
+    }
+  }
+
   auto removable_annos = get_annos(m_config);
-  kill_annotations(scope, removable_annos);
+  kill_annotations(scope, removable_annos, remove_build, remove_system);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
           "Annotations: %d/%d\n",
