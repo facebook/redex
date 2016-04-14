@@ -13,6 +13,7 @@
 #include <memory>
 #include <gtest/gtest.h>
 #include <string>
+#include <unistd.h>
 
 #include <folly/json.h>
 #include <folly/dynamic.h>
@@ -49,8 +50,11 @@ to make sure we do not optimize such synthetic getters.
 TEST(SynthTest1, synthetic) {
   g_redex = new RedexContext();
 
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  const char* dexfile = "synth-test-class.dex";
+  if (access(dexfile, R_OK) != 0) {
+    dexfile = std::getenv("dexfile");
+    ASSERT_NE(nullptr, dexfile);
+  }
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));

@@ -29,8 +29,11 @@
 TEST(EmptyClassesTest1, emptyclasses) {
   g_redex = new RedexContext();
 
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  const char* dexfile = "empty-classes-test-class.dex";
+  if (access(dexfile, R_OK) != 0) {
+    dexfile = std::getenv("dexfile");
+    ASSERT_NE(nullptr, dexfile);
+  }
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));
@@ -49,11 +52,12 @@ TEST(EmptyClassesTest1, emptyclasses) {
   };
 
   std::vector<KeepRule> null_rules;
+  auto const keep = { "Lcom/facebook/redextest/DoNotStrip;" };
   PassManager manager(
     passes,
     null_rules,
     folly::dynamic::object(
-      "keep_annotations", { "Lcom/facebook/redextest/DoNotStrip;" })
+      "keep_annotations", folly::dynamic(keep.begin(), keep.end()))
   );
   manager.run_passes(dexen);
 
