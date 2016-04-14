@@ -58,6 +58,16 @@ Now, build ReDex using autoconf and make.
 autoreconf -ivf && ./configure && make && make install
 ```
 
+### Test
+
+Optionally, you can run our unit test suite.  We use gtest, which is downloaded
+via a setup script.
+```
+./test/setup.sh
+cd test
+make check
+```
+
 ### Usage
 To use ReDex, first build your app and find the APK for it.  Then run:
 ```

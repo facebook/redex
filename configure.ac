@@ -12,7 +12,7 @@ AC_CONFIG_SUBDIRS([third-party/folly/folly])
 AC_PROG_CXX
 AC_PROG_CC
 
-AC_PROG_RANLIB
+LT_INIT
 
 AM_INIT_AUTOMAKE([subdir-objects])
 
@@ -58,5 +58,5 @@ AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([clock_gettime gettimeofday memmove memset munmap regcomp strchr strdup strerror strrchr strstr strtol])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile test/Makefile test/unit/Makefile])
 AC_OUTPUT

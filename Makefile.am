@@ -1,58 +1,52 @@
 AUTOMAKE_OPTIONS = foreign
 
-CXXFLAGS = --std=gnu++11 -O3 -Wall -g
+SUBDIRS = third-party/folly/folly . test
 
-SUBDIRS = third-party/folly/folly
+ACLOCAL_AMFLAGS = -I m4
+AM_CXXFLAGS = --std=gnu++11 -O3 -Wall -g
 
-bin_PROGRAMS = redex-all
+#
+# Include paths
+#
+AM_CPPFLAGS = \
+	-I$(top_srcdir)/configparser \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/liblocator \
+	-I$(top_srcdir)/libresource \
+	-I$(top_srcdir)/libresource/android \
+	-I$(top_srcdir)/libresource/androidfw \
+	-I$(top_srcdir)/libresource/cutils \
+	-I$(top_srcdir)/libresource/system \
+	-I$(top_srcdir)/libresource/utils \
+	-I$(top_srcdir)/opt \
+	-I$(top_srcdir)/opt/annoclasskill \
+	-I$(top_srcdir)/opt/annokill \
+	-I$(top_srcdir)/opt/bridge \
+	-I$(top_srcdir)/opt/delinit \
+	-I$(top_srcdir)/opt/delsuper \
+	-I$(top_srcdir)/opt/final_inline \
+	-I$(top_srcdir)/opt/interdex \
+	-I$(top_srcdir)/opt/local-dce \
+	-I$(top_srcdir)/opt/peephole \
+	-I$(top_srcdir)/opt/rebindrefs \
+	-I$(top_srcdir)/opt/remove_empty_classes \
+	-I$(top_srcdir)/opt/renameclasses \
+	-I$(top_srcdir)/opt/shorten-srcstrings \
+	-I$(top_srcdir)/opt/simpleinline \
+	-I$(top_srcdir)/opt/singleimpl \
+	-I$(top_srcdir)/opt/static-sink \
+	-I$(top_srcdir)/opt/staticrelo \
+	-I$(top_srcdir)/opt/synth \
+	-I$(top_srcdir)/opt/unterface \
+	-I$(top_srcdir)/third-party/folly \
+	-I$(top_srcdir)/util
 
-bin_SCRIPTS = redex
-CLEANFILES = $(bin_SCRIPTS)
-EXTRA_DIST = redex.py
+#
+# libredex: the optimizer's guts
+#
+noinst_LTLIBRARIES = libredex.la
 
-redex: redex.py Makefile
-	cp $(srcdir)/redex.py redex
-	chmod +x redex
-
-includes = \
-	configparser \
-	include \
-	liblocator \
-	libresource \
-	libresource/android \
-	libresource/androidfw \
-	libresource/cutils \
-	libresource/system \
-	libresource/utils \
-	opt \
-	opt/all-static \
-	opt/annoclasskill \
-	opt/annokill \
-	opt/bridge \
-	opt/delinit \
-	opt/delsuper \
-	opt/final_inline \
-	opt/interdex \
-	opt/local-dce \
-	opt/peephole \
-	opt/rebindrefs \
-	opt/remove_empty_classes \
-	opt/renameclasses \
-	opt/shorten-srcstrings \
-	opt/simpleinline \
-	opt/singleimpl \
-	opt/static-sink \
-	opt/staticrelo \
-	opt/synth \
-	opt/unterface \
-	tools/redex-all \
-	third-party/folly \
-	util
-
-redex_all_CPPFLAGS = $(foreach i, $(includes), -I$(top_srcdir)/$i)
-redex_all_LDADD = -lboost_filesystem -lboost_system -lpthread third-party/folly/folly/.libs/libfolly.a
-
-redex_all_SOURCES = \
+libredex_la_SOURCES = \
 	configparser/keeprules.cc \
 	configparser/generated_files/parser.cc \
 	configparser/generated_files/tokenizer.cc \
@@ -119,6 +113,33 @@ redex_all_SOURCES = \
 	opt/synth/Synth.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
-	tools/redex-all/main.cpp \
-	tools/redex-all/Passes.cpp \
 	util/Sha1.cpp
+
+libredex_la_LIBADD = \
+	-lboost_filesystem \
+	-lboost_system \
+	-lpthread \
+	third-party/folly/folly/libfolly.la
+
+#
+# redex-all: the main executable
+#
+bin_PROGRAMS = redex-all
+
+redex_all_SOURCES = \
+	tools/redex-all/main.cpp \
+	tools/redex-all/Passes.cpp
+
+redex_all_LDADD = libredex.la
+
+#
+# redex: Python driver script
+#
+bin_SCRIPTS = redex
+CLEANFILES = $(bin_SCRIPTS)
+EXTRA_DIST = redex.py
+
+redex: redex.py Makefile
+	cp $(srcdir)/redex.py redex
+	chmod +x redex
+
