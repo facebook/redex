@@ -22,13 +22,12 @@
 std::vector<std::string> PgoFiles::load_coldstart_classes() {
   const char* kClassTail = ".class";
   const int lentail = strlen(kClassTail);
-  const int kMaxLineLength = 1024;
   auto file = m_coldstart_class_filename.c_str();
   
   std::vector<std::string> coldstart_classes;
   
   std::ifstream input(file);
-  if (!input.isOpen()){
+  if (!input){
     return std::vector<std::string>();
   }
   std::string clzname;
