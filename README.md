@@ -9,20 +9,28 @@ source.
 
 # Quick Start Guide
 
-### Dependencies
+## Dependencies
 
 ReDex depends on folly, glog, double-conversion, boost and zlib, and uses
 autoconf/automake for building.  Getting these dependences is easiest using a
 package manager.
 
-Mac OS X:
+### Mac OS X
+
+You'll need Xcode with command line tools installed.  To get the command line
+tools, use:
+```
+xcode-select --install
+```
+
+Install dependences using homebrew:
 ```
 brew install autoconf automake libtool python3
 brew install boost double-conversion gflags glog libevent openssl
 brew link openssl --force
 ```
 
-Ubuntu 14.04 LTS:
+### Ubuntu 14.04 LTS
 ```
 sudo apt-get install \
     g++ \
@@ -46,11 +54,12 @@ sudo apt-get install \
     libiberty-dev
 ```
 
-### Download, Build and Install
+## Download, Build and Install
 
-ReDex includes [folly](https://github.com/facebook/folly) as a git submodule.
-Initialize it using:
+Get ReDex and its submodules from GitHub:
 ```
+git clone https://github.com/facebook/redex.git
+cd redex
 git submodule update --init
 ```
 
@@ -59,7 +68,7 @@ Now, build ReDex using autoconf and make.
 autoreconf -ivf && ./configure && make && make install
 ```
 
-### Test
+## Test
 
 Optionally, you can run our unit test suite.  We use gtest, which is downloaded
 via a setup script.
@@ -69,7 +78,8 @@ cd test
 make check
 ```
 
-### Usage
+## Usage
+
 To use ReDex, first build your app and find the APK for it.  Then run:
 ```
 redex path/to/your.apk -o path/to/output.apk
@@ -79,7 +89,7 @@ input.  Enjoy!
 
 # FAQ
 
-### How does this compare to ProGuard?
+## How does this compare to ProGuard?
 
 ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
 ReDex, however, optimizes .dex bytecode, while ProGuard optimizes .class
@@ -96,7 +106,7 @@ improvements (about 25% on both dex size and cold start time) are based on using
 ReDex on an app already optimized with ProGuard.  We have no plans to measure
 performance without ProGuard.
 
-### How about DexGuard?
+## How about DexGuard?
 
 DexGuard operates on dex, but we haven't evaluated it at all since it's closed
 source.  We don't use it at Facebook and we have no plans to start.
