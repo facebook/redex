@@ -27,12 +27,6 @@ AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
 
-AC_CHECK_LIB([double-conversion],[ceil],[],[AC_MSG_ERROR(
-             [Please install double-conversion library])])
-
-AC_HAVE_LIBRARY([glog],[],[AC_MSG_ERROR(
-                [Please install google-glog library])])
-
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h memory.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])
 
