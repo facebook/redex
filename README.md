@@ -65,7 +65,8 @@ git submodule update --init
 
 Now, build ReDex using autoconf and make.
 ```
-autoreconf -ivf && ./configure && make && make install
+autoreconf -ivf && ./configure && make
+sudo make install
 ```
 
 ## Test
