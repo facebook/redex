@@ -40,26 +40,24 @@ PgoFiles::PgoFiles(const folly::dynamic& config) :
  */
 std::vector<std::string> PgoFiles::load_coldstart_classes() {
   const char* kClassTail = ".class";
-  const int kMaxLineLength = 1024;
+  const int lentail = strlen(kClassTail);
   auto file = m_coldstart_class_filename.c_str();
-  FILE* fp = fopen(file, "r");
-  if (fp == nullptr) {
+  
+  std::vector<std::string> coldstart_classes;
+  
+  std::ifstream input(file);
+  if (!input){
     return std::vector<std::string>();
   }
-  std::vector<std::string> coldstart_classes;
-  char buf[kMaxLineLength];
-  buf[0] = 'L';
-  while (fscanf(fp, "%s", buf + 1) == 1) {
-    static int lentail = strlen(kClassTail);
-    std::string clzname(buf);
+  std::string clzname;
+  while (input >> clzname) {
     int position = clzname.length() - lentail;
     always_assert_log(position >= 0,
                       "Bailing, invalid class spec '%s' in interdex file %s\n",
-                      buf, file);
+                      clzname.c_str(), file);
     clzname.replace(position, lentail, ";");
-    coldstart_classes.emplace_back(m_proguard_map.translate_class(clzname));
+    coldstart_classes.emplace_back(m_proguard_map.translate_class("L" + clzname));
   }
-  fclose(fp);
   return coldstart_classes;
 }
 
