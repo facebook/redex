@@ -204,6 +204,7 @@ struct WrapperMethods {
   std::unordered_map<DexMethod*, std::pair<DexMethod*, int>> wrapped;
   std::unordered_set<DexMethod*> keepers;
   std::unordered_set<DexMethod*> methods_to_update;
+  std::unordered_set<DexMethod*> promoted_to_static;
   bool next_pass = false;
 };
 
@@ -478,6 +479,7 @@ bool replace_method_wrapper(MethodTransformer& transform,
 
   if (is_static(wrapper) && !is_static(wrappee)) {
     make_static_and_update_args(wrappee, wrapper);
+    ssms.promoted_to_static.insert(wrappee);
   }
   if (!is_private(wrapper)) {
     set_public(wrappee);
@@ -773,10 +775,32 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
 
 void transform(const std::vector<DexClass*>& classes,
                WrapperMethods& ssms, const SynthConfig& synthConfig) {
+  // remove wrappers
   walk_code(
       classes,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, DexCode* code) { replace_wrappers(m, code, ssms); });
+  // check that invokes to promoted static method is correct
+  walk_opcodes(
+      classes,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* meth, DexOpcode* insn) {
+        auto opcode = insn->opcode();
+        if (opcode != OPCODE_INVOKE_DIRECT &&
+            opcode != OPCODE_INVOKE_DIRECT_RANGE) {
+          return;
+        }
+        auto wrappee = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        if (ssms.promoted_to_static.count(wrappee) == 0) {
+          return;
+        }
+        // change the opcode to invoke-static
+        insn->set_opcode(opcode == OPCODE_INVOKE_DIRECT ?
+            OPCODE_INVOKE_STATIC : OPCODE_INVOKE_STATIC_RANGE);
+        TRACE(SYNT, 3,
+            "Updated invoke on promoted to static %s\n in method %s",
+            SHOW(wrappee), SHOW(meth));
+      });
   remove_dead_methods(ssms, synthConfig);
 }
 
