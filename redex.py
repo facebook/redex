@@ -238,11 +238,8 @@ class Api21DexMode(object):
         for path in abs_glob(extracted_apk_dir, '*.dex'):
             shutil.move(path, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
-
-        if not os.path.exists(join(extracted_apk_dir,
-                              'assets', 'secondary-program-dex-jars')):
+    def write_meta(self, extracted_apk_dir, dex_dir, have_locators):
+        if not os.path.exists(join(extracted_apk_dir, self._secondary_dir)):
             return
         jar_meta_path = join(extracted_apk_dir,
                              self._secondary_dir,
@@ -261,6 +258,17 @@ class Api21DexMode(object):
                     'classes%d.dex %s secondary.dex%02d.Canary\n'
                     % (i, sha1hash, i - 1))
                 shutil.move(dex_path, extracted_apk_dir)
+
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
+
+        self.write_meta(extracted_apk_dir, dex_dir, have_locators)
+        for i in range(2, 100):
+            dex_path = join(dex_dir, 'classes%d.dex' % i)
+            if not isfile(dex_path):
+                break
+            shutil.move(dex_path, extracted_apk_dir)
+
 
 class SubdirDexMode(object):
     """
