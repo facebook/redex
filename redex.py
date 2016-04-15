@@ -477,7 +477,7 @@ def zipalign(unaligned_apk_path, output_apk_path):
         subprocess.check_call(zipalign +
                               ['4', unaligned_apk_path, output_apk_path])
     except:
-        print("Couldn't find zipalign.  Your APK may not be fully optimized.")
+        print("Couldn't find zipalign. See README.md to resolve this.")
         shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 

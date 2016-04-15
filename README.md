@@ -90,6 +90,19 @@ input.  Enjoy!
 
 # FAQ
 
+## I'm getting "Couldn't find zipalign. See README.md to resolve this"
+
+`zipalign` is an optimization step that is bundled with the Android SDK.  You
+need to tell redex where to find it.  For example, if you installed the SDK at
+`/path/to/android/sdk`, try:
+```
+ANDROID_SDK=/path/to/android/sdk redex [... arguments ...]
+```
+You can alternatively add `zipalign` to your PATH, for example:
+```
+PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
+```
+
 ## How does this compare to ProGuard?
 
 ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
