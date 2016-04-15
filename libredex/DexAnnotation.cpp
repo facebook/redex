@@ -153,7 +153,7 @@ uint64_t read_evarg(const uint8_t*& encdata,
   return v;
 }
 
-static void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val) {
+void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val) {
   uint8_t devtb = DEVT_HDR_TYPE(type);
   int count = 0;
   uint64_t t = (val >> 8);
@@ -171,34 +171,28 @@ static void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val) {
   }
 }
 
-static void type_encoder_signext(uint8_t*& encdata,
-                                 uint8_t type,
-                                 uint64_t val) {
+void type_encoder_signext(uint8_t*& encdata, uint8_t type, uint64_t val) {
+  uint8_t* mp = encdata++;
   int64_t sval = *(int64_t*)&val;
-  int bytes = 0;
   int64_t t = sval;
-  int64_t sbit = 0;
-  do {
+  int bytes = 0;
+  while (true) {
+    uint8_t emit = t & 0xff;
+    int64_t rest = t >> 8;
+    *encdata++ = emit;
     bytes++;
-    sbit = t & 0x80;
-    t >>= 8;
-  } while (t && t != -1);
-
-  // If the highest bit of a positive number is set, we need an extra 0 byte
-  // so the encoded form will be positive.
-  if (!t && sbit) bytes++;
-
-  *encdata++ = DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(bytes - 1);
-  for (int i = 0; i < bytes; i++) {
-    *encdata++ = sval & 0xff;
-    sval >>= 8;
+    if (rest == 0) {
+      if ((emit & 0x80) == 0) break;
+    }
+    if (rest == -1) {
+      if ((emit & 0x80) == 0x80) break;
+    }
+    t = rest;
   }
+  *mp = DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(bytes - 1);
 }
 
-void type_encoder_fp(
-    uint8_t*& encdata,
-    uint8_t type,
-    uint64_t val) {
+void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val) {
   // Ignore trailing zero bytes.
   int bytes = 0;
   while (val && ((val & 0xff) == 0)) {

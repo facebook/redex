@@ -381,10 +381,11 @@ class DexAnnotationDirectory {
   friend std::string show(const DexAnnotationDirectory*);
 };
 
-uint64_t read_evarg(const uint8_t*& encdata,
-                    uint8_t evarg,
-                    bool sign_extend = false);
-void type_encoder_fp(
-    uint8_t*& encdata,
-    uint8_t type,
-    uint64_t val);
+uint64_t read_evarg(
+  const uint8_t*& encdata,
+  uint8_t evarg,
+  bool sign_extend = false);
+
+void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val);
+void type_encoder_signext(uint8_t*& encdata, uint8_t type, uint64_t val);
+void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val);
