@@ -31,9 +31,11 @@ static size_t unhandled_inline = 0;
  * Format: array of "Lpkg/Class;"
  */
 std::unordered_set<DexType*> keep_class_member_annos(
-  const folly::dynamic& config
-) {
+    const folly::dynamic& config, PgoFiles& pgo) {
   std::unordered_set<DexType*> keep;
+  for (const auto& anno : pgo.get_no_optimizations_annos()) {
+    keep.emplace(anno);
+  }
   try {
     for (auto const& keep_anno : config["keep_class_member_annos"]) {
       auto type = DexType::get_type(DexString::get_string(keep_anno.c_str()));
@@ -334,7 +336,7 @@ void inline_field_values(Scope& fullscope) {
 }
 
 void FinalInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  auto keep_annos = keep_class_member_annos(m_config);
+  auto keep_annos = keep_class_member_annos(m_config, pgo);
   auto keep_members = keep_class_members(m_config);
   auto scope = build_class_scope(dexen);
   inline_field_values(scope);

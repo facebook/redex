@@ -28,7 +28,7 @@ std::unordered_set<DexClass*> do_not_strip_classes;
 
 // Note: this method will return nullptr if the dotname refers to an unknown
 // type.
-static DexType* get_dextype_from_dotname(const char* dotname) {
+DexType* get_dextype_from_dotname(const char* dotname) {
   if (dotname == nullptr) {
     return nullptr;
   }
@@ -50,7 +50,7 @@ static DexType* get_dextype_from_dotname(const char* dotname) {
  *   const-class
  *   instance-of
  */
-static void mark_reachable_directly(DexClass* dclass) {
+void mark_reachable_directly(DexClass* dclass) {
   if (dclass == nullptr) return;
   dclass->rstate.ref_by_type();
   // When we mark a class as reachable, we also mark all fields and methods as
@@ -70,7 +70,7 @@ static void mark_reachable_directly(DexClass* dclass) {
   }
 }
 
-static void mark_reachable_directly(DexType* dtype) {
+void mark_reachable_directly(DexType* dtype) {
   if (dtype == nullptr) return;
   mark_reachable_directly(type_class_internal(dtype));
 }
@@ -89,7 +89,7 @@ static void mark_reachable_directly(DexType* dtype) {
  *   MyGreatLayout.xml: (from_code = false, created when view is inflated)
  *     <com.facebook.MyTerrificView />
  */
-static void mark_reachable_by_classname(DexClass* dclass, bool from_code) {
+void mark_reachable_by_classname(DexClass* dclass, bool from_code) {
   if (dclass == nullptr) return;
   dclass->rstate.ref_by_string(from_code);
   // When we mark a class as reachable, we also mark all fields and methods as
@@ -109,11 +109,11 @@ static void mark_reachable_by_classname(DexClass* dclass, bool from_code) {
   }
 }
 
-static void mark_reachable_by_classname(DexType* dtype, bool from_code) {
+void mark_reachable_by_classname(DexType* dtype, bool from_code) {
   mark_reachable_by_classname(type_class_internal(dtype), from_code);
 }
 
-static void mark_reachable_by_classname(std::string& classname, bool from_code) {
+void mark_reachable_by_classname(std::string& classname, bool from_code) {
   DexString* dstring =
       DexString::get_string(classname.c_str(), classname.size());
   DexType* dtype = DexType::get_type(dstring);
@@ -122,12 +122,12 @@ static void mark_reachable_by_classname(std::string& classname, bool from_code) 
   mark_reachable_by_classname(dclass, from_code);
 }
 
-static void mark_reachable_by_seed(DexClass* dclass) {
+void mark_reachable_by_seed(DexClass* dclass) {
   if (dclass == nullptr) return;
   dclass->rstate.ref_by_seed();
 }
 
-static void mark_reachable_by_seed(DexType* dtype) {
+void mark_reachable_by_seed(DexType* dtype) {
   if (dtype == nullptr) return;
   mark_reachable_by_seed(type_class_internal(dtype));
 }
@@ -224,9 +224,6 @@ bool in_reflected_pkg(DexClass* dclass,
                           reflected_pkg_classes);
 }
 
-}
-
-
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -239,7 +236,11 @@ bool in_reflected_pkg(DexClass* dclass,
  *  - Classes marked with special annotations (keep_annotations in config)
  *  - Classes reachable from native libraries
  */
-static void init_permanently_reachable_classes(const Scope& scope, folly::dynamic& config, const std::vector<KeepRule>& proguard_rules) {
+void init_permanently_reachable_classes(
+    const Scope& scope,
+    folly::dynamic& config,
+    const std::vector<KeepRule>& proguard_rules,
+    const std::unordered_set<DexType*>& no_optimizations_anno) {
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
@@ -265,6 +266,9 @@ static void init_permanently_reachable_classes(const Scope& scope, folly::dynami
       DexType* anno = DexType::get_type(anno_name.c_str());
       if (anno) keep_annotations.insert(anno);
     }
+  }
+  for (const auto& anno : no_optimizations_anno) {
+    keep_annotations.insert(anno);
   }
   keep_annotated_classes(scope, keep_annotations);
 
@@ -348,7 +352,8 @@ static void init_permanently_reachable_classes(const Scope& scope, folly::dynami
         int pat_len = pat.size();
         if (type_matches(pat.c_str(), cname, pat_len, cls_len)) {
           mark_reachable_directly(clazz);
-          TRACE(PGR, 2, "matched cls %s against pattern %s \n", cname, pat.c_str());
+          TRACE(PGR, 2, "matched cls %s against pattern %s \n",
+              cname, pat.c_str());
           pg_marked_classes++;
           break;
       }
@@ -356,6 +361,8 @@ static void init_permanently_reachable_classes(const Scope& scope, folly::dynami
   }
   TRACE(PGR, 1, "matched on %lu classes with CLASS KEEP proguard rules \n",
       pg_marked_classes);
+}
+
 }
 
 /**
@@ -373,49 +380,49 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
 
   std::unordered_set<DexString*> maybetypes;
   walk_annotations(scope,
-                   [&](DexAnnotation* anno) {
-                     static DexType* dalviksig =
-                         DexType::get_type("Ldalvik/annotation/Signature;");
-                     // Signature annotations contain strings that Jackson uses
-                     // to construct the underlying types.  We capture the
-                     // full list here, and mark them later.  (There are many
-                     // duplicates, so de-duping before we look it up as a class
-                     // makes sense)
-                     if (anno->type() == dalviksig) {
-                       auto elems = anno->anno_elems();
-                       for (auto const& elem : elems) {
-                         auto ev = elem.encoded_value;
-                         if (ev->evtype() != DEVT_ARRAY) continue;
-                         auto arrayev = static_cast<DexEncodedValueArray*>(ev);
-                         auto const& evs = arrayev->evalues();
-                         for (auto strev : *evs) {
-                           if (strev->evtype() != DEVT_STRING) continue;
-                           auto stringev =
-                               static_cast<DexEncodedValueString*>(strev);
-                           maybetypes.insert((DexString*)stringev->string());
-                         }
-                       }
-                       return;
-                     }
-                     // Class literals in annotations.
-                     //
-                     // Example:
-                     //    @JsonDeserialize(using=MyJsonDeserializer.class)
-                     //                                   ^^^^
-                     if (anno->runtime_visible()) {
-                       auto elems = anno->anno_elems();
-                       for (auto const& dae : elems) {
-                         auto evalue = dae.encoded_value;
-                         std::vector<DexType*> ltype;
-                         evalue->gather_types(ltype);
-                         if (ltype.size()) {
-                           for (auto dextype : ltype) {
-                             mark_reachable_directly(dextype);
-                           }
-                         }
-                       }
-                     }
-                   });
+      [&](DexAnnotation* anno) {
+        static DexType* dalviksig =
+            DexType::get_type("Ldalvik/annotation/Signature;");
+        // Signature annotations contain strings that Jackson uses
+        // to construct the underlying types.  We capture the
+        // full list here, and mark them later.  (There are many
+        // duplicates, so de-duping before we look it up as a
+        // class makes sense)
+        if (anno->type() == dalviksig) {
+          auto elems = anno->anno_elems();
+          for (auto const& elem : elems) {
+            auto ev = elem.encoded_value;
+            if (ev->evtype() != DEVT_ARRAY) continue;
+            auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+            auto const& evs = arrayev->evalues();
+            for (auto strev : *evs) {
+              if (strev->evtype() != DEVT_STRING) continue;
+              auto stringev =
+              static_cast<DexEncodedValueString*>(strev);
+              maybetypes.insert((DexString*)stringev->string());
+            }
+          }
+          return;
+        }
+        // Class literals in annotations.
+        //
+        // Example:
+        //    @JsonDeserialize(using=MyJsonDeserializer.class)
+        //                                   ^^^^
+        if (anno->runtime_visible()) {
+          auto elems = anno->anno_elems();
+          for (auto const& dae : elems) {
+            auto evalue = dae.encoded_value;
+            std::vector<DexType*> ltype;
+            evalue->gather_types(ltype);
+            if (ltype.size()) {
+              for (auto dextype : ltype) {
+                mark_reachable_directly(dextype);
+              }
+            }
+          }
+        }
+      });
 
   // Now we process the strings that were in the signature
   // annotations.
@@ -478,7 +485,8 @@ void reportReachableClasses(const Scope& scope, std::string reportFileName) {
   // First report keep annotations
   std::ofstream reportFileDNS(reportFileName + ".dns");
   for (auto const& dns : do_not_strip_classes) {
-    reportFileDNS << "Do not strip class: " << dns->get_type()->get_name()->c_str() << "\n";
+    reportFileDNS << "Do not strip class: " <<
+        dns->get_type()->get_name()->c_str() << "\n";
   }
   reportFileDNS.close();
   // Report classes that the reflection filter says can't be deleted.
@@ -507,11 +515,16 @@ void reportReachableClasses(const Scope& scope, std::string reportFileName) {
   reportFileKeep.close();
 }
 
-void init_reachable_classes(const Scope& scope, folly::dynamic& config, const std::vector<KeepRule>& proguard_rules) {
+void init_reachable_classes(
+    const Scope& scope,
+    folly::dynamic& config,
+    const std::vector<KeepRule>& proguard_rules,
+    const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex
   // passes will cause them to be no longer reachable.  For example, if a
   // class is referenced from the manifest.
-  init_permanently_reachable_classes(scope, config, proguard_rules);
+  init_permanently_reachable_classes(
+      scope, config, proguard_rules, no_optimizations_anno);
 
   // Classes that are reachable in ways that could change as Redex runs. For
   // example, a class might be instantiated from a method, but if that method
@@ -525,17 +538,22 @@ void init_seed_classes(const std::string seeds_filename) {
     std::ifstream seeds_file(seeds_filename);
     uint count = 0;
     if (!seeds_file) {
-      TRACE(PGR, 1, "Seeds file %s was not found (ignoring error).", seeds_filename.c_str());
+      TRACE(PGR, 1, "Seeds file %s was not found (ignoring error).",
+          seeds_filename.c_str());
     } else {
       std::string line;
       while (getline(seeds_file, line)) {
-        if (line.find(":") == std::string::npos && line.find("$") == std::string::npos) {
+        if (line.find(":") == std::string::npos && line.find("$") ==
+            std::string::npos) {
           auto dex_type = get_dextype_from_dotname(line.c_str());
           if (dex_type != nullptr) {
             mark_reachable_by_seed(dex_type);
             count++;
           } else {
-            TRACE(PGR, 1, "Seed file contains class for which Dex type can't be found: %s\n", line.c_str());
+            TRACE(PGR, 1,
+                "Seed file contains class for which "
+                "Dex type can't be found: %s\n",
+                line.c_str());
           }
         }
       }

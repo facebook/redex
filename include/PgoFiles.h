@@ -16,15 +16,10 @@
 
 #include "ProguardMap.h"
 
+class DexType;
+
 struct PgoFiles {
-  PgoFiles(const folly::dynamic& config)
-    : m_proguard_map(
-        config.getDefault("proguard_map", "").asString().toStdString()),
-      m_coldstart_class_filename(
-        config.getDefault("coldstart_classes", "").asString().toStdString()),
-      m_coldstart_method_filename(
-        config.getDefault("coldstart_methods", "").asString().toStdString())
-  {}
+  PgoFiles(const folly::dynamic& config);
 
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.size() == 0) {
@@ -40,6 +35,10 @@ struct PgoFiles {
     return m_coldstart_methods;
   }
 
+  const std::unordered_set<DexType*> get_no_optimizations_annos() const {
+    return m_no_optimizations_annos;
+  }
+
  private:
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
@@ -50,4 +49,7 @@ struct PgoFiles {
   std::string m_coldstart_method_filename;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
+
+  // global no optimizations annotations
+  std::unordered_set<DexType*> m_no_optimizations_annos;
 };

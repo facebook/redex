@@ -33,5 +33,4 @@ class PassManager {
 
   //proguard rules
   const std::vector<KeepRule>& m_proguard_rules;
-
 };

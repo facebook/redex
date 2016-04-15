@@ -24,7 +24,8 @@ public:
   virtual void run_pass(DexClassesVector&, PgoFiles&) override;
 
 private:
-  std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope);
+  std::unordered_set<DexMethod*> gather_non_virtual_methods(
+      Scope& scope, const std::unordered_set<DexType*>& no_inline);
   void select_single_called(
       Scope& scope, std::unordered_set<DexMethod*>& methods);
 

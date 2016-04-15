@@ -206,7 +206,9 @@ candidates_t build_candidates(
     // Make sure this class is not prohibited from being deleted. Granted,
     // we could still move methods and not delete the class, but let's
     // simplify things for now.
-    && m::can_delete<DexClass>();
+    && m::can_delete<DexClass>()
+    && !m::any_annos<DexClass>(
+        m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
 
   visit_classes(scope, match, [&](DexClass* cls){
     TRACE(RELO, 5, "RELO %s is a candidate\n", SHOW(cls->get_type()));
@@ -492,8 +494,12 @@ void do_mutations(
   delete_classes(scope, dexen, cls_deletes);
 }
 
-std::unordered_set<DexType*> get_dont_optimize_annos(folly::dynamic config) {
+std::unordered_set<DexType*> get_dont_optimize_annos(
+    folly::dynamic config, PgoFiles& pgo) {
   std::unordered_set<DexType*> dont;
+  for (const auto& anno : pgo.get_no_optimizations_annos()) {
+    dont.emplace(anno);
+  }
   if (!config.isObject()) {
     return dont;
   }
@@ -505,15 +511,7 @@ std::unordered_set<DexType*> get_dont_optimize_annos(folly::dynamic config) {
   for (auto const& dont_anno : dont_list) {
     if (dont_anno.isString()) {
       auto type = DexType::get_type(DexString::get_string(dont_anno.c_str()));
-      if (type != nullptr) {
-        dont.emplace(type);
-      } else {
-        fprintf(
-          stderr,
-          "Unknown type listed in StaticReloPass.dont_optimize_annos: %s\n",
-          dont_anno.c_str());
-        abort();
-      }
+      if (type != nullptr) dont.emplace(type);
     }
   }
   return dont;
@@ -535,7 +533,7 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   auto scope = build_class_scope(dexen);
   auto cls_to_dex = build_class_to_dex_map(dexen);
   auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, pgo);
-  auto dont_optimize_annos = get_dont_optimize_annos(m_config);
+  auto dont_optimize_annos = get_dont_optimize_annos(m_config, pgo);
 
   // Make one pass through all code to find dmethod refs and class refs,
   // needed later on for refining eligibility as well as performing the
@@ -546,7 +544,7 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
 
   // Find candidates
   candidates_t candidates = build_candidates(
-    scope, class_refs, dont_optimize_annos);
+      scope, class_refs, dont_optimize_annos);
 
   // Find the relocation target for each dex
   auto dex_to_target = build_dex_to_target_map(
@@ -573,15 +571,13 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
   TRACE(
     RELO,
     1,
-"\
-RELO :) Deleted %d methods\n\
-RELO :) Moved %d methods\n\
-RELO :) Deleted %d classes\n\
-RELO :) Moved %d/%d methods to single call site targets\n\
-RELO :| On average relocated %f methods onto all targets\n\
-RELO :| Max %d methods relocated onto any one target\n\
-RELO :( Could not move %d methods\n\
-",
+    "RELO :) Deleted %d methods\n"
+    "RELO :) Moved %d methods\n"
+    "RELO :) Deleted %d classes\n"
+    "RELO :) Moved %d/%d methods to single call site targets\n"
+    "RELO :| On average relocated %f methods onto all targets\n"
+    "RELO :| Max %d methods relocated onto any one target\n"
+    "RELO :( Could not move %d methods\n",
     s_meth_delete_count,
     s_meth_move_count,
     s_cls_delete_count,

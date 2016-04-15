@@ -14,6 +14,25 @@
 #include <vector>
 
 #include "Debug.h"
+#include "DexClass.h"
+
+PgoFiles::PgoFiles(const folly::dynamic& config) :
+    m_proguard_map(
+        config.getDefault("proguard_map", "").asString().toStdString()),
+    m_coldstart_class_filename(
+        config.getDefault("coldstart_classes", "").asString().toStdString()),
+    m_coldstart_method_filename(
+        config.getDefault("coldstart_methods", "").asString().toStdString())
+{
+  auto no_optimizations_anno = config.find("no_optimizations_annotations");
+  if (no_optimizations_anno != config.items().end()) {
+    for (auto const& config_anno_name : no_optimizations_anno->second) {
+      std::string anno_name = toStdString(config_anno_name.asString());
+      DexType* anno = DexType::get_type(anno_name.c_str());
+      if (anno) m_no_optimizations_annos.insert(anno);
+    }
+  }
+}
 
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted

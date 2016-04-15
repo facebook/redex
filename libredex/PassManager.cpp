@@ -41,7 +41,10 @@ PassManager::PassManager(
 
 void PassManager::run_passes(DexClassesVector& dexen) {
   PgoFiles pgo(m_config);
-  init_reachable_classes(build_class_scope(dexen), m_config, m_proguard_rules);
+
+  init_reachable_classes(build_class_scope(dexen), m_config,
+      m_proguard_rules, pgo.get_no_optimizations_annos());
+
   Scope scope = build_class_scope(dexen);
   // reportReachableClasses(scope, "reachable");
   for (auto pass : m_activated_passes) {
