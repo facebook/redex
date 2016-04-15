@@ -103,6 +103,29 @@ You can alternatively add `zipalign` to your PATH, for example:
 PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
 ```
 
+## My app fails to install with `Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]`
+
+After you run redex, you'll need to re-sign your app.  You can re-sign manually
+using these instructions:
+http://developer.android.com/tools/publishing/app-signing.html#signing-manually.
+
+You can also tell redex to sign for you.  If you want to sign with the debug
+key, you can simply do:
+
+```
+redex --sign [ ... arguments ...]
+```
+
+If you want to sign with your release key, you'll need to provide the
+appropriate args:
+
+```
+--sign Sign the apk after optimizing it
+-s [KEYSTORE], --keystore [KEYSTORE]
+-a [KEYALIAS], --keyalias [KEYALIAS]
+-p [KEYPASS], --keypass [KEYPASS]
+```
+
 ## How does this compare to ProGuard?
 
 ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
