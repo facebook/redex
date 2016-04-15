@@ -19,6 +19,7 @@ TEST(ProguardMapTest, empty) {
     "    int do1 -> a\n"
     "    3:3:void <init>() -> <init>\n"
     "    8:929:java.util.ArrayList getCopy() -> a\n"
+    "    1807:1807:android.content.Context android.support.v7.view.menu.MenuBuilder.getContext():807:807 -> addSubMenu\n"
   );
   ProguardMap pm(ss);
   EXPECT_EQ(pm.translate_class("Lcom/foo/bar;"), "LA;");

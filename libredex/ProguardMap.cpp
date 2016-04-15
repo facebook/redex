@@ -184,6 +184,11 @@ bool ProguardMap::parse_method(const std::string& line) {
   }
   *p++ = '\0';
 
+  while (*p != ' ') {
+    if (!*p) goto no_match;
+    p++;
+  }
+
   if (strncmp(p, " -> ", 4)) {
     goto no_match;
   }
