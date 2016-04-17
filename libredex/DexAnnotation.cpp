@@ -460,34 +460,27 @@ DexAnnotationSet* DexAnnotationSet::get_annotation_set(DexIdx* idx,
 
 void DexAnnotationDirectory::calc_internals() {
   int cntviz = 0;
-  if (m_class) {
-    int ca, cv;
-    m_class->viz_counts(ca, cv);
-    m_aset_size += 4 + 4 * (ca);
-    m_aset_count++;
-    m_anno_count += ca;
-    cntviz += cv;
-  }
-  if (m_field) {
-    for (auto const& p : *m_field) {
-      DexAnnotationSet* das = p.second;
+  auto updateCount = [this](DexAnnotationSet* das){
       int ca, cv;
       das->viz_counts(ca, cv);
       m_anno_count += ca;
       m_aset_size += 4 + 4 * (ca);
       m_aset_count++;
-      cntviz += cv;
+      return cv;
+  };
+  if (m_class) {
+    cntviz += updateCount(m_class);
+  }
+  if (m_field) {
+    for (auto const& p : *m_field) {
+      DexAnnotationSet* das = p.second;
+      cntviz += updateCount(das);
     }
   }
   if (m_method) {
     for (auto const& p : *m_method) {
       DexAnnotationSet* das = p.second;
-      int ca, cv;
-      das->viz_counts(ca, cv);
-      m_anno_count += ca;
-      m_aset_size += 4 + 4 * (ca);
-      m_aset_count++;
-      cntviz += cv;
+      cntviz += updateCount(das);
     }
   }
   if (m_method_param) {
@@ -497,12 +490,7 @@ void DexAnnotationDirectory::calc_internals() {
       m_xref_count++;
       for (auto const& pp : *pa) {
         DexAnnotationSet* das = pp.second;
-        int ca, cv;
-        das->viz_counts(ca, cv);
-        m_anno_count += ca;
-        m_aset_size += 4 + 4 * (ca);
-        m_aset_count++;
-        cntviz += cv;
+        cntviz += updateCount(das);
       }
     }
   }
