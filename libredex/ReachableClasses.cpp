@@ -9,6 +9,7 @@
 
 #include "ReachableClasses.h"
 
+#include <stdio.h>
 #include <chrono>
 #include <string>
 #include <unordered_set>
