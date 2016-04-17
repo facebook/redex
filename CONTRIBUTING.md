@@ -25,7 +25,7 @@ We actively welcome your pull requests!
 In order to accept your pull request, we need you to submit a CLA. You only need
 to do this once to work on any of Facebook's open source projects.
 
-Complete your CLA here: <https://code.facebook.com/cla>
+Complete your CLA [here](https://code.facebook.com/cla)
 
 ## Issues
 
