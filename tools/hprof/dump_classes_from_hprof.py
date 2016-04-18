@@ -68,7 +68,7 @@ class HprofTag(enum.Enum):
     HEAP_DUMP_END = 0x2C
     CPU_SAMPLES = 0x0D
     CONTROL_SETTINGS = 0x0E
-    
+
 class HeapTag(enum.Enum):
     # standard
     ROOT_UNKNOWN = 0xFF
