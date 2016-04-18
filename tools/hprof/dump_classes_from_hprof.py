@@ -23,11 +23,12 @@ import struct
 import subprocess
 import sys
 import tempfile
+from functools import reduce
 
 def parse_hprof_dump(instream):
     # Read the tag - a null-terminated string
     iter_until_null = iter(lambda: instream.read(1), '\x00')
-    tag = reduce(operator.concat, iter_until_null, '')
+    tag = reduce(operator.concat, iter_until_null, b'')
 
     big_endian_unsigned_4byte_integer = struct.Struct(b'>I')
     sizeof_id = big_endian_unsigned_4byte_integer.unpack(instream.read(4))[0]
