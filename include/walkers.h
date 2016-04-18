@@ -27,7 +27,7 @@ void walk_methods(const T& scope, MethodWalkerFn walker) {
     for (auto vmethod : cls->get_vmethods()) {
       walker(vmethod);
     }
-  };
+  }
 }
 
 /**
@@ -43,7 +43,7 @@ void walk_fields(const T& scope, FieldWalkerFn walker) {
     for (auto sfield : cls->get_sfields()) {
       walker(sfield);
     }
-  };
+  }
 }
 
 /**
@@ -69,7 +69,7 @@ void walk_code(const T& scope,
         if (code) codeWalker(vmethod, code);
       }
     }
-  };
+  }
 }
 
 /**
@@ -105,7 +105,7 @@ void walk_opcodes(const T& scope,
         }
       }
     }
-  };
+  }
 }
 
 /**
