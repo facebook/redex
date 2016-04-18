@@ -27,7 +27,7 @@ from functools import reduce
 
 def parse_hprof_dump(instream):
     # Read the tag - a null-terminated string
-    iter_until_null = iter(lambda: instream.read(1), '\x00')
+    iter_until_null = iter(lambda: instream.read(1), b'\x00')
     tag = reduce(operator.concat, iter_until_null, b'')
 
     big_endian_unsigned_4byte_integer = struct.Struct(b'>I')
@@ -68,7 +68,7 @@ class HprofTag(enum.Enum):
     HEAP_DUMP_END = 0x2C
     CPU_SAMPLES = 0x0D
     CONTROL_SETTINGS = 0x0E
-
+    
 class HeapTag(enum.Enum):
     # standard
     ROOT_UNKNOWN = 0xFF
@@ -150,7 +150,11 @@ class HprofBasic(enum.Enum):
             return byte_stream.next_eight_bytes()
         else:
             raise Exception('Invalid HprofBasic type: %s' % self)
-
+def getArray(value):
+    try:
+        return array(value)
+    except TypeError:
+        return array(str(value)[0]) 
 class Record(object):
     record_struct_format = b'>BII'
     record_struct = struct.Struct(record_struct_format)
@@ -161,8 +165,10 @@ class Record(object):
 
     @staticmethod
     def read_from_stream(hprof_data, instream):
+        print(struct.calcsize(Record.record_struct_format))
+        print(instream.read(struct.calcsize(Record.record_struct_format)))
         (tag, time_offset_us, length) = Record.record_struct.unpack(instream.read(struct.calcsize(Record.record_struct_format)))
-        data = array(b'B')
+        data = getArray(b'B')
         data.fromstring(instream.read(length))
         if tag == HprofTag.STRING.value:
             return hprof_data.parse_string_record(tag=tag, time_offset_us=time_offset_us, data=data)
@@ -437,7 +443,7 @@ class HprofInstance(HprofObject):
                 merged_fields_builder[name][clazz.name] = value
             clazz = clazz.super_class
 
-        for key, value in merged_fields_builder.iteritems():
+        for key, value in merged_fields_builder.items():
             # Avoid over-writing python internals, like __dict__
             if key in self.fields.__dict__:
                 key = '__hprof_' + key
@@ -853,11 +859,11 @@ class HprofData(object):
 
     def resolve(self):
         # First resolve heaps
-        for heap in self.heap_dict.itervalues():
+        for heap in self.heap_dict.values():
             heap.resolve(self)
 
         # Then resolve classes
-        for obj in self.object_id_dict.itervalues():
+        for obj in self.object_id_dict.values():
             if isinstance(obj, HprofClass):
                 clazz = obj
                 clazz.resolve(self)
@@ -872,11 +878,11 @@ class HprofData(object):
         # at the time we create every HprofClass 'java.lang.Class' may have
         # not be parsed yet and thus unavailable
         clsCls = self.class_name_dict['java.lang.Class']
-        for cls in self.class_name_dict.itervalues():
+        for cls in self.class_name_dict.values():
             cls.clazz = clsCls
 
         # Then other objects
-        for obj in self.object_id_dict.itervalues():
+        for obj in self.object_id_dict.values():
             if not isinstance(obj, HprofClass):
                 obj.resolve(self)
             obj.is_root = False  # Fixed up for root objects below
@@ -893,14 +899,14 @@ class HprofData(object):
         return self.class_object_id_to_load_class_record[class_object_id]
 
     def lookup_instances_of_class(self, class_name):
-        return [obj for obj in self.object_id_dict.itervalues()
+        return [obj for obj in self.object_id_dict.values()
                         if isinstance(obj, HprofInstance) and obj.clazz.name == class_name]
 
     def load_inverted_references(self):
         if self.inverted_references is None:
             # Will be much faster for later invocations
             self.inverted_references = defaultdict(list)
-            for heap_obj in self.object_id_dict.itervalues():
+            for heap_obj in self.object_id_dict.values():
                 for ref in heap_obj.outgoing_references():
                     self.inverted_references[ref.referee].append(ref)
 
@@ -973,7 +979,7 @@ def roots_of_obj(hprof_data, obj):
 
 def zygote_references_to_app_objects(hprof_data):
     references = []
-    for obj in hprof_data.object_id_dict.itervalues():
+    for obj in hprof_data.object_id_dict.values():
         if obj.heap.name == 'zygote':
             for reference in obj.outgoing_references():
                 if reference.referee.heap.name != 'zygote':
@@ -1249,7 +1255,7 @@ def java_locals(hprof_data):
             or root.heap_tag == HeapTag.ROOT_JNI_LOCAL]
     threads = {root.thread_serial: root.obj for root in hprof_data.roots if
                root.heap_tag == HeapTag.ROOT_THREAD_OBJECT}
-    thread_locals = {thread: set() for thread in threads.itervalues()}
+    thread_locals = {thread: set() for thread in threads.values()}
     for loc in locs:
         thread_locals[threads[loc.thread_serial]].add(loc.obj)
     return thread_locals
@@ -1261,7 +1267,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     hp = parse_filename(args.hprof)
     classes = []
-    for cls_name, cls in hp.class_name_dict.iteritems():
+    for cls_name, cls in hp.class_name_dict.items():
         classes.append((cls_name, hp.class_object_id_to_load_class_record[
                 cls.object_id].class_serial))
     seen = set()
