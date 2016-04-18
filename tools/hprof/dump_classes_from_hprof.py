@@ -165,8 +165,6 @@ class Record(object):
 
     @staticmethod
     def read_from_stream(hprof_data, instream):
-        print(struct.calcsize(Record.record_struct_format))
-        print(instream.read(struct.calcsize(Record.record_struct_format)))
         (tag, time_offset_us, length) = Record.record_struct.unpack(instream.read(struct.calcsize(Record.record_struct_format)))
         data = getArray(b'B')
         data.fromstring(instream.read(length))
