@@ -21,9 +21,8 @@ from os.path import abspath, basename, dirname, getsize, isdir, isfile, join, \
         realpath, split
 
 timer = timeit.default_timer
-uncompressed_extensions = \
-        set(['.ogg', '.m4a', '.jpg', '.png', '.arsc', '.xzs'])
 
+per_file_compression = {}
 
 def want_trace():
     try:
@@ -200,16 +199,8 @@ def make_temp_dir(name='', debug=False):
 
 def extract_apk(apk, destination_directory):
     with zipfile.ZipFile(apk) as z:
-        try:
-            if z.getinfo('resources.arsc').compress_type == zipfile.ZIP_DEFLATED:
-                uncompressed_extensions.remove('.arsc')
-        except KeyError:
-            log('Unable to determine compression status of resources.arsc')
-
-        log('resources.arsc will be ' +
-                ('uncompressed' if '.arsc' in uncompressed_extensions
-                    else 'compressed') + ' in output apk')
-
+        for info in z.infolist():
+            per_file_compression[info.filename] = info.compress_type
         z.extractall(destination_directory)
 
 
@@ -470,10 +461,6 @@ def detect_secondary_dex_mode(extracted_apk_dir):
     sys.exit('Unknown secondary dex mode')
 
 
-def should_compress(filename):
-    return not any(filename.endswith(ext) for ext in uncompressed_extensions)
-
-
 def zipalign(unaligned_apk_path, output_apk_path):
     # Align zip and optionally perform good compression.
     try:
@@ -509,10 +496,12 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     with zipfile.ZipFile(unaligned_apk_path, 'w') as unaligned_apk:
         for dirpath, dirnames, filenames in os.walk(extracted_apk_dir):
             for filename in filenames:
-                compress = zipfile.ZIP_DEFLATED if should_compress(filename) \
-                        else zipfile.ZIP_STORED
                 filepath = join(dirpath, filename)
-                archivepath = filepath[len(extracted_apk_dir):]
+                archivepath = filepath[len(extracted_apk_dir) + 1:]
+                try:
+                    compress = per_file_compression[archivepath]
+                except KeyError:
+                    compress = zipfile.ZIP_DEFLATED
                 unaligned_apk.write(filepath, archivepath,
                         compress_type=compress)
 
