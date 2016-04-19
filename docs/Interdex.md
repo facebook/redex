@@ -56,8 +56,9 @@ On your computer:
  adb pull /data/local/tmp/SOMEDUMP.hprof YOUR_DIR_HERE/.
  ```
  // pass the heap dump to the python script for parsing and printing out the class list
+ // Note that the script needs python 2
  ```
- python redex/tools/hprof/dump_classes_from_hprof.py --hprof YOUR_DIR_HERE/SOMEDUMP.hprof > list_of_classes.txt
+ YOUR_PYTHON_2_PATH redex/tools/hprof/dump_classes_from_hprof.py --hprof YOUR_DIR_HERE/SOMEDUMP.hprof > list_of_classes.txt
  ```
 
  If everything worked out, list_of_classes.txt will contain a large number of lines of the form foobar.class
