@@ -460,7 +460,7 @@ DexAnnotationSet* DexAnnotationSet::get_annotation_set(DexIdx* idx,
 
 void DexAnnotationDirectory::calc_internals() {
   int cntviz = 0;
-  auto updateCount = [this](DexAnnotationSet* das){
+  auto updateCount = [this](DexAnnotationSet* das) {
       int ca, cv;
       das->viz_counts(ca, cv);
       m_anno_count += ca;
