@@ -234,7 +234,7 @@ void rename_classes(Scope& scope,
   }
 }
 
-void RenameClassesPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   std::string path;
   std::vector<std::string> pre_whitelist_patterns;
   std::vector<std::string> post_whitelist_patterns;

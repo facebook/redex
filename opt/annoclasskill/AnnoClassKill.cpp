@@ -150,7 +150,7 @@ std::unordered_set<DexType*> get_kill_annos(const folly::dynamic& config) {
   return kill_annos;
 }
 
-void AnnoClassKillPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void AnnoClassKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   auto kill_annos = get_kill_annos(m_config);
   kill_annotation_classes(scope, kill_annos);

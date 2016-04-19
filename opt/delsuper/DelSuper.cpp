@@ -318,7 +318,7 @@ public:
 
 }
 
-void DelSuperPass::run_pass(DexClassesVector& dexen, PgoFiles& pgos) {
+void DelSuperPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   const auto& scope = build_class_scope(dexen);
   DelSuper(scope).run(/* do_delete = */true);
 }

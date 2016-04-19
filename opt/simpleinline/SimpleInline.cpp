@@ -71,9 +71,9 @@ DEBUG_ONLY bool method_breakup(
 }
 
 std::unordered_set<DexType*> no_inline_annos(
-    const folly::dynamic& config, PgoFiles& pgo) {
+    const folly::dynamic& config, ConfigFiles& cfg) {
   std::unordered_set<DexType*> no_inline;
-  for (const auto& anno : pgo.get_no_optimizations_annos()) {
+  for (const auto& anno : cfg.get_no_optimizations_annos()) {
     no_inline.insert(anno);
   }
   if (!config.isObject()) return no_inline;
@@ -104,8 +104,8 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 
 }
 
-void SimpleInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  const auto no_inline = no_inline_annos(m_config, pgo);
+void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+  const auto no_inline = no_inline_annos(m_config, cfg);
 
   virtual_inline = true;
   try {

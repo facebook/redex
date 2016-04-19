@@ -15,5 +15,5 @@ class AnnoKillPass : public Pass {
  public:
   AnnoKillPass() : Pass("AnnoKillPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 };

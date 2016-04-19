@@ -324,7 +324,7 @@ int DeadRefs::remove_unreachable() {
 
 }
 
-void DelInitPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   DeadRefs drefs;
   drefs.delinit(scope);

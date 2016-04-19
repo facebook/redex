@@ -176,7 +176,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
       });
 }
 
-void AnnoKillPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
 
   bool remove_build = false;

@@ -110,14 +110,14 @@ std::unordered_map<const DexClass*, int> build_class_to_dex_map(
  * Helper to build a map of DexClass* -> order it appears in cold start list.
  *
  * @param dexen All classes in the dexen
- * @param pgo Our PGO input files
+ * @param cfg Our PGO input files
  * @return Unordered map of DexClass* -> cold start class load rank.
  *         Lower rank is earlier in cold start class load.
  */
 std::unordered_map<const DexClass*, int> build_class_to_pgo_order_map(
   const DexClassesVector& dexen,
-  PgoFiles& pgo) {
-  auto interdex_list = pgo.get_coldstart_classes();
+  ConfigFiles& cfg) {
+  auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::unordered_map<const DexClass*, int> coldstart_classes;
   for (auto const& dex : dexen) {
@@ -495,9 +495,9 @@ void do_mutations(
 }
 
 std::unordered_set<DexType*> get_dont_optimize_annos(
-    folly::dynamic config, PgoFiles& pgo) {
+    folly::dynamic config, ConfigFiles& cfg) {
   std::unordered_set<DexType*> dont;
-  for (const auto& anno : pgo.get_no_optimizations_annos()) {
+  for (const auto& anno : cfg.get_no_optimizations_annos()) {
     dont.emplace(anno);
   }
   if (!config.isObject()) {
@@ -519,7 +519,7 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 
 } // namespace
 
-void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   // Clear out counter
   s_cls_delete_count = 0;
   s_meth_delete_count = 0;
@@ -532,8 +532,8 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
 
   auto scope = build_class_scope(dexen);
   auto cls_to_dex = build_class_to_dex_map(dexen);
-  auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, pgo);
-  auto dont_optimize_annos = get_dont_optimize_annos(m_config, pgo);
+  auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
+  auto dont_optimize_annos = get_dont_optimize_annos(m_config, cfg);
 
   // Make one pass through all code to find dmethod refs and class refs,
   // needed later on for refining eligibility as well as performing the

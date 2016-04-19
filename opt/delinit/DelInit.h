@@ -15,5 +15,5 @@ class DelInitPass : public Pass {
  public:
   DelInitPass() : Pass("DelInitPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 };

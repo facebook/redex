@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "PgoFiles.h"
+#include "ConfigFiles.h"
 
 #include <fstream>
 #include <string>
@@ -16,7 +16,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 
-PgoFiles::PgoFiles(const folly::dynamic& config) :
+ConfigFiles::ConfigFiles(const folly::dynamic& config) :
     m_proguard_map(
         config.getDefault("proguard_map", "").asString().toStdString()),
     m_coldstart_class_filename(
@@ -38,7 +38,7 @@ PgoFiles::PgoFiles(const folly::dynamic& config) :
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.
  */
-std::vector<std::string> PgoFiles::load_coldstart_classes() {
+std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   const char* kClassTail = ".class";
   const int lentail = strlen(kClassTail);
   auto file = m_coldstart_class_filename.c_str();
@@ -64,7 +64,7 @@ std::vector<std::string> PgoFiles::load_coldstart_classes() {
 /*
  * Read the method list file and return it is a vector of strings.
  */
-std::vector<std::string> PgoFiles::load_coldstart_methods() {
+std::vector<std::string> ConfigFiles::load_coldstart_methods() {
   std::ifstream listfile(m_coldstart_method_filename);
   if (!listfile) {
     fprintf(stderr, "Failed to open coldstart method list: `%s'\n",

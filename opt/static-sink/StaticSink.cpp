@@ -20,7 +20,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Resolver.h"
-#include "PgoFiles.h"
+#include "ConfigFiles.h"
 #include "ReachableClasses.h"
 #include "walkers.h"
 #include "Warning.h"
@@ -119,9 +119,9 @@ std::unordered_set<DexMethod*> strings_to_dexmethods(
 
 std::vector<DexClass*> get_coldstart_classes(
   const DexClassesVector& dexen,
-  PgoFiles& pgo
+  ConfigFiles& cfg
 ) {
-  auto interdex_list = pgo.get_coldstart_classes();
+  auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::vector<DexClass*> coldstart_classes;
   for (auto const& dex : dexen) {
@@ -365,11 +365,11 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
 
 }
 
-void StaticSinkPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  auto method_list = pgo.get_coldstart_methods();
+void StaticSinkPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+  auto method_list = cfg.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);
   TRACE(SINK, 1, "methods used in coldstart: %lu\n", methods.size());
-  auto coldstart_classes = get_coldstart_classes(dexen, pgo);
+  auto coldstart_classes = get_coldstart_classes(dexen, cfg);
   count_coldstart_statics(coldstart_classes);
   auto statics = get_noncoldstart_statics(coldstart_classes, methods);
   TRACE(SINK, 1, "statics not used in coldstart: %lu\n", statics.size());

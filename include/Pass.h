@@ -13,7 +13,7 @@
 #include <vector>
 #include <folly/dynamic.h>
 
-#include "PgoFiles.h"
+#include "ConfigFiles.h"
 
 class DexClasses;
 class DexClass;
@@ -39,7 +39,7 @@ class Pass {
   bool assumes_sync() const { return m_assumes_sync; }
   std::string name() const { return m_name; }
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) = 0;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) = 0;
 
   // configuration data
   folly::dynamic m_config;

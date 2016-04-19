@@ -21,7 +21,7 @@ class SimpleInlinePass : public Pass {
 public:
   SimpleInlinePass() : Pass("SimpleInlinePass"), virtual_inline(true) {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 
 private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(

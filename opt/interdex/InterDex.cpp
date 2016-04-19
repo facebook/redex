@@ -21,7 +21,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "PgoFiles.h"
+#include "ConfigFiles.h"
 #include "ReachableClasses.h"
 #include "Transform.h"
 #include "walkers.h"
@@ -299,7 +299,7 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
 
 static DexClassesVector run_interdex(
   const DexClassesVector& dexen,
-  PgoFiles& pgo,
+  ConfigFiles& cfg,
   bool allow_cutting_off_dex,
   bool static_prune_classes
 ) {
@@ -313,7 +313,7 @@ static DexClassesVector run_interdex(
   cls_skipped_in_primary = 0;
   cls_skipped_in_secondary = 0;
 
-  auto interdexorder = pgo.get_coldstart_classes();
+  auto interdexorder = cfg.get_coldstart_classes();
   dex_emit_tracker det;
   dex_emit_tracker primary_det;
   for (auto const& dex : dexen) {
@@ -445,7 +445,7 @@ static DexClassesVector run_interdex(
 
 }
 
-void InterDexPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
 
   bool static_prune = false;
   if (m_config["static_prune"] != nullptr) {
@@ -455,11 +455,11 @@ void InterDexPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
     }
   }
 
-  auto first_attempt = run_interdex(dexen, pgo, true, static_prune);
+  auto first_attempt = run_interdex(dexen, cfg, true, static_prune);
   if (first_attempt.size() > dexen.size()) {
     fprintf(stderr, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
         Retrying without cutting off interdex dexes. \n", dexen.size(), first_attempt.size());
-    dexen = run_interdex(dexen, pgo, false, static_prune);
+    dexen = run_interdex(dexen, cfg, false, static_prune);
   } else {
     dexen = std::move(first_attempt);
   }

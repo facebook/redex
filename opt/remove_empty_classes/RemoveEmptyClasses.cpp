@@ -113,7 +113,8 @@ void remove_empty_classes(Scope& classes) {
     classes_before_size - classes.size());
 }
 
-void RemoveEmptyClassesPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void RemoveEmptyClassesPass::run_pass(
+    DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   remove_empty_classes(scope);
   post_dexen_changes(scope, dexen);

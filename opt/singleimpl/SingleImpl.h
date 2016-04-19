@@ -15,7 +15,7 @@ class SingleImplPass : public Pass {
  public:
   SingleImplPass() : Pass("SingleImplPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 
   // count of removed interfaces
   size_t removed_count{0};

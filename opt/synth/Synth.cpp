@@ -868,7 +868,7 @@ SynthConfig load_config(const folly::dynamic& config) {
   return synthConfig;
 }
 
-void SynthPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void SynthPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   SynthConfig synthConfig = load_config(m_config);
   Scope scope = build_class_scope(dexen);
   int passes = 0;

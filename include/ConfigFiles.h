@@ -18,8 +18,8 @@
 
 class DexType;
 
-struct PgoFiles {
-  PgoFiles(const folly::dynamic& config);
+struct ConfigFiles {
+  ConfigFiles(const folly::dynamic& config);
 
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.size() == 0) {

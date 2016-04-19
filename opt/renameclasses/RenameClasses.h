@@ -15,5 +15,5 @@ class RenameClassesPass : public Pass {
  public:
   RenameClassesPass() : Pass("RenameClassesPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 };

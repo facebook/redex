@@ -31,9 +31,9 @@ static size_t unhandled_inline = 0;
  * Format: array of "Lpkg/Class;"
  */
 std::unordered_set<DexType*> keep_class_member_annos(
-    const folly::dynamic& config, PgoFiles& pgo) {
+    const folly::dynamic& config, ConfigFiles& cfg) {
   std::unordered_set<DexType*> keep;
-  for (const auto& anno : pgo.get_no_optimizations_annos()) {
+  for (const auto& anno : cfg.get_no_optimizations_annos()) {
     keep.emplace(anno);
   }
   try {
@@ -335,8 +335,8 @@ void inline_field_values(Scope& fullscope) {
   MethodTransform::sync_all();
 }
 
-void FinalInlinePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
-  auto keep_annos = keep_class_member_annos(m_config, pgo);
+void FinalInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+  auto keep_annos = keep_class_member_annos(m_config, cfg);
   auto keep_members = keep_class_members(m_config);
   auto scope = build_class_scope(dexen);
   inline_field_values(scope);

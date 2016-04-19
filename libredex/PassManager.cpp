@@ -17,7 +17,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "PgoFiles.h"
+#include "ConfigFiles.h"
 #include "ReachableClasses.h"
 #include "Transform.h"
 
@@ -40,10 +40,10 @@ PassManager::PassManager(
 }
 
 void PassManager::run_passes(DexClassesVector& dexen) {
-  PgoFiles pgo(m_config);
+  ConfigFiles cfg(m_config);
 
   init_reachable_classes(build_class_scope(dexen), m_config,
-      m_proguard_rules, pgo.get_no_optimizations_annos());
+      m_proguard_rules, cfg.get_no_optimizations_annos());
 
   Scope scope = build_class_scope(dexen);
   // reportReachableClasses(scope, "reachable");
@@ -54,7 +54,7 @@ void PassManager::run_passes(DexClassesVector& dexen) {
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
-    pass->run_pass(dexen, pgo);
+    pass->run_pass(dexen, cfg);
     auto end = high_resolution_clock::now();
     TRACE(PM, 1, "Pass %s completed in %.1lf seconds\n",
           pass->name().c_str(), duration<double>(end - start).count());

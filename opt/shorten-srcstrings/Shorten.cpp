@@ -123,7 +123,8 @@ static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
   fclose(fd);
 }
 
-void ShortenSrcStringsPass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void ShortenSrcStringsPass::run_pass(
+    DexClassesVector& dexen, ConfigFiles& cfg) {
   folly::dynamic path = "/tmp/filename_mappings.txt";
   try {
     path = m_config.at("filename_mappings");

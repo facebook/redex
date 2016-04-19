@@ -225,7 +225,7 @@ class PeepholeOptimizer {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void PeepholePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void PeepholePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   PeepholeOptimizer(scope).run();
 }

@@ -316,7 +316,7 @@ class BridgeRemover {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void BridgePass::run_pass(DexClassesVector& dexen, PgoFiles& pgo) {
+void BridgePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   Scope scope = build_class_scope(dexen);
   BridgeRemover(scope).run();
 }

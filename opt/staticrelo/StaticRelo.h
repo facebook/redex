@@ -16,5 +16,5 @@ class StaticReloPass : public Pass {
  public:
   StaticReloPass() : Pass("StaticReloPass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 };

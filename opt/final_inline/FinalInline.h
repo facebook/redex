@@ -15,5 +15,5 @@ class FinalInlinePass : public Pass {
  public:
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
-  virtual void run_pass(DexClassesVector&, PgoFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 };
