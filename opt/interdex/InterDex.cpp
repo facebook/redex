@@ -40,6 +40,8 @@ size_t global_cls_cnt;
 size_t cls_skipped_in_primary = 0;
 size_t cls_skipped_in_secondary = 0;
 
+bool emit_canaries = false;
+
 static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
   std::vector<DexMethod*> method_refs;
   std::vector<DexField*> field_refs;
@@ -137,22 +139,24 @@ static void flush_out_secondary(
     return;
   }
   /* Find the Canary class and add it in. */
-  int dexnum = ((int)outdex.size());
-  char buf[kCanaryClassBufsize];
-  always_assert_log(dexnum <= kMaxDexNum,
-                    "Bailing, Max dex number surpassed %d\n", dexnum);
-  snprintf(buf, sizeof(buf), kCanaryClassFormat, dexnum);
-  std::string canaryname(buf);
-  auto it = det.clookup.find(canaryname);
-  if (it == det.clookup.end()) {
-    fprintf(stderr, "Warning, no canary class %s found\n", buf);
-    ClassCreator cc(DexType::make_type(canaryname.c_str()));
-    cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
-    cc.set_super(get_object_type());
-    det.outs.push_back(cc.create());
-  } else {
-    auto clazz = it->second;
-    det.outs.push_back(clazz);
+  if (emit_canaries) {
+    int dexnum = ((int)outdex.size());
+    char buf[kCanaryClassBufsize];
+    always_assert_log(dexnum <= kMaxDexNum,
+                      "Bailing, Max dex number surpassed %d\n", dexnum);
+    snprintf(buf, sizeof(buf), kCanaryClassFormat, dexnum);
+    std::string canaryname(buf);
+    auto it = det.clookup.find(canaryname);
+    if (it == det.clookup.end()) {
+      fprintf(stderr, "Warning, no canary class %s found\n", buf);
+      ClassCreator cc(DexType::make_type(canaryname.c_str()));
+      cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+      cc.set_super(get_object_type());
+      det.outs.push_back(cc.create());
+    } else {
+      auto clazz = it->second;
+      det.outs.push_back(clazz);
+    }
   }
 
   /* Now emit our outs list... */
@@ -162,7 +166,11 @@ static void flush_out_secondary(
 static void flush_out_secondary(
     dex_emit_tracker &det,
     DexClassesVector &outdex) {
-  flush_out_secondary(det, outdex, det.mrefs.size(), det.frefs.size());
+  flush_out_secondary(
+      det,
+      outdex,
+      det.mrefs.size(),
+      det.frefs.size());
 }
 
 static bool is_canary(DexClass* clazz) {
@@ -305,8 +313,7 @@ static DexClassesVector run_interdex(
   const DexClassesVector& dexen,
   ConfigFiles& cfg,
   bool allow_cutting_off_dex,
-  bool static_prune_classes
-) {
+  bool static_prune_classes) {
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
   global_vmeth_cnt = 0;
@@ -456,6 +463,14 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
     auto prune_str = m_config["static_prune"].asString().toStdString();
     if (prune_str == "1") {
       static_prune = true;
+    }
+  }
+
+  emit_canaries = false;
+  if (m_config["emit_canaries"] != nullptr) {
+    auto prune_str = m_config["emit_canaries"].asString().toStdString();
+    if (prune_str == "1") {
+      emit_canaries = true;
     }
   }
 

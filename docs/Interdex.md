@@ -72,6 +72,17 @@ To enable the Interdex pass for you application, add the following to your confi
 - add "InterDexPass" to passes
 - add "coldstart\_classes": "list\_of\_classes.txt" to the config file
 
+## Options
+
+There are two flags that can be set to influence the behavior of the Interdex pass
+
+- emit_canaries: This flag controls whether each secondary dex has
+  a non-functional canary class added. Defaults to false.
+  Enable this only if you explicitly know that you need it.
+
+- static_prune: This flag controls whether Interdex attempts to remove classes
+  that have no references to them from the rest of the set of classes in the pgo list.
+
 # Measuring benefit
 
 - Install an apk without interdex pass enabled
