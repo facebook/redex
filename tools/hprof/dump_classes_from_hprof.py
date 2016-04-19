@@ -150,11 +150,13 @@ class HprofBasic(enum.Enum):
             return byte_stream.next_eight_bytes()
         else:
             raise Exception('Invalid HprofBasic type: %s' % self)
+
 def getArray(value):
     try:
         return array(value)
     except TypeError:
-        return array(str(value)[0]) 
+        return array(str(value)[0])
+        
 class Record(object):
     record_struct_format = b'>BII'
     record_struct = struct.Struct(record_struct_format)
