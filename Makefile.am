@@ -51,6 +51,7 @@ libredex_la_SOURCES = \
 	configparser/generated_files/parser.cc \
 	configparser/generated_files/tokenizer.cc \
 	liblocator/locator.cpp \
+	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
 	libredex/Debug.cpp \
 	libredex/DexAnnotation.cpp \
@@ -63,7 +64,6 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/JarLoader.cpp \
 	libredex/PassManager.cpp \
-	libredex/PgoFiles.cpp \
 	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ReachableClasses.cpp \
