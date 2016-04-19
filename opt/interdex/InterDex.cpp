@@ -132,6 +132,10 @@ static void flush_out_secondary(
     DexClassesVector &outdex,
     size_t mrefs_size,
     size_t frefs_size) {
+  // don't emit dex if we don't have any classes
+  if (!det.outs.size()) {
+    return;
+  }
   /* Find the Canary class and add it in. */
   int dexnum = ((int)outdex.size());
   char buf[kCanaryClassBufsize];
