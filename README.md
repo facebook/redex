@@ -126,6 +126,13 @@ appropriate args:
 -p [KEYPASS], --keypass [KEYPASS]
 ```
 
+## I'm getting "/usr/local/bin/redex-all: error while loading shared libraries: libfolly.so.57..."
+
+If you're on Linux, run:
+```
+sudo ldconfig
+```
+
 ## How does this compare to ProGuard?
 
 ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
