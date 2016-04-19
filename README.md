@@ -79,6 +79,14 @@ cd test
 make check
 ```
 
+## Docker
+
+```sh
+docker build --rm -t redex .
+
+docker run -it -v $ANDROID_SDK:/opt/android-sdk-linux -v $(pwd):/redex redex redex path/to/your.apk -o path/to/output.apk
+```
+
 ## Usage
 
 To use ReDex, first build your app and find the APK for it.  Then run:
