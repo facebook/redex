@@ -67,7 +67,13 @@ unsigned DexOpcode::count_from_opcode() const {
       1, /* FMT_f3rc   */
       2, /* FMT_f3rms  */
       2, /* FMT_f3rmi  */
-      2, /* FMT_f51l   */
+      4, /* FMT_f51l   */
+      1, /* FMT_f41c_d */
+      1, /* FMT_f41c_s */
+      2, /* FMT_f52c_d */
+      2, /* FMT_f52c_s */
+      2, /* FMT_f5rc */
+      2, /* FMT_f57c */
       0, /* FMT_fopcode   */
   };
   return args[opcode_format(opcode())];
@@ -108,6 +114,10 @@ unsigned DexOpcode::dests_size() const {
   case FMT_f31t:
   case FMT_f35c:
   case FMT_f3rc:
+  case FMT_f41c_s:
+  case FMT_f52c_s:
+  case FMT_f5rc:
+  case FMT_f57c:
   case FMT_fopcode:
     return 0;
   case FMT_f12x:
@@ -126,6 +136,8 @@ unsigned DexOpcode::dests_size() const {
   case FMT_f31i:
   case FMT_f31c:
   case FMT_f51l:
+  case FMT_f41c_d:
+  case FMT_f52c_d:
     return 1;
   case FMT_f20bc:
   case FMT_f22cs:
@@ -154,6 +166,7 @@ unsigned DexOpcode::srcs_size() const {
   case FMT_f31i:
   case FMT_f31c:
   case FMT_f51l:
+  case FMT_f41c_d:
   case FMT_fopcode:
     return 0;
   case FMT_f12x:
@@ -167,15 +180,20 @@ unsigned DexOpcode::srcs_size() const {
   case FMT_f32x:
   case FMT_f31t:
   case FMT_f3rc:
+  case FMT_f41c_s:
+  case FMT_f52c_d:
+  case FMT_f5rc:
     return 1;
   case FMT_f12x_2:
   case FMT_f23x_d:
   case FMT_f22t:
   case FMT_f22c_s:
+  case FMT_f52c_s:
     return 2;
   case FMT_f23x_s:
     return 3;
   case FMT_f35c:
+  case FMT_f57c:
     return arg_word_count();
   case FMT_f20bc:
   case FMT_f22cs:
@@ -209,6 +227,8 @@ bool DexOpcode::src_is_wide(int i) const {
   case OPCODE_APUT_WIDE:
   case OPCODE_IPUT_WIDE:
   case OPCODE_SPUT_WIDE:
+  case OPCODE_IPUT_WIDE_JUMBO:
+  case OPCODE_SPUT_WIDE_JUMBO:
     return i == 0;
 
   case OPCODE_NEG_LONG:
@@ -280,6 +300,8 @@ bool DexOpcode::dest_is_wide() const {
   case OPCODE_AGET_WIDE:
   case OPCODE_IGET_WIDE:
   case OPCODE_SGET_WIDE:
+  case OPCODE_IGET_WIDE_JUMBO:
+  case OPCODE_SGET_WIDE_JUMBO:
     return true;
 
   case OPCODE_NEG_LONG:
@@ -365,6 +387,12 @@ int DexOpcode::src_bit_width(int i) const {
   case FMT_f31c:    assert(false);
   case FMT_f35c:    assert(i <= 4); return 4;
   case FMT_f3rc:    assert(i == 0); return 16;
+  case FMT_f41c_d:  assert(false);
+  case FMT_f41c_s:  assert(i == 0);  return 16;
+  case FMT_f52c_d:  assert(i == 0);  return 16;
+  case FMT_f52c_s:  assert(i <= 1);  return 16;
+  case FMT_f5rc:    assert(i == 0);  return 16;
+  case FMT_f57c:    assert(i <= 6);  return 4;
   case FMT_f35ms:
   case FMT_f35mi:
   case FMT_f3rms:
@@ -414,6 +442,12 @@ int DexOpcode::dest_bit_width() const {
   case FMT_f3rms:
   case FMT_f3rmi:   assert(false);
   case FMT_f51l:    return 8;
+  case FMT_f41c_d:  return 16;
+  case FMT_f41c_s:  assert(false);
+  case FMT_f52c_d:  return 16;
+  case FMT_f52c_s:  assert(false);
+  case FMT_f5rc:    assert(false);
+  case FMT_f57c:    assert(false);
   case FMT_fopcode:
   default:          assert(false);
   }
@@ -442,6 +476,9 @@ uint16_t DexOpcode::dest() const {
   case FMT_f51l:
     return (m_opcode >> 8) & 0xff;
   case FMT_f32x:
+    return m_arg[0];
+  case FMT_f41c_d:
+  case FMT_f52c_d:
     return m_arg[0];
   default:
     // All other formats do not define a destination register.
@@ -476,6 +513,10 @@ DexOpcode* DexOpcode::set_dest(uint16_t vreg) {
     m_opcode = (m_opcode & 0x00ff) | (vreg << 8);
     return this;
   case FMT_f32x:
+    m_arg[0] = vreg;
+    return this;
+  case FMT_f41c_d:
+  case FMT_f52c_d:
     m_arg[0] = vreg;
     return this;
   default:
@@ -540,6 +581,36 @@ uint16_t DexOpcode::src(int i) const {
       return (m_arg[0] >> 12) & 0xf;
     case 4:
       return (m_opcode >> 8) & 0xf;
+    }
+  case FMT_f41c_s:
+    assert(i == 0);
+    return m_arg[0];
+  case FMT_f52c_d:
+    assert(i == 0);
+    return m_arg[1];
+  case FMT_f52c_s:
+    assert(i <= 1);
+    return m_arg[i];
+  case FMT_f5rc:
+    assert(i == 0);
+    return m_arg[1];
+  case FMT_f57c:
+    assert(i <= 6);
+    switch(i) {
+    case 0:
+      return (m_arg[0] >> 4) & 0xf;
+    case 1:
+      return (m_arg[0] >> 8) & 0xf;
+    case 2:
+      return (m_arg[0] >> 12) & 0xf;
+    case 3:
+      return m_arg[1] & 0xf;
+    case 4:
+      return (m_arg[1] >> 4) & 0xf;
+    case 5:
+      return (m_arg[1] >> 8) & 0xf;
+    case 6:
+      return (m_arg[1] >> 12) & 0xf;
     }
   default:
     // All other formats do not define source registers.
@@ -636,6 +707,48 @@ DexOpcode* DexOpcode::set_src(int i, uint16_t vreg) {
       return this;
     case 4:
       m_opcode = (m_opcode & 0xf0ff) | (vreg << 8);
+      return this;
+    }
+  case FMT_f41c_s:
+    assert(i == 0);
+    m_arg[0] = vreg;
+    return this;
+  case FMT_f52c_d:
+    assert(i == 0);
+    m_arg[1] = vreg;
+    return this;
+  case FMT_f52c_s:
+    assert(i <= 1);
+    m_arg[i] = vreg;
+    return this;
+  case FMT_f5rc:
+    assert(i == 0);
+    m_arg[1] = vreg;
+    return this;
+  case FMT_f57c:
+    assert(i <= 6);
+    assert((vreg & 0xf) == vreg);
+    switch (i) {
+    case 0:
+      m_arg[0] = (m_arg[0] & 0xff0f) | (vreg << 4);
+      return this;
+    case 1:
+      m_arg[0] = (m_arg[0] & 0xf0ff) | (vreg << 8);
+      return this;
+    case 2:
+      m_arg[0] = (m_arg[0] & 0x0fff) | (vreg << 12);
+      return this;
+    case 3:
+      m_arg[1] = (m_arg[1] & 0xfff0) | vreg;
+      return this;
+    case 4:
+      m_arg[0] = (m_arg[1] & 0xff0f) | (vreg << 4);
+      return this;
+    case 5:
+      m_arg[0] = (m_arg[1] & 0xf0ff) | (vreg << 8);
+      return this;
+    case 6:
+      m_arg[0] = (m_arg[1] & 0x0fff) | (vreg << 12);
       return this;
     }
   default:
@@ -799,51 +912,83 @@ DexOpcode* DexOpcode::set_offset(int32_t offset) {
 }
 
 bool DexOpcode::has_range_base() const {
-  return opcode_format(opcode()) == FMT_f3rc;
+  auto format = opcode_format(opcode());
+  if (format == FMT_f3rc || format == FMT_f5rc)
+    return true;
+  return false;
 }
 
 bool DexOpcode::has_range_size() const {
-  return opcode_format(opcode()) == FMT_f3rc;
+  auto format = opcode_format(opcode());
+  if (format == FMT_f3rc || format == FMT_f5rc)
+    return true;
+  return false;
 }
 
 uint16_t DexOpcode::range_base() const {
-  assert(opcode_format(opcode()) == FMT_f3rc);
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f3rc || format == FMT_f5rc);
+  if (format == FMT_f5rc)
+    return m_arg[1];
   return m_arg[0];
 }
 
 uint16_t DexOpcode::range_size() const {
-  assert(opcode_format(opcode()) == FMT_f3rc);
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f3rc || format == FMT_f5rc);
+  if (format == FMT_f5rc)
+    return m_arg[0];
   return (m_opcode >> 8) & 0xff;
 }
 
 DexOpcode* DexOpcode::set_range_base(uint16_t base) {
-  assert(opcode_format(opcode()) == FMT_f3rc);
-  m_arg[0] = base;
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f3rc || format == FMT_f5rc);
+  if (format == FMT_f5rc) {
+    m_arg[1] = base;
+  } else {
+    m_arg[0] = base;
+  }
   return this;
 }
 
 DexOpcode* DexOpcode::set_range_size(uint16_t size) {
-  assert(opcode_format(opcode()) == FMT_f3rc);
-  assert(size == (size & 0xff));
-  m_opcode = (m_opcode & 0xff) | (size << 8);
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f3rc || format == FMT_f5rc);
+  if (format == FMT_f5rc) {
+    m_arg[0] = size;
+  } else {
+    assert(size == (size & 0xff));
+    m_opcode = (m_opcode & 0xff) | (size << 8);
+  }
   return this;
 }
 
 bool DexOpcode::has_arg_word_count() const {
-  return opcode_format(opcode()) == FMT_f35c;
+  auto format = opcode_format(opcode());
+  if(format == FMT_f35c || format == FMT_f57c)
+    return true;
+  return false;
 }
 
 uint16_t DexOpcode::arg_word_count() const {
-  auto DEBUG_ONLY format = opcode_format(opcode());
-  assert(format == FMT_f35c);
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f35c || format == FMT_f57c);
+  if (format == FMT_f57c) {
+    return (m_arg[0]) & 0xf;
+  }
   return (m_opcode >> 12) & 0xf;
 }
 
 DexOpcode* DexOpcode::set_arg_word_count(uint16_t count) {
-  auto DEBUG_ONLY format = opcode_format(opcode());
-  assert(format == FMT_f35c);
+  auto format = opcode_format(opcode());
+  assert(format == FMT_f35c || format == FMT_f57c);
   assert((count & 0xf) == count);
-  m_opcode = (m_opcode & 0x0fff) | (count << 12);
+  if (format == FMT_f57c) {
+    m_arg[0] = (m_arg[0] & 0xfff0) | count;
+  } else {
+    m_opcode = (m_opcode & 0x0fff) | (count << 12);
+  }
   return this;
 }
 
