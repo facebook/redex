@@ -343,6 +343,71 @@ DexClass* select_relocation_target(
 }
 
 /**
+ * Check if references inside a candidate method can be moved.
+ */
+bool can_make_references_public(const DexMethod* from_meth) {
+  auto const& code = from_meth->get_code();
+  if (!code) return false;
+  for (auto const& inst : code->get_instructions()) {
+    if (inst->has_types()) {
+      auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
+      auto tclass = type_class(tref);
+      if (!tclass) return false;
+      if (tclass->is_external() && !is_public(tclass)) return false;
+    } else if (inst->has_fields()) {
+      auto fref = resolve_field(static_cast<DexOpcodeField*>(inst)->field());
+      if (!fref) return false;
+      auto fclass = type_class(fref->get_class());
+      if (!fclass) return false;
+      if (fclass->is_external() && !is_public(fclass)) return false;
+    } else if (inst->has_methods()) {
+      auto methodinst = static_cast<DexOpcodeMethod*>(inst);
+      auto mref = resolve_method(
+        methodinst->get_method(),
+        opcode_to_search(methodinst));
+      if (!mref) return false;
+      auto mclass = type_class(mref->get_class());
+      if (!mclass) return false;
+      if (mclass->is_external() && !is_public(mclass)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A moved method may refer to package private members.  Make things public as
+ * needed.
+ */
+void make_references_public(const DexMethod* from_meth) {
+  auto const& code = from_meth->get_code();
+  if (!code) return;
+  for (auto const& inst : code->get_instructions()) {
+    if (inst->has_types()) {
+      auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
+      auto tclass = type_class(tref);
+      always_assert(tclass);
+      set_public(tclass);
+    } else if (inst->has_fields()) {
+      auto fref = resolve_field(static_cast<DexOpcodeField*>(inst)->field());
+      auto fclass = type_class(fref->get_class());
+      always_assert(fclass);
+      set_public(fclass);
+      set_public(fref);
+    } else if (inst->has_methods()) {
+      auto methodinst = static_cast<DexOpcodeMethod*>(inst);
+      auto mref = resolve_method(
+        methodinst->get_method(),
+        opcode_to_search(methodinst)
+      );
+      auto mclass = type_class(mref->get_class());
+      always_assert(mclass);
+      set_public(mclass);
+      set_public(mref);
+    }
+  }
+}
+
+/**
  * Builds all the mutations we'll make for relocation (method moves, method
  * deletes, class deletes).
  *
@@ -396,7 +461,13 @@ DexClass* select_relocation_target(
         if (dmethod_refs.at(meth).size() == 1) {
           s_single_ref_total_count++;
         }
-
+        // We need to make any references in the candidate public; if we can't,
+        // then we can't move the class.
+        if (!can_make_references_public(meth)) {
+          s_meth_could_not_move_count++;
+          can_delete_class = false;
+          continue;
+        }
         // If there's no relocation_target, we can't delete the class, and don't
         // move the method. We also need to make the method public as other
         // methods that were moved away may refer back to it.
@@ -484,6 +555,7 @@ void do_mutations(
       // the new placement may be restricted from those call sites without
       // these changes.
       set_public(from_meth);
+      make_references_public(from_meth);
       set_public(to_cls);
       s_meth_move_count++;
     }
