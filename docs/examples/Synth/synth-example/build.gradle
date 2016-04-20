@@ -2,11 +2,11 @@ apply plugin: 'com.android.application'
 
 android {
     signingConfigs {
-        satnam_signed {
-            storeFile file('/Users/satnamsingh/satnam_keystore.jks')
-            keyAlias 'satnam_keystore'
-            keyPassword 'wombat'
-            storePassword 'wombat'
+        debug_keystore {
+            storeFile file('/Users/satnamsingh/.android/debug.keystore')
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            storePassword 'android'
         }
     }
     compileSdkVersion 23
@@ -22,7 +22,7 @@ android {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.satnam_signed
+            signingConfig signingConfigs.debug_keystore
             proguardFile '/Users/satnamsingh/redex/docs/examples/Synth/synth-example/proguard-rules.pro'
         }
     }

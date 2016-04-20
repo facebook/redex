@@ -157,17 +157,18 @@ Similar optimizations exist for other synthetic wrapper scenarios e.g.
 for instance fields.
 
 ## Example Code
-The project in this directory can be opened with Android Studio 1.5 and
+The project in the `synth-example` directory can be opened with Android Studio 1.5 and
 contains the sample here that illustrates the removal of synthetic
-wrappers for static private fields. To produce the release APK
-you will need to update the signing configuration to use your own
-keystore rather than the `satnam_keystore`.
+wrappers for static private fields. 
 
 The `Makefile` in this directory can be used once you have build a signed:
 APK (`Build : Generate Signed APK...`) to produce the following items:
 * `synth-example-release-redex.apk`: A Redex optimized version of the original APK.
 * `classes.dump`: A dump of the Dex bytecode for the input APK `synth-example-release.apk`.
 * `classes-redex.dump`: A dump of the Redex optimizd APK `synth-example-release-redex.apk`.
+
+The environment variable `ANDROID_TOOLS` should be set to the location
+of your Android SDK tools directory.
 
 To produce these items:
 

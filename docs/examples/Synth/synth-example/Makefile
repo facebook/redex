@@ -9,9 +9,9 @@ all:	$(INPUT_APK)-redex.apk classes.dump classes-redex.dump
 clean:
 	rm -rf $(INPUT_APK)-redex.apk classes.dump classes-redex.dump
 
-KEYSTORE = ../../../../../satnam_keystore.jks
-ALIAS = satnam_keystore
-KEYPASS = wombat
+KEYSTORE = $(HOME)/.android/debug.keystore
+ALIAS = androiddebugkey
+KEYPASS = android
 
 $(INPUT_APK)-redex.apk:	$(INPUT_APK).apk
 			$(REDEX) --sign -s $(KEYSTORE) -a $(ALIAS) -p $(KEYPASS) -o $@ $< 
