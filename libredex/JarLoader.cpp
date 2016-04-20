@@ -361,6 +361,9 @@ static bool parse_class(uint8_t *buffer) {
   uint16_t super = read16(buffer);
   uint16_t ifcount = read16(buffer);
   DexType *self = make_dextype_from_cref(cpool, clazz);
+  if (type_class(self)) {
+    return true;
+  }
   ClassCreator cc(self);
   cc.set_external();
   if (super != 0) {

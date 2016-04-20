@@ -340,7 +340,7 @@ void init_permanently_reachable_classes(
       std::string cls_pattern(r.classname);
       std::replace(cls_pattern.begin(), cls_pattern.end(), '.', '/');
       auto prep_pat = 'L' + cls_pattern;
-      TRACE(PGR, 1, "adding pattern %s \n", prep_pat.c_str());
+      TRACE(PGR, 2, "adding pattern %s \n", prep_pat.c_str());
       cls_patterns.push_back(prep_pat);
     }
   }
@@ -550,7 +550,7 @@ void init_seed_classes(const std::string seeds_filename) {
             mark_reachable_by_seed(dex_type);
             count++;
           } else {
-            TRACE(PGR, 1,
+            TRACE(PGR, 2,
                 "Seed file contains class for which "
                 "Dex type can't be found: %s\n",
                 line.c_str());
