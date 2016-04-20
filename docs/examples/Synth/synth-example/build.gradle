@@ -22,11 +22,7 @@ android {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-<<<<<<< 0ec06a4786eebba2bd8938a8b79d3761915caeba
-            signingConfig signingConfigs.satnam_signed
-=======
             signingConfig signingConfigs.debug_keystore
->>>>>>> Redex synth example
             proguardFile '/Users/satnamsingh/redex/docs/examples/Synth/synth-example/proguard-rules.pro'
         }
     }

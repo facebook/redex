@@ -157,7 +157,7 @@ Similar optimizations exist for other synthetic wrapper scenarios e.g.
 for instance fields.
 
 ## Example Code
-The project in the `synt-example` directory can be opened with Android Studio 1.5 and
+The project in the `synth-example` directory can be opened with Android Studio 1.5 and
 contains the sample here that illustrates the removal of synthetic
 wrappers for static private fields. 
 
@@ -167,12 +167,9 @@ APK (`Build : Generate Signed APK...`) to produce the following items:
 * `classes.dump`: A dump of the Dex bytecode for the input APK `synth-example-release.apk`.
 * `classes-redex.dump`: A dump of the Redex optimizd APK `synth-example-release-redex.apk`.
 
-<<<<<<< 0ec06a4786eebba2bd8938a8b79d3761915caeba
-=======
 The environment variable `ANDROID_TOOLS` should be set to the location
-of your Android SDK tools.
+of your Android SDK tools directory.
 
->>>>>>> Redex synth example
 To produce these items:
 
 ```
