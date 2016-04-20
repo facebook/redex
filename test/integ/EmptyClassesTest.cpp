@@ -53,13 +53,15 @@ TEST(EmptyClassesTest1, emptyclasses) {
 
   std::vector<KeepRule> null_rules;
   auto const keep = { "Lcom/facebook/redextest/DoNotStrip;" };
+  const folly::dynamic conf_obj = folly::dynamic::object(
+            "keep_annotations", folly::dynamic(keep.begin(), keep.end()));
   PassManager manager(
     passes,
     null_rules,
-    folly::dynamic::object(
-      "keep_annotations", folly::dynamic(keep.begin(), keep.end()))
+    conf_obj
   );
-  manager.run_passes(dexen);
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(dexen, dummy_cfg);
 
   size_t after = 0;
   std::set<std::string> remaining_classes;

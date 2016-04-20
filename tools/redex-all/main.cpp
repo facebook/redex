@@ -279,6 +279,40 @@ void output_stats(const char* path, const dex_output_stats_t& stats) {
   folly::writeFile(folly::toPrettyJson(d), path);
 }
 
+void output_moved_methods_map(const char* path, DexClassesVector& dexen, ConfigFiles& cfg) {
+  // print out moved methods map
+  if (cfg.save_move_map()) {
+    FILE* fd = fopen(path, "w");
+    if (fd == nullptr) {
+      perror("Error opening method move file");
+      return;
+    }
+    auto move_map = cfg.get_moved_methods_map();
+    std::string dummy = "dummy";
+    for (const auto& it : *move_map) {
+      MethodTuple mt = it.first;
+      auto cls_name = std::get<0>(mt);
+      auto meth_name = std::get<1>(mt);
+      auto src_file = std::get<2>(mt);
+      auto ren_to_cls_name = it.second->get_type()->get_name()->c_str();
+      const char* src_string;
+      if (src_file != nullptr) {
+        src_string = src_file->c_str();
+      } else {
+        src_string = dummy.c_str();
+      }
+      fprintf(fd, "%s %s (%s) -> %s \n",
+          cls_name->c_str(),
+          meth_name->c_str(),
+          src_string,
+          ren_to_cls_name);
+    }
+    fclose(fd);
+  } else {
+    TRACE(MAIN, 1, "No method move map data structure!\n");
+  }
+}
+
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace);
   signal(SIGABRT, crash_backtrace);
@@ -351,8 +385,9 @@ int main(int argc, char* argv[]) {
     init_seed_classes(args.seeds_filename);
   }
 
+  ConfigFiles cfg(args.config);
   PassManager manager(passes, rules, args.config);
-  manager.run_passes(dexen);
+  manager.run_passes(dexen, cfg);
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
 
@@ -367,6 +402,7 @@ int main(int argc, char* argv[]) {
 
   auto methodmapping = args.config.getDefault("method_mapping", "").asString();
   auto stats_output = args.config.getDefault("stats_output", "").asString();
+  auto method_move_map = args.config.getDefault("method_move_map", "").asString();
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";
@@ -383,6 +419,7 @@ int main(int argc, char* argv[]) {
     totals += stats;
   }
   output_stats(stats_output.c_str(), totals);
+  output_moved_methods_map(method_move_map.c_str(), dexen, cfg);
   print_warning_summary();
   delete g_redex;
   TRACE(MAIN, 1, "Done.\n");

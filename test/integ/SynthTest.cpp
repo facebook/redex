@@ -68,7 +68,11 @@ TEST(SynthTest1, synthetic) {
 
   std::vector<KeepRule> null_rules;
   PassManager manager(passes, null_rules);
-  manager.run_passes(dexen);
+
+  const folly::dynamic conf_obj = folly::dynamic::object(
+            "dummy", "");
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(dexen, dummy_cfg);
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {

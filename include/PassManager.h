@@ -22,7 +22,7 @@ class PassManager {
     const std::vector<Pass*>& passes,
     const std::vector<KeepRule>& rules,
     const folly::dynamic& config = folly::dynamic::object);
-  void run_passes(DexClassesVector&);
+  void run_passes(DexClassesVector&, ConfigFiles&);
 
  private:
   void activate_pass(const char* name, const folly::dynamic& cfg);

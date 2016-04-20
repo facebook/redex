@@ -15,6 +15,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -25,6 +26,7 @@
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Match.h"
+#include "ConfigFiles.h"
 #include "walkers.h"
 
 namespace {
@@ -521,12 +523,24 @@ void delete_classes(
   post_dexen_changes(scope, dexen);
 }
 
+void record_move_data(DexMethod* from_meth,
+    DexClass* from_cls,
+    DexClass* to_cls,
+    ConfigFiles& cfg) {
+  MethodTuple from_tuple = std::make_tuple(
+      from_cls->get_type()->get_name(),
+      from_meth->get_name(),
+      from_cls->get_source_file());
+  cfg.add_moved_methods(from_tuple, to_cls);
+}
+
 void do_mutations(
   Scope& scope,
   DexClassesVector& dexen,
   std::unordered_map<DexMethod*, DexClass*>& meth_moves,
   std::unordered_set<DexMethod*>& meth_deletes,
-  std::unordered_set<DexClass*>& cls_deletes) {
+  std::unordered_set<DexClass*>& cls_deletes,
+  ConfigFiles& cfg) {
 
   // Do method deletes
   s_meth_delete_count = meth_deletes.size();
@@ -545,6 +559,12 @@ void do_mutations(
       always_assert(from_cls != to_cls);
       TRACE(RELO, 5, "RELO Relocating %s to %s\n",
         SHOW(from_meth), SHOW(to_cls->get_type()));
+      if (from_cls->get_type()->get_name()->c_str() == nullptr ||
+          from_meth->get_name()->c_str() == nullptr) {
+        TRACE(RELO, 5, "skipping class move\n");
+        continue;
+      }
+      record_move_data(from_meth, from_cls, to_cls, cfg);
       // Move the method to the target class
       from_cls->get_dmethods().remove(from_meth);
       from_meth->change_class(to_cls->get_type());
@@ -637,7 +657,7 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
     cls_deletes);
 
   // Perform all relocation mutations
-  do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes);
+  do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
 
   // Final report
   TRACE(

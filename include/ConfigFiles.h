@@ -14,9 +14,12 @@
 
 #include <folly/dynamic.h>
 
+#include "DexClass.h"
 #include "ProguardMap.h"
 
 class DexType;
+using MethodTuple = std::tuple<DexString*, DexString*, DexString*>;
+using MethodMap = std::unordered_map<MethodTuple, DexClass*>;
 
 struct ConfigFiles {
   ConfigFiles(const folly::dynamic& config);
@@ -39,12 +42,27 @@ struct ConfigFiles {
     return m_no_optimizations_annos;
   }
 
+  bool save_move_map() {
+    return m_move_map;
+  }
+
+  MethodMap * get_moved_methods_map() {
+    return &m_moved_methods_map;
+  }
+
+  void add_moved_methods(MethodTuple mt, DexClass* cls) {
+    m_move_map = true;
+    m_moved_methods_map[mt] = cls;
+  }
+
  private:
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
 
  private:
+  bool m_move_map;
   ProguardMap m_proguard_map;
+  MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_method_filename;
   std::vector<std::string> m_coldstart_classes;
