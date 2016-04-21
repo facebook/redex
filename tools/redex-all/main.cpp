@@ -281,7 +281,7 @@ void output_stats(const char* path, const dex_output_stats_t& stats) {
 
 void output_moved_methods_map(const char* path, DexClassesVector& dexen, ConfigFiles& cfg) {
   // print out moved methods map
-  if (cfg.save_move_map()) {
+  if (cfg.save_move_map() && strcmp(path, "")) {
     FILE* fd = fopen(path, "w");
     if (fd == nullptr) {
       perror("Error opening method move file");
