@@ -36,6 +36,7 @@ T_NEWLINE \n
 T_COMMA ","
 T_SEMICOLON ";"
 T_AT "@"
+T_QUOTE "'"
 T_CLASS "class"
 T_INTERFACE "interface"
 T_AT_INTERFACE "@interface"
@@ -124,6 +125,7 @@ T_PATTERN [A-Za-z*[.0-9/$_]+[A-Za-z*\[\].0-9/$_#-]*
 {T_COMMA}                        {DEBUG("comma            ");  return T_COMMA;}
 {T_SEMICOLON}                    {DEBUG("semicolon        ");  return T_SEMICOLON;}
 {T_NOT}                          {DEBUG("not              ");  return T_NOT;}
+{T_QUOTE}                        {DEBUG("quote            ");  return T_QUOTE;}
 
 \*/;                             {DEBUG("any_member       ");  /* Can't use {ANY_MEMBER} at start of line due to bug in flex */ return T_ANY_MEMBER;}
 
