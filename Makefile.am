@@ -56,10 +56,10 @@ libredex_la_SOURCES = \
 	libredex/Debug.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexClass.cpp \
-	libredex/DexDebugOpcode.cpp \
+	libredex/DexDebugInstruction.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
-	libredex/DexOpcode.cpp \
+	libredex/DexInstruction.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexUtil.cpp \
 	libredex/JarLoader.cpp \
