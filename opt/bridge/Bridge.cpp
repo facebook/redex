@@ -33,8 +33,7 @@ namespace {
 
 DexMethod* match_pattern(DexMethod* bridge) {
   auto code = bridge->get_code();
-  always_assert_log(
-      code, "Bridge method `%s' doesn't contain code", SHOW(bridge));
+  if (!code) return nullptr;
   auto const& insts = code->get_instructions();
   auto it = insts.begin();
   auto end = insts.end();
@@ -58,7 +57,7 @@ DexMethod* match_pattern(DexMethod* bridge) {
     return nullptr;
   }
   ++it;
-  always_assert_log(it == end, "In %s", SHOW(bridge));
+  if (it != end) return nullptr;
   return invoke->get_method();
 }
 
