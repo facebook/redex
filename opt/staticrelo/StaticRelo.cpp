@@ -40,6 +40,7 @@ static float s_avg_relocation_load;
 static int s_max_relocation_load;
 static int s_single_ref_total_count;
 static int s_single_ref_moved_count;
+static int s_line_conflict_but_sig_fine_count;
 
 /** map of dmethod or class (T) -> method/opcode referencing dmethod or class */
 template <typename T>
@@ -256,8 +257,22 @@ bool does_method_collide(
   const DexMethod* method,
   const std::vector<DexMethod*> methods) {
   for (auto other_method : methods) {
+    auto first_dbg = method->get_code()->get_debug_item();
+    auto sec_dbg = other_method->get_code()->get_debug_item();
+    bool line_nums_equal = false;
+    // In a stack trace we can't disambiguate between
+    // two methods if they have the same name and line number
+    // since we don't get the full signature back.
+    if (first_dbg != nullptr && sec_dbg != nullptr) {
+      line_nums_equal = first_dbg->get_line_start() == sec_dbg->get_line_start();
+    }
     if (method->get_name() == other_method->get_name() &&
-      method->get_proto() == other_method->get_proto()) {
+          (method->get_proto() == other_method->get_proto() ||
+        line_nums_equal)) {
+      // under different constraints we could use the full signature to disambiguate
+      if (method->get_proto() != other_method->get_proto()) {
+        s_line_conflict_but_sig_fine_count++;
+      }
       return true;
     }
   }
@@ -621,6 +636,7 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   s_max_relocation_load = 0;
   s_single_ref_total_count = 0;
   s_single_ref_moved_count = 0;
+  s_line_conflict_but_sig_fine_count = 0;
 
   auto scope = build_class_scope(dexen);
   auto cls_to_dex = build_class_to_dex_map(dexen);
@@ -669,7 +685,9 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
     "RELO :) Moved %d/%d methods to single call site targets\n"
     "RELO :| On average relocated %f methods onto all targets\n"
     "RELO :| Max %d methods relocated onto any one target\n"
-    "RELO :( Could not move %d methods\n",
+    "RELO :( Could not move %d methods\n"
+    "RELO :( Could not move %d methods due to conservative "
+    "aliasing criteria\n",
     s_meth_delete_count,
     s_meth_move_count,
     s_cls_delete_count,
@@ -677,5 +695,6 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
     s_single_ref_total_count,
     s_avg_relocation_load,
     s_max_relocation_load,
-    s_meth_could_not_move_count);
+    s_meth_could_not_move_count,
+    s_line_conflict_but_sig_fine_count);
 }
