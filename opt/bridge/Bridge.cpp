@@ -94,9 +94,10 @@ bool signature_matches(DexMethod* a, DexMethod* b) {
 }
 
 bool has_bridgelike_access(DexMethod* m) {
-  return (m->get_access() & ACC_BRIDGE) ||
-         ((m->get_access() & ACC_SYNTHETIC) &&
-          !(m->get_access() & (ACC_STATIC | ACC_CONSTRUCTOR)));
+  return 
+    m->is_virtual() &&
+    (is_bridge(m) ||
+     (is_synthetic(m) && !is_static(m) && !is_constructor(m)));
 }
 
 void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
