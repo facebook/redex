@@ -98,48 +98,49 @@
      T_DONTSKIPNONPUBLICLIBRARYCLASSES = 287,
      T_FLATTENPACKAGEHIERARCHY = 288,
      T_INJARS = 289,
-     T_KEEPATTRIBUTES = 290,
-     T_KEEPPACKAGENAMES = 291,
-     T_KEEPPARAMETERNAMES = 292,
-     T_LIBRARYJARS = 293,
-     T_MERGEINTERFACESAGGRESSIVELY = 294,
-     T_OBFUSCATIONDICTIONARY = 295,
-     T_OPTIMIZATIONPASSES = 296,
-     T_OPTIMIZATIONS = 297,
-     T_OUTJARS = 298,
-     T_OVERLOADAGGRESSIVELY = 299,
-     T_PACKAGEOBFUSCATIONDICTIONARY = 300,
-     T_PRINTCONFIGURATION = 301,
-     T_PRINTMAPPING = 302,
-     T_PRINTSEEDS = 303,
-     T_PRINTUSAGE = 304,
-     T_RENAMESOURCEFILEATTRIBUTE = 305,
-     T_REPACKAGECLASSES = 306,
-     T_USEUNIQUECLASSMEMBERNAMES = 307,
-     T_VERBOSE = 308,
-     T_WHYAREYOUKEEPING = 309,
-     T_CLASS = 310,
-     T_ENUM = 311,
-     T_INTERFACE = 312,
-     T_AT_INTERFACE = 313,
-     T_INIT = 314,
-     T_IMPLEMENTS = 315,
-     T_EXTENDS = 316,
-     T_PUBLIC = 317,
-     T_PRIVATE = 318,
-     T_PROTECTED = 319,
-     T_STATIC = 320,
-     T_FINAL = 321,
-     T_TRANSIENT = 322,
-     T_NATIVE = 323,
-     T_METHODS = 324,
-     T_FIELDS = 325,
-     T_ANY_MEMBER = 326,
-     T_PATTERN = 327,
-     T_MEMBERS_BEGIN = 328,
-     T_MEMBERS_END = 329,
-     T_ARGS_BEGIN = 330,
-     T_ARGS_END = 331
+     T_INCLUDE = 290,
+     T_KEEPATTRIBUTES = 291,
+     T_KEEPPACKAGENAMES = 292,
+     T_KEEPPARAMETERNAMES = 293,
+     T_LIBRARYJARS = 294,
+     T_MERGEINTERFACESAGGRESSIVELY = 295,
+     T_OBFUSCATIONDICTIONARY = 296,
+     T_OPTIMIZATIONPASSES = 297,
+     T_OPTIMIZATIONS = 298,
+     T_OUTJARS = 299,
+     T_OVERLOADAGGRESSIVELY = 300,
+     T_PACKAGEOBFUSCATIONDICTIONARY = 301,
+     T_PRINTCONFIGURATION = 302,
+     T_PRINTMAPPING = 303,
+     T_PRINTSEEDS = 304,
+     T_PRINTUSAGE = 305,
+     T_RENAMESOURCEFILEATTRIBUTE = 306,
+     T_REPACKAGECLASSES = 307,
+     T_USEUNIQUECLASSMEMBERNAMES = 308,
+     T_VERBOSE = 309,
+     T_WHYAREYOUKEEPING = 310,
+     T_CLASS = 311,
+     T_ENUM = 312,
+     T_INTERFACE = 313,
+     T_AT_INTERFACE = 314,
+     T_INIT = 315,
+     T_IMPLEMENTS = 316,
+     T_EXTENDS = 317,
+     T_PUBLIC = 318,
+     T_PRIVATE = 319,
+     T_PROTECTED = 320,
+     T_STATIC = 321,
+     T_FINAL = 322,
+     T_TRANSIENT = 323,
+     T_NATIVE = 324,
+     T_METHODS = 325,
+     T_FIELDS = 326,
+     T_ANY_MEMBER = 327,
+     T_PATTERN = 328,
+     T_MEMBERS_BEGIN = 329,
+     T_MEMBERS_END = 330,
+     T_ARGS_BEGIN = 331,
+     T_ARGS_END = 332
    };
 #endif
 /* Tokens.  */
@@ -175,48 +176,49 @@
 #define T_DONTSKIPNONPUBLICLIBRARYCLASSES 287
 #define T_FLATTENPACKAGEHIERARCHY 288
 #define T_INJARS 289
-#define T_KEEPATTRIBUTES 290
-#define T_KEEPPACKAGENAMES 291
-#define T_KEEPPARAMETERNAMES 292
-#define T_LIBRARYJARS 293
-#define T_MERGEINTERFACESAGGRESSIVELY 294
-#define T_OBFUSCATIONDICTIONARY 295
-#define T_OPTIMIZATIONPASSES 296
-#define T_OPTIMIZATIONS 297
-#define T_OUTJARS 298
-#define T_OVERLOADAGGRESSIVELY 299
-#define T_PACKAGEOBFUSCATIONDICTIONARY 300
-#define T_PRINTCONFIGURATION 301
-#define T_PRINTMAPPING 302
-#define T_PRINTSEEDS 303
-#define T_PRINTUSAGE 304
-#define T_RENAMESOURCEFILEATTRIBUTE 305
-#define T_REPACKAGECLASSES 306
-#define T_USEUNIQUECLASSMEMBERNAMES 307
-#define T_VERBOSE 308
-#define T_WHYAREYOUKEEPING 309
-#define T_CLASS 310
-#define T_ENUM 311
-#define T_INTERFACE 312
-#define T_AT_INTERFACE 313
-#define T_INIT 314
-#define T_IMPLEMENTS 315
-#define T_EXTENDS 316
-#define T_PUBLIC 317
-#define T_PRIVATE 318
-#define T_PROTECTED 319
-#define T_STATIC 320
-#define T_FINAL 321
-#define T_TRANSIENT 322
-#define T_NATIVE 323
-#define T_METHODS 324
-#define T_FIELDS 325
-#define T_ANY_MEMBER 326
-#define T_PATTERN 327
-#define T_MEMBERS_BEGIN 328
-#define T_MEMBERS_END 329
-#define T_ARGS_BEGIN 330
-#define T_ARGS_END 331
+#define T_INCLUDE 290
+#define T_KEEPATTRIBUTES 291
+#define T_KEEPPACKAGENAMES 292
+#define T_KEEPPARAMETERNAMES 293
+#define T_LIBRARYJARS 294
+#define T_MERGEINTERFACESAGGRESSIVELY 295
+#define T_OBFUSCATIONDICTIONARY 296
+#define T_OPTIMIZATIONPASSES 297
+#define T_OPTIMIZATIONS 298
+#define T_OUTJARS 299
+#define T_OVERLOADAGGRESSIVELY 300
+#define T_PACKAGEOBFUSCATIONDICTIONARY 301
+#define T_PRINTCONFIGURATION 302
+#define T_PRINTMAPPING 303
+#define T_PRINTSEEDS 304
+#define T_PRINTUSAGE 305
+#define T_RENAMESOURCEFILEATTRIBUTE 306
+#define T_REPACKAGECLASSES 307
+#define T_USEUNIQUECLASSMEMBERNAMES 308
+#define T_VERBOSE 309
+#define T_WHYAREYOUKEEPING 310
+#define T_CLASS 311
+#define T_ENUM 312
+#define T_INTERFACE 313
+#define T_AT_INTERFACE 314
+#define T_INIT 315
+#define T_IMPLEMENTS 316
+#define T_EXTENDS 317
+#define T_PUBLIC 318
+#define T_PRIVATE 319
+#define T_PROTECTED 320
+#define T_STATIC 321
+#define T_FINAL 322
+#define T_TRANSIENT 323
+#define T_NATIVE 324
+#define T_METHODS 325
+#define T_FIELDS 326
+#define T_ANY_MEMBER 327
+#define T_PATTERN 328
+#define T_MEMBERS_BEGIN 329
+#define T_MEMBERS_END 330
+#define T_ARGS_BEGIN 331
+#define T_ARGS_END 332
 
 
 
@@ -355,7 +357,7 @@ typedef int YYSTYPE;
 
 
 /* Line 216 of yacc.c.  */
-#line 359 "/Users/bertrand/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
+#line 361 "/Users/bertrand/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_parser_cc/parser.cc"
 
 #ifdef short
 # undef short
@@ -568,22 +570,22 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  75
+#define YYFINAL  77
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   192
+#define YYLAST   189
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  77
+#define YYNTOKENS  78
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  39
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  117
+#define YYNRULES  118
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  167
+#define YYNSTATES  169
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   331
+#define YYMAXUTOK   332
 
 #define YYTRANSLATE(YYX)						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -624,7 +626,7 @@ static const yytype_uint8 yytranslate[] =
       45,    46,    47,    48,    49,    50,    51,    52,    53,    54,
       55,    56,    57,    58,    59,    60,    61,    62,    63,    64,
       65,    66,    67,    68,    69,    70,    71,    72,    73,    74,
-      75,    76
+      75,    76,    77
 };
 
 #if YYDEBUG
@@ -641,61 +643,61 @@ static const yytype_uint16 yyprhs[] =
      139,   141,   143,   144,   148,   149,   153,   154,   158,   159,
      160,   164,   165,   166,   172,   176,   178,   180,   183,   186,
      189,   191,   194,   198,   201,   203,   205,   207,   209,   212,
-     214,   216,   219,   222,   225,   227,   229,   232,   235,   238,
-     240,   243,   246,   249,   252,   255,   258,   261,   266,   270,
-     272,   274,   277,   281,   283,   285,   288,   292
+     214,   216,   219,   222,   225,   228,   230,   232,   235,   238,
+     241,   243,   246,   249,   252,   255,   258,   261,   264,   269,
+     273,   275,   277,   280,   284,   286,   288,   291,   295
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      78,     0,    -1,    79,    -1,    -1,    79,    80,    -1,    80,
-      -1,     9,    -1,   112,    -1,    82,    -1,    81,    -1,    34,
-      72,    -1,    43,    72,    -1,    38,    72,    -1,    -1,    83,
-      84,    85,    87,    93,    -1,    10,    -1,    11,    -1,    12,
-      -1,    13,    -1,    14,    -1,    15,    -1,    -1,     5,    86,
-      85,    -1,    16,    -1,    17,    -1,    18,    -1,    -1,    88,
-      97,    98,    99,    89,    92,    -1,    90,    91,    -1,    -1,
-      55,    -1,    56,    -1,    57,    -1,    58,    -1,    72,    -1,
-      -1,    60,    72,    -1,    61,    72,    -1,    -1,    73,    94,
-      74,    -1,    94,    95,     4,    -1,    95,     4,    -1,    -1,
-      96,    97,    98,    99,   102,   106,    -1,    -1,     7,    72,
-      -1,    -1,    62,    -1,    63,    -1,    64,    -1,    -1,   100,
-      99,    -1,     6,   101,    -1,   101,    -1,    65,    -1,    66,
-      -1,    67,    -1,    68,    -1,    59,    -1,    70,    -1,    69,
-      -1,    71,    -1,    -1,    71,   103,    72,    -1,    -1,    72,
-     104,    71,    -1,    -1,    72,   105,    72,    -1,    -1,    -1,
-      75,   107,    76,    -1,    -1,    -1,    75,   108,   110,   109,
-      76,    -1,   110,     5,   111,    -1,   111,    -1,    72,    -1,
-      19,    72,    -1,    20,    72,    -1,    21,    72,    -1,    22,
-      -1,    23,    72,    -1,    24,    87,    93,    -1,    25,    72,
+      79,     0,    -1,    80,    -1,    -1,    80,    81,    -1,    81,
+      -1,     9,    -1,   113,    -1,    83,    -1,    82,    -1,    34,
+      73,    -1,    44,    73,    -1,    39,    73,    -1,    -1,    84,
+      85,    86,    88,    94,    -1,    10,    -1,    11,    -1,    12,
+      -1,    13,    -1,    14,    -1,    15,    -1,    -1,     5,    87,
+      86,    -1,    16,    -1,    17,    -1,    18,    -1,    -1,    89,
+      98,    99,   100,    90,    93,    -1,    91,    92,    -1,    -1,
+      56,    -1,    57,    -1,    58,    -1,    59,    -1,    73,    -1,
+      -1,    61,    73,    -1,    62,    73,    -1,    -1,    74,    95,
+      75,    -1,    95,    96,     4,    -1,    96,     4,    -1,    -1,
+      97,    98,    99,   100,   103,   107,    -1,    -1,     7,    73,
+      -1,    -1,    63,    -1,    64,    -1,    65,    -1,    -1,   101,
+     100,    -1,     6,   102,    -1,   102,    -1,    66,    -1,    67,
+      -1,    68,    -1,    69,    -1,    60,    -1,    71,    -1,    70,
+      -1,    72,    -1,    -1,    72,   104,    73,    -1,    -1,    73,
+     105,    72,    -1,    -1,    73,   106,    73,    -1,    -1,    -1,
+      76,   108,    77,    -1,    -1,    -1,    76,   109,   111,   110,
+      77,    -1,   111,     5,   112,    -1,   112,    -1,    73,    -1,
+      19,    73,    -1,    20,    73,    -1,    21,    73,    -1,    22,
+      -1,    23,    73,    -1,    24,    88,    94,    -1,    25,    73,
       -1,    26,    -1,    27,    -1,    28,    -1,    29,    -1,    30,
-     115,    -1,    31,    -1,    32,    -1,    33,    72,    -1,    35,
-     115,    -1,    36,   115,    -1,    37,    -1,    39,    -1,    40,
-      72,    -1,    41,    72,    -1,    42,   113,    -1,    44,    -1,
-      45,    72,    -1,    46,   115,    -1,    47,    72,    -1,    48,
-      72,    -1,    49,    72,    -1,    50,    72,    -1,    51,    72,
-      -1,    51,     8,    72,     8,    -1,    51,     8,     8,    -1,
-      52,    -1,    53,    -1,    54,    72,    -1,   114,     5,   113,
-      -1,   114,    -1,    72,    -1,     6,    72,    -1,    72,     5,
-     115,    -1,    72,    -1
+     116,    -1,    31,    -1,    32,    -1,    33,    73,    -1,    35,
+      73,    -1,    36,   116,    -1,    37,   116,    -1,    38,    -1,
+      40,    -1,    41,    73,    -1,    42,    73,    -1,    43,   114,
+      -1,    45,    -1,    46,    73,    -1,    47,   116,    -1,    48,
+      73,    -1,    49,    73,    -1,    50,    73,    -1,    51,    73,
+      -1,    52,    73,    -1,    52,     8,    73,     8,    -1,    52,
+       8,     8,    -1,    53,    -1,    54,    -1,    55,    73,    -1,
+     115,     5,   114,    -1,   115,    -1,    73,    -1,     6,    73,
+      -1,    73,     5,   116,    -1,    73,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   179,   179,   179,   184,   185,   188,   189,   190,   191,
-     194,   195,   196,   200,   200,   205,   207,   209,   211,   213,
-     215,   218,   220,   223,   224,   225,   228,   228,   231,   234,
-     235,   236,   237,   238,   241,   244,   245,   246,   248,   250,
-     253,   254,   257,   257,   265,   267,   269,   271,   272,   273,
-     275,   277,   280,   281,   284,   285,   286,   287,   290,   291,
-     292,   293,   294,   294,   295,   295,   296,   296,   299,   301,
-     301,   302,   302,   302,   305,   306,   309,   312,   313,   314,
-     315,   316,   317,   318,   319,   320,   321,   322,   323,   324,
-     325,   326,   327,   328,   329,   330,   331,   332,   333,   334,
-     335,   336,   337,   338,   339,   340,   341,   342,   343,   344,
-     345,   346,   349,   350,   353,   354,   357,   358
+       0,   180,   180,   180,   185,   186,   189,   190,   191,   192,
+     195,   196,   197,   201,   201,   206,   208,   210,   212,   214,
+     216,   219,   221,   224,   225,   226,   229,   229,   232,   235,
+     236,   237,   238,   239,   242,   245,   246,   247,   249,   251,
+     254,   255,   258,   258,   266,   268,   270,   272,   273,   274,
+     276,   278,   281,   282,   285,   286,   287,   288,   291,   292,
+     293,   294,   295,   295,   296,   296,   297,   297,   300,   302,
+     302,   303,   303,   303,   306,   307,   310,   313,   314,   315,
+     316,   317,   318,   319,   320,   321,   322,   323,   324,   325,
+     326,   327,   328,   329,   330,   331,   332,   333,   334,   335,
+     336,   337,   338,   339,   340,   341,   342,   343,   344,   345,
+     346,   347,   348,   351,   352,   355,   356,   359,   360
 };
 #endif
 
@@ -715,7 +717,7 @@ static const char *const yytname[] =
   "T_CLASSOBFUSCATIONDICTIONARY", "T_DONTOBFUSCATE", "T_DONTOPTIMIZE",
   "T_DONTPREVERIFY", "T_DONTSHRINK", "T_DONTWARN",
   "T_DONTUSEMIXEDCASECLASSNAMES", "T_DONTSKIPNONPUBLICLIBRARYCLASSES",
-  "T_FLATTENPACKAGEHIERARCHY", "T_INJARS", "T_KEEPATTRIBUTES",
+  "T_FLATTENPACKAGEHIERARCHY", "T_INJARS", "T_INCLUDE", "T_KEEPATTRIBUTES",
   "T_KEEPPACKAGENAMES", "T_KEEPPARAMETERNAMES", "T_LIBRARYJARS",
   "T_MERGEINTERFACESAGGRESSIVELY", "T_OBFUSCATIONDICTIONARY",
   "T_OPTIMIZATIONPASSES", "T_OPTIMIZATIONS", "T_OUTJARS",
@@ -751,25 +753,25 @@ static const yytype_uint16 yytoknum[] =
      295,   296,   297,   298,   299,   300,   301,   302,   303,   304,
      305,   306,   307,   308,   309,   310,   311,   312,   313,   314,
      315,   316,   317,   318,   319,   320,   321,   322,   323,   324,
-     325,   326,   327,   328,   329,   330,   331
+     325,   326,   327,   328,   329,   330,   331,   332
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    77,    78,    78,    79,    79,    80,    80,    80,    80,
-      81,    81,    81,    83,    82,    84,    84,    84,    84,    84,
-      84,    85,    85,    86,    86,    86,    88,    87,    89,    90,
-      90,    90,    90,    90,    91,    92,    92,    92,    93,    93,
-      94,    94,    96,    95,    97,    97,    98,    98,    98,    98,
-      99,    99,   100,   100,   101,   101,   101,   101,   102,   102,
-     102,   102,   103,   102,   104,   102,   105,   102,   106,   107,
-     106,   108,   109,   106,   110,   110,   111,   112,   112,   112,
-     112,   112,   112,   112,   112,   112,   112,   112,   112,   112,
-     112,   112,   112,   112,   112,   112,   112,   112,   112,   112,
-     112,   112,   112,   112,   112,   112,   112,   112,   112,   112,
-     112,   112,   113,   113,   114,   114,   115,   115
+       0,    78,    79,    79,    80,    80,    81,    81,    81,    81,
+      82,    82,    82,    84,    83,    85,    85,    85,    85,    85,
+      85,    86,    86,    87,    87,    87,    89,    88,    90,    91,
+      91,    91,    91,    91,    92,    93,    93,    93,    94,    94,
+      95,    95,    97,    96,    98,    98,    99,    99,    99,    99,
+     100,   100,   101,   101,   102,   102,   102,   102,   103,   103,
+     103,   103,   104,   103,   105,   103,   106,   103,   107,   108,
+     107,   109,   110,   107,   111,   111,   112,   113,   113,   113,
+     113,   113,   113,   113,   113,   113,   113,   113,   113,   113,
+     113,   113,   113,   113,   113,   113,   113,   113,   113,   113,
+     113,   113,   113,   113,   113,   113,   113,   113,   113,   113,
+     113,   113,   113,   114,   114,   115,   115,   116,   116
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
@@ -784,9 +786,9 @@ static const yytype_uint8 yyr2[] =
        1,     1,     0,     3,     0,     3,     0,     3,     0,     0,
        3,     0,     0,     5,     3,     1,     1,     2,     2,     2,
        1,     2,     3,     2,     1,     1,     1,     1,     2,     1,
-       1,     2,     2,     2,     1,     1,     2,     2,     2,     1,
-       2,     2,     2,     2,     2,     2,     2,     4,     3,     1,
-       1,     2,     3,     1,     1,     2,     3,     1
+       1,     2,     2,     2,     2,     1,     1,     2,     2,     2,
+       1,     2,     2,     2,     2,     2,     2,     2,     4,     3,
+       1,     1,     2,     3,     1,     1,     2,     3,     1
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -796,63 +798,63 @@ static const yytype_uint8 yydefact[] =
 {
       13,     6,     0,     0,     0,    80,     0,    26,     0,    84,
       85,    86,    87,     0,    89,    90,     0,     0,     0,     0,
-      94,     0,    95,     0,     0,     0,     0,    99,     0,     0,
-       0,     0,     0,     0,     0,   109,   110,     0,     0,    13,
-       5,     9,     8,     0,     7,    77,    78,    79,    81,    38,
-      44,    83,   117,    88,    91,    10,    92,    93,    12,    96,
-      97,     0,   114,    98,   113,    11,   100,   101,   102,   103,
-     104,   105,     0,   106,   111,     1,     4,    15,    16,    17,
-      18,    19,    20,    21,    42,    82,     0,    46,     0,   115,
-       0,   108,     0,     0,    26,    42,     0,    44,    45,    47,
-      48,    49,    50,   116,   112,   107,    23,    24,    25,    21,
-      38,    39,     0,    41,    46,     0,    54,    55,    56,    57,
-      29,    50,    53,    22,    14,    40,    50,    52,    30,    31,
-      32,    33,    35,     0,    51,     0,     0,     0,    27,    34,
-      28,    58,    60,    59,    61,    64,    68,    36,    37,     0,
-       0,     0,    69,    43,    63,    65,    67,     0,     0,    70,
-      76,    72,    75,     0,     0,    74,    73
+       0,    95,     0,    96,     0,     0,     0,     0,   100,     0,
+       0,     0,     0,     0,     0,     0,   110,   111,     0,     0,
+      13,     5,     9,     8,     0,     7,    77,    78,    79,    81,
+      38,    44,    83,   118,    88,    91,    10,    92,    93,    94,
+      12,    97,    98,     0,   115,    99,   114,    11,   101,   102,
+     103,   104,   105,   106,     0,   107,   112,     1,     4,    15,
+      16,    17,    18,    19,    20,    21,    42,    82,     0,    46,
+       0,   116,     0,   109,     0,     0,    26,    42,     0,    44,
+      45,    47,    48,    49,    50,   117,   113,   108,    23,    24,
+      25,    21,    38,    39,     0,    41,    46,     0,    54,    55,
+      56,    57,    29,    50,    53,    22,    14,    40,    50,    52,
+      30,    31,    32,    33,    35,     0,    51,     0,     0,     0,
+      27,    34,    28,    58,    60,    59,    61,    64,    68,    36,
+      37,     0,     0,     0,    69,    43,    63,    65,    67,     0,
+       0,    70,    76,    72,    75,     0,     0,    74,    73
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int16 yydefgoto[] =
 {
-      -1,    38,    39,    40,    41,    42,    43,    83,    94,   109,
-      49,    50,   132,   133,   140,   138,    85,    95,    96,    97,
-      87,   102,   120,   121,   122,   146,   149,   150,   151,   153,
-     157,   158,   164,   161,   162,    44,    63,    64,    53
+      -1,    39,    40,    41,    42,    43,    44,    85,    96,   111,
+      50,    51,   134,   135,   142,   140,    87,    97,    98,    99,
+      89,   104,   122,   123,   124,   148,   151,   152,   153,   155,
+     159,   160,   166,   163,   164,    45,    65,    66,    54
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -114
+#define YYPACT_NINF -116
 static const yytype_int16 yypact[] =
 {
-       6,  -114,   -60,   -58,   -56,  -114,   -11,  -114,     0,  -114,
-    -114,  -114,  -114,     7,  -114,  -114,     8,    45,     7,     7,
-    -114,    46,  -114,    57,    58,    -4,    59,  -114,    60,     7,
-      65,    66,    67,    68,    -5,  -114,  -114,    69,   133,    62,
-    -114,  -114,  -114,    63,  -114,  -114,  -114,  -114,  -114,    70,
-     127,  -114,   130,  -114,  -114,  -114,  -114,  -114,  -114,  -114,
-    -114,    72,  -114,  -114,   131,  -114,  -114,  -114,  -114,  -114,
-    -114,  -114,    -3,  -114,  -114,  -114,  -114,  -114,  -114,  -114,
-    -114,  -114,  -114,   137,  -114,  -114,    73,    61,     7,  -114,
-      -4,  -114,   138,   110,  -114,    74,   143,   127,  -114,  -114,
-    -114,  -114,    -2,  -114,  -114,  -114,  -114,  -114,  -114,   137,
-      70,  -114,   145,  -114,    61,   -44,  -114,  -114,  -114,  -114,
-      64,    -2,  -114,  -114,  -114,  -114,    -2,  -114,  -114,  -114,
-    -114,  -114,   -51,    78,  -114,   -52,    79,    80,  -114,  -114,
-    -114,  -114,  -114,  -114,    81,    82,    83,  -114,  -114,    84,
-      86,    87,    88,  -114,  -114,  -114,  -114,    85,    90,  -114,
-    -114,   150,  -114,    90,    89,  -114,  -114
+       6,  -116,   -61,   -59,   -57,  -116,   -11,  -116,     0,  -116,
+    -116,  -116,  -116,     7,  -116,  -116,     8,    46,    47,     7,
+       7,  -116,    58,  -116,    59,    60,    -4,    61,  -116,    66,
+       7,    67,    68,    69,    70,    -5,  -116,  -116,    71,   135,
+      63,  -116,  -116,  -116,    64,  -116,  -116,  -116,  -116,  -116,
+      72,   129,  -116,   132,  -116,  -116,  -116,  -116,  -116,  -116,
+    -116,  -116,  -116,    74,  -116,  -116,   133,  -116,  -116,  -116,
+    -116,  -116,  -116,  -116,    -3,  -116,  -116,  -116,  -116,  -116,
+    -116,  -116,  -116,  -116,  -116,   140,  -116,  -116,    75,    62,
+       7,  -116,    -4,  -116,   141,   112,  -116,    76,   146,   129,
+    -116,  -116,  -116,  -116,    -2,  -116,  -116,  -116,  -116,  -116,
+    -116,   140,    72,  -116,   148,  -116,    62,   -45,  -116,  -116,
+    -116,  -116,    65,    -2,  -116,  -116,  -116,  -116,    -2,  -116,
+    -116,  -116,  -116,  -116,   -52,    80,  -116,   -53,    81,    82,
+    -116,  -116,  -116,  -116,  -116,  -116,    83,    84,    85,  -116,
+    -116,    86,    88,    89,    90,  -116,  -116,  -116,  -116,    87,
+      92,  -116,  -116,   153,  -116,    92,    91,  -116,  -116
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-    -114,  -114,  -114,   124,  -114,  -114,  -114,  -114,    55,  -114,
-      75,  -114,  -114,  -114,  -114,  -114,    56,  -114,    76,  -114,
-      71,    53,  -113,  -114,    77,  -114,  -114,  -114,  -114,  -114,
-    -114,  -114,  -114,  -114,     9,  -114,    91,  -114,   -18
+    -116,  -116,  -116,   126,  -116,  -116,  -116,  -116,    56,  -116,
+      73,  -116,  -116,  -116,  -116,  -116,    77,  -116,    78,  -116,
+      79,    54,  -115,  -116,    55,  -116,  -116,  -116,  -116,  -116,
+    -116,  -116,  -116,  -116,     9,  -116,    93,  -116,   -19
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -862,50 +864,48 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -72
 static const yytype_int16 yytable[] =
 {
-      56,    57,    61,    72,   115,    91,    -3,   141,   134,   136,
-     137,    67,    45,   135,    46,     1,    47,   142,   143,   144,
-     145,   116,   117,   118,   119,     2,     3,     4,     5,     6,
+      58,    59,    63,    74,   117,    93,    -3,   143,   136,   138,
+     139,    69,    46,   137,    47,     1,    48,   144,   145,   146,
+     147,   118,   119,   120,   121,     2,     3,     4,     5,     6,
        7,     8,     9,    10,    11,    12,    13,    14,    15,    16,
       17,    18,    19,    20,    21,    22,    23,    24,    25,    26,
       27,    28,    29,    30,    31,    32,    33,    34,    35,    36,
-      37,    48,    -2,   116,   117,   118,   119,    73,    62,    92,
-     103,     1,    51,    77,    78,    79,    80,    81,    82,    52,
-      54,     2,     3,     4,     5,     6,     7,     8,     9,    10,
-      11,    12,    13,    14,    15,    16,    17,    18,    19,    20,
-      21,    22,    23,    24,    25,    26,    27,    28,    29,    30,
-      31,    32,    33,    34,    35,    36,    37,    55,    58,   128,
-     129,   130,   131,    99,   100,   101,   106,   107,   108,    59,
-      60,    65,    66,    75,    86,    88,    90,    68,    69,    70,
-      71,    74,    93,    84,    89,    98,   105,   113,   111,   125,
-     139,   147,   148,   -62,   -66,   163,   154,   155,   152,   156,
-     -71,   159,   160,    76,   123,   166,   124,   126,   114,   110,
-       0,   112,   165,     0,     0,     0,     0,     0,     0,     0,
-       0,   104,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,   127
+      37,    38,    49,    -2,   118,   119,   120,   121,    75,    64,
+      94,   105,     1,    52,    79,    80,    81,    82,    83,    84,
+      53,    55,     2,     3,     4,     5,     6,     7,     8,     9,
+      10,    11,    12,    13,    14,    15,    16,    17,    18,    19,
+      20,    21,    22,    23,    24,    25,    26,    27,    28,    29,
+      30,    31,    32,    33,    34,    35,    36,    37,    38,    56,
+      57,   130,   131,   132,   133,   101,   102,   103,   108,   109,
+     110,    60,    61,    62,    67,    77,    88,    90,    92,    68,
+      70,    71,    72,    73,    76,    95,    86,    91,   100,   107,
+     115,   113,   127,   141,   149,   150,   -62,   -66,   165,   156,
+     157,   154,   158,   -71,   161,   162,    78,   125,   168,   112,
+     128,     0,   129,     0,   167,   114,     0,     0,   116,     0,
+       0,     0,     0,     0,     0,   106,     0,     0,     0,   126
 };
 
 static const yytype_int16 yycheck[] =
 {
-      18,    19,     6,     8,     6,     8,     0,    59,   121,    60,
-      61,    29,    72,   126,    72,     9,    72,    69,    70,    71,
-      72,    65,    66,    67,    68,    19,    20,    21,    22,    23,
+      19,    20,     6,     8,     6,     8,     0,    60,   123,    61,
+      62,    30,    73,   128,    73,     9,    73,    70,    71,    72,
+      73,    66,    67,    68,    69,    19,    20,    21,    22,    23,
       24,    25,    26,    27,    28,    29,    30,    31,    32,    33,
       34,    35,    36,    37,    38,    39,    40,    41,    42,    43,
       44,    45,    46,    47,    48,    49,    50,    51,    52,    53,
-      54,    72,     0,    65,    66,    67,    68,    72,    72,    72,
-      88,     9,    72,    10,    11,    12,    13,    14,    15,    72,
-      72,    19,    20,    21,    22,    23,    24,    25,    26,    27,
-      28,    29,    30,    31,    32,    33,    34,    35,    36,    37,
-      38,    39,    40,    41,    42,    43,    44,    45,    46,    47,
-      48,    49,    50,    51,    52,    53,    54,    72,    72,    55,
-      56,    57,    58,    62,    63,    64,    16,    17,    18,    72,
-      72,    72,    72,     0,     7,     5,     5,    72,    72,    72,
-      72,    72,     5,    73,    72,    72,     8,     4,    74,     4,
-      72,    72,    72,    72,    72,     5,    72,    71,    75,    72,
-      72,    76,    72,    39,   109,    76,   110,   114,    97,    94,
-      -1,    95,   163,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    90,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,   115
+      54,    55,    73,     0,    66,    67,    68,    69,    73,    73,
+      73,    90,     9,    73,    10,    11,    12,    13,    14,    15,
+      73,    73,    19,    20,    21,    22,    23,    24,    25,    26,
+      27,    28,    29,    30,    31,    32,    33,    34,    35,    36,
+      37,    38,    39,    40,    41,    42,    43,    44,    45,    46,
+      47,    48,    49,    50,    51,    52,    53,    54,    55,    73,
+      73,    56,    57,    58,    59,    63,    64,    65,    16,    17,
+      18,    73,    73,    73,    73,     0,     7,     5,     5,    73,
+      73,    73,    73,    73,    73,     5,    74,    73,    73,     8,
+       4,    75,     4,    73,    73,    73,    73,    73,     5,    73,
+      72,    76,    73,    73,    77,    73,    40,   111,    77,    96,
+     116,    -1,   117,    -1,   165,    97,    -1,    -1,    99,    -1,
+      -1,    -1,    -1,    -1,    -1,    92,    -1,    -1,    -1,   112
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
@@ -915,20 +915,20 @@ static const yytype_uint8 yystos[] =
        0,     9,    19,    20,    21,    22,    23,    24,    25,    26,
       27,    28,    29,    30,    31,    32,    33,    34,    35,    36,
       37,    38,    39,    40,    41,    42,    43,    44,    45,    46,
-      47,    48,    49,    50,    51,    52,    53,    54,    78,    79,
-      80,    81,    82,    83,   112,    72,    72,    72,    72,    87,
-      88,    72,    72,   115,    72,    72,   115,   115,    72,    72,
-      72,     6,    72,   113,   114,    72,    72,   115,    72,    72,
-      72,    72,     8,    72,    72,     0,    80,    10,    11,    12,
-      13,    14,    15,    84,    73,    93,     7,    97,     5,    72,
-       5,     8,    72,     5,    85,    94,    95,    96,    72,    62,
-      63,    64,    98,   115,   113,     8,    16,    17,    18,    86,
-      87,    74,    95,     4,    97,     6,    65,    66,    67,    68,
-      99,   100,   101,    85,    93,     4,    98,   101,    55,    56,
-      57,    58,    89,    90,    99,    99,    60,    61,    92,    72,
-      91,    59,    69,    70,    71,    72,   102,    72,    72,   103,
-     104,   105,    75,   106,    72,    71,    72,   107,   108,    76,
-      72,   110,   111,     5,   109,   111,    76
+      47,    48,    49,    50,    51,    52,    53,    54,    55,    79,
+      80,    81,    82,    83,    84,   113,    73,    73,    73,    73,
+      88,    89,    73,    73,   116,    73,    73,    73,   116,   116,
+      73,    73,    73,     6,    73,   114,   115,    73,    73,   116,
+      73,    73,    73,    73,     8,    73,    73,     0,    81,    10,
+      11,    12,    13,    14,    15,    85,    74,    94,     7,    98,
+       5,    73,     5,     8,    73,     5,    86,    95,    96,    97,
+      73,    63,    64,    65,    99,   116,   114,     8,    16,    17,
+      18,    87,    88,    75,    96,     4,    98,     6,    66,    67,
+      68,    69,   100,   101,   102,    86,    94,     4,    99,   102,
+      56,    57,    58,    59,    90,    91,   100,   100,    61,    62,
+      93,    73,    92,    60,    70,    71,    72,    73,   103,    73,
+      73,   104,   105,   106,    76,   107,    73,    72,    73,   108,
+     109,    77,    73,   111,   112,     5,   110,   112,    77
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1743,228 +1743,228 @@ yyreduce:
   switch (yyn)
     {
         case 12:
-#line 196 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 197 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     { library_jars->push_back(duplicate(yylval)); ;}
     break;
 
   case 13:
-#line 200 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 201 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keep_rule_start();;}
     break;
 
   case 14:
-#line 202 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 203 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keep_rule_end();;}
     break;
 
   case 15:
-#line 205 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 206 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 16:
-#line 207 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 208 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 17:
-#line 209 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 210 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 18:
-#line 211 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 212 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 19:
-#line 213 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 214 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = false;
       keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 20:
-#line 215 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 216 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;
       keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 23:
-#line 223 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 224 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {WARN("'allowobfuscation' is not supported.\n"); ;}
     break;
 
   case 24:
-#line 224 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 225 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {WARN("'allowoptimization' is not supported.\n");;}
     break;
 
   case 25:
-#line 225 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 226 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {keeprule->allow_deletion = true;;}
     break;
 
   case 26:
-#line 228 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 229 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags = 0;;}
     break;
 
   case 27:
-#line 228 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 229 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->flags = flags;;}
     break;
 
   case 29:
-#line 234 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 235 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ANY_CLASS_TYPE;;}
     break;
 
   case 30:
-#line 235 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 236 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::CLASS;;}
     break;
 
   case 31:
-#line 236 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 237 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ENUMERATION;;}
     break;
 
   case 32:
-#line 237 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 238 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::INTERFACE;;}
     break;
 
   case 33:
-#line 238 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 239 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->class_type = keeprules::ANNOTATION;;}
     break;
 
   case 34:
-#line 241 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 242 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->classname = duplicate(yylval);;}
     break;
 
   case 35:
-#line 244 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 245 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->extends = nullptr;;}
     break;
 
   case 36:
-#line 245 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
-    {if (keeprule) keeprule->extends = duplicate(yylval);;}
-    break;
-
-  case 37:
 #line 246 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (keeprule) keeprule->extends = duplicate(yylval);;}
     break;
 
+  case 37:
+#line 247 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+    {if (keeprule) keeprule->extends = duplicate(yylval);;}
+    break;
+
   case 42:
-#line 257 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 258 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_start();;}
     break;
 
   case 43:
-#line 263 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 264 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_end();;}
     break;
 
   case 45:
-#line 267 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 268 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_annotation = duplicate(yylval);;}
     break;
 
   case 47:
-#line 271 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 272 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PUBLIC;;}
     break;
 
   case 48:
-#line 272 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 273 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PRIVATE;;}
     break;
 
   case 49:
-#line 273 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 274 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::PROTECTED;;}
     break;
 
   case 54:
-#line 284 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 285 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::STATIC;;}
     break;
 
   case 55:
-#line 285 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 286 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::FINAL;;}
     break;
 
   case 56:
-#line 286 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 287 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::TRANSIENT;;}
     break;
 
   case 57:
-#line 287 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 288 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {flags |= keeprules::NATIVE;;}
     break;
 
   case 61:
-#line 293 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 294 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = "*"; member_name = "*";;}
     break;
 
   case 62:
-#line 294 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 295 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = "*";;}
     break;
 
   case 63:
-#line 294 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 295 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_name = duplicate(yylval);;}
     break;
 
   case 64:
-#line 295 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 296 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = duplicate(yylval);;}
     break;
 
   case 65:
-#line 295 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 296 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_name = "*";;}
     break;
 
   case 66:
-#line 296 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 297 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_type = duplicate(yylval);;}
     break;
 
   case 67:
-#line 296 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 297 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_name = duplicate(yylval);;}
     break;
 
   case 69:
-#line 301 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 302 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_start(); member_args_end();/* Method that takes no args */;}
     break;
 
   case 71:
-#line 302 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 303 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_start(); /* Method with args */;}
     break;
 
   case 72:
-#line 302 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 303 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {member_args_end();;}
     break;
 
   case 76:
-#line 309 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 310 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
     {if (method_filter) { method_filter->params.push_back(duplicate(yylval));};}
     break;
 
@@ -2184,7 +2184,7 @@ yyreturn:
 }
 
 
-#line 360 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
+#line 362 "/Users/bertrand/fbsource/fbandroid/native/redex/configparser/config.y"
 
 
 bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules,

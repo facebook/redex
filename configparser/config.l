@@ -77,6 +77,7 @@ T_DONTWARN "-dontwarn"
 T_DONTUSEMIXEDCASECLASSNAMES "-dontusemixedcaseclassnames"
 T_DONTSKIPNONPUBLICLIBRARYCLASSES "-dontskipnonpubliclibraryclasses"
 T_FLATTENPACKAGEHIERARCHY "-flattenpackagehierarchy"
+T_INCLUDE "-include"
 T_INJARS "-injars"
 T_OUTJARS "-outjars"
 T_KEEPATTRIBUTES "-keepattributes"
@@ -190,6 +191,7 @@ T_PATTERN [A-Za-z*[.0-9/$_]+[A-Za-z*\[\].0-9/$_#-]*
 {T_DONTUSEMIXEDCASECLASSNAMES}   {DEBUG("[ignored rule]   "); return T_DONTUSEMIXEDCASECLASSNAMES;}
 {T_DONTSKIPNONPUBLICLIBRARYCLASSES} {DEBUG("[ignored rule]   "); return T_DONTSKIPNONPUBLICLIBRARYCLASSES;}
 {T_FLATTENPACKAGEHIERARCHY}      {DEBUG("[ignored rule]   "); return T_FLATTENPACKAGEHIERARCHY;}
+{T_INCLUDE}                      {DEBUG("[ignored rule]   "); return T_INCLUDE;}
 {T_KEEPATTRIBUTES}               {DEBUG("[ignored rule]   "); return T_KEEPATTRIBUTES;}
 {T_KEEPPACKAGENAMES}             {DEBUG("[ignored rule]   "); return T_KEEPPACKAGENAMES;}
 {T_KEEPPARAMETERNAMES}           {DEBUG("[ignored rule]   "); return T_KEEPPARAMETERNAMES;}
