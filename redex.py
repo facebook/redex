@@ -73,7 +73,7 @@ def run_pass(
         dexfiles,
         ):
 
-    if executable_path == '':
+    if executable_path is None:
         executable_path = shutil.which('redex-all')
         if executable_path is None:
             executable_path = join(dirname(abspath(__file__)), 'redex-all')
@@ -596,7 +596,13 @@ def copy_filename_map_to_out_dir(tmp, apk_output_path):
         log('Skipping method id map copy, since no file found to copy')
 
 
-def arg_parser(config=None, keystore=None, keyalias=None, keypass=None):
+def arg_parser(
+        binary=None,
+        config=None,
+        keystore=None,
+        keyalias=None,
+        keypass=None,
+        ):
     description = """
 Given an APK, produce a better APK!
 
@@ -610,7 +616,7 @@ Given an APK, produce a better APK!
             help='Output APK file name (defaults to redex-out.apk)')
     parser.add_argument('-j', '--jarpath', nargs='?')
 
-    parser.add_argument('redex_binary', nargs='?', default='',
+    parser.add_argument('--redex-binary', nargs='?', default=binary,
             help='Path to redex binary')
 
     parser.add_argument('-c', '--config', default=config,
@@ -706,7 +712,7 @@ def run_redex(args):
     config = args.config
     binary = args.redex_binary
     log('Using config ' + (config if config is not None else '(default)'))
-    log('Using binary ' + binary)
+    log('Using binary ' + (binary if binary is not None else '(default)'))
 
     if config is None:
         config_dict = {}
