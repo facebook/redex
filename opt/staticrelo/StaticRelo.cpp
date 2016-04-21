@@ -21,8 +21,8 @@
 #include <unordered_map>
 
 #include "DexClass.h"
-#include "DexDebugOpcode.h"
-#include "DexOpcode.h"
+#include "DexDebugInstruction.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Match.h"
@@ -44,7 +44,7 @@ static int s_single_ref_moved_count;
 /** map of dmethod or class (T) -> method/opcode referencing dmethod or class */
 template <typename T>
 using refs_t = std::unordered_map<
-  const T*, std::vector<std::pair<const DexMethod*, DexOpcode*> > >;
+  const T*, std::vector<std::pair<const DexMethod*, DexInstruction*> > >;
 
 struct compare_dexclasses {
   bool operator()(const DexClass* a, const DexClass* b) const {
@@ -75,18 +75,18 @@ void visit_classes(
  * Helper to visit all opcodes which match the given criteria.
  *
  * @param scope all classes we're processing
- * @param p A match_t<DexOpcode, ...> built up by m::* routines
+ * @param p A match_t<DexInstruction, ...> built up by m::* routines
  * @param v Visitor function
  */
-template<typename P, typename V = void(DexMethod*, DexOpcode*)>
+template<typename P, typename V = void(DexMethod*, DexInstruction*)>
 void visit_opcodes(
-  const Scope& scope, const m::match_t<DexOpcode, P>& p, const V& v) {
+  const Scope& scope, const m::match_t<DexInstruction, P>& p, const V& v) {
   walk_opcodes(
     scope,
     [](const DexMethod*) { return true; },
-    [&](const DexMethod* m, DexOpcode* opcode) {
-      if (p.matches(opcode)) {
-        v(m, opcode);
+    [&](const DexMethod* m, DexInstruction* insn) {
+      if (p.matches(insn)) {
+        v(m, insn);
       }
     });
 }
@@ -151,18 +151,18 @@ void build_refs(
   refs_t<DexClass>& class_refs) {
   // Looking for direct/static invokes or class refs
   auto match =
-    m::invoke_static<DexOpcode>()
-    or m::invoke_direct<DexOpcode>()
-    or m::has_types<DexOpcode>();
-  visit_opcodes(scope, match, [&](const DexMethod* meth, DexOpcode* opc){
-    if (opc->has_types()) {
-      const auto top = static_cast<DexOpcodeType*>(opc);
+    m::invoke_static<DexInstruction>()
+    or m::invoke_direct<DexInstruction>()
+    or m::has_types<DexInstruction>();
+  visit_opcodes(scope, match, [&](const DexMethod* meth, DexInstruction* insn){
+    if (insn->has_types()) {
+      const auto top = static_cast<DexOpcodeType*>(insn);
       const auto tref = type_class(top->get_type());
-      if (tref) class_refs[tref].push_back(std::make_pair(meth, opc));
+      if (tref) class_refs[tref].push_back(std::make_pair(meth, insn));
     } else {
-      const auto mop = static_cast<DexOpcodeMethod*>(opc);
+      const auto mop = static_cast<DexOpcodeMethod*>(insn);
       const auto mref = mop->get_method();
-      dmethod_refs[mref].push_back(std::make_pair(meth, opc));
+      dmethod_refs[mref].push_back(std::make_pair(meth, insn));
     }
   });
 }

@@ -48,7 +48,7 @@ MethodBlock::MethodBlock(FatMethod::iterator iterator, MethodCreator* creator)
 
 void MethodBlock::invoke(DexMethod* meth, std::vector<Location>& args) {
   always_assert(meth->is_concrete());
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   if (meth->is_virtual()) {
     if (type_class(meth->get_class())->get_access() & ACC_INTERFACE) {
       opcode = OPCODE_INVOKE_INTERFACE;
@@ -65,7 +65,7 @@ void MethodBlock::invoke(DexMethod* meth, std::vector<Location>& args) {
   invoke(opcode, meth, args);
 }
 
-void MethodBlock::invoke(DexCodeItemOpcode opcode,
+void MethodBlock::invoke(DexOpcode opcode,
                          DexMethod* meth,
                          std::vector<Location>& args) {
   always_assert(is_invoke(opcode));
@@ -77,12 +77,12 @@ void MethodBlock::invoke(DexCodeItemOpcode opcode,
     invk->set_src(i, reg_num(arg));
   }
   if (arg_count > mc->out_count) mc->out_count = arg_count;
-  push_opcode(invk);
+  push_instruction(invk);
 }
 
 void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
   always_assert(field->is_concrete() && !(field->get_access() & ACC_STATIC));
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -118,7 +118,7 @@ void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
 
 void MethodBlock::iput(DexField* field, Location obj, Location src) {
   always_assert(field->is_concrete() && !(field->get_access() & ACC_STATIC));
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -152,7 +152,7 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
   ifield_op(opcode, field, obj, src);
 }
 
-void MethodBlock::ifield_op(DexCodeItemOpcode opcode,
+void MethodBlock::ifield_op(DexOpcode opcode,
                             DexField* field,
                             Location obj,
                             Location& src_or_dst) {
@@ -162,18 +162,18 @@ void MethodBlock::ifield_op(DexCodeItemOpcode opcode,
     iget->set_dest(reg_num(src_or_dst));
     src_or_dst.type = field->get_class();
     iget->set_src(0, reg_num(obj));
-    push_opcode(iget);
+    push_instruction(iget);
   } else {
     auto iput = new DexOpcodeField(opcode, field);
     iput->set_src(0, reg_num(src_or_dst));
     iput->set_src(1, reg_num(obj));
-    push_opcode(iput);
+    push_instruction(iput);
   }
 }
 
 void MethodBlock::sget(DexField* field, Location& dst) {
   always_assert(field->is_concrete() && (field->get_access() & ACC_STATIC));
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -209,7 +209,7 @@ void MethodBlock::sget(DexField* field, Location& dst) {
 
 void MethodBlock::sput(DexField* field, Location src) {
   always_assert(field->is_concrete() && (field->get_access() & ACC_STATIC));
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -243,7 +243,7 @@ void MethodBlock::sput(DexField* field, Location src) {
   sfield_op(opcode, field, src);
 }
 
-void MethodBlock::sfield_op(DexCodeItemOpcode opcode,
+void MethodBlock::sfield_op(DexOpcode opcode,
                             DexField* field,
                             Location& src_or_dst) {
   always_assert(is_sfield_op(opcode));
@@ -251,11 +251,11 @@ void MethodBlock::sfield_op(DexCodeItemOpcode opcode,
     auto sget = new DexOpcodeField(opcode, field);
     sget->set_dest(reg_num(src_or_dst));
     src_or_dst.type = field->get_class();
-    push_opcode(sget);
+    push_instruction(sget);
   } else {
     auto sput = new DexOpcodeField(opcode, field);
     sput->set_src(0, reg_num(src_or_dst));
-    push_opcode(sput);
+    push_instruction(sput);
   }
 }
 
@@ -263,25 +263,25 @@ void MethodBlock::move(Location src, Location& dst) {
   always_assert(src.is_compatible(dst.type));
   auto ch = type_shorty(dst.type);
   assert(ch != 'V');
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_OBJECT;
   else if (ch == 'J' || ch == 'D')
     opcode = OPCODE_MOVE_WIDE;
   else
     opcode = OPCODE_MOVE;
-  DexOpcode* move = new DexOpcode(opcode);
+  DexInstruction* move = new DexInstruction(opcode);
   move->set_dest(reg_num(dst));
   move->set_src(0, reg_num(src));
   dst.type = src.type;
-  push_opcode(move);
+  push_instruction(move);
 }
 
 void MethodBlock::move_result(Location& dst, DexType* type) {
   always_assert(dst.is_compatible(type));
   auto ch = type_shorty(type);
   assert(ch != 'V');
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_RESULT_OBJECT;
   else if (ch == 'J' || ch == 'D')
@@ -289,16 +289,16 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   else
     opcode = OPCODE_MOVE_RESULT;
 
-  DexOpcode* mov_res = new DexOpcode(opcode);
+  DexInstruction* mov_res = new DexInstruction(opcode);
   mov_res->set_dest(reg_num(dst));
   dst.type = type;
-  push_opcode(mov_res);
+  push_instruction(mov_res);
 }
 
 void MethodBlock::ret(Location loc) {
   auto ch = type_shorty(loc.type);
   assert(ch != 'V');
-  DexCodeItemOpcode opcode;
+  DexOpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_RETURN_OBJECT;
   else if (ch == 'J' || ch == 'D')
@@ -306,96 +306,96 @@ void MethodBlock::ret(Location loc) {
   else
     opcode = OPCODE_RETURN;
 
-  auto ret = new DexOpcode(opcode);
+  auto ret = new DexInstruction(opcode);
   ret->set_src(0, reg_num(loc));
-  push_opcode(ret);
+  push_instruction(ret);
 }
 
-void MethodBlock::ret_void() { push_opcode(new DexOpcode(OPCODE_RETURN_VOID)); }
+void MethodBlock::ret_void() { push_instruction(new DexInstruction(OPCODE_RETURN_VOID)); }
 
 void MethodBlock::load_const(Location& loc, int32_t value) {
   always_assert(!loc.is_wide());
-  DexOpcode* load = new DexOpcode(OPCODE_CONST_16);
+  DexInstruction* load = new DexInstruction(OPCODE_CONST_16);
   load->set_dest(reg_num(loc));
   load->set_literal(value);
   loc.type = get_int_type();
-  push_opcode(load);
+  push_instruction(load);
 }
 
 void MethodBlock::load_const(Location& loc, double value) {
   always_assert(loc.is_wide());
-  DexOpcode* load = new DexOpcode(OPCODE_CONST_WIDE);
+  DexInstruction* load = new DexInstruction(OPCODE_CONST_WIDE);
   load->set_dest(reg_num(loc));
   load->set_literal(value);
   loc.type = get_double_type();
-  push_opcode(load);
+  push_instruction(load);
 }
 
 void MethodBlock::load_const(Location& loc, DexString* value) {
   always_assert(!loc.is_wide());
-  DexOpcode* load = new DexOpcodeString(OPCODE_CONST_STRING, value);
+  DexInstruction* load = new DexOpcodeString(OPCODE_CONST_STRING, value);
   load->set_dest(reg_num(loc));
   loc.type = get_string_type();
-  push_opcode(load);
+  push_instruction(load);
 }
 
 void MethodBlock::load_const(Location& loc, DexType* value) {
   always_assert(!loc.is_wide());
-  DexOpcode* load = new DexOpcodeType(OPCODE_CONST_CLASS, value);
+  DexInstruction* load = new DexOpcodeType(OPCODE_CONST_CLASS, value);
   load->set_dest(reg_num(loc));
   loc.type = get_class_type();
-  push_opcode(load);
+  push_instruction(load);
 }
 
 void MethodBlock::load_null(Location& loc) {
   always_assert(!loc.is_wide());
-  DexOpcode* load = new DexOpcode(OPCODE_CONST_4);
+  DexInstruction* load = new DexInstruction(OPCODE_CONST_4);
   load->set_dest(reg_num(loc));
   load->set_literal(0);
   loc.type = get_object_type();
-  push_opcode(load);
+  push_instruction(load);
 }
 
-MethodBlock* MethodBlock::if_test(DexCodeItemOpcode if_op,
+MethodBlock* MethodBlock::if_test(DexOpcode if_op,
                                   Location first,
                                   Location second) {
   always_assert(OPCODE_IF_EQ <= if_op && if_op <= OPCODE_IF_LE);
-  DexOpcode* op = new DexOpcode(if_op);
+  DexInstruction* op = new DexInstruction(if_op);
   op->set_src(0, reg_num(first));
   op->set_src(1, reg_num(second));
   return make_if_block(op);
 }
 
-MethodBlock* MethodBlock::if_testz(DexCodeItemOpcode if_op, Location test) {
+MethodBlock* MethodBlock::if_testz(DexOpcode if_op, Location test) {
   always_assert(OPCODE_IF_EQZ <= if_op && if_op <= OPCODE_IF_LEZ);
-  DexOpcode* op = new DexOpcode(if_op);
+  DexInstruction* op = new DexInstruction(if_op);
   op->set_src(0, reg_num(test));
   return make_if_block(op);
 }
 
-MethodBlock* MethodBlock::if_else_test(DexCodeItemOpcode if_op,
+MethodBlock* MethodBlock::if_else_test(DexOpcode if_op,
                                        Location first,
                                        Location second,
                                        MethodBlock** true_block) {
   always_assert(OPCODE_IF_EQ <= if_op && if_op <= OPCODE_IF_LE);
-  DexOpcode* op = new DexOpcode(if_op);
+  DexInstruction* op = new DexInstruction(if_op);
   op->set_src(0, reg_num(first));
   op->set_src(1, reg_num(second));
   return make_if_else_block(op, true_block);
 }
 
-MethodBlock* MethodBlock::if_else_testz(DexCodeItemOpcode if_op,
+MethodBlock* MethodBlock::if_else_testz(DexOpcode if_op,
                                         Location test,
                                         MethodBlock** true_block) {
   always_assert(OPCODE_IF_EQZ <= if_op && if_op <= OPCODE_IF_LEZ);
-  DexOpcode* op = new DexOpcode(if_op);
+  DexInstruction* op = new DexInstruction(if_op);
   op->set_src(0, reg_num(test));
   return make_if_else_block(op, true_block);
 }
 
 MethodBlock* MethodBlock::swtich_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
-  auto sw_opcode = new DexOpcode(OPCODE_PACKED_SWITCH);
+  auto sw_opcode = new DexInstruction(OPCODE_PACKED_SWITCH);
   sw_opcode->set_src(0, reg_num(test));
   return make_switch_block(sw_opcode, cases);
 }
@@ -422,53 +422,53 @@ uint16_t MethodCreator::ins_count() const {
   return ins;
 }
 
-void MethodBlock::push_opcode(DexOpcode* opcode) {
-  curr = mc->push_opcode(curr, opcode);
+void MethodBlock::push_instruction(DexInstruction* insn) {
+  curr = mc->push_instruction(curr, insn);
 }
 
-FatMethod::iterator MethodCreator::push_opcode(FatMethod::iterator curr,
-                                               DexOpcode* opcode) {
-  return meth_code->insert(++curr, opcode);
+FatMethod::iterator MethodCreator::push_instruction(FatMethod::iterator curr,
+                                               DexInstruction* insn) {
+  return meth_code->insert(++curr, insn);
 }
 
-MethodBlock* MethodBlock::make_if_block(DexOpcode* opcode) {
+MethodBlock* MethodBlock::make_if_block(DexInstruction* insn) {
   FatMethod::iterator false_block;
-  curr = mc->make_if_block(curr, opcode, &false_block);
+  curr = mc->make_if_block(curr, insn, &false_block);
   return new MethodBlock(false_block, mc);
 }
 
 FatMethod::iterator MethodCreator::make_if_block(
     FatMethod::iterator curr,
-    DexOpcode* opcode,
+    DexInstruction* insn,
     FatMethod::iterator* false_block) {
-  return meth_code->make_if_block(++curr, opcode, false_block);
+  return meth_code->make_if_block(++curr, insn, false_block);
 }
 
-MethodBlock* MethodBlock::make_if_else_block(DexOpcode* opcode,
+MethodBlock* MethodBlock::make_if_else_block(DexInstruction* insn,
                                              MethodBlock** true_block) {
   FatMethod::iterator if_it;
   FatMethod::iterator else_it;
-  curr = mc->make_if_else_block(curr, opcode, &if_it, &else_it);
+  curr = mc->make_if_else_block(curr, insn, &if_it, &else_it);
   *true_block = new MethodBlock(else_it, mc);
   return new MethodBlock(if_it, mc);
 }
 
 FatMethod::iterator MethodCreator::make_if_else_block(
     FatMethod::iterator curr,
-    DexOpcode* opcode,
+    DexInstruction* insn,
     FatMethod::iterator* false_block,
     FatMethod::iterator* true_block) {
-  return meth_code->make_if_else_block(++curr, opcode, false_block, true_block);
+  return meth_code->make_if_else_block(++curr, insn, false_block, true_block);
 }
 
 MethodBlock* MethodBlock::make_switch_block(
-    DexOpcode* opcode, std::map<int, MethodBlock*>& cases) {
+    DexInstruction* insn, std::map<int, MethodBlock*>& cases) {
   FatMethod::iterator default_it;
   std::map<int, FatMethod::iterator> mt_cases;
   for (auto cases_it : cases) {
     mt_cases[cases_it.first] = curr;
   }
-  curr = mc->make_switch_block(curr, opcode, &default_it, mt_cases);
+  curr = mc->make_switch_block(curr, insn, &default_it, mt_cases);
   for (auto& cases_it : cases) {
     cases_it.second = new MethodBlock(mt_cases[cases_it.first], mc);
   }
@@ -477,10 +477,10 @@ MethodBlock* MethodBlock::make_switch_block(
 
 FatMethod::iterator MethodCreator::make_switch_block(
     FatMethod::iterator curr,
-    DexOpcode* opcode,
+    DexInstruction* insn,
     FatMethod::iterator* default_block,
     std::map<int, FatMethod::iterator>& cases) {
-  return meth_code->make_switch_block(++curr, opcode, default_block, cases);
+  return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 
 MethodCreator::MethodCreator(DexMethod* meth)
@@ -528,12 +528,12 @@ DexCode* MethodCreator::to_code() {
   method->set_code(code);
   for (auto mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
-      DexOpcode* opcode = mi.op;
-      if (opcode->dests_size()) {
-        opcode->set_dest(get_real_reg_num(opcode->dest()));
+      DexInstruction* insn = mi.insn;
+      if (insn->dests_size()) {
+        insn->set_dest(get_real_reg_num(insn->dest()));
       }
-      for (int i = 0; i < static_cast<int>(opcode->srcs_size()); i++) {
-        opcode->set_src(i, get_real_reg_num(opcode->src(i)));
+      for (int i = 0; i < static_cast<int>(insn->srcs_size()); i++) {
+        insn->set_src(i, get_real_reg_num(insn->src(i)));
       }
     }
   }

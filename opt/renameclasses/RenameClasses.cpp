@@ -18,7 +18,7 @@
 
 #include "walkers.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 

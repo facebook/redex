@@ -16,7 +16,7 @@
 #include <utility>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 
 #include <folly/dynamic.h>
 

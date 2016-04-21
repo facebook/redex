@@ -18,7 +18,7 @@
 #include <folly/dynamic.h>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "Match.h"
 #include "RedexContext.h"

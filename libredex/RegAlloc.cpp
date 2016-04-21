@@ -16,20 +16,20 @@
 
 using LiveSet = boost::dynamic_bitset<>;
 
-std::vector<DexOpcode*> get_opcode_vector(
+std::vector<DexInstruction*> get_instruction_vector(
   const std::vector<Block*>& blocks
 ) {
-  std::vector<DexOpcode*> ops;
+  std::vector<DexInstruction*> insns;
   uint16_t id = 0;
   for (auto& block : blocks) {
     for (auto& i : *block) {
       if (i.type == MFLOW_OPCODE) {
         i.addr = id++;
-        ops.push_back(i.op);
+        insns.push_back(i.insn);
       }
     }
   }
-  return ops;
+  return insns;
 }
 
 static bool candidate(DexMethod* m) {
@@ -131,7 +131,7 @@ void allocate_registers(DexMethod* m) {
 
   TRACE(REG, 5, "%s\n", SHOW(blocks));
 
-  auto opcode_vector = get_opcode_vector(blocks);
+  auto opcode_vector = get_instruction_vector(blocks);
   std::vector<LiveSet> liveness(opcode_vector.size(), LiveSet(nregs));
   std::vector<LiveSet> block_liveness(blocks.size(), LiveSet(nregs));
   bool changed;
@@ -149,7 +149,7 @@ void allocate_registers(DexMethod* m) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        auto inst = it->op;
+        auto inst = it->insn;
         auto& iliveness = liveness[it->addr];
         iliveness = livein;
         for (size_t i = 0; i < inst->srcs_size(); i++) {
@@ -285,12 +285,12 @@ void allocate_registers(DexMethod* m) {
       if (item.type != MFLOW_OPCODE) {
         continue;
       }
-      auto op = item.op;
-      if (op->dests_size()) {
-        op->set_dest(reg_map[op->dest()]);
+      auto insn = item.insn;
+      if (insn->dests_size()) {
+        insn->set_dest(reg_map[insn->dest()]);
       }
-      for (size_t i = 0; i < op->srcs_size(); i++) {
-        op->set_src(i, reg_map[op->src(i)]);
+      for (size_t i = 0; i < insn->srcs_size(); i++) {
+        insn->set_src(i, reg_map[insn->src(i)]);
       }
     }
   }

@@ -19,7 +19,7 @@ class DexOutputIdx;
 class DexString;
 class DexType;
 
-class DexDebugOpcode : public Gatherable {
+class DexDebugInstruction : public Gatherable {
  private:
   union {
     uint32_t m_uvalue;
@@ -31,14 +31,14 @@ class DexDebugOpcode : public Gatherable {
   DexDebugItemOpcode m_opcode;
 
  public:
-  DexDebugOpcode(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
+  DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
       : Gatherable() {
     m_opcode = op;
     m_uvalue = v;
     m_signed = false;
   }
 
-  DexDebugOpcode(DexDebugItemOpcode op, int32_t v) : Gatherable() {
+  DexDebugInstruction(DexDebugItemOpcode op, int32_t v) : Gatherable() {
     m_opcode = op;
     m_value = v;
     m_signed = true;
@@ -46,8 +46,8 @@ class DexDebugOpcode : public Gatherable {
 
  public:
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
-  static DexDebugOpcode* make_opcode(DexIdx* idx, const uint8_t*& encdata);
-  virtual DexDebugOpcode* clone() const { return new DexDebugOpcode(*this); }
+  static DexDebugInstruction* make_instruction(DexIdx* idx, const uint8_t*& encdata);
+  virtual DexDebugInstruction* clone() const { return new DexDebugInstruction(*this); }
 
   DexDebugItemOpcode opcode() const { return m_opcode; }
 
@@ -62,12 +62,12 @@ class DexDebugOpcode : public Gatherable {
   void set_value(int32_t v) { m_value = v; }
 };
 
-class DexDebugOpcodeSetFile : public DexDebugOpcode {
+class DexDebugOpcodeSetFile : public DexDebugInstruction {
  private:
   DexString* m_str;
 
  public:
-  DexDebugOpcodeSetFile(DexString* str) : DexDebugOpcode(DBG_SET_FILE) {
+  DexDebugOpcodeSetFile(DexString* str) : DexDebugInstruction(DBG_SET_FILE) {
     m_str = str;
   }
 
@@ -83,7 +83,7 @@ class DexDebugOpcodeSetFile : public DexDebugOpcode {
   void set_file(DexString* file) { m_str = file; }
 };
 
-class DexDebugOpcodeStartLocal : public DexDebugOpcode {
+class DexDebugOpcodeStartLocal : public DexDebugInstruction {
  private:
   DexString* m_name;
   DexType* m_type;
@@ -94,7 +94,7 @@ class DexDebugOpcodeStartLocal : public DexDebugOpcode {
                            DexString* name,
                            DexType* type,
                            DexString* sig = nullptr)
-      : DexDebugOpcode(DBG_START_LOCAL, rnum) {
+      : DexDebugInstruction(DBG_START_LOCAL, rnum) {
     m_name = name;
     m_type = type;
     m_sig = sig;

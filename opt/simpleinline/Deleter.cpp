@@ -18,10 +18,10 @@ size_t delete_methods(
 
   // if a removable candidate is invoked do not delete
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, DexOpcode* opcode) {
-        if (is_invoke(opcode->opcode())) {
-          const auto mop = static_cast<DexOpcodeMethod*>(opcode);
-          auto callee = resolver(mop->get_method(), opcode_to_search(opcode));
+      [&](DexMethod* meth, DexInstruction* insn) {
+        if (is_invoke(insn->opcode())) {
+          const auto mop = static_cast<DexOpcodeMethod*>(insn);
+          auto callee = resolver(mop->get_method(), opcode_to_search(insn));
           if (callee != nullptr) {
             removable.erase(callee);
           }

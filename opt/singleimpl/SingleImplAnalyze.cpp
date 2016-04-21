@@ -343,8 +343,8 @@ void AnalysisImpl::analyze_opcodes() {
 
   walk_opcodes(scope,
                [](DexMethod* method) { return true; },
-               [&](DexMethod* method, DexOpcode* opcode) {
-                 auto op = opcode->opcode();
+               [&](DexMethod* method, DexInstruction* insn) {
+                 auto op = insn->opcode();
                  switch (op) {
                  // type ref
                  case OPCODE_CONST_CLASS: {
@@ -353,7 +353,7 @@ void AnalysisImpl::analyze_opcodes() {
                    // different instances to retrieve, so we simply drop all
                    // single impl
                    // that are used with const_class
-                   auto top = static_cast<DexOpcodeType*>(opcode);
+                   auto top = static_cast<DexOpcodeType*>(insn);
                    const auto typeref = top->get_type();
                    auto intf = get_and_check_single_impl(typeref);
                    if (intf) {
@@ -367,7 +367,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY_RANGE: {
-                   auto top = static_cast<DexOpcodeType*>(opcode);
+                   auto top = static_cast<DexOpcodeType*>(insn);
                    auto intf = get_and_check_single_impl(top->get_type());
                    if (intf) {
                      single_impls[intf].typerefs.push_back(top);
@@ -381,7 +381,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_IPUT:
                  case OPCODE_IPUT_WIDE:
                  case OPCODE_IPUT_OBJECT: {
-                   const auto fop = static_cast<DexOpcodeField*>(opcode);
+                   const auto fop = static_cast<DexOpcodeField*>(insn);
                    auto field =
                        resolve_field(fop->field(), FieldSearch::Instance);
                    if (field == nullptr) {
@@ -396,7 +396,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_SPUT:
                  case OPCODE_SPUT_WIDE:
                  case OPCODE_SPUT_OBJECT: {
-                   const auto fop = static_cast<DexOpcodeField*>(opcode);
+                   const auto fop = static_cast<DexOpcodeField*>(insn);
                    auto field =
                        resolve_field(fop->field(), FieldSearch::Static);
                    if (field == nullptr) {
@@ -410,7 +410,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_INTERFACE_RANGE: {
                    // if it is an invoke on the interface method, collect it as
                    // such
-                   const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+                   const auto mop = static_cast<DexOpcodeMethod*>(insn);
                    const auto meth = mop->get_method();
                    const auto owner = meth->get_class();
                    const auto intf = get_and_check_single_impl(owner);
@@ -437,7 +437,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_VIRTUAL_RANGE:
                  case OPCODE_INVOKE_SUPER:
                  case OPCODE_INVOKE_SUPER_RANGE: {
-                   const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+                   const auto mop = static_cast<DexOpcodeMethod*>(insn);
                    const auto meth = mop->get_method();
                    check_sig(meth, mop);
                    return;

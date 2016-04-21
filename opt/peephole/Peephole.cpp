@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "PassManager.h"
 #include "Transform.h"
 #include "DexUtil.h"
@@ -49,12 +49,12 @@ class PeepholeOptimizer {
  private:
   using RegWriters = std::vector<ssize_t>;
   using DataflowSources =
-      std::vector<std::pair<DexOpcode*, std::vector<ssize_t>>>;
+      std::vector<std::pair<DexInstruction*, std::vector<ssize_t>>>;
 
   const ssize_t kInvalid = -1;
 
   const std::vector<DexClass*>& m_scope;
-  std::unordered_map<DexOpcode*, DexOpcode*> m_replacements;
+  std::unordered_map<DexInstruction*, DexInstruction*> m_replacements;
   ssize_t m_last_call;
   RegWriters m_last_writer;
   DataflowSources m_dataflow_sources;
@@ -74,70 +74,70 @@ class PeepholeOptimizer {
     m_dataflow_sources.clear();
   }
 
-  DexOpcode* peephole_patterns(DexOpcode* op) {
-    if (is_move_result(op->opcode())) {
+  DexInstruction* peephole_patterns(DexInstruction* insn) {
+    if (is_move_result(insn->opcode())) {
       /*
        * const-class vA, Lsome/Class;
        * invoke-virtual {vA} Ljava/lang/Class;.getSimpleName()
        * move-result vB
        */
       if (m_last_call < 0) {
-        return op;
+        return insn;
       }
       auto invokep = m_dataflow_sources[m_last_call];
       auto invoke = static_cast<DexOpcodeMethod*>(invokep.first);
       auto const& invoke_srcs = invokep.second;
       if (invoke->get_method() != method_Class_getSimpleName()) {
-        return op;
+        return insn;
       }
       if (invoke_srcs[0] < 0) {
-        return op;
+        return insn;
       }
       auto const_class = m_dataflow_sources[invoke_srcs[0]].first;
       if (const_class->opcode() != OPCODE_CONST_CLASS) {
-        return op;
+        return insn;
       }
       auto clstype = static_cast<DexOpcodeType*>(const_class)->get_type();
       m_stats_simple_name++;
       return (new DexOpcodeString(OPCODE_CONST_STRING,
                                   get_simple_name(clstype)))
-          ->set_dest(op->dest());
+          ->set_dest(insn->dest());
     }
 
-    if (op->opcode() == OPCODE_CHECK_CAST) {
+    if (insn->opcode() == OPCODE_CHECK_CAST) {
       /*
        * invoke-virtual Lsome/Class;
        * move-result vA;
        * check-cast vA, Lsome/Class;
        *
        */
-      auto move_result_idx = m_last_writer[op->src(0)];
+      auto move_result_idx = m_last_writer[insn->src(0)];
       if (move_result_idx == kInvalid) {
-        return op;
+        return insn;
       }
       auto move_resultp = m_dataflow_sources[move_result_idx];
       auto move_result = move_resultp.first;
       if (!is_move_result(move_result->opcode())) {
-        return op;
+        return insn;
       }
       auto const& move_result_srcs = move_resultp.second;
       if (move_result_srcs[0] == kInvalid) {
-        return op;
+        return insn;
       }
       auto invokep = m_dataflow_sources[move_result_srcs[0]];
       auto invoke = static_cast<DexOpcodeMethod*>(invokep.first);
       auto invoke_return_type = invoke->get_method()->get_proto()->get_rtype();
-      auto check_type = static_cast<DexOpcodeType*>(op)->get_type();
+      auto check_type = static_cast<DexOpcodeType*>(insn)->get_type();
       if (check_type != invoke_return_type) {
         if (!check_cast(invoke_return_type, check_type)) {
-          return op;
+          return insn;
         }
         m_stats_check_casts_super_removed++;
       }
       m_stats_check_casts_removed++;
-      return (new DexOpcode(OPCODE_NOP));
+      return (new DexInstruction(OPCODE_NOP));
     }
-    return op;
+    return insn;
   }
 
   /**
@@ -152,9 +152,9 @@ class PeepholeOptimizer {
     size_t index = 0;
     for (auto& mei : *block) {
       if (mei.type == MFLOW_OPCODE) {
-        auto newop = peephole_patterns(mei.op);
-        if (newop != mei.op) {
-          m_replacements.emplace(mei.op, newop);
+        auto newop = peephole_patterns(mei.insn);
+        if (newop != mei.insn) {
+          m_replacements.emplace(mei.insn, newop);
         }
         if (is_invoke(newop->opcode())) {
           m_last_call = index;

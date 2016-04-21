@@ -20,7 +20,7 @@
 #include <utility>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "walkers.h"
 #include "UnterfaceOpt.h"

@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 
@@ -48,8 +48,8 @@ inline bool has_code(const DexMethod* meth) {
 }
 
 /** Determine if the opcode matches any flavor of invoke-direct */
-inline bool is_invoke_direct(const DexOpcode* opc) {
-  auto op = opc->opcode();
+inline bool is_invoke_direct(const DexInstruction* insn) {
+  auto op = insn->opcode();
   return op == OPCODE_INVOKE_DIRECT ||
     op == OPCODE_INVOKE_DIRECT_RANGE;
 }
@@ -214,17 +214,17 @@ inline match_t<DexClass, std::tuple<> > is_interface() {
 struct DexOpcodeSeq {
 public:
   const DexMethod* meth;
-  std::vector<DexOpcode*>::const_iterator& it;
+  std::vector<DexInstruction*>::const_iterator& it;
 };
 
-inline DexOpcode* next(const DexOpcodeSeq* opcs) {
+inline DexInstruction* next(const DexOpcodeSeq* opcs) {
   auto opcode = *(opcs->it);
   std::advance(opcs->it, 1);
   return opcode;
 }
 
-inline const DexOpcode* next(const DexOpcode* opc) {
-  return opc;
+inline const DexInstruction* next(const DexInstruction* insn) {
+  return insn;
 }
 
 // Some of these matchers can work with single opcodes, or

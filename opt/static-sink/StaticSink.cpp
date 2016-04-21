@@ -169,9 +169,9 @@ void remove_primary_dex_refs(
   walk_opcodes(
     primary_dex,
     [](DexMethod*) { return true; },
-    [&](DexMethod*, DexOpcode* op) {
-      if (op->has_methods()) {
-        auto callee = static_cast<DexOpcodeMethod*>(op)->get_method();
+    [&](DexMethod*, DexInstruction* insn) {
+      if (insn->has_methods()) {
+        auto callee = static_cast<DexOpcodeMethod*>(insn)->get_method();
         ref_set.insert(callee);
       }
     }
@@ -333,9 +333,9 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
       auto cls = type_class(m->get_class());
       return class_set.count(cls) == 0 && is_public(cls);
     },
-    [&](DexMethod* m, DexOpcode* op) {
-      if (op->has_methods()) {
-        auto callee = static_cast<DexOpcodeMethod*>(op)->get_method();
+    [&](DexMethod* m, DexInstruction* insn) {
+      if (insn->has_methods()) {
+        auto callee = static_cast<DexOpcodeMethod*>(insn)->get_method();
         if (static_set.count(callee)) {
           statics_to_callers[callee] = type_class(m->get_class());
         }

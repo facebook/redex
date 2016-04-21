@@ -207,7 +207,7 @@ static bool validate_sget(DexMethod* context, DexOpcodeField* opfield) {
   return false;
 }
 
-void replace_opcode(DexMethod* method, DexOpcode* from, DexOpcode* to) {
+void replace_opcode(DexMethod* method, DexInstruction* from, DexInstruction* to) {
   MethodTransform* mt = MethodTransform::get_method_transform(method);
   mt->replace_opcode(from, to);
 }
@@ -231,7 +231,7 @@ void inline_cheap_sget(DexMethod* method, DexOpcodeField* opfield) {
                       " CONST_16 or CONST_HIGH16, bailing\n");
   }();
 
-  auto newopcode = (new DexOpcode(opcode, 0))->set_dest(dest)->set_literal(v);
+  auto newopcode = (new DexInstruction(opcode, 0))->set_dest(dest)->set_literal(v);
   replace_opcode(method, opfield, newopcode);
 }
 
@@ -245,7 +245,7 @@ void inline_sget(DexMethod* method, DexOpcodeField* opfield) {
   /* FIXME for sget_wide case */
   uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
 
-  auto newopcode = (new DexOpcode(opcode))->set_dest(dest)->set_literal(v);
+  auto newopcode = (new DexInstruction(opcode))->set_dest(dest)->set_literal(v);
   replace_opcode(method, opfield, newopcode);
 }
 
@@ -309,9 +309,9 @@ void inline_field_values(Scope& fullscope) {
   walk_opcodes(
       fullscope,
       [](DexMethod* method) { return true; },
-      [&](DexMethod* method, DexOpcode* opcode) {
-        if (opcode->has_fields() && is_sfield_op(opcode->opcode())) {
-          auto fieldop = static_cast<DexOpcodeField*>(opcode);
+      [&](DexMethod* method, DexInstruction* insn) {
+        if (insn->has_fields() && is_sfield_op(insn->opcode())) {
+          auto fieldop = static_cast<DexOpcodeField*>(insn);
           auto field = resolve_field(fieldop->field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) return;
           if (inline_field.count(field) == 0) return;

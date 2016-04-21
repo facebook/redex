@@ -11,7 +11,7 @@
 #include "InlineHelper.h"
 #include "Deleter.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
@@ -266,11 +266,11 @@ void SimpleInlinePass::select_single_called(
   }
   // count call sites for each method
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, DexOpcode* opcode) {
-        if (is_invoke(opcode->opcode())) {
-          auto mop = static_cast<DexOpcodeMethod*>(opcode);
+      [&](DexMethod* meth, DexInstruction* insn) {
+        if (is_invoke(insn->opcode())) {
+          auto mop = static_cast<DexOpcodeMethod*>(insn);
           auto callee = resolve_method(
-              mop->get_method(), opcode_to_search(opcode), resolved_refs);
+              mop->get_method(), opcode_to_search(insn), resolved_refs);
           if (callee != nullptr && callee->is_concrete()
               && methods.count(callee) > 0) {
             calls[callee]++;

@@ -18,7 +18,7 @@
 
 #include "walkers.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "ReachableClasses.h"
@@ -224,11 +224,11 @@ void DeadRefs::track_callers(Scope& scope) {
   called.clear();
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexOpcode* opcode) {
-        if (opcode->has_methods()) {
-          auto methodop = static_cast<DexOpcodeMethod*>(opcode);
+      [&](DexMethod* m, DexInstruction* insn) {
+        if (insn->has_methods()) {
+          auto methodop = static_cast<DexOpcodeMethod*>(insn);
           auto callee = methodop->get_method();
-          callee = resolve_method(callee, opcode_to_search(opcode));
+          callee = resolve_method(callee, opcode_to_search(insn));
           if (callee == nullptr || !callee->is_concrete()) return;
           if (vmethods.count(callee) > 0) {
             vmethods.erase(callee);
@@ -236,13 +236,13 @@ void DeadRefs::track_callers(Scope& scope) {
           called.insert(callee);
           return;
         }
-        if (opcode->has_fields()) {
-          auto fieldop = static_cast<DexOpcodeField*>(opcode);
+        if (insn->has_fields()) {
+          auto fieldop = static_cast<DexOpcodeField*>(insn);
           auto field = fieldop->field();
           field = resolve_field(field,
-              is_ifield_op(opcode->opcode()) ?
+              is_ifield_op(insn->opcode()) ?
                   FieldSearch::Instance :
-                  is_sfield_op(opcode->opcode()) ?
+                  is_sfield_op(insn->opcode()) ?
                       FieldSearch::Static : FieldSearch::Any);
           if (field == nullptr || !field->is_concrete()) return;
           if (ifields.count(field) > 0) {

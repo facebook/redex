@@ -17,7 +17,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include "walkers.h"
@@ -27,7 +27,7 @@ namespace {
  * These instructions have observable side effects so must always be considered
  * live, regardless of whether their output is consumed by another instruction.
  */
-static bool has_side_effects(DexCodeItemOpcode opc) {
+static bool has_side_effects(DexOpcode opc) {
   switch (opc) {
   case OPCODE_RETURN_VOID:
   case OPCODE_RETURN:
@@ -162,7 +162,7 @@ class LocalDce {
     std::vector<boost::dynamic_bitset<>> liveness(
         cfg.size(), boost::dynamic_bitset<>(regs + 1));
     bool changed;
-    std::vector<DexOpcode*> dead_instructions;
+    std::vector<DexInstruction*> dead_instructions;
 
     TRACE(DCE, 5, "%s\n", show(method).c_str());
     TRACE(DCE, 5, "%s", show(cfg).c_str());
@@ -193,16 +193,16 @@ class LocalDce {
           if (it->type != MFLOW_OPCODE) {
             continue;
           }
-          bool required = is_required(it->op, bliveness);
+          bool required = is_required(it->insn, bliveness);
           if (required) {
-            update_liveness(it->op, bliveness);
+            update_liveness(it->insn, bliveness);
           } else {
-            dead_instructions.push_back(it->op);
+            dead_instructions.push_back(it->insn);
           }
           TRACE(CFG,
                 5,
                 "%s\n%s\n",
-                show(it->op).c_str(),
+                show(it->insn).c_str(),
                 show(bliveness).c_str());
         }
         if (bliveness != prev_liveness) {
@@ -246,7 +246,7 @@ class LocalDce {
     }
     auto last = b->rbegin();
     if (last->type == MFLOW_OPCODE &&
-        last->op->opcode() == FOPCODE_FILLED_ARRAY) {
+        last->insn->opcode() == FOPCODE_FILLED_ARRAY) {
       return false;
     }
     // Skip if it contains nothing but debug info.
@@ -263,18 +263,18 @@ class LocalDce {
       return;
     }
     // Gather the ops to delete.
-    std::unordered_set<DexOpcode*> delete_ops;
+    std::unordered_set<DexInstruction*> delete_ops;
     std::unordered_set<DexTryItem*> delete_tries;
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
-        delete_ops.insert(mei.op);
+        delete_ops.insert(mei.insn);
       } else if (mei.type == MFLOW_TRY) {
         delete_tries.insert(mei.tentry->tentry);
       }
     }
     // Remove branch targets.
     for (auto it = transform->begin(); it != transform->end(); ++it) {
-      if (it->type == MFLOW_TARGET && delete_ops.count(it->target->src->op)) {
+      if (it->type == MFLOW_TARGET && delete_ops.count(it->target->src->insn)) {
         delete it->target;
         it->type = MFLOW_FALLTHROUGH;
       } else if (it->type == MFLOW_TRY &&
@@ -344,7 +344,7 @@ class LocalDce {
    * An instruction is required (i.e., live) if it has side effects or if its
    * destination register is live.
    */
-  bool is_required(DexOpcode* inst, const boost::dynamic_bitset<>& bliveness) {
+  bool is_required(DexInstruction* inst, const boost::dynamic_bitset<>& bliveness) {
     if (has_side_effects(inst->opcode())) {
       if (is_invoke(inst->opcode())) {
         auto invoke = static_cast<DexOpcodeMethod*>(inst);
@@ -367,7 +367,7 @@ class LocalDce {
   /*
    * Update the liveness vector given that `inst` is live.
    */
-  void update_liveness(const DexOpcode* inst,
+  void update_liveness(const DexInstruction* inst,
                        boost::dynamic_bitset<>& bliveness) {
     // The destination register is killed, so it isn't live before this.
     if (inst->dests_size()) {

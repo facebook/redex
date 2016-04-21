@@ -21,7 +21,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
@@ -105,7 +105,7 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
   auto invoke =
       std::find_if(insts.begin(),
                    insts.end(),
-                   [](const DexOpcode* i) { return is_invoke(i->opcode()); });
+                   [](const DexInstruction* insn) { return is_invoke(insn->opcode()); });
   MethodTransform::inline_tail_call(bridge, bridgee, *invoke);
 }
 }

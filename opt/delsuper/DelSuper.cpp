@@ -18,26 +18,26 @@
 
 #include "walkers.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 
 
 namespace {
 
-static const DexCodeItemOpcode s_return_invoke_super_void_opcs[2] = {
+static const DexOpcode s_return_invoke_super_void_opcs[2] = {
   OPCODE_INVOKE_SUPER, OPCODE_RETURN_VOID
 };
 
-static const DexCodeItemOpcode s_return_invoke_super_opcs[3] = {
+static const DexOpcode s_return_invoke_super_opcs[3] = {
   OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT, OPCODE_RETURN
 };
 
-static const DexCodeItemOpcode s_return_invoke_super_wide_opcs[3] = {
+static const DexOpcode s_return_invoke_super_wide_opcs[3] = {
   OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_WIDE, OPCODE_RETURN_WIDE
 };
 
-static const DexCodeItemOpcode s_return_invoke_super_obj_opcs[3] = {
+static const DexOpcode s_return_invoke_super_obj_opcs[3] = {
   OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_OBJECT, OPCODE_RETURN_OBJECT
 };
 
@@ -95,22 +95,22 @@ private:
    */
   bool do_invoke_meth_args_pass_through(
     const DexMethod* meth,
-    const DexOpcode* opc) {
-    assert(opc->opcode() == OPCODE_INVOKE_SUPER);
-    assert(opc->has_arg_word_count() == true);
+    const DexInstruction* insn) {
+    assert(insn->opcode() == OPCODE_INVOKE_SUPER);
+    assert(insn->has_arg_word_count() == true);
     uint16_t start_reg = meth->get_code()->get_registers_size() -
       meth->get_code()->get_ins_size();
     uint16_t end_reg = meth->get_code()->get_registers_size();
     // args to this method start at 'start_reg', so they should
-    // be passed into invoke_super of opc {start_reg, ..., end_reg}
-    uint16_t arg_word_count = opc->arg_word_count();
+    // be passed into invoke_super of insn {start_reg, ..., end_reg}
+    uint16_t arg_word_count = insn->arg_word_count();
     if (arg_word_count != end_reg - start_reg) {
       return false;
     }
     // N.B. don't need to check reg < end_reg in for loop
     // because of above length check
     for (uint16_t i = 0, reg = start_reg ; i < arg_word_count ; ++i, ++reg) {
-      uint16_t opc_reg = opc->src(i);
+      uint16_t opc_reg = insn->src(i);
       if (reg != opc_reg) {
         return false;
       }
@@ -119,8 +119,8 @@ private:
   }
 
   bool are_opcs_equal(
-    const std::vector<DexOpcode*> insns,
-    const DexCodeItemOpcode* opcs,
+    const std::vector<DexInstruction*> insns,
+    const DexOpcode* opcs,
     size_t opcs_len) {
     if (insns.size() != opcs_len) return false;
     for (size_t i = 0 ; i < opcs_len ; ++i) {
@@ -182,8 +182,8 @@ private:
     }
 
     // For non-void scenarios, capture move-result and return opcodes
-    DexOpcode* move_res_opc = nullptr;
-    DexOpcode* return_opc = nullptr;
+    DexInstruction* move_res_opc = nullptr;
+    DexInstruction* return_opc = nullptr;
     if (insns.size() == 3) {
       move_res_opc = insns[1];
       return_opc = insns[2];
@@ -191,8 +191,8 @@ private:
     m_num_trivial++;
 
     // Get invoked method
-    const DexOpcode* opc = insns[0];
-    const DexOpcodeMethod* mopc = static_cast<const DexOpcodeMethod*>(opc);
+    const DexInstruction* insn = insns[0];
+    const DexOpcodeMethod* mopc = static_cast<const DexOpcodeMethod*>(insn);
     DexMethod* invoked_meth = mopc->get_method();
 
     // Invoked method name must match

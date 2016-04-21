@@ -11,7 +11,7 @@
 
 #include "dexdefs.h"
 #include "DexAccess.h"
-#include "DexDebugOpcode.h"
+#include "DexDebugInstruction.h"
 #include "DexClass.h"
 #include "DexOutput.h"
 
@@ -21,7 +21,7 @@ void DexDebugOpcodeSetFile::gather_strings(
 }
 
 void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  DexDebugOpcode::encode(dodx, encdata);
+  DexDebugInstruction::encode(dodx, encdata);
   uint32_t fidx = DEX_NO_INDEX;
   if (m_str) {
     fidx = dodx->stringidx(m_str);
@@ -40,7 +40,7 @@ void DexDebugOpcodeStartLocal::gather_types(std::vector<DexType*>& ltype) {
 }
 
 void DexDebugOpcodeStartLocal::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  DexDebugOpcode::encode(dodx, encdata);
+  DexDebugInstruction::encode(dodx, encdata);
   uint32_t nidx = DEX_NO_INDEX;
   uint32_t tidx = DEX_NO_INDEX;
   if (m_name) {
@@ -56,7 +56,7 @@ void DexDebugOpcodeStartLocal::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   }
 }
 
-void DexDebugOpcode::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   *encdata++ = (uint8_t)m_opcode;
   if (m_signed) {
     encdata = write_sleb128(encdata, m_value);
@@ -66,7 +66,7 @@ void DexDebugOpcode::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   encdata = write_uleb128(encdata, m_uvalue);
 }
 
-DexDebugOpcode* DexDebugOpcode::make_opcode(DexIdx* idx,
+DexDebugInstruction* DexDebugInstruction::make_instruction(DexIdx* idx,
                                             const uint8_t*& encdata) {
   uint8_t opcode = *encdata++;
   switch (opcode) {
@@ -76,11 +76,11 @@ DexDebugOpcode* DexDebugOpcode::make_opcode(DexIdx* idx,
   case DBG_END_LOCAL:
   case DBG_RESTART_LOCAL: {
     uint32_t v = read_uleb128(&encdata);
-    return new DexDebugOpcode((DexDebugItemOpcode)opcode, v);
+    return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_ADVANCE_LINE: {
     int32_t v = (uint32_t)read_sleb128(&encdata);
-    return new DexDebugOpcode((DexDebugItemOpcode)opcode, v);
+    return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_START_LOCAL: {
     uint32_t rnum = read_uleb128(&encdata);
@@ -100,6 +100,6 @@ DexDebugOpcode* DexDebugOpcode::make_opcode(DexIdx* idx,
     return new DexDebugOpcodeSetFile(str);
   }
   default:
-    return new DexDebugOpcode((DexDebugItemOpcode)opcode);
+    return new DexDebugInstruction((DexDebugItemOpcode)opcode);
   };
 }

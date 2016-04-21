@@ -14,7 +14,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "PassManager.h"
@@ -106,11 +106,11 @@ struct Rebinder {
     walk_opcodes(
       m_scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexOpcode* opcode) {
-        switch (opcode->opcode()) {
+      [&](DexMethod* m, DexInstruction* insn) {
+        switch (insn->opcode()) {
           case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_INTERFACE_RANGE: {
-            const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+            const auto mop = static_cast<DexOpcodeMethod*>(insn);
             const auto mref = mop->get_method();
             rebind_method_opcode(mop, mref, resolve_intf_methodref(mref));
             break;
@@ -118,12 +118,12 @@ struct Rebinder {
           case OPCODE_INVOKE_VIRTUAL:
           case OPCODE_INVOKE_VIRTUAL_RANGE:
             if (m_level != RebindLevel::NORMAL) {
-              rebind_virtual_method(opcode);
+              rebind_virtual_method(insn);
             }
             break;
           case OPCODE_INVOKE_STATIC:
           case OPCODE_INVOKE_STATIC_RANGE: {
-            const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+            const auto mop = static_cast<DexOpcodeMethod*>(insn);
             const auto mref = mop->get_method();
             rebind_method_opcode(mop, mref,
                 resolve_method(mref, MethodSearch::Static));
@@ -136,7 +136,7 @@ struct Rebinder {
           case OPCODE_SGET_BYTE:
           case OPCODE_SGET_CHAR:
           case OPCODE_SGET_SHORT:
-            rebind_field(opcode, FieldSearch::Static);
+            rebind_field(insn, FieldSearch::Static);
             break;
           case OPCODE_IGET:
           case OPCODE_IGET_WIDE:
@@ -145,7 +145,7 @@ struct Rebinder {
           case OPCODE_IGET_BYTE:
           case OPCODE_IGET_CHAR:
           case OPCODE_IGET_SHORT:
-            rebind_field(opcode, FieldSearch::Instance);
+            rebind_field(insn, FieldSearch::Instance);
             break;
           default:
             break;
@@ -184,8 +184,8 @@ struct Rebinder {
     }
   };
 
-  void rebind_virtual_method(DexOpcode* opcode) {
-    const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+  void rebind_virtual_method(DexInstruction* insn) {
+    const auto mop = static_cast<DexOpcodeMethod*>(insn);
     const auto mref = mop->get_method();
     auto mtype = mref->get_class();
     if (is_array_clone(mref, mtype)) {
@@ -249,8 +249,8 @@ struct Rebinder {
     return nullptr;
   }
 
-  void rebind_field(DexOpcode* opcode, FieldSearch field_search) {
-    const auto fop = static_cast<DexOpcodeField*>(opcode);
+  void rebind_field(DexInstruction* insn, FieldSearch field_search) {
+    const auto fop = static_cast<DexOpcodeField*>(insn);
     const auto fref = fop->field();
     const auto fdef = resolve_field(fref, field_search);
     if (fdef != nullptr && fdef != fref) {

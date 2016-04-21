@@ -13,8 +13,8 @@
 
 #include "DexClass.h"
 #include "DexAnnotation.h"
-#include "DexOpcode.h"
-#include "DexDebugOpcode.h"
+#include "DexInstruction.h"
+#include "DexDebugInstruction.h"
 #include "DexIdx.h"
 #include "Creators.h"
 #include "Transform.h"
@@ -112,10 +112,10 @@ std::string show(DexAnnotationVisibility vis) {
   not_reached();
 }
 
-std::string show_opcode(const DexOpcode* op) {
-  if (!op) return "";
+std::string show_opcode(const DexInstruction* insn) {
+  if (!insn) return "";
   std::stringstream ss;
-  auto opcode = op->opcode();
+  auto opcode = insn->opcode();
   switch (opcode) {
   case OPCODE_NOP:
     return "nop";
@@ -461,146 +461,146 @@ std::string show_opcode(const DexOpcode* op) {
     return "const-wide";
   // field opcode
   case OPCODE_IGET:
-    ss << "iget " << show(((DexOpcodeField*)op)->field());
+    ss << "iget " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_WIDE:
-    ss << "iget-wide " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-wide " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_OBJECT:
-    ss << "iget-object " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-object " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_BOOLEAN:
-    ss << "iget-boolean " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-boolean " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_BYTE:
-    ss << "iget-byte " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-byte " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_CHAR:
-    ss << "iget-char " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-char " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IGET_SHORT:
-    ss << "iget-short " << show(((DexOpcodeField*)op)->field());
+    ss << "iget-short " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT:
-    ss << "iput " << show(((DexOpcodeField*)op)->field());
+    ss << "iput " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_WIDE:
-    ss << "iput-wide " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-wide " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_OBJECT:
-    ss << "iput-object " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-object " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_BOOLEAN:
-    ss << "iput-boolean " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-boolean " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_BYTE:
-    ss << "iput-byte " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-byte " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_CHAR:
-    ss << "iput-char " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-char " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_IPUT_SHORT:
-    ss << "iput-short " << show(((DexOpcodeField*)op)->field());
+    ss << "iput-short " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET:
-    ss << "sget " << show(((DexOpcodeField*)op)->field());
+    ss << "sget " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_WIDE:
-    ss << "sget-wide " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-wide " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_OBJECT:
-    ss << "sget-object " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-object " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_BOOLEAN:
-    ss << "sget-boolean " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-boolean " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_BYTE:
-    ss << "sget-byte " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-byte " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_CHAR:
-    ss << "sget-char " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-char " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SGET_SHORT:
-    ss << "sget-short " << show(((DexOpcodeField*)op)->field());
+    ss << "sget-short " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT:
-    ss << "sput " << show(((DexOpcodeField*)op)->field());
+    ss << "sput " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_WIDE:
-    ss << "sput-wide " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-wide " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_OBJECT:
-    ss << "sput-object " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-object " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_BOOLEAN:
-    ss << "sput-boolean " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-boolean " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_BYTE:
-    ss << "sput-byte " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-byte " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_CHAR:
-    ss << "sput-char " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-char " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_SPUT_SHORT:
-    ss << "sput-short " << show(((DexOpcodeField*)op)->field());
+    ss << "sput-short " << show(((DexOpcodeField*)insn)->field());
     return ss.str();
   case OPCODE_INVOKE_VIRTUAL:
-    ss << "invoke-virtual " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-virtual " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_SUPER:
-    ss << "invoke-super " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-super " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_DIRECT:
-    ss << "invoke-direct " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-direct " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_STATIC:
-    ss << "invoke-static " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-static " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_INTERFACE:
-    ss << "invoke-interface " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_VIRTUAL_RANGE:
-    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_SUPER_RANGE:
-    ss << "invoke-super/range " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_DIRECT_RANGE:
-    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_STATIC_RANGE:
-    ss << "invoke-static/range " << show(((DexOpcodeMethod*)op)->get_method());
+    ss << "invoke-static/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_INVOKE_INTERFACE_RANGE:
     ss << "invoke-interface/range "
-       << show(((DexOpcodeMethod*)op)->get_method());
+       << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case OPCODE_CONST_STRING:
-    ss << "const-string " << show(((DexOpcodeString*)op)->get_string());
+    ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();
   case OPCODE_CONST_STRING_JUMBO:
-    ss << "const-string/jumbo " << show(((DexOpcodeString*)op)->get_string());
+    ss << "const-string/jumbo " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();
   case OPCODE_CONST_CLASS:
-    ss << "const-class " << show(((DexOpcodeType*)op)->get_type());
+    ss << "const-class " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_CHECK_CAST:
-    ss << "check-cast " << show(((DexOpcodeType*)op)->get_type());
+    ss << "check-cast " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_INSTANCE_OF:
-    ss << "instance-of " << show(((DexOpcodeType*)op)->get_type());
+    ss << "instance-of " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_NEW_INSTANCE:
-    ss << "new-instance " << show(((DexOpcodeType*)op)->get_type());
+    ss << "new-instance " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_NEW_ARRAY:
-    ss << "new-array " << show(((DexOpcodeType*)op)->get_type());
+    ss << "new-array " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_FILLED_NEW_ARRAY:
-    ss << "filled-new-array " << show(((DexOpcodeType*)op)->get_type());
+    ss << "filled-new-array " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    ss << "filled-new-array/range " << show(((DexOpcodeType*)op)->get_type());
+    ss << "filled-new-array/range " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
   case FOPCODE_PACKED_SWITCH:
     ss << "packed-switch";
@@ -801,7 +801,7 @@ std::string show(const DexAnnotationDirectory* p) {
   return ss.str();
 }
 
-std::string show(DexCodeItemOpcode opcode) {
+std::string show(DexOpcode opcode) {
   switch (opcode) {
 #define OP(op, ...) \
   case OPCODE_##op: \
@@ -818,53 +818,53 @@ std::string show(DexCodeItemOpcode opcode) {
   return "";
 }
 
-std::string show(const DexOpcode* op) {
-  if (!op) return "";
+std::string show(const DexInstruction* insn) {
+  if (!insn) return "";
   std::stringstream ss;
-  ss << show_opcode(op);
+  ss << show_opcode(insn);
   bool first = true;
-  if (op->dests_size()) {
-    ss << " v" << op->dest();
+  if (insn->dests_size()) {
+    ss << " v" << insn->dest();
     first = false;
   }
-  for (unsigned i = 0; i < op->srcs_size(); ++i) {
+  for (unsigned i = 0; i < insn->srcs_size(); ++i) {
     if (!first) ss << ",";
-    ss << " v" << op->src(i);
+    ss << " v" << insn->src(i);
     first = false;
   }
   return ss.str();
 }
 
-std::string show(const DexDebugOpcode* op) {
-  if (!op) return "";
+std::string show(const DexDebugInstruction* insn) {
+  if (!insn) return "";
   std::stringstream ss;
-  switch (op->opcode()) {
+  switch (insn->opcode()) {
   case DBG_END_SEQUENCE:
     ss << "DBG_END_SEQUENCE";
     break;
   case DBG_ADVANCE_PC:
-    ss << "DBG_ADVANCE_PC " << op->uvalue();
+    ss << "DBG_ADVANCE_PC " << insn->uvalue();
     break;
   case DBG_ADVANCE_LINE:
-    ss << "DBG_ADVANCE_LINE " << op->value();
+    ss << "DBG_ADVANCE_LINE " << insn->value();
     break;
   case DBG_START_LOCAL: {
-    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(op);
+    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
     ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name())
         << ":" << show(sl->type());
     break;
   }
   case DBG_START_LOCAL_EXTENDED: {
-    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(op);
+    auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
     ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name())
         << ":" << show(sl->type()) << ";" << show(sl->sig());
     break;
   }
   case DBG_END_LOCAL:
-    ss << "DBG_END_LOCAL v" << op->uvalue();
+    ss << "DBG_END_LOCAL v" << insn->uvalue();
     break;
   case DBG_RESTART_LOCAL:
-    ss << "DBG_RESTART_LOCAL v" << op->uvalue();
+    ss << "DBG_RESTART_LOCAL v" << insn->uvalue();
     break;
   case DBG_SET_PROLOGUE_END:
     ss << "DBG_SET_PROLOGUE_END";
@@ -873,7 +873,7 @@ std::string show(const DexDebugOpcode* op) {
     ss << "DBG_SET_EPILOGUE_BEGIN";
     break;
   case DBG_SET_FILE: {
-    auto sf = static_cast<const DexDebugOpcodeSetFile*>(op);
+    auto sf = static_cast<const DexDebugOpcodeSetFile*>(insn);
     ss << "DBG_SET_FILE " << show(sf->file());
     break;
   }
@@ -881,7 +881,7 @@ std::string show(const DexDebugOpcode* op) {
     constexpr int DBG_FIRST_SPECIAL = 0x0a;
     constexpr int DBG_LINE_BASE = -4;
     constexpr int DBG_LINE_RANGE = 15;
-    auto adjusted_opcode = op->opcode() - DBG_FIRST_SPECIAL;
+    auto adjusted_opcode = insn->opcode() - DBG_FIRST_SPECIAL;
     auto line = DBG_LINE_BASE + (adjusted_opcode % DBG_LINE_RANGE);
     auto address = (adjusted_opcode / DBG_LINE_RANGE);
     ss << "DBG_SPECIAL line+=" << line << " addr+=" << address;
@@ -906,13 +906,13 @@ std::string show(const MethodItemEntry& mei) {
   std::stringstream ss;
   switch (mei.type) {
   case MFLOW_OPCODE:
-    ss << "OPCODE: [" << mei.op << "] " << show(mei.op);
+    ss << "OPCODE: [" << mei.insn << "] " << show(mei.insn);
     return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET MULTI: " << mei.target->src->op;
+      ss << "TARGET MULTI: " << mei.target->src->insn;
     } else {
-      ss << "TARGET SIMPLE: " << mei.target->src->op;
+      ss << "TARGET SIMPLE: " << mei.target->src->insn;
     }
     return ss.str();
   case MFLOW_TRY:

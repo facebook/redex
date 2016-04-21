@@ -78,10 +78,10 @@ void walk_code(const T& scope,
  */
 template <class T,
           class MethodFilterFn = bool(DexMethod*),
-          class OpCodeWalkerFn = void(DexMethod*, DexOpcode*)>
+          class InstructionWalkerFn = void(DexMethod*, DexInstruction*)>
 void walk_opcodes(const T& scope,
                   MethodFilterFn methodFilter,
-                  OpCodeWalkerFn opcodeWalker) {
+                  InstructionWalkerFn opcodeWalker) {
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
       if (methodFilter(dmethod)) {

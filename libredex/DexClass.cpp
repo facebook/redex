@@ -16,7 +16,7 @@
 #include "Debug.h"
 #include "dexdefs.h"
 #include "DexAccess.h"
-#include "DexDebugOpcode.h"
+#include "DexDebugInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Warning.h"
@@ -45,14 +45,14 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
     DexString* str = decode_noindexable_string(idx, encdata);
     m_param_names.push_back(str);
   }
-  DexDebugOpcode* dbgp;
-  while ((dbgp = DexDebugOpcode::make_opcode(idx, encdata)) != nullptr) {
-    m_opcodes.push_back(dbgp);
+  DexDebugInstruction* dbgp;
+  while ((dbgp = DexDebugInstruction::make_instruction(idx, encdata)) != nullptr) {
+    m_insns.push_back(dbgp);
   }
 }
 
 DexDebugItem::~DexDebugItem() {
-  for (auto const& dbgop : m_opcodes) {
+  for (auto const& dbgop : m_insns) {
     delete dbgop;
   }
 }
@@ -74,7 +74,7 @@ int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
     uint32_t idx = dodx->stringidx(s);
     encdata = write_uleb128p1(encdata, idx);
   }
-  for (auto dbgop : m_opcodes) {
+  for (auto dbgop : m_insns) {
     dbgop->encode(dodx, encdata);
   }
   encdata = write_uleb128(encdata, DBG_END_SEQUENCE);
@@ -82,7 +82,7 @@ int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
 }
 
 void DexDebugItem::gather_types(std::vector<DexType*>& ltype) {
-  for (auto dbgop : m_opcodes) {
+  for (auto dbgop : m_insns) {
     dbgop->gather_types(ltype);
   }
 }
@@ -91,7 +91,7 @@ void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
   for (auto p : m_param_names) {
     if (p) lstring.push_back(p);
   }
-  for (auto dbgop : m_opcodes) {
+  for (auto dbgop : m_insns) {
     dbgop->gather_strings(lstring);
   }
 }
@@ -108,7 +108,7 @@ DexCode* DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (code->insns_size) {
     const uint16_t* end = cdata + code->insns_size;
     while (cdata < end) {
-      DexOpcode* dop = DexOpcode::make_opcode(idx, cdata);
+      DexInstruction* dop = DexInstruction::make_instruction(idx, cdata);
       always_assert_log(
           dop != nullptr, "Failed to parse method at offset 0x%08x", offset);
       dc->m_insns.push_back(dop);

@@ -10,7 +10,7 @@
 #include "Vinfo.h"
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 

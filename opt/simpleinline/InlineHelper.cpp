@@ -8,7 +8,7 @@
  */
 
 #include "InlineHelper.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "walkers.h"
@@ -144,7 +144,7 @@ MultiMethodInliner::MultiMethodInliner(
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, DexOpcode* opcode) {
+      [&](DexMethod* meth, DexInstruction* opcode) {
         if (is_invoke(opcode->opcode())) {
           auto mop = static_cast<DexOpcodeMethod*>(opcode);
           auto callee = resolver(mop->get_method(), opcode_to_search(opcode));
@@ -355,7 +355,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee) {
  * referenced by a callee is visible and accessible in the caller context.
  * This step would not be needed if we changed all private instance to static.
  */
-bool MultiMethodInliner::create_vmethod(DexOpcode* insn) {
+bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
     auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
@@ -383,7 +383,7 @@ bool MultiMethodInliner::create_vmethod(DexOpcode* insn) {
  * Return whether the callee contains an invoke-super.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::is_invoke_super(DexOpcode* insn) {
+bool MultiMethodInliner::is_invoke_super(DexInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER ||
       insn->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
     info.invoke_super++;
@@ -397,7 +397,7 @@ bool MultiMethodInliner::is_invoke_super(DexOpcode* insn) {
  * When inlining writing over one of the ins may change the type of the
  * register to a type that breaks the invariants in the caller.
  */
-bool MultiMethodInliner::writes_ins_reg(DexOpcode* insn, uint16_t temp_regs) {
+bool MultiMethodInliner::writes_ins_reg(DexInstruction* insn, uint16_t temp_regs) {
   int reg = -1;
   if (insn->opcode() == OPCODE_CHECK_CAST) {
     reg = insn->src(0);
@@ -423,7 +423,7 @@ bool MultiMethodInliner::writes_ins_reg(DexOpcode* insn, uint16_t temp_regs) {
  * But we need to make all methods public across the hierarchy and for methods
  * we don't know we have no idea whether the method was public or not anyway.
  */
-bool MultiMethodInliner::unknown_virtual(DexOpcode* insn, DexMethod* context) {
+bool MultiMethodInliner::unknown_virtual(DexInstruction* insn, DexMethod* context) {
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
       insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
     auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
@@ -465,7 +465,7 @@ bool MultiMethodInliner::unknown_virtual(DexOpcode* insn, DexMethod* context) {
  * But we need to make all fields public across the hierarchy and for fields
  * we don't know we have no idea whether the field was public or not anyway.
  */
-bool MultiMethodInliner::unknown_field(DexOpcode* insn, DexMethod* context) {
+bool MultiMethodInliner::unknown_field(DexInstruction* insn, DexMethod* context) {
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
     auto fop = static_cast<DexOpcodeField*>(insn);
     auto field = fop->field();

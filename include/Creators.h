@@ -10,7 +10,7 @@
 #pragma once
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include <vector>
@@ -102,7 +102,7 @@ struct MethodBlock {
    * At some point, when importing external dependency, we could remove this
    * function as all references would be known.
    */
-  void invoke(DexCodeItemOpcode opcode,
+  void invoke(DexOpcode opcode,
               DexMethod* meth,
               std::vector<Location>& args);
 
@@ -123,7 +123,7 @@ struct MethodBlock {
    * The field can be a field ref.
    * This function can be used when the field is unknown to redex.
    */
-  void ifield_op(DexCodeItemOpcode opcode,
+  void ifield_op(DexOpcode opcode,
                  DexField* field,
                  Location obj,
                  Location& src_or_dst);
@@ -145,7 +145,7 @@ struct MethodBlock {
    * The field can be a field ref.
    * This function can be used when the field is unknown to redex.
    */
-  void sfield_op(DexCodeItemOpcode opcode,
+  void sfield_op(DexOpcode opcode,
                  DexField* field,
                  Location& src_or_dst);
 
@@ -220,7 +220,7 @@ struct MethodBlock {
    *   code4
    *   ret
    */
-  MethodBlock* if_test(DexCodeItemOpcode if_op,
+  MethodBlock* if_test(DexOpcode if_op,
                        Location first,
                        Location second);
 
@@ -237,7 +237,7 @@ struct MethodBlock {
    *   code4
    *   ret
    */
-  MethodBlock* if_testz(DexCodeItemOpcode if_op, Location test);
+  MethodBlock* if_testz(DexOpcode if_op, Location test);
 
   /**
    * Emit an if* opcode that tests 2 Locations.
@@ -256,7 +256,7 @@ struct MethodBlock {
    *   code4
    *   got end_if_label // emitted automatically
    */
-  MethodBlock* if_else_test(DexCodeItemOpcode if_op,
+  MethodBlock* if_else_test(DexOpcode if_op,
                             Location first,
                             Location second,
                             MethodBlock** true_block);
@@ -278,7 +278,7 @@ struct MethodBlock {
    *   code4
    *   got end_if_label // emitted automatically
    */
-  MethodBlock* if_else_testz(DexCodeItemOpcode if_op,
+  MethodBlock* if_else_testz(DexOpcode if_op,
                              Location test,
                              MethodBlock** true_block);
 
@@ -309,10 +309,10 @@ struct MethodBlock {
   // Helpers
   //
 
-  void push_opcode(DexOpcode* opcode);
-  MethodBlock* make_if_block(DexOpcode* opcode);
-  MethodBlock* make_if_else_block(DexOpcode* opcode, MethodBlock** true_block);
-  MethodBlock* make_switch_block(DexOpcode* opcode,
+  void push_instruction(DexInstruction* insn);
+  MethodBlock* make_if_block(DexInstruction* insn);
+  MethodBlock* make_if_else_block(DexInstruction* insn, MethodBlock** true_block);
+  MethodBlock* make_switch_block(DexInstruction* insn,
                                  std::map<int, MethodBlock*>& cases);
 
  private:
@@ -423,17 +423,17 @@ struct MethodCreator {
     return top_reg - vreg - 1;
   }
 
-  FatMethod::iterator push_opcode(FatMethod::iterator curr, DexOpcode* opcode);
+  FatMethod::iterator push_instruction(FatMethod::iterator curr, DexInstruction* insn);
   FatMethod::iterator make_if_block(FatMethod::iterator curr,
-                                    DexOpcode* opcode,
+                                    DexInstruction* insn,
                                     FatMethod::iterator* false_block);
   FatMethod::iterator make_if_else_block(FatMethod::iterator curr,
-                                         DexOpcode* opcode,
+                                         DexInstruction* insn,
                                          FatMethod::iterator* false_block,
                                          FatMethod::iterator* true_block);
   FatMethod::iterator make_switch_block(
       FatMethod::iterator curr,
-      DexOpcode* opcode,
+      DexInstruction* opcode,
       FatMethod::iterator* default_block,
       std::map<int, FatMethod::iterator>& cases);
 

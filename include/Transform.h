@@ -43,7 +43,7 @@ struct TryEntry {
  * for multi-branch encodings.  The target is
  * implicit in the flow, where the target is from
  * i.e. what has to be re-written is what is recorded
- * in DexOpcode*.
+ * in DexInstruction*.
  */
 enum BranchTargetType {
   BRANCH_SIMPLE = 0,
@@ -71,13 +71,13 @@ struct MethodItemEntry {
   uint16_t addr;
   union {
     TryEntry* tentry;
-    DexOpcode* op;
+    DexInstruction* insn;
     BranchTarget* target;
-    DexDebugOpcode* dbgop;
+    DexDebugInstruction* dbgop;
   };
-  MethodItemEntry(DexOpcode* op) {
+  MethodItemEntry(DexInstruction* insn) {
     this->type = MFLOW_OPCODE;
-    this->op = op;
+    this->insn = insn;
   }
   MethodItemEntry(TryEntry* tentry) {
     this->type = MFLOW_TRY;
@@ -87,7 +87,7 @@ struct MethodItemEntry {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  MethodItemEntry(DexDebugOpcode* dbgop) {
+  MethodItemEntry(DexDebugInstruction* dbgop) {
     this->type = MFLOW_DEBUG;
     this->dbgop = dbgop;
   }
@@ -222,17 +222,17 @@ class MethodTransform {
 
  private:
   FatMethod::iterator main_block();
-  FatMethod::iterator insert(FatMethod::iterator cur, DexOpcode* opcode);
+  FatMethod::iterator insert(FatMethod::iterator cur, DexInstruction* insn);
   FatMethod::iterator make_if_block(FatMethod::iterator cur,
-                                    DexOpcode* opcode,
+                                    DexInstruction* insn,
                                     FatMethod::iterator* if_block);
   FatMethod::iterator make_if_else_block(FatMethod::iterator cur,
-                                         DexOpcode* opcode,
+                                         DexInstruction* insn,
                                          FatMethod::iterator* if_block,
                                          FatMethod::iterator* else_block);
   FatMethod::iterator make_switch_block(
       FatMethod::iterator cur,
-      DexOpcode* opcode,
+      DexInstruction* insn,
       FatMethod::iterator* default_block,
       std::map<int, FatMethod::iterator>& cases);
 
@@ -263,7 +263,7 @@ class MethodTransform {
    */
   static void inline_tail_call(DexMethod* caller,
                                DexMethod* callee,
-                               DexOpcode* invoke);
+                               DexInstruction* invoke);
 
   static bool inline_16regs(
       InlineContext& context,
@@ -277,13 +277,13 @@ class MethodTransform {
   void sync();
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
-  void replace_opcode(DexOpcode* from, DexOpcode* to);
+  void replace_opcode(DexInstruction* from, DexInstruction* to);
 
   /* position = nullptr means at the head */
-  void insert_after(DexOpcode* position, std::list<DexOpcode*>& opcodes);
+  void insert_after(DexInstruction* position, std::list<DexInstruction*>& opcodes);
 
   /* Memory ownership of "op" passes to callee, it will delete it. */
-  void remove_opcode(DexOpcode* op);
+  void remove_opcode(DexInstruction* insn);
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }

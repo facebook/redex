@@ -20,7 +20,7 @@
 #include "DexIdx.h"
 #include "dexdefs.h"
 #include "DexAccess.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexAnnotation.h"
 #include "Show.h"
 #include "Trace.h"
@@ -47,7 +47,7 @@
  * the pointer values of each type that has a uniqueness requirement.
  */
 
-class DexDebugOpcode;
+class DexDebugInstruction;
 class DexOutputIdx;
 class DexString;
 class DexType;
@@ -420,7 +420,7 @@ inline bool compare_dexprotos(const DexProto* a, const DexProto* b) {
 class DexDebugItem {
   uint32_t m_line_start;
   std::vector<DexString*> m_param_names;
-  std::vector<DexDebugOpcode*> m_opcodes;
+  std::vector<DexDebugInstruction*> m_insns;
   DexDebugItem(DexIdx* idx, uint32_t offset);
 
  public:
@@ -429,7 +429,7 @@ class DexDebugItem {
  public:
   ~DexDebugItem();
 
-  std::vector<DexDebugOpcode*>& get_opcodes() { return m_opcodes; }
+  std::vector<DexDebugInstruction*>& get_instructions() { return m_insns; }
   uint32_t get_line_start() const { return m_line_start; }
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
@@ -453,7 +453,7 @@ class DexCode {
   uint16_t m_registers_size;
   uint16_t m_ins_size;
   uint16_t m_outs_size;
-  std::vector<DexOpcode*> m_insns;
+  std::vector<DexInstruction*> m_insns;
   std::vector<DexTryItem*> m_tries;
   DexDebugItem* m_dbg;
 
@@ -479,8 +479,8 @@ class DexCode {
 
  public:
   DexDebugItem* get_debug_item() const { return m_dbg; }
-  std::vector<DexOpcode*>& get_instructions() { return m_insns; }
-  const std::vector<DexOpcode*>& get_instructions() const { return m_insns; }
+  std::vector<DexInstruction*>& get_instructions() { return m_insns; }
+  const std::vector<DexInstruction*>& get_instructions() const { return m_insns; }
   std::vector<DexTryItem*>& get_tries() { return m_tries; }
   const std::vector<DexTryItem*>& get_tries() const { return m_tries; }
   uint16_t get_registers_size() const { return m_registers_size; }

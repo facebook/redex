@@ -335,7 +335,7 @@ enum DexOpcodeFormat : uint8_t {
 
 #define MAX_ARG_COUNT (4)
 
-enum DexCodeItemOpcode : uint16_t {
+enum DexOpcode : uint16_t {
 #define OP(op, code, ...) OPCODE_ ## op = code,
 OPS
 #undef OP
@@ -344,12 +344,12 @@ OPS
   FOPCODE_FILLED_ARRAY  = 0x0300,
 };
 
-std::string show(DexCodeItemOpcode);
+std::string show(DexOpcode);
 
 class DexIdx;
 class DexOutputIdx;
 
-class DexOpcode : public Gatherable {
+class DexInstruction : public Gatherable {
  protected:
   bool m_has_strings{false};
   bool m_has_types{false};
@@ -368,7 +368,7 @@ class DexOpcode : public Gatherable {
   // count, we'll have to add a assert here.
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
-  DexOpcode(const uint16_t* opcodes, int count) : Gatherable() {
+  DexInstruction(const uint16_t* opcodes, int count) : Gatherable() {
     m_opcode = *opcodes++;
     m_count = count;
     for (int i = 0; i < count; i++) {
@@ -377,10 +377,10 @@ class DexOpcode : public Gatherable {
   }
 
  public:
-  DexOpcode(uint16_t opcode)
+  DexInstruction(uint16_t opcode)
       : Gatherable(), m_opcode(opcode), m_count(count_from_opcode()) {}
 
-  DexOpcode(uint16_t opcode, uint16_t arg) : DexOpcode(opcode) {
+  DexInstruction(uint16_t opcode, uint16_t arg) : DexInstruction(opcode) {
     assert(m_count == 1);
     m_arg[0] = arg;
   }
@@ -397,10 +397,10 @@ class DexOpcode : public Gatherable {
   }
 
  public:
-  static DexOpcode* make_opcode(DexIdx* idx, const uint16_t*& insns);
+  static DexInstruction* make_instruction(DexIdx* idx, const uint16_t*& insns);
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
   virtual uint16_t size() const;
-  virtual DexOpcode* clone() const { return new DexOpcode(*this); }
+  virtual DexInstruction* clone() const { return new DexInstruction(*this); }
 
   bool has_strings() const { return m_has_strings; }
   bool has_types() const { return m_has_types; }
@@ -431,7 +431,7 @@ class DexOpcode : public Gatherable {
   /*
    * Accessors for logical parts of the instruction.
    */
-  DexCodeItemOpcode opcode() const;
+  DexOpcode opcode() const;
   uint16_t dest() const;
   uint16_t src(int i) const;
   uint16_t arg_word_count() const;
@@ -443,14 +443,14 @@ class DexOpcode : public Gatherable {
   /*
    * Setters for logical parts of the instruction.
    */
-  DexOpcode* set_opcode(DexCodeItemOpcode);
-  DexOpcode* set_dest(uint16_t vreg);
-  DexOpcode* set_src(int i, uint16_t vreg);
-  DexOpcode* set_arg_word_count(uint16_t count);
-  DexOpcode* set_range_base(uint16_t base);
-  DexOpcode* set_range_size(uint16_t size);
-  DexOpcode* set_literal(int64_t literal);
-  DexOpcode* set_offset(int32_t offset);
+  DexInstruction* set_opcode(DexOpcode);
+  DexInstruction* set_dest(uint16_t vreg);
+  DexInstruction* set_src(int i, uint16_t vreg);
+  DexInstruction* set_arg_word_count(uint16_t count);
+  DexInstruction* set_range_base(uint16_t base);
+  DexInstruction* set_range_size(uint16_t size);
+  DexInstruction* set_literal(int64_t literal);
+  DexInstruction* set_offset(int32_t offset);
 
   /*
    * The number of shorts needed to encode the args.
@@ -459,13 +459,13 @@ class DexOpcode : public Gatherable {
 
   void verify_encoding() const;
 
-  friend std::string show(const DexOpcode* op);
+  friend std::string show(const DexInstruction* op);
 
  private:
   unsigned count_from_opcode() const;
 };
 
-class DexOpcodeString : public DexOpcode {
+class DexOpcodeString : public DexInstruction {
  private:
   DexString* m_string;
 
@@ -475,7 +475,7 @@ class DexOpcodeString : public DexOpcode {
   virtual void gather_strings(std::vector<DexString*>& lstring);
   virtual DexOpcodeString* clone() const { return new DexOpcodeString(*this); }
 
-  DexOpcodeString(uint16_t opcode, DexString* str) : DexOpcode(opcode) {
+  DexOpcodeString(uint16_t opcode, DexString* str) : DexInstruction(opcode) {
     m_string = str;
     m_has_strings = true;
   }
@@ -485,7 +485,7 @@ class DexOpcodeString : public DexOpcode {
   bool jumbo() const { return opcode() == OPCODE_CONST_STRING_JUMBO; }
 };
 
-class DexOpcodeType : public DexOpcode {
+class DexOpcodeType : public DexInstruction {
  private:
   DexType* m_type;
 
@@ -495,13 +495,13 @@ class DexOpcodeType : public DexOpcode {
   virtual void gather_types(std::vector<DexType*>& ltype);
   virtual DexOpcodeType* clone() const { return new DexOpcodeType(*this); }
 
-  DexOpcodeType(uint16_t opcode, DexType* type) : DexOpcode(opcode) {
+  DexOpcodeType(uint16_t opcode, DexType* type) : DexInstruction(opcode) {
     m_type = type;
     m_has_types = true;
   }
 
   DexOpcodeType(uint16_t opcode, DexType* type, uint16_t arg)
-      : DexOpcode(opcode, arg) {
+      : DexInstruction(opcode, arg) {
     m_type = type;
     m_has_types = true;
   }
@@ -511,7 +511,7 @@ class DexOpcodeType : public DexOpcode {
   void rewrite_type(DexType* type) { m_type = type; }
 };
 
-class DexOpcodeField : public DexOpcode {
+class DexOpcodeField : public DexInstruction {
  private:
   DexField* m_field;
 
@@ -521,7 +521,7 @@ class DexOpcodeField : public DexOpcode {
   virtual void gather_fields(std::vector<DexField*>& lfield);
   virtual DexOpcodeField* clone() const { return new DexOpcodeField(*this); }
 
-  DexOpcodeField(uint16_t opcode, DexField* field) : DexOpcode(opcode) {
+  DexOpcodeField(uint16_t opcode, DexField* field) : DexInstruction(opcode) {
     m_field = field;
     m_has_fields = true;
   }
@@ -530,7 +530,7 @@ class DexOpcodeField : public DexOpcode {
   void rewrite_field(DexField* field) { m_field = field; }
 };
 
-class DexOpcodeMethod : public DexOpcode {
+class DexOpcodeMethod : public DexInstruction {
  private:
   DexMethod* m_method;
 
@@ -541,7 +541,7 @@ class DexOpcodeMethod : public DexOpcode {
   virtual DexOpcodeMethod* clone() const { return new DexOpcodeMethod(*this); }
 
   DexOpcodeMethod(uint16_t opcode, DexMethod* meth, uint16_t arg)
-      : DexOpcode(opcode, arg) {
+      : DexInstruction(opcode, arg) {
     m_method = meth;
     m_has_methods = true;
   }
@@ -551,7 +551,7 @@ class DexOpcodeMethod : public DexOpcode {
   void rewrite_method(DexMethod* method) { m_method = method; }
 };
 
-class DexOpcodeData : public DexOpcode {
+class DexOpcodeData : public DexInstruction {
  private:
   uint16_t m_data_count;
   uint16_t* m_data;
@@ -562,7 +562,7 @@ class DexOpcodeData : public DexOpcode {
   virtual DexOpcodeData* clone() const { return new DexOpcodeData(*this); }
 
   DexOpcodeData(const uint16_t* opcodes, int count)
-      : DexOpcode(opcodes, 0),
+      : DexInstruction(opcodes, 0),
         m_data_count(count),
         m_data(new uint16_t[count]) {
     opcodes++;
@@ -570,14 +570,14 @@ class DexOpcodeData : public DexOpcode {
   }
 
   DexOpcodeData(const DexOpcodeData& op)
-      : DexOpcode(op),
+      : DexInstruction(op),
         m_data_count(op.m_data_count),
         m_data(new uint16_t[m_data_count]) {
     memcpy(m_data, op.m_data, m_data_count * sizeof(uint16_t));
   }
 
   DexOpcodeData& operator=(DexOpcodeData op) {
-    DexOpcode::operator=(op);
+    DexInstruction::operator=(op);
     std::swap(m_data, op.m_data);
     return *this;
   }
@@ -590,62 +590,62 @@ class DexOpcodeData : public DexOpcode {
 /**
  * Return a copy of the instruction passed in.
  */
-DexOpcode* copy_insn(DexOpcode* insn);
+DexInstruction* copy_insn(DexInstruction* insn);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Convenient predicates for opcode classes.
 
-inline bool is_iget(DexCodeItemOpcode op) {
+inline bool is_iget(DexOpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IGET_SHORT;
 }
 
-inline bool is_ifield_op(DexCodeItemOpcode op) {
+inline bool is_ifield_op(DexOpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IPUT_SHORT;
 }
 
-inline bool is_sget(DexCodeItemOpcode op) {
+inline bool is_sget(DexOpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SGET_SHORT;
 }
 
-inline bool is_sput(DexCodeItemOpcode op) {
+inline bool is_sput(DexOpcode op) {
   return op >= OPCODE_SPUT && op <= OPCODE_SPUT_SHORT;
 }
 
-inline bool is_sfield_op(DexCodeItemOpcode op) {
+inline bool is_sfield_op(DexOpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
 }
 
-inline bool is_move(DexCodeItemOpcode op) {
+inline bool is_move(DexOpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT_16;
 }
 
-inline bool is_return(DexCodeItemOpcode op) {
+inline bool is_return(DexOpcode op) {
   return op >= OPCODE_RETURN_VOID && op <= OPCODE_RETURN_OBJECT;
 }
 
-inline bool is_return_value(DexCodeItemOpcode op) {
+inline bool is_return_value(DexOpcode op) {
   // OPCODE_RETURN_VOID is deliberately excluded because void isn't a "value".
   return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
 }
 
-inline bool is_move_result(DexCodeItemOpcode op) {
+inline bool is_move_result(DexOpcode op) {
   return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
 }
 
-inline bool is_invoke(DexCodeItemOpcode op) {
+inline bool is_invoke(DexOpcode op) {
   return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE_RANGE;
 }
 
-inline bool is_invoke_range(DexCodeItemOpcode op) {
+inline bool is_invoke_range(DexOpcode op) {
   return op >= OPCODE_INVOKE_VIRTUAL_RANGE &&
       op <= OPCODE_INVOKE_INTERFACE_RANGE;
 }
 
-inline bool is_filled_new_array(DexCodeItemOpcode op) {
+inline bool is_filled_new_array(DexOpcode op) {
   return op == OPCODE_FILLED_NEW_ARRAY || op == OPCODE_FILLED_NEW_ARRAY_RANGE;
 }
 
-inline bool is_branch(DexCodeItemOpcode op) {
+inline bool is_branch(DexOpcode op) {
   switch (op) {
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
@@ -671,7 +671,7 @@ inline bool is_branch(DexCodeItemOpcode op) {
   }
 }
 
-inline bool is_goto(DexCodeItemOpcode op) {
+inline bool is_goto(DexOpcode op) {
   switch (op) {
   case OPCODE_GOTO_32:
   case OPCODE_GOTO_16:
@@ -682,7 +682,7 @@ inline bool is_goto(DexCodeItemOpcode op) {
   }
 }
 
-inline bool is_conditional_branch(DexCodeItemOpcode op) {
+inline bool is_conditional_branch(DexOpcode op) {
   switch (op) {
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
@@ -702,11 +702,11 @@ inline bool is_conditional_branch(DexCodeItemOpcode op) {
   }
 }
 
-inline bool is_multi_branch(DexCodeItemOpcode op) {
+inline bool is_multi_branch(DexOpcode op) {
   return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
 }
 
-inline bool may_throw(DexCodeItemOpcode op) {
+inline bool may_throw(DexOpcode op) {
   switch (op) {
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
@@ -762,6 +762,6 @@ inline bool may_throw(DexCodeItemOpcode op) {
   }
 }
 
-inline bool is_const(DexCodeItemOpcode op) {
+inline bool is_const(DexOpcode op) {
   return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_CLASS;
 }

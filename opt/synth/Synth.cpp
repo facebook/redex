@@ -21,7 +21,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexOpcode.h"
+#include "DexInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Resolver.h"
@@ -310,7 +310,7 @@ WrapperMethods analyze(const std::vector<DexClass*>& classes,
   return ssms;
 }
 
-DexOpcode* make_iget(DexField* field, uint8_t dest, uint8_t src) {
+DexInstruction* make_iget(DexField* field, uint8_t dest, uint8_t src) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:
@@ -340,7 +340,7 @@ DexOpcode* make_iget(DexField* field, uint8_t dest, uint8_t src) {
   return (new DexOpcodeField(opcode, field))->set_dest(dest)->set_src(0, src);
 }
 
-DexOpcode* make_sget(DexField* field, uint8_t dest) {
+DexInstruction* make_sget(DexField* field, uint8_t dest) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:
@@ -371,7 +371,7 @@ DexOpcode* make_sget(DexField* field, uint8_t dest) {
 
 bool replace_getter_wrapper(MethodTransformer& transform,
                             DexOpcodeMethod* meth_insn,
-                            DexOpcode* move_result,
+                            DexInstruction* move_result,
                             DexField* field) {
   TRACE(SYNT, 2, "Optimizing getter wrapper call: %s\n", SHOW(meth_insn));
   assert(field->is_concrete());
@@ -524,7 +524,7 @@ void replace_ctor_wrapper(MethodTransformer& transform,
 void replace_wrappers(DexMethod* caller_method,
                       DexCode* code,
                       WrapperMethods& ssms) {
-  std::vector<std::tuple<DexOpcodeMethod*, DexOpcode*, DexField*>> getter_calls;
+  std::vector<std::tuple<DexOpcodeMethod*, DexInstruction*, DexField*>> getter_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapper_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapped_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> ctor_calls;
@@ -784,7 +784,7 @@ void transform(const std::vector<DexClass*>& classes,
   walk_opcodes(
       classes,
       [](DexMethod*) { return true; },
-      [&](DexMethod* meth, DexOpcode* insn) {
+      [&](DexMethod* meth, DexInstruction* insn) {
         auto opcode = insn->opcode();
         if (opcode != OPCODE_INVOKE_DIRECT &&
             opcode != OPCODE_INVOKE_DIRECT_RANGE) {
