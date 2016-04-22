@@ -376,7 +376,9 @@ bool can_make_references_public(const DexMethod* from_meth) {
       if (!fref) return false;
       auto fclass = type_class(fref->get_class());
       if (!fclass) return false;
-      if (fclass->is_external() && !is_public(fclass)) return false;
+      if (fref->is_external() && (!is_public(fref) || !is_public(fclass))) {
+        return false;
+      }
     } else if (inst->has_methods()) {
       auto methodinst = static_cast<DexOpcodeMethod*>(inst);
       auto mref = resolve_method(
@@ -385,7 +387,9 @@ bool can_make_references_public(const DexMethod* from_meth) {
       if (!mref) return false;
       auto mclass = type_class(mref->get_class());
       if (!mclass) return false;
-      if (mclass->is_external() && !is_public(mclass)) return false;
+      if (mref->is_external() && (!is_public(mref) || !is_public(mclass))) {
+        return false;
+      }
     }
   }
   return true;
@@ -403,13 +407,15 @@ void make_references_public(const DexMethod* from_meth) {
       auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
       auto tclass = type_class(tref);
       always_assert(tclass);
-      set_public(tclass);
+      if (!tclass->is_external()) set_public(tclass);
     } else if (inst->has_fields()) {
       auto fref = resolve_field(static_cast<DexOpcodeField*>(inst)->field());
       auto fclass = type_class(fref->get_class());
       always_assert(fclass);
-      set_public(fclass);
-      set_public(fref);
+      if (fref->is_concrete()) {
+        set_public(fclass);
+        set_public(fref);
+      }
     } else if (inst->has_methods()) {
       auto methodinst = static_cast<DexOpcodeMethod*>(inst);
       auto mref = resolve_method(
@@ -418,8 +424,10 @@ void make_references_public(const DexMethod* from_meth) {
       );
       auto mclass = type_class(mref->get_class());
       always_assert(mclass);
-      set_public(mclass);
-      set_public(mref);
+      if (mref->is_concrete()) {
+        set_public(mclass);
+        set_public(mref);
+      }
     }
   }
 }

@@ -14,8 +14,8 @@ inline bool match(const DexString* name,
 DexMethod* check_vmethods(const DexString* name,
                           const DexProto* proto,
                           const DexType* type) {
-  const auto cls = type_class(type);
-  for (auto& method : cls->get_vmethods()) {
+  const DexClass* cls = type_class(type);
+  for (const auto& method : cls->get_vmethods()) {
     if (match(name, proto, method)) return method;
   }
   return nullptr;
@@ -24,8 +24,8 @@ DexMethod* check_vmethods(const DexString* name,
 DexMethod* check_dmethods(const DexString* name,
                           const DexProto* proto,
                           const DexType* type) {
-  const auto cls = type_class(type);
-  for (auto& method : cls->get_dmethods()) {
+  const DexClass* cls = type_class(type);
+  for (const auto& method : cls->get_dmethods()) {
     if (match(name, proto, method)) return method;
   }
   return nullptr;
@@ -45,7 +45,7 @@ DexMethod* resolve_intf_methodref(DexType* intf, DexMethod* meth) {
     return nullptr;
   };
 
-  const auto intf_cls = type_class(intf);
+  const DexClass* intf_cls = type_class(intf);
   if (intf_cls == nullptr) return nullptr;
   auto method = find_method(intf_cls);
   if (method) return method;

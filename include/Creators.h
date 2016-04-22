@@ -455,6 +455,8 @@ struct MethodCreator {
  */
 struct ClassCreator {
   explicit ClassCreator(DexType* type) {
+    always_assert_log(type_class(type) == nullptr,
+        "class already exists for %s\n", SHOW(type));
     m_cls = new DexClass();
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;

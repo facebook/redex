@@ -741,6 +741,9 @@ bool load_jar_file(const char *location) {
   }
   bool rv = process_jar(mapping, size);
   munmap(mapping, size);
+  if (!rv) {
+    fprintf(stderr, "Error processing jar: %s\n", location);
+  }
   return rv;
 }
 

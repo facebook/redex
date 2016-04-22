@@ -200,7 +200,9 @@ class DexType {
   friend std::string show(const DexType*);
 
   template <typename V>
-  static void visit_all_dextype(V v);
+  static void visit_all_dextype(V v) {
+    g_redex->visit_all_dextype(v);
+  }
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -267,11 +269,18 @@ class DexField {
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
 
-  void set_access(DexAccessFlags access) { assert(!m_external); m_access = access; }
+  void set_access(DexAccessFlags access) {
+    always_assert_log(!m_external,
+        "Unexpected external field %s\n", SHOW(this));
+    m_access = access;
+  }
+
   void set_external() {
-    always_assert(!m_concrete);
+    always_assert_log(!m_concrete,
+        "Unexpected concrete field %s\n", SHOW(this));
     m_external = true;
   }
+
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
   void clear_annotations() {
     delete m_anno;
@@ -604,10 +613,21 @@ class DexMethod {
     return &m_param_anno;
   }
 
-  void set_access(DexAccessFlags access) { assert(!m_external); m_access = access; }
-  void set_virtual(bool is_virtual) { assert(!m_external); m_virtual = is_virtual; }
+  void set_access(DexAccessFlags access) {
+    always_assert_log(!m_external,
+        "Unexpected external method %s\n", SHOW(this));
+    m_access = access;
+  }
+
+  void set_virtual(bool is_virtual) {
+    always_assert_log(!m_external,
+        "Unexpected external method %s\n", SHOW(this));
+    m_virtual = is_virtual;
+  }
+
   void set_external() {
-    always_assert(!m_concrete);
+    always_assert_log(!m_concrete,
+        "Unexpected concrete method %s\n", SHOW(this));
     m_external = true;
   }
   void set_code(DexCode* code) { m_code = code; }
@@ -696,9 +716,17 @@ class DexClass {
 
  public:
   const std::list<DexMethod*>& get_dmethods() const { return m_dmethods; }
-  std::list<DexMethod*>& get_dmethods() { assert(!m_external); return m_dmethods; }
+  std::list<DexMethod*>& get_dmethods() {
+    always_assert_log(!m_external,
+        "Unexpected external class %s\n", SHOW(m_self));
+    return m_dmethods;
+  }
   const std::list<DexMethod*>& get_vmethods() const { return m_vmethods; }
-  std::list<DexMethod*>& get_vmethods() { assert(!m_external); return m_vmethods; }
+  std::list<DexMethod*>& get_vmethods() {
+    always_assert_log(!m_external,
+        "Unexpected external class %s\n", SHOW(m_self));
+    return m_vmethods;
+  }
   const std::list<DexField*>& get_sfields() const { return m_sfields; }
   std::list<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
   const std::list<DexField*>& get_ifields() const { return m_ifields; }
@@ -714,10 +742,20 @@ class DexClass {
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();
   DexAnnotationSet* get_anno_set() const { return m_anno; }
-
-  void set_access(DexAccessFlags access) { assert(!m_external); m_access_flags = access; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
-  void set_interfaces(DexTypeList* intfs) { assert(!m_external); m_interfaces = intfs; }
+
+  void set_access(DexAccessFlags access) {
+    always_assert_log(!m_external,
+        "Unexpected external class %s\n", SHOW(m_self));
+    m_access_flags = access;
+  }
+
+  void set_interfaces(DexTypeList* intfs) {
+    always_assert_log(!m_external,
+        "Unexpected external class %s\n", SHOW(m_self));
+    m_interfaces = intfs;
+  }
+
   void clear_annotations() {
     delete m_anno;
     m_anno = nullptr;
