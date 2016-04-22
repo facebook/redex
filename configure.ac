@@ -21,6 +21,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_PATH_PYTHON([3.0], [], [AC_MSG_ERROR([Redex requires python3])])
 
 # Checks for libraries.
+AX_PTHREAD
 AX_BOOST_BASE([1.54.0], [], [AC_MSG_ERROR(
               [Please install boost >= 1.54 (including filesystem)])])
 AX_BOOST_FILESYSTEM
