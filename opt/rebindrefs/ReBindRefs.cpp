@@ -83,24 +83,41 @@ bool is_object_getClass(DexMethod* mref) {
 }
 
 /**
- * Level of "compression" for rebinding.
- * The compression level relates exclusively to virtual invocation.
- * NORMAL:  virtual invocation are not resolved and left as they are
- * MEDIUM:  virtual invocation are resolved to the first definition up the
- *          hierarchy
- * HIGH:    virtual invocation are resolved to the top most definition up
- *          the hierarchy. That is, to the place where the method is first
- *          introduced
+ * Java allows relaxing visibility down the hierarchy chain so while
+ * rebinding we don't want to bind to a method up the hierarchy that would
+ * not be visible.
+ * Walk up the hierarchy chain as long as the method is public.
  */
-enum RebindLevel {
-  NORMAL = 0,
-  MEDIUM = 1,
-  HIGH = 2
-};
+DexMethod* bind_to_visible_ancestor(
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
+  DexMethod* top_impl = nullptr;
+  while (cls) {
+    for (const auto& cls_meth : cls->get_vmethods()) {
+      if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
+        auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
+        auto curr_cls_vis = cls->get_access() & VISIBILITY_MASK;
+        if (curr_vis != ACC_PUBLIC || curr_cls_vis != ACC_PUBLIC) {
+          return top_impl != nullptr ? top_impl : cls_meth;
+        }
+        if (top_impl != nullptr) {
+          auto top_vis = top_impl->get_access() & VISIBILITY_MASK;
+          auto top_cls_vis = type_class(top_impl->get_class())->get_access()
+              & VISIBILITY_MASK;
+          if (top_vis != curr_vis || top_cls_vis != curr_cls_vis) {
+            return top_impl;
+          }
+        }
+        top_impl = cls_meth;
+        break;
+      }
+    }
+    cls = type_class(cls->get_super_class());
+  }
+  return top_impl;
+}
 
 struct Rebinder {
-  Rebinder(Scope& scope, RebindLevel level)
-      : m_scope(scope), m_level(level) {}
+  Rebinder(Scope& scope) : m_scope(scope) {}
 
   void rewrite_refs() {
     walk_opcodes(
@@ -109,26 +126,17 @@ struct Rebinder {
       [&](DexMethod* m, DexInstruction* insn) {
         switch (insn->opcode()) {
           case OPCODE_INVOKE_INTERFACE:
-          case OPCODE_INVOKE_INTERFACE_RANGE: {
-            const auto mop = static_cast<DexOpcodeMethod*>(insn);
-            const auto mref = mop->get_method();
-            rebind_method_opcode(mop, mref, resolve_intf_methodref(mref));
+          case OPCODE_INVOKE_INTERFACE_RANGE:
+            rebind_method(insn, InvokeType::Interface);
             break;
-          }
           case OPCODE_INVOKE_VIRTUAL:
           case OPCODE_INVOKE_VIRTUAL_RANGE:
-            if (m_level != RebindLevel::NORMAL) {
-              rebind_virtual_method(insn);
-            }
+            rebind_method(insn, InvokeType::Virtual);
             break;
           case OPCODE_INVOKE_STATIC:
-          case OPCODE_INVOKE_STATIC_RANGE: {
-            const auto mop = static_cast<DexOpcodeMethod*>(insn);
-            const auto mref = mop->get_method();
-            rebind_method_opcode(mop, mref,
-                resolve_method(mref, MethodSearch::Static));
+          case OPCODE_INVOKE_STATIC_RANGE:
+            rebind_method(insn, InvokeType::Static);
             break;
-          }
           case OPCODE_SGET:
           case OPCODE_SGET_WIDE:
           case OPCODE_SGET_OBJECT:
@@ -157,14 +165,21 @@ struct Rebinder {
     m_frefs.print("Field refs");
     m_mrefs.print("Method refs");
     m_array_clone_refs.print("Array clone");
+    m_equals_refs.print("equals");
+    m_hashCode_refs.print("hashCode");
+    m_getClass_refs.print("getClass");
   }
 
  private:
+  enum class InvokeType {
+    Static,
+    Virtual,
+    Interface,
+  };
+
   template<typename T>
   struct RefStats {
     int count = 0;
-    std::unordered_set<DexClass*> non_public;
-    std::unordered_set<DexClass*> made_public;
     std::unordered_set<T> in;
     std::unordered_set<T> out;
 
@@ -174,55 +189,66 @@ struct Rebinder {
       out.emplace(tout);
     }
 
+    void insert(T tin) {
+      insert(tin, T());
+    }
+
     void print(const char* tag) {
       TRACE(BIND, 1,
-          "%11s [refs total count: %6d, unique old refs: %6lu, "
-          "unique new refs: %6lu, non public classes: %6lu, "
-          "classes made public: %6lu]\n",
-          tag, count, in.size(), out.size(),
-          non_public.size(), made_public.size());
+              "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]\n",
+              tag, count, in.size(), out.size());
     }
   };
 
-  void rebind_virtual_method(DexInstruction* insn) {
-    const auto mop = static_cast<DexOpcodeMethod*>(insn);
+  void rebind_method(DexInstruction* opcode, InvokeType invoke_type) {
+    const auto mop = static_cast<DexOpcodeMethod*>(opcode);
     const auto mref = mop->get_method();
-    auto mtype = mref->get_class();
-    if (is_array_clone(mref, mtype)) {
-      rebind_method_opcode(mop, mref, rebind_array_clone(mref));
-      return;
+    switch (invoke_type) {
+      case InvokeType::Static:
+        rebind_method_opcode(
+            mop, mref, resolve_method(mref, MethodSearch::Static));
+        return;
+      case InvokeType::Interface:
+        rebind_method_opcode(mop, mref, resolve_intf_methodref(mref));
+        return;
+      case InvokeType::Virtual: {
+        auto mtype = mref->get_class();
+        if (is_array_clone(mref, mtype)) {
+          rebind_method_opcode(mop, mref, rebind_array_clone(mref));
+          return;
+        }
+        // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
+        // and possibly any smart handling of String
+        static auto str = DexType::make_type("Ljava/lang/String;");
+        if (mtype == str) return;
+        auto real_ref = rebind_object_methods(mref);
+        if (real_ref) {
+          rebind_method_opcode(mop, mref, real_ref);
+          return;
+        }
+        auto cls = type_class(mtype);
+        real_ref = bind_to_visible_ancestor(
+            cls, mref->get_name(), mref->get_proto());
+        rebind_method_opcode(mop, mref, real_ref);
+        return;
+      }
     }
-
-    // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
-    // and possibly any smart handling of String
-    static auto str = DexType::make_type("Ljava/lang/String;");
-    if (mtype == str) return;
-
-    auto mdef = find_visible_ancestor(mref);
-    rebind_method_opcode(mop, mref, mdef);
-    return;
   }
 
   void rebind_method_opcode(
       DexOpcodeMethod* mop,
       DexMethod* mref,
-      DexMethod* mdef) {
-    if (mdef == nullptr || mdef == mref) {
+      DexMethod* real_ref) {
+    if (!real_ref || real_ref == mref || real_ref->is_external()) {
       return;
     }
-    auto cls = type_class(mdef->get_class());
+    TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(mref), SHOW(real_ref));
+    m_mrefs.insert(mref, real_ref);
+    mop->rewrite_method(real_ref);
+    auto cls = type_class(real_ref->get_class());
     if (cls != nullptr && !is_public(cls)) {
-      if (cls->is_external()) {
-        m_mrefs.non_public.insert(cls);
-        return;
-      }
-      m_mrefs.made_public.insert(cls);
       set_public(cls);
     }
-
-    TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(mref), SHOW(mdef));
-    m_mrefs.insert(mref, mdef);
-    mop->rewrite_method(mdef);
   }
 
   bool is_array_clone(DexMethod* mref, DexType* mtype) {
@@ -233,17 +259,20 @@ struct Rebinder {
   }
 
   DexMethod* rebind_array_clone(DexMethod* mref) {
-    DexMethod* real_ref = object_array_clone();
-    m_array_clone_refs.insert(mref, real_ref);
-    return real_ref;
+   DexMethod* real_ref = object_array_clone();
+   m_array_clone_refs.insert(mref, real_ref);
+   return real_ref;
   }
 
-  DexMethod* check_object_methods(DexMethod* mref) {
+  DexMethod* rebind_object_methods(DexMethod* mref) {
     if (is_object_equals(mref)) {
+      m_equals_refs.insert(mref);
       return object_equals();
     } else if (is_object_hashCode(mref)) {
+      m_hashCode_refs.insert(mref);
       return object_hashCode();
     } else if (is_object_getClass(mref)) {
+      m_getClass_refs.insert(mref);
       return object_getClass();
     }
     return nullptr;
@@ -252,110 +281,37 @@ struct Rebinder {
   void rebind_field(DexInstruction* insn, FieldSearch field_search) {
     const auto fop = static_cast<DexOpcodeField*>(insn);
     const auto fref = fop->field();
-    const auto fdef = resolve_field(fref, field_search);
-    if (fdef != nullptr && fdef != fref) {
-      auto cls = type_class(fdef->get_class());
-      if (!is_public(cls)) {
-        if (cls->is_external()) {
-          m_frefs.non_public.insert(cls);
-          return;
-        }
-        m_frefs.made_public.insert(cls);
-        set_public(cls);
-      }
+    const auto real_ref = resolve_field(fref, field_search);
+    if (real_ref && real_ref != fref) {
       TRACE(BIND,
             2,
             "Rebinding %s\n\t=>%s\n",
             SHOW(fref),
-            SHOW(fdef));
-      fop->rewrite_field(fdef);
-      m_frefs.insert(fref, fdef);
+            SHOW(real_ref));
+      fop->rewrite_field(real_ref);
+      auto cls = type_class(real_ref->get_class());
+      always_assert(cls != nullptr);
+      if(!is_public(cls))
+        set_public(cls);
+      m_frefs.insert(fref, real_ref);
     }
-  }
-
-  /**
-   * Java allows relaxing visibility down the hierarchy chain so while
-   * rebinding we don't want to bind to a method up the hierarchy that would
-   * not be visible.
-   * Walk up the hierarchy chain as long as the method is public.
-   * If the RebindLevel is MEDIUM rebind to the first definition.
-   */
-  DexMethod* find_visible_ancestor(DexMethod* mref) {
-    const auto mtype = mref->get_class();
-    const auto name = mref->get_name();
-    const auto proto = mref->get_proto();
-    const DexClass* cls = type_class(mtype);
-    DexMethod* super_def = nullptr;
-    while (cls) {
-      for (const auto& cls_meth : cls->get_vmethods()) {
-        if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
-          auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
-          auto curr_cls_vis = cls->get_access() & VISIBILITY_MASK;
-          if (curr_vis != ACC_PUBLIC || curr_cls_vis != ACC_PUBLIC) {
-            return super_def != nullptr ? super_def : cls_meth;
-          }
-          if (super_def != nullptr) {
-            if (m_level == RebindLevel::MEDIUM) {
-              return super_def;
-            }
-            auto top_vis = super_def->get_access() & VISIBILITY_MASK;
-            auto top_cls_vis = type_class(super_def->get_class())->get_access()
-                & VISIBILITY_MASK;
-            if (top_vis != curr_vis || top_cls_vis != curr_cls_vis) {
-              return super_def;
-            }
-          }
-          super_def = cls_meth;
-          break;
-        }
-      }
-      cls = type_class(cls->get_super_class());
-    }
-    // level MEDIUM and no super_def found is a bit of a stretch because
-    // rebinding to java.lang.Object may skip some definition between
-    // java.lang.Object the class that was not known
-    if (m_level == RebindLevel::HIGH ||
-        (m_level == RebindLevel::MEDIUM && super_def == nullptr)) {
-      auto mdef = check_object_methods(mref);
-      if (mdef != nullptr) {
-        return mdef;
-      }
-    }
-    return super_def;
   }
 
   Scope& m_scope;
-  RebindLevel m_level;
 
   RefStats<DexField*> m_frefs;
   RefStats<DexMethod*> m_mrefs;
   RefStats<DexMethod*> m_array_clone_refs;
+  RefStats<DexMethod*> m_equals_refs;
+  RefStats<DexMethod*> m_hashCode_refs;
+  RefStats<DexMethod*> m_getClass_refs;
 };
-
-RebindLevel get_rebind_level(const folly::dynamic& config) {
-  if (config.isObject()) {
-    auto it = config.find("level");
-    if (it != config.items().end()) {
-      int l = it->second.asInt();
-      switch (l) {
-      case 0:
-        return RebindLevel::NORMAL;
-      case 1:
-        return RebindLevel::MEDIUM;
-      case 2:
-        return RebindLevel::HIGH;
-      }
-    }
-  }
-  return RebindLevel::NORMAL;
-}
 
 }
 
 void ReBindRefsPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   Scope scope = build_class_scope(dexen);
-  auto level = get_rebind_level(m_config);
-  Rebinder rb(scope, level);
+  Rebinder rb(scope);
   rb.rewrite_refs();
   rb.print_stats();
 }
