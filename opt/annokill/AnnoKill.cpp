@@ -182,13 +182,13 @@ void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   bool remove_build = false;
   bool remove_system = false;
   if (m_config["remove_all_build_annos"] != nullptr) {
-    auto build_str = m_config["remove_all_build_annos"].asString().toStdString();
+    auto build_str = m_config["remove_all_build_annos"].asString();
     if (build_str == "1") {
       remove_build = true;
     }
   }
   if (m_config["remove_all_system_annos"] != nullptr) {
-    auto system_str = m_config["remove_all_system_annos"].asString().toStdString();
+    auto system_str = m_config["remove_all_system_annos"].asString();
     if (system_str == "1") {
       remove_system = true;
     }

@@ -460,7 +460,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
 
   bool static_prune = false;
   if (m_config["static_prune"] != nullptr) {
-    auto prune_str = m_config["static_prune"].asString().toStdString();
+    auto prune_str = m_config["static_prune"].asString();
     if (prune_str == "1") {
       static_prune = true;
     }
@@ -468,7 +468,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
 
   emit_canaries = false;
   if (m_config["emit_canaries"] != nullptr) {
-    auto prune_str = m_config["emit_canaries"].asString().toStdString();
+    auto prune_str = m_config["emit_canaries"].asString();
     if (prune_str == "1") {
       emit_canaries = true;
     }

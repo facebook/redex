@@ -247,13 +247,13 @@ void init_permanently_reachable_classes(
 
   auto config_apk_dir = config.find("apk_dir");
   if (config_apk_dir != config.items().end()) {
-    apk_dir = toStdString(config_apk_dir->second.asString());
+    apk_dir = config_apk_dir->second.asString();
   }
 
   auto config_reflected_package_names = config.find("reflected_packages");
   if (config_reflected_package_names != config.items().end()) {
     for (auto config_pkg_name : config_reflected_package_names->second) {
-      std::string pkg_name = toStdString(config_pkg_name.asString());
+      std::string pkg_name = config_pkg_name.asString();
       reflected_package_names.push_back(pkg_name);
     }
   }
@@ -262,7 +262,7 @@ void init_permanently_reachable_classes(
   auto config_keep_annotations = config.find("keep_annotations");
   if (config_keep_annotations != config.items().end()) {
     for (auto const& config_anno_name : config_keep_annotations->second) {
-      std::string anno_name = toStdString(config_anno_name.asString());
+      std::string anno_name = config_anno_name.asString();
       DexType* anno = DexType::get_type(anno_name.c_str());
       if (anno) keep_annotations.insert(anno);
     }
@@ -276,7 +276,7 @@ void init_permanently_reachable_classes(
   auto config_keep_packages = config.find("keep_packages");
   if (config_keep_packages != config.items().end()) {
     for (auto const& config_pkg : config_keep_packages->second) {
-      auto pkg_name = toStdString(config_pkg.asString());
+      auto pkg_name = config_pkg.asString();
       keep_pkgs.push_back(pkg_name);
     }
   }
