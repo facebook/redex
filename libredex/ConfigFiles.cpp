@@ -18,16 +18,16 @@
 
 ConfigFiles::ConfigFiles(const folly::dynamic& config) :
     m_proguard_map(
-        config.getDefault("proguard_map", "").asString()),
+      folly::toStdString(config.getDefault("proguard_map", "").asString())),
     m_coldstart_class_filename(
-        config.getDefault("coldstart_classes", "").asString()),
+      folly::toStdString(config.getDefault("coldstart_classes", "").asString())),
     m_coldstart_method_filename(
-        config.getDefault("coldstart_methods", "").asString())
+      folly::toStdString(config.getDefault("coldstart_methods", "").asString()))
 {
   auto no_optimizations_anno = config.find("no_optimizations_annotations");
   if (no_optimizations_anno != config.items().end()) {
     for (auto const& config_anno_name : no_optimizations_anno->second) {
-      std::string anno_name = config_anno_name.asString();
+      std::string anno_name = config_anno_name.c_str();
       DexType* anno = DexType::get_type(anno_name.c_str());
       if (anno) m_no_optimizations_annos.insert(anno);
     }
