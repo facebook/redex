@@ -51,6 +51,22 @@ static kill_counters s_kcount;
  */
 static const char* kAnnoDefault = "Ldalvik/annotation/AnnotationDefault;";
 
+std::unordered_set<DexType*> get_blacklist(const folly::dynamic& config) {
+  std::unordered_set<DexType*> blacklist;
+  try {
+    for (auto const& config_blacklist : config["blacklist"]) {
+      DexType* entry = DexType::get_type(config_blacklist.c_str());
+      if (entry) {
+        TRACE(ANNO, 2, "blacklist class: %s\n", SHOW(entry));
+        blacklist.insert(entry);
+      }
+    }
+  } catch (const std::exception&) {
+    // Swallow exception if the config doesn't have any entries.
+  }
+  return blacklist;
+}
+
 std::unordered_set<DexType*> get_annos(const folly::dynamic& config) {
   std::unordered_set<DexType*> annos;
   try {
@@ -98,18 +114,16 @@ static void cleanup_aset(DexAnnotationSet* aset,
  * explicitly feeding it.  However, the number of cases is very
  * small, so it's not worth doing.
  */
-static const char* kJacksonType =
-    "Lcom/fasterxml/jackson/core/type/TypeReference;";
 void kill_annotations(const std::vector<DexClass*>& classes,
     std::unordered_set<DexType*>& removable_annos,
+    std::unordered_set<DexType*>& blacklist_classes,
     bool remove_build,
     bool remove_system) {
-  static DexType* typeref = DexType::get_type(kJacksonType);
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
     s_kcount.class_asets++;
-    if (clazz->get_super_class() == typeref) {
+    if (blacklist_classes.count(clazz->get_super_class()) > 0) {
       TRACE(ANNO, 3, "Skipping %s\n", show(clazz->get_type()).c_str());
       continue;
     }
@@ -195,7 +209,9 @@ void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   }
 
   auto removable_annos = get_annos(m_config);
-  kill_annotations(scope, removable_annos, remove_build, remove_system);
+  auto blacklist_classes = get_blacklist(m_config);
+  kill_annotations(scope,
+      removable_annos, blacklist_classes, remove_build, remove_system);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
           "Annotations: %d/%d\n",
