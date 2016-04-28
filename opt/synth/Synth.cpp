@@ -529,6 +529,7 @@ void replace_wrappers(DexMethod* caller_method,
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapped_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> ctor_calls;
 
+  TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
   auto& insns = code->get_instructions();
   for (auto it = insns.begin(); it != insns.end(); ++it) {
     auto insn = *it;
@@ -557,7 +558,10 @@ void replace_wrappers(DexMethod* caller_method,
         wrapper_calls.emplace_back(meth_insn, method);
         continue;
       }
-      assert(ssms.wrapped.find(callee) == ssms.wrapped.end());
+      always_assert_log(
+        ssms.wrapped.find(callee) == ssms.wrapped.end(),
+        "caller: %s\ncallee: %s\ninsn: %s\n",
+        SHOW(caller_method), SHOW(callee), SHOW(insn));
 
       ssms.keepers.emplace(callee);
     } else if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
@@ -775,11 +779,23 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
 
 void transform(const std::vector<DexClass*>& classes,
                WrapperMethods& ssms, const SynthConfig& synthConfig) {
-  // remove wrappers
-  walk_code(
-      classes,
-      [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexCode* code) { replace_wrappers(m, code, ssms); });
+  // remove wrappers.  build a vector ahead of time to ensure we only visit each
+  // method once, even if we mutate the class method lists such that we'd hit
+  // something a second time.
+  std::vector<DexMethod*> methods;
+  for (auto const& cls : classes) {
+    for (auto const& dm : cls->get_dmethods()) {
+      methods.emplace_back(dm);
+    }
+    for (auto const& vm : cls->get_vmethods()) {
+      methods.emplace_back(vm);
+    }
+  }
+  for (auto const& m : methods) {
+    if (m->get_code()) {
+      replace_wrappers(m, m->get_code(), ssms);
+    }
+  }
   // check that invokes to promoted static method is correct
   walk_opcodes(
       classes,
