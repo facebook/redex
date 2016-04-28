@@ -153,7 +153,7 @@ match_t<T, std::tuple<> > any() {
 // instead of std::string&
 /** Match any T named thusly */
 template<typename T>
-match_t<T, std::tuple<const std::string&> > named(const std::string& name) {
+match_t<T, std::tuple<const std::string> > named(const std::string& name) {
   return {
     [](const T* t, const std::string& name) {
       return !strcmp(t->get_name()->c_str(), name.c_str());
