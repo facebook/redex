@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+import sys
+
+from os.path import abspath, dirname, isfile, join
+
+redex_path = dirname(abspath(__file__))
+
+while True:
+    if redex_path == '/':
+        raise Exception('Could not find redex.py')
+    if isfile(join(redex_path, 'redex.py')):
+        sys.path.append(redex_path)
+        break
+    redex_path = dirname(redex_path)
+
+import redex
+
+if __name__ == '__main__':
+    args = sys.argv[1:]
+    apk = None
+    options = []
+    for arg in args:
+        if not arg.startswith('--'):
+            apk = arg
+        else:
+            options.append(arg)
+    if apk is None:
+        sys.exit('No apk given')
+
+    apk_dir = redex.make_temp_dir('.apk_dir')
+    dex_dir = redex.make_temp_dir('.dex_dir')
+
+    redex.extract_apk(apk, apk_dir)
+    dex_mode = redex.detect_secondary_dex_mode(apk_dir)
+    dex_mode.unpackage(apk_dir, dex_dir)
+    dexen = redex.dex_glob(dex_dir)
+
+    subprocess.call(['redexdump'] + options + dexen)
