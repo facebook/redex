@@ -544,7 +544,8 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
       SHOW(callee));
   for (auto insn : callee->get_code()->get_instructions()) {
     if (insn->has_fields()) {
-      auto field = static_cast<DexOpcodeField*>(insn)->field();
+      auto fop = static_cast<DexOpcodeField*>(insn);
+      auto field = fop->field();
       field = resolve_field(field, is_sfield_op(insn->opcode())
           ? FieldSearch::Static : FieldSearch::Instance);
       if (field != nullptr && field->is_concrete()) {
@@ -553,11 +554,13 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
             SHOW(field->get_type()));
         set_public(field);
         set_public(type_class(field->get_class()));
+        fop->rewrite_field(field);
       }
       continue;
     }
     if (insn->has_methods()) {
-      auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+      auto mop = static_cast<DexOpcodeMethod*>(insn);
+      auto method = mop->get_method();
       method = resolver(method, opcode_to_search(insn));
       if (method != nullptr && method->is_concrete()) {
         TRACE(MMINL, 6, "changing visibility of %s.%s: %s\n",
@@ -565,6 +568,7 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
             SHOW(method->get_proto()));
         set_public(method);
         set_public(type_class(method->get_class()));
+        mop->rewrite_method(method);
       }
       continue;
     }
