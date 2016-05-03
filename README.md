@@ -88,6 +88,10 @@ redex path/to/your.apk -o path/to/output.apk
 With any luck, the result `output.apk` should be smaller and faster than the
 input.  Enjoy!
 
+# Documentation
+Right now we have a limited amount of [documentation](docs/README.md) which describes a few
+example Redex optimization passes as well as deployments of Redex (including Docker).
+
 # FAQ
 
 ## I'm getting "Couldn't find zipalign. See README.md to resolve this"
