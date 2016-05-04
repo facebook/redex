@@ -119,10 +119,12 @@ bool should_rename(DexClass *clazz,
   return false;
 }
 
-void rename_classes(Scope& scope,
-    std::vector<std::string>& pre_whitelist_patterns,
-    std::vector<std::string>& post_whitelist_patterns,
-    const char* path) {
+void rename_classes(
+  Scope& scope,
+  std::vector<std::string>& pre_whitelist_patterns,
+  std::vector<std::string>& post_whitelist_patterns,
+  const std::string& path
+) {
   unpackage_private(scope);
   int clazz_ident = 0;
   std::map<DexString*, DexString*> aliases;
@@ -212,8 +214,8 @@ void rename_classes(Scope& scope,
     }
   });
 
-  if (path != nullptr) {
-    FILE* fd = fopen(path, "w");
+  if (!path.empty()) {
+    FILE* fd = fopen(path.c_str(), "w");
     if (fd == nullptr) {
       perror("Error writing rename file");
       return;
@@ -235,24 +237,8 @@ void rename_classes(Scope& scope,
 }
 
 void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
-  std::string path;
-  std::vector<std::string> pre_whitelist_patterns;
-  std::vector<std::string> post_whitelist_patterns;
-  path = folly::toStdString(m_config["class_rename"].asString());
-  for (auto config_pkg_name : m_config["pre_filter_whitelist"]) {
-    std::string pattern = folly::toStdString(config_pkg_name.asString());
-    pre_whitelist_patterns.push_back(pattern);
-  }
-  for (auto config_pkg_name : m_config["post_filter_whitelist"]) {
-    std::string pattern = folly::toStdString(config_pkg_name.asString());
-    post_whitelist_patterns.push_back(pattern);
-  }
   auto scope = build_class_scope(dexen);
-  if (path.empty()) {
-    rename_classes(scope, pre_whitelist_patterns, post_whitelist_patterns, nullptr);
-  } else {
-    rename_classes(scope, pre_whitelist_patterns, post_whitelist_patterns, path.c_str());
-  }
+  rename_classes(scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path);
   TRACE(RENAME, 1, "renamed classes: %d anon classes, %d from single char patterns, %d from multi char patterns\n",
       match_inner,
       match_short,

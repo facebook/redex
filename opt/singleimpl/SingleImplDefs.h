@@ -17,8 +17,7 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
-
-#include <folly/dynamic.h>
+#include "SingleImpl.h"
 
 /**
  * Analyze and optimize data structures.
@@ -139,7 +138,7 @@ struct SingleImplAnalysis {
    */
   static std::unique_ptr<SingleImplAnalysis> analyze(
       const Scope& scope, DexClasses& primary_dex, const TypeMap& single_impl,
-      const TypeSet& intfs, const folly::dynamic& config);
+      const TypeSet& intfs, const SingleImplConfig& config);
 
   /**
    * Escape an interface and all parent interfaces.

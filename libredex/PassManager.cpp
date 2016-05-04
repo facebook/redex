@@ -64,7 +64,7 @@ void PassManager::activate_pass(const char* name, const folly::dynamic& cfg) {
   for (auto pass : m_registered_passes) {
     if (name == pass->name()) {
       m_activated_passes.push_back(pass);
-      pass->m_config = cfg.getDefault(pass->name());
+      pass->configure_pass(PassConfig(cfg.getDefault(pass->name())));
       return;
     }
   }

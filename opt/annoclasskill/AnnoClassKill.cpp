@@ -134,10 +134,12 @@ void kill_annotation_classes(
           annotations_removed_count);
 }
 
-std::unordered_set<DexType*> get_kill_annos(const folly::dynamic& config) {
+std::unordered_set<DexType*> get_kill_annos(
+  const std::vector<std::string>& kill
+) {
   std::unordered_set<DexType*> kill_annos;
   try {
-    for (auto const& config_anno : config["kill_annos"]) {
+    for (auto const& config_anno : kill) {
       DexType* anno = DexType::get_type(config_anno.c_str());
       if (anno) {
         TRACE(CLASSKILL, 2, "kill anno: %s\n", SHOW(anno));
@@ -152,7 +154,7 @@ std::unordered_set<DexType*> get_kill_annos(const folly::dynamic& config) {
 
 void AnnoClassKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
-  auto kill_annos = get_kill_annos(m_config);
+  auto kill_annos = get_kill_annos(m_kill_annos);
   kill_annotation_classes(scope, kill_annos);
   post_dexen_changes(scope, dexen);
 }

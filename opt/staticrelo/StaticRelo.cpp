@@ -611,24 +611,16 @@ void do_mutations(
 }
 
 std::unordered_set<DexType*> get_dont_optimize_annos(
-    folly::dynamic config, ConfigFiles& cfg) {
+  const std::vector<std::string>& dont_list,
+  ConfigFiles& cfg
+) {
   std::unordered_set<DexType*> dont;
   for (const auto& anno : cfg.get_no_optimizations_annos()) {
     dont.emplace(anno);
   }
-  if (!config.isObject()) {
-    return dont;
-  }
-  auto dont_item = config.find("dont_optimize_annos");
-  if (dont_item == config.items().end()) {
-    return dont;
-  }
-  auto const& dont_list = dont_item->second;
   for (auto const& dont_anno : dont_list) {
-    if (dont_anno.isString()) {
-      auto type = DexType::get_type(DexString::get_string(dont_anno.c_str()));
-      if (type != nullptr) dont.emplace(type);
-    }
+    auto type = DexType::get_type(DexString::get_string(dont_anno.c_str()));
+    if (type != nullptr) dont.emplace(type);
   }
   return dont;
 }
@@ -650,7 +642,8 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   auto cls_to_dex = build_class_to_dex_map(dexen);
   auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
-  auto dont_optimize_annos = get_dont_optimize_annos(m_config, cfg);
+  auto dont_optimize_annos = get_dont_optimize_annos(
+    m_dont_optimize_annos, cfg);
 
   // Make one pass through all code to find dmethod refs and class refs,
   // needed later on for refining eligibility as well as performing the

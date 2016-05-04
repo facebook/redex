@@ -51,34 +51,28 @@ static kill_counters s_kcount;
  */
 static const char* kAnnoDefault = "Ldalvik/annotation/AnnotationDefault;";
 
-std::unordered_set<DexType*> get_blacklist(const folly::dynamic& config) {
+std::unordered_set<DexType*> get_blacklist(
+  const std::vector<std::string>& config
+) {
   std::unordered_set<DexType*> blacklist;
-  try {
-    for (auto const& config_blacklist : config["blacklist"]) {
-      DexType* entry = DexType::get_type(config_blacklist.c_str());
-      if (entry) {
-        TRACE(ANNO, 2, "blacklist class: %s\n", SHOW(entry));
-        blacklist.insert(entry);
-      }
+  for (auto const& config_blacklist : config) {
+    DexType* entry = DexType::get_type(config_blacklist.c_str());
+    if (entry) {
+      TRACE(ANNO, 2, "blacklist class: %s\n", SHOW(entry));
+      blacklist.insert(entry);
     }
-  } catch (const std::exception&) {
-    // Swallow exception if the config doesn't have any entries.
   }
   return blacklist;
 }
 
-std::unordered_set<DexType*> get_annos(const folly::dynamic& config) {
+std::unordered_set<DexType*> get_annos(const std::vector<std::string>& remove) {
   std::unordered_set<DexType*> annos;
-  try {
-    for (auto const& config_anno : config["remove_annos"]) {
-      DexType* anno = DexType::get_type(config_anno.c_str());
-      if (anno) {
-        TRACE(ANNO, 2, "removable anno: %s\n", SHOW(anno));
-        annos.insert(anno);
-      }
+  for (auto const& config_anno : remove) {
+    DexType* anno = DexType::get_type(config_anno.c_str());
+    if (anno) {
+      TRACE(ANNO, 2, "removable anno: %s\n", SHOW(anno));
+      annos.insert(anno);
     }
-  } catch (const std::exception&) {
-    // Swallow exception if the config doesn't have any annos.
   }
   return annos;
 }
@@ -192,26 +186,14 @@ void kill_annotations(const std::vector<DexClass*>& classes,
 
 void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
-
-  bool remove_build = false;
-  bool remove_system = false;
-  if (m_config["remove_all_build_annos"] != nullptr) {
-    auto build_str = m_config["remove_all_build_annos"].asString();
-    if (build_str == "1") {
-      remove_build = true;
-    }
-  }
-  if (m_config["remove_all_system_annos"] != nullptr) {
-    auto system_str = m_config["remove_all_system_annos"].asString();
-    if (system_str == "1") {
-      remove_system = true;
-    }
-  }
-
-  auto removable_annos = get_annos(m_config);
-  auto blacklist_classes = get_blacklist(m_config);
-  kill_annotations(scope,
-      removable_annos, blacklist_classes, remove_build, remove_system);
+  auto removable_annos = get_annos(m_remove_annos);
+  auto blacklist_classes = get_blacklist(m_blacklist);
+  kill_annotations(
+    scope,
+    removable_annos,
+    blacklist_classes,
+    m_remove_build,
+    m_remove_system);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
           "Annotations: %d/%d\n",

@@ -14,9 +14,6 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include <folly/json.h>
-#include <folly/dynamic.h>
-
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"

@@ -25,8 +25,6 @@
 #include "walkers.h"
 #include "UnterfaceOpt.h"
 
-#include <folly/dynamic.h>
-
 namespace {
 
 //

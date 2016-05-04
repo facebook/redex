@@ -12,8 +12,17 @@
 #include "Pass.h"
 
 class InterDexPass : public Pass {
-  public:
-    InterDexPass() : Pass("InterDexPass") {}
+ public:
+  InterDexPass() : Pass("InterDexPass") {}
 
-    virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("static_prune", false, m_static_prune);
+    pc.get("emit_canaries", true, m_emit_canaries);
+  }
+
+  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+
+ private:
+  bool m_static_prune;
+  bool m_emit_canaries;
 };

@@ -15,5 +15,12 @@ class AnnoClassKillPass : public Pass {
  public:
   AnnoClassKillPass() : Pass("AnnoClassKillPass") {}
 
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("kill_annos", {}, m_kill_annos);
+  }
+
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+
+ private:
+  std::vector<std::string> m_kill_annos;
 };

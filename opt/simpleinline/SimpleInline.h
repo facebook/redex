@@ -19,7 +19,12 @@
 
 class SimpleInlinePass : public Pass {
 public:
-  SimpleInlinePass() : Pass("SimpleInlinePass"), virtual_inline(true) {}
+  SimpleInlinePass() : Pass("SimpleInlinePass") {}
+
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("virtual", true, m_virtual_inline);
+    pc.get("no_inline_annos", {}, m_no_inline_annos);
+  }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 
@@ -34,7 +39,10 @@ private:
   static const size_t SMALL_CODE_SIZE = 3;
 
   // inline virtual methods
-  bool virtual_inline;
+  bool m_virtual_inline;
+
+  // annotations indicating not to inline a function
+  std::vector<std::string> m_no_inline_annos;
 
   // set of inlinable methods
   std::unordered_set<DexMethod*> inlinable;

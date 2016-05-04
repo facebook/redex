@@ -31,13 +31,15 @@ static size_t unhandled_inline = 0;
  * Format: array of "Lpkg/Class;"
  */
 std::unordered_set<DexType*> keep_class_member_annos(
-    const folly::dynamic& config, ConfigFiles& cfg) {
+  const std::vector<std::string>& annos,
+  ConfigFiles& cfg
+) {
   std::unordered_set<DexType*> keep;
   for (const auto& anno : cfg.get_no_optimizations_annos()) {
     keep.emplace(anno);
   }
   try {
-    for (auto const& keep_anno : config["keep_class_member_annos"]) {
+    for (auto const& keep_anno : annos) {
       auto type = DexType::get_type(DexString::get_string(keep_anno.c_str()));
       if (type != nullptr) {
         keep.emplace(type);
@@ -52,11 +54,12 @@ std::unordered_set<DexType*> keep_class_member_annos(
 /*
  * Format: array of "Type Lpkg/Class;.fieldName"
  */
-std::unordered_set<DexField*> keep_class_members(const folly::dynamic& config) {
+std::unordered_set<DexField*> keep_class_members(
+  const std::vector<std::string>& members
+) {
   std::unordered_set<DexField*> keep;
   try {
-    for (auto const& keep_thing : config["keep_class_members"]) {
-      auto keepstr = keep_thing.asString();
+    for (auto const& keepstr : members) {
       auto tpos = keepstr.find(' ');
       auto cpos = keepstr.find('.');
       auto type = DexType::get_type(keepstr.substr(0, tpos).c_str());
@@ -336,8 +339,8 @@ void inline_field_values(Scope& fullscope) {
 }
 
 void FinalInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
-  auto keep_annos = keep_class_member_annos(m_config, cfg);
-  auto keep_members = keep_class_members(m_config);
+  auto keep_annos = keep_class_member_annos(m_keep_class_member_annos, cfg);
+  auto keep_members = keep_class_members(m_keep_class_members);
   auto scope = build_class_scope(dexen);
   inline_field_values(scope);
   remove_unused_fields(scope, keep_annos, keep_members);

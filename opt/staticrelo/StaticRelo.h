@@ -16,5 +16,12 @@ class StaticReloPass : public Pass {
  public:
   StaticReloPass() : Pass("StaticReloPass") {}
 
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("dont_optimize_annos", {}, m_dont_optimize_annos);
+  }
+
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+
+ private:
+  std::vector<std::string> m_dont_optimize_annos;
 };

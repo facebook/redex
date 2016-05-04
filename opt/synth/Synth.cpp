@@ -862,35 +862,12 @@ bool optimize(const std::vector<DexClass*>& classes,
   return ssms.next_pass;
 }
 
-const int64_t MAX_PASSES = 5;
-SynthConfig load_config(const folly::dynamic& config) {
-  auto get_value = [&](const char* value, int64_t default_val) {
-    if (config.isObject()) {
-      auto it = config.find(value);
-      if (it != config.items().end()) {
-        TRACE(SYNT, 2, "Setting config %s to %ld\n", value,
-              it->second.asInt());
-        return it->second.asInt();
-      }
-    }
-    TRACE(SYNT, 2, "For %s using default value %ld\n", value, default_val);
-    return default_val;
-  };
-
-  int64_t max_passes = get_value("max_passes", MAX_PASSES);
-  int64_t synth_only = get_value("synth_only", 0);
-  int64_t remove_pub = get_value("remove_pub", 1);
-  SynthConfig synthConfig = {max_passes, (bool)synth_only, (bool)remove_pub};
-  return synthConfig;
-}
-
 void SynthPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
-  SynthConfig synthConfig = load_config(m_config);
   Scope scope = build_class_scope(dexen);
   int passes = 0;
   do {
     TRACE(SYNT, 1, "Synth removal, pass %d\n", passes);
-    bool more_opt_needed = optimize(scope, synthConfig);
+    bool more_opt_needed = optimize(scope, m_pass_config);
     if (!more_opt_needed) break;
-  } while (++passes < synthConfig.max_passes);
+  } while (++passes < m_pass_config.max_passes);
 }

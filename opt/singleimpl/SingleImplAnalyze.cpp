@@ -26,8 +26,6 @@
 #include "Trace.h"
 #include "walkers.h"
 
-#include <folly/dynamic.h>
-
 struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope, DexClasses& primary_dex)
       : SingleImplAnalysis(), scope(scope) {
@@ -38,7 +36,7 @@ struct AnalysisImpl : SingleImplAnalysis {
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,
-                          const folly::dynamic& config);
+                          const SingleImplConfig& config);
   void collect_field_defs();
   void collect_method_defs();
   void analyze_opcodes();
@@ -51,9 +49,9 @@ struct AnalysisImpl : SingleImplAnalysis {
   void check_impl_hierarchy();
   void escape_with_clinit();
   void escape_with_sfields();
-  void filter_single_impl(const folly::dynamic& config);
+  void filter_single_impl(const SingleImplConfig& config);
   void filter_do_not_strip();
-  void filter_list(folly::dynamic list, bool keep_match);
+  void filter_list(const std::vector<std::string>& list, bool keep_match);
 
  private:
   const Scope& scope;
@@ -84,7 +82,7 @@ DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
  */
 void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
                                       const TypeSet& intfs,
-                                      const folly::dynamic& config) {
+                                      const SingleImplConfig& config) {
   for (const auto intf_it : single_impl) {
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
@@ -107,11 +105,14 @@ void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
 /**
  * Filter common function for both white and black list.
  */
-void AnalysisImpl::filter_list(folly::dynamic list, bool keep_match) {
+void AnalysisImpl::filter_list(
+  const std::vector<std::string>& list,
+  bool keep_match
+) {
+  if (list.empty()) return;
 
-  auto find_in_dynamic = [&](const char* name) {
-    for (auto& el : list) {
-      auto const el_str = el.asString();
+  auto find_in_list = [&](const char* name) {
+    for (auto& el_str : list) {
       auto const el_name = el_str.c_str();
       if (strncmp(name, el_name, strlen(el_name)) == 0) {
         return true;
@@ -123,7 +124,7 @@ void AnalysisImpl::filter_list(folly::dynamic list, bool keep_match) {
   for (const auto intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_name = intf->get_name()->c_str();
-    bool match = find_in_dynamic(intf_name);
+    bool match = find_in_list(intf_name);
     if (match && keep_match) continue;
     if (!match && !keep_match) continue;
     escape_interface(intf, FILTERED);
@@ -134,25 +135,11 @@ void AnalysisImpl::filter_list(folly::dynamic list, bool keep_match) {
  * Apply filters to the set of single impl found.
  * White lists come first, then black lists.
  */
-void AnalysisImpl::filter_single_impl(const folly::dynamic& config) {
-  auto white_list = config.find("white_list");
-  if (white_list != config.items().end() && white_list->second.size() > 0) {
-    filter_list(white_list->second, true);
-  }
-  auto package_white_list = config.find("package_white_list");
-  if (package_white_list != config.items().end() &&
-      package_white_list->second.size() > 0) {
-    filter_list(package_white_list->second, true);
-  }
-  auto black_list = config.find("black_list");
-  if (black_list != config.items().end() && black_list->second.size() > 0) {
-    filter_list(black_list->second, false);
-  }
-  auto package_black_list = config.find("package_black_list");
-  if (package_black_list != config.items().end() &&
-      package_black_list->second.size() > 0) {
-    filter_list(package_black_list->second, false);
-  }
+void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
+  filter_list(config.white_list, true);
+  filter_list(config.package_white_list, true);
+  filter_list(config.black_list, false);
+  filter_list(config.package_black_list, false);
 }
 
 /**
@@ -453,7 +440,7 @@ void AnalysisImpl::analyze_opcodes() {
  */
 std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
     const Scope& scope, DexClasses& primary_dex, const TypeMap& single_impl,
-    const TypeSet& intfs, const folly::dynamic& config) {
+    const TypeSet& intfs, const SingleImplConfig& config) {
   std::unique_ptr<AnalysisImpl> single_impls(
       new AnalysisImpl(scope, primary_dex));
   single_impls->create_single_impl(single_impl, intfs, config);

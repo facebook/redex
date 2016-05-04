@@ -71,15 +71,14 @@ DEBUG_ONLY bool method_breakup(
 }
 
 std::unordered_set<DexType*> no_inline_annos(
-    const folly::dynamic& config, ConfigFiles& cfg) {
+  const std::vector<std::string>& annos,
+  ConfigFiles& cfg
+) {
   std::unordered_set<DexType*> no_inline;
   for (const auto& anno : cfg.get_no_optimizations_annos()) {
     no_inline.insert(anno);
   }
-  if (!config.isObject()) return no_inline;
-  auto it = config.find("no_inline_annos");
-  if (it == config.items().end()) return no_inline;
-  for (auto const& no_inline_anno : it->second) {
+  for (auto const& no_inline_anno : annos) {
     auto type = DexType::get_type(
         DexString::get_string(no_inline_anno.c_str()));
     if (type != nullptr) {
@@ -105,14 +104,8 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 }
 
 void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
-  const auto no_inline = no_inline_annos(m_config, cfg);
+  const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
 
-  virtual_inline = true;
-  try {
-    virtual_inline = m_config.at("virtual").asInt() == 1;
-  } catch (...) {
-    // Swallow exception if no configuration.
-  }
   auto scope = build_class_scope(dexen);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope, no_inline);
@@ -223,7 +216,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
 
         can_inline_method(method, code);
       });
-  if (virtual_inline) {
+  if (m_virtual_inline) {
     auto non_virtual = devirtualize(scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
