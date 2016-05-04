@@ -475,7 +475,7 @@ bool MultiMethodInliner::unknown_field(DexInstruction* insn, DexMethod* context)
       info.escaped_field++;
       return true;
     }
-    if (field->is_external() && !is_public(field)) {
+    if (!field->is_concrete() && !is_public(field)) {
       info.non_pub_field++;
       return true;
     }

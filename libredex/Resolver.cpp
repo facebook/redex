@@ -147,7 +147,7 @@ DexField* resolve_field(
         return a->get_name() == name && a->get_type() == type;
       };
 
-  auto cls = type_class_internal(owner);
+  const DexClass* cls = type_class(owner);
   while (cls) {
     if (fs == FieldSearch::Instance || fs == FieldSearch::Any) {
       for (auto ifield : cls->get_ifields()) {
@@ -163,7 +163,7 @@ DexField* resolve_field(
         }
       }
     }
-    cls = type_class_internal(cls->get_super_class());
+    cls = type_class(cls->get_super_class());
   }
   return nullptr;
 }

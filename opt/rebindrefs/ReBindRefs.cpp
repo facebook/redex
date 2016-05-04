@@ -283,16 +283,18 @@ struct Rebinder {
     const auto fref = fop->field();
     const auto real_ref = resolve_field(fref, field_search);
     if (real_ref && real_ref != fref) {
+      auto cls = type_class(real_ref->get_class());
+      always_assert(cls != nullptr);
+      if (!is_public(cls)) {
+        if (cls->is_external()) return;
+        set_public(cls);
+      }
       TRACE(BIND,
             2,
             "Rebinding %s\n\t=>%s\n",
             SHOW(fref),
             SHOW(real_ref));
       fop->rewrite_field(real_ref);
-      auto cls = type_class(real_ref->get_class());
-      always_assert(cls != nullptr);
-      if(!is_public(cls))
-        set_public(cls);
       m_frefs.insert(fref, real_ref);
     }
   }

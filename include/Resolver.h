@@ -199,9 +199,11 @@ DexField* resolve_field(
  * lookup in the class hierarchy is performed looking for the definition.
  */
 inline DexField* resolve_field(
-    DexField* field, FieldSearch = FieldSearch::Any) {
-  if (field->is_def()) return field;
+    DexField* field, FieldSearch search = FieldSearch::Any) {
+  if (field->is_def()) {
+    return field;
+  }
   return resolve_field(
-      field->get_class(), field->get_name(), field->get_type());
+      field->get_class(), field->get_name(), field->get_type(), search);
 }
 
