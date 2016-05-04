@@ -437,13 +437,19 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
   DexProto* new_proto = DexProto::make_proto(
     old_proto->get_rtype(),
     DexTypeList::make_type_list(std::move(new_args)));
-  if (find_collision_excepting(wrapper,
-                               wrappee->get_name(),
-                               new_proto,
-                               type_class(wrappee->get_class()),
-                               false /* is_virtual */,
-                               true /* check_direct */)) {
-    return false;
+  auto new_name = wrappee->get_name();
+  auto new_class = type_class(wrappee->get_class());
+  if (find_collision(new_name, new_proto, new_class, false)) {
+    if (find_collision_excepting(
+          wrapper,
+          new_name,
+          new_proto,
+          new_class,
+          false /* is_virtual */,
+          true /* check_direct */)) {
+      return false;
+    }
+    return !do_not_strip(wrapper);
   }
   return true;
 }
