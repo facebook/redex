@@ -31,29 +31,6 @@ namespace {
 // group all callees/callers count in the same bucket
 const int MAX_COUNT = 10;
 
-// sort and print a map of type or method to the count of their presence
-// when inlining
-template <typename Key>
-DEBUG_ONLY bool sort_and_print(std::map<Key, int>& member_map,
-                               int break_out,
-                               const char* msg) {
-  std::vector<std::pair<Key, int>> member_list;
-  for (auto entry : member_map) {
-    auto p = std::make_pair(entry.first, entry.second);
-    member_list.push_back(p);
-  }
-  std::sort(member_list.begin(), member_list.end(),
-      [](const std::pair<Key, int> v1, const std::pair<Key, int> v2) {
-        return v1.second > v2.second;
-      });
-  TRACE(SINL, 5, "%s\n", msg);
-  for (auto p : member_list) {
-    if (p.second < break_out) break;
-    TRACE(SINL, 5, "%s => %d\n", SHOW(p.first), p.second);
-  }
-  return true;
-}
-
 DEBUG_ONLY bool method_breakup(
     std::vector<std::vector<DexMethod*>>& calls_group) {
   size_t size = calls_group.size();
@@ -146,8 +123,6 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   TRACE(SINL, 3, "reference outside of primary %ld\n",
       inliner.get_info().not_in_primary);
   TRACE(SINL, 3, "not found %ld\n", inliner.get_info().not_found);
-  // assert(sort_and_print(unk_refs, 50, "INVOKE OVER CLASSES"));
-  // assert(sort_and_print(unk_meths, 5, "INVOKE OVER METHODS"));
   TRACE(SINL, 1,
       "%ld inlined calls over %ld methods and %ld methods removed\n",
       inliner.get_info().calls_inlined, inlined_count, deleted);

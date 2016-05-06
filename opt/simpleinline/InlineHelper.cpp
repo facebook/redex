@@ -15,21 +15,6 @@
 
 namespace {
 
-// debug only struct to track method distribution
-DEBUG_ONLY std::map<DexType*, int> unk_refs;
-DEBUG_ONLY std::map<DexMethod*, int> unk_meths;
-DEBUG_ONLY bool track(DexMethod* meth) {
-  auto type = meth->get_class();
-  auto cls = type_class(type);
-  while (cls != nullptr) {
-    type = cls->get_super_class();
-    cls = type_class(type);
-  }
-  unk_refs[type]++;
-  unk_meths[meth]++;
-  return true;
-}
-
 // add any type on which an access is allowed and safe without accessibility
 // issues
 const char* safe_types_on_refs[] = {
@@ -446,7 +431,6 @@ bool MultiMethodInliner::unknown_virtual(DexInstruction* insn, DexMethod* contex
       }
       if (type_ok(type)) return false;
       if (method_ok(type, method)) return false;
-      assert(track(method));
       info.escaped_virtual++;
       return true;
     }
