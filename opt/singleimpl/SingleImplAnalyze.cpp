@@ -147,7 +147,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
  */
 void AnalysisImpl::filter_do_not_strip() {
   for (const auto intf_it : single_impls) {
-    if (do_not_strip(type_class(intf_it.first))) {
+    if (!can_delete(type_class(intf_it.first))) {
       escape_interface(intf_it.first, DO_NOT_STRIP);
     }
   }

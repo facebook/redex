@@ -161,8 +161,9 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
       // always inline small methods even if they are not deletable
       inlinable.insert(meth);
     } else {
-      if (do_not_strip(meth)) {
+      if (!can_delete(meth)) {
         // never inline methods that cannot be deleted
+        TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
         dont_strip++;
       } else {
         methods.insert(meth);

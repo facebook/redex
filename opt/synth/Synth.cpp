@@ -449,7 +449,7 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
           true /* check_direct */)) {
       return false;
     }
-    return !do_not_strip(wrapper);
+    return can_delete(wrapper);
   }
   return true;
 }
@@ -722,7 +722,7 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
       TRACE(SYNT, 2, "Retaining method: %s\n", SHOW(meth));
       return;
     }
-    if (do_not_strip(meth)) {
+    if (!can_delete(meth)) {
       TRACE(SYNT, 2, "Do not strip: %s\n", SHOW(meth));
       return;
     }

@@ -27,7 +27,6 @@ bool is_empty_class(DexClass* cls,
   TRACE(EMPTY, 4, ">> Empty Analysis for %s\n", name);
   TRACE(EMPTY, 4, "   no methods or fields: %d\n", empty_class);
   TRACE(EMPTY, 4, "   can delete: %d\n", can_delete(cls));
-  TRACE(EMPTY, 4, "   !do not strip: %d\n", !do_not_strip(cls));
   TRACE(EMPTY, 4, "   not interface: %d\n",
       !(access & DexAccessFlags::ACC_INTERFACE));
   TRACE(EMPTY, 4, "   references: %d\n",
@@ -35,7 +34,6 @@ bool is_empty_class(DexClass* cls,
   bool remove =
          empty_class &&
          can_delete(cls) &&
-         !do_not_strip(cls) &&
          !(access & DexAccessFlags::ACC_INTERFACE) &&
          class_references.count(cls->get_type()) == 0;
   TRACE(EMPTY, 4, "   remove: %d\n", remove);

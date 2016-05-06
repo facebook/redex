@@ -29,10 +29,14 @@ void init_seed_classes(const std::string seeds_filename);
  * nullptr checks everywhere.
  */
 template<class DexMember>
-inline bool can_delete(DexMember* member) { return member->rstate.can_delete(); }
+inline bool can_delete(DexMember* member) {
+  return member->rstate.can_delete();
+}
 
 template<class DexMember>
-inline bool can_rename(DexMember* member) { return member->rstate.can_rename(); }
+inline bool can_rename(DexMember* member) {
+  return member->rstate.can_rename();
+}
 
 template<class DexMember>
 inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
@@ -53,7 +57,3 @@ inline bool can_remove_class(DexClass* clazz) {
   }
   return can_delete(clazz) && !is_seed(clazz);
 }
-
-bool do_not_strip(DexField*);
-bool do_not_strip(DexMethod*);
-bool do_not_strip(DexClass*);

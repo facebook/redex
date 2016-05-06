@@ -101,7 +101,7 @@ bool should_rename(DexClass *clazz,
       return true;
     }
   }
-  if (!can_rename(clazz) || do_not_strip(clazz)) {
+  if (!can_rename(clazz)) {
     return false;
   }
   /* Check for wider, less precise filters */

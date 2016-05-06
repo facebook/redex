@@ -31,6 +31,61 @@
 
 namespace {
 
+static std::unordered_set<const DexClass*> referenced_classes;
+
+// Note: this method will return nullptr if the dotname refers to an unknown
+// type.
+DexType* get_dextype_from_dotname(const char* dotname) {
+  if (dotname == nullptr) {
+    return nullptr;
+  }
+  std::string buf;
+  buf.reserve(strlen(dotname) + 2);
+  buf += 'L';
+  buf += dotname;
+  buf += ';';
+  std::replace(buf.begin(), buf.end(), '.', '/');
+  return DexType::get_type(buf.c_str());
+}
+
+void find_referenced_classes(const Scope& scope) {
+  walk_code(
+    scope,
+    [](DexMethod*) { return true; },
+    [&](DexMethod* meth, DexCode* code) {
+      auto opcodes = code->get_instructions();
+      for (const auto& opcode : opcodes) {
+        // Matches any stringref that name-aliases a type.
+        if (opcode->has_strings()) {
+          auto stringop = static_cast<DexOpcodeString*>(opcode);
+          DexString* dsclzref = stringop->get_string();
+          DexType* dtexclude =
+            get_dextype_from_dotname(dsclzref->c_str());
+          if (dtexclude == nullptr) continue;
+          TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
+          referenced_classes.insert(type_class(dtexclude));
+        }
+        if (opcode->has_types()) {
+          auto typeop = static_cast<DexOpcodeType*>(opcode);
+          TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
+          referenced_classes.insert(type_class(typeop->get_type()));
+        }
+      }
+    });
+}
+
+bool can_remove(const DexClass* cls) {
+  return can_delete(cls) && !referenced_classes.count(cls);
+}
+
+bool can_remove(const DexMethod* m) {
+  return can_remove(type_class(m->get_class()));
+}
+
+bool can_remove(const DexField* f) {
+  return can_remove(type_class(f->get_class()));
+}
+
 /**
  * Return true for classes that should not be processed by the optimization.
  */
@@ -118,7 +173,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       init_called++;
       continue;
     }
-    if (!can_delete(init)) {
+    if (!can_remove(init)) {
       init_cant_delete++;
       continue;
     }
@@ -177,12 +232,12 @@ void DeadRefs::find_unreachable_data(DexClass* clazz) {
   classes.insert(clazz);
 
   for (const auto& meth : clazz->get_vmethods()) {
-    if (!can_delete(meth)) continue;
+    if (!can_remove(meth)) continue;
     vmethods.insert(meth);
   }
 
   for (const auto& field : clazz->get_ifields()) {
-    if (!can_delete(field)) continue;
+    if (!can_remove(field)) continue;
     ifields.insert(field);
   }
 }
@@ -303,7 +358,7 @@ int DeadRefs::remove_unreachable() {
       called_dmeths++;
       continue;
     }
-    if (!can_delete(meth)) {
+    if (!can_remove(meth)) {
       dont_delete_dmeths++;
       continue;
     }
@@ -326,6 +381,7 @@ int DeadRefs::remove_unreachable() {
 
 void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
+  find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
   TRACE(DELINIT, 1, "Removed %d <init> methods\n",

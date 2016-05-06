@@ -147,8 +147,8 @@ std::vector<DexMethod*> get_noncoldstart_statics(
       if ((method->get_access() & ACC_STATIC)) {
         if (!is_clinit(method) &&
             coldstart_methods.count(method) == 0 &&
-            do_not_strip(cls) &&
-            do_not_strip(method)) {
+            can_delete(cls) &&
+            can_delete(method)) {
           noncold_methods.push_back(method);
         } else {
           keep_statics++;
