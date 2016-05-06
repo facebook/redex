@@ -163,6 +163,15 @@ source.  We don't use it at Facebook and we have no plans to start.
 
 The blog [Optimizing Android bytecode with ReDex](https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex) provides an overview of the Redex project.
 
+# Issues
+Issues on GitHub are assigned priorities which reflect their urgency and how soon they are
+likely to be addressed.
+* P0: Unbreak now! A serious issue which should have someone working on it right now.
+* P1: High Priority. An important issue that someone should be actively working on.
+* P2: Mid Priority. An important issue which is in the queue to be processed soon.
+* P3: Low Priority. An important issue which may get dealt with at a later date.
+* P4: Wishlist: An issue with merit but low priority which is up for grabs but likely to be pruned if not addressed after a reasonable period.
+
 # License
 
 ReDex is BSD-licensed.  We also provide an additional patent grant.
