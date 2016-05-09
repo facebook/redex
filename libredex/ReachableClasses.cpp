@@ -300,7 +300,8 @@ void init_permanently_reachable_classes(
   std::vector<std::string> cls_patterns;
   for (auto const& r : proguard_rules) {
     if (r.classname != nullptr &&
-        r.class_type == keeprules::ClassType::CLASS &&
+        (r.class_type == keeprules::ClassType::CLASS ||
+         r.class_type == keeprules::ClassType::INTERFACE) &&
           strlen(r.classname) > 2) {
       std::string cls_pattern(r.classname);
       std::replace(cls_pattern.begin(), cls_pattern.end(), '.', '/');

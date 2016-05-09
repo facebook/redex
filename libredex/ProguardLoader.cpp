@@ -20,6 +20,7 @@ bool load_proguard_config_file(const char *location, std::vector<KeepRule>* rule
     fprintf(stderr, "couldn't parse Proguard rules\n");
     return false;
   } else {
+    TRACE(PGR, 1, "Loaded %d ProGuard rules\n", rules->size());
     return true;
   }
 }
