@@ -30,7 +30,7 @@ brew install boost double-conversion gflags glog libevent openssl
 brew link openssl --force
 ```
 
-### Ubuntu 14.04 LTS
+### Ubuntu 14.04 LTS (64-bit)
 ```
 sudo apt-get install \
     g++ \
