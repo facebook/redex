@@ -148,11 +148,18 @@ static void flush_out_secondary(
     std::string canaryname(buf);
     auto it = det.clookup.find(canaryname);
     if (it == det.clookup.end()) {
-      fprintf(stderr, "Warning, no canary class %s found\n", buf);
-      ClassCreator cc(DexType::make_type(canaryname.c_str()));
-      cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
-      cc.set_super(get_object_type());
-      det.outs.push_back(cc.create());
+      TRACE(IDEX, 1, "Warning, no canary class %s found\n", buf);
+      auto canary_type = DexType::make_type(canaryname.c_str());
+      auto canary_cls = type_class(canary_type);
+      if (canary_cls == nullptr) {
+        // class doesn't exist, we have to create it
+        // this can happen if we grow the number of dexes
+        ClassCreator cc(canary_type);
+        cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+        cc.set_super(get_object_type());
+        canary_cls = cc.create();
+      }
+      det.outs.push_back(canary_cls);
     } else {
       auto clazz = it->second;
       det.outs.push_back(clazz);
@@ -461,7 +468,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
 
   auto first_attempt = run_interdex(dexen, cfg, true, m_static_prune);
   if (first_attempt.size() > dexen.size()) {
-    fprintf(stderr, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
+    TRACE(IDEX, 1, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
         Retrying without cutting off interdex dexes. \n", dexen.size(), first_attempt.size());
     dexen = run_interdex(dexen, cfg, false, m_static_prune);
   } else {
