@@ -283,8 +283,8 @@ class DexAnnotationSet : public Gatherable {
   virtual void gather_methods(std::vector<DexMethod*>& lmethod);
   virtual void gather_strings(std::vector<DexString*>& lstring);
   static DexAnnotationSet* get_annotation_set(DexIdx* idx, uint32_t aset_off);
-  int size() { return m_annotations.size(); }
-  void viz_counts(int& cntanno, int& cntviz) {
+  unsigned long size() { return m_annotations.size(); }
+  void viz_counts(unsigned long& cntanno, unsigned long& cntviz) {
     cntanno = m_annotations.size();
     cntviz = 0;
     for (auto const& da : m_annotations) {

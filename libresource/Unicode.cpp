@@ -520,7 +520,7 @@ ssize_t utf8_to_utf16_length(const uint8_t* u8str, size_t u8len)
     size_t u16measuredLen = 0;
     while (u8cur < u8end) {
         u16measuredLen++;
-        int u8charLen = utf8_codepoint_len(*u8cur);
+        auto u8charLen = utf8_codepoint_len(*u8cur);
         uint32_t codepoint = utf8_to_utf32_codepoint(u8cur, u8charLen);
         if (codepoint > 0xFFFF) u16measuredLen++; // this will be a surrogate pair in utf16
         u8cur += u8charLen;
