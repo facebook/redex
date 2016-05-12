@@ -59,7 +59,7 @@ RedexContext::~RedexContext() {
   }
 }
 
-DexString* RedexContext::make_string(const char* nstr, int utfsize) {
+DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   always_assert(nstr != nullptr);
   DexString* rv;
   pthread_mutex_lock(&s_string_lock);
@@ -74,7 +74,7 @@ DexString* RedexContext::make_string(const char* nstr, int utfsize) {
   return rv;
 }
 
-DexString* RedexContext::get_string(const char* nstr, int utfsize) {
+DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   if (nstr == nullptr) {
     return nullptr;
   }

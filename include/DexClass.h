@@ -56,14 +56,14 @@ class DexString {
   friend struct RedexContext;
 
   const char* m_cstr;
-  int m_utfsize;
-  int m_strlen;
+  uint32_t m_utfsize;
+  uint32_t m_strlen;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexString(const char* nstr, int utfsize) {
+  DexString(const char* nstr, uint32_t utfsize) {
     m_cstr = (const char*)strdup(nstr);
     m_utfsize = utfsize;
-    m_strlen = strlen(nstr);
+    m_strlen = (uint32_t)strlen(nstr);
   }
 
   ~DexString() {
@@ -75,21 +75,21 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static DexString* make_string(const char* nstr, int utfsize) {
+  static DexString* make_string(const char* nstr, uint32_t utfsize) {
     return g_redex->make_string(nstr, utfsize);
   }
 
   static DexString* make_string(const char* nstr) {
-    return make_string(nstr, strlen(nstr));
+    return make_string(nstr, (uint32_t)strlen(nstr));
   }
 
   // Return an existing DexString or nullptr if one does not exist.
-  static DexString* get_string(const char* nstr, int utfsize) {
+  static DexString* get_string(const char* nstr, uint32_t utfsize) {
     return g_redex->get_string(nstr, utfsize);
   }
 
   static DexString* get_string(const char* nstr) {
-    return get_string(nstr, strlen(nstr));
+    return get_string(nstr, (uint32_t)strlen(nstr));
   }
 
  public:
@@ -100,8 +100,8 @@ class DexString {
 
   const char* c_str() const { return m_cstr; }
 
-  int get_entry_size() const {
-    int len = uleb128_encoding_size(m_utfsize);
+  uint32_t get_entry_size() const {
+    uint32_t len = uleb128_encoding_size(m_utfsize);
     len += m_strlen;
     len++; // NULL byte
     return len;
@@ -797,7 +797,7 @@ class DexClasses {
     return m_classes.erase(begin, end);
   }
 
-  int size() { return m_classes.size(); }
+  size_t size() { return m_classes.size(); }
   iterator begin() { return m_classes.begin(); }
   iterator end() { return m_classes.end(); }
   const_iterator begin() const { return m_classes.cbegin(); }

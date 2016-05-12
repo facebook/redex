@@ -99,7 +99,7 @@ inline uint32_t read_uleb128p1(const uint8_t** _ptr) {
 /*
  * Number of bytes it takes to encode a particular integer in a uleb128.
  */
-inline int uleb128_encoding_size(uint32_t v) {
+inline uint8_t uleb128_encoding_size(uint32_t v) {
   v >>= 7;
   if (v == 0) return 1;
   v >>= 7;

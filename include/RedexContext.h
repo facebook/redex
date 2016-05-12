@@ -36,8 +36,8 @@ struct RedexContext {
 
   ~RedexContext();
 
-  DexString* make_string(const char* nstr, int utfsize);
-  DexString* get_string(const char* nstr, int utfsize);
+  DexString* make_string(const char* nstr, uint32_t utfsize);
+  DexString* get_string(const char* nstr, uint32_t utfsize);
   template <typename V> void visit_all_dexstring(V v);
 
   DexType* make_type(DexString* dstring);

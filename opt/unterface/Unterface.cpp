@@ -456,7 +456,7 @@ void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   DexClasses& orig_classes = dexen[0];
   DexClasses classes(orig_classes.size() + untfs.size() - removed.size());
   int pos = 0;
-  for (int i = 0; i < orig_classes.size(); ++i) {
+  for (size_t i = 0; i < orig_classes.size(); ++i) {
     auto cls = orig_classes.get(i);
     if (removed.find(cls) == removed.end()) {
       classes.insert_at(cls, pos++);
