@@ -347,6 +347,15 @@ inline match_t<DexClass, std::tuple<> > is_enum() {
   };
 }
 
+/** Match classes that have class data */
+inline match_t<DexClass, std::tuple<> > has_class_data() {
+  return {
+    [](const DexClass* cls) {
+      return cls->has_class_data();
+    }
+  };
+}
+
 /** Match classes satisfying the given method match for any vmethods */
 template <typename P>
 match_t<DexClass, std::tuple<match_t<DexMethod, P> > >

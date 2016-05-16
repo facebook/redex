@@ -193,6 +193,7 @@ candidates_t build_candidates(
     && !m::is_external<DexClass>()
     && !m::is_interface()
     && !m::is_enum()
+    && m::has_class_data()
     && !m::any_vmethods(m::any<DexMethod>())
     // No dmethods which are annotated with anything in dont_optimize_annos
     && !m::any_dmethods(
@@ -510,6 +511,9 @@ void make_references_public(const DexMethod* from_meth) {
           can_delete_class = false;
           continue;
         }
+        always_assert_log(relocation_target->has_class_data(),
+            "Relocatoin target %s has no class data\n",
+            SHOW(relocation_target->get_type()));
         target_methods[relocation_target].push_back(meth);
         meth_moves[meth] = relocation_target;
         target_relocations[relocation_target]++;
