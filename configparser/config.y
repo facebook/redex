@@ -17,7 +17,8 @@ extern "C" int yyparse();
 extern "C" FILE *yyin;
 extern "C" int line_number;
 
-#define WARN(x) printf("WARNING: %s\n", x)
+// #define WARN(x) printf("WARNING: %s\n", x)
+#define WARN(x) 
 #define ASSERT(x, y) if (!(x)) { printf("ERROR: %s", y); exit(-1);}
 
 void yyerror(const char* msg);

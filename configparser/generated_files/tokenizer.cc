@@ -1,5 +1,5 @@
 
-#line 3 "/Users/bertrand/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_tokenizer/tokenizer.cc"
+#line 3 "/Users/satnamsingh/fbsource/fbandroid/buck-out/gen/native/redex/config_generate_tokenizer/tokenizer.cc"
 
 #define  YY_INT_ALIGNED short int
 
