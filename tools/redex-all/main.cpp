@@ -385,8 +385,10 @@ int main(int argc, char* argv[]) {
   for (const auto& library_jar: library_jars) {
     TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
     if (!load_jar_file(library_jar.c_str())) {
-      fprintf(stderr, "ERROR: Unable to open jar %s\n", args.jar_path.c_str());
-      exit(1);
+      fprintf(stderr,
+        "WARNING: Error in jar %s - continue. This may lead to unexpected "
+        "behavior, please check your jars\n",
+        args.jar_path.c_str());
     }
   }
 
