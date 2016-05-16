@@ -48,17 +48,17 @@ struct ProguardMap {
   /**
    * Translate un-obfuscated class name to obfuscated name.
    */
-  const std::string& translate_class(const std::string& cls);
+  std::string translate_class(const std::string& cls);
 
   /**
    * Translate un-obfuscated field name to obfuscated name.
    */
-  const std::string& translate_field(const std::string& field);
+  std::string translate_field(const std::string& field);
 
   /**
    * Translate un-obfuscated method name to obfuscated name.
    */
-  const std::string& translate_method(const std::string& method);
+  std::string translate_method(const std::string& method);
 
  private:
   template <class IStream>

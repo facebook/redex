@@ -91,17 +91,17 @@ ProguardMap::ProguardMap(const std::string& filename) {
   }
 }
 
-const std::string& ProguardMap::translate_class(const std::string& cls) {
+std::string ProguardMap::translate_class(const std::string& cls) {
   auto it = m_classMap.find(cls);
   if (it == m_classMap.end()) return cls;
   return it->second;
 }
 
-const std::string& ProguardMap::translate_field(const std::string& field) {
+std::string ProguardMap::translate_field(const std::string& field) {
   return m_fieldMap[field];
 }
 
-const std::string& ProguardMap::translate_method(const std::string& method) {
+std::string ProguardMap::translate_method(const std::string& method) {
   return m_methodMap[method];
 }
 
