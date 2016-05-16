@@ -11,12 +11,14 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <streambuf>
 #include <string>
 #include <vector>
 
 #include <getopt.h>
 #include <signal.h>
+#include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -343,7 +345,7 @@ int main(int argc, char* argv[]) {
   // on the command line or ProGuard file.
   // TODO: Make the command line -jarpath option like a colon separated
   //       list of library JARS.
-  std::vector<std::string> library_jars;
+  std::set<std::string> library_jars;
   auto start = parse_args(argc, argv, args);
   if (!dir_is_writable(args.out_dir)) {
     fprintf(stderr, "outdir %s is not a writable directory\n",
@@ -367,7 +369,12 @@ int main(int argc, char* argv[]) {
 
 
   if (!args.jar_path.empty()) {
-    library_jars.push_back(args.jar_path);
+	  std::stringstream jar_stream(args.jar_path);
+		std::string dependent_jar_path;
+	  while (std::getline(jar_stream, dependent_jar_path, ':')) {
+			TRACE(MAIN, 2, "Dependent JAR specified on command-line: %s\n", dependent_jar_path.c_str());
+      library_jars.emplace(dependent_jar_path);
+		}
   } else {
     TRACE(MAIN, 1, "Skipping parsing a classpath jar\n");
   }

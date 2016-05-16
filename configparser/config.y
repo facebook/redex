@@ -25,7 +25,7 @@ void yyerror(const char* msg);
 
 /* TODO: consider conversion to using %parse-param to specify args for yyparse() */
 std::vector<KeepRule>* rules = nullptr;
-std::vector<std::string>* library_jars = nullptr;
+std::set<std::string>* library_jars = nullptr;
 
 // Used for both classes and members
 uint32_t flags;
@@ -195,7 +195,7 @@ RULE:
 DIRECTIVE:
     T_INJARS T_PATTERN |
     T_OUTJARS T_PATTERN |
-    T_LIBRARYJARS T_PATTERN { library_jars->push_back(duplicate(yylval)); }
+    T_LIBRARYJARS T_PATTERN { library_jars->emplace(duplicate(yylval)); }
     ;
 
 KEEP_RULE:
@@ -363,7 +363,7 @@ PATTERN_LIST:
 %%
 
 bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules,
-                         std::vector<std::string>* passed_library_jars) {
+                         std::set<std::string>* passed_library_jars) {
     FILE *pgfile = fopen(file, "r");
     if (!pgfile) {
         std::cerr << "Couldn't open " << file << std::endl;

@@ -252,7 +252,7 @@ void yyerror(const char* msg);
 
 /* TODO: consider conversion to using %parse-param to specify args for yyparse() */
 std::vector<KeepRule>* rules = nullptr;
-std::vector<std::string>* library_jars = nullptr;
+std::set<std::string>* library_jars = nullptr;
 
 // Used for both classes and members
 uint32_t flags;
@@ -1745,7 +1745,7 @@ yyreduce:
     {
         case 12:
 #line 198 "/Users/satnamsingh/fbsource/fbandroid/native/redex/configparser/config.y"
-    { library_jars->push_back(duplicate(yylval)); ;}
+    { library_jars->emplace(duplicate(yylval)); ;}
     break;
 
   case 13:
@@ -2189,7 +2189,7 @@ yyreturn:
 
 
 bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules,
-                         std::vector<std::string>* passed_library_jars) {
+                         std::set<std::string>* passed_library_jars) {
     FILE *pgfile = fopen(file, "r");
     if (!pgfile) {
         std::cerr << "Couldn't open " << file << std::endl;
