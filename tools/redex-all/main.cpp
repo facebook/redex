@@ -86,7 +86,7 @@ struct Arguments {
   Arguments() : config(nullptr) {}
 
   folly::dynamic config;
-  std::string jar_path;
+  std::set<std::string> jar_paths;
   std::string proguard_config;
   std::string seeds_filename;
   std::string out_dir;
@@ -209,7 +209,8 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       args.out_dir = optarg;
       break;
     case 'j':
-      args.jar_path = optarg;
+      args.jar_paths.emplace(optarg);
+			TRACE(MAIN, 2, "Command line -j option: %s\n", optarg);
       break;
     case 'p':
       args.proguard_config = optarg;
@@ -368,15 +369,13 @@ int main(int argc, char* argv[]) {
   }
 
 
-  if (!args.jar_path.empty()) {
-	  std::stringstream jar_stream(args.jar_path);
+  for (const auto jar_path : args.jar_paths) {
+	  std::stringstream jar_stream(jar_path);
 		std::string dependent_jar_path;
 	  while (std::getline(jar_stream, dependent_jar_path, ':')) {
 			TRACE(MAIN, 2, "Dependent JAR specified on command-line: %s\n", dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
 		}
-  } else {
-    TRACE(MAIN, 1, "Skipping parsing a classpath jar\n");
   }
 
   if (start == 0 || start == argc) {
@@ -395,7 +394,7 @@ int main(int argc, char* argv[]) {
       fprintf(stderr,
         "WARNING: Error in jar %s - continue. This may lead to unexpected "
         "behavior, please check your jars\n",
-        args.jar_path.c_str());
+        library_jar.c_str());
     }
   }
 

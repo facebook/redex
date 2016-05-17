@@ -88,8 +88,6 @@ def run_pass(
         args += ['--config', config_path]
     if script_args.warn:
         args += ['--warn', script_args.warn]
-    if script_args.jarpath:
-        args += ['--jarpath', script_args.jarpath]
     if script_args.proguard_config:
         args += ['--proguard-config', script_args.proguard_config]
     if script_args.keep:
@@ -97,6 +95,7 @@ def run_pass(
     if script_args.proguard_map:
         args += ['-Sproguard_map=' + script_args.proguard_map]
 
+    args += ['--jarpath=' + x for x in script_args.jarpaths]
     args += ['-S' + x for x in script_args.passthru]
     args += ['-J' + x for x in script_args.passthru_json]
 
@@ -614,7 +613,8 @@ Given an APK, produce a better APK!
     parser.add_argument('input_apk', help='Input APK file')
     parser.add_argument('-o', '--out', nargs='?', default='redex-out.apk',
             help='Output APK file name (defaults to redex-out.apk)')
-    parser.add_argument('-j', '--jarpath', nargs='?')
+    parser.add_argument('-j', '--jarpath', dest='jarpaths', action='append', default=[],
+            help='Path to dependent library jar file')
 
     parser.add_argument('--redex-binary', nargs='?', default=binary,
             help='Path to redex binary')
