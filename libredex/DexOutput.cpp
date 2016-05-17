@@ -585,6 +585,13 @@ void DexOutput::generate_class_data() {
       cdefs[i].class_data_offset = m_cdi_offsets[clz];
     } else {
       cdefs[i].class_data_offset = 0;
+      always_assert_log(
+          clz->get_dmethods().size() == 0 &&
+          clz->get_vmethods().size() == 0 &&
+          clz->get_ifields().size() == 0 &&
+          clz->get_sfields().size() == 0,
+          "DexClass %s has member but no class data!\n",
+          SHOW(clz->get_type()));
     }
     if (m_static_values.count(clz)) {
       cdefs[i].static_values_off = m_static_values[clz];
