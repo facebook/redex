@@ -44,7 +44,7 @@ namespace android {
  */
 class Asset {
 public:
-    virtual ~Asset(void);
+    virtual ~Asset(void) = 0;
 
     static int32_t getGlobalCount();
     static String8 getAssetAllocations();
@@ -216,7 +216,7 @@ private:
 class _FileAsset : public Asset {
 public:
     _FileAsset(void);
-    virtual ~_FileAsset(void);
+    virtual ~_FileAsset(void) = 0;
 
     /*
      * Use a piece of an already-open file.
