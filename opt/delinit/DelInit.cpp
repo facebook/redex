@@ -48,7 +48,64 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   return DexType::get_type(buf.c_str());
 }
 
+void process_signature_anno(DexString* dstring) {
+  const char* cstr = dstring->c_str();
+  int len = strlen(cstr);
+  if (len < 3) return;
+  if (cstr[0] != 'L') return;
+  if (cstr[len - 1] == ';') {
+    auto dtype = DexType::get_type(dstring);
+    referenced_classes.insert(type_class(dtype));
+    return;
+  }
+  std::string buf(cstr);
+  buf += ';';
+  auto dtype = DexType::get_type(buf.c_str());
+  referenced_classes.insert(type_class(dtype));
+}
+
 void find_referenced_classes(const Scope& scope) {
+  std::unordered_set<DexString*> maybetypes;
+  walk_annotations(
+    scope,
+    [&](DexAnnotation* anno) {
+      static DexType* dalviksig =
+        DexType::get_type("Ldalvik/annotation/Signature;");
+      // Signature annotations contain strings that Jackson uses
+      // to construct the underlying types.
+      if (anno->type() == dalviksig) {
+        auto elems = anno->anno_elems();
+        for (auto const& elem : elems) {
+          auto ev = elem.encoded_value;
+          if (ev->evtype() != DEVT_ARRAY) continue;
+          auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+          auto const& evs = arrayev->evalues();
+          for (auto strev : *evs) {
+            if (strev->evtype() != DEVT_STRING) continue;
+            auto stringev = static_cast<DexEncodedValueString*>(strev);
+            process_signature_anno(stringev->string());
+          }
+        }
+        return;
+      }
+      // Class literals in annotations.
+      // Example:
+      //    @JsonDeserialize(using=MyJsonDeserializer.class)
+      if (anno->runtime_visible()) {
+        auto elems = anno->anno_elems();
+        for (auto const& dae : elems) {
+          auto evalue = dae.encoded_value;
+          std::vector<DexType*> ltype;
+          evalue->gather_types(ltype);
+          if (ltype.size()) {
+            for (auto dextype : ltype) {
+              referenced_classes.insert(type_class(dextype));
+            }
+          }
+        }
+      }
+    });
+
   walk_code(
     scope,
     [](DexMethod*) { return true; },
