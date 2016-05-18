@@ -42,12 +42,12 @@ DexMethod* match_pattern(DexMethod* bridge) {
     ++it;
   }
   always_assert_log(it != end, "In %s", SHOW(bridge));
-  auto invoke = static_cast<DexOpcodeMethod*>(*it);
-  if (invoke->opcode() != OPCODE_INVOKE_DIRECT &&
-      invoke->opcode() != OPCODE_INVOKE_STATIC) {
+  if ((*it)->opcode() != OPCODE_INVOKE_DIRECT &&
+      (*it)->opcode() != OPCODE_INVOKE_STATIC) {
     TRACE(BRIDGE, 5, "Rejecting, unhandled pattern: `%s'\n", SHOW(bridge));
     return nullptr;
   }
+  auto invoke = static_cast<DexOpcodeMethod*>(*it);
   ++it;
   if (is_move_result((*it)->opcode())) {
     ++it;
@@ -93,7 +93,7 @@ bool signature_matches(DexMethod* a, DexMethod* b) {
 }
 
 bool has_bridgelike_access(DexMethod* m) {
-  return 
+  return
     m->is_virtual() &&
     (is_bridge(m) ||
      (is_synthetic(m) && !is_static(m) && !is_constructor(m)));

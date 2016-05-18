@@ -181,11 +181,11 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   if (code == nullptr) return nullptr;
   auto& insns = code->get_instructions();
   auto it = insns.begin();
-  auto invoke = static_cast<DexOpcodeMethod*>(*it);
-  if (invoke->opcode() != OPCODE_INVOKE_DIRECT) {
+  if ((*it)->opcode() != OPCODE_INVOKE_DIRECT) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s\n", SHOW(m));
     return nullptr;
   }
+  auto invoke = static_cast<DexOpcodeMethod*>(*it);
   if (!passes_args_through(invoke, code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s\n", SHOW(m));
     return nullptr;
