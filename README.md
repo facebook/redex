@@ -26,7 +26,7 @@ xcode-select --install
 Install dependences using homebrew:
 ```
 brew install autoconf automake libtool python3
-brew install boost double-conversion gflags glog libevent openssl
+brew install boost double-conversion gflags glog libevent openssl jsoncpp
 brew link openssl --force
 ```
 
@@ -51,7 +51,8 @@ sudo apt-get install \
     binutils-dev \
     libjemalloc-dev \
     libssl-dev \
-    libiberty-dev
+    libiberty-dev \
+    libjsoncpp-dev
 ```
 
 ## Download, Build and Install

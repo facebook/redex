@@ -11,7 +11,9 @@
 
 #include <string>
 #include <vector>
-#include <folly/dynamic.h>
+#include <json/json.h>
+#include <iostream>
+#include <algorithm>
 
 #include "ConfigFiles.h"
 
@@ -22,12 +24,12 @@ using Scope = std::vector<DexClass*>;
 
 class PassConfig {
  public:
-  explicit PassConfig(const folly::dynamic& cfg)
+  explicit PassConfig(const Json::Value& cfg)
     : m_config(cfg)
   {}
 
   void get(const char* name, int64_t dflt, int64_t& param) const {
-    param = m_config.getDefault(name, dflt).asInt();
+    param = m_config.get(name, (Json::Int64)dflt).asInt();
   }
 
   void get(
@@ -35,11 +37,34 @@ class PassConfig {
     const std::string& dflt,
     std::string& param
   ) const {
-    param = folly::toStdString(m_config.getDefault(name, dflt).asString());
+    param = m_config.get(name, dflt).asString();
   }
 
   void get(const char* name, bool dflt, bool& param) const {
-    param = m_config.getDefault(name, dflt).asBool();
+    auto val = m_config.get(name, dflt);
+
+    // Do some simple type conversions that folly used to do
+    if (val.isBool()) {
+      param = val.asBool();
+      return;
+    } else if (val.isInt()) {
+      auto valInt = val.asInt();
+      if (valInt == 0 || valInt == 1) {
+        param = (val.asInt() != 0);
+        return;
+      }
+    } else if (val.isString()) {
+      auto str = val.asString();
+      std::transform(str.begin(), str.end(), str.begin(), static_cast<int(*)(int)>(std::tolower));
+      if (str == "0" || str == "false" || str == "off" || str == "no") {
+        param = false;
+        return;
+      } else if (str == "1" || str == "true" || str == "on" || str == "yes") {
+        param = true;
+        return;
+      }
+    }
+    throw std::runtime_error("Cannot convert JSON value to bool: " + val.asString());
   }
 
   void get(
@@ -47,19 +72,19 @@ class PassConfig {
     const std::vector<std::string>& dflt,
     std::vector<std::string>& param
   ) const {
-    auto it = m_config.find(name);
-    if (it == m_config.items().end()) {
+    auto it = m_config[name];
+    if (it == Json::nullValue) {
       param = dflt;
     } else {
       param.clear();
-      for (auto const& str : it->second) {
-        param.emplace_back(folly::toStdString(str.asString()));
+      for (auto const& str : it) {
+        param.emplace_back(str.asString());
       }
     }
   }
 
- private:
-  folly::dynamic m_config;
+  private:
+    Json::Value m_config;
 };
 
 class Pass {

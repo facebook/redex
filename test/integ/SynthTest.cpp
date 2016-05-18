@@ -15,8 +15,7 @@
 #include <string>
 #include <unistd.h>
 
-#include <folly/json.h>
-#include <folly/dynamic.h>
+#include <json/json.h>
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -69,8 +68,7 @@ TEST(SynthTest1, synthetic) {
   std::vector<KeepRule> null_rules;
   PassManager manager(passes, null_rules);
 
-  const folly::dynamic conf_obj = folly::dynamic::object(
-            "dummy", "");
+  Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(dexen, dummy_cfg);
 

@@ -24,16 +24,16 @@
 PassManager::PassManager(
     const std::vector<Pass*>& passes,
     const std::vector<KeepRule>& rules,
-    const folly::dynamic& config)
+    const Json::Value& config)
   : m_config(config),
     m_registered_passes(passes),
     m_proguard_rules(rules) {
-  try {
+  if (config["redex"].isMember("passes")) {
     auto passes = config["redex"]["passes"];
     for (auto& pass : passes) {
       activate_pass(pass.asString().c_str(), config);
     }
-  } catch (const std::out_of_range& e) {
+  } else {
     // If config isn't set up, run all registered passes.
     m_activated_passes = m_registered_passes;
   }
@@ -60,11 +60,11 @@ void PassManager::run_passes(DexClassesVector& dexen, ConfigFiles& cfg) {
   MethodTransform::sync_all();
 }
 
-void PassManager::activate_pass(const char* name, const folly::dynamic& cfg) {
+void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
   for (auto pass : m_registered_passes) {
     if (name == pass->name()) {
       m_activated_passes.push_back(pass);
-      pass->configure_pass(PassConfig(cfg.getDefault(pass->name())));
+      pass->configure_pass(PassConfig(cfg[pass->name()]));
       return;
     }
   }

@@ -12,8 +12,7 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include <folly/json.h>
-#include <folly/dynamic.h>
+#include <json/json.h>
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -53,8 +52,12 @@ TEST(EmptyClassesTest1, emptyclasses) {
 
   std::vector<KeepRule> null_rules;
   auto const keep = { "Lcom/facebook/redextest/DoNotStrip;" };
-  const folly::dynamic conf_obj = folly::dynamic::object(
-            "keep_annotations", folly::dynamic(keep.begin(), keep.end()));
+  Json::Value keep_annotations = Json::arrayValue;
+  for (const auto elt : keep) {
+    keep_annotations.append(Json::Value(elt));
+  }
+  Json::Value conf_obj;
+  conf_obj["keep_annotations"] = keep_annotations;
   PassManager manager(
     passes,
     null_rules,

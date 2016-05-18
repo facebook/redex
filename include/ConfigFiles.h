@@ -11,18 +11,20 @@
 
 #include <vector>
 #include <string>
+#include <map>
+#include <unordered_set>
 
-#include <folly/dynamic.h>
+#include <json/json.h>
 
 #include "DexClass.h"
 #include "ProguardMap.h"
 
 class DexType;
 using MethodTuple = std::tuple<DexString*, DexString*, DexString*>;
-using MethodMap = std::unordered_map<MethodTuple, DexClass*>;
+using MethodMap = std::map<MethodTuple, DexClass*>;
 
 struct ConfigFiles {
-  ConfigFiles(const folly::dynamic& config);
+  ConfigFiles(const Json::Value& config);
 
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.size() == 0) {

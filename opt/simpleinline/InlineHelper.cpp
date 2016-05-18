@@ -38,8 +38,8 @@ struct DexTypeCache {
   std::vector<DexType*> cache;
 
   DexTypeCache() {
-    for (size_t i = 0; i < ARRAY_SIZE(safe_types_on_refs); ++i) {
-      auto type = DexType::get_type(safe_types_on_refs[i]);
+    for (auto const safe_type : safe_types_on_refs) {
+      auto type = DexType::get_type(safe_type);
       if (type != nullptr) {
         cache.push_back(type);
       }

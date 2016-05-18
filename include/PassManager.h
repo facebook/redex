@@ -14,20 +14,20 @@
 
 #include <string>
 #include <vector>
-#include <folly/dynamic.h>
+#include <json/json.h>
 
 class PassManager {
  public:
   PassManager(
     const std::vector<Pass*>& passes,
     const std::vector<KeepRule>& rules,
-    const folly::dynamic& config = folly::dynamic::object);
+    const Json::Value& config = Json::Value(Json::objectValue));
   void run_passes(DexClassesVector&, ConfigFiles&);
 
  private:
-  void activate_pass(const char* name, const folly::dynamic& cfg);
+  void activate_pass(const char* name, const Json::Value& cfg);
 
-  folly::dynamic m_config;
+  Json::Value m_config;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
 

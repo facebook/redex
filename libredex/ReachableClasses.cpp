@@ -207,31 +207,31 @@ bool in_reflected_pkg(DexClass* dclass,
  */
 void init_permanently_reachable_classes(
     const Scope& scope,
-    folly::dynamic& config,
+    Json::Value& config,
     const std::vector<KeepRule>& proguard_rules,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
 
-  auto config_apk_dir = config.find("apk_dir");
-  if (config_apk_dir != config.items().end()) {
-    apk_dir = folly::toStdString(config_apk_dir->second.asString());
+  auto config_apk_dir = config["apk_dir"];
+  if (config_apk_dir != Json::nullValue) {
+    apk_dir = config_apk_dir.asString();
   }
 
-  auto config_reflected_package_names = config.find("keep_packages");
-  if (config_reflected_package_names != config.items().end()) {
-    for (auto config_pkg_name : config_reflected_package_names->second) {
-      std::string pkg_name = folly::toStdString(config_pkg_name.asString());
+  auto config_reflected_package_names = config["keep_packages"];
+  if (config_reflected_package_names != Json::nullValue) {
+    for (auto config_pkg_name : config_reflected_package_names) {
+      std::string pkg_name = config_pkg_name.asString();
       reflected_package_names.push_back(pkg_name);
     }
   }
 
   std::unordered_set<DexType*> keep_annotations;
-  auto config_keep_annotations = config.find("keep_annotations");
-  if (config_keep_annotations != config.items().end()) {
-    for (auto const& config_anno_name : config_keep_annotations->second) {
-      std::string anno_name = folly::toStdString(config_anno_name.asString());
+  auto config_keep_annotations = config["keep_annotations"];
+  if (config_keep_annotations != Json::nullValue) {
+    for (auto const& config_anno_name : config_keep_annotations) {
+      std::string anno_name = config_anno_name.asString();
       DexType* anno = DexType::get_type(anno_name.c_str());
       if (anno) keep_annotations.insert(anno);
     }
@@ -380,7 +380,7 @@ void reportReachableClasses(const Scope& scope, std::string reportFileName) {
 
 void init_reachable_classes(
     const Scope& scope,
-    folly::dynamic& config,
+    Json::Value& config,
     const std::vector<KeepRule>& proguard_rules,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex

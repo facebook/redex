@@ -23,9 +23,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <folly/dynamic.h>
-#include <folly/json.h>
-#include <folly/FileUtil.h>
+#include <json/json.h>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -83,9 +81,9 @@ static void usage() {
 /////////////////////////////////////////////////////////////////////////////
 
 struct Arguments {
-  Arguments() : config(nullptr) {}
+  Arguments() : config(Json::nullValue) {}
 
-  folly::dynamic config;
+  Json::Value config;
   std::set<std::string> jar_paths;
   std::string proguard_config;
   std::string seeds_filename;
@@ -98,25 +96,19 @@ bool parse_config(const char* config_file, Arguments& args) {
     fprintf(stderr, "ERROR: cannot find config file\n");
     return false;
   }
-  std::stringstream config_content;
-  config_content << config_stream.rdbuf();
-  args.config = folly::parseJson(config_content.str());
+  config_stream >> args.config; // parse JSON
   return true;
 }
 
-static folly::dynamic parse_json_value(std::string& value_string) {
-  // If we just to parseJson() it will fail because that requires an object
-  // as the root.
-  // Instead we wrap the value in a dummy object so that we can parse any
-  // JSON value: array, object, string, boolean, number, or null
-  std::string formatted = std::string("{\"dummy\":") + value_string +
-      std::string("}");
-  folly::dynamic temp = folly::parseJson(formatted.c_str());
-  return temp["dummy"];
+static Json::Value parse_json_value(std::string& value_string) {
+  std::stringstream temp_stream(value_string);
+  Json::Value temp_json;
+  temp_stream >> temp_json;
+  return temp_json;
 }
 
 static bool add_value_to_config(
-    folly::dynamic& config, std::string& key_value, bool is_json) {
+    Json::Value& config, std::string& key_value, bool is_json) {
   size_t equals_idx = key_value.find('=');
   size_t dot_idx = key_value.find('.');
 
@@ -126,10 +118,6 @@ static bool add_value_to_config(
       std::string pass = key_value.substr(0, dot_idx);
       std::string key = key_value.substr(dot_idx + 1, equals_idx - dot_idx - 1);
       std::string value_string = key_value.substr(equals_idx + 1);
-      // Create empty object for the pass if it doesn't already exist
-      if (config.find(pass.c_str()) == config.items().end()) {
-        config[pass.c_str()] = folly::dynamic::object;
-      }
       if (is_json) {
         config[pass.c_str()][key.c_str()] = parse_json_value(value_string);
       } else {
@@ -150,7 +138,7 @@ static bool add_value_to_config(
   return false;
 }
 
-folly::dynamic default_config() {
+Json::Value default_config() {
   auto passes = {
     "ReBindRefsPass",
     "BridgePass",
@@ -163,9 +151,11 @@ folly::dynamic default_config() {
     "RemoveEmptyClassesPass",
     "ShortenSrcStringsPass",
   };
-  auto cfg = folly::parseJson("{\"redex\":{\"passes\":[]}}");
+  std::stringstream temp_json("{\"redex\":{\"passes\":[]}}");
+  Json::Value cfg;
+  temp_json >> cfg;
   for (auto const& pass : passes) {
-    cfg["redex"]["passes"].push_back(pass);
+    cfg["redex"]["passes"].append(pass);
   }
   return cfg;
 }
@@ -276,7 +266,7 @@ bool dir_is_writable(const std::string& dir) {
 }
 
 void output_stats(const char* path, const dex_output_stats_t& stats) {
-  folly::dynamic d = folly::dynamic::object;
+  Json::Value d;
   d["num_types"] = stats.num_types;
   d["num_type_lists"] = stats.num_type_lists;
   d["num_classes"] = stats.num_classes;
@@ -288,7 +278,10 @@ void output_stats(const char* path, const dex_output_stats_t& stats) {
   d["num_protos"] = stats.num_protos;
   d["num_static_values"] = stats.num_static_values;
   d["num_annotations"] = stats.num_annotations;
-  folly::writeFile(folly::toPrettyJson(d), path);
+  Json::StyledStreamWriter writer;
+  std::ofstream out(path);
+  writer.write(out, d);
+  out.close();
 }
 
 void output_moved_methods_map(const char* path, DexClassesVector& dexen, ConfigFiles& cfg) {
@@ -410,7 +403,7 @@ int main(int argc, char* argv[]) {
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
 
   LocatorIndex* locator_index = nullptr;
-  if (args.config.getDefault("emit_locator_strings", false).asBool()) {
+  if (args.config.get("emit_locator_strings", false).asBool()) {
     TRACE(LOC, 1,
         "Will emit class-locator strings for classloader optimization\n");
     locator_index = new LocatorIndex(make_locator_index(dexen));
@@ -418,9 +411,9 @@ int main(int argc, char* argv[]) {
 
   dex_output_stats_t totals;
 
-  auto methodmapping = args.config.getDefault("method_mapping", "").asString();
-  auto stats_output = args.config.getDefault("stats_output", "").asString();
-  auto method_move_map = args.config.getDefault("method_move_map", "").asString();
+  auto methodmapping = args.config.get("method_mapping", "").asString();
+  auto stats_output = args.config.get("stats_output", "").asString();
+  auto method_move_map = args.config.get("method_move_map", "").asString();
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";

@@ -8,6 +8,7 @@
  */
 
 #include <algorithm>
+#include <memory>
 #include <fcntl.h>
 #include <list>
 #include <stdlib.h>
@@ -15,7 +16,6 @@
 #include <functional>
 #include <exception>
 #include <assert.h>
-#include <folly/Optional.h>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -31,8 +31,6 @@
  * For adler32...
  */
 #include <zlib.h>
-
-using folly::Optional;
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -295,7 +293,7 @@ public:
   void init_header_offsets();
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
-  Optional<Locator> locator_for_descriptor(
+  std::unique_ptr<Locator> locator_for_descriptor(
     const std::unordered_set<DexString*>& type_names,
     DexString* descriptor);
 
@@ -356,7 +354,7 @@ void DexOutput::emit_locator(Locator locator) {
   m_offset += locator_length + 1;
 }
 
-Optional<Locator>
+std::unique_ptr<Locator>
 DexOutput::locator_for_descriptor(
   const std::unordered_set<DexString*>& type_names,
   DexString* descriptor)
@@ -367,7 +365,7 @@ DexOutput::locator_for_descriptor(
     if (locator_it != locator_index->end()) {
       // This string is the name of a type we define in one of our
       // dex files.
-      return locator_it->second;
+      return std::unique_ptr<Locator>(new Locator(locator_it->second));
     }
 
     if (type_names.count(descriptor)) {
@@ -380,7 +378,7 @@ DexOutput::locator_for_descriptor(
         if (elementDescriptor != nullptr) {
           locator_it = locator_index->find(elementDescriptor);
           if (locator_it != locator_index->end()) {
-            return locator_it->second;
+            return std::unique_ptr<Locator>(new Locator(locator_it->second));
           }
         }
       }
@@ -388,11 +386,11 @@ DexOutput::locator_for_descriptor(
       // We have the name of a type, but it's not a type we define.
       // Emit the special locator that indicates we should look in the
       // system classloader.
-      return Locator::make(0, 0);
+      return std::unique_ptr<Locator>(new Locator(Locator::make(0, 0)));
     }
   }
 
-  return {};
+  return nullptr;
 }
 
 void DexOutput::generate_string_data() {
@@ -422,7 +420,7 @@ void DexOutput::generate_string_data() {
   insert_map_item(TYPE_STRING_DATA_ITEM, nrstr, m_offset);
   for (DexString* str : string_order) {
     // Emit lookup acceleration string if requested
-    Optional<Locator> locator = locator_for_descriptor(type_names, str);
+    std::unique_ptr<Locator> locator = locator_for_descriptor(type_names, str);
     if (locator) {
       unsigned orig_offset = m_offset;
       emit_locator(*locator);

@@ -15,7 +15,7 @@
 #include "DexUtil.h"
 #include "ProguardLoader.h"
 
-void init_reachable_classes(const Scope& scope, folly::dynamic& config,
+void init_reachable_classes(const Scope& scope, Json::Value& config,
     const std::vector<KeepRule>& proguard_rules,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
