@@ -198,6 +198,13 @@ static void insert_multi_branch_target(FatMethod* fm,
   insert_mentry_before(fm, mentry, target);
 }
 
+static int32_t read_int32(const uint16_t*& data) {
+  int32_t result;
+  memcpy(&result, data, sizeof(int32_t));
+  data += 2;
+  return result;
+}
+
 static void shard_multi_target(FatMethod* fm,
                                DexOpcodeData* fopcode,
                                MethodItemEntry* src,
@@ -205,21 +212,20 @@ static void shard_multi_target(FatMethod* fm,
   const uint16_t* data = fopcode->data();
   uint16_t entries = *data++;
   auto ftype = fopcode->opcode();
-  int32_t* idata = (int32_t*)data;
   uint32_t base = src->addr;
   if (ftype == FOPCODE_PACKED_SWITCH) {
-    int32_t index = *idata++;
+    int32_t index = read_int32(data);
     for (int i = 0; i < entries; i++) {
-      uint32_t targetaddr = base + *idata++;
+      uint32_t targetaddr = base + read_int32(data);
       auto target = addr_to_mei[targetaddr];
       insert_multi_branch_target(fm, index, target, src);
       index++;
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
-    int32_t* tdata = idata + entries;
+    const uint16_t* tdata = data + 2 * entries;  // entries are 32b
     for (int i = 0; i < entries; i++) {
-      int32_t index = *idata++;
-      uint32_t targetaddr = base + *tdata++;
+      int32_t index = read_int32(data);
+      uint32_t targetaddr = base + read_int32(tdata);
       auto target = addr_to_mei[targetaddr];
       insert_multi_branch_target(fm, index, target, src);
     }
