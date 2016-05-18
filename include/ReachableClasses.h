@@ -20,7 +20,7 @@ void init_reachable_classes(const Scope& scope, folly::dynamic& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
 void reportReachableClasses(const Scope& scope, std::string reportFileName);
-void init_seed_classes(const std::string seeds_filename);
+unsigned int init_seed_classes(const std::string seeds_filename);
 
 /* Note-
  * The lack of convenience functions for DexType* is

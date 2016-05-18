@@ -61,6 +61,7 @@ TEST(EmptyClassesTest1, emptyclasses) {
     conf_obj
   );
   ConfigFiles dummy_cfg(conf_obj);
+  dummy_cfg.using_seeds = true;
   manager.run_passes(dexen, dummy_cfg);
 
   size_t after = 0;

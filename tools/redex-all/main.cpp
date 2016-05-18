@@ -398,11 +398,12 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  ConfigFiles cfg(args.config);
+	cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
-    init_seed_classes(args.seeds_filename);
+		cfg.using_seeds = init_seed_classes(args.seeds_filename) > 0;
   }
 
-  ConfigFiles cfg(args.config);
   PassManager manager(passes, rules, args.config);
   manager.run_passes(dexen, cfg);
 

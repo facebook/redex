@@ -395,14 +395,15 @@ void init_reachable_classes(
   recompute_classes_reachable_from_code(scope);
 }
 
-void init_seed_classes(const std::string seeds_filename) {
+unsigned int init_seed_classes(const std::string seeds_filename) {
     TRACE(PGR, 1, "Reading seed classes from %s\n", seeds_filename.c_str());
     auto start = std::chrono::high_resolution_clock::now();
     std::ifstream seeds_file(seeds_filename);
-    uint count = 0;
+    unsigned int count = 0;
     if (!seeds_file) {
       TRACE(PGR, 1, "Seeds file %s was not found (ignoring error).",
           seeds_filename.c_str());
+			return 0;
     } else {
       std::string line;
       while (getline(seeds_file, line)) {
@@ -425,4 +426,5 @@ void init_seed_classes(const std::string seeds_filename) {
     auto end = std::chrono::high_resolution_clock::now();
     TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
           std::chrono::duration<double>(end - start).count());
+		return count;
 }

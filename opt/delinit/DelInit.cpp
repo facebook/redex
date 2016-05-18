@@ -380,6 +380,10 @@ int DeadRefs::remove_unreachable() {
 }
 
 void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+  if (!cfg.using_seeds) {
+	  TRACE(DELINIT, 1, "No seeds information so not running DelInit\n");
+		return;
+	}
   auto scope = build_class_scope(dexen);
   find_referenced_classes(scope);
   DeadRefs drefs;

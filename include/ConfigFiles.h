@@ -54,6 +54,8 @@ struct ConfigFiles {
     m_move_map = true;
     m_moved_methods_map[mt] = cls;
   }
+	
+	bool using_seeds = false;
 
  private:
   std::vector<std::string> load_coldstart_classes();
