@@ -70,11 +70,11 @@ class DexOutputIdx {
   uint32_t fieldidx(DexField* f) const { return m_field->at(f); }
   uint32_t methodidx(DexMethod* m) const { return m_method->at(m); }
 
-  int stringsize() const { return m_string->size(); }
-  int typesize() const { return m_type->size(); }
-  int protosize() const { return m_proto->size(); }
-  int fieldsize() const { return m_field->size(); }
-  int methodsize() const { return m_method->size(); }
+  size_t stringsize() const { return m_string->size(); }
+  size_t typesize() const { return m_type->size(); }
+  size_t protosize() const { return m_proto->size(); }
+  size_t fieldsize() const { return m_field->size(); }
+  size_t methodsize() const { return m_method->size(); }
 
   uint32_t get_offset(uint8_t* ptr) { return (uint32_t)(ptr - m_base); }
 

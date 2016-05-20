@@ -348,8 +348,8 @@ void DexOutput::emit_locator(Locator locator) {
   char buf[Locator::encoded_max];
   locator.encode(buf);
   size_t locator_length = strlen(buf); // ASCII-only
-  write_uleb128(m_output + m_offset, locator_length);
-  m_offset += uleb128_encoding_size(locator_length);
+  write_uleb128(m_output + m_offset, (uint32_t) locator_length);
+  m_offset += uleb128_encoding_size((uint32_t) locator_length);
   memcpy(m_output + m_offset, buf, locator_length + 1);
   m_offset += locator_length + 1;
 }
@@ -417,7 +417,7 @@ void DexOutput::generate_string_data() {
     }
   }
 
-  insert_map_item(TYPE_STRING_DATA_ITEM, nrstr, m_offset);
+  insert_map_item(TYPE_STRING_DATA_ITEM, (uint32_t) nrstr, m_offset);
   for (DexString* str : string_order) {
     // Emit lookup acceleration string if requested
     std::unique_ptr<Locator> locator = locator_for_descriptor(type_names, str);
@@ -476,7 +476,7 @@ void DexOutput::generate_typelist_data() {
     m_offset += size;
     m_stats.num_type_lists++;
   }
-  insert_map_item(TYPE_TYPE_LIST, num_tls, tl_start);
+  insert_map_item(TYPE_TYPE_LIST, (uint32_t) num_tls, tl_start);
 }
 
 void DexOutput::generate_proto_data() {
@@ -607,7 +607,7 @@ void DexOutput::generate_class_data_items() {
   dexcode_to_offset dco;
   uint32_t cdi_start = m_offset;
   for (auto& it : m_code_item_emits) {
-    uint32_t offset = ((uint8_t*)it.second) - m_output;
+    uint32_t offset = (uint32_t) (((uint8_t*)it.second) - m_output);
     dco[it.first] = offset;
   }
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
@@ -618,7 +618,7 @@ void DexOutput::generate_class_data_items() {
     m_cdi_offsets[clz] = m_offset;
     m_offset += size;
   }
-  insert_map_item(TYPE_CLASS_DATA_ITEM, m_cdi_offsets.size(), cdi_start);
+  insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t) m_cdi_offsets.size(), cdi_start);
 }
 
 void DexOutput::generate_code_items() {
@@ -644,7 +644,7 @@ void DexOutput::generate_code_items() {
     m_code_item_emits.emplace_back(code, (dex_code_item*)(m_output + m_offset));
     m_offset += size;
   }
-  insert_map_item(TYPE_CODE_ITEM, m_code_item_emits.size(), ci_start);
+  insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
 }
 
 void DexOutput::generate_static_values() {
@@ -663,7 +663,7 @@ void DexOutput::generate_static_values() {
     delete deva;
   }
   if (m_static_values.size()) {
-    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, m_static_values.size(), sv_start);
+    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t) m_static_values.size(), sv_start);
   }
 }
 
@@ -737,7 +737,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
   for (auto xref : xreflist) {
     if (xrefmap.count(xref)) continue;
     std::vector<uint32_t> xref_bytes;
-    xref_bytes.push_back(xref->size());
+    xref_bytes.push_back((unsigned int) xref->size());
     for (auto param : *xref) {
       DexAnnotationSet* das = param.second;
       always_assert_log(asetmap.count(das) != 0,
@@ -865,7 +865,7 @@ void DexOutput::generate_map() {
   uint32_t* mapout = (uint32_t*)(m_output + m_offset);
   hdr.map_off = m_offset;
   insert_map_item(TYPE_MAP_LIST, 1, m_offset);
-  *mapout = m_map_items.size();
+  *mapout = (uint32_t) m_map_items.size();
   dex_map_item* map = (dex_map_item*)(mapout + 1);
   for (auto const& mit : m_map_items) {
     *map++ = mit;
@@ -924,34 +924,34 @@ void DexOutput::init_header_offsets() {
   hdr.endian_tag = ENDIAN_CONSTANT;
   /* Link section was never used */
   hdr.link_size = hdr.link_off = 0;
-  hdr.string_ids_size = dodx->stringsize();
+  hdr.string_ids_size = (uint32_t) dodx->stringsize();
   hdr.string_ids_off = hdr.string_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_STRING_ID_ITEM, dodx->stringsize(), m_offset);
+  insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t) dodx->stringsize(), m_offset);
 
   m_offset += dodx->stringsize() * sizeof(dex_string_id);
-  hdr.type_ids_size = dodx->typesize();
+  hdr.type_ids_size = (uint32_t) dodx->typesize();
   hdr.type_ids_off = hdr.type_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_TYPE_ID_ITEM, dodx->typesize(), m_offset);
+  insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t) dodx->typesize(), m_offset);
 
   m_offset += dodx->typesize() * sizeof(dex_type_id);
-  hdr.proto_ids_size = dodx->protosize();
+  hdr.proto_ids_size = (uint32_t) dodx->protosize();
   hdr.proto_ids_off = hdr.proto_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_PROTO_ID_ITEM, dodx->protosize(), m_offset);
+  insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t) dodx->protosize(), m_offset);
 
   m_offset += dodx->protosize() * sizeof(dex_proto_id);
-  hdr.field_ids_size = dodx->fieldsize();
+  hdr.field_ids_size = (uint32_t) dodx->fieldsize();
   hdr.field_ids_off = hdr.field_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_FIELD_ID_ITEM, dodx->fieldsize(), m_offset);
+  insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t) dodx->fieldsize(), m_offset);
 
   m_offset += dodx->fieldsize() * sizeof(dex_field_id);
-  hdr.method_ids_size = dodx->methodsize();
+  hdr.method_ids_size = (uint32_t) dodx->methodsize();
   hdr.method_ids_off = hdr.method_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_METHOD_ID_ITEM, dodx->methodsize(), m_offset);
+  insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t) dodx->methodsize(), m_offset);
 
   m_offset += dodx->methodsize() * sizeof(dex_method_id);
-  hdr.class_defs_size = m_classes->size();
+  hdr.class_defs_size = (uint32_t) m_classes->size();
   hdr.class_defs_off = hdr.class_defs_size ? m_offset : 0;
-  insert_map_item(TYPE_CLASS_DEF_ITEM, m_classes->size(), m_offset);
+  insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t) m_classes->size(), m_offset);
 
   m_offset += m_classes->size() * sizeof(dex_class_def);
   hdr.data_off = m_offset;
@@ -972,9 +972,9 @@ void DexOutput::finalize_header() {
   sha1_update(&context, m_output + skip, hdr.file_size - skip);
   sha1_final(hdr.signature, &context);
   memcpy(m_output, &hdr, sizeof(hdr));
-  uint32_t adler = adler32(0L, Z_NULL, 0);
+  uint32_t adler = (uint32_t)adler32(0L, Z_NULL, 0);
   skip = sizeof(hdr.magic) + sizeof(hdr.checksum);
-  adler = adler32(adler, (const Bytef*)(m_output + skip), hdr.file_size - skip);
+  adler = (uint32_t) adler32(adler, (const Bytef*)(m_output + skip), hdr.file_size - skip);
   hdr.checksum = adler;
   memcpy(m_output, &hdr, sizeof(hdr));
 }

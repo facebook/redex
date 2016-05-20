@@ -34,7 +34,7 @@ DexString* get_simple_name(const DexType* type) {
   std::string full(type->get_name()->c_str());
   auto lpos = full.rfind('/');
   auto simple = full.substr(lpos + 1, full.size() - lpos - 2);
-  return DexString::make_string(simple.c_str(), simple.size());
+  return DexString::make_string(simple.c_str(), (uint32_t) simple.size());
 }
 
 /**

@@ -60,7 +60,7 @@ static const int kMaxMethodRefs = ((64 * 1024) - 1);
 static const int kMaxFieldRefs = 64 * 1024 - 1;
 static const char* kCanaryPrefix = "Lsecondary/dex";
 static const char* kCanaryClassFormat = "Lsecondary/dex%02d/Canary;";
-static const int kCanaryClassBufsize = strlen(kCanaryClassFormat) + 1;
+static const size_t kCanaryClassBufsize = strlen(kCanaryClassFormat) + 1;
 static const int kMaxDexNum = 99;
 
 struct dex_emit_tracker {

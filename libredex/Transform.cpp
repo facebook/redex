@@ -1112,7 +1112,7 @@ bool MethodTransform::try_sync() {
     std::sort(targets.begin(), targets.end(), multi_target_compare_index);
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
-      int count = (targets.size() * 4) + 2;
+      unsigned long count = (targets.size() * 4) + 2;
       uint16_t sparse_payload[count];
       sparse_payload[0] = FOPCODE_SPARSE_SWITCH;
       sparse_payload[1] = targets.size();
@@ -1130,7 +1130,7 @@ bool MethodTransform::try_sync() {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop = new DexOpcodeData(sparse_payload, count - 1);
+      DexInstruction* fop = new DexOpcodeData(sparse_payload, (int) (count - 1));
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
@@ -1139,7 +1139,7 @@ bool MethodTransform::try_sync() {
       addr += count;
     } else {
       // Emit packed.
-      int count = (targets.size() * 2) + 4;
+      unsigned long count = (targets.size() * 2) + 4;
       uint16_t packed_payload[count];
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
       packed_payload[1] = targets.size();
@@ -1155,7 +1155,7 @@ bool MethodTransform::try_sync() {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop = new DexOpcodeData(packed_payload, count - 1);
+      DexInstruction* fop = new DexOpcodeData(packed_payload, (int) (count - 1));
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.

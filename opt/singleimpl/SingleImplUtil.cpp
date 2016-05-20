@@ -26,7 +26,7 @@ DexType* get_concrete_type(SingleImpls& single_impls, DexType* type) {
       return concrete;
     }
     const auto base_name = concrete->get_name()->c_str();
-    uint32_t size = array_level + strlen(base_name);
+    uint32_t size = (uint32_t) (array_level + strlen(base_name));
     char array_name[size];
     char* p = array_name;
     while (array_level--)

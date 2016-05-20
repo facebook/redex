@@ -454,7 +454,7 @@ void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   // write back
   DexClassesVector outdex;
   DexClasses& orig_classes = dexen[0];
-  DexClasses classes(orig_classes.size() + untfs.size() - removed.size());
+  DexClasses classes((size_t)(orig_classes.size() + untfs.size() - removed.size()));
   int pos = 0;
   for (size_t i = 0; i < orig_classes.size(); ++i) {
     auto cls = orig_classes.get(i);

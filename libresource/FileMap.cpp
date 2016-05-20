@@ -123,9 +123,10 @@ bool FileMap::create(const char* origFileName, int fd, off64_t offset, size_t le
         return false;
     }
 #else // !defined(__MINGW32__)
-    int     prot, flags, adjust;
-    off64_t adjOffset;
-    size_t  adjLength;
+    long long adjust;
+    int       prot, flags;
+    off64_t   adjOffset;
+    size_t    adjLength;
 
     void* ptr;
 

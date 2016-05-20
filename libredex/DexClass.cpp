@@ -23,11 +23,11 @@
 
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
   uint16_t* typep = (uint16_t*)(output + 1);
-  *output = m_list.size();
+  *output = (uint32_t) m_list.size();
   for (auto const& type : m_list) {
     *typep++ = dodx->typeidx(type);
   }
-  return (((uint8_t*)typep) - (uint8_t*)output);
+  return (int) (((uint8_t*)typep) - (uint8_t*)output);
 }
 
 void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
@@ -65,7 +65,7 @@ DexDebugItem* DexDebugItem::get_dex_debug(DexIdx* idx, uint32_t offset) {
 int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, m_line_start);
-  encdata = write_uleb128(encdata, m_param_names.size());
+  encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {
     if (s == nullptr) {
       encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
@@ -78,7 +78,7 @@ int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
     dbgop->encode(dodx, encdata);
   }
   encdata = write_uleb128(encdata, DBG_END_SEQUENCE);
-  return encdata - output;
+  return (int) (encdata - output);
 }
 
 void DexDebugItem::gather_types(std::vector<DexType*>& ltype) {
@@ -165,7 +165,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   for (auto opc : m_insns) {
     opc->encode(dodx, insns);
   }
-  code->insns_size = insns - ((uint16_t*)(code + 1));
+  code->insns_size = (uint32_t) (insns - ((uint16_t*)(code + 1)));
   if (m_tries.size() == 0)
     return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
   /*
@@ -184,11 +184,11 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     dti[tryno].start_addr = dextry->m_start_addr;
     dti[tryno].insn_count = dextry->m_insn_count;
     dti[tryno].handler_off = hemit - handler_base;
-    int catchcount = dextry->m_catches.size();
+    size_t catchcount = dextry->m_catches.size();
     if (dextry->m_catchall != DEX_NO_INDEX) {
       catchcount = -catchcount;
     }
-    hemit = write_sleb128(hemit, catchcount);
+    hemit = write_sleb128(hemit, (int32_t) catchcount);
     for (auto const& cit : dextry->m_catches) {
       DexType* type = cit.first;
       hemit = write_uleb128(hemit, dodx->typeidx(type));
@@ -198,7 +198,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
       hemit = write_uleb128(hemit, dextry->m_catchall);
     }
   }
-  return hemit - ((uint8_t*)output);
+  return (int) (hemit - ((uint8_t*)output));
 }
 
 void DexMethod::become_virtual() {
@@ -288,10 +288,10 @@ int DexClass::encode(DexOutputIdx* dodx,
              m_access_flags);
   }
   uint8_t* encdata = output;
-  encdata = write_uleb128(encdata, m_sfields.size());
-  encdata = write_uleb128(encdata, m_ifields.size());
-  encdata = write_uleb128(encdata, m_dmethods.size());
-  encdata = write_uleb128(encdata, m_vmethods.size());
+  encdata = write_uleb128(encdata, (uint32_t) m_sfields.size());
+  encdata = write_uleb128(encdata, (uint32_t) m_ifields.size());
+  encdata = write_uleb128(encdata, (uint32_t) m_dmethods.size());
+  encdata = write_uleb128(encdata, (uint32_t) m_vmethods.size());
   uint32_t idxbase;
   idxbase = 0;
   for (auto const& f : m_sfields) {
@@ -370,7 +370,7 @@ int DexClass::encode(DexOutputIdx* dodx,
     }
     encdata = write_uleb128(encdata, code_off);
   }
-  return (encdata - output);
+  return (int) (encdata - output);
 }
 
 void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {

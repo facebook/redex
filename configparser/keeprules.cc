@@ -12,7 +12,7 @@
 // This could be faster with DP, but this code is simpler to read and it's
 // fast enough with reasonable inputs.  Just don't call
 // pattern_match('**************************', 'aaaaaaaaaaaaaaaaaaaaaaaaa')...
-bool pattern_match(const char* pattern, const char* name, int pl, int nl) {
+bool pattern_match(const char* pattern, const char* name, size_t pl, int nl) {
   if (*pattern == '*') {
     bool step2 = false, step1 = false;
     if (pl > 1 && *(pattern + 1) == '*') {
@@ -54,7 +54,7 @@ bool pattern_match(const char* pattern, const char* name, int pl, int nl) {
 }
 
 
-bool type_matches(const char* pattern, const char* name, int pl, int nl) {
+bool type_matches(const char* pattern, const char* name, size_t pl, size_t nl) {
   if (pattern == nullptr ||
       strcmp(pattern, "*") == 0 ||
       strcmp(pattern, "***") == 0) {

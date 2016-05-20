@@ -176,7 +176,7 @@ void rename_classes(
   for (auto apair : aliases) {
     char buf[MAX_DESCRIPTOR_LENGTH];
     const char *sourcestr = apair.first->c_str();
-    int sourcelen = strlen(sourcestr);
+    size_t sourcelen = strlen(sourcestr);
     if (sourcestr[sourcelen - 1] != ';')
       continue;
     strcpy(buf, sourcestr);

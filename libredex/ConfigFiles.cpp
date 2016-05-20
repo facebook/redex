@@ -40,7 +40,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config) :
  */
 std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   const char* kClassTail = ".class";
-  const int lentail = strlen(kClassTail);
+  const size_t lentail = strlen(kClassTail);
   auto file = m_coldstart_class_filename.c_str();
 
   std::vector<std::string> coldstart_classes;
@@ -51,7 +51,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   }
   std::string clzname;
   while (input >> clzname) {
-    int position = clzname.length() - lentail;
+		long position = clzname.length() - lentail;
     always_assert_log(position >= 0,
                       "Bailing, invalid class spec '%s' in interdex file %s\n",
                       clzname.c_str(), file);

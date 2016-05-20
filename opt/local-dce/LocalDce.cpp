@@ -380,7 +380,7 @@ class LocalDce {
     }
     // Source registers are live.
     for (size_t i = 0; i < inst->srcs_size(); i++) {
-      bliveness.set(inst->src(i));
+      bliveness.set(inst->src((int)i));
     }
     // `invoke-range` instructions need special handling since their sources
     // are encoded as a range.

@@ -111,7 +111,7 @@ void mark_reachable_by_classname(DexType* dtype, bool from_code) {
 
 void mark_reachable_by_classname(std::string& classname, bool from_code) {
   DexString* dstring =
-      DexString::get_string(classname.c_str(), classname.size());
+      DexString::get_string(classname.c_str(), (uint32_t)classname.size());
   DexType* dtype = DexType::get_type(dstring);
   if (dtype == nullptr) return;
   DexClass* dclass = type_class_internal(dtype);
@@ -315,7 +315,7 @@ void init_permanently_reachable_classes(
     auto cname = clazz->get_type()->get_name()->c_str();
     auto cls_len = strlen(cname);
     for (auto const& pat : cls_patterns) {
-        int pat_len = pat.size();
+        size_t pat_len = pat.size();
         if (type_matches(pat.c_str(), cname, pat_len, cls_len)) {
           mark_reachable_directly(clazz);
           TRACE(PGR, 2, "matched cls %s against pattern %s \n",

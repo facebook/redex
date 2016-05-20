@@ -32,12 +32,12 @@
 namespace {
 
 // Counters for this optimization
-static int s_cls_delete_count;
-static int s_meth_delete_count;
+static size_t s_cls_delete_count;
+static size_t s_meth_delete_count;
 static int s_meth_move_count;
 static int s_meth_could_not_move_count;
 static float s_avg_relocation_load;
-static int s_max_relocation_load;
+static size_t s_max_relocation_load;
 static int s_single_ref_total_count;
 static int s_single_ref_moved_count;
 static int s_line_conflict_but_sig_fine_count;
@@ -98,10 +98,10 @@ void visit_opcodes(
  * @param dexen All classes in the dexen
  * @return Unordered map of DexClass* -> dex index
  */
-std::unordered_map<const DexClass*, int> build_class_to_dex_map(
+std::unordered_map<const DexClass*, size_t> build_class_to_dex_map(
   const DexClassesVector& dexen) {
-  std::unordered_map<const DexClass*, int> map;
-  for (int i = 0, N = dexen.size() ; i < N ; ++i) {
+  std::unordered_map<const DexClass*, size_t> map;
+  for (size_t i = 0, N = dexen.size() ; i < N ; ++i) {
     for (const auto& cls : dexen[i]) {
       map[cls] = i;
     }
@@ -117,12 +117,12 @@ std::unordered_map<const DexClass*, int> build_class_to_dex_map(
  * @return Unordered map of DexClass* -> cold start class load rank.
  *         Lower rank is earlier in cold start class load.
  */
-std::unordered_map<const DexClass*, int> build_class_to_pgo_order_map(
+std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
   const DexClassesVector& dexen,
   ConfigFiles& cfg) {
   auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
-  std::unordered_map<const DexClass*, int> coldstart_classes;
+  std::unordered_map<const DexClass*, size_t> coldstart_classes;
   for (auto const& dex : dexen) {
     for (auto const& cls : dex) {
       class_string_map[std::string(cls->get_type()->get_name()->c_str())] = cls;
@@ -232,12 +232,12 @@ candidates_t build_candidates(
  * @param cls_to_dex Map of DexClass* -> dex index
  * @return Unordered map of  dex idx -> target DexClass* for relocation
  */
-std::unordered_map<int, DexClass*> build_dex_to_target_map(
+std::unordered_map<size_t, DexClass*> build_dex_to_target_map(
   const candidates_t& candidates,
-  const std::unordered_map<const DexClass*, int>& cls_to_dex) {
-  std::unordered_map<int, DexClass*> map;
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex) {
+  std::unordered_map<size_t, DexClass*> map;
   for (DexClass* cls : candidates) {
-    int dex = cls_to_dex.at(cls);
+    size_t dex = cls_to_dex.at(cls);
     map[dex] = cls;
   }
   for (const auto& it : map) {
@@ -328,8 +328,8 @@ DexClass* select_relocation_target(
   const DexMethod* meth,
   DexClass* default_target,
   const refs_t<DexMethod>& dmethod_refs,
-  const std::unordered_map<const DexClass*, int>& cls_to_pgo_order,
-  const std::unordered_map<const DexClass*, int>& cls_to_dex,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
   std::unordered_map<DexClass*, std::vector<DexMethod*> >& target_methods) {
 /*
   const auto& refs = dmethod_refs.at(meth);
@@ -450,13 +450,13 @@ void make_references_public(const DexMethod* from_meth) {
  void build_mutations(
   const candidates_t& candidates,
   const refs_t<DexMethod>& dmethod_refs,
-  const std::unordered_map<const DexClass*, int>& cls_to_pgo_order,
-  const std::unordered_map<const DexClass*, int>& cls_to_dex,
-  const std::unordered_map<int, DexClass*>& dex_to_target,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
+  const std::unordered_map<size_t, DexClass*>& dex_to_target,
   std::unordered_map<DexMethod*, DexClass*>& meth_moves,
   std::unordered_set<DexMethod*>& meth_deletes,
   std::unordered_set<DexClass*>& cls_deletes) {
-  std::unordered_map<DexClass*, int> target_relocations;
+  std::unordered_map<DexClass*, size_t> target_relocations;
   std::unordered_map<DexClass*, std::vector<DexMethod*> > target_methods;
   // Load the targets' existing methods into target_methods
   for (auto it : dex_to_target) {

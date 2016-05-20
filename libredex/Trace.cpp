@@ -89,8 +89,8 @@ struct Tracer {
 
  private:
   FILE* m_file{nullptr};
-  int m_level{0};
-  std::array<int, N_TRACE_MODULES> m_traces;
+  long m_level{0};
+  std::array<long, N_TRACE_MODULES> m_traces;
 };
 
 static Tracer tracer;

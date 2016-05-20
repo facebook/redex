@@ -613,7 +613,7 @@ static int jar_uncompress(Bytef *dest, uLongf *destLen, const Bytef *source,
 }
 
 static bool decompress_class(jar_entry &file, uint8_t *mapping,
-                             uint8_t *outbuffer, int bufsize) {
+                             uint8_t *outbuffer, ssize_t bufsize) {
   if (file.cd_entry.comp_method != kCompMethodDeflate) {
     fprintf(stderr, "Unknown compression method %d, Bailing\n",
             file.cd_entry.comp_method);
@@ -666,7 +666,7 @@ static bool process_jar_entries(std::vector<jar_entry> &files,
   ssize_t bufsize = kStartBufferSize;
   uint8_t *outbuffer = (uint8_t*)malloc(bufsize);
   static char classEndString[] = ".class";
-  static int classEndStringLen = strlen(classEndString);
+  static size_t classEndStringLen = strlen(classEndString);
   init_basic_types();
   for (auto &file : files) {
     if (file.cd_entry.ucomp_size == 0)

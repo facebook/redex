@@ -153,7 +153,7 @@ void allocate_registers(DexMethod* m) {
         auto& iliveness = liveness[it->addr];
         iliveness = livein;
         for (size_t i = 0; i < inst->srcs_size(); i++) {
-          iliveness.set(inst->src(i));
+          iliveness.set(inst->src((int) i));
         }
         livein = iliveness;
         if (inst->dests_size()) {
@@ -290,7 +290,7 @@ void allocate_registers(DexMethod* m) {
         insn->set_dest(reg_map[insn->dest()]);
       }
       for (size_t i = 0; i < insn->srcs_size(); i++) {
-        insn->set_src(i, reg_map[insn->src(i)]);
+        insn->set_src((int) i, reg_map[insn->src((int) i)]);
       }
     }
   }

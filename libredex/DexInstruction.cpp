@@ -865,15 +865,15 @@ int32_t DexInstruction::offset() const {
   auto format = opcode_format(opcode());
   switch (format) {
   case FMT_f10t:
-    return signext<8>(m_opcode >> 8);
+    return (int32_t) signext<8>(m_opcode >> 8);
   case FMT_f20t:
   case FMT_f21t:
   case FMT_f22t:
-    return signext<16>(m_arg[0]);
+    return (int32_t) signext<16>(m_arg[0]);
   case FMT_f30t:
   case FMT_f31t: {
     auto offset = uint32_t(m_arg[0]) | (uint32_t(m_arg[1]) << 16);
-    return signext<32>(offset);
+    return  (int32_t) signext<32>(offset);
   }
   default:
     assert(false);

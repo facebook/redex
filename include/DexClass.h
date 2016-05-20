@@ -780,16 +780,16 @@ class DexClasses {
   using iterator = std::vector<DexClass*>::iterator;
   using const_iterator = std::vector<DexClass*>::const_iterator;
 
-  DexClasses(int size) : m_classes(size) {}
+  DexClasses(size_t size) : m_classes(size) {}
 
   DexClasses(const DexClasses&) = delete;
   DexClasses(DexClasses&&) = default;
 
-  void insert_at(DexClass* cls, int num) {
+  void insert_at(DexClass* cls, size_t num) {
     m_classes.at(num) = cls;
   }
 
-  DexClass* get(int num) {
+  DexClass* get(size_t num) {
     return m_classes.at(num);
   }
 
