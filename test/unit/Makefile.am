@@ -32,8 +32,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/tools/redex-all \
-	-I$(top_srcdir)/third-party/folly \
-	-I$(top_srcdir)/util
+	-I$(top_srcdir)/util \
+	-I/usr/include/jsoncpp
 
 TESTS = \
 	config_parser_test \

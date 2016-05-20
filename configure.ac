@@ -6,7 +6,6 @@ AC_INIT([redex], [1.0], [not-valid-yet@fb.com])
 AM_INIT_AUTOMAKE(redex, 1.0)
 AC_CONFIG_SRCDIR([configparser/config.l])
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_SUBDIRS([third-party/folly/folly])
 
 # Checks for programs.
 AC_PROG_CXX
@@ -27,6 +26,7 @@ AX_BOOST_BASE([1.54.0], [], [AC_MSG_ERROR(
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
+AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h memory.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])

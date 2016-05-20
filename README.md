@@ -11,9 +11,7 @@ source.
 
 ## Dependencies
 
-ReDex depends on folly, glog, double-conversion, boost and zlib, and uses
-autoconf/automake for building.  Getting these dependences is easiest using a
-package manager.
+Getting these dependences is easiest using a package manager.
 
 ### Mac OS X
 
@@ -57,11 +55,10 @@ sudo apt-get install \
 
 ## Download, Build and Install
 
-Get ReDex and its submodules from GitHub:
+Get ReDex from GitHub:
 ```
 git clone https://github.com/facebook/redex.git
 cd redex
-git submodule update --init
 ```
 
 Now, build ReDex using autoconf and make.
@@ -129,13 +126,6 @@ appropriate args:
 -s [KEYSTORE], --keystore [KEYSTORE]
 -a [KEYALIAS], --keyalias [KEYALIAS]
 -p [KEYPASS], --keypass [KEYPASS]
-```
-
-## I'm getting "/usr/local/bin/redex-all: error while loading shared libraries: libfolly.so.57..."
-
-If you're on Linux, run:
-```
-sudo ldconfig
 ```
 
 ## How does this compare to ProGuard?

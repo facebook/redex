@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = third-party/folly/folly . test
+SUBDIRS = . test
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = --std=gnu++11 -O3 -Wall -g
@@ -38,8 +38,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/unterface \
-	-I$(top_srcdir)/third-party/folly \
-	-I$(top_srcdir)/util
+	-I$(top_srcdir)/util \
+	-I/usr/include/jsoncpp
 
 #
 # libredex: the optimizer's guts
@@ -118,8 +118,7 @@ libredex_la_SOURCES = \
 libredex_la_LIBADD = \
 	-lboost_filesystem \
 	-lboost_system \
-	-lpthread \
-	third-party/folly/folly/libfolly.la
+	-lpthread
 
 #
 # redex-all: the main executable
