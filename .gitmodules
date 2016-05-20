@@ -1,3 +1,0 @@
-[submodule "third-party/folly"]
-	path = third-party/folly
-	url = https://github.com/facebook/folly.git
