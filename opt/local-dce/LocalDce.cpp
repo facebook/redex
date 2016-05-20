@@ -400,6 +400,7 @@ class LocalDce {
   LocalDce(const Scope& scope) : m_scope(scope) {}
 
   void run() {
+	  TRACE(DCE, 1, "Running LocalDCE pass\n");
     walk_methods(m_scope,
                  [&](DexMethod* m) {
                    if (!m->get_code()) {
