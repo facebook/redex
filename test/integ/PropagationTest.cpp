@@ -62,7 +62,7 @@ TEST(PropagationTest1, localDCE1) {
   dexen.emplace_back(load_classes_from_dex(dexfile));
   DexClasses& classes = dexen.back();
   std::cout << "Loaded classes: " << classes.size() << std::endl ;
-	
+
 	TRACE(DCE, 2, "Code before:\n");
   for(const auto& cls : classes) {
 	  TRACE(DCE, 2, "Class %s\n", SHOW(cls));
@@ -85,7 +85,7 @@ TEST(PropagationTest1, localDCE1) {
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(dexen, dummy_cfg);
-	
+
 	TRACE(DCE, 2, "Code after:\n");
 	for(const auto& cls : classes) {
 	  TRACE(DCE, 2, "Class %s\n", SHOW(cls));
@@ -96,10 +96,11 @@ TEST(PropagationTest1, localDCE1) {
 			  for (auto const instruction : dm->get_code()->get_instructions()) {
 					// Make sure there is no invoke-virtual in the optimized method.
 			    ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_VIRTUAL);
+          // Make sure there is no const-class in the optimized method.
+          ASSERT_NE(instruction->opcode(), OPCODE_CONST_CLASS);
 			  }
 			}
 		}
 	}
-	
-}
 
+}
