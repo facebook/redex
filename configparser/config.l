@@ -69,6 +69,7 @@ T_ALLOWACCESSMODIFICATION "-allowaccessmodification"
 T_APPLYMAPPING "-applymapping"
 T_ASSUMENOSIDEEFFECTS "-assumenosideeffects"
 T_CLASSOBFUSCATIONDICTIONARY "-classobfuscationdictionary"
+T_DONTNOTE "-dontnote"
 T_DONTOBFUSCATE "-dontobfuscate"
 T_DONTOPTIMIZE "-dontoptimize"
 T_DONTPREVERIFY "-dontpreverify"
@@ -183,6 +184,7 @@ T_PATTERN [A-Za-z*[.0-9/$_]+[A-Za-z*\[\].0-9/$_#-]*
 {T_APPLYMAPPING}                 {DEBUG("[ignored rule]   "); return T_APPLYMAPPING;}
 {T_ASSUMENOSIDEEFFECTS}          {DEBUG("[ignored rule]   "); return T_ASSUMENOSIDEEFFECTS;}
 {T_CLASSOBFUSCATIONDICTIONARY}   {DEBUG("[ignored rule]   "); return T_CLASSOBFUSCATIONDICTIONARY;}
+{T_DONTNOTE}                     {DEBUG("[ignored rule]   "); return T_DONTNOTE;}
 {T_DONTOBFUSCATE}                {DEBUG("[ignored rule]   "); return T_DONTOBFUSCATE;}
 {T_DONTOPTIMIZE}                 {DEBUG("[ignored rule]   "); return T_DONTOPTIMIZE;}
 {T_DONTPREVERIFY}                {DEBUG("[ignored rule]   "); return T_DONTPREVERIFY;}
