@@ -44,38 +44,38 @@ std::vector<Pass*> create_passes();
 
 static void usage() {
   fprintf(
-    stderr,
-    "usage: redex-all [opts...] dexes...\n\n"
-    "  -a --apkdir  directory containing unzipped APK\n"
-    "  -c --config  JSON-formatted config file\n"
-    "  -o --outdir  output directory for optimized dexes\n"
-    "  -j --jarpath Classpath jar\n"
-    "  -p --proguard-config proguard config file\n"
-    "  -s --seeds seeds file specifiying roots of classes to kept\n"
-    "  -w --warn    warning level:\n"
-    "                   0: no warnings\n"
-    "                   1: count of warnings\n"
-    "                   2: full text of warnings\n"
-    "  -Skey=string  Add a string value to the global config, overwriting the "
-    "existing value if any\n"
-    "                 Example: -Smy_param_name=foo\n"
-    "  -SSomePassName.key=string\n"
-    "               Add a string value to a pass config, overwriting the "
-    "existing value if any\n"
-    "                 Example: -SRenameClassesPass.class_rename="
-    "/foo/bar/data.txt\n"
-    "  -Jkey=<json value>\n"
-    "               Add a json value to the global config, overwriting the "
-    "existing value if any.\n"
-    "                 Example: -Smy_param_name={\"foo\": true}\n"
-    "  -JSomePassName.key=<json value>\n"
-    "               Add a json value to a pass config, overwriting the "
-    "existing value if any\n"
-    "                 Example: -SRenameClassesPass.class_rename=[1, 2, 3]\n"
-    "\n"
-    " Note: Be careful to properly escape JSON parameters, e.g. strings "
-    "must be quoted.\n"
-  );
+      stderr,
+      "usage: redex-all [opts...] dexes...\n\n"
+      "  -a --apkdir  directory containing unzipped APK\n"
+      "  -c --config  JSON-formatted config file\n"
+      "  -o --outdir  output directory for optimized dexes\n"
+      "  -j --jarpath Classpath jar\n"
+      "  -p --proguard-config proguard config file\n"
+      "  -s --seeds seeds file specifiying roots of classes to kept\n"
+      "  -w --warn    warning level:\n"
+      "                   0: no warnings\n"
+      "                   1: count of warnings\n"
+      "                   2: full text of warnings\n"
+      "  -Skey=string  Add a string value to the global config, overwriting "
+      "the "
+      "existing value if any\n"
+      "                 Example: -Smy_param_name=foo\n"
+      "  -SSomePassName.key=string\n"
+      "               Add a string value to a pass config, overwriting the "
+      "existing value if any\n"
+      "                 Example: -SRenameClassesPass.class_rename="
+      "/foo/bar/data.txt\n"
+      "  -Jkey=<json value>\n"
+      "               Add a json value to the global config, overwriting the "
+      "existing value if any.\n"
+      "                 Example: -Smy_param_name={\"foo\": true}\n"
+      "  -JSomePassName.key=<json value>\n"
+      "               Add a json value to a pass config, overwriting the "
+      "existing value if any\n"
+      "                 Example: -SRenameClassesPass.class_rename=[1, 2, 3]\n"
+      "\n"
+      " Note: Be careful to properly escape JSON parameters, e.g. strings "
+      "must be quoted.\n");
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -107,8 +107,9 @@ static Json::Value parse_json_value(std::string& value_string) {
   return temp_json;
 }
 
-static bool add_value_to_config(
-    Json::Value& config, std::string& key_value, bool is_json) {
+static bool add_value_to_config(Json::Value& config,
+                                std::string& key_value,
+                                bool is_json) {
   size_t equals_idx = key_value.find('=');
   size_t dot_idx = key_value.find('.');
 
@@ -140,16 +141,16 @@ static bool add_value_to_config(
 
 Json::Value default_config() {
   auto passes = {
-    "ReBindRefsPass",
-    "BridgePass",
-    "SynthPass",
-    "FinalInlinePass",
-    "DelSuperPass",
-    "SingleImplPass",
-    "SimpleInlinePass",
-    "StaticReloPass",
-    "RemoveEmptyClassesPass",
-    "ShortenSrcStringsPass",
+      "ReBindRefsPass",
+      "BridgePass",
+      "SynthPass",
+      "FinalInlinePass",
+      "DelSuperPass",
+      "SingleImplPass",
+      "SimpleInlinePass",
+      "StaticReloPass",
+      "RemoveEmptyClassesPass",
+      "ShortenSrcStringsPass",
   };
   std::stringstream temp_json("{\"redex\":{\"passes\":[]}}");
   Json::Value cfg;
@@ -162,14 +163,14 @@ Json::Value default_config() {
 
 int parse_args(int argc, char* argv[], Arguments& args) {
   const struct option options[] = {
-    { "apkdir",  required_argument, 0, 'a' },
-    { "config",  required_argument, 0, 'c' },
-    { "jarpath", required_argument, 0, 'j'},
-    { "proguard-config", required_argument, 0, 'p'},
-    { "seeds", required_argument, 0, 's'},
-    { "outdir",  required_argument, 0, 'o' },
-    { "warn",    required_argument, 0, 'w' },
-    { nullptr, 0, nullptr, 0 },
+      {"apkdir", required_argument, 0, 'a'},
+      {"config", required_argument, 0, 'c'},
+      {"jarpath", required_argument, 0, 'j'},
+      {"proguard-config", required_argument, 0, 'p'},
+      {"seeds", required_argument, 0, 's'},
+      {"outdir", required_argument, 0, 'o'},
+      {"warn", required_argument, 0, 'w'},
+      {nullptr, 0, nullptr, 0},
   };
   args.out_dir = ".";
   char c;
@@ -181,11 +182,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
   const char* apk_dir = nullptr;
 
   while ((c = getopt_long(
-            argc,
-            argv,
-            ":a:c:o:w:p:S::J::",
-            &options[0],
-            nullptr)) != -1) {
+              argc, argv, ":a:c:o:w:p:S::J::", &options[0], nullptr)) != -1) {
     switch (c) {
     case 'a':
       apk_dir = optarg;
@@ -200,7 +197,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       break;
     case 'j':
       args.jar_paths.emplace(optarg);
-			TRACE(MAIN, 2, "Command line -j option: %s\n", optarg);
+      TRACE(MAIN, 2, "Command line -j option: %s\n", optarg);
       break;
     case 'p':
       args.proguard_config = optarg;
@@ -210,7 +207,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       break;
     case 's':
       if (optarg) {
-         args.seeds_filename = optarg;
+        args.seeds_filename = optarg;
       }
       break;
     case 'S':
@@ -229,7 +226,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       fprintf(stderr, "ERROR: %s requires an argument\n", argv[optind - 1]);
       return 0;
     case '?':
-      return 0;  // getopt_long has printed an error
+      return 0; // getopt_long has printed an error
     default:
       abort();
     }
@@ -284,7 +281,9 @@ void output_stats(const char* path, const dex_output_stats_t& stats) {
   out.close();
 }
 
-void output_moved_methods_map(const char* path, DexClassesVector& dexen, ConfigFiles& cfg) {
+void output_moved_methods_map(const char* path,
+                              DexClassesVector& dexen,
+                              ConfigFiles& cfg) {
   // print out moved methods map
   if (cfg.save_move_map() && strcmp(path, "")) {
     FILE* fd = fopen(path, "w");
@@ -306,11 +305,12 @@ void output_moved_methods_map(const char* path, DexClassesVector& dexen, ConfigF
       } else {
         src_string = dummy.c_str();
       }
-      fprintf(fd, "%s %s (%s) -> %s \n",
-          cls_name->c_str(),
-          meth_name->c_str(),
-          src_string,
-          ren_to_cls_name);
+      fprintf(fd,
+              "%s %s (%s) -> %s \n",
+              cls_name->c_str(),
+              meth_name->c_str(),
+              src_string,
+              ren_to_cls_name);
     }
     fclose(fd);
   } else {
@@ -342,33 +342,38 @@ int main(int argc, char* argv[]) {
   std::set<std::string> library_jars;
   auto start = parse_args(argc, argv, args);
   if (!dir_is_writable(args.out_dir)) {
-    fprintf(stderr, "outdir %s is not a writable directory\n",
+    fprintf(stderr,
+            "outdir %s is not a writable directory\n",
             args.out_dir.c_str());
     exit(1);
   }
 
   if (!args.proguard_config.empty()) {
     if (!load_proguard_config_file(
-        args.proguard_config.c_str(), &rules, &library_jars)) {
-      fprintf(stderr, "ERROR: Unable to open proguard config %s\n",
+            args.proguard_config.c_str(), &rules, &library_jars)) {
+      fprintf(stderr,
+              "ERROR: Unable to open proguard config %s\n",
               args.proguard_config.c_str());
       // For now tolerate missing or unparseable ProGuard configuration files.
       // start = 0;
     }
   } else {
-    TRACE(MAIN, 1,
-        "Skipping parsing the proguard config file "
-        "because no file was specified\n");
+    TRACE(MAIN,
+          1,
+          "Skipping parsing the proguard config file "
+          "because no file was specified\n");
   }
 
-
   for (const auto jar_path : args.jar_paths) {
-	  std::stringstream jar_stream(jar_path);
-		std::string dependent_jar_path;
-	  while (std::getline(jar_stream, dependent_jar_path, ':')) {
-			TRACE(MAIN, 2, "Dependent JAR specified on command-line: %s\n", dependent_jar_path.c_str());
+    std::stringstream jar_stream(jar_path);
+    std::string dependent_jar_path;
+    while (std::getline(jar_stream, dependent_jar_path, ':')) {
+      TRACE(MAIN,
+            2,
+            "Dependent JAR specified on command-line: %s\n",
+            dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
-		}
+    }
   }
 
   if (start == 0 || start == argc) {
@@ -381,20 +386,21 @@ int main(int argc, char* argv[]) {
     dexen.emplace_back(load_classes_from_dex(argv[i]));
   }
 
-  for (const auto& library_jar: library_jars) {
+  for (const auto& library_jar : library_jars) {
     TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
     if (!load_jar_file(library_jar.c_str())) {
-      fprintf(stderr,
-        "WARNING: Error in jar %s - continue. This may lead to unexpected "
-        "behavior, please check your jars\n",
-        library_jar.c_str());
+      fprintf(
+          stderr,
+          "WARNING: Error in jar %s - continue. This may lead to unexpected "
+          "behavior, please check your jars\n",
+          library_jar.c_str());
     }
   }
 
   ConfigFiles cfg(args.config);
-	cfg.using_seeds = false;
+  cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
-		cfg.using_seeds = init_seed_classes(args.seeds_filename) > 0;
+    cfg.using_seeds = init_seed_classes(args.seeds_filename) > 0;
   }
 
   PassManager manager(passes, rules, args.config);
@@ -404,8 +410,9 @@ int main(int argc, char* argv[]) {
 
   LocatorIndex* locator_index = nullptr;
   if (args.config.get("emit_locator_strings", false).asBool()) {
-    TRACE(LOC, 1,
-        "Will emit class-locator strings for classloader optimization\n");
+    TRACE(LOC,
+          1,
+          "Will emit class-locator strings for classloader optimization\n");
     locator_index = new LocatorIndex(make_locator_index(dexen));
   }
 
@@ -422,11 +429,7 @@ int main(int argc, char* argv[]) {
     }
     ss << ".dex";
     auto stats = write_classes_to_dex(
-      ss.str(),
-      &dexen[i],
-      locator_index,
-      i,
-      methodmapping.c_str());
+        ss.str(), &dexen[i], locator_index, i, methodmapping.c_str());
     totals += stats;
   }
   output_stats(stats_output.c_str(), totals);
