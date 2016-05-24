@@ -50,7 +50,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
 
 void process_signature_anno(DexString* dstring) {
   const char* cstr = dstring->c_str();
-  int len = strlen(cstr);
+  size_t len = strlen(cstr);
   if (len < 3) return;
   if (cstr[0] != 'L') return;
   if (cstr[len - 1] == ';') {
