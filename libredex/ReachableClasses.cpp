@@ -288,7 +288,6 @@ void init_permanently_reachable_classes(
     }
   }
 
-#if 0
   /* Do only keep class rules for now.
    * '*' and '**' rules are skipped,
    * because those are matching on something else,
@@ -328,7 +327,6 @@ void init_permanently_reachable_classes(
   }
   TRACE(PGR, 1, "matched on %lu classes with CLASS KEEP proguard rules \n",
       pg_marked_classes);
-#endif
 }
 
 }

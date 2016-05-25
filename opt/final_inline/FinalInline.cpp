@@ -140,7 +140,6 @@ void remove_unused_fields(Scope& scope,
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
   for (auto clazz : scope) {
     if (!can_delete(clazz)) {
-      TRACE(FINALINLINE, 2, "Cannot delete: %s\n", SHOW(clazz));
       continue;
     }
     auto sfields = clazz->get_sfields();
