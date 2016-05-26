@@ -429,7 +429,12 @@ int main(int argc, char* argv[]) {
     }
     ss << ".dex";
     auto stats = write_classes_to_dex(
-        ss.str(), &dexen[i], locator_index, i, methodmapping.c_str());
+      ss.str(),
+      &dexen[i],
+      locator_index,
+      i,
+      cfg,
+      methodmapping.c_str());
     totals += stats;
   }
   output_stats(stats_output.c_str(), totals);

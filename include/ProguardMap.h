@@ -14,6 +14,8 @@
 #include <map>
 #include <string>
 
+#include "DexClass.h"
+
 /**
  * ProguardMap parses ProGuard's mapping.txt file that maps de-obfuscated class
  * and member names to obfuscated names.  This facility is useful if you have
@@ -30,6 +32,11 @@
  * de-obfuscated name and produce an obfuscated name.  Since we're likely
  * working on an obfuscated APK, this direction is also good for looking up the
  * result with the various `DexMember::get_member` functions.
+ *
+ * The deobfuscate* methods expect as input the "complete" name for the object.
+ * For classes, this is the full descriptor.
+ * For methods, it's <class descriptor>.<name>(<args descs>)<return desc> .
+ * For fields,  it's <class descriptor>.<name>:<type desc> .
  */
 struct ProguardMap {
   /**
@@ -48,17 +55,32 @@ struct ProguardMap {
   /**
    * Translate un-obfuscated class name to obfuscated name.
    */
-  std::string translate_class(const std::string& cls);
+  std::string translate_class(const std::string& cls) const;
 
   /**
    * Translate un-obfuscated field name to obfuscated name.
    */
-  std::string translate_field(const std::string& field);
+  std::string translate_field(const std::string& field) const;
 
   /**
    * Translate un-obfuscated method name to obfuscated name.
    */
-  std::string translate_method(const std::string& method);
+  std::string translate_method(const std::string& method) const;
+
+  /**
+   * Translate obfuscated class name to un-obfuscated name.
+   */
+  std::string deobfuscate_class(const std::string& cls) const;
+
+  /**
+   * Translate obfuscated field name to un-obfuscated name.
+   */
+  std::string deobfuscate_field(const std::string& field) const;
+
+  /**
+   * Translate obfuscated method name to un-obfuscated name.
+   */
+  std::string deobfuscate_method(const std::string& method) const;
 
  private:
   template <class IStream>
@@ -81,9 +103,21 @@ struct ProguardMap {
       const char* args);
 
  private:
+  // Unobfuscated to obfuscated maps
   std::map<std::string, std::string> m_classMap;
   std::map<std::string, std::string> m_fieldMap;
   std::map<std::string, std::string> m_methodMap;
+
+  // Obfuscated to unobfuscated maps
+  std::map<std::string, std::string> m_obfClassMap;
+  std::map<std::string, std::string> m_obfFieldMap;
+  std::map<std::string, std::string> m_obfMethodMap;
+
   std::string m_currClass;
   std::string m_currNewClass;
 };
+
+std::string proguard_name(DexType* cls);
+std::string proguard_name(DexClass* cls);
+std::string proguard_name(DexMethod* method);
+std::string proguard_name(DexField* field);

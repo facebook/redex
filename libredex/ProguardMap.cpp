@@ -91,18 +91,37 @@ ProguardMap::ProguardMap(const std::string& filename) {
   }
 }
 
-std::string ProguardMap::translate_class(const std::string& cls) {
-  auto it = m_classMap.find(cls);
-  if (it == m_classMap.end()) return cls;
+std::string find_or_same(
+  const std::string& key,
+  const std::map<std::string, std::string>& map
+) {
+  auto it = map.find(key);
+  if (it == map.end()) return key;
   return it->second;
 }
 
-std::string ProguardMap::translate_field(const std::string& field) {
-  return m_fieldMap[field];
+std::string ProguardMap::translate_class(const std::string& cls) const {
+  return find_or_same(cls, m_classMap);
 }
 
-std::string ProguardMap::translate_method(const std::string& method) {
-  return m_methodMap[method];
+std::string ProguardMap::translate_field(const std::string& field) const {
+  return find_or_same(field, m_fieldMap);
+}
+
+std::string ProguardMap::translate_method(const std::string& method) const {
+  return find_or_same(method, m_methodMap);
+}
+
+std::string ProguardMap::deobfuscate_class(const std::string& cls) const {
+  return find_or_same(cls, m_obfClassMap);
+}
+
+std::string ProguardMap::deobfuscate_field(const std::string& field) const {
+  return find_or_same(field, m_obfFieldMap);
+}
+
+std::string ProguardMap::deobfuscate_method(const std::string& method) const {
+  return find_or_same(method, m_obfMethodMap);
 }
 
 void ProguardMap::parse_line(const std::string& line) {
@@ -131,6 +150,7 @@ bool ProguardMap::parse_class(const std::string& line) {
   m_currClass = convert_type(classname);
   m_currNewClass = convert_type(newname);
   m_classMap[m_currClass] = m_currNewClass;
+  m_obfClassMap[m_currNewClass] = m_currClass;
   return true;
 }
 
@@ -146,6 +166,7 @@ bool ProguardMap::parse_field(const std::string& line) {
   auto pgnew = convert_proguard_field(m_currNewClass, type, newname);
   auto pgold = convert_proguard_field(m_currClass, type, fieldname);
   m_fieldMap[pgold] = pgnew;
+  m_obfFieldMap[pgnew] = pgold;
   return true;
 }
 
@@ -212,4 +233,37 @@ void ProguardMap::add_method_mapping(
   auto pgold = convert_proguard_method(m_currClass, type, methodname, args);
   auto pgnew = convert_proguard_method(m_currNewClass, type, newname, args);
   m_methodMap[pgold] = pgnew;
+  m_obfMethodMap[pgnew] = pgold;
+}
+
+std::string proguard_name(DexType* type) {
+  return type->get_name()->c_str();
+}
+
+std::string proguard_name(DexClass* cls) {
+  return cls->get_name()->c_str();
+}
+
+std::string proguard_name(DexMethod* method) {
+  // Format is <class descriptor>.<method name>(<arg descriptors>)<return descriptor>
+  auto str = proguard_name(method->get_class()) + "." + method->get_name()->c_str();
+
+  auto proto = method->get_proto();
+  auto args_str = std::string("(");
+
+  for (auto& arg_type: proto->get_args()->get_type_list()) {
+    args_str += proguard_name(arg_type);
+  }
+  args_str += ")";
+
+  auto ret_str = proguard_name(proto->get_rtype());
+  return str + args_str + ret_str;
+}
+
+std::string proguard_name(DexField* field) {
+  auto str = proguard_name(field->get_class()) + "."
+    + field->get_name()->c_str() + ":"
+    + proguard_name(field->get_type());
+
+  return str;
 }

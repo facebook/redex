@@ -262,6 +262,7 @@ public:
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
+  const ConfigFiles& m_config_files;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data();
@@ -303,6 +304,7 @@ public:
     DexClasses* classes,
     LocatorIndex* locator_index,
     size_t dex_number,
+    const ConfigFiles& config_files,
     const char* method_mapping_path);
   ~DexOutput();
   void prepare();
@@ -314,7 +316,10 @@ DexOutput::DexOutput(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  const char* method_mapping_path) {
+  const ConfigFiles& config_files,
+  const char* method_mapping_path):
+    m_config_files(config_files) {
+
   m_classes = classes;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
@@ -511,6 +516,7 @@ namespace {
 void write_method_mapping(
   const char* filename,
   const DexOutputIdx* dodx,
+  const ProguardMap& proguard_map,
   size_t dex_number
 ) {
   if (!filename || filename[0] == '\0') return;
@@ -525,12 +531,21 @@ void write_method_mapping(
     auto method = it.first;
     auto idx = it.second;
 
+    auto deobf_class = proguard_map.deobfuscate_class(proguard_name(method->get_class()));
+    auto deobf_method = proguard_map.deobfuscate_method(proguard_name(method));
+
+    // Format is <cls>.<name>(<args>)<ret>
+    // We only want the name here.
+    auto begin = deobf_method.find('.') + 1;
+    auto end = deobf_method.rfind('(');
+    auto deobf_method_name = deobf_method.substr(begin, end-begin);
+
     fprintf(fd,
             "%u %lu %s %s\n",
             idx,
             dex_number,
-            method->get_name()->c_str(),
-            method->get_class()->get_name()->c_str());
+            deobf_method_name.c_str(),
+            deobf_class.c_str());
   }
   fclose(fd);
 }
@@ -560,7 +575,12 @@ void DexOutput::generate_method_data() {
     if (method->is_concrete()) m_stats.num_methods++;
     m_stats.num_method_refs++;
   }
-  write_method_mapping(m_method_mapping_filename, dodx, m_dex_number);
+  write_method_mapping(
+    m_method_mapping_filename,
+    dodx,
+    m_config_files.get_proguard_map(),
+    m_dex_number
+  );
 }
 
 void DexOutput::generate_class_data() {
@@ -1015,6 +1035,7 @@ write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
+  const ConfigFiles& cfg,
   const char* method_mapping_filename)
 {
   DexOutput dout = DexOutput(
@@ -1022,6 +1043,7 @@ write_classes_to_dex(
     classes,
     locator_index,
     dex_number,
+    cfg,
     method_mapping_filename);
   dout.prepare();
   dout.write();

@@ -11,9 +11,11 @@
 
 #include <unordered_map>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "Trace.h"
 #include "Pass.h"
+#include "ProguardMap.h"
 
 #include <locator.h>
 using facebook::Locator;
@@ -103,4 +105,5 @@ dex_output_stats_t write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
+  const ConfigFiles& cfg,
   const char* method_mapping_filename);
