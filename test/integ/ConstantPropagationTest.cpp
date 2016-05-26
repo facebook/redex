@@ -72,13 +72,16 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
 	TRACE(MAIN, 2, "Code before:\n");
   for(const auto& cls : classes) {
-	  TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
-		for (const auto& dm : cls->get_dmethods()) {
-		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-			if (strcmp(dm->get_name()->c_str(), "propagation") == 0) {
-			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-			}
-		}
+    if (strcmp(cls->get_name()->c_str(), "Lcom/facebook/redextest/MyBy2Or3;") == 0 ||
+        strcmp(cls->get_name()->c_str(), "Lcom/facebook/redextest/ConstantPropagation;") == 0) {
+  	  TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+  		for (const auto& dm : cls->get_dmethods()) {
+  		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+  			if (strcmp(dm->get_name()->c_str(), "propagation") == 0) {
+  			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+  			}
+  		}
+    }
 	}
 
   std::vector<Pass*> passes = {
@@ -97,22 +100,29 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
 	TRACE(MAIN, 2, "Code after:\n");
 	for(const auto& cls : classes) {
-	  TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
-		for (const auto& dm : cls->get_dmethods()) {
-		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-			if (strcmp(dm->get_name()->c_str(), "propagation") == 0) {
-			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-			  for (auto const instruction : dm->get_code()->get_instructions()) {
-          //The logic will be reverted when the future
-          //development of constant propagation optimization is done, i.e.,
-          //The code will be changed to ASSERT_TRUE(false)
-          // if IF_EQZ or New Class Instance instruction is found
-          if (instruction->opcode() == OPCODE_IF_EQZ ||
-              instruction->opcode() == OPCODE_NEW_INSTANCE) {
-                  ASSERT_TRUE(true);
-              }
-			  }
-			}
-		}
+    if (strcmp(cls->get_name()->c_str(), "Lcom/facebook/redextest/MyBy2Or3;") == 0) {
+      TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+      // To be reverted: Class MyBy2Or3 should be removed by future optimization.
+      ASSERT_TRUE(true);
+    }
+    else if (strcmp(cls->get_name()->c_str(), "Lcom/facebook/redextest/ConstantPropagation;") == 0) {
+      TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+      for (const auto& dm : cls->get_dmethods()) {
+  		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+  			if (strcmp(dm->get_name()->c_str(), "propagation") == 0) {
+  			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+  			  for (auto const instruction : dm->get_code()->get_instructions()) {
+            // The logic will be reverted when the future
+            // development of constant propagation optimization is done, i.e.,
+            // The code will be changed to ASSERT_TRUE(false)
+            // if IF_EQZ or New Class Instance instruction is found
+            if (instruction->opcode() == OPCODE_IF_EQZ ||
+                instruction->opcode() == OPCODE_NEW_INSTANCE) {
+                    ASSERT_TRUE(true);
+            }
+  			  }
+  			}
+  		}
+    }
 	}
 }
