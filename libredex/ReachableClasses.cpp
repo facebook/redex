@@ -176,6 +176,30 @@ void keep_annotated_classes(
 }
 
 /*
+ * This method handles the keep_class_members from the configuration file.
+ */
+void keep_class_members(
+    const Scope& scope,
+    const std::vector<std::string>& keep_class_mems) {
+  for (auto const& cls : scope) {
+    std::string name = std::string(cls->get_type()->get_name()->c_str());
+    for (auto const& class_mem : keep_class_mems) {
+      std::string class_mem_str = std::string(class_mem.c_str());
+      std::size_t pos = class_mem_str.find(name);
+      if (pos != std::string::npos) {
+        std::string rem_str = class_mem_str.substr(pos+name.size());
+        for (auto const& f : cls->get_sfields()) {
+          if (rem_str.find(std::string(f->get_name()->c_str()))!=std::string::npos) {
+            mark_only_reachable_directly(f);
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
+/*
  * Returns true iff this class or any of its super classes are in the set of
  * classes banned due to use of complex reflection.
  */
@@ -240,6 +264,16 @@ void init_permanently_reachable_classes(
     keep_annotations.insert(anno);
   }
   keep_annotated_classes(scope, keep_annotations);
+
+  std::vector<std::string> keep_class_mems;
+  auto config_keep_class_members = config["keep_class_members"];
+  if (config_keep_class_members != Json::nullValue) {
+    for (auto const& config_class_mem : config_keep_class_members) {
+      auto class_mem_name = config_class_mem.asString();
+      keep_class_mems.push_back(class_mem_name);
+    }
+  }
+  keep_class_members(scope, keep_class_mems);
 
   if (apk_dir.size()) {
     // Classes present in manifest

@@ -27,62 +27,6 @@
 
 static size_t unhandled_inline = 0;
 
-/*
- * Format: array of "Lpkg/Class;"
- */
-std::unordered_set<DexType*> keep_class_member_annos(
-  const std::vector<std::string>& annos,
-  ConfigFiles& cfg
-) {
-  std::unordered_set<DexType*> keep;
-  for (const auto& anno : cfg.get_no_optimizations_annos()) {
-    keep.emplace(anno);
-  }
-  try {
-    for (auto const& keep_anno : annos) {
-      auto type = DexType::get_type(DexString::get_string(keep_anno.c_str()));
-      if (type != nullptr) {
-        keep.emplace(type);
-      }
-    }
-  } catch (...) {
-    // Swallow exception if the field isn't there.
-  }
-  return keep;
-}
-
-/*
- * Format: array of "Type Lpkg/Class;.fieldName"
- */
-std::unordered_set<DexField*> keep_class_members(
-  const std::vector<std::string>& members
-) {
-  std::unordered_set<DexField*> keep;
-  try {
-    for (auto const& keepstr : members) {
-      auto tpos = keepstr.find(' ');
-      auto cpos = keepstr.find('.');
-      auto type = DexType::get_type(keepstr.substr(0, tpos).c_str());
-      auto cls =
-        DexType::get_type(keepstr.substr(tpos + 1, cpos - tpos - 1).c_str());
-      auto name = DexString::get_string(keepstr.substr(cpos + 1).c_str());
-      if (!type || !cls || !name) {
-        fprintf(stderr,
-                "Unknown field %s in keep_class_members\n",
-                keepstr.c_str());
-        continue;
-      }
-      auto field = DexField::get_field(cls, name, type);
-      if (field != nullptr) {
-        keep.emplace(field);
-      }
-    }
-  } catch (...) {
-    // Swallow exception if the field isn't there.
-  }
-  return keep;
-}
-
 std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
   std::vector<DexField*> field_refs;
   walk_methods(scope,
@@ -112,29 +56,7 @@ std::unordered_set<DexField*> get_field_target(
   return ftarget;
 }
 
-bool is_kept_by_annotation(const DexField* sfield,
-                           const std::unordered_set<DexType*>& keep_annos) {
-  auto annoset = sfield->get_anno_set();
-  if (!annoset) {
-    return false;
-  }
-  auto const& annos = annoset->get_annotations();
-  for (auto& anno : annos) {
-    if (keep_annos.count(anno->type())) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool is_kept_member(DexField* sfield,
-                    const std::unordered_set<DexField*>& keep_members) {
-  return keep_members.count(sfield);
-}
-
 void remove_unused_fields(Scope& scope,
-    const std::unordered_set<DexType*>& keep_annos,
-    const std::unordered_set<DexField*>& keep_members,
     const std::vector<std::string>& remove_members) {
   std::vector<DexField*> moveable_fields;
   std::vector<DexClass*> smallscope;
@@ -159,8 +81,7 @@ void remove_unused_fields(Scope& scope,
       if ((sfield->get_access() & aflags) != aflags) continue;
       auto value = sfield->get_static_value();
       if (value == nullptr && !is_primitive(sfield->get_type())) continue;
-      if (is_kept_by_annotation(sfield, keep_annos)) continue;
-      if (is_kept_member(sfield, keep_members)) continue;
+      if (!can_delete(sfield)) continue;
 
       moveable_fields.push_back(sfield);
       smallscope.push_back(clazz);
@@ -351,9 +272,7 @@ void inline_field_values(Scope& fullscope) {
 }
 
 void FinalInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
-  auto keep_annos = keep_class_member_annos(m_keep_class_member_annos, cfg);
-  auto keep_members = keep_class_members(m_keep_class_members);
   auto scope = build_class_scope(dexen);
   inline_field_values(scope);
-  remove_unused_fields(scope, keep_annos, keep_members, m_remove_class_members);
+  remove_unused_fields(scope, m_remove_class_members);
 }
