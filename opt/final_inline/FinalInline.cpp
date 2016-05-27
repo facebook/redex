@@ -133,14 +133,26 @@ bool is_kept_member(DexField* sfield,
 }
 
 void remove_unused_fields(Scope& scope,
-                          const std::unordered_set<DexType*>& keep_annos,
-                          const std::unordered_set<DexField*>& keep_members) {
+    const std::unordered_set<DexType*>& keep_annos,
+    const std::unordered_set<DexField*>& keep_members,
+    const std::vector<std::string>& remove_members) {
   std::vector<DexField*> moveable_fields;
   std::vector<DexClass*> smallscope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
   for (auto clazz : scope) {
     if (!can_delete(clazz)) {
-      continue;
+      auto name = clazz->get_name()->c_str();
+      bool found = false;
+      for (const auto& name_prefix : remove_members) {
+        if (strstr(name, name_prefix.c_str()) != nullptr) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        TRACE(FINALINLINE, 2, "Cannot delete: %s\n", SHOW(clazz));
+        continue;
+      }
     }
     auto sfields = clazz->get_sfields();
     for (auto sfield : sfields) {
@@ -343,5 +355,5 @@ void FinalInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto keep_members = keep_class_members(m_keep_class_members);
   auto scope = build_class_scope(dexen);
   inline_field_values(scope);
-  remove_unused_fields(scope, keep_annos, keep_members);
+  remove_unused_fields(scope, keep_annos, keep_members, m_remove_class_members);
 }
