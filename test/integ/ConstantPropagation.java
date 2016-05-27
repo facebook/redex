@@ -15,8 +15,15 @@
 
 package com.facebook.redextest;
 
+class Alpha {
+    public static int theAnswer() {
+        return 42;
+    }
+}
+
 public class ConstantPropagation {
-  public static int propagation() {
+  // Test whether class MyBy2Or3 is removed
+  public static int propagation_1() {
     int y;
     boolean x;
     x = false;
@@ -25,6 +32,19 @@ public class ConstantPropagation {
       y = p.Double();
     } else {
       y = 42;
+    }
+    return y;
+  }
+
+  // Test whether class Alpha is removed
+  public static int propagation_2() {
+    int y;
+    boolean x;
+    x = false;
+    if (x) {
+      y = 32;
+    } else {
+      y = Alpha.theAnswer();
     }
     return y;
   }
