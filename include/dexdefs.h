@@ -317,6 +317,10 @@ enum DexDebugItemOpcode {
   DBG_RESTART_LOCAL        = 0x06,
   DBG_SET_PROLOGUE_END     = 0x07,
   DBG_SET_EPILOGUE_BEGIN   = 0x08,
-  DBG_SET_FILE             = 0x09,
-  DBG_LAST_SPECIAL_OPCODE  = 0xff
+  DBG_SET_FILE             = 0x09
 };
+
+constexpr int32_t DBG_FIRST_SPECIAL = 0x0a;
+constexpr int32_t DBG_LAST_SPECIAL = 0x0a;
+constexpr int32_t DBG_LINE_BASE = -4;
+constexpr int32_t DBG_LINE_RANGE = 15;

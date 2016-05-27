@@ -878,9 +878,6 @@ std::string show(const DexDebugInstruction* insn) {
     break;
   }
   default: {
-    constexpr int DBG_FIRST_SPECIAL = 0x0a;
-    constexpr int DBG_LINE_BASE = -4;
-    constexpr int DBG_LINE_RANGE = 15;
     auto adjusted_opcode = insn->opcode() - DBG_FIRST_SPECIAL;
     auto line = DBG_LINE_BASE + (adjusted_opcode % DBG_LINE_RANGE);
     auto address = (adjusted_opcode / DBG_LINE_RANGE);

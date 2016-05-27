@@ -255,10 +255,6 @@ static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
   }
 }
 
-constexpr uint8_t kDebugFirstSpecial = 0x0a;
-constexpr uint8_t kDebugLineRange = 15;
-constexpr int8_t kDebugLineBase = -4;
-
 static void associate_debug_opcodes(FatMethod* fm,
                                     DexDebugItem* dbg,
                                     addr_mei_t& addr_to_mei) {
@@ -289,10 +285,9 @@ static void associate_debug_opcodes(FatMethod* fm,
       continue;
     }
     default: {
-      uint8_t adjustment = op;
-      adjustment -= kDebugFirstSpecial;
-      absolute_line += kDebugLineBase + (adjustment % kDebugLineRange);
-      offset += adjustment / kDebugLineRange;
+      uint8_t adjustment = op - DBG_FIRST_SPECIAL;
+      absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
+      offset += adjustment / DBG_LINE_RANGE;
       opcode->set_uvalue(absolute_line);
     }
     }
@@ -1204,18 +1199,18 @@ bool MethodTransform::try_sync() {
           auto line_adjust = dbgop->value() - absolute_line;
           auto addr_adjust = mentry->addr - daddr;
           absolute_line += line_adjust;
-          if (line_adjust < kDebugLineBase ||
-              line_adjust >= (kDebugLineRange + kDebugLineBase)) {
+          if (line_adjust < DBG_LINE_BASE ||
+              line_adjust >= (DBG_LINE_RANGE + DBG_LINE_BASE)) {
             dopout.push_back(new DexDebugInstruction(DBG_ADVANCE_LINE, line_adjust));
             line_adjust = 0;
           }
-          auto special = (line_adjust - kDebugLineBase) +
-                         (addr_adjust * kDebugLineRange) + kDebugFirstSpecial;
+          auto special = (line_adjust - DBG_LINE_BASE) +
+                         (addr_adjust * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
           if (special > 0xff) {
             dopout.push_back(
                 new DexDebugInstruction(DBG_ADVANCE_PC, uint32_t(addr_adjust)));
             addr_adjust = 0;
-            special = line_adjust - kDebugLineBase + kDebugFirstSpecial;
+            special = line_adjust - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
           }
           dbgop->set_opcode(static_cast<DexDebugItemOpcode>(special));
           dbgop->set_uvalue(DEX_NO_INDEX);
