@@ -127,6 +127,7 @@ class LocalDce {
  private:
   const Scope& m_scope;
   size_t m_instructions_eliminated{0};
+  size_t m_total_instructions{0};
 
   /*
    * Eliminate dead code using a standard backward dataflow analysis for
@@ -190,6 +191,7 @@ class LocalDce {
         // Compute live-in for this block by walking its instruction list in
         // reverse and applying the liveness rules.
         for (auto it = b->rbegin(); it != b->rend(); ++it) {
+          m_total_instructions++;
           if (it->type != MFLOW_OPCODE) {
             continue;
           }
@@ -411,6 +413,12 @@ class LocalDce {
     TRACE(DCE, 1,
             "Dead instructions eliminated: %lu\n",
             m_instructions_eliminated);
+    TRACE(DCE, 1,
+            "Total instructions: %lu\n",
+            m_total_instructions);
+    TRACE(DCE, 1,
+            "Percentage of instructions identified as dead code: %f%%\n",
+            m_instructions_eliminated * 100 / double(m_total_instructions));
   }
 };
 }
