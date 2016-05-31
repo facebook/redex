@@ -50,6 +50,18 @@ invoke-static public static com.facebook.redextest.Alpha.theAnswer()I
 move-result v1
 goto
 
+dmethod: propagation_3
+dmethod: regs: 2, ins: 0, outs: 0
+invoke-static public static com.facebook.redextest.Gamma.getConfig()Z
+move-result v1
+if-eqz v1
+const/16 v0
+return v0
+invoke-static public static com.facebook.redextest.Alpha.theAnswer()I
+move-result v0
+goto
+
+
 After optimization with LocalDcePass, DelInitPass, RemoveEmptyClassesPass
 and ConstantPropagationPass, the code should be:
 
@@ -63,10 +75,14 @@ dmethod: regs: 2, ins: 0, outs: 0
 const/16 v1
 return v1
 
+dmethod: propagation_3
+dmethod: regs: 1, ins: 0, outs: 0
+const/16 v0
+return v0
+
 This test mainly checks whether the constant propagation is fired. It does
 this by checking to make sure there are no OPCODE_IF_EQZ and OPCODE_NEW_INSTANCE
 instructions in the optimized method.
-
 */
 
 // The ClassType enum is used to classify and filter classes in test result
@@ -80,10 +96,12 @@ ClassType filter_test_classes(const DexString *cls_name) {
   if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/ConstantPropagation;") == 0)
     return MAINCLASS;
   if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/MyBy2Or3;") == 0 ||
-      strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Alpha;") == 0)
+      strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Alpha;") == 0 ||
+      strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Gamma;") == 0)
     return REMOVEDCLASS;
   return OTHERCLASS;
 }
+
 
 TEST(ConstantPropagationTest1, constantpropagation) {
   g_redex = new RedexContext();
@@ -151,6 +169,18 @@ TEST(ConstantPropagationTest1, constantpropagation) {
             }
   			  }
   			} else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
+          TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+  			  for (auto const instruction : dm->get_code()->get_instructions()) {
+            // The logic will be reverted when the future
+            // development of constant propagation optimization is done, i.e.,
+            // The code will be changed to ASSERT_TRUE(false)
+            // if IF_EQZ or Invote_Static instruction is found
+            if (instruction->opcode() == OPCODE_IF_EQZ ||
+                instruction->opcode() == OPCODE_INVOKE_STATIC) {
+                    ASSERT_TRUE(true);
+            }
+  			  }
+        } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
             // The logic will be reverted when the future

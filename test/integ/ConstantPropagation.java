@@ -16,12 +16,20 @@
 package com.facebook.redextest;
 
 class Alpha {
-    public static int theAnswer() {
-        return 42;
-    }
+  public static int theAnswer() {
+    return 42;
+  }
+}
+
+class Beta {
+  private static final boolean gammaConfig = true;
+  public static boolean getConfig() {
+    return gammaConfig;
+  }
 }
 
 public class ConstantPropagation {
+  // Senario 1: Constant in if statement
   // Test whether class MyBy2Or3 is removed
   public static int propagation_1() {
     int y;
@@ -36,12 +44,25 @@ public class ConstantPropagation {
     return y;
   }
 
+  // Senario 2: Method returning a constant
   // Test whether class Alpha is removed
   public static int propagation_2() {
     int y;
     boolean x;
     x = false;
     if (x) {
+      y = 32;
+    } else {
+      y = Alpha.theAnswer();
+    }
+    return y;
+  }
+
+  // Senario 3: Constant from field, propagate across parameters and return value
+  // Test whether class Gamma and Alpha are removed
+  public static int propagation_3() {
+    int y;
+    if (Beta.getConfig()) {
       y = 32;
     } else {
       y = Alpha.theAnswer();
