@@ -14,6 +14,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+//#include <iostream>
+//#include <fstream>
+
 namespace {
 
 /**
@@ -43,6 +46,83 @@ using MethodsSigMap = std::unordered_map<DexProto*, std::vector<MethAcc>>;
 using MethodsNameMap = std::unordered_map<DexString*, MethodsSigMap>;
 using ProtoSet = std::unordered_set<DexProto*>;
 using InterfaceMethods = std::unordered_map<DexString*, ProtoSet>;
+
+/*
+std::ofstream logfile;
+
+void log_mark_methods(const DexType* parent, const TypeSet& children) {
+  logfile << "mark methods for " << SHOW(parent) << " with children ";
+  for (const auto& child : children) {
+    logfile << SHOW(child) << ", ";
+  }
+  logfile << "\n";
+}
+
+void log_interface_methods(const char* msg, InterfaceMethods& methods) {
+  logfile << msg << methods.size() << "\n";
+  for (const auto& i_m_it : methods) {
+    logfile << SHOW(i_m_it.first) << ": ";
+    for (const auto& proto : i_m_it.second) {
+      logfile << SHOW(proto) << ", ";
+    }
+    logfile << "\n";
+  }
+}
+
+void log_methods_name_map(const char* msg, MethodsNameMap& methods) {
+  logfile << msg << methods.size() << "\n";
+  for (const auto& meth_it : methods) {
+    logfile << SHOW(meth_it.first) << ": ";
+    for (const auto& msig_it : meth_it.second) {
+      logfile << SHOW(msig_it.first) << "[";
+      for (const auto& m_acc_it : msig_it.second) {
+        logfile << SHOW(m_acc_it.first->get_class())
+            << "." << SHOW(m_acc_it.first->get_name())
+            << ": " << SHOW(m_acc_it.first->get_proto()) << ", ";
+      }
+      logfile << "]";
+    }
+    logfile << "\n";
+  }
+}
+
+void log_final_results(MethodsNameMap& methods) {
+  logfile << "final result\n";
+  for (const auto& meths_by_name : methods) {
+    for (const auto& meths_by_sig : meths_by_name.second) {
+      for (const auto& meths : meths_by_sig.second) {
+        if (!meths.first->is_concrete()) {
+          logfile << "non concrete: "
+              << SHOW(meths.first->get_class())
+              << "."
+              << SHOW(meths.first->get_name())
+              << ": "
+              << SHOW(meths.first->get_proto())
+              << "\n";
+          continue;
+        }
+        if (meths.second == FINAL) {
+          logfile << "non virtual: "
+              << SHOW(meths.first->get_class())
+              << "."
+              << SHOW(meths.first->get_name())
+              << ": "
+              << SHOW(meths.first->get_proto())
+              << "\n";
+        } else {
+          logfile << "non final: "
+              << SHOW(meths.first->get_class())
+              << "."
+              << SHOW(meths.first->get_name())
+              << ": "
+              << SHOW(meths.first->get_proto())
+              << "\n";
+        }
+      }
+    }
+  }
+}
+*/
 
 /**
  * List of java.lang.Object virtual methods generated if java.lang.Object
@@ -173,7 +253,7 @@ const std::list<DexMethod*>& get_vmethods(DexType* type) {
 /**
  * Merge the methods map in derived with that of base for the given type.
  */
-void merge(MethodsNameMap& base, MethodsNameMap& derived, const DexType* type) {
+void merge(MethodsNameMap& base, MethodsNameMap& derived) {
   for (const auto& entry : derived) {
     const auto& base_entry = base.find(entry.first);
     if (base_entry == base.end()) {
@@ -185,6 +265,25 @@ void merge(MethodsNameMap& base, MethodsNameMap& derived, const DexType* type) {
       auto& meths = sig_to_meths[sigs.first];
       meths.insert(meths.end(), sigs.second.begin(), sigs.second.end());
     }
+  }
+}
+
+/**
+ * Merge the interface methods map in derived with that of base.
+ */
+void merge(
+    InterfaceMethods& intf_methods, InterfaceMethods& child_intf_methods) {
+  // TODO: remove after we wrote enough unit tests to make sure all cases
+  //       are covered
+  // intf_methods.insert(child_intf_methods.begin(), child_intf_methods.end());
+  for (const auto& child_meth_it : child_intf_methods) {
+    const auto& intf_protos = intf_methods.find(child_meth_it.first);
+    if (intf_protos == intf_methods.end()) {
+      intf_methods[child_meth_it.first] = child_meth_it.second;
+      continue;
+    }
+    auto& proto_set = intf_protos->second;
+    proto_set.insert(child_meth_it.second.begin(), child_meth_it.second.end());
   }
 }
 
@@ -224,6 +323,7 @@ bool load_interfaces_methods(
       continue;
     }
     if (load_interface_methods(intf_cls, methods)) escaped = true;
+    // log_interface_methods("Load Interface Methods: ", methods);
   }
   return escaped;
 }
@@ -394,12 +494,11 @@ void Devirtualizer::analyze_methods(std::vector<DexMethod*>& non_virtual) {
   InterfaceMethods intf_methods;
   mark_methods(object, children, intf_methods, methods);
 
+  // log_final_results(methods);
   for (const auto& meths_by_name : methods) {
     for (const auto& meths_by_sig : meths_by_name.second) {
       for (const auto& meths : meths_by_sig.second) {
-        if (!meths.first->is_concrete()) {
-          continue;
-        }
+        if (!meths.first->is_concrete()) continue;
         if (meths.second == FINAL) non_virtual.push_back(meths.first);
       }
     }
@@ -435,7 +534,7 @@ void Devirtualizer::analyze_methods(std::vector<DexMethod*>& non_virtual) {
  * class A { public m() {} public g() {} public f() {} }
  * class B extends A implements I {}
  * class C extends B { public void k() {} }
- * class D extends A { public void k() }
+ * class D extends A { public void k() {} }
  * in this case, not knowing interface I, we mark all methods in A, B and C
  * IMPL but methods in D are not, so in this case they are just FINAL and
  * effectively D.k() would be non virtual as opposed to C.k() which is IMPL.
@@ -446,27 +545,34 @@ bool Devirtualizer::mark_methods(
   always_assert_log(intf_methods.size() == 0 && methods.size() == 0,
       "intf_methods and children_methods are out params");
   bool escape = false;
+  // log_mark_methods(parent, children);
   // recurse through every child in a BFS style to collect all methods
   // and interface methods under parent
   for (const auto& child : children) {
     MethodsNameMap child_methods;
     InterfaceMethods child_intf_methods;
     escape = mark_methods(child, m_class_hierarchy[child],
-        child_intf_methods, child_methods) | escape;
-    merge(methods, child_methods, parent);
-    intf_methods.insert(child_intf_methods.begin(), child_intf_methods.end());
+        child_intf_methods, child_methods) || escape;
+    // log_methods_name_map("Child methods: ", child_methods);
+    // log_interface_methods("Child interface methods: ", child_intf_methods);
+    merge(methods, child_methods);
+    merge(intf_methods, child_intf_methods);
+    // log_interface_methods("Interface methods after merge: ", intf_methods);
   }
   // get parent interface methods
   InterfaceMethods parent_intf_methods;
   bool escape_intf = get_interface_methods(parent, parent_intf_methods);
-  intf_methods.insert(parent_intf_methods.begin(), parent_intf_methods.end());
-  escape |= escape_intf;
+  // log_interface_methods("parent interface methods found: ",
+  //     parent_intf_methods);
+  merge(intf_methods, parent_intf_methods);
+  // log_interface_methods("interface methods after merge with parent interface: ",
+  //     intf_methods);
+  escape = escape || escape_intf;
 
   analyze_parent_children_methods(parent, methods, intf_methods, escape);
 
   if (escape_intf) {
     // if any interface in parent escapes, mark all children methods 'impl'
-    escape = true;
     impl_all(methods);
   } else {
     impl_intf_methods(methods, parent_intf_methods);
@@ -478,6 +584,10 @@ bool Devirtualizer::mark_methods(
 }
 
 std::vector<DexMethod*> devirtualize(std::vector<DexClass*>& scope) {
+  // logfile.open("devirtualizer.log");
+  // logfile << "devirtualizing " << scope.size() << " classes\n";
   Devirtualizer devirtualizer(scope);
-  return devirtualizer.devirtualize();
+  auto meths = devirtualizer.devirtualize();
+  // logfile.close();
+  return meths;
 }

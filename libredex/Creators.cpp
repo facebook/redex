@@ -401,7 +401,7 @@ MethodBlock* MethodBlock::swtich_op(Location test,
 }
 
 void MethodCreator::load_locals(DexMethod* meth) {
-  if (!(meth->get_access() & ACC_STATIC)) {
+  if (!(access & ACC_STATIC)) {
     make_local(meth->get_class());
   }
   auto proto = meth->get_proto();
@@ -418,7 +418,7 @@ uint16_t MethodCreator::ins_count() const {
   auto args = proto->get_args();
   uint16_t ins =
       args == nullptr ? 0 : static_cast<uint16_t>(args->get_type_list().size());
-  if (!(method->get_access() & ACC_STATIC)) ins++;
+  if (!(access & ACC_STATIC)) ins++;
   return ins;
 }
 
@@ -484,12 +484,13 @@ FatMethod::iterator MethodCreator::make_switch_block(
 }
 
 MethodCreator::MethodCreator(DexMethod* meth)
-    : method(meth),
-      meth_code(MethodTransform::get_new_method(method)),
-      out_count(0),
-      top_reg(0) {
+    : method(meth)
+    , meth_code(MethodTransform::get_new_method(method))
+    , out_count(0)
+    , top_reg(0)
+    , access(meth->get_access()) {
   always_assert_log(meth->is_concrete(),
-                    "Method must be concrete or use the other ctor");
+      "Method must be concrete or use the other ctor");
   load_locals(meth);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }
@@ -498,10 +499,11 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
                              DexAccessFlags access)
-    : method(DexMethod::make_method(cls, name, proto)),
-      meth_code(MethodTransform::get_new_method(method)),
-      out_count(0),
-      top_reg(0) {
+    : method(DexMethod::make_method(cls, name, proto))
+    , meth_code(MethodTransform::get_new_method(method))
+    , out_count(0)
+    , top_reg(0)
+    , access(access) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   method->set_access(access);
   load_locals(method);
@@ -512,9 +514,8 @@ DexMethod* MethodCreator::create() {
   if (method->is_concrete()) {
     method->set_code(to_code());
   } else {
-    auto access = method->get_access();
-    bool is_virtual = !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR));
-    method->make_concrete(access, to_code(), is_virtual);
+    method->make_concrete(access, to_code(),
+        !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
   }
   return method;
 }

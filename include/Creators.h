@@ -442,6 +442,7 @@ struct MethodCreator {
   MethodTransform* meth_code;
   uint16_t out_count;
   uint16_t top_reg;
+  DexAccessFlags access;
   std::vector<Location> locals;
   MethodBlock* main_block;
 
