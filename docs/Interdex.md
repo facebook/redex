@@ -29,7 +29,7 @@ Note that it is very important that you have compiled the app that you're going
 to be generating the heap dump with the same settings that you use in your
 release build, otherwise the class ordering will not reflect reality.
 
-It is equally important that the usage reflects a real-world scenario.Using
+It is equally important that the usage reflects a real-world scenario. Using
 an overly simplistic test or startup scenario will not generate representative
 data and will not lead to performance improvements. 
 
