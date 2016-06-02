@@ -101,6 +101,48 @@ static void cleanup_aset(DexAnnotationSet* aset,
     }
   }
 }
+
+/*
+ * Return a subset of classes where each class does not contain
+ * any class annotations which exist in blacklist_container_classes. 
+ */
+std::vector<DexClass*> get_classes_not_containing_blacklisted_contained_annotations(
+      const std::vector<DexClass*>& classes,
+      std::unordered_set<DexType*>& blacklist_container_classes) {
+  std::vector<DexClass*> non_container_classes;
+  for (auto clazz : classes) {
+    DexAnnotationSet* aset = clazz->get_anno_set();
+    if (aset == nullptr) {
+      non_container_classes.push_back(clazz);
+    } else {
+      s_kcount.class_asets++;
+      bool isContained = false;
+      auto& annos = aset->get_annotations();
+      for (auto container_class:blacklist_container_classes) {
+        for (auto anno:annos) {
+          if (anno->type() == container_class) {
+            TRACE(ANNO, 2, 
+                  "class %s has class annotation %s which is blacklisted\n",
+                  SHOW(clazz->get_type()), SHOW(container_class));
+            isContained = true;
+            break; 
+          }
+        }
+        if (isContained) {
+          break; 
+        }
+      }
+      if (!isContained) {
+        non_container_classes.push_back(clazz);
+      }
+    }
+  }
+  TRACE(ANNO, 2, "non_container_classes.size() %d\n", non_container_classes.size());
+  TRACE(ANNO, 2, "classes.size() %d\n", classes.size());
+  return non_container_classes;
+}
+
+
 /*
  * Subclasses of TypeReference; use the system visible annotations
  * in order to imply the "type", rather than doing so explicitly.
@@ -116,7 +158,6 @@ void kill_annotations(const std::vector<DexClass*>& classes,
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
-    s_kcount.class_asets++;
     if (blacklist_classes.count(clazz->get_super_class()) > 0) {
       TRACE(ANNO, 3, "Skipping %s\n", show(clazz->get_type()).c_str());
       continue;
@@ -188,8 +229,25 @@ void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   auto removable_annos = get_annos(m_remove_annos);
   auto blacklist_classes = get_blacklist(m_blacklist);
+  auto blacklist_classes_containing_class_annotations = 
+    get_blacklist(m_blacklist_classes_containing_class_annotations);
+
+  /*
+   * Pass one 
+   * Get the list of classes which do not contain any of the class annotations
+   * in blacklist_of_contained_annotations
+   */
+  auto classes_not_containing_blacklisted_contained_annotations = 
+    get_classes_not_containing_blacklisted_contained_annotations(scope,
+      blacklist_classes_containing_class_annotations);
+
+  /*
+   * Pass two 
+   * Kill the annotations in the list of 
+   * classes_not_containing_blacklisted_contained_annotations
+   */
   kill_annotations(
-    scope,
+    classes_not_containing_blacklisted_contained_annotations,
     removable_annos,
     blacklist_classes,
     m_remove_build,

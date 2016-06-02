@@ -20,6 +20,8 @@ class AnnoKillPass : public Pass {
     pc.get("remove_all_system_annos", false, m_remove_system);
     pc.get("remove_annos", {}, m_remove_annos);
     pc.get("blacklist", {}, m_blacklist);
+    pc.get("blacklist_classes_containing_class_annotations", {},
+         m_blacklist_classes_containing_class_annotations);
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
@@ -29,4 +31,5 @@ class AnnoKillPass : public Pass {
   bool m_remove_system;
   std::vector<std::string> m_remove_annos;
   std::vector<std::string> m_blacklist;
+  std::vector<std::string> m_blacklist_classes_containing_class_annotations;
 };
