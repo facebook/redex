@@ -22,6 +22,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/bridge \
+	-I$(top_srcdir)/opt/constant_propagation \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
@@ -89,6 +90,7 @@ libredex_la_SOURCES = \
 	opt/annoclasskill/AnnoClassKill.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
+	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
@@ -141,4 +143,3 @@ EXTRA_DIST = redex.py
 redex: redex.py Makefile
 	cp $(srcdir)/redex.py redex
 	chmod +x redex
-

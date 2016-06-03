@@ -15,6 +15,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/bridge \
+	-I$(top_srcdir)/opt/constant_propagation \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \

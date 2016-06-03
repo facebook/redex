@@ -14,6 +14,7 @@
 #include "AnnoClassKill.h"
 #include "AnnoKill.h"
 #include "Bridge.h"
+#include "ConstantPropagation.h"
 #include "DelInit.h"
 #include "DelSuper.h"
 #include "FinalInline.h"
@@ -36,6 +37,7 @@ std::vector<Pass*> create_passes() {
     new AnnoClassKillPass(),
     new AnnoKillPass(),
     new BridgePass(),
+    new ConstantPropagationPass(),
     new DelInitPass(),
     new DelSuperPass(),
     new FinalInlinePass(),

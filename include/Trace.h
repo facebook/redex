@@ -15,6 +15,7 @@
   TM(BRIDGE)                                    \
   TM(CFG)                                       \
   TM(CLASSKILL)                                 \
+  TM(CONSTP)                                    \
   TM(DC)                                        \
   TM(DCE)                                       \
   TM(DELINIT)                                   \

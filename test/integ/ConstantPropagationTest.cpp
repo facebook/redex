@@ -19,6 +19,7 @@
 #include "LocalDce.h"
 #include "DelInit.h"
 #include "RemoveEmptyClasses.h"
+#include "ConstantPropagation.h"
 /*
 
 This test takes as input the Dex bytecode for the class generated
@@ -118,25 +119,25 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   DexClasses& classes = dexen.back();
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
-	TRACE(MAIN, 2, "Code before:\n");
+	TRACE(CONSTP, 2, "Code before:\n");
   for(const auto& cls : classes) {
     if (filter_test_classes(cls->get_name()) < 2) {
-  	  TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+  	  TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
   		for (const auto& dm : cls->get_dmethods()) {
-  		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+  		  TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
   			if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0 ||
             strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
-  			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+  			  TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			}
   		}
     }
 	}
 
   std::vector<Pass*> passes = {
-    new LocalDcePass(),
     new DelInitPass(),
     new RemoveEmptyClassesPass(),
-    // TODO: add constant propagation and conditional pruning optimization
+    new ConstantPropagationPass(),
+    new LocalDcePass(),
   };
 
   std::vector<KeepRule> null_rules;
@@ -146,18 +147,18 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(dexen, dummy_cfg);
 
-	TRACE(MAIN, 2, "Code after:\n");
+	TRACE(CONSTP, 2, "Code after:\n");
 	for(const auto& cls : classes) {
     if (filter_test_classes(cls->get_name()) == REMOVEDCLASS) {
-      TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
       // To be reverted: These classes should be removed by future optimization.
       ASSERT_TRUE(true);
     } else if (filter_test_classes(cls->get_name()) == MAINCLASS) {
-      TRACE(MAIN, 2, "Class %s\n", SHOW(cls));
+      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
       for (const auto& dm : cls->get_dmethods()) {
-  		  TRACE(MAIN, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+  		  TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
   			if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
-  			  TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+  			  TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
             // The logic will be reverted when the future
             // development of constant propagation optimization is done, i.e.,
@@ -169,7 +170,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
             }
   			  }
   			} else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
-          TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
             // The logic will be reverted when the future
             // development of constant propagation optimization is done, i.e.,
@@ -181,7 +182,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
             }
   			  }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
-          TRACE(MAIN, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
             // The logic will be reverted when the future
             // development of constant propagation optimization is done, i.e.,
