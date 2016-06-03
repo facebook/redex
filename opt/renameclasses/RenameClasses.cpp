@@ -64,14 +64,14 @@ void get_next_ident(char *out, int &num) {
 
 void unpackage_private(Scope &scope) {
   walk_methods(scope,
-	       [&](DexMethod *method) {
-    if (is_package_protected(method)) set_public(method);
-  });
+      [&](DexMethod *method) {
+        if (is_package_protected(method)) set_public(method);
+      });
   walk_fields(scope,
-	       [&](DexField *field) {
-    if (is_package_protected(field)) set_public(field);
-  });
-  for(auto clazz : scope) {
+      [&](DexField *field) {
+        if (is_package_protected(field)) set_public(field);
+      });
+  for (auto clazz : scope) {
     if (is_package_protected(clazz)) set_public(clazz);
   }
 }
@@ -101,7 +101,7 @@ bool should_rename(DexClass *clazz,
       return true;
     }
   }
-  if (!can_rename(clazz)) {
+  if (!can_rename(clazz) && !can_delete(clazz)) {
     return false;
   }
   /* Check for wider, less precise filters */
@@ -120,48 +120,49 @@ bool should_rename(DexClass *clazz,
 }
 
 void rename_classes(
-  Scope& scope,
-  std::vector<std::string>& pre_whitelist_patterns,
-  std::vector<std::string>& post_whitelist_patterns,
-  const std::string& path
-) {
+    Scope& scope,
+    std::vector<std::string>& pre_whitelist_patterns,
+    std::vector<std::string>& post_whitelist_patterns,
+    const std::string& path) {
   unpackage_private(scope);
   int clazz_ident = 0;
   std::map<DexString*, DexString*> aliases;
   for(auto clazz: scope) {
-    if (should_rename(clazz, pre_whitelist_patterns, post_whitelist_patterns)) {
-      char clzname[4];
-      char descriptor[10];
-      get_next_ident(clzname, clazz_ident);
-      // The X helps our hacked Dalvik classloader recognize that a
-      // class name is the output of the redex renamer and thus will
-      // never be found in the Android platform.
-      sprintf(descriptor, "LX%s;", clzname);
-      auto dstring = DexString::make_string(descriptor);
-      auto dtype = clazz->get_type();
-      auto oldname = dtype->get_name();
-      aliases[oldname] = dstring;
-      dtype->assign_name_alias(dstring);
-      base_strings_size += strlen(oldname->c_str());
-      base_strings_size += strlen(dstring->c_str());
-      TRACE(RENAME, 4, "'%s'->'%s'\n", oldname->c_str(), descriptor);
-      while(1) {
-       std::string arrayop("[");
-        arrayop += oldname->c_str();
-        oldname = DexString::get_string(arrayop.c_str());
-        if (oldname == nullptr) {
-          break;
-        }
-        auto arraytype = DexType::get_type(oldname);
-        if (arraytype == nullptr) {
-          break;
-        }
-        std::string newarraytype("[");
-        newarraytype += dstring->c_str();
-        dstring = DexString::make_string(newarraytype.c_str());
-        aliases[oldname] = dstring;
-        arraytype->assign_name_alias(dstring);
+    if (!should_rename(
+        clazz, pre_whitelist_patterns, post_whitelist_patterns)) {
+      continue;
+    }
+    char clzname[4];
+    char descriptor[10];
+    get_next_ident(clzname, clazz_ident);
+    // The X helps our hacked Dalvik classloader recognize that a
+    // class name is the output of the redex renamer and thus will
+    // never be found in the Android platform.
+    sprintf(descriptor, "LX%s;", clzname);
+    auto dstring = DexString::make_string(descriptor);
+    auto dtype = clazz->get_type();
+    auto oldname = dtype->get_name();
+    aliases[oldname] = dstring;
+    dtype->assign_name_alias(dstring);
+    base_strings_size += strlen(oldname->c_str());
+    base_strings_size += strlen(dstring->c_str());
+    TRACE(RENAME, 4, "'%s'->'%s'\n", oldname->c_str(), descriptor);
+    while (1) {
+     std::string arrayop("[");
+      arrayop += oldname->c_str();
+      oldname = DexString::get_string(arrayop.c_str());
+      if (oldname == nullptr) {
+        break;
       }
+      auto arraytype = DexType::get_type(oldname);
+      if (arraytype == nullptr) {
+        break;
+      }
+      std::string newarraytype("[");
+      newarraytype += dstring->c_str();
+      dstring = DexString::make_string(newarraytype.c_str());
+      aliases[oldname] = dstring;
+      arraytype->assign_name_alias(dstring);
     }
   }
   /* Now we need to re-write the Signature annotations.  They use
@@ -177,8 +178,7 @@ void rename_classes(
     char buf[MAX_DESCRIPTOR_LENGTH];
     const char *sourcestr = apair.first->c_str();
     size_t sourcelen = strlen(sourcestr);
-    if (sourcestr[sourcelen - 1] != ';')
-      continue;
+    if (sourcestr[sourcelen - 1] != ';') continue;
     strcpy(buf, sourcestr);
     buf[sourcelen - 1] = '\0';
     auto dstring = DexString::get_string(buf);
@@ -191,23 +191,20 @@ void rename_classes(
   walk_annotations(scope, [&](DexAnnotation* anno) {
     static DexType *dalviksig =
       DexType::get_type("Ldalvik/annotation/Signature;");
-    if (anno->type() != dalviksig)
-      return;
+    if (anno->type() != dalviksig) return;
     auto elems = anno->anno_elems();
     for (auto elem : elems) {
       auto ev = elem.encoded_value;
-      if (ev->evtype() != DEVT_ARRAY)
-        continue;
+      if (ev->evtype() != DEVT_ARRAY) continue;
       auto arrayev = static_cast<DexEncodedValueArray*>(ev);
       auto const& evs = arrayev->evalues();
       for (auto strev : *evs) {
-        if (strev->evtype() != DEVT_STRING)
-          continue;
+        if (strev->evtype() != DEVT_STRING) continue;
         auto stringev = static_cast<DexEncodedValueString*>(strev);
         if (aliases.count(stringev->string())) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
-                stringev->string()->c_str(),
-                aliases[stringev->string()]->c_str());
+              stringev->string()->c_str(),
+              aliases[stringev->string()]->c_str());
           stringev->string(aliases[stringev->string()]);
         }
       }
@@ -220,7 +217,7 @@ void rename_classes(
       perror("Error writing rename file");
       return;
     }
-    for(const auto &it : aliases) {
+    for (const auto &it : aliases) {
       // record for later processing and back map generation
       fprintf(fd, "%s -> %s\n",it.first->c_str(),
       it.second->c_str());
@@ -239,9 +236,12 @@ void rename_classes(
 void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   rename_classes(scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path);
-  TRACE(RENAME, 1, "renamed classes: %d anon classes, %d from single char patterns, %d from multi char patterns\n",
+  TRACE(RENAME, 1,
+      "renamed classes: %d anon classes, %d from single char patterns, "
+      "%d from multi char patterns\n",
       match_inner,
       match_short,
       match_long);
-  TRACE(RENAME, 1, "String savings, at least %d bytes \n", base_strings_size - ren_strings_size);
+  TRACE(RENAME, 1, "String savings, at least %d bytes \n",
+      base_strings_size - ren_strings_size);
 }
