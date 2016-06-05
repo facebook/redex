@@ -104,7 +104,7 @@ static void cleanup_aset(DexAnnotationSet* aset,
 
 /*
  * Return a subset of classes where each class does not contain
- * any class annotations which exist in blacklist_container_classes. 
+ * any class annotations which exist in blacklist_container_classes.
  */
 std::vector<DexClass*> get_classes_not_containing_blacklisted_contained_annotations(
       const std::vector<DexClass*>& classes,
@@ -121,15 +121,15 @@ std::vector<DexClass*> get_classes_not_containing_blacklisted_contained_annotati
       for (auto container_class:blacklist_container_classes) {
         for (auto anno:annos) {
           if (anno->type() == container_class) {
-            TRACE(ANNO, 2, 
+            TRACE(ANNO, 2,
                   "class %s has class annotation %s which is blacklisted\n",
                   SHOW(clazz->get_type()), SHOW(container_class));
             isContained = true;
-            break; 
+            break;
           }
         }
         if (isContained) {
-          break; 
+          break;
         }
       }
       if (!isContained) {
@@ -183,33 +183,29 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         }
       });
   walk_methods(classes,
-               [&](DexMethod* method) {
-                 /* Parameter annotations... */
-                 auto pas = method->get_param_anno();
-                 if (pas == nullptr) return;
-                 s_kcount.method_param_asets += pas->size();
-                 bool clear_pas = true;
-                 for (auto pa : *pas) {
-                   DexAnnotationSet* aset = pa.second;
-                   if (aset->size() == 0) continue;
-                   cleanup_aset(aset, removable_annos, remove_build, remove_system);
-                   if (aset->size() == 0) {
-                     continue;
-                   }
-                   clear_pas = false;
-                 }
-                 if (clear_pas) {
-                   TRACE(ANNO,
-                         2,
-                         "Clearing parameter annotations for method %s\n",
-                         SHOW(method));
-                   s_kcount.method_param_asets_cleared += pas->size();
-                   for (auto pa : *pas) {
-                     delete pa.second;
-                   }
-                   pas->clear();
-                 }
-               });
+      [&](DexMethod* method) {
+        /* Parameter annotations... */
+        auto pas = method->get_param_anno();
+        if (pas == nullptr) return;
+        s_kcount.method_param_asets += pas->size();
+        bool clear_pas = true;
+        for (auto pa : *pas) {
+          DexAnnotationSet* aset = pa.second;
+          if (aset->size() == 0) continue;
+          cleanup_aset(aset, removable_annos, remove_build, remove_system);
+          if (aset->size() == 0) continue;
+          clear_pas = false;
+        }
+        if (clear_pas) {
+          TRACE(ANNO, 2, "Clearing parameter annotations for method %s\n",
+              SHOW(method));
+          s_kcount.method_param_asets_cleared += pas->size();
+          for (auto pa : *pas) {
+            delete pa.second;
+          }
+          pas->clear();
+        }
+      });
   walk_fields(
       classes,
       [&](DexField* field) {
@@ -229,21 +225,21 @@ void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   auto removable_annos = get_annos(m_remove_annos);
   auto blacklist_classes = get_blacklist(m_blacklist);
-  auto blacklist_classes_containing_class_annotations = 
+  auto blacklist_classes_containing_class_annotations =
     get_blacklist(m_blacklist_classes_containing_class_annotations);
 
   /*
-   * Pass one 
+   * Pass one
    * Get the list of classes which do not contain any of the class annotations
    * in blacklist_of_contained_annotations
    */
-  auto classes_not_containing_blacklisted_contained_annotations = 
+  auto classes_not_containing_blacklisted_contained_annotations =
     get_classes_not_containing_blacklisted_contained_annotations(scope,
       blacklist_classes_containing_class_annotations);
 
   /*
-   * Pass two 
-   * Kill the annotations in the list of 
+   * Pass two
+   * Kill the annotations in the list of
    * classes_not_containing_blacklisted_contained_annotations
    */
   kill_annotations(
@@ -254,23 +250,23 @@ void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
     m_remove_system);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
-          "Annotations: %d/%d\n",
-          s_kcount.annotations_killed,
-          s_kcount.annotations);
+      "Annotations: %d/%d\n",
+      s_kcount.annotations_killed,
+      s_kcount.annotations);
   TRACE(ANNO, 1,
-          "Class Asets: %d/%d\n",
-          s_kcount.class_asets_cleared,
-          s_kcount.class_asets);
+      "Class Asets: %d/%d\n",
+      s_kcount.class_asets_cleared,
+      s_kcount.class_asets);
   TRACE(ANNO, 1,
-          "Method Asets: %d/%d\n",
-          s_kcount.method_asets_cleared,
-          s_kcount.method_asets);
+      "Method Asets: %d/%d\n",
+      s_kcount.method_asets_cleared,
+      s_kcount.method_asets);
   TRACE(ANNO, 1,
-          "MethodParam Asets: %d/%d\n",
-          s_kcount.method_param_asets_cleared,
-          s_kcount.method_param_asets);
+      "MethodParam Asets: %d/%d\n",
+      s_kcount.method_param_asets_cleared,
+      s_kcount.method_param_asets);
   TRACE(ANNO, 1,
-          "Field Asets: %d/%d\n",
-          s_kcount.field_asets_cleared,
-          s_kcount.field_asets);
+      "Field Asets: %d/%d\n",
+      s_kcount.field_asets_cleared,
+      s_kcount.field_asets);
 }
