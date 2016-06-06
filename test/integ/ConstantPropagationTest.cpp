@@ -160,26 +160,13 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   			if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
   			  TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
-            // The logic will be reverted when the future
-            // development of constant propagation optimization is done, i.e.,
-            // The code will be changed to ASSERT_TRUE(false)
-            // if IF_EQZ or New Class Instance instruction is found
-            if (instruction->opcode() == OPCODE_IF_EQZ ||
-                instruction->opcode() == OPCODE_NEW_INSTANCE) {
-                    ASSERT_TRUE(true);
-            }
+            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
+            ASSERT_NE(instruction->opcode(), OPCODE_NEW_INSTANCE);
   			  }
   			} else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
   			  for (auto const instruction : dm->get_code()->get_instructions()) {
-            // The logic will be reverted when the future
-            // development of constant propagation optimization is done, i.e.,
-            // The code will be changed to ASSERT_TRUE(false)
-            // if IF_EQZ or Invote_Static instruction is found
-            if (instruction->opcode() == OPCODE_IF_EQZ ||
-                instruction->opcode() == OPCODE_INVOKE_STATIC) {
-                    ASSERT_TRUE(true);
-            }
+            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
   			  }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
