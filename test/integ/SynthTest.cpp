@@ -25,6 +25,7 @@
 
 #include "ReBindRefs.h"
 #include "Synth.h"
+#include "LocalDce.h"
 
 #include "Match.h"
 
@@ -75,7 +76,7 @@ TEST(SynthTest1, synthetic) {
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   std::vector<Pass*> passes = {
-      new ReBindRefsPass(), new SynthPass(),
+      new ReBindRefsPass(), new SynthPass(), new LocalDcePass(),
   };
 
   std::vector<KeepRule> null_rules;
@@ -126,6 +127,19 @@ TEST(SynthTest1, synthetic) {
         }
       }
       ASSERT_TRUE(gamma_synth_found);
+    }
+
+    // Make sure the const_4 insn before the call to synthetic constructor is removed
+    if (strcmp(class_name, "Lcom/facebook/redextest/SyntheticConstructor$InnerClass;") == 0) {
+      for (const auto& method : cls->get_dmethods()) {
+        if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
+          TRACE(DCE, 2, "dmethod: %s\n",  SHOW(method->get_code()));
+  			  for (auto const instruction : method->get_code()->get_instructions()) {
+            // Make sure there is no const-4 in the optimized method.
+            ASSERT_NE(instruction->opcode(), OPCODE_CONST_4);
+  			  }
+  			}
+      }
     }
 
     // Tests re-expressed using the match library.

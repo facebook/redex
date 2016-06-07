@@ -14,5 +14,7 @@ public class SynthTest {
     Alpha a = new Alpha(12);
     Alpha.Beta b = a.new Beta();
     System.out.println("2b = " + b.doublex());
+    SyntheticConstructor s = new SyntheticConstructor(1);
+    SyntheticConstructor.InnerClass i = s.new InnerClass();
   }
 }

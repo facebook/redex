@@ -56,3 +56,27 @@ class Gamma extends java.io.FilterWriter {
     }
   }
 }
+
+/*
+The class SyntheticConstructor is added to test whether the const/4 insn
+before calling a synthetic constructor can be removed by LocalDcePass
+*/
+
+class SyntheticConstructor {
+  public SyntheticConstructor(int i) {
+    x = i;
+  }
+  private static int x;
+  private SyntheticConstructor() {
+    x = 1;
+  }
+  public class InnerClass {
+    private SyntheticConstructor sc;
+    public InnerClass() {
+      sc = new SyntheticConstructor();
+    }
+    public int getValue() {
+      return sc.x;
+    }
+  }
+}
