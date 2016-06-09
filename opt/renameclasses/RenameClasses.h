@@ -17,14 +17,18 @@ class RenameClassesPass : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("class_rename", "", m_path);
+    pc.get("rename_annotations", false, m_rename_annotations);
     pc.get("pre_filter_whitelist", {}, m_pre_filter_whitelist);
     pc.get("post_filter_whitelist", {}, m_post_filter_whitelist);
+    pc.get("untouchable_hierarchies", {}, m_untouchable_hierarchies);
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
 
  private:
   std::string m_path;
+  bool m_rename_annotations;
   std::vector<std::string> m_pre_filter_whitelist;
   std::vector<std::string> m_post_filter_whitelist;
+  std::vector<std::string> m_untouchable_hierarchies;
 };

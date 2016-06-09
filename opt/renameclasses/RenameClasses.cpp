@@ -78,7 +78,11 @@ void unpackage_private(Scope &scope) {
 
 bool should_rename(DexClass *clazz,
     std::vector<std::string>& pre_patterns,
-    std::vector<std::string>& post_patterns) {
+    std::vector<std::string>& post_patterns,
+    std::unordered_set<const DexType*>& untouchables,
+    bool rename_annotations) {
+  if (!rename_annotations && is_annotation(clazz)) return false;
+  if (untouchables.count(clazz->get_type())) return false;
   auto chstring = clazz->get_type()->get_name()->c_str();
   /* We're assuming anonymous classes are safe always safe to rename */
   auto substr = strrchr(chstring, '$');
@@ -123,13 +127,16 @@ void rename_classes(
     Scope& scope,
     std::vector<std::string>& pre_whitelist_patterns,
     std::vector<std::string>& post_whitelist_patterns,
-    const std::string& path) {
+    const std::string& path,
+    std::unordered_set<const DexType*>& untouchables,
+    bool rename_annotations) {
   unpackage_private(scope);
   int clazz_ident = 0;
   std::map<DexString*, DexString*> aliases;
   for(auto clazz: scope) {
     if (!should_rename(
-        clazz, pre_whitelist_patterns, post_whitelist_patterns)) {
+        clazz, pre_whitelist_patterns, post_whitelist_patterns,
+        untouchables, rename_annotations)) {
       continue;
     }
     char clzname[4];
@@ -235,7 +242,19 @@ void rename_classes(
 
 void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
-  rename_classes(scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path);
+  std::unordered_set<const DexType*> untouchables;
+  for (const auto& base : m_untouchable_hierarchies) {
+    auto base_type = DexType::get_type(base.c_str());
+    if (base_type != nullptr) {
+      untouchables.insert(base_type);
+      TypeVector children;
+      get_all_children(base_type, children);
+      untouchables.insert(children.begin(), children.end());
+    }
+  }
+  rename_classes(
+      scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,
+      untouchables, m_rename_annotations);
   TRACE(RENAME, 1,
       "renamed classes: %d anon classes, %d from single char patterns, "
       "%d from multi char patterns\n",
