@@ -84,7 +84,7 @@ bool should_rename(DexClass *clazz,
   if (!rename_annotations && is_annotation(clazz)) return false;
   if (untouchables.count(clazz->get_type())) return false;
   auto chstring = clazz->get_type()->get_name()->c_str();
-  /* We're assuming anonymous classes are safe always safe to rename */
+  /* We're assuming anonymous classes are safe always safe to rename. */
   auto substr = strrchr(chstring, '$');
   if (substr != nullptr) {
     auto val = *++substr;
@@ -140,15 +140,21 @@ void rename_classes(
       continue;
     }
     char clzname[4];
-    char descriptor[10];
     get_next_ident(clzname, clazz_ident);
+
+    auto dtype = clazz->get_type();
+    auto oldname = dtype->get_name();
+
     // The X helps our hacked Dalvik classloader recognize that a
     // class name is the output of the redex renamer and thus will
     // never be found in the Android platform.
-    sprintf(descriptor, "LX%s;", clzname);
+    // The $ indicates that the class was originally an inner class.
+    // Some code, most notably android instrumentation runner, uses
+    // this information to decide whether or not to classload the class.
+    bool inner = strrchr(oldname->c_str(), '$');
+    char descriptor[10];
+    sprintf(descriptor, "LX%s%s;", inner ? "$" : "", clzname);
     auto dstring = DexString::make_string(descriptor);
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
     aliases[oldname] = dstring;
     dtype->assign_name_alias(dstring);
     base_strings_size += strlen(oldname->c_str());
