@@ -22,3 +22,5 @@ void dump_clsdata(ddump_data* rd);
 void dump_code(ddump_data* rd);
 void dump_enarr(ddump_data* rd);
 void dump_anno(ddump_data* rd);
+void dump_debug(ddump_data* rd);
+void disassemble_debug(ddump_data* rd, uint32_t offset);

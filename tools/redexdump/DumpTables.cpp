@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "DexDebugInstruction.h"
 #include "Formatters.h"
 #include "PrintUtil.h"
 #include <RedexDump.h>
@@ -233,8 +234,8 @@ static std::string get_code_item(dex_code_item** pcode_item) {
      << "ins_size: " << code_item->ins_size << ", "
      << "outs_size: " << code_item->outs_size << ", "
      << "tries_size: " << code_item->tries_size << ", "
-     << "debug_info_off: " << code_item->debug_info_off << ", "
-     << "insns_size: " << code_item->insns_size << "\n";
+     << "debug_info_off: 0x" << std::hex << code_item->debug_info_off << ", "
+     << "insns_size: " << std::dec << code_item->insns_size << "\n";
   const uint16_t* dexptr =
       (const uint16_t*)(code_item + 1) + code_item->insns_size;
   *pcode_item = (dex_code_item*)dexptr;
@@ -267,6 +268,166 @@ static std::string get_code_item(dex_code_item** pcode_item) {
     }
   }
   *pcode_item = (dex_code_item*)(((uintptr_t)*pcode_item + 3) & ~3);
+  return ss.str();
+}
+
+class DexDebugInstructionReader {
+ protected:
+  virtual void handle_advance_pc(DexDebugItemOpcode op, uint32_t arg) {
+    return handle_default(op);
+  }
+  virtual void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
+    return handle_default(op);
+  }
+  virtual void handle_start_local(DexDebugItemOpcode op, uint32_t arg1,
+      uint32_t arg2, uint32_t arg3) {
+    return handle_default(op);
+  }
+  virtual void handle_start_local_extended(DexDebugItemOpcode op, uint32_t arg1,
+      uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+    return handle_default(op);
+  }
+  virtual void handle_end_local(DexDebugItemOpcode op, uint32_t arg1) {
+    return handle_default(op);
+  }
+  virtual void handle_restart_local(DexDebugItemOpcode op, uint32_t arg1) {
+    return handle_default(op);
+  }
+  virtual void handle_set_file(DexDebugItemOpcode op, uint32_t arg) {
+    return handle_default(op);
+  }
+  virtual void handle_set_prologue_end(DexDebugItemOpcode op) {
+    return handle_default(op);
+  }
+  virtual void handle_set_epilogue_begin(DexDebugItemOpcode op) {
+    return handle_default(op);
+  }
+  virtual void handle_default(DexDebugItemOpcode op) = 0;
+ public:
+  void read(const uint8_t*& data) {
+    uint32_t u1, u2, u3, u4;
+    int32_t s1;
+    while (true) {
+      DexDebugItemOpcode op = (DexDebugItemOpcode)*data++;
+      switch (op) {
+      case DBG_END_SEQUENCE:
+        return;
+      case DBG_ADVANCE_PC:
+        u1 = read_uleb128(&data);
+        handle_advance_pc(op, u1);
+        break;
+      case DBG_ADVANCE_LINE:
+        s1 = read_sleb128(&data);
+        handle_advance_line(op, s1);
+        break;
+      case DBG_START_LOCAL:
+        u1 = read_uleb128(&data);
+        u2 = read_uleb128(&data);
+        u3 = read_uleb128(&data);
+        handle_start_local(op, u1, u2, u3);
+        break;
+      case DBG_START_LOCAL_EXTENDED:
+        u1 = read_uleb128(&data);
+        u2 = read_uleb128(&data);
+        u3 = read_uleb128(&data);
+        u4 = read_uleb128(&data);
+        handle_start_local_extended(op, u1, u2, u3, u4);
+        break;
+      case DBG_END_LOCAL:
+        u1 = read_uleb128(&data);
+        handle_end_local(op, u1);
+        break;
+      case DBG_RESTART_LOCAL:
+        u1 = read_uleb128(&data);
+        handle_restart_local(op, u1);
+        break;
+      case DBG_SET_PROLOGUE_END:
+        handle_set_prologue_end(op);
+        break;
+      case DBG_SET_EPILOGUE_BEGIN:
+        handle_set_epilogue_begin(op);
+        break;
+      case DBG_SET_FILE:
+        u1 = read_uleb128(&data);
+        handle_set_file(op, u1);
+        break;
+      default: // special opcodes
+        handle_default(op);
+        break;
+      };
+    }
+  }
+};
+
+uint32_t count_debug_instructions(const uint8_t*& encdata) {
+  struct DexDebugInstructionCounter : public DexDebugInstructionReader {
+    int sum;
+    void handle_default(DexDebugItemOpcode op) {
+      sum++;
+    }
+  };
+  auto counter = DexDebugInstructionCounter();
+  counter.read(encdata);
+  return counter.sum;
+}
+
+void disassemble_debug(ddump_data* rd, uint32_t offset) {
+  redump("Disassembling debug opcodes at 0x%x\n", offset);
+  auto data = (const uint8_t*)(rd->dexmmap + offset);
+  auto line_start = read_uleb128(&data);
+  auto parameters_size = read_uleb128(&data);
+  redump("line_start: %d, parameters_size: %d\n", line_start, parameters_size);
+  for (unsigned int i = 0; i < parameters_size; ++i) {
+    read_uleb128(&data);
+  }
+  struct DexDebugInstructionPrinter : public DexDebugInstructionReader {
+    void handle_advance_pc(DexDebugItemOpcode op, uint32_t arg) {
+      redump("DBG_ADVANCE_PC %u\n", arg);
+    }
+    void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
+      redump("DBG_ADVANCE_LINE %d\n", arg);
+    }
+    void handle_start_local(DexDebugItemOpcode op, uint32_t reg,
+        uint32_t name_idx, uint32_t type_idx) {
+      redump("DBG_START_LOCAL %d\n", reg);
+    }
+    void handle_start_local_extended(DexDebugItemOpcode op, uint32_t reg,
+        uint32_t, uint32_t, uint32_t) {
+      redump("DBG_START_LOCAL_EXTENDED %d\n", reg);
+    }
+    void handle_end_local(DexDebugItemOpcode op, uint32_t reg) {
+      redump("DBG_END_LOCAL %d\n", reg);
+    }
+    void handle_restart_local(DexDebugItemOpcode op, uint32_t reg) {
+      redump("DBG_RESTART_LOCAL %d\n", reg);
+    }
+    void handle_set_file(DexDebugItemOpcode op, uint32_t arg) {
+      redump("DBG_SET_FILE\n");
+    }
+    void handle_set_prologue_end(DexDebugItemOpcode op) {
+      redump("DBG_SET_PROLOGUE_END\n");
+    }
+    void handle_set_epilogue_begin(DexDebugItemOpcode op) {
+      redump("DBG_SET_EPILOGUE_BEGIN\n");
+    }
+    void handle_default(DexDebugItemOpcode op) {
+      redump("DBG_SPECIAL 0x%02x\n", (uint32_t)op);
+    }
+  };
+  DexDebugInstructionPrinter().read(data);
+}
+
+static std::string get_debug_item(const uint8_t** pdebug_item) {
+  auto line_start = read_uleb128(pdebug_item);
+  auto parameters_size = read_uleb128(pdebug_item);
+  for (unsigned int i = 0; i < parameters_size; ++i) {
+    read_uleb128(pdebug_item);
+  }
+  auto num_opcodes = count_debug_instructions(*pdebug_item);
+  std::stringstream ss;
+  ss << "line_start: " << line_start << ", "
+     << "parameters_size: " << parameters_size << ", "
+     << "num_opcodes: " << num_opcodes << "\n";
   return ss.str();
 }
 
@@ -403,6 +564,15 @@ static void dump_code_items(ddump_data* rd,
   }
 }
 
+static void dump_debug_items(ddump_data* rd,
+                             const uint8_t* debug_items,
+                             uint32_t size) {
+  for (uint32_t i = 0; i < size; i++) {
+    auto offset = reinterpret_cast<const char*>(debug_items) - rd->dexmmap;
+    redump(offset, "%s", get_debug_item(&debug_items).c_str());
+  }
+}
+
 void dump_code(ddump_data* rd) {
   unsigned count;
   dex_map_item* maps;
@@ -414,7 +584,7 @@ void dump_code(ddump_data* rd) {
       "ins_size: <count>,"
       "outs_size: <count>,"
       "tries_size: <count>,"
-      "debug_info_off: <count>,"
+      "debug_info_off: <addr>,"
       "insns_size: <count>\n");
   for (unsigned i = 0; i < count; i++) {
     if (maps[i].type == TYPE_CODE_ITEM) {
@@ -494,6 +664,19 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
 void dump_anno(ddump_data* rd) {
   for (uint32_t i = 0; i < rd->dexh->class_defs_size; i++) {
     dump_class_annotations(rd, &rd->dex_class_defs[i]);
+  }
+}
+
+void dump_debug(ddump_data* rd) {
+  unsigned count;
+  dex_map_item* maps;
+  get_dex_map_items(rd, &count, &maps);
+  for (unsigned i = 0; i < count; i++) {
+    if (maps[i].type == TYPE_DEBUG_INFO_ITEM) {
+      auto debug_items = (uint8_t*)(rd->dexmmap + maps[i].offset);
+      dump_debug_items(rd, debug_items, maps[i].size);
+      return;
+    }
   }
 }
 

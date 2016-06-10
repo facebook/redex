@@ -41,6 +41,8 @@ static const char ddump_usage_string[] =
     "-x, --code: print items in the code data section\n"
     "-e, --enarr: print items in the encoded array section\n"
     "-A, --anno: print items in the annotation section\n"
+    "-d, --debug: print debug info items in the data section\n"
+    "-D, --ddebug=<addr>: disassemble debug info item at <addr>\n"
     "\nprinting options:\n"
     "-C, --clean: does not print indexes or offsets making the output "
     "usable for a diff\n";
@@ -59,6 +61,8 @@ int main(int argc, char* argv[]) {
   bool code = false;
   bool enarr = false;
   bool anno = false;
+  bool debug = false;
+  uint32_t ddebug_offset = 0;
 
   char c;
   static const struct option options[] = {
@@ -74,6 +78,8 @@ int main(int argc, char* argv[]) {
     { "code", no_argument, nullptr, 'x' },
     { "enarr", no_argument, nullptr, 'e' },
     { "anno", no_argument, nullptr, 'A' },
+    { "debug", no_argument, nullptr, 'd' },
+    { "ddebug", required_argument, nullptr, 'D' },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },
   };
@@ -81,7 +87,7 @@ int main(int argc, char* argv[]) {
   while ((c = getopt_long(
             argc,
             argv,
-            "asStpfmcCxeAh",
+            "asStpfmcCxeAdDh",
             &options[0],
             nullptr)) != -1) {
     switch (c) {
@@ -120,6 +126,12 @@ int main(int argc, char* argv[]) {
         break;
       case 'A':
         anno = true;
+        break;
+      case 'd':
+        debug = true;
+        break;
+      case 'D':
+        sscanf(optarg, "%x", &ddebug_offset);
         break;
       case 'h':
         puts(ddump_usage_string);
@@ -173,6 +185,12 @@ int main(int argc, char* argv[]) {
     }
     if (anno || all) {
       dump_anno(&rd);
+    }
+    if (debug || all) {
+      dump_debug(&rd);
+    }
+    if (ddebug_offset != 0) {
+      disassemble_debug(&rd, ddebug_offset);
     }
     fprintf(stdout, "\n");
     fflush(stdout);
