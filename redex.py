@@ -568,6 +568,14 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
             else:
                 print(line.rstrip(), file=output)
 
+def copy_line_map_to_out_dir(tmp, apk_output_path):
+    output_dir = os.path.dirname(apk_output_path)
+    output_path = os.path.join(output_dir, "redex-line-number-map.txt")
+    if os.path.isfile(tmp + '/redex-line-number-map.txt'):
+        subprocess.check_call(['cp', tmp + '/redex-line-number-map.txt', output_path])
+        log('Copying line number map to output dir')
+    else:
+        log('Skipping line number map copy, since no file found to copy')
 
 def copy_stats_to_out_dir(tmp, apk_output_path):
     output_dir = os.path.dirname(apk_output_path)
@@ -759,6 +767,7 @@ def run_redex(args):
             args.keyalias, args.keypass)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
+    copy_line_map_to_out_dir(newtmp, args.out)
     copy_stats_to_out_dir(newtmp, args.out)
     copy_filename_map_to_out_dir(newtmp, args.out)
 

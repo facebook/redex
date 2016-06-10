@@ -253,7 +253,7 @@ class LocalDce {
     }
     // Skip if it contains nothing but debug info.
     for (; first != b->end(); ++first) {
-      if (first->type != MFLOW_DEBUG) {
+      if (first->type != MFLOW_DEBUG || first->type != MFLOW_POSITION) {
         return true;
       }
     }

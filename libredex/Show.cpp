@@ -887,6 +887,26 @@ std::string show(const DexDebugInstruction* insn) {
   return ss.str();
 }
 
+std::string show(const DexPosition* pos) {
+  std::stringstream ss;
+  ss << show(pos->file) << ":" << pos->line;
+  return ss.str();
+}
+
+std::string show(const DexDebugEntry* entry) {
+  std::stringstream ss;
+  ss << std::hex;
+  switch (entry->type) {
+    case DexDebugEntryType::Instruction:
+      ss << "INSTRUCTION: [0x" << entry->addr << "] " << show(entry->insn);
+      break;
+    case DexDebugEntryType::Position:
+      ss << "POSITION: [0x" << entry->addr << "] " << show(entry->pos);
+      break;
+  }
+  return ss.str();
+}
+
 std::string show(TryEntryType t) {
   switch (t) {
   case TRY_START:
@@ -918,19 +938,13 @@ std::string show(const MethodItemEntry& mei) {
   case MFLOW_DEBUG:
     ss << "DEBUG: " << show(mei.dbgop);
     return ss.str();
+  case MFLOW_POSITION:
+    ss << "POSITION: " << show(mei.pos);
+    return ss.str();
   case MFLOW_FALLTHROUGH:
     return "FALLTHROUGH:";
   }
   not_reached();
-}
-
-std::string show(const FatMethod* fm) {
-  std::string ret;
-  for (auto const& mei : *fm) {
-    ret += show(mei);
-    ret += "\n";
-  }
-  return ret;
 }
 
 std::string show(const std::vector<Block*>& blocks) {
@@ -1003,4 +1017,3 @@ std::string show(DexIdx* p) {
   }
   return ss.str();
 }
-

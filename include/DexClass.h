@@ -20,8 +20,10 @@
 #include "DexIdx.h"
 #include "dexdefs.h"
 #include "DexAccess.h"
+#include "DexDebugInstruction.h"
 #include "DexInstruction.h"
 #include "DexAnnotation.h"
+#include "DexPosition.h"
 #include "Show.h"
 #include "Trace.h"
 #include "RedexContext.h"
@@ -426,23 +428,52 @@ inline bool compare_dexprotos(const DexProto* a, const DexProto* b) {
   return (*(a->get_args()) < *(b->get_args()));
 }
 
+/*
+ * Dex files encode debug information as a series of opcodes. Internally, we
+ * convert the opcodes that delta-encode position into absolute DexPositions.
+ * The other opcodes get passed directly through.
+ */
+enum class DexDebugEntryType { Instruction, Position };
+
+struct DexDebugEntry final {
+  DexDebugEntryType type;
+  uint32_t addr;
+  union {
+    DexPosition* pos;
+    DexDebugInstruction* insn;
+  };
+  DexDebugEntry(uint32_t addr, DexPosition* pos)
+    : type(DexDebugEntryType::Position), addr(addr), pos(pos) {}
+  DexDebugEntry(uint32_t addr, DexDebugInstruction* insn)
+    : type(DexDebugEntryType::Instruction), addr(addr), insn(insn) {}
+  void gather_strings(std::vector<DexString*>& lstring) {
+    if (type == DexDebugEntryType::Instruction) {
+      insn->gather_strings(lstring);
+    }
+  }
+  void gather_types(std::vector<DexType*>& ltype) {
+    if (type == DexDebugEntryType::Instruction) {
+      insn->gather_types(ltype);
+    }
+  }
+};
+
 class DexDebugItem {
   uint32_t m_line_start;
   std::vector<DexString*> m_param_names;
-  std::vector<DexDebugInstruction*> m_insns;
-  DexDebugItem(DexIdx* idx, uint32_t offset);
+  std::vector<DexDebugEntry> m_dbg_entries;
+  DexDebugItem(DexIdx* idx, uint32_t offset, DexString* source_file);
 
  public:
-  static DexDebugItem* get_dex_debug(DexIdx* idx, uint32_t offset);
+  static DexDebugItem* get_dex_debug(DexIdx* idx, uint32_t offset,
+      DexString* source_file);
 
  public:
-  ~DexDebugItem();
-
-  std::vector<DexDebugInstruction*>& get_instructions() { return m_insns; }
+  std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
   uint32_t get_line_start() const { return m_line_start; }
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
-  int encode(DexOutputIdx* dodx, uint8_t* output);
+  int encode(DexOutputIdx* dodx, PositionMapper* pos_mapper, uint8_t* output);
 
   void gather_types(std::vector<DexType*>& ltype);
   void gather_strings(std::vector<DexString*>& lstring);
@@ -467,7 +498,8 @@ class DexCode {
   DexDebugItem* m_dbg;
 
  public:
-  static DexCode* get_dex_code(DexIdx* idx, uint32_t offset);
+  static DexCode* get_dex_code(DexIdx* idx, uint32_t offset,
+      DexString* source_file);
 
   // TODO: make it private and find a better way to allow code creation
   DexCode()

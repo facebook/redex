@@ -17,6 +17,7 @@
 #include <boost/intrusive/list.hpp>
 
 #include "DexClass.h"
+#include "DexDebugInstruction.h"
 
 enum TryEntryType {
   TRY_START = 0,
@@ -62,7 +63,8 @@ enum MethodItemType {
   MFLOW_OPCODE = 1,
   MFLOW_TARGET = 2,
   MFLOW_DEBUG = 3,
-  MFLOW_FALLTHROUGH = 4,
+  MFLOW_POSITION = 4,
+  MFLOW_FALLTHROUGH = 5,
 };
 
 struct MethodItemEntry {
@@ -74,6 +76,7 @@ struct MethodItemEntry {
     DexInstruction* insn;
     BranchTarget* target;
     DexDebugInstruction* dbgop;
+    DexPosition* pos;
   };
   MethodItemEntry(DexInstruction* insn) {
     this->type = MFLOW_OPCODE;
@@ -87,10 +90,10 @@ struct MethodItemEntry {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  MethodItemEntry(DexDebugInstruction* dbgop) {
-    this->type = MFLOW_DEBUG;
-    this->dbgop = dbgop;
-  }
+  MethodItemEntry(DexDebugInstruction* dbgop)
+      : type(MFLOW_DEBUG), dbgop(dbgop) {}
+  MethodItemEntry(DexPosition* pos)
+      : type(MFLOW_POSITION), pos(pos) {}
   MethodItemEntry() { this->type = MFLOW_FALLTHROUGH; }
   ~MethodItemEntry() {
     switch (type) {

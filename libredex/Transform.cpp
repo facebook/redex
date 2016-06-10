@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
+#include "DexUtil.h"
 #include "WorkQueue.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -255,43 +256,11 @@ static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
   }
 }
 
-static void associate_debug_opcodes(FatMethod* fm,
+static void associate_debug_entries(FatMethod* fm,
                                     DexDebugItem* dbg,
                                     addr_mei_t& addr_to_mei) {
-  uint32_t offset = 0;
-  auto const& opcodes = dbg->get_instructions();
-  int32_t absolute_line = int32_t(dbg->get_line_start());
-  for (auto opcode : opcodes) {
-    auto op = opcode->opcode();
-    TRACE(MTRANS, 5, "decode offset %08x %02x\n", offset, op);
-    switch (op) {
-    case DBG_ADVANCE_LINE:
-      TRACE(MTRANS, 5, "Advance line %d\n", opcode->value());
-      absolute_line += opcode->value();
-      opcode->set_value(absolute_line);
-    case DBG_END_LOCAL:
-    case DBG_RESTART_LOCAL:
-    case DBG_START_LOCAL:
-    case DBG_START_LOCAL_EXTENDED:
-    case DBG_SET_FILE:
-    case DBG_END_SEQUENCE:
-    case DBG_SET_PROLOGUE_END:
-    case DBG_SET_EPILOGUE_BEGIN: {
-      break;
-    }
-    case DBG_ADVANCE_PC: {
-      offset += opcode->uvalue();
-      delete opcode; /* Ugh, messy, FIXME!!! */
-      continue;
-    }
-    default: {
-      uint8_t adjustment = op - DBG_FIRST_SPECIAL;
-      absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
-      offset += adjustment / DBG_LINE_RANGE;
-      opcode->set_uvalue(absolute_line);
-    }
-    }
-    auto insert_point = addr_to_mei[offset];
+  for (auto& entry : dbg->get_entries()) {
+    auto insert_point = addr_to_mei[entry.addr];
     if (!insert_point) {
       /* We don't have a way of emitting debug info for fopcodes.  To
        * be honest, I'm not sure why DX emits them.  We don't.
@@ -299,14 +268,15 @@ static void associate_debug_opcodes(FatMethod* fm,
       TRACE(MTRANS, 5, "Warning..Skipping fopcode debug opcode\n");
       continue;
     }
-    MethodItemEntry* mentry = new MethodItemEntry(opcode);
-    TRACE(MTRANS,
-          5,
-          "insert at offset %08x %02x [%p][mentry%p]\n",
-          offset,
-          op,
-          insert_point,
-          mentry);
+    MethodItemEntry* mentry;
+    switch (entry.type) {
+      case DexDebugEntryType::Instruction:
+        mentry = new MethodItemEntry(entry.insn);
+        break;
+      case DexDebugEntryType::Position:
+        mentry = new MethodItemEntry(entry.pos);
+        break;
+    }
     insert_mentry_before(fm, mentry, insert_point);
   }
 }
@@ -380,9 +350,8 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
   associate_try_items(fm, code, addr_to_mei);
   auto debugitem = code->get_debug_item();
   if (debugitem) {
-    associate_debug_opcodes(fm, debugitem, addr_to_mei);
+    associate_debug_entries(fm, debugitem, addr_to_mei);
   }
-
   return fm;
 }
 
@@ -695,7 +664,8 @@ void cleanup_callee_debug(FatMethod* fcallee) {
 
 MethodItemEntry* clone(
     MethodItemEntry* mei,
-    std::unordered_map<MethodItemEntry*, MethodItemEntry*>& entry_map) {
+    std::unordered_map<MethodItemEntry*, MethodItemEntry*>& entry_map,
+    std::unordered_map<DexPosition*, DexPosition*>& pos_map) {
   MethodItemEntry* cloned_mei;
   auto entry = entry_map.find(mei);
   if (entry != entry_map.end()) {
@@ -713,10 +683,20 @@ MethodItemEntry* clone(
     return cloned_mei;
   case MFLOW_TARGET:
     cloned_mei->target = new BranchTarget(*cloned_mei->target);
-    cloned_mei->target->src = clone(cloned_mei->target->src, entry_map);
+    cloned_mei->target->src = clone(cloned_mei->target->src, entry_map,
+        pos_map);
     return cloned_mei;
   case MFLOW_DEBUG:
+    // XXX MethodItemEntry doesn't delete dbgop in its dtor, so this is probably
+    // a leak
     cloned_mei->dbgop = cloned_mei->dbgop->clone();
+    return cloned_mei;
+  case MFLOW_POSITION:
+    // XXX MethodItemEntry doesn't delete pos in its dtor, so this is probably
+    // a leak
+    cloned_mei->pos = new DexPosition(*cloned_mei->pos);
+    pos_map[mei->pos] = cloned_mei->pos;
+    cloned_mei->pos->parent = pos_map.at(cloned_mei->pos->parent);
     return cloned_mei;
   case MFLOW_FALLTHROUGH:
     return cloned_mei;
@@ -816,13 +796,29 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   if (it->type == MFLOW_DEBUG && it->dbgop->opcode() == DBG_SET_PROLOGUE_END) {
     ++it;
   }
+  // find the last position entry before the invoke.
+  // we need to decrement the reverse iterator because it gets constructed
+  // as pointing to the element preceding pos
+  auto position_it = --FatMethod::reverse_iterator(pos);
+  while (++position_it != fcaller->rend()
+      && position_it->type != MFLOW_POSITION);
+  auto invoke_position =
+    position_it == fcaller->rend() ? nullptr : position_it->pos;
+  if (invoke_position != nullptr) {
+    TRACE(MTRANS, 5, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
+        invoke_position->line);
+  }
+
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
   // We need a map of MethodItemEntry we have created because a branch
   // points to another MethodItemEntry which may have been created or not
   std::unordered_map<MethodItemEntry*, MethodItemEntry*> entry_map;
+  // for remapping the parent position pointers
+  std::unordered_map<DexPosition*, DexPosition*> pos_map;
+  pos_map[nullptr] = nullptr;
   while (it != fcallee->end()) {
-    auto mei = clone(&*it, entry_map);
+    auto mei = clone(&*it, entry_map, pos_map);
     remap_registers(*mei, callee_reg_map);
     it++;
     if (mei->type == MFLOW_OPCODE && is_return(mei->insn->opcode())) {
@@ -835,6 +831,9 @@ bool MethodTransform::inline_16regs(InlineContext& context,
       }
       break;
     } else {
+      if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
+        mei->pos->parent = invoke_position;
+      }
       fcaller->insert(pos, *mei);
     }
   }
@@ -845,7 +844,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     fcaller->erase_and_dispose(move_res, FatMethodDisposer());
   }
   while (it != fcallee->end()) {
-    auto mei = clone(&*it, entry_map);
+    auto mei = clone(&*it, entry_map, pos_map);
     remap_registers(*mei, callee_reg_map);
     it++;
     fcaller->push_back(*mei);
@@ -1164,62 +1163,13 @@ bool MethodTransform::try_sync() {
   TRACE(MTRANS, 5, "Emitting debug opcodes\n");
   auto debugitem = code->get_debug_item();
   if (debugitem) {
-    auto& dopout = debugitem->get_instructions();
-    int32_t absolute_line = int32_t(debugitem->get_line_start());
-    dopout.clear();
-    uint32_t daddr = 0;
-    for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
-      MethodItemEntry* mentry = &*miter;
-      if (mentry->type == MFLOW_DEBUG) {
-        auto dbgop = mentry->dbgop;
-        auto op = dbgop->opcode();
-        switch (op) {
-        case DBG_END_LOCAL:
-        case DBG_RESTART_LOCAL:
-        case DBG_START_LOCAL:
-        case DBG_START_LOCAL_EXTENDED:
-        case DBG_SET_FILE:
-        case DBG_END_SEQUENCE:
-        case DBG_SET_PROLOGUE_END:
-        case DBG_SET_EPILOGUE_BEGIN:
-          break;
-        case DBG_ADVANCE_LINE: {
-          auto diff = dbgop->value() - absolute_line;
-          dbgop->set_value(diff);
-          absolute_line += diff;
-          break;
-        }
-        case DBG_ADVANCE_PC: {
-          uint32_t advance = mentry->addr - daddr;
-          dbgop->set_uvalue(advance);
-          daddr += advance;
-          break;
-        }
-        default: {
-          auto line_adjust = dbgop->value() - absolute_line;
-          auto addr_adjust = mentry->addr - daddr;
-          absolute_line += line_adjust;
-          if (line_adjust < DBG_LINE_BASE ||
-              line_adjust >= (DBG_LINE_RANGE + DBG_LINE_BASE)) {
-            dopout.push_back(new DexDebugInstruction(DBG_ADVANCE_LINE, line_adjust));
-            line_adjust = 0;
-          }
-          auto special = (line_adjust - DBG_LINE_BASE) +
-                         (addr_adjust * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
-          if (special > 0xff) {
-            dopout.push_back(
-                new DexDebugInstruction(DBG_ADVANCE_PC, uint32_t(addr_adjust)));
-            addr_adjust = 0;
-            special = line_adjust - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
-          }
-          dbgop->set_opcode(static_cast<DexDebugItemOpcode>(special));
-          dbgop->set_uvalue(DEX_NO_INDEX);
-          daddr = mentry->addr;
-          break;
-        }
-        }
-        TRACE(MTRANS, 5, "emit: %08x:%02x\n", daddr, dbgop->opcode());
-        dopout.push_back(dbgop);
+    auto& entries = debugitem->get_entries();
+    entries.clear();
+    for (auto& mentry : *m_fmethod) {
+      if (mentry.type == MFLOW_DEBUG) {
+        entries.emplace_back(mentry.addr, mentry.dbgop->clone());
+      } else if (mentry.type == MFLOW_POSITION) {
+        entries.emplace_back(mentry.addr, mentry.pos);
       }
     }
   }

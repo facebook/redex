@@ -96,6 +96,9 @@ class GatheredTypes {
 GatheredTypes::GatheredTypes(DexClasses* classes)
   : m_classes(classes)
 {
+  // ensure that the string id table contains the empty string, which is used
+  // for the DexPosition mapping
+  m_lstring.push_back(DexString::make_string(""));
   gather_components();
 }
 
@@ -254,6 +257,7 @@ public:
   uint32_t m_offset;
   const char* m_filename;
   size_t m_dex_number;
+  PositionMapper* m_pos_mapper;
   const char* m_method_mapping_filename;
   std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
@@ -305,6 +309,7 @@ public:
     LocatorIndex* locator_index,
     size_t dex_number,
     const ConfigFiles& config_files,
+    PositionMapper* pos_mapper,
     const char* method_mapping_path);
   ~DexOutput();
   void prepare();
@@ -317,9 +322,9 @@ DexOutput::DexOutput(
   LocatorIndex* locator_index,
   size_t dex_number,
   const ConfigFiles& config_files,
+  PositionMapper* pos_mapper,
   const char* method_mapping_path):
     m_config_files(config_files) {
-
   m_classes = classes;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
@@ -327,6 +332,7 @@ DexOutput::DexOutput(
   m_gtypes = new GatheredTypes(classes);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
+  m_pos_mapper = pos_mapper,
   m_method_mapping_filename = method_mapping_path;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
@@ -594,11 +600,10 @@ void DexOutput::generate_class_data() {
     cdefs[i].interfaces_off = 0;
     cdefs[i].annotations_off = 0;
     cdefs[i].interfaces_off = m_tl_emit_offsets[clz->get_interfaces()];
-    if (clz->get_source_file() != nullptr) {
-      cdefs[i].source_file_idx = dodx->stringidx(clz->get_source_file());
-    } else {
-      cdefs[i].source_file_idx = DEX_NO_INDEX;
-    }
+    // All filenames / positions get remapped by the PositionMapper
+    // Note: we cannot use DEX_NO_INDEX here, otherwise stack traces will just
+    // print "Unknown source"
+    cdefs[i].source_file_idx = dodx->stringidx(DexString::make_string(""));
     if (m_cdi_offsets.count(clz)) {
       cdefs[i].class_data_offset = m_cdi_offsets[clz];
     } else {
@@ -873,7 +878,7 @@ void DexOutput::generate_debug_items() {
     if (dbg == nullptr) continue;
     dbgcount++;
     // No align requirement for debug items.
-    int size = dbg->encode(dodx, m_output + m_offset);
+    int size = dbg->encode(dodx, m_pos_mapper, m_output + m_offset);
     dci->debug_info_off = m_offset;
     m_offset += size;
   }
@@ -1036,6 +1041,7 @@ write_classes_to_dex(
   LocatorIndex* locator_index,
   size_t dex_number,
   const ConfigFiles& cfg,
+  PositionMapper* pos_mapper,
   const char* method_mapping_filename)
 {
   DexOutput dout = DexOutput(
@@ -1044,6 +1050,7 @@ write_classes_to_dex(
     locator_index,
     dex_number,
     cfg,
+    pos_mapper,
     method_mapping_filename);
   dout.prepare();
   dout.write();

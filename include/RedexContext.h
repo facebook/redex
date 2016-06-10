@@ -9,17 +9,21 @@
 
 #pragma once
 
+#include <vector>
 #include <cstring>
 #include <list>
 #include <map>
 #include <pthread.h>
 
+class DexDebugInstruction;
 class DexString;
 class DexType;
 class DexField;
 class DexTypeList;
 class DexProto;
 class DexMethod;
+struct DexDebugEntry;
+struct DexPosition;
 struct RedexContext;
 
 extern RedexContext* g_redex;
@@ -69,6 +73,9 @@ struct RedexContext {
   void mutate_method_class(DexMethod* method, DexType* cls);
   void mutate_method_proto(DexMethod* method, DexProto* proto);
 
+  DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
+  DexDebugEntry* make_dbg_entry(DexPosition* pos);
+
  private:
   struct carray_cmp {
     bool operator()(const char* a, const char* b) const {
@@ -100,6 +107,7 @@ struct RedexContext {
   std::map<DexType*, std::map<DexString*, std::map<DexProto*, DexMethod*>>>
       s_method_map;
   pthread_mutex_t s_method_lock;
+
 };
 
 template <typename V>

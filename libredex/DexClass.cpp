@@ -10,6 +10,7 @@
 #include "DexClass.h"
 
 #include <algorithm>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -37,7 +38,54 @@ void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   m_concrete = true;
 }
 
-DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
+/*
+ * Evaluate the debug opcodes to figure out their absolute addresses and line
+ * numbers.
+ */
+static std::vector<DexDebugEntry> eval_debug_instructions(
+    DexDebugItem* dbg,
+    std::vector<std::unique_ptr<DexDebugInstruction>>& insns,
+    DexString* source_file
+    ) {
+  std::vector<DexDebugEntry> entries;
+  int32_t absolute_line = int32_t(dbg->get_line_start());
+  uint32_t pc = 0;
+  for (auto& opcode : insns) {
+    auto op = opcode->opcode();
+    switch (op) {
+    case DBG_ADVANCE_LINE: {
+      absolute_line += opcode->value();
+      continue;
+    }
+    case DBG_END_LOCAL:
+    case DBG_RESTART_LOCAL:
+    case DBG_START_LOCAL:
+    case DBG_START_LOCAL_EXTENDED:
+    case DBG_SET_FILE:
+    case DBG_END_SEQUENCE:
+    case DBG_SET_PROLOGUE_END:
+    case DBG_SET_EPILOGUE_BEGIN: {
+      entries.emplace_back(pc, opcode.release());
+      break;
+    }
+    case DBG_ADVANCE_PC: {
+      pc += opcode->uvalue();
+      continue;
+    }
+    default: {
+      uint8_t adjustment = op - DBG_FIRST_SPECIAL;
+      absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
+      pc += adjustment / DBG_LINE_RANGE;
+      entries.emplace_back(pc, new DexPosition(source_file, absolute_line));
+      break;
+    }
+    }
+  }
+  return entries;
+}
+
+DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset,
+    DexString* source_file) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
   m_line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
@@ -45,26 +93,99 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
     DexString* str = decode_noindexable_string(idx, encdata);
     m_param_names.push_back(str);
   }
+  std::vector<std::unique_ptr<DexDebugInstruction>> insns;
   DexDebugInstruction* dbgp;
   while ((dbgp = DexDebugInstruction::make_instruction(idx, encdata)) != nullptr) {
-    m_insns.push_back(dbgp);
+    insns.emplace_back(dbgp);
   }
+  m_dbg_entries = eval_debug_instructions(this, insns, source_file);
 }
 
-DexDebugItem::~DexDebugItem() {
-  for (auto const& dbgop : m_insns) {
-    delete dbgop;
-  }
-}
-
-DexDebugItem* DexDebugItem::get_dex_debug(DexIdx* idx, uint32_t offset) {
+DexDebugItem* DexDebugItem::get_dex_debug(DexIdx* idx, uint32_t offset,
+    DexString* source_file) {
   if (offset == 0) return nullptr;
-  return new DexDebugItem(idx, offset);
+  return new DexDebugItem(idx, offset, source_file);
 }
 
-int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
+namespace {
+
+/*
+ * Convert DexDebugEntries into debug opcodes.
+ */
+std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
+    DexDebugItem* debugitem,
+    DexOutputIdx* dodx,
+    PositionMapper* pos_mapper,
+    uint8_t* output) {
+  std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+  uint32_t prev_addr = 0;
+  uint32_t prev_line = pos_mapper->get_next_line();
+  auto& entries = debugitem->get_entries();
+
+  for (auto it = entries.begin(); it != entries.end(); ++it) {
+    // find all entries that belong to the same address, and group them by type
+    auto addr = it->addr;
+    std::vector<DexPosition*> positions;
+    std::vector<DexDebugInstruction*> insns;
+    for (; it != entries.end() && it->addr == addr; ++it) {
+      switch (it->type) {
+        case DexDebugEntryType::Position:
+          positions.push_back(it->pos);
+          break;
+        case DexDebugEntryType::Instruction:
+          insns.push_back(it->insn);
+          break;
+      }
+    }
+    --it;
+    auto addr_delta = addr - prev_addr;
+    prev_addr = addr;
+
+    for (auto pos : positions) {
+      pos_mapper->register_position(pos);
+    }
+    // only emit the last position entry for a given address
+    if (!positions.empty()) {
+      auto line = pos_mapper->position_to_line(positions.back());
+      int32_t line_delta = line - prev_line;
+      prev_line = line;
+      if (line_delta < DBG_LINE_BASE ||
+              line_delta >= (DBG_LINE_RANGE + DBG_LINE_BASE)) {
+        dbgops.emplace_back(new DexDebugInstruction(
+              DexDebugItemOpcode::DBG_ADVANCE_LINE, line_delta));
+        line_delta = 0;
+      }
+      auto special = (line_delta - DBG_LINE_BASE) +
+                       (addr_delta * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
+      if (special & ~0xff) {
+        dbgops.emplace_back(new DexDebugInstruction(
+              DexDebugItemOpcode::DBG_ADVANCE_PC, uint32_t(addr_delta)));
+        special = line_delta - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
+      }
+      dbgops.emplace_back(new DexDebugInstruction(
+            static_cast<DexDebugItemOpcode>(special)));
+      line_delta = 0;
+      addr_delta = 0;
+    }
+
+    for (auto insn : insns) {
+      if (addr_delta != 0) {
+        dbgops.emplace_back(new DexDebugInstruction(
+              DexDebugItemOpcode::DBG_ADVANCE_PC, addr_delta));
+        addr_delta = 0;
+      }
+      dbgops.emplace_back(insn->clone());
+    }
+  }
+  return dbgops;
+}
+
+}
+
+int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
+    uint8_t* output) {
   uint8_t* encdata = output;
-  encdata = write_uleb128(encdata, m_line_start);
+  encdata = write_uleb128(encdata, pos_mapper->get_next_line());
   encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {
     if (s == nullptr) {
@@ -74,7 +195,8 @@ int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
     uint32_t idx = dodx->stringidx(s);
     encdata = write_uleb128p1(encdata, idx);
   }
-  for (auto dbgop : m_insns) {
+  auto dbgops = generate_debug_instructions(this, dodx, pos_mapper, encdata);
+  for (auto& dbgop : dbgops) {
     dbgop->encode(dodx, encdata);
   }
   encdata = write_uleb128(encdata, DBG_END_SEQUENCE);
@@ -82,8 +204,8 @@ int DexDebugItem::encode(DexOutputIdx* dodx, uint8_t* output) {
 }
 
 void DexDebugItem::gather_types(std::vector<DexType*>& ltype) {
-  for (auto dbgop : m_insns) {
-    dbgop->gather_types(ltype);
+  for (auto& entry : m_dbg_entries) {
+    entry.gather_types(ltype);
   }
 }
 
@@ -91,12 +213,13 @@ void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
   for (auto p : m_param_names) {
     if (p) lstring.push_back(p);
   }
-  for (auto dbgop : m_insns) {
-    dbgop->gather_strings(lstring);
+  for (auto& entry : m_dbg_entries) {
+    entry.gather_strings(lstring);
   }
 }
 
-DexCode* DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
+DexCode* DexCode::get_dex_code(
+    DexIdx* idx, uint32_t offset, DexString* source_file) {
   if (offset == 0) return nullptr;
   const dex_code_item* code = (const dex_code_item*)idx->get_uint_data(offset);
   DexCode* dc = new DexCode();
@@ -149,7 +272,8 @@ DexCode* DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
       dc->m_tries.push_back(dextry);
     }
   }
-  dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off);
+  dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off,
+      source_file);
   return dc;
 }
 
@@ -260,7 +384,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    DexCode* dc = DexCode::get_dex_code(idx, code_off);
+    DexCode* dc = DexCode::get_dex_code(idx, code_off, m_source_file);
     dm->make_concrete(access_flags, dc, false);
     m_dmethods.push_back(dm);
   }
@@ -270,7 +394,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    DexCode* dc = DexCode::get_dex_code(idx, code_off);
+    DexCode* dc = DexCode::get_dex_code(idx, code_off, m_source_file);
     dm->make_concrete(access_flags, dc, true);
     m_vmethods.push_back(dm);
   }
