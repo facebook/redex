@@ -30,9 +30,9 @@ namespace {
     size_t m_branch_propagated{0};
 
     void propagate(DexMethod* method) {
-      TRACE(CONSTP, 5, "%s\n", show(method).c_str());
+      TRACE(CONSTP, 2, "%s\n", show(method).c_str());
       for (auto const inst : method->get_code()->get_instructions()) {
-        TRACE(CONSTP, 5, "instruction: %s\n",  SHOW(inst));
+        TRACE(CONSTP, 2, "instruction: %s\n",  SHOW(inst));
         //If an instruction's type is CONST, it's loaded to specific register and
         //this instruction is marked as can_move until prior instructions change the value of can_move to false
         if (is_const(inst->opcode())) {
@@ -66,6 +66,7 @@ namespace {
       }
       remove_constants(method);
       dead_instructions.clear();
+      reg_values.clear();
       can_remove.clear();
     }
 
@@ -79,7 +80,7 @@ namespace {
             auto src_reg = inst->src(0);
             if (reg_values[src_reg].known && reg_values[src_reg].val == 0) {
               inst->set_opcode(OPCODE_GOTO_16);
-              TRACE(CONSTP, 2, "Changed conditional branch to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
+              TRACE(CONSTP, 2, "Changed conditional branch to GOTO Branch offset: %d \n", inst->offset());
               m_branch_propagated++;
               can_remove[reg_values[src_reg].insn] = true;
             }
@@ -94,7 +95,7 @@ namespace {
     // still marked as can_remove. Then, the program removes all instructions that can be removed
     void remove_constants(DexMethod* method) {
       for (auto& r: reg_values) {
-        if (r.known /* && can_remove[r.insn] */) {
+        if (r.known && can_remove[r.insn]) {
           dead_instructions.push_back(r.insn);
         }
         r.known = false;
@@ -106,10 +107,9 @@ namespace {
     // If there's instruction that overwrites value in a dest registers_size loaded
     // by an earlier instruction. The earier instruction is removed if it has true in can_move
     void check_destination(DexInstruction* inst) {
-      auto &dest_reg_value = reg_values[inst->dest()];
-      if (dest_reg_value.known /* && can_remove[dest_reg_value.insn] */) {
+      auto dest_reg_value = reg_values[inst->dest()];
+      if (dest_reg_value.known && can_remove[dest_reg_value.insn]) {
         dead_instructions.push_back(dest_reg_value.insn);
-        dest_reg_value.known = false;
       }
     }
 
@@ -131,13 +131,14 @@ namespace {
           propagate(m);
         });
         TRACE(CONSTP, 1,
-          "Constant propagated: %lu\n",
+          "Constant removed: %lu\n",
           m_constant_removed);
           TRACE(CONSTP, 1,
-            "Branch condition removed: %lu\n",
+            "Branch condition propagated: %lu\n",
             m_branch_propagated);
           }
         };
+
       }
 
       ////////////////////////////////////////////////////////////////////////////////
