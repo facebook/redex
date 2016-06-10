@@ -20,6 +20,16 @@
 #include "DelInit.h"
 #include "RemoveEmptyClasses.h"
 #include "ConstantPropagation.h"
+#include <json/json.h>
+
+#include "Debug.h"
+#include "JarLoader.h"
+#include "DexOutput.h"
+#include "PassManager.h"
+#include "ProguardLoader.h"
+#include "ReachableClasses.h"
+#include "Warning.h"
+
 /*
 
 This test takes as input the Dex bytecode for the class generated
@@ -92,6 +102,9 @@ enum ClassType {
   REMOVEDCLASS = 1,
   OTHERCLASS = 2,
 };
+
+void output_stats(const char*, const dex_output_stats_t&);
+void output_moved_methods_map(const char*, DexClassesVector&, ConfigFiles&);
 
 ClassType filter_test_classes(const DexString *cls_name) {
   if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/ConstantPropagation;") == 0)
@@ -184,4 +197,92 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   		}
     }
 	}
+
+  TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+  LocatorIndex* locator_index = nullptr;
+  locator_index = new LocatorIndex(make_locator_index(dexen));
+
+  dex_output_stats_t totals;
+
+  auto methodmapping = std::string("mapping.txt");
+  auto stats_output = std::string("stats_output");
+  auto method_move_map = std::string("method_move_map");
+  for (size_t i = 0; i < dexen.size(); i++) {
+    std::stringstream ss;
+    if (i > 0) {
+      ss << (i + 1);
+    }
+    ss << "output.dex";
+    auto stats = write_classes_to_dex(
+      ss.str(),
+      &dexen[i],
+      locator_index,
+      i,
+      dummy_cfg,
+      methodmapping.c_str());
+    totals += stats;
+  }
+  output_stats(stats_output.c_str(), totals);
+  output_moved_methods_map(method_move_map.c_str(), dexen, dummy_cfg);
+  print_warning_summary();
+  delete g_redex;
+  TRACE(MAIN, 1, "Done.\n");
+}
+
+// This method is copied from main.cpp
+void output_stats(const char* path, const dex_output_stats_t& stats) {
+  Json::Value d;
+  d["num_types"] = stats.num_types;
+  d["num_type_lists"] = stats.num_type_lists;
+  d["num_classes"] = stats.num_classes;
+  d["num_methods"] = stats.num_methods;
+  d["num_method_refs"] = stats.num_method_refs;
+  d["num_fields"] = stats.num_fields;
+  d["num_field_refs"] = stats.num_field_refs;
+  d["num_strings"] = stats.num_strings;
+  d["num_protos"] = stats.num_protos;
+  d["num_static_values"] = stats.num_static_values;
+  d["num_annotations"] = stats.num_annotations;
+  Json::StyledStreamWriter writer;
+  std::ofstream out(path);
+  writer.write(out, d);
+  out.close();
+}
+
+// This method is copied from main.cpp
+void output_moved_methods_map(const char* path,
+                              DexClassesVector& dexen,
+                              ConfigFiles& cfg) {
+  // print out moved methods map
+  if (cfg.save_move_map() && strcmp(path, "")) {
+    FILE* fd = fopen(path, "w");
+    if (fd == nullptr) {
+      perror("Error opening method move file");
+      return;
+    }
+    auto move_map = cfg.get_moved_methods_map();
+    std::string dummy = "dummy";
+    for (const auto& it : *move_map) {
+      MethodTuple mt = it.first;
+      auto cls_name = std::get<0>(mt);
+      auto meth_name = std::get<1>(mt);
+      auto src_file = std::get<2>(mt);
+      auto ren_to_cls_name = it.second->get_type()->get_name()->c_str();
+      const char* src_string;
+      if (src_file != nullptr) {
+        src_string = src_file->c_str();
+      } else {
+        src_string = dummy.c_str();
+      }
+      fprintf(fd,
+              "%s %s (%s) -> %s \n",
+              cls_name->c_str(),
+              meth_name->c_str(),
+              src_string,
+              ren_to_cls_name);
+    }
+    fclose(fd);
+  } else {
+    TRACE(MAIN, 1, "No method move map data structure!\n");
+  }
 }
