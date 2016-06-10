@@ -1020,7 +1020,10 @@ void MethodTransform::sync_all() {
     workitems[i].init(mt_sync, transforms[i]);
   }
   WorkQueue wq;
-  wq.run_work_items(&workitems[0], (int)workitems.size());
+
+  if (workitems.size() > 0) {
+    wq.run_work_items(&workitems[0], (int)workitems.size());
+  }
 }
 
 void MethodTransform::sync() {
