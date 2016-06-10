@@ -35,4 +35,22 @@ public class InlineMain {
   public void testNested() throws Exception {
     InlineSeparateFile.inlineNested();
   }
+
+  private static int inlineMe() {
+    return 1;
+  }
+
+  private void ignoreAndThrow(Object x) throws Exception {
+    throw new Exception("foo");
+  }
+
+  /**
+   * Check that the line number is reset to the original for the code that
+   * follows an inlined method. We expect the resulting stack trace *not*
+   * to point to inlineMe().
+   */
+  @Test
+  public void testPositionReset() throws Exception {
+    ignoreAndThrow(inlineMe());
+  }
 }

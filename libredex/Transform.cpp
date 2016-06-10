@@ -837,6 +837,12 @@ bool MethodTransform::inline_16regs(InlineContext& context,
       fcaller->insert(pos, *mei);
     }
   }
+  // ensure that the caller's code after the inlined method retain their
+  // original position
+  if (invoke_position != nullptr) {
+    fcaller->insert(pos, *(new MethodItemEntry(invoke_position)));
+  }
+
   // remove invoke
   fcaller->erase_and_dispose(pos, FatMethodDisposer());
   // remove move_result
