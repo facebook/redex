@@ -13,16 +13,24 @@ public class InlineSeparateFile {
   public static final void wrapsThrow() throws Exception {
     throw new Exception("foo");
   }
-  public static final void inlineMe() throws Exception {
+  public static final void inlineZero() throws Exception {
     String foo = null;
     wrapsThrow();
   }
-  public static final void inlineMe2() throws Exception {
+  public static final void inlineOnce() throws Exception {
+    String foo = null;
+    inlineZero();
+  }
+  public static final void inlineZero1() throws Exception {
     String foo = null;
     wrapsThrow();
   }
-  public static final void inlineNested() throws Exception {
+  public static final void inlineOnce1() throws Exception {
     String foo = null;
-    inlineMe2();
+    inlineZero1();
+  }
+  public static final void inlineTwice() throws Exception {
+    String foo = null;
+    inlineOnce1();
   }
 }

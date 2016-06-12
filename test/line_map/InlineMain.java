@@ -11,29 +11,74 @@ package com.facebook.redexlinemap;
 
 import static org.fest.assertions.api.Assertions.*;
 
-import org.junit.Test;
+import android.test.InstrumentationTestCase;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import org.junit.*;
 
-public class InlineMain {
+public class InlineMain extends InstrumentationTestCase {
+
+  LineMapper lm;
+
+  public void setUp() throws Exception {
+    super.setUp();
+    lm = new LineMapper(
+      getInstrumentation().getTargetContext().getResources().getAssets().open(
+        "redex-line-number-map.txt"));
+  }
+
   /**
    * Check that the stack trace of a non-inlined function makes sense.
    */
   @Test
   public void testBasic() throws Exception {
-    InlineSeparateFile.wrapsThrow();
+    try {
+      InlineSeparateFile.wrapsThrow();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertEquals(traceToString(trace, 2), Arrays.asList(
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
+        "com.facebook.redexlinemap.InlineMain.testBasic(InlineMain.java:37)"
+      ));
+    }
   }
+
   /**
    * Check the stack trace of a once-inlined function.
    */
   @Test
   public void testInlineOnce() throws Exception {
-    InlineSeparateFile.inlineMe();
+    try {
+      InlineSeparateFile.inlineOnce();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertEquals(traceToString(trace, 4), Arrays.asList(
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
+        "com.facebook.redexlinemap.InlineSeparateFile.inlineOnce(InlineSeparateFile.java:18)",
+        "com.facebook.redexlinemap.InlineSeparateFile.inlineOnce(InlineSeparateFile.java:22)",
+        "com.facebook.redexlinemap.InlineMain.testInlineOnce(InlineMain.java:53)"
+      ));
+    }
   }
+
   /**
    * Check the stack trace of a multiply-inlined function.
    */
   @Test
-  public void testNested() throws Exception {
-    InlineSeparateFile.inlineNested();
+  public void testInlineTwice() throws Exception {
+    try {
+      InlineSeparateFile.inlineTwice();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertEquals(traceToString(trace, 5), Arrays.asList(
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
+        "com.facebook.redexlinemap.InlineSeparateFile.inlineTwice(InlineSeparateFile.java:26)",
+        "com.facebook.redexlinemap.InlineSeparateFile.inlineTwice(InlineSeparateFile.java:30)",
+        "com.facebook.redexlinemap.InlineSeparateFile.inlineTwice(InlineSeparateFile.java:34)",
+        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineMain.java:71)"
+      ));
+    }
   }
 
   private static int inlineMe() {
@@ -44,13 +89,41 @@ public class InlineMain {
     throw new Exception("foo");
   }
 
+  private void callIgnoreAndThrow() throws Exception {
+    ignoreAndThrow(inlineMe());
+  }
+
   /**
    * Check that the line number is reset to the original for the code that
    * follows an inlined method. We expect the resulting stack trace *not*
    * to point to inlineMe().
+   *
+   * Note that we don't call ignoreAndThrow() directly because the try-catch
+   * block here prevents inlining from occurring.
    */
   @Test
   public void testPositionReset() throws Exception {
-    ignoreAndThrow(inlineMe());
+    try {
+      callIgnoreAndThrow();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertEquals(traceToString(trace, 3), Arrays.asList(
+       "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:89)",
+       "com.facebook.redexlinemap.InlineMain.callIgnoreAndThrow(InlineMain.java:93)",
+       "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:107)"
+      ));
+    }
+  }
+
+  /**
+   * Stringifies and returns the top N elements of a stack trace.
+   */
+  private ArrayList<String> traceToString(
+      ArrayList<StackTraceElement> trace, int limit) {
+    ArrayList<String> result = new ArrayList();
+    for (int i = 0; i < limit && i < trace.size(); ++i) {
+      result.add(trace.get(i).toString());
+    }
+    return result;
   }
 }
