@@ -37,7 +37,7 @@ public class InlineMain extends InstrumentationTestCase {
       InlineSeparateFile.wrapsThrow();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertEquals(traceToString(trace, 2), Arrays.asList(
+      assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
         "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
         "com.facebook.redexlinemap.InlineMain.testBasic(InlineMain.java:37)"
       ));
@@ -53,7 +53,7 @@ public class InlineMain extends InstrumentationTestCase {
       InlineSeparateFile.inlineOnce();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertEquals(traceToString(trace, 4), Arrays.asList(
+      assertEquals(TraceUtil.traceToString(trace, 4), Arrays.asList(
         "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
         "com.facebook.redexlinemap.InlineSeparateFile.inlineOnce(InlineSeparateFile.java:18)",
         "com.facebook.redexlinemap.InlineSeparateFile.inlineOnce(InlineSeparateFile.java:22)",
@@ -71,7 +71,7 @@ public class InlineMain extends InstrumentationTestCase {
       InlineSeparateFile.inlineTwice();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertEquals(traceToString(trace, 5), Arrays.asList(
+      assertEquals(TraceUtil.traceToString(trace, 5), Arrays.asList(
         "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
         "com.facebook.redexlinemap.InlineSeparateFile.inlineTwice(InlineSeparateFile.java:26)",
         "com.facebook.redexlinemap.InlineSeparateFile.inlineTwice(InlineSeparateFile.java:30)",
@@ -107,23 +107,11 @@ public class InlineMain extends InstrumentationTestCase {
       callIgnoreAndThrow();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertEquals(traceToString(trace, 3), Arrays.asList(
+      assertEquals(TraceUtil.traceToString(trace, 3), Arrays.asList(
        "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:89)",
        "com.facebook.redexlinemap.InlineMain.callIgnoreAndThrow(InlineMain.java:93)",
        "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:107)"
       ));
     }
-  }
-
-  /**
-   * Stringifies and returns the top N elements of a stack trace.
-   */
-  private ArrayList<String> traceToString(
-      ArrayList<StackTraceElement> trace, int limit) {
-    ArrayList<String> result = new ArrayList();
-    for (int i = 0; i < limit && i < trace.size(); ++i) {
-      result.add(trace.get(i).toString());
-    }
-    return result;
   }
 }

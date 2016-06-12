@@ -422,7 +422,7 @@ int main(int argc, char* argv[]) {
   auto stats_output = args.config.get("stats_output", "").asString();
   auto method_move_map = args.config.get("method_move_map", "").asString();
   auto pos_output = args.config.get("line_number_map", "").asString();
-  auto pos_mapper = PositionMapper();
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";
@@ -436,11 +436,11 @@ int main(int argc, char* argv[]) {
       locator_index,
       i,
       cfg,
-      &pos_mapper,
+      pos_mapper.get(),
       methodmapping.c_str());
     totals += stats;
   }
-  pos_mapper.write_to(pos_output.c_str());
+  pos_mapper->write_map();
   output_stats(stats_output.c_str(), totals);
   output_moved_methods_map(method_move_map.c_str(), dexen, cfg);
   print_warning_summary();

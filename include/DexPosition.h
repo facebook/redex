@@ -9,11 +9,13 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <vector>
+#include <cstdint>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 class DexString;
+class DexDebugItem;
 
 struct DexPosition final {
   DexString* file;
@@ -24,6 +26,16 @@ struct DexPosition final {
   DexPosition(DexString* file, uint32_t line);
 };
 
+class PositionMapper {
+ public:
+  virtual DexString* get_source_file(const DexClass*) = 0;
+  virtual uint32_t position_to_line(DexPosition*) = 0;
+  virtual uint32_t get_next_line(const DexDebugItem*) = 0;
+  virtual void register_position(DexPosition* pos) = 0;
+  virtual void write_map() = 0;
+  static PositionMapper* make(const std::string filename);
+};
+
 /*
  * This allows us to recover the original file names and line numbers from
  * runtime stack traces of Dex files that have undergone inlining. The
@@ -31,17 +43,31 @@ struct DexPosition final {
  * the Dex debug info indicate the line in this text file at which the real
  * position can be found.
  */
-class PositionMapper final {
+class RealPositionMapper : public PositionMapper {
+  std::string m_filename;
   std::vector<DexPosition*> m_positions;
   std::unordered_map<DexPosition*, int64_t> m_pos_line_map;
+ protected:
+  uint32_t get_line(DexPosition*);
  public:
-  uint32_t position_to_line(DexPosition*);
-  uint32_t get_next_line() {
+  RealPositionMapper(const std::string filename): m_filename(filename) {}
+  virtual DexString* get_source_file(const DexClass*);
+  virtual uint32_t position_to_line(DexPosition*);
+  virtual uint32_t get_next_line(const DexDebugItem*) {
     // line numbers are not allowed to be less than one
     return m_positions.size() + 1;
   }
-  void register_position(DexPosition* pos);
-  uint32_t get_line(DexPosition* pos);
+  virtual void register_position(DexPosition* pos);
+  virtual void write_map();
+};
 
-  void write_to(const char* filename);
+class NoopPositionMapper : public PositionMapper {
+ public:
+  virtual DexString* get_source_file(const DexClass*);
+  virtual uint32_t position_to_line(DexPosition* pos) {
+    return pos->line;
+  }
+  virtual uint32_t get_next_line(const DexDebugItem*);
+  virtual void register_position(DexPosition* pos) {}
+  virtual void write_map() {}
 };

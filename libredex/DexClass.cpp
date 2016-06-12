@@ -119,7 +119,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     uint8_t* output) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
-  uint32_t prev_line = pos_mapper->get_next_line();
+  uint32_t prev_line = pos_mapper->get_next_line(debugitem);
   auto& entries = debugitem->get_entries();
 
   for (auto it = entries.begin(); it != entries.end(); ++it) {
@@ -185,7 +185,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
 int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
     uint8_t* output) {
   uint8_t* encdata = output;
-  encdata = write_uleb128(encdata, pos_mapper->get_next_line());
+  encdata = write_uleb128(encdata, pos_mapper->get_next_line(this));
   encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {
     if (s == nullptr) {

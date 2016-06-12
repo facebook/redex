@@ -15,25 +15,22 @@
 DexPosition::DexPosition(DexString* file, uint32_t line)
   : file(file), line(line), parent(nullptr) {}
 
-void PositionMapper::register_position(DexPosition* pos) {
+void RealPositionMapper::register_position(DexPosition* pos) {
   m_pos_line_map[pos] = -1;
 }
 
-uint32_t PositionMapper::get_line(DexPosition* pos) {
+uint32_t RealPositionMapper::get_line(DexPosition* pos) {
   return m_pos_line_map.at(pos) + 1;
 }
 
-uint32_t PositionMapper::position_to_line(DexPosition* pos) {
+uint32_t RealPositionMapper::position_to_line(DexPosition* pos) {
   auto idx = m_positions.size();
   m_positions.emplace_back(pos);
   m_pos_line_map[pos] = idx;
   return get_line(pos);
 }
 
-void PositionMapper::write_to(const char* filename) {
-  if (strcmp(filename, "") == 0) {
-    return;
-  }
+void RealPositionMapper::write_map() {
   // to ensure that the line numbers in the Dex are as compact as possible,
   // we put the emitted positions at the start of the list and rest at the end
   for (auto item : m_pos_line_map) {
@@ -44,7 +41,7 @@ void PositionMapper::write_to(const char* filename) {
       m_pos_line_map[item.first] = idx;
     }
   }
-  FILE* fp = fopen(filename, "w");
+  FILE* fp = fopen(m_filename.c_str(), "w");
   for (auto pos : m_positions) {
     auto parent_line = 0;
     try {
@@ -56,4 +53,34 @@ void PositionMapper::write_to(const char* filename) {
     fprintf(fp, "%s:%d|%d\n", pos->file->c_str(), pos->line, parent_line);
   }
   fclose(fp);
+}
+
+PositionMapper* PositionMapper::make(const std::string filename) {
+  if (filename == "") {
+    // If no path is provided for the map, just pass the original line numbers
+    // through to the output. This does mean that the line numbers will be
+    // incorrect for inlined code.
+    return new NoopPositionMapper();
+  } else {
+    return new RealPositionMapper(filename);
+  }
+}
+
+DexString* RealPositionMapper::get_source_file(const DexClass*) {
+  // Note: When remapping line numbers, we don't simply emit DEX_NO_INDEX for
+  // the source_file_idx because that would cause stack traces to print
+  // "at com.foo.bar (Unknown source)" even when line number data is
+  // available. So we make the source_file_idx point at an empty string
+  // instead.
+  return DexString::make_string("");
+}
+
+DexString* NoopPositionMapper::get_source_file(const DexClass* clz) {
+  return clz->get_source_file();
+}
+
+
+uint32_t NoopPositionMapper::get_next_line(const DexDebugItem* dbg) {
+  // XXX: we could be smarter and look for the first position entry
+  return dbg->get_line_start();
 }

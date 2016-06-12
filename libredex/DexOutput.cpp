@@ -600,10 +600,12 @@ void DexOutput::generate_class_data() {
     cdefs[i].interfaces_off = 0;
     cdefs[i].annotations_off = 0;
     cdefs[i].interfaces_off = m_tl_emit_offsets[clz->get_interfaces()];
-    // All filenames / positions get remapped by the PositionMapper
-    // Note: we cannot use DEX_NO_INDEX here, otherwise stack traces will just
-    // print "Unknown source"
-    cdefs[i].source_file_idx = dodx->stringidx(DexString::make_string(""));
+    auto source_file = m_pos_mapper->get_source_file(clz);
+    if (source_file != nullptr) {
+      cdefs[i].source_file_idx = dodx->stringidx(source_file);
+    } else {
+      cdefs[i].source_file_idx = DEX_NO_INDEX;
+    }
     if (m_cdi_offsets.count(clz)) {
       cdefs[i].class_data_offset = m_cdi_offsets[clz];
     } else {
