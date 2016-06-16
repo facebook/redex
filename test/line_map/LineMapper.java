@@ -11,6 +11,8 @@ package com.facebook.redexlinemap;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class LineMapper {
   ArrayList<Position> mapping;
@@ -19,12 +21,12 @@ public class LineMapper {
     mapping = new ArrayList();
     BufferedReader reader = new BufferedReader(new InputStreamReader(ins));
     String input;
+    ObjectMapper json = new ObjectMapper();
     while ((input = reader.readLine()) != null) {
-      String[] parts = input.split("\\|");
-      int parent = Integer.parseInt(parts[1]) - 1;
-      String[] parts_ = parts[0].split(":");
-      int line = Integer.parseInt(parts_[1]);
-      mapping.add(new Position(parts_[0], line, parent));
+      Map<String, Object> data = json.readValue(input, Map.class);
+      mapping.add(new Position((String)data.get("file"),
+                               (Integer)data.get("line"),
+                               (Integer)data.get("parent") - 1));
     }
   }
 

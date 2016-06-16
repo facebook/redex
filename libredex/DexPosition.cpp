@@ -7,7 +7,9 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <fstream>
 #include <iostream>
+#include <json/json.h>
 
 #include "DexClass.h"
 #include "DexPosition.h"
@@ -41,18 +43,22 @@ void RealPositionMapper::write_map() {
       m_pos_line_map[item.first] = idx;
     }
   }
-  FILE* fp = fopen(m_filename.c_str(), "w");
+  std::ofstream ofs(m_filename.c_str(),
+                    std::ofstream::out | std::ofstream::trunc);
   for (auto pos : m_positions) {
     auto parent_line = 0;
     try {
       parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
     } catch (std::out_of_range& e) {
       std::cerr << "Parent position " << show(pos->parent) << " of "
-        << show(pos) << " was not registered" << std::endl;
+                << show(pos) << " was not registered" << std::endl;
     }
-    fprintf(fp, "%s:%d|%d\n", pos->file->c_str(), pos->line, parent_line);
+    Json::Value json;
+    json["file"] = std::string(pos->file->c_str());
+    json["line"] = pos->line;
+    json["parent"] = parent_line;
+    ofs << Json::FastWriter().write(json);
   }
-  fclose(fp);
 }
 
 PositionMapper* PositionMapper::make(const std::string filename) {

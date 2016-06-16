@@ -3,11 +3,12 @@
 
 import argparse
 import fileinput
+import json
 import re
 
 from collections import namedtuple
 
-Position = namedtuple('Position', ['line', 'parent'])
+Position = namedtuple('Position', ['file', 'line', 'parent'])
 
 def read_map(fn):
     """
@@ -21,8 +22,10 @@ def read_map(fn):
     line_map = []
     with open(fn) as f:
         for s in f:
-            line, _sep, parent = s.partition('|')
-            line_map.append(Position(line, int(parent) - 1))
+            obj = json.loads(s)
+            line = int(obj['line'])
+            parent = int(obj['parent']) - 1
+            line_map.append(Position(obj['file'], line, parent))
     return line_map
 
 def get_stack(line_map, idx):
@@ -31,12 +34,10 @@ def get_stack(line_map, idx):
     of the tree.
     """
     positions = []
-    while True:
+    while idx >= 0:
         pos = line_map[idx]
-        positions.append(pos.line)
+        positions.append(pos)
         idx = pos.parent
-        if idx < 0:
-            break
     return positions
 
 def process(line_map, line):
@@ -46,9 +47,9 @@ def process(line_map, line):
     def remap(match):
         method = match.group(1)
         line = int(match.group(2))
-        real_lines = get_stack(line_map, line - 1)
+        positions = get_stack(line_map, line - 1)
         return "\n".join(
-                '%s(%s)' % (method, real_line) for real_line in real_lines)
+                '%s(%s:%d)' % (method, p.file, p.line) for p in positions)
 
     return re.sub('(.*)\(:(\d+)\)', remap, line)
 
