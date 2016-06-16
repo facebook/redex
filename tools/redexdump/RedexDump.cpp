@@ -44,7 +44,7 @@ static const char ddump_usage_string[] =
     "-d, --debug: print debug info items in the data section\n"
     "-D, --ddebug=<addr>: disassemble debug info item at <addr>\n"
     "\nprinting options:\n"
-    "-C, --clean: does not print indexes or offsets making the output "
+    "--clean: does not print indexes or offsets making the output "
     "usable for a diff\n";
 
 int main(int argc, char* argv[]) {
@@ -80,6 +80,7 @@ int main(int argc, char* argv[]) {
     { "anno", no_argument, nullptr, 'A' },
     { "debug", no_argument, nullptr, 'd' },
     { "ddebug", required_argument, nullptr, 'D' },
+    { "clean", no_argument, (int*)&clean, 1 },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },
   };
@@ -138,6 +139,9 @@ int main(int argc, char* argv[]) {
         return 0;
       case '?':
         return 1; // getopt_long has printed an error
+      case 0:
+        // we're handling a long-only option
+        break;
       default:
         abort();
     }
