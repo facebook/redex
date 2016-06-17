@@ -114,4 +114,32 @@ public class InlineMain extends InstrumentationTestCase {
       ));
     }
   }
+
+  private void elseThrows() throws Exception {
+    if (lm == null) {
+      System.out.println("");
+    } else {
+      InlineSeparateFile.wrapsThrow();
+    }
+  }
+
+  private void callElseThrows() throws Exception {
+    elseThrows();
+  }
+
+  @Test
+  public void testElseThrows() throws Exception {
+    try {
+      callElseThrows();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertEquals(
+          TraceUtil.traceToString(trace, 4),
+          Arrays.asList(
+            "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
+            "com.facebook.redexlinemap.InlineMain.callElseThrows(InlineMain.java:122)",
+            "com.facebook.redexlinemap.InlineMain.callElseThrows(InlineMain.java:127)",
+            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:133)"));
+    }
+  }
 }

@@ -10,6 +10,7 @@
 #include "Transform.h"
 
 #include <algorithm>
+#include <memory>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -526,11 +527,15 @@ void remap_debug(DexDebugInstruction* dbgop, const RegMap& reg_map) {
   }
 }
 
+void remap_registers(DexInstruction* insn, const RegMap& reg_map) {
+  remap_dest(insn, reg_map);
+  remap_srcs(insn, reg_map);
+}
+
 void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
   switch (mei.type) {
   case MFLOW_OPCODE:
-    remap_dest(mei.insn, reg_map);
-    remap_srcs(mei.insn, reg_map);
+    remap_registers(mei.insn, reg_map);
     break;
   case MFLOW_DEBUG:
     remap_debug(mei.dbgop, reg_map);
@@ -662,48 +667,81 @@ void cleanup_callee_debug(FatMethod* fcallee) {
   }
 }
 
-MethodItemEntry* clone(
-    MethodItemEntry* mei,
-    std::unordered_map<MethodItemEntry*, MethodItemEntry*>& entry_map,
-    std::unordered_map<DexPosition*, DexPosition*>& pos_map) {
-  MethodItemEntry* cloned_mei;
-  auto entry = entry_map.find(mei);
-  if (entry != entry_map.end()) {
-    return entry->second;
-  }
-  cloned_mei = new MethodItemEntry(*mei);
-  entry_map[mei] = cloned_mei;
-  switch (cloned_mei->type) {
-  case MFLOW_TRY:
-    cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-    cloned_mei->tentry->tentry = new DexTryItem(*cloned_mei->tentry->tentry);
-    return cloned_mei;
-  case MFLOW_OPCODE:
-    cloned_mei->insn = cloned_mei->insn->clone();
-    return cloned_mei;
-  case MFLOW_TARGET:
-    cloned_mei->target = new BranchTarget(*cloned_mei->target);
-    cloned_mei->target->src = clone(cloned_mei->target->src, entry_map,
-        pos_map);
-    return cloned_mei;
-  case MFLOW_DEBUG:
-    // XXX MethodItemEntry doesn't delete dbgop in its dtor, so this is probably
-    // a leak
-    cloned_mei->dbgop = cloned_mei->dbgop->clone();
-    return cloned_mei;
-  case MFLOW_POSITION:
-    // XXX MethodItemEntry doesn't delete pos in its dtor, so this is probably
-    // a leak
-    cloned_mei->pos = new DexPosition(*cloned_mei->pos);
-    pos_map[mei->pos] = cloned_mei->pos;
-    cloned_mei->pos->parent = pos_map.at(cloned_mei->pos->parent);
-    return cloned_mei;
-  case MFLOW_FALLTHROUGH:
-    return cloned_mei;
-  }
-  not_reached();
-}
+/*
+ * For splicing a callee's FatMethod into a caller.
+ */
+class MethodSplicer {
+  // We need a map of MethodItemEntry we have created because a branch
+  // points to another MethodItemEntry which may have been created or not
+  std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
+  // for remapping the parent position pointers
+  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  const RegMap& m_callee_reg_map;
+  DexPosition* m_invoke_position;
 
+ public:
+  MethodSplicer(const RegMap& callee_reg_map, DexPosition* invoke_position)
+      : m_callee_reg_map(callee_reg_map), m_invoke_position(invoke_position) {
+    m_pos_map[nullptr] = nullptr;
+  }
+
+ private:
+  MethodItemEntry* clone(MethodItemEntry* mei) {
+    MethodItemEntry* cloned_mei;
+    auto entry = m_entry_map.find(mei);
+    if (entry != m_entry_map.end()) {
+      return entry->second;
+    }
+    cloned_mei = new MethodItemEntry(*mei);
+    m_entry_map[mei] = cloned_mei;
+    switch (cloned_mei->type) {
+    case MFLOW_TRY:
+      cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
+      cloned_mei->tentry->tentry = new DexTryItem(*cloned_mei->tentry->tentry);
+      return cloned_mei;
+    case MFLOW_OPCODE:
+      cloned_mei->insn = cloned_mei->insn->clone();
+      return cloned_mei;
+    case MFLOW_TARGET:
+      cloned_mei->target = new BranchTarget(*cloned_mei->target);
+      cloned_mei->target->src = clone(cloned_mei->target->src);
+      return cloned_mei;
+    case MFLOW_DEBUG:
+      // XXX MethodItemEntry doesn't delete dbgop in its dtor, so this is
+      // probably
+      // a leak
+      cloned_mei->dbgop = cloned_mei->dbgop->clone();
+      return cloned_mei;
+    case MFLOW_POSITION:
+      // XXX MethodItemEntry doesn't delete pos in its dtor, so this is probably
+      // a leak
+      cloned_mei->pos = new DexPosition(*cloned_mei->pos);
+      m_pos_map[mei->pos] = cloned_mei->pos;
+      cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
+      return cloned_mei;
+    case MFLOW_FALLTHROUGH:
+      return cloned_mei;
+    }
+    not_reached();
+  }
+
+ public:
+  void operator()(FatMethod* fcaller,
+                  FatMethod::iterator insert_pos,
+                  FatMethod::iterator fcallee_start,
+                  FatMethod::iterator fcallee_end) {
+    auto it = fcallee_start;
+    while (it != fcallee_end) {
+      auto mei = clone(&*it);
+      remap_registers(*mei, m_callee_reg_map);
+      it++;
+      if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
+        mei->pos->parent = m_invoke_position;
+      }
+      fcaller->insert(insert_pos, *mei);
+    }
+  }
+};
 }
 
 void MethodTransform::inline_tail_call(DexMethod* caller,
@@ -811,31 +849,18 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  // We need a map of MethodItemEntry we have created because a branch
-  // points to another MethodItemEntry which may have been created or not
-  std::unordered_map<MethodItemEntry*, MethodItemEntry*> entry_map;
-  // for remapping the parent position pointers
-  std::unordered_map<DexPosition*, DexPosition*> pos_map;
-  pos_map[nullptr] = nullptr;
-  while (it != fcallee->end()) {
-    auto mei = clone(&*it, entry_map, pos_map);
-    remap_registers(*mei, callee_reg_map);
-    it++;
-    if (mei->type == MFLOW_OPCODE && is_return(mei->insn->opcode())) {
-      if (move_res != fcaller->end()) {
-        DexInstruction* move = move_result(mei->insn, move_res->insn);
-        auto move_mei = new MethodItemEntry(move);
-        fcaller->insert(pos, *move_mei);
-        delete mei->insn;
-        delete mei;
-      }
-      break;
-    } else {
-      if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
-        mei->pos->parent = invoke_position;
-      }
-      fcaller->insert(pos, *mei);
-    }
+  auto splice = MethodSplicer(callee_reg_map, invoke_position);
+  auto ret_it =
+      std::find_if(it, fcallee->end(), [](const MethodItemEntry& mei) {
+        return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
+      });
+  splice(fcaller, pos, it, ret_it);
+  if (move_res != fcaller->end()) {
+    std::unique_ptr<DexInstruction> ret_insn(ret_it->insn->clone());
+    remap_registers(ret_insn.get(), callee_reg_map);
+    DexInstruction* move = move_result(ret_insn.get(), move_res->insn);
+    auto move_mei = new MethodItemEntry(move);
+    fcaller->insert(pos, *move_mei);
   }
   // ensure that the caller's code after the inlined method retain their
   // original position
@@ -849,12 +874,9 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   if (move_res != fcaller->end()) {
     fcaller->erase_and_dispose(move_res, FatMethodDisposer());
   }
-  while (it != fcallee->end()) {
-    auto mei = clone(&*it, entry_map, pos_map);
-    remap_registers(*mei, callee_reg_map);
-    it++;
-    fcaller->push_back(*mei);
-  }
+  // Copy the opcodes in the callee after the return and put them at the end of
+  // the caller.
+  splice(fcaller, fcaller->end(), std::next(ret_it), fcallee->end());
 
   // adjust method header
   caller->get_code()->set_registers_size(newregs);
