@@ -1,7 +1,7 @@
 # Using ProGuard Rules with Redex
 
 Currently there is limited support for specifying ProGuard rules which
-Redex will try to honor when it considers deleting (shrinking) classses,
+Redex will try to honor when it considers deleting (shrinking) classes,
 methods and fields.
 
 ## The Need To Control Shrinking
