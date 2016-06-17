@@ -262,19 +262,35 @@ bool dir_is_writable(const std::string& dir) {
   return access(dir.c_str(), W_OK) == 0;
 }
 
-void output_stats(const char* path, const dex_output_stats_t& stats) {
+Json::Value get_stats(const dex_output_stats_t& stats) {
+  Json::Value val;
+  val["num_types"] = stats.num_types;
+  val["num_type_lists"] = stats.num_type_lists;
+  val["num_classes"] = stats.num_classes;
+  val["num_methods"] = stats.num_methods;
+  val["num_method_refs"] = stats.num_method_refs;
+  val["num_fields"] = stats.num_fields;
+  val["num_field_refs"] = stats.num_field_refs;
+  val["num_strings"] = stats.num_strings;
+  val["num_protos"] = stats.num_protos;
+  val["num_static_values"] = stats.num_static_values;
+  val["num_annotations"] = stats.num_annotations;
+  return val;
+}
+
+Json::Value get_detailed_stats(const std::vector<dex_output_stats_t> &dexes_stats) {
+  Json::Value dexes;
+  int i = 0;
+  for (const dex_output_stats_t &stats : dexes_stats) {
+    dexes[i++] = get_stats(stats);
+  }
+  return dexes;
+}
+
+void output_stats(const char* path, const dex_output_stats_t& stats, const std::vector<dex_output_stats_t> &dexes_stats) {
   Json::Value d;
-  d["num_types"] = stats.num_types;
-  d["num_type_lists"] = stats.num_type_lists;
-  d["num_classes"] = stats.num_classes;
-  d["num_methods"] = stats.num_methods;
-  d["num_method_refs"] = stats.num_method_refs;
-  d["num_fields"] = stats.num_fields;
-  d["num_field_refs"] = stats.num_field_refs;
-  d["num_strings"] = stats.num_strings;
-  d["num_protos"] = stats.num_protos;
-  d["num_static_values"] = stats.num_static_values;
-  d["num_annotations"] = stats.num_annotations;
+  d["total_stats"] = get_stats(stats);
+  d["dexes_stats"] = get_detailed_stats(dexes_stats);
   Json::StyledStreamWriter writer;
   std::ofstream out(path);
   writer.write(out, d);
@@ -417,6 +433,7 @@ int main(int argc, char* argv[]) {
   }
 
   dex_output_stats_t totals;
+  std::vector<dex_output_stats_t> dexes_stats;
 
   auto methodmapping = args.config.get("method_mapping", "").asString();
   auto stats_output = args.config.get("stats_output", "").asString();
@@ -439,9 +456,10 @@ int main(int argc, char* argv[]) {
       pos_mapper.get(),
       methodmapping.c_str());
     totals += stats;
+    dexes_stats.push_back(stats);
   }
   pos_mapper->write_map();
-  output_stats(stats_output.c_str(), totals);
+  output_stats(stats_output.c_str(), totals, dexes_stats);
   output_moved_methods_map(method_move_map.c_str(), dexen, cfg);
   print_warning_summary();
   delete g_redex;
