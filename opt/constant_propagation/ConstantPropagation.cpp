@@ -14,6 +14,7 @@
 #include "Transform.h"
 #include "walkers.h"
 #include <vector>
+#include <stack>
 
 namespace {
 
@@ -22,129 +23,201 @@ namespace {
     const Scope& m_scope;
     // The index of the reg_values is the index of registers
     std::vector<AbstractRegister> reg_values;
-    // dead_instructions contains contant insns that can be removed after propagation
-    std::vector<DexInstruction*> dead_instructions;
-    // can_remove maps an instruction to a value indicating whether it can be removed
-    std::unordered_map<DexInstruction*, bool> can_remove;
     // method_returns keeps track of constant returned by methods
     std::unordered_map<DexMethod*, int64_t> method_returns;
+    // Store dead instructions to be removed
+    std::vector<DexInstruction*> dead_instructions;
     size_t m_constant_removed{0};
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
 
     void propagate(DexMethod* method) {
-      TRACE(CONSTP, 5, "%s\n", show(method).c_str());
-      DexInstruction *last_inst = nullptr;
-      for (auto const inst : method->get_code()->get_instructions()) {
-        TRACE(CONSTP, 2, "instruction: %s\n",  SHOW(inst));
-        //If an instruction's type is CONST, it's loaded to specific register and
-        //this instruction is marked as can_move until prior instructions change the value of can_move to false
-        if (is_const(inst->opcode())) {
-          // Only deal with const/4 for simplicity, More constant instruction types will be added later
-          if (inst->opcode() == OPCODE_CONST_4 || inst->opcode() == OPCODE_CONST_16) {
-            if (inst->dests_size() && inst->has_literal()){
-              check_destination(inst);
-              auto dest_reg = inst->dest();
-              reg_values[dest_reg].known = true;
-              reg_values[dest_reg].insn = inst;
-              reg_values[dest_reg].val = inst->literal();
-              can_remove[inst] = true;
-              TRACE(CONSTP, 5, "Move Constant: %d into register: %d\n", inst->literal(), dest_reg);
-              m_constant_removed++;
+      bool changed = true;
+      TRACE(CONSTP, 5, "Class: %s\n", SHOW(method->get_class()));
+      TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
+      // The loop traverses all blocks in the method until no more branch is converted
+      while (changed) {
+        if (!method->get_code()) {
+          return;
+        }
+        changed = false;
+        auto transform = MethodTransform::get_method_transform(method, true);
+        auto& cfg = transform->cfg();
+        if (cfg.size() > 0) {
+          std::stack<Block *> blocks;
+          blocks.push(cfg[0]);
+          std::unordered_map<Block *, bool> visited;
+          for (const auto b: cfg) {
+            visited[b] = false;
+          }
+          // This loop traverses each block by depth-first
+          while (!blocks.empty()) {
+            auto b = blocks.top();
+            blocks.pop();
+            visited[b] = true;
+            DexInstruction *last_inst = nullptr;
+            for (auto it = b->begin(); it != b->end() && !changed; ++it) {
+              if (it->type != MFLOW_OPCODE) {
+                continue;
+              }
+              auto inst = it->insn;
+              TRACE(CONSTP, 5, "instruction: %s\n",  SHOW(inst));
+              // If an instruction's type is CONST, it's loaded to a specific register
+              // Then the register is marked as known.
+              if (is_const(inst->opcode())) {
+                propagate_constant(inst);
+              } else {
+                changed = propagate_insn(inst, last_inst, method);
+              }
+            }
+            if (changed) {
+              remove_constants(method);
+              break;
+            }
+            // Only propagate to next block when it's the only successive block
+            if (b->succs().size() == 1) {
+              for (auto succs_b: b->succs()) {
+                if (!visited[succs_b])
+                  blocks.push(succs_b);
+              }
+            } else {
+              remove_constants(method);
             }
           }
-        } else {
+        }
+        for (auto dead: dead_instructions) {
+          transform->remove_opcode(dead);
+        }
+        dead_instructions.clear();
+        transform->sync();
+      }
+      remove_constants(method);
+    }
+
+    bool propagate_insn(DexInstruction *inst, DexInstruction *&last_inst, DexMethod *method) {
+      bool changed = false;
+      switch (inst->opcode()) {
+        case OPCODE_IF_EQZ:
+          if (propagate_branch(inst)) {
+            TRACE(CONSTP, 2, "Class: %s\n",  SHOW(method->get_class()));
+            TRACE(CONSTP, 2, "Method: %s\n %s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
+            changed = true;
+          }
+          break;
+        // If returning a constant value from a known register
+        // Save the return value for future use
+        case OPCODE_RETURN:
           if (inst->srcs_size() > 0) {
-            for (unsigned i = 0; i < inst->srcs_size(); i++) {
-              if (reg_values[inst->src(i)].known) {
-                can_remove[reg_values[inst->src(i)].insn] = false;
-              }
+            if (reg_values[inst->src(0)].known) {
+              method_returns[method] = reg_values[inst->src(0)].val;
             }
           }
-          switch (inst->opcode()) {
-            case OPCODE_IF_EQZ:
-              propagate_branch(inst->opcode(), inst);
-              break;
-            // If returning a constant value from a known register
-            // Save the return value for future use
-            case OPCODE_RETURN:
-              if (inst->srcs_size() > 0) {
-                if (reg_values[inst->src(0)].known) {
-                  method_returns[method] = reg_values[inst->src(0)].val;
-                }
+          break;
+        // When there's a move-result instruction following a static-invoke insn
+        // Check if there is a constant returned. If so, propagate the value
+        case OPCODE_MOVE_RESULT:
+          check_destination(inst);
+          if (last_inst != nullptr &&
+              last_inst->opcode() == OPCODE_INVOKE_STATIC &&
+              last_inst->has_methods()) {
+              DexOpcodeMethod *referred_method = (DexOpcodeMethod *)last_inst;
+              if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
+                auto return_val = method_returns[referred_method->get_method()];
+                TRACE(CONSTP, 2, "invoke-static instruction: %s\n",  SHOW(last_inst));
+                TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
+                TRACE(CONSTP, 5, "Class: %s\n",  SHOW(method->get_class()));
+                TRACE(CONSTP, 5, "Original Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
+                m_method_return_propagated++;
+                auto dest_reg = inst->dest();
+                inst->set_opcode(OPCODE_CONST_16);
+                inst->set_literal(return_val);
+                inst->set_dest(dest_reg);
+                TRACE(CONSTP, 3, "Convert move-result to: %s\n", SHOW(inst));
+                dead_instructions.push_back(referred_method);
+                TRACE(CONSTP, 5, "Tranformed Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
+                propagate_constant(inst);
+                changed = true;
               }
-              break;
-            // When there's a move-result instruction following a static-invoke insn
-            // Check if there is a constatn returned. If so, propagate the value
-            case OPCODE_MOVE_RESULT:
-              if (last_inst != nullptr &&
-                  last_inst->opcode() == OPCODE_INVOKE_STATIC &&
-                  last_inst->has_methods()) {
-                  DexOpcodeMethod *referred_method = (DexOpcodeMethod *)last_inst;
-                  if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
-                    auto return_val = method_returns[referred_method->get_method()];
-                    TRACE(CONSTP, 2, "invoke-static instruction: %s\n",  SHOW(last_inst));
-                    TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
-                    m_method_return_propagated++;
-                    if (inst->size() == 2) {
-                      inst->set_opcode(OPCODE_CONST_16);
-                    }
-                    if (inst->size() == 1) {
-                      inst->set_opcode(OPCODE_CONST_4);
-                    }
-                    inst->set_literal(return_val);
-                    TRACE(CONSTP, 2, "Convert move-result to: %s\n", SHOW(inst));
-                    referred_method->set_opcode(OPCODE_CONST_16);
-                    referred_method->set_dest(inst->dest());
-                    referred_method->set_literal(inst->literal());
-                  }
-              }
-            default:
-              break;
           }
+          break;
+          // If there is a move_object instruction and the src reg is known
+          // Propagate the value to the dest register
+        case OPCODE_MOVE_OBJECT:
+          if (reg_values[inst->src(0)].known) {
+            auto &src_reg_value = reg_values[inst->src(0)];
+            reg_values[inst->dest()].known = true;
+            reg_values[inst->dest()].val = src_reg_value.val;
+          } else {
+            check_destination(inst);
+          }
+          break;
+        default:
           if (inst->dests_size()) {
             check_destination(inst);
           }
-        }
-        last_inst = inst;
+          break;
       }
-      remove_constants(method);
-      dead_instructions.clear();
-      reg_values.clear();
-      can_remove.clear();
+      last_inst = inst;
+      return changed;
+    }
+
+    // Propagate const instruction value to registers
+    void propagate_constant(DexInstruction *inst) {
+      // Only deal with const/4 and OPCODE_CONST_16 for simplicity, More constant instruction types will be added later
+      if (inst->opcode() == OPCODE_CONST_4 ||
+          inst->opcode() == OPCODE_CONST_16) {
+        if (inst->dests_size() && inst->has_literal()){
+          auto dest_reg = inst->dest();
+          reg_values[dest_reg].known = true;
+          reg_values[dest_reg].val = inst->literal();
+          TRACE(CONSTP, 3, "Move Constant: %d into register: %d\n", inst->literal(), dest_reg);
+          m_constant_removed++;
+        }
+      }
     }
 
     // If a branch reads the value from a register loaded in earlier step,
     // the branch will read value from register, do the evaluation and
     // change the conditional branch to a goto branch if possible
-    void propagate_branch(DexOpcode opcode, DexInstruction *inst) {
-      if (opcode == OPCODE_IF_EQZ) {
-        if (inst->srcs_size() == 1) {
+    bool propagate_branch(DexInstruction *inst) {
+      if (inst->srcs_size() == 1) {
+        if (inst->opcode() == OPCODE_IF_EQZ) {
           auto src_reg = inst->src(0);
           if (reg_values[src_reg].known && reg_values[src_reg].val == 0) {
+            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
             inst->set_opcode(OPCODE_GOTO_16);
-            TRACE(CONSTP, 2, "Changed conditional branch to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
+            TRACE(CONSTP, 2, "to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
             m_branch_propagated++;
-            can_remove[reg_values[src_reg].insn] = true;
+            return true;
+          }
+        }
+        if (inst->opcode() == OPCODE_IF_NEZ) {
+          auto src_reg = inst->src(0);
+          if (reg_values[src_reg].known && reg_values[src_reg].val != 0) {
+            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
+            inst->set_opcode(OPCODE_GOTO_16);
+            TRACE(CONSTP, 2, "to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
+            m_branch_propagated++;
+            return true;
           }
         }
       }
+      return false;
     }
 
-    // This function reads the vector of reg_values and check if there is any instruction
-    // still marked as can_remove. Then, the program removes all instructions that can be removed
+    // This function reads the vector of reg_values and marks all regs to unknown
     void remove_constants(DexMethod* method) {
-      for (auto& r: reg_values) {
+      for (auto &r: reg_values) {
         r.known = false;
         r.insn = nullptr;
       }
     }
 
-    // If there's instruction that overwrites value in a dest registers_size loaded
-    // by an earlier instruction. The earier instruction is removed if it has true in can_move
+    // If there's instruction that overwrites value into a known register, and the
+    // loaded value is unknown. We change the register to unknown.
     void check_destination(DexInstruction* inst) {
       auto &dest_reg_value = reg_values[inst->dest()];
-      if (dest_reg_value.known /* && can_remove[dest_reg_value.insn] */) {
+      if (dest_reg_value.known) {
         dest_reg_value.known = false;
       }
     }

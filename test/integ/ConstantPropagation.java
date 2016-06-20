@@ -17,7 +17,12 @@ package com.facebook.redextest;
 
 class Alpha {
   public static int theAnswer() {
-    return 42;
+    boolean x = false;
+    if (x) {
+      return 42;
+    } else {
+      return 32;
+    }
   }
 }
 
