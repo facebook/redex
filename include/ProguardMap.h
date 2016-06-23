@@ -82,6 +82,39 @@ struct ProguardMap {
    */
   std::string deobfuscate_method(const std::string& method) const;
 
+  /**
+   * Update the class mapping. Used when we do something to the class name
+   * inside of redex.
+   */
+  void update_class_mapping(const std::string& oldname, const std::string& newname);
+
+  /**
+   * Update the method mapping. Used when we do something to the class name
+   * inside of redex.
+   */
+  void update_method_mapping(const DexMethod* dm, const std::string& newname);
+
+  /**
+   * Update the field mapping. Used when we do something to the class name
+   * inside of redex.
+   */
+  void update_field_mapping(const DexField* df, const std::string& newname);
+
+  /**
+   * Translate obfuscated class name to un-obfuscated name using dynamic map
+   */
+  std::string deobfuscate_class_dynamic(const std::string& cls) const;
+
+  /**
+   * Translate obfuscated method name to un-obfuscated name using dynamic map
+   */
+  std::string deobfuscate_method_dynamic(const std::string& method) const;
+
+  /**
+   * Translate obfuscated field name to un-obfuscated name using dynamic map
+   */
+  std::string deobfuscate_field_dynamic(const std::string& field) const;
+
  private:
   template <class IStream>
   void parse_proguard_map(IStream& fp) {
@@ -108,10 +141,16 @@ struct ProguardMap {
   std::map<std::string, std::string> m_fieldMap;
   std::map<std::string, std::string> m_methodMap;
 
-  // Obfuscated to unobfuscated maps
+  // Obfuscated to unobfuscated maps from proguard
   std::map<std::string, std::string> m_obfClassMap;
   std::map<std::string, std::string> m_obfFieldMap;
   std::map<std::string, std::string> m_obfMethodMap;
+
+  // Obfuscated to unobfuscated maps
+  // which can be updated by redex passes
+  std::map<std::string, std::string> m_dynObfClassMap;
+  std::map<std::string, std::string> m_dynObfFieldMap;
+  std::map<std::string, std::string> m_dynObfMethodMap;
 
   std::string m_currClass;
   std::string m_currNewClass;

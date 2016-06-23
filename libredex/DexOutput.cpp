@@ -266,7 +266,7 @@ public:
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
-  const ConfigFiles& m_config_files;
+  ConfigFiles& m_config_files;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data();
@@ -308,7 +308,7 @@ public:
     DexClasses* classes,
     LocatorIndex* locator_index,
     size_t dex_number,
-    const ConfigFiles& config_files,
+    ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     const char* method_mapping_path);
   ~DexOutput();
@@ -321,7 +321,7 @@ DexOutput::DexOutput(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  const ConfigFiles& config_files,
+  ConfigFiles& config_files,
   PositionMapper* pos_mapper,
   const char* method_mapping_path):
     m_config_files(config_files) {
@@ -537,7 +537,7 @@ void write_method_mapping(
     auto method = it.first;
     auto idx = it.second;
 
-    auto deobf_class = proguard_map.deobfuscate_class(proguard_name(method->get_class()));
+    auto deobf_class = proguard_map.deobfuscate_class_dynamic(proguard_name(method->get_class()));
     auto deobf_method = proguard_map.deobfuscate_method(proguard_name(method));
 
     // Format is <cls>.<name>(<args>)<ret>
@@ -1042,7 +1042,7 @@ write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  const ConfigFiles& cfg,
+  ConfigFiles& cfg,
   PositionMapper* pos_mapper,
   const char* method_mapping_filename)
 {

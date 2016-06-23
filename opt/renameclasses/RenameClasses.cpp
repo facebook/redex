@@ -129,6 +129,7 @@ void rename_classes(
     std::vector<std::string>& post_whitelist_patterns,
     const std::string& path,
     std::unordered_set<const DexType*>& untouchables,
+    ProguardMap& proguard_map,
     bool rename_annotations) {
   unpackage_private(scope);
   int clazz_ident = 0;
@@ -145,6 +146,7 @@ void rename_classes(
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
 
+
     // The X helps our hacked Dalvik classloader recognize that a
     // class name is the output of the redex renamer and thus will
     // never be found in the Android platform.
@@ -157,6 +159,9 @@ void rename_classes(
     auto dstring = DexString::make_string(descriptor);
     aliases[oldname] = dstring;
     dtype->assign_name_alias(dstring);
+    std::string old_str(oldname->c_str());
+    std::string new_str(descriptor);
+    proguard_map.update_class_mapping(old_str, new_str);
     base_strings_size += strlen(oldname->c_str());
     base_strings_size += strlen(dstring->c_str());
     TRACE(RENAME, 4, "'%s'->'%s'\n", oldname->c_str(), descriptor);
@@ -260,7 +265,7 @@ void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   }
   rename_classes(
       scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,
-      untouchables, m_rename_annotations);
+      untouchables, cfg.get_proguard_map(), m_rename_annotations);
   TRACE(RENAME, 1,
       "renamed classes: %d anon classes, %d from single char patterns, "
       "%d from multi char patterns\n",

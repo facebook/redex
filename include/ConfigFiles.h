@@ -57,10 +57,10 @@ struct ConfigFiles {
     m_moved_methods_map[mt] = cls;
   }
 
-  const ProguardMap& get_proguard_map() const {
+  ProguardMap& get_proguard_map() {
     return m_proguard_map;
   }
-	
+
 	bool using_seeds = false;
 
  private:

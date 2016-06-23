@@ -124,6 +124,18 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
   return find_or_same(method, m_obfMethodMap);
 }
 
+std::string ProguardMap::deobfuscate_class_dynamic(const std::string& cls) const {
+  return find_or_same(cls, m_dynObfClassMap);
+}
+
+std::string ProguardMap::deobfuscate_method_dynamic(const std::string& method) const {
+  return find_or_same(method, m_dynObfMethodMap);
+}
+
+std::string ProguardMap::deobfuscate_field_dynamic(const std::string& field) const {
+  return find_or_same(field, m_dynObfFieldMap);
+}
+
 void ProguardMap::parse_line(const std::string& line) {
   if (parse_class(line)) {
     return;
@@ -151,6 +163,8 @@ bool ProguardMap::parse_class(const std::string& line) {
   m_currNewClass = convert_type(newname);
   m_classMap[m_currClass] = m_currNewClass;
   m_obfClassMap[m_currNewClass] = m_currClass;
+  // initialize the dynamic map with the PG mapping
+  m_dynObfClassMap[m_currNewClass] = m_currClass;
   return true;
 }
 
@@ -167,6 +181,8 @@ bool ProguardMap::parse_field(const std::string& line) {
   auto pgold = convert_proguard_field(m_currClass, type, fieldname);
   m_fieldMap[pgold] = pgnew;
   m_obfFieldMap[pgnew] = pgold;
+  // initialize the dynamic map with the PG mapping
+  m_dynObfFieldMap[pgnew] = pgold;
   return true;
 }
 
@@ -234,6 +250,34 @@ void ProguardMap::add_method_mapping(
   auto pgnew = convert_proguard_method(m_currNewClass, type, newname, args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
+  // initialize the dynamic map with the PG mapping
+  m_dynObfMethodMap[pgnew] = pgold;
+}
+
+void ProguardMap::update_class_mapping(const std::string& oldname, const std::string& newname) {
+  auto unobf_clsname = find_or_same(oldname, m_dynObfClassMap);
+  m_dynObfClassMap[newname] = unobf_clsname;
+}
+
+void ProguardMap::update_method_mapping(const DexMethod* dm, const std::string& new_str) {
+  std::string cls(dm->get_class()->get_name()->c_str());
+  auto type = dm->get_proto()->get_rtype()->get_name()->c_str();
+  auto method = dm->get_name()->c_str();
+  auto args = SHOW(dm->get_proto()->get_args());
+  auto oldname = convert_proguard_method(cls, type, method, args);
+  auto newname = convert_proguard_method(cls, type, new_str.c_str(), args);
+  auto unobf_methodname = find_or_same(oldname, m_dynObfMethodMap);
+  m_dynObfClassMap[newname] = unobf_methodname;
+}
+
+void ProguardMap::update_field_mapping(const DexField* df, const std::string& new_str) {
+  std::string cls(df->get_class()->get_name()->c_str());
+  auto type = df->get_type()->get_name()->c_str();
+  auto field = df->get_name()->c_str();
+  auto oldname = convert_proguard_field(cls, type, field);
+  auto newname = convert_proguard_field(cls, type, new_str.c_str());
+  auto unobf_fieldname = find_or_same(oldname, m_dynObfFieldMap);
+  m_dynObfClassMap[newname] = unobf_fieldname;
 }
 
 std::string proguard_name(DexType* type) {

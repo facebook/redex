@@ -105,6 +105,6 @@ dex_output_stats_t write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
-  const ConfigFiles& cfg,
+  ConfigFiles& cfg,
   PositionMapper* line_mapper,
   const char* method_mapping_filename);
