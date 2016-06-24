@@ -95,15 +95,12 @@ enum ClassType {
 };
 
 ClassType filter_test_classes(const DexString *cls_name) {
-  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/ConstantPropagation;") == 0)
+  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Propagation;") == 0)
     return MAINCLASS;
-  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/MyBy2Or3;") == 0 ||
-      strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Alpha;") == 0 ||
-      strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Gamma;") == 0)
+  if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Alpha;") == 0)
     return REMOVEDCLASS;
   return OTHERCLASS;
 }
-
 
 TEST(ConstantPropagationTest1, constantpropagation) {
   g_redex = new RedexContext();
@@ -122,23 +119,23 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
 	TRACE(CONSTP, 2, "Code before:\n");
   for(const auto& cls : classes) {
+    TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) < 2) {
-  	  TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
-  		for (const auto& dm : cls->get_dmethods()) {
-  		  TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-  			if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0 ||
-            strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
-  			  TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-  			}
-  		}
+      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
+      for (const auto& dm : cls->get_dmethods()) {
+        TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+        if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0 ||
+            strcmp(dm->get_name()->c_str(), "propagation_2") == 0 ||
+            strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
+          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        }
+      }
     }
-	}
+  }
 
   std::vector<Pass*> passes = {
-    new DelInitPass(),
-    new RemoveEmptyClassesPass(),
     new ConstantPropagationPass(),
-    new LocalDcePass(),
+    new LocalDcePass()
   };
 
   std::vector<KeepRule> null_rules;
@@ -146,38 +143,36 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
+  dummy_cfg.using_seeds = true;
   manager.run_passes(dexen, dummy_cfg);
 
-	TRACE(CONSTP, 2, "Code after:\n");
-	for(const auto& cls : classes) {
-    if (filter_test_classes(cls->get_name()) == REMOVEDCLASS) {
-      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
-      // To be reverted: These classes should be removed by future optimization.
-      ASSERT_TRUE(true);
-    } else if (filter_test_classes(cls->get_name()) == MAINCLASS) {
-      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
+  TRACE(CONSTP, 2, "Code after:\n");
+  for(const auto& cls : classes) {
+    TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
+    //ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
+    if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
-  		  TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-  			if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
-  			  TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-  			  for (auto const instruction : dm->get_code()->get_instructions()) {
+        TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+        if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
+          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+          for (auto const instruction : dm->get_code()->get_instructions()) {
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
             ASSERT_NE(instruction->opcode(), OPCODE_NEW_INSTANCE);
-  			  }
-  			} else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
+          }
+        } else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-  			  for (auto const instruction : dm->get_code()->get_instructions()) {
+          for (auto const instruction : dm->get_code()->get_instructions()) {
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
             ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
-  			  }
+          }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-  			  for (auto const instruction : dm->get_code()->get_instructions()) {
+          for (auto const instruction : dm->get_code()->get_instructions()) {
             //ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
             //ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
-  			  }
+          }
         }
-  		}
+      }
     }
-	}
+  }
 }

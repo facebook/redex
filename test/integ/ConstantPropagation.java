@@ -27,22 +27,21 @@ class Alpha {
 }
 
 class Beta {
-  private static final boolean gammaConfig = true;
-  public static boolean getConfig() {
+  private final boolean gammaConfig = false;
+  public boolean getConfig() {
     return gammaConfig;
   }
 }
 
-public class ConstantPropagation {
+class Propagation {
   // Senario 1: Constant in if statement
-  // Test whether class MyBy2Or3 is removed
+  // Test whether class Alpha is removed
   public static int propagation_1() {
     int y;
     boolean x;
     x = false;
     if (x) {
-      MyBy2Or3 p = new MyBy2Or3(1);
-      y = p.Double();
+      y = Alpha.theAnswer();
     } else {
       y = 42;
     }
@@ -67,11 +66,21 @@ public class ConstantPropagation {
   // Test whether class Gamma and Alpha are removed
   public static int propagation_3() {
     int y;
-    if (Beta.getConfig()) {
-      y = 32;
-    } else {
+    Beta b = new Beta();
+    if (b.getConfig()) {
       y = Alpha.theAnswer();
+    } else {
+      y = 35;
     }
     return y;
+  }
+}
+
+public class ConstantPropagation {
+  public static void main(String[] args) {
+    Propagation p = new Propagation();
+    System.out.println(p.propagation_1());
+    System.out.println(p.propagation_2());
+    System.out.println(p.propagation_3());
   }
 }
