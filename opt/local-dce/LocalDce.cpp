@@ -425,7 +425,68 @@ class LocalDce {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+DexType* get_dextype_from_dotname(const char* dotname) {
+  if (dotname == nullptr) {
+    return nullptr;
+  }
+  std::string buf;
+  buf.reserve(strlen(dotname) + 2);
+  buf += 'L';
+  buf += dotname;
+  buf += ';';
+  std::replace(buf.begin(), buf.end(), '.', '/');
+  return DexType::get_type(buf.c_str());
+}
+
+std::unordered_set<const DexClass*> find_referenced_classes(const Scope& scope) {
+  std::unordered_set<const DexClass*> referenced_classes;
+  walk_code(
+    scope,
+    [](DexMethod*) { return true; },
+    [&](DexMethod* meth, DexCode* code) {
+      auto opcodes = code->get_instructions();
+      for (const auto& opcode : opcodes) {
+        if (opcode->opcode() == OPCODE_NOP)
+          continue;
+        // Matches any stringref that name-aliases a type.
+        if (opcode->has_strings()) {
+          auto stringop = static_cast<DexOpcodeString*>(opcode);
+          DexString* dsclzref = stringop->get_string();
+          DexType* dtexclude =
+            get_dextype_from_dotname(dsclzref->c_str());
+          if (dtexclude == nullptr) continue;
+          TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
+          referenced_classes.insert(type_class(dtexclude));
+        }
+        if (opcode->has_types()) {
+          auto typeop = static_cast<DexOpcodeType*>(opcode);
+          TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
+          referenced_classes.insert(type_class(typeop->get_type()));
+        }
+        if (opcode->has_methods()) {
+          auto methodop = static_cast<DexOpcodeMethod*>(opcode);
+            auto ref_class = methodop->get_method()->get_class();
+            if (type_class(ref_class) != nullptr) {
+              TRACE(PGR, 3, "method_ref: %s\n", SHOW(ref_class));
+              referenced_classes.insert(type_class(ref_class));
+            }
+        }
+      }
+    });
+    return referenced_classes;
+}
+
 void LocalDcePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
+  auto pre_opt_classes = find_referenced_classes(scope);
   LocalDce(scope).run();
+  MethodTransform::sync_all();
+  auto post_opt_classes = find_referenced_classes(scope);
+  scope.erase(remove_if(scope.begin(), scope.end(),
+    [&](DexClass* cls) {
+      if (pre_opt_classes.find(cls) != pre_opt_classes.end() &&
+      post_opt_classes.find(cls) == pre_opt_classes.end()) { return true; }
+      return false; }),
+    scope.end());
+  post_dexen_changes(scope, dexen);
 }
