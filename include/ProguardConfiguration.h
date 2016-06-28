@@ -12,7 +12,9 @@
 #include <set>
 #include <vector>
 
-namespace proguard_parser {
+namespace redex {
+
+  using namespace std;
   
   enum class AccessFlag {
     PUBLIC,
@@ -64,6 +66,7 @@ namespace proguard_parser {
   struct ProguardConfiguration {
     bool ok;
     vector<string> includes;
+		string basedirectory;
     vector<string> injars;
     vector<string> outjars;
     vector<string> libraryjars;
@@ -73,6 +76,7 @@ namespace proguard_parser {
     vector<string> printusage;
     vector<string> keepdirectories;
     bool shrink = true;
+		bool optimize = true;
     bool allowaccessmodification = false;
     bool dontusemixedcaseclassnames = false;
     bool dontpreverify = false;
@@ -81,10 +85,11 @@ namespace proguard_parser {
     vector<KeepSpec> keep_rules;
     vector<KeepSpec> keepclassmembers_rules;
     vector<KeepSpec> keepclasseswithmembers_rules;
+		vector<KeepSpec> assumesideeffects_rules;
     vector<string> optimization_filters;
     vector<string> keepattributes;
     vector<string> dontwarn;
   };
   
-}
+} // namespace redex
 
