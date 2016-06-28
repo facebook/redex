@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "Transform.h"
 #include "walkers.h"
+#include "LocalDce.h"
 #include <vector>
 #include <stack>
 
@@ -96,7 +97,7 @@ namespace {
         }
         dead_instructions.clear();
         remove_constants(method);
-        MethodTransform::sync_all();
+        transform->sync();
       }
     }
 
@@ -116,11 +117,8 @@ namespace {
         // If returning a constant value from a known register
         // Save the return value for future use
         case OPCODE_RETURN:
-          if (inst->srcs_size() > 0) {
-            if (reg_values[inst->src(0)].known) {
-              method_returns[method] = reg_values[inst->src(0)].val;
-            }
-          }
+          if (reg_values[inst->src(0)].known)
+            method_returns[method] = reg_values[inst->src(0)].val;
           break;
         // When there's a move-result instruction following a static-invoke insn
         // Check if there is a constant returned. If so, propagate the value
@@ -129,17 +127,15 @@ namespace {
               (last_inst->opcode() == OPCODE_INVOKE_STATIC ||
               last_inst->opcode() == OPCODE_INVOKE_VIRTUAL) &&
               last_inst->has_methods()) {
-              DexOpcodeMethod *referred_method = (DexOpcodeMethod *)last_inst;
+              DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
               if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
                 auto return_val = method_returns[referred_method->get_method()];
                 TRACE(CONSTP, 2, "invoke-static instruction: %s\n",  SHOW(last_inst));
                 TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
                 TRACE(CONSTP, 5, "Class: %s\n",  SHOW(method->get_class()));
-                TRACE(CONSTP, 5, "Original Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
                 m_method_return_propagated++;
                 auto new_inst = (new DexInstruction(OPCODE_CONST_16))->set_dest(inst->dest())->set_literal(return_val);
                 replaces.emplace_back(inst, new_inst);
-                TRACE(CONSTP, 3, "Convert move-result to: %s\n", SHOW(inst));
                 dead_instructions.push_back(referred_method);
                 TRACE(CONSTP, 5, "Tranformed Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
                 propagate_constant(inst);
@@ -253,5 +249,17 @@ namespace {
 
 void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
+  auto pre_opt_classes = LocalDcePass::find_referenced_classes(scope);
   ConstantPropagation(scope).run();
+  MethodTransform::sync_all();
+  auto post_opt_classes = LocalDcePass::find_referenced_classes(scope);
+  scope.erase(remove_if(scope.begin(), scope.end(),
+    [&](DexClass* cls) {
+      if (pre_opt_classes.find(cls) != pre_opt_classes.end() &&
+      post_opt_classes.find(cls) == pre_opt_classes.end()) {
+        TRACE(DCE, 2, "Removed class: %s\n", cls->get_name()->c_str());
+        return true; }
+      return false; }),
+    scope.end());
+  post_dexen_changes(scope, dexen);
 }

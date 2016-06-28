@@ -27,8 +27,8 @@ class Alpha {
 }
 
 class Beta {
-  private final boolean gammaConfig = false;
-  public boolean getConfig() {
+  private static final boolean gammaConfig = false;
+  public static boolean getConfig() {
     return gammaConfig;
   }
 }
@@ -66,8 +66,7 @@ class Propagation {
   // Test whether class Gamma and Alpha are removed
   public static int propagation_3() {
     int y;
-    Beta b = new Beta();
-    if (b.getConfig()) {
+    if (Beta.getConfig()) {
       y = Alpha.theAnswer();
     } else {
       y = 35;

@@ -425,7 +425,7 @@ class LocalDce {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-DexType* get_dextype_from_dotname(const char* dotname) {
+DexType* LocalDcePass::get_dextype_from_dotname(const char* dotname) {
   if (dotname == nullptr) {
     return nullptr;
   }
@@ -438,7 +438,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   return DexType::get_type(buf.c_str());
 }
 
-std::unordered_set<const DexClass*> find_referenced_classes(const Scope& scope) {
+std::unordered_set<const DexClass*> LocalDcePass::find_referenced_classes(const Scope& scope) {
   std::unordered_set<const DexClass*> referenced_classes;
   walk_code(
     scope,
@@ -485,7 +485,9 @@ void LocalDcePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   scope.erase(remove_if(scope.begin(), scope.end(),
     [&](DexClass* cls) {
       if (pre_opt_classes.find(cls) != pre_opt_classes.end() &&
-      post_opt_classes.find(cls) == pre_opt_classes.end()) { return true; }
+      post_opt_classes.find(cls) == pre_opt_classes.end()) {
+        TRACE(DCE, 2, "Removed class: %s\n", cls->get_name()->c_str());
+        return true; }
       return false; }),
     scope.end());
   post_dexen_changes(scope, dexen);

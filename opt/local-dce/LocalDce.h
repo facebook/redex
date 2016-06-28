@@ -17,4 +17,7 @@ class LocalDcePass : public Pass {
     : Pass("LocalDcePass", DoesNotSync{}) {}
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  
+  static DexType* get_dextype_from_dotname(const char*);
+  static std::unordered_set<const DexClass*> find_referenced_classes(const Scope&);
 };
