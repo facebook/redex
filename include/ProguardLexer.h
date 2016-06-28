@@ -36,6 +36,7 @@ namespace redex {
       openBracket,
       closeBracket,
       semiColon,
+      colon,
       notToken,
       comma,
       dot,
@@ -74,6 +75,7 @@ namespace redex {
       
       // Input/Output Options
       include,
+			basedirectory,
       injars,
       outjars,
       libraryjars,
@@ -163,6 +165,12 @@ namespace redex {
     public:
       SemiColon(unsigned int line_number) : Token(token::semiColon, line_number) {}
       string show() const override { return ";"; }
+    };
+
+    class Colon : public Token {
+    public:
+      Colon(unsigned int line_number) : Token(token::colon, line_number) {}
+      string show() const override { return ":"; }
     };
     
     class Not : public Token {
@@ -368,7 +376,14 @@ namespace redex {
       string show() const override { return "-include"; }
       bool is_command() const override { return true; }
     };
-    
+
+    class BaseDirectory : public Token {
+    public:
+      BaseDirectory(unsigned int line_number) : Token(token::basedirectory, line_number) {}
+      string show() const override { return "-basedirectory"; }
+      bool is_command() const override { return true; }
+    };
+		
     class InJars : public Token {
     public:
       InJars(unsigned int line_number) : Token(token::injars, line_number) {}

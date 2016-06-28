@@ -23,7 +23,9 @@ namespace redex {
     
     
     bool is_deliminator(char ch) {
-      return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' || ch == ',' ||  ch == '/' || ch == '[' || ch == ']' || ch == ';' || ch == '\n' || ch == EOF;
+      return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')'
+                         || ch == ',' || ch == '[' || ch == ']'
+                         || ch == ';' || ch == ':' || ch == EOF;
     }
     
     // An identifier can refer to a class name, a field name or a package name.
@@ -58,7 +60,7 @@ namespace redex {
       if (config.peek() == '-' || config.peek() == EOF) {
         return "";
       }
-      while (!isspace(config.peek()) && config.peek() != ':') {
+      while (config.peek() != ':' && !isspace(config.peek()) && config.peek() != EOF) {
         char ch;
         config >> noskipws >> ch;
         if (ch == '"') {
@@ -198,6 +200,11 @@ namespace redex {
           tokens.push_back(unique_ptr<Token>(new SemiColon(line)));
           continue;
         }
+ 
+        if (ch == ':') {
+          tokens.push_back(unique_ptr<Token>(new Colon(line)));
+          continue;
+        }
         
         if (ch == ',') {
           tokens.push_back(unique_ptr<Token>(new Comma(line)));
@@ -290,6 +297,14 @@ namespace redex {
             }
             continue;
           }
+					if (command == "basedirectory") {
+            tokens.push_back(unique_ptr<Token>(new BaseDirectory(line)));
+            string path = read_path(config, &line);
+            if (path != "") {
+              tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
+            }
+            continue;
+          }
           if (command == "injars") {
             tokens.push_back(unique_ptr<Token>(new InJars(line)));
             vector<string> paths = read_paths(config, &line);
@@ -350,10 +365,8 @@ namespace redex {
           // Keep Options
           if (command == "keepdirectories") {
             tokens.push_back(unique_ptr<Token>(new KeepDirectories(line)));
-            // Do not support the directory filter syntax. Instead support
-            // the specification of a single directory.
-            string path = read_path(config, &line);
-            if (path != "") {
+            vector<string> paths = read_paths(config, &line);
+            for (const auto& path : paths) {
               tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
             }
             continue;
@@ -612,7 +625,6 @@ namespace redex {
         tokens.push_back(unique_ptr<Token>(new UnknownToken(word, line)));
       }
       tokens.push_back(unique_ptr<Token>(new EndOfFile(line)));
-      cout << "Processed " << line << " lines.\n";
       return tokens;
     }
     

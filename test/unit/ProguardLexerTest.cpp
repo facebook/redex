@@ -24,13 +24,16 @@ TEST(ProguardLexerTest, empty) {
 
 // Parse a few tokens.
 TEST(ProguardLexerTest, assortment) {
-  std::stringstream ss("{ } ( ) ; ! , . / class public final abstract interface\n"
+  // The ss stream below should result in the vector of tokens in the expected variable
+  // that occurs below this. Please keep ss and expected in sync.
+  std::stringstream ss("{ } ( ) ; : ! , . / class public final abstract interface\n"
                        "enum extends implements private protected static\n"
                        "volatile @ transient @interface synchronized native\n"
                        "strictfp synthetic bridge varargs wombat <init> <fields>\n"
                        "<methods> []\n"
                        "-target 1.8 \n"
                        "-include /alpha/beta.pro\n"
+											 "-basedirectory /alpha/beta\n"
                        "-injars gamma.pro\n"
                        "-outjars delta.pro:/epsilon/iota.pro\n"
                        "-libraryjars /alpha/zeta.pro\n"
@@ -51,6 +54,7 @@ TEST(ProguardLexerTest, assortment) {
 			 redex::proguard_parser::token::openBracket,
 			 redex::proguard_parser::token::closeBracket,
 			 redex::proguard_parser::token::semiColon,
+			 redex::proguard_parser::token::colon,
 			 redex::proguard_parser::token::notToken,
 			 redex::proguard_parser::token::comma,
 			 redex::proguard_parser::token::dot,
@@ -84,6 +88,8 @@ TEST(ProguardLexerTest, assortment) {
 			 redex::proguard_parser::token::target,
 			 redex::proguard_parser::token::target_version_token,
 			 redex::proguard_parser::token::include,
+			 redex::proguard_parser::token::filepath,
+			 redex::proguard_parser::token::basedirectory,
 			 redex::proguard_parser::token::filepath,
 			 redex::proguard_parser::token::injars,
 			 redex::proguard_parser::token::filepath,
@@ -137,6 +143,9 @@ TEST(ProguardLexerTest, assortment) {
   std::vector<std::unique_ptr<redex::proguard_parser::Token>> tokens = redex::proguard_parser::lex(ss);
   ASSERT_EQ(tokens.size(), expected.size());
   for (auto i =0; i < expected.size(); i++) {
+	  if (tokens[i]->type != expected[i]) {
+		  std::cout << "got " << tokens[i]->show() << " expected " << &expected[i] << std::endl ;
+		}
     ASSERT_EQ(tokens[i]->type, expected[i]);
   }
 }
