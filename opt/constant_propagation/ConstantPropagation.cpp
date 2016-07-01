@@ -107,6 +107,7 @@ namespace {
         reg_values[inst->dest()].known = false;
       }
       switch (inst->opcode()) {
+        case OPCODE_IF_NEZ:
         case OPCODE_IF_EQZ:
           if (propagate_branch(inst)) {
             TRACE(CONSTP, 2, "Class: %s\n",  SHOW(method->get_class()));
@@ -222,11 +223,16 @@ namespace {
       }
     }
 
-    void run() {
+    void run(const std::unordered_set<DexType*> &blacklist_classes) {
       TRACE(CONSTP, 1, "Running ConstantPropagation pass\n");
       walk_methods(m_scope,
         [&](DexMethod* m) {
           if (!m->get_code()) {
+            return;
+          }
+          // Skipping blacklisted classes
+          if (blacklist_classes.count(m->get_class()) > 0) {
+            TRACE(CONSTP, 2, "Skipping %s\n", show(m->get_class()).c_str());
             return;
           }
           propagate(m);
@@ -247,10 +253,25 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+std::unordered_set<DexType*> get_black_list(
+  const std::vector<std::string>& config
+) {
+  std::unordered_set<DexType*> blacklist;
+  for (auto const& config_blacklist : config) {
+    DexType* entry = DexType::get_type(config_blacklist.c_str());
+    if (entry) {
+      TRACE(CONSTP, 2, "blacklist class: %s\n", SHOW(entry));
+      blacklist.insert(entry);
+    }
+  }
+  return blacklist;
+}
+
 void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   auto scope = build_class_scope(dexen);
   auto pre_opt_classes = LocalDcePass::find_referenced_classes(scope);
-  ConstantPropagation(scope).run();
+  auto blacklist_classes = get_black_list(m_blacklist);
+  ConstantPropagation(scope).run(blacklist_classes);
   MethodTransform::sync_all();
   auto post_opt_classes = LocalDcePass::find_referenced_classes(scope);
   scope.erase(remove_if(scope.begin(), scope.end(),
