@@ -73,6 +73,7 @@ class DexString {
   }
 
  public:
+  uint32_t size() const { return m_strlen; }
   // DexString retrieval/creation
 
   // If the DexString exists, return it, otherwise create it and return it.

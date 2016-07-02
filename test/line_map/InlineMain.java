@@ -25,7 +25,7 @@ public class InlineMain extends InstrumentationTestCase {
     super.setUp();
     lm = new LineMapper(
       getInstrumentation().getTargetContext().getResources().getAssets().open(
-        "redex-line-number-map.txt"));
+        "redex-line-number-map"));
   }
 
   /**

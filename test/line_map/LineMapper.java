@@ -11,31 +11,56 @@ package com.facebook.redexlinemap;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Map;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class LineMapper {
+  String[] stringPool;
   ArrayList<Position> mapping;
 
-  public LineMapper(InputStream ins) throws IOException {
+  private int readInt(DataInputStream ds) throws IOException {
+    // DataInputStream's methods assume big-endianess, so we have to write our
+    // own integer reader
+    byte[] b = new byte[4];
+    ds.readFully(b, 0, 4);
+    return (b[0] & 0xff) | ((b[1] & 0xff) << 8) | ((b[2] & 0xff) << 16) |
+        ((b[3] & 0xff) << 24);
+  }
+
+  public LineMapper(InputStream ins) throws Exception {
     mapping = new ArrayList();
-    BufferedReader reader = new BufferedReader(new InputStreamReader(ins));
-    String input;
-    ObjectMapper json = new ObjectMapper();
-    while ((input = reader.readLine()) != null) {
-      Map<String, Object> data = json.readValue(input, Map.class);
-      mapping.add(new Position((String)data.get("file"),
-                               (Integer)data.get("line"),
-                               (Integer)data.get("parent") - 1));
+    DataInputStream ds = new DataInputStream(ins);
+    long magic = readInt(ds);
+    if (magic != 0xfaceb000) {
+      throw new Exception("Magic number mismatch: got " +
+                          Long.toHexString(magic));
+    }
+    int version = readInt(ds);
+    if (version != 1) {
+      throw new Exception("Version mismatch");
+    }
+    int spool_count = readInt(ds);
+    System.out.println(Integer.toString(spool_count));
+    stringPool = new String[spool_count];
+    for (int i = 0; i < spool_count; ++i) {
+      int ssize = readInt(ds);
+      byte[] bytes = new byte[ssize];
+      ds.readFully(bytes, 0, ssize);
+      stringPool[i] = new String(bytes);
+    }
+    int pos_count = readInt(ds);
+    for (int i = 0; i < pos_count; ++i) {
+      int file_id = readInt(ds);
+      int line = readInt(ds);
+      long parent = readInt(ds);
+      mapping.add(new Position(file_id, line, parent));
     }
   }
 
-  public ArrayList<Position> getPositionsAt(int idx) {
+  public ArrayList<Position> getPositionsAt(long idx) {
     ArrayList<Position> positions = new ArrayList();
     while (idx >= 0) {
-      Position pos = mapping.get(idx);
+      Position pos = mapping.get((int)idx);
       positions.add(pos);
-      idx = pos.parent;
+      idx = pos.parent - 1;
     }
     return positions;
   }
@@ -48,8 +73,10 @@ public class LineMapper {
         int line = el.getLineNumber();
         ArrayList<Position> positions = getPositionsAt(line - 1);
         for (Position pos : positions) {
-          newTrace.add(new StackTraceElement(
-            el.getClassName(), el.getMethodName(), pos.file, pos.line));
+          newTrace.add(new StackTraceElement(el.getClassName(),
+                                             el.getMethodName(),
+                                             stringPool[pos.file_id],
+                                             pos.line));
         }
       } else {
         newTrace.add(el);
@@ -60,11 +87,11 @@ public class LineMapper {
 }
 
 class Position {
-  String file;
+  int file_id;
   int line;
-  int parent;
-  public Position(String file, int line, int parent) {
-    this.file = file;
+  long parent;
+  public Position(int file_id, int line, long parent) {
+    this.file_id = file_id;
     this.line = line;
     this.parent = parent;
   }
