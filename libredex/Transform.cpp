@@ -111,6 +111,10 @@ EncodeResult encode_offset(DexInstruction* insn, int32_t offset) {
   if (is_goto(op)) {
     // Use the smallest encoding possible.
     auto newopcode = [&] {
+      // branch offset 0 must use goto/32, as per the spec.
+      if (offset == 0) {
+        return OPCODE_GOTO_32;
+      }
       switch (bytecount) {
       case 1:
         return OPCODE_GOTO;
