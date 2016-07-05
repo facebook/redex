@@ -10,6 +10,7 @@
 #include "DexClass.h"
 
 #include <algorithm>
+#include <boost/functional/hash.hpp>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -265,9 +266,9 @@ DexCode* DexCode::get_dex_code(
         DexType* dt = idx->get_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
-      dextry->m_catchall = DEX_NO_INDEX;
       if (has_catchall) {
-        dextry->m_catchall = read_uleb128(&handler);
+        auto hoff = read_uleb128(&handler);
+        dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
       dc->m_tries.push_back(dextry);
     }
@@ -301,26 +302,35 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   dex_tries_item* dti = (dex_tries_item*)insns;
   uint8_t* handler_base = (uint8_t*)(dti + tries);
   uint8_t* hemit = handler_base;
-  hemit = write_uleb128(hemit, tries); // ???
+  std::unordered_set<DexCatches, boost::hash<DexCatches>> catches_set;
+  for (auto dextry : m_tries) {
+    catches_set.insert(dextry->m_catches);
+  }
+  hemit = write_uleb128(hemit, catches_set.size());
   int tryno = 0;
+  std::unordered_map<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
     DexTryItem* dextry = *it;
     dti[tryno].start_addr = dextry->m_start_addr;
     dti[tryno].insn_count = dextry->m_insn_count;
-    dti[tryno].handler_off = hemit - handler_base;
-    size_t catchcount = dextry->m_catches.size();
-    if (dextry->m_catchall != DEX_NO_INDEX) {
-      catchcount = -catchcount;
+    if (catches_map.find(dextry->m_catches) == catches_map.end()) {
+      catches_map[dextry->m_catches] = hemit - handler_base;
+      size_t catchcount = dextry->m_catches.size();
+      bool has_catchall =
+        dextry->m_catches.back().first == nullptr;
+      if (has_catchall) {
+        catchcount = -(catchcount - 1);
+      }
+      hemit = write_sleb128(hemit, (int32_t) catchcount);
+      for (auto const& cit : dextry->m_catches) {
+        auto type = cit.first;
+        if (type != nullptr) {
+          hemit = write_uleb128(hemit, dodx->typeidx(type));
+        }
+        hemit = write_uleb128(hemit, cit.second);
+      }
     }
-    hemit = write_sleb128(hemit, (int32_t) catchcount);
-    for (auto const& cit : dextry->m_catches) {
-      DexType* type = cit.first;
-      hemit = write_uleb128(hemit, dodx->typeidx(type));
-      hemit = write_uleb128(hemit, cit.second);
-    }
-    if (dextry->m_catchall != DEX_NO_INDEX) {
-      hemit = write_uleb128(hemit, dextry->m_catchall);
-    }
+    dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
   return (int) (hemit - ((uint8_t*)output));
 }

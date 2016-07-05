@@ -324,10 +324,6 @@ static void associate_try_items(FatMethod* fm,
       TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
       insert_try_entry(fm, TRY_CATCH, tri, catzop, catz.first, order++);
     }
-    if (tri->m_catchall != DEX_NO_INDEX) {
-      auto catzop = addr_to_mei[tri->m_catchall];
-      insert_try_entry(fm, TRY_CATCH, tri, catzop);
-    }
   }
 }
 }
@@ -1242,13 +1238,8 @@ bool MethodTransform::try_sync() {
         }
         break;
       case TRY_CATCH:
-        if (tryentry->tentry->centry == nullptr) {
-          /* Catch all */
-          dextry->m_catchall = tryentry->addr;
-        } else {
-          dextry->m_catches.push_back(
-              std::make_pair(tryentry->tentry->centry, tryentry->addr));
-        }
+        dextry->m_catches.push_back(
+            std::make_pair(tryentry->tentry->centry, tryentry->addr));
         break;
       default:
         always_assert_log(false, "Invalid try entry type");

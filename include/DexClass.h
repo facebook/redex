@@ -485,9 +485,7 @@ typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
 struct DexTryItem {
   uint32_t m_start_addr;
   uint32_t m_insn_count;
-  /* Order matters for m_catches, so using list<> instead of map<> */
-  DexCatches m_catches; /* Gathered by DexCode */
-  uint32_t m_catchall; /* DEX_NO_INDEX if none */
+  DexCatches m_catches;
 };
 
 class DexCode {
