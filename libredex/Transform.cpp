@@ -593,14 +593,23 @@ void build_remap_regs(RegMap& reg_map,
                       uint16_t new_tmp_off) {
   auto oldregs = callee->get_code()->get_registers_size();
   auto ins = callee->get_code()->get_ins_size();
-  auto wc = invoke->arg_word_count();
-  always_assert(ins == wc);
   // remap all local regs (not args)
   for (uint16_t i = 0; i < oldregs - ins; ++i) {
     reg_map[i] = new_tmp_off + i;
   }
-  for (uint16_t i = 0; i < wc; ++i) {
-    reg_map[oldregs - ins + i] = invoke->src(i);
+  if (is_invoke_range(invoke->opcode())) {
+    auto base = invoke->range_base();
+    auto range = invoke->range_size();
+    always_assert(ins == range);
+    for (uint16_t i = 0; i < range; ++i) {
+      reg_map[oldregs - ins + i] = base + i;
+    }
+  } else {
+    auto wc = invoke->arg_word_count();
+    always_assert(ins == wc);
+    for (uint16_t i = 0; i < wc; ++i) {
+      reg_map[oldregs - ins + i] = invoke->src(i);
+    }
   }
 }
 

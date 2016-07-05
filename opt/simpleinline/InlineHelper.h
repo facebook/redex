@@ -177,7 +177,6 @@ class MultiMethodInliner {
     size_t recursive{0};
     size_t caller_tries{0};
     size_t not_found{0};
-    size_t invoke_range{0};
     size_t enum_callee{0};
     size_t more_than_16regs{0};
     size_t try_catch_block{0};

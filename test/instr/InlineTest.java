@@ -41,4 +41,17 @@ public class InlineTest {
   public static boolean likely(boolean b) {
     return b;
   }
+
+  private void needsInvokeRange(int a, String b, char c, long d, double e) {
+    assertThat(a).isEqualTo(0);
+    assertThat(b).isEqualTo("a");
+    assertThat(c).isEqualTo('c');
+    assertThat(d).isEqualTo(123);
+    assertThat(e).isEqualTo(1.1);
+  }
+
+  @Test
+  public void testInvokeRange() {
+    needsInvokeRange(0, "a", 'c', 123, 1.1);
+  }
 }

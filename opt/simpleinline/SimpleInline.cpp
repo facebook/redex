@@ -102,7 +102,6 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   size_t deleted = delete_methods(scope, inlined, resolver);
 
   TRACE(SINL, 3, "recursive %ld\n", inliner.get_info().recursive);
-  TRACE(SINL, 3, "invoke range %ld\n", inliner.get_info().invoke_range);
   TRACE(SINL, 3, "enum meths %ld\n", inliner.get_info().enum_callee);
   TRACE(SINL, 3, "more than 16 regs %ld\n",
       inliner.get_info().more_than_16regs);

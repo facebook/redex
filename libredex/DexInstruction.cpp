@@ -21,7 +21,7 @@ DexOpcodeFormat opcode_format(DexOpcode opcode) {
     return FMT_##fmt;
     OPS
 #undef OP
-        case FOPCODE_PACKED_SWITCH : return FMT_fopcode;
+  case FOPCODE_PACKED_SWITCH : return FMT_fopcode;
   case FOPCODE_SPARSE_SWITCH:
     return FMT_fopcode;
   case FOPCODE_FILLED_ARRAY:

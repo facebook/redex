@@ -220,12 +220,6 @@ void MultiMethodInliner::inline_callees(
 
     if (!is_inlinable(callee, caller)) continue;
 
-    auto op = mop->opcode();
-    if (is_invoke_range(op)) {
-      info.invoke_range++;
-      continue;
-    }
-
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n",
         SHOW(callee), caller->get_code()->get_registers_size(),
         SHOW(caller),

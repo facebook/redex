@@ -14,38 +14,14 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include "DexClass.h"
-#include "DexInstruction.h"
-#include "DexLoader.h"
 #include "Match.h"
-#include "RedexContext.h"
-
-DexClass* find_class_named(const DexClasses& classes, const char* name) {
-  auto it = std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls){
-    return !strcmp(
-      name,
-      cls->get_name()->c_str());
-  });
-  if (it == classes.end()) {
-    return nullptr;
-  } else {
-    return *it;
-  }
-}
+#include "VerifyUtil.h"
 
 /**
  * Ensure the structures in DelSuperTest.java are as expected
  * following a redex transformation.
  */
-TEST(PostVerify, DelSuper) {
-  g_redex = new RedexContext();
-
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
-
-  std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
-  DexClasses& classes = dexen.back();
+TEST_F(PostVerify, DelSuper) {
   std::cout << "Loaded classes: " << classes.size() << std::endl ;
 
   // Should have C1 and 2 C2 still
@@ -73,6 +49,4 @@ TEST(PostVerify, DelSuper) {
     m::any_vmethods(m::named<DexMethod>("notOptimized4"));
   ASSERT_TRUE(m3.matches(c1));
   ASSERT_TRUE(m3.matches(c2));
-
-  delete g_redex;
 }
