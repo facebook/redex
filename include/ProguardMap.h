@@ -47,8 +47,7 @@ struct ProguardMap {
   /**
    * Construct map from a given stream.
    */
-  template <class IStream>
-  explicit ProguardMap(IStream& is) {
+  explicit ProguardMap(std::istream& is) {
     parse_proguard_map(is);
   }
 
@@ -116,8 +115,7 @@ struct ProguardMap {
   std::string deobfuscate_field_dynamic(const std::string& field) const;
 
  private:
-  template <class IStream>
-  void parse_proguard_map(IStream& fp) {
+  void parse_proguard_map(std::istream& fp) {
     std::string line;
     while (std::getline(fp, line)) {
       parse_line(line);
