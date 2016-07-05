@@ -550,13 +550,17 @@ class DexCode {
   friend std::string show(const DexCode*);
 };
 
+struct DexMethodRef {
+  /* Method Ref related members */
+  DexType* cls = nullptr;
+  DexString* name = nullptr;
+  DexProto* proto = nullptr;
+};
+
 class DexMethod {
   friend struct RedexContext;
 
-  /* Method Ref related members */
-  DexType* m_class;
-  DexString* m_name;
-  DexProto* m_proto;
+  DexMethodRef m_ref;
   /* Concrete method members */
   DexAnnotationSet* m_anno;
   DexCode* m_code;
@@ -573,9 +577,9 @@ class DexMethod {
     m_external = false;
     m_anno = nullptr;
     m_code = nullptr;
-    m_class = type;
-    m_name = name;
-    m_proto = proto;
+    m_ref.cls = type;
+    m_ref.name = name;
+    m_ref.proto = proto;
     m_access = static_cast<DexAccessFlags>(0);
   }
 
@@ -627,9 +631,9 @@ class DexMethod {
  public:
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
-  DexType* get_class() const { return m_class; }
-  DexString* get_name() const { return m_name; }
-  DexProto* get_proto() const { return m_proto; }
+  DexType* get_class() const { return m_ref.cls; }
+  DexString* get_name() const { return m_ref.name; }
+  DexProto* get_proto() const { return m_ref.proto; }
   DexCode* get_code() const { return m_code; }
   bool is_concrete() const { return m_concrete; }
   bool is_virtual() const { return m_virtual; }
@@ -666,11 +670,8 @@ class DexMethod {
   void set_code(DexCode* code) { m_code = code; }
 
   void make_concrete(DexAccessFlags access, DexCode* dc, bool is_virtual);
-  void change_class(DexType* cls) {
-    g_redex->mutate_method_class(this, cls);
-  }
-  void change_proto(DexProto* proto) {
-    g_redex->mutate_method_proto(this, proto);
+  void change(const DexMethodRef& ref) {
+    g_redex->mutate_method(this, ref);
   }
   void become_virtual();
   void clear_annotations() {

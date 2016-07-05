@@ -251,18 +251,16 @@ DexMethod* RedexContext::get_method(DexType* type,
   return rv;
 }
 
-void RedexContext::mutate_method_class(DexMethod* method, DexType* cls) {
+void RedexContext::mutate_method(DexMethod* method, const DexMethodRef& ref) {
   pthread_mutex_lock(&s_method_lock);
-  s_method_map[method->m_class][method->m_name].erase(method->m_proto);
-  method->m_class = cls;
-  s_method_map[method->m_class][method->m_name][method->m_proto] = method;
-  pthread_mutex_unlock(&s_method_lock);
-}
+  s_method_map[method->m_ref.cls][method->m_ref.name].erase(
+      method->m_ref.proto);
 
-void RedexContext::mutate_method_proto(DexMethod* method, DexProto* proto) {
-  pthread_mutex_lock(&s_method_lock);
-  s_method_map[method->m_class][method->m_name].erase(method->m_proto);
-  method->m_proto = proto;
-  s_method_map[method->m_class][method->m_name][method->m_proto] = method;
+  DexMethodRef r;
+  r.cls = ref.cls != nullptr ? ref.cls : method->m_ref.cls;
+  r.name = ref.name != nullptr ? ref.name : method->m_ref.name;
+  r.proto = ref.proto != nullptr ? ref.proto : method->m_ref.proto;
+  method->m_ref = r;
+  s_method_map[r.cls][r.name][r.proto] = method;
   pthread_mutex_unlock(&s_method_lock);
 }

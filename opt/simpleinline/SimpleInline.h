@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "InlineHelper.h"
 #include "Pass.h"
 #include "DexClass.h"
 #include "Resolver.h"
@@ -23,7 +24,10 @@ public:
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("virtual", true, m_virtual_inline);
-    pc.get("try_catch", false, m_try_catch_inline);
+    pc.get("try_catch", false, m_inliner_config.try_catch_inline);
+    pc.get("callee_invoke_direct",
+           false,
+           m_inliner_config.callee_direct_invoke_inline);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
   }
 
@@ -43,7 +47,7 @@ private:
   bool m_virtual_inline;
 
   // inline methods with try-catch
-  bool m_try_catch_inline;
+  MultiMethodInliner::Config m_inliner_config;
 
   // annotations indicating not to inline a function
   std::vector<std::string> m_no_inline_annos;

@@ -466,7 +466,9 @@ void make_static_and_update_args(DexMethod* wrappee, DexMethod* wrapper) {
   DexProto* new_proto = DexProto::make_proto(
     old_proto->get_rtype(),
     DexTypeList::make_type_list(std::move(new_args)));
-  wrappee->change_proto(new_proto);
+  DexMethodRef ref;
+  ref.proto = new_proto;
+  wrappee->change(ref);
   auto& dmethods = type_class(wrappee->get_class())->get_dmethods();
   dmethods.sort(compare_dexmethods);
   wrappee->set_access(wrappee->get_access() | ACC_STATIC);

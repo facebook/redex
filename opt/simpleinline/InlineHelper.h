@@ -29,12 +29,17 @@
  */
 class MultiMethodInliner {
  public:
+  struct Config {
+    bool try_catch_inline;
+    bool callee_direct_invoke_inline;
+  };
+
   MultiMethodInliner(
-      std::vector<DexClass*>& scope,
+      const std::vector<DexClass*>& scope,
       DexClasses& primary_dex,
       std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
-      bool try_catch_inline);
+      const Config& config);
 
   /**
    * attempt inlining for all candidates.
@@ -146,6 +151,8 @@ class MultiMethodInliner {
    */
   void change_visibility(DexMethod* callee);
 
+  void invoke_direct_to_static();
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -196,7 +203,11 @@ class MultiMethodInliner {
   };
   InliningInfo info;
 
-  bool m_try_catch_inline;
+  const std::vector<DexClass*>& m_scope;
+
+  const Config& m_config;
+
+  std::unordered_set<DexMethod*> m_make_static;
 
  public:
   const InliningInfo& get_info() {

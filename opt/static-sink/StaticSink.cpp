@@ -303,7 +303,9 @@ DexClass* move_statics_out(
     }
     TRACE(SINK, 2, "sink %s to %s\n", SHOW(meth), SHOW(sink_class));
     type_class(meth->get_class())->get_dmethods().remove(meth);
-    meth->change_class(sink_class->get_type());
+    DexMethodRef ref;
+    ref.cls = sink_class->get_type();
+    meth->change(ref);
     set_public(meth);
     insert_sorted(sink_class->get_dmethods(), meth, compare_dexmethods);
     moved_count++;

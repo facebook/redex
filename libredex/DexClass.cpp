@@ -336,7 +336,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
 void DexMethod::become_virtual() {
   assert(!m_virtual);
   m_virtual = true;
-  auto cls = type_class(m_class);
+  auto cls = type_class(m_ref.cls);
   assert(!cls->is_external());
   auto& dmethods = cls->get_dmethods();
   auto& vmethods = cls->get_vmethods();
@@ -787,7 +787,7 @@ void DexField::gather_strings_shallow(std::vector<DexString*>& lstring) {
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) {
-  // We handle m_class and proto in the first-layer gather.
+  // We handle m_ref.cls and proto in the first-layer gather.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
   auto param_anno = get_param_anno();
@@ -837,13 +837,13 @@ void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) {
 }
 
 void DexMethod::gather_types_shallow(std::vector<DexType*>& ltype) {
-  ltype.push_back(m_class);
-  m_proto->gather_types(ltype);
+  ltype.push_back(m_ref.cls);
+  m_ref.proto->gather_types(ltype);
 }
 
 void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) {
-  lstring.push_back(m_name);
-  m_proto->gather_strings(lstring);
+  lstring.push_back(m_ref.name);
+  m_ref.proto->gather_strings(lstring);
 }
 
 void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {

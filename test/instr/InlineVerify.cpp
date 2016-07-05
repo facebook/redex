@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
+#include "Show.h"
 #include "VerifyUtil.h"
 
 /*
@@ -267,4 +268,53 @@ TEST_F(PostVerify, InlineCalleeTryTwice) {
   ASSERT_NE(nullptr, invoke_throws);
   auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 3);
+}
+
+/*
+ * Ensure that testInlineInvokeDirect() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineInvokeDirect) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
+  auto invoke =
+      find_invoke(m, OPCODE_INVOKE_DIRECT, "hasNoninlinableInvokeDirect");
+  auto noninlinable_invoke_direct =
+      find_invoke(invoke->get_method(), OPCODE_INVOKE_DIRECT, "noninlinable");
+  auto noninlinable = noninlinable_invoke_direct->get_method();
+  ASSERT_EQ(show(noninlinable->get_proto()), "()V");
+
+  // verify that there are two inlinable() methods in the class. The static
+  // version exists to test that we don't cause a signature collision when we
+  // make the instance method static.
+  auto dmethods = cls->get_dmethods();
+  ASSERT_EQ(2,
+            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
+              return !strcmp("noninlinable", m->get_name()->c_str());
+            }));
+}
+
+TEST_F(PostVerify, InlineInvokeDirect) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
+  auto noninlinable_invoke_direct =
+      find_invoke(m, OPCODE_INVOKE_STATIC, "noninlinable$redex");
+  ASSERT_NE(nullptr, noninlinable_invoke_direct);
+  auto noninlinable = noninlinable_invoke_direct->get_method();
+  ASSERT_EQ(show(noninlinable->get_proto()),
+            "(Lcom/facebook/redexinline/InlineTest;)V");
+
+  auto dmethods = cls->get_dmethods();
+  // verify that we've replaced the instance noninlinable() method with
+  // noninlinable$redex
+  ASSERT_EQ(1,
+            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
+              return !strcmp("noninlinable", m->get_name()->c_str());
+            }));
+  ASSERT_EQ(1,
+            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
+              return !strcmp("noninlinable$redex", m->get_name()->c_str());
+            }));
 }

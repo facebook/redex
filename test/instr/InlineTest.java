@@ -205,4 +205,41 @@ public class InlineTest {
     }
     assertThat(caught).isTrue();
   }
+
+  private void noninlinable() {
+    if (mHello != null) {
+      noninlinable();
+    }
+  }
+
+  /*
+   * This method exists to test that we rename the instance method
+   * noninlinable() above when we change it to a static method. (Otherwise
+   * we would have a clash in method signatures.)
+   */
+  public static void noninlinable(InlineTest foo) {
+    if (foo != null && foo.getHello() != null) {
+      noninlinable(foo);
+    }
+  }
+
+  /*
+   * The @Test annotation here is just to ensure that the compiler doesn't
+   * think the static noninlinable() method is unused and optimize it out.
+   */
+  @Test
+  public void callsStaticNoninlinable() {
+    noninlinable(null);
+  }
+
+  private void hasNoninlinableInvokeDirect() {
+    if (mHello != null) {
+      noninlinable();
+    }
+  }
+
+  @Test
+  public void testInlineInvokeDirect() {
+    hasNoninlinableInvokeDirect();
+  }
 }

@@ -22,6 +22,7 @@ class DexField;
 class DexTypeList;
 class DexProto;
 class DexMethod;
+struct DexMethodRef;
 struct DexDebugEntry;
 struct DexPosition;
 struct RedexContext;
@@ -70,8 +71,7 @@ struct RedexContext {
   DexMethod* get_method(DexType* type,
                         DexString* name,
                         DexProto* proto);
-  void mutate_method_class(DexMethod* method, DexType* cls);
-  void mutate_method_proto(DexMethod* method, DexProto* proto);
+  void mutate_method(DexMethod* method, const DexMethodRef& ref);
 
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);

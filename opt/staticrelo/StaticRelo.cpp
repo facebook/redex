@@ -595,7 +595,9 @@ void do_mutations(
       record_move_data(from_meth, from_cls, to_cls, cfg);
       // Move the method to the target class
       from_cls->get_dmethods().remove(from_meth);
-      from_meth->change_class(to_cls->get_type());
+      DexMethodRef ref;
+      ref.cls = to_cls->get_type();
+      from_meth->change(ref);
       insert_sorted(to_cls->get_dmethods(), from_meth, compare_dexmethods);
       // Make the method public and make the target class public. They must
       // be public because the method may have been visible to other other

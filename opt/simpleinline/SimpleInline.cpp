@@ -94,7 +94,7 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
 
   // inline candidates
   MultiMethodInliner inliner(
-      scope, dexen[0], inlinable, resolver, m_try_catch_inline);
+      scope, dexen[0], inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
   // delete all methods that can be deleted

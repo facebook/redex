@@ -669,8 +669,8 @@ std::string show(const DexCode* code) {
 std::string show(const DexMethod* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->m_access, true) << humanize(show(p->m_class)) << "."
-     << show(p->m_name) << show(p->m_proto);
+  ss << accessibility(p->m_access, true) << humanize(show(p->m_ref.cls)) << "."
+     << show(p->m_ref.name) << show(p->m_ref.proto);
   if (p->m_anno) {
     ss << "\n  annotations:" << show(p->m_anno);
   }

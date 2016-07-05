@@ -118,12 +118,12 @@ bool method_ok(DexType* type, DexMethod* meth) {
 }
 
 MultiMethodInliner::MultiMethodInliner(
-    std::vector<DexClass*>& scope,
+    const std::vector<DexClass*>& scope,
     DexClasses& primary_dex,
     std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
-    bool try_catch_inline)
-        : resolver(resolver), m_try_catch_inline(try_catch_inline) {
+    const Config& config)
+    : resolver(resolver), m_scope(scope), m_config(config) {
   for (const auto& cls : primary_dex) {
     primary.insert(cls->get_type());
   }
@@ -158,6 +158,8 @@ void MultiMethodInliner::inline_methods() {
   }
   // save all changes made
   MethodTransform::sync_all();
+
+  invoke_direct_to_static();
 }
 
 void MultiMethodInliner::caller_inline(
@@ -179,7 +181,7 @@ void MultiMethodInliner::caller_inline(
       caller_inline(callee, maybe_caller->second, visited);
     }
   }
-  if (!m_try_catch_inline && caller->get_code()->get_tries().size() > 0) {
+  if (!m_config.try_catch_inline && caller->get_code()->get_tries().size() > 0) {
     info.caller_tries++;
     return;
   }
@@ -243,7 +245,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   }
   if (is_enum_method(callee)) return false;
   if (over_16regs(caller, callee)) return false;
-  if (!m_try_catch_inline && has_try_catch(callee)) return false;
+  if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
 
   if (cannot_inline_opcodes(callee)) return false;
 
@@ -353,8 +355,13 @@ bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    info.need_vmethod++;
-    return true;
+    if (m_config.callee_direct_invoke_inline &&
+        !(method->get_access() & ACC_NATIVE)) {
+      m_make_static.insert(method);
+    } else {
+      info.need_vmethod++;
+      return true;
+    }
   }
   return false;
 }
@@ -563,3 +570,60 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
   }
 }
 
+namespace {
+
+void make_static(DexMethod* method) {
+  TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
+  auto proto = method->get_proto();
+  auto params = proto->get_args()->get_type_list();
+  auto clstype = method->get_class();
+  params.push_front(clstype);
+  auto new_args = DexTypeList::make_type_list(std::move(params));
+  auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
+  DexMethodRef ref;
+  ref.proto = new_proto;
+  // since we've changed the method proto, we should rename the method in order
+  // to avoid proto collision with anther method of the same name
+  std::stringstream ss;
+  ss << method->get_name()->c_str();
+  ss << "$redex";
+  ref.name = DexString::make_string(ss.str().c_str());
+  method->change(ref);
+  method->set_access(method->get_access() | ACC_STATIC);
+
+  // changing the method proto means that we need to change its position in the
+  // dmethod list
+  auto cls = type_class(clstype);
+  auto& dmethods = cls->get_dmethods();
+  dmethods.remove(method);
+  insert_sorted(dmethods, method, compare_dexmethods);
+}
+
+DexOpcode direct_to_static_op(DexOpcode op) {
+  switch (op) {
+    case OPCODE_INVOKE_DIRECT:
+      return OPCODE_INVOKE_STATIC;
+    case OPCODE_INVOKE_DIRECT_RANGE:
+      return OPCODE_INVOKE_STATIC_RANGE;
+    default:
+      always_assert(false);
+  }
+}
+
+}
+
+void MultiMethodInliner::invoke_direct_to_static() {
+  for (auto method : m_make_static) {
+    make_static(method);
+  }
+  walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod* meth, DexInstruction* opcode) {
+        auto op = opcode->opcode();
+        if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE) {
+          auto mop = static_cast<DexOpcodeMethod*>(opcode);
+          if (m_make_static.count(mop->get_method())) {
+            opcode->set_opcode(direct_to_static_op(op));
+          }
+        }
+      });
+}
