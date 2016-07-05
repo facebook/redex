@@ -32,6 +32,7 @@ class MultiMethodInliner {
   struct Config {
     bool try_catch_inline;
     bool callee_direct_invoke_inline;
+    bool virtual_same_class_inline;
   };
 
   MultiMethodInliner(
@@ -101,7 +102,7 @@ class MultiMethodInliner {
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
    */
-  bool cannot_inline_opcodes(DexMethod* callee);
+  bool cannot_inline_opcodes(DexMethod* callee, DexMethod* caller);
 
   /**
    * Return true if inlining would require a method called from the callee
@@ -129,7 +130,9 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the method
    * was package/protected and we move the call out of context.
    */
-  bool unknown_virtual(DexInstruction* insn, DexMethod* context);
+  bool unknown_virtual(DexInstruction* insn,
+                       DexMethod* caller,
+                       DexMethod* callee);
 
   /**
    * Return true if the callee contains a call to an unknown field.

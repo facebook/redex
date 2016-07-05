@@ -28,6 +28,9 @@ public:
     pc.get("callee_invoke_direct",
            false,
            m_inliner_config.callee_direct_invoke_inline);
+    pc.get("virtual_same_class",
+           false,
+           m_inliner_config.virtual_same_class_inline);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
   }
 

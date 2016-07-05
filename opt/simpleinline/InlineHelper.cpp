@@ -248,7 +248,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   if (over_16regs(caller, callee)) return false;
   if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
 
-  if (cannot_inline_opcodes(callee)) return false;
+  if (cannot_inline_opcodes(callee, caller)) return false;
 
   return true;
 }
@@ -299,7 +299,8 @@ bool MultiMethodInliner::has_try_catch(DexMethod* callee) {
 /**
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
-bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee) {
+bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
+                                               DexMethod* caller) {
   int ret_count = 0;
   auto code = callee->get_code();
   uint16_t temp_regs =
@@ -308,7 +309,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee) {
     if (create_vmethod(insn)) return true;
     if (is_invoke_super(insn)) return true;
     if (writes_ins_reg(insn, temp_regs)) return true;
-    if (unknown_virtual(insn, callee)) return true;
+    if (unknown_virtual(insn, callee, caller)) return true;
     if (unknown_field(insn, callee)) return true;
     if (insn->opcode() == OPCODE_THROW) {
       info.throws++;
@@ -411,7 +412,17 @@ bool MultiMethodInliner::writes_ins_reg(DexInstruction* insn, uint16_t temp_regs
  * But we need to make all methods public across the hierarchy and for methods
  * we don't know we have no idea whether the method was public or not anyway.
  */
-bool MultiMethodInliner::unknown_virtual(DexInstruction* insn, DexMethod* context) {
+
+bool MultiMethodInliner::unknown_virtual(DexInstruction* insn,
+                                         DexMethod* callee,
+                                         DexMethod* caller) {
+  // if the caller and callee are in the same class, we don't have to worry
+  // about unknown virtuals -- private / protected methods will remain
+  // accessible
+  if (m_config.virtual_same_class_inline &&
+      caller->get_class() == callee->get_class()) {
+    return false;
+  }
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
       insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
     auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
