@@ -527,7 +527,7 @@ DexCode* MethodCreator::to_code() {
   code->set_outs_size(out_count);
   code->set_debug_item(nullptr);
   method->set_code(code);
-  for (auto mi : *meth_code->m_fmethod) {
+  for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       DexInstruction* insn = mi.insn;
       if (insn->dests_size()) {

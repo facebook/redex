@@ -286,44 +286,34 @@ static void associate_debug_entries(FatMethod* fm,
   }
 }
 
-static bool order_try_entries(const MethodItemEntry* a,
-                              const MethodItemEntry* b) {
-  return (a->tentry->order < b->tentry->order);
-}
-
-static void insert_try_entry(FatMethod* fm,
-                             TryEntryType type,
-                             DexTryItem* dti,
-                             MethodItemEntry* atmei,
-                             DexType* centry = nullptr,
-                             uint32_t order = 0) {
-  TryEntry* tentry = new TryEntry();
-  tentry->type = type;
-  tentry->tentry = dti;
-  tentry->centry = centry;
-  tentry->order = order;
-  MethodItemEntry* mentry = new MethodItemEntry(tentry);
-  insert_mentry_before(fm, mentry, atmei);
-}
-
 static void associate_try_items(FatMethod* fm,
                                 DexCode* code,
                                 addr_mei_t& addr_to_mei) {
   auto const& tries = code->get_tries();
-  for (auto tri : tries) {
-    auto begin = addr_to_mei[tri->m_start_addr];
-    TRACE(MTRANS, 3, "try_start %08x mei %p\n", tri->m_start_addr, begin);
-    insert_try_entry(fm, TRY_START, tri, begin);
-    uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
-    auto end = addr_to_mei[lastaddr];
-    TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
-    insert_try_entry(fm, TRY_END, tri, end);
-    uint32_t order = 1;
+  for (auto& tri : tries) {
+    MethodItemEntry* catch_start = nullptr;
+    CatchEntry* last_catch = nullptr;
     for (auto catz : tri->m_catches) {
       auto catzop = addr_to_mei[catz.second];
       TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
-      insert_try_entry(fm, TRY_CATCH, tri, catzop, catz.first, order++);
+      auto catch_mei = new MethodItemEntry(catz.first);
+      catch_start = catch_start == nullptr ? catch_mei : catch_start;
+      if (last_catch != nullptr) {
+        last_catch->next = catch_mei;
+      }
+      last_catch = catch_mei->centry;
+      insert_mentry_before(fm, catch_mei, catzop);
     }
+
+    auto begin = addr_to_mei[tri->m_start_addr];
+    TRACE(MTRANS, 3, "try_start %08x mei %p\n", tri->m_start_addr, begin);
+    auto try_start = new MethodItemEntry(TRY_START, catch_start);
+    insert_mentry_before(fm, try_start, begin);
+    uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
+    auto end = addr_to_mei[lastaddr];
+    TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
+    auto try_end = new MethodItemEntry(TRY_END, catch_start);
+    insert_mentry_before(fm, try_end, end);
   }
 }
 }
@@ -691,6 +681,7 @@ class MethodSplicer {
  public:
   MethodSplicer(const RegMap& callee_reg_map, DexPosition* invoke_position)
       : m_callee_reg_map(callee_reg_map), m_invoke_position(invoke_position) {
+    m_entry_map[nullptr] = nullptr;
     m_pos_map[nullptr] = nullptr;
   }
 
@@ -706,7 +697,11 @@ class MethodSplicer {
     switch (cloned_mei->type) {
     case MFLOW_TRY:
       cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-      cloned_mei->tentry->tentry = new DexTryItem(*cloned_mei->tentry->tentry);
+      cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
+      return cloned_mei;
+    case MFLOW_CATCH:
+      cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
+      cloned_mei->centry->next = clone(cloned_mei->centry->next);
       return cloned_mei;
     case MFLOW_OPCODE:
       cloned_mei->insn = cloned_mei->insn->clone();
@@ -901,7 +896,8 @@ bool end_of_block(const FatMethod* fm, FatMethod::iterator it, bool in_try) {
   if (next == fm->end()) {
     return true;
   }
-  if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY) {
+  if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||
+      next->type == MFLOW_CATCH) {
     return true;
   }
   if (it->type != MFLOW_OPCODE) {
@@ -930,8 +926,8 @@ bool ends_with_may_throw(Block* p) {
 void MethodTransform::build_cfg() {
   // Find the block boundaries
   std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
-  std::vector<std::pair<DexTryItem*, Block*>> try_ends;
-  std::unordered_map<DexTryItem*, std::vector<Block*>> try_catches;
+  std::vector<std::pair<TryEntry*, Block*>> try_ends;
+  std::unordered_map<CatchEntry*, Block*> try_catches;
   size_t id = 0;
   bool in_try = false;
   m_blocks.emplace_back(new Block(id++));
@@ -973,12 +969,10 @@ void MethodTransform::build_cfg() {
       continue;
     }
     // Record try/catch blocks to add edges in the next pass.
-    if (next->type == MFLOW_TRY) {
-      if (next->tentry->type == TRY_END) {
-        try_ends.emplace_back(next->tentry->tentry, next_block);
-      } else if (next->tentry->type == TRY_CATCH) {
-        try_catches[next->tentry->tentry].push_back(next_block);
-      }
+    if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
+      try_ends.emplace_back(next->tentry, next_block);
+    } else if (next->type == MFLOW_CATCH) {
+      try_catches[next->centry] = next_block;
     }
   }
   // Link the blocks together with edges
@@ -1017,7 +1011,7 @@ void MethodTransform::build_cfg() {
    * are contiguous in the bytecode, and we generate blocks in bytecode order.
    */
   for (auto tep : try_ends) {
-    auto tryitem = tep.first;
+    auto try_end = tep.first;
     auto tryendblock = tep.second;
     size_t bid = tryendblock->id();
     always_assert(bid > 0);
@@ -1025,8 +1019,10 @@ void MethodTransform::build_cfg() {
     while (true) {
       auto block = m_blocks[bid];
       if (ends_with_may_throw(block)) {
-        auto& catches = try_catches[tryitem];
-        for (auto catchblock : catches) {
+        for (auto mei = try_end->catch_start;
+             mei != nullptr;
+             mei = mei->centry->next) {
+          auto catchblock = try_catches.at(mei->centry);
           block->m_succs.push_back(catchblock);
           catchblock->m_preds.push_back(block);
         }
@@ -1034,7 +1030,8 @@ void MethodTransform::build_cfg() {
       auto begin = block->begin();
       if (begin->type == MFLOW_TRY) {
         auto tentry = begin->tentry;
-        if (tentry->type == TRY_START && tentry->tentry == tryitem) {
+        if (tentry->type == TRY_START) {
+          always_assert(tentry->catch_start == try_end->catch_start);
           break;
         }
       }
@@ -1103,7 +1100,6 @@ bool MethodTransform::try_sync() {
   std::vector<MethodItemEntry*> multi_branches;
   std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
   std::unordered_map<BranchTarget*, uint32_t> multi_targets;
-  std::unordered_map<DexTryItem*, std::vector<MethodItemEntry*>> try_items;
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE) {
@@ -1134,9 +1130,6 @@ bool MethodTransform::try_sync() {
           return false;
         }
       }
-    }
-    if (mentry->type == MFLOW_TRY) {
-      try_items[mentry->tentry->tentry].push_back(mentry);
     }
   }
   TRACE(MTRANS, 5, "Emitting multi-branches\n");
@@ -1214,44 +1207,44 @@ bool MethodTransform::try_sync() {
     }
   }
   // Step 5, try/catch blocks
+  TRACE(MTRANS, 5, "Emitting try items & catch handlers\n");
   auto& tries = code->get_tries();
   tries.clear();
-  for (auto tryitem : try_items) {
-    DexTryItem* dextry = tryitem.first;
-    auto& tryentries = tryitem.second;
-    sort(tryentries.begin(), tryentries.end(), order_try_entries);
-    dextry->m_catches.clear();
-    MethodItemEntry* try_start = nullptr;
-    bool suppress = false;
-    for (auto tryentry : tryentries) {
-      switch (tryentry->tentry->type) {
-      case TRY_START:
-        dextry->m_start_addr = tryentry->addr;
-        try_start = tryentry;
-        break;
-      case TRY_END:
-        assert(try_start != nullptr);
-        assert(try_start->addr <= tryentry->addr);
-        dextry->m_insn_count = tryentry->addr - try_start->addr;
-        if (dextry->m_insn_count == 0) {
-          suppress = true;
-        }
-        break;
-      case TRY_CATCH:
-        dextry->m_catches.push_back(
-            std::make_pair(tryentry->tentry->centry, tryentry->addr));
-        break;
-      default:
-        always_assert_log(false, "Invalid try entry type");
-      }
+  MethodItemEntry* active_try = nullptr;
+  for (auto& mentry : *m_fmethod) {
+    if (mentry.type != MFLOW_TRY) {
+      continue;
     }
-    if (!suppress) {
-      tries.push_back(dextry);
+    auto& tentry = mentry.tentry;
+    if (tentry->type == TRY_START) {
+      always_assert(active_try == nullptr);
+      active_try = &mentry;
+      continue;
     }
+    assert(tentry->type == TRY_END);
+    auto try_end = &mentry;
+    auto try_start = active_try;
+    active_try = nullptr;
+
+    always_assert(try_end->tentry->catch_start == try_start->tentry->catch_start);
+    auto insn_count = try_end->addr - try_start->addr;
+    if (insn_count == 0) {
+      continue;
+    }
+    auto try_item = new DexTryItem(try_start->addr, insn_count);
+    for (auto mei = try_end->tentry->catch_start;
+        mei != nullptr;
+        mei = mei->centry->next) {
+      try_item->m_catches.emplace_back(mei->centry->catch_type, mei->addr);
+    }
+    tries.emplace_back(try_item);
   }
+  always_assert_log(active_try == nullptr, "unclosed try_start found");
+
   std::sort(tries.begin(),
             tries.end(),
-            [](const DexTryItem* a, const DexTryItem* b) {
+            [](const std::unique_ptr<DexTryItem>& a,
+               const std::unique_ptr<DexTryItem>& b) {
               return a->m_start_addr < b->m_start_addr;
             });
   return true;

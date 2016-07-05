@@ -250,9 +250,7 @@ DexCode* DexCode::get_dex_code(
     const dex_tries_item* dti = (const dex_tries_item*)cdata;
     const uint8_t* handlers = (const uint8_t*)(dti + tries);
     for (uint32_t i = 0; i < tries; i++) {
-      DexTryItem* dextry = new DexTryItem();
-      dextry->m_start_addr = dti[i].start_addr;
-      dextry->m_insn_count = dti[i].insn_count;
+      DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
       const uint8_t* handler = handlers + dti[i].handler_off;
       int32_t count = read_sleb128(&handler);
       bool has_catchall = false;
@@ -270,7 +268,7 @@ DexCode* DexCode::get_dex_code(
         auto hoff = read_uleb128(&handler);
         dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
-      dc->m_tries.push_back(dextry);
+      dc->m_tries.emplace_back(dextry);
     }
   }
   dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off,
@@ -303,14 +301,14 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   uint8_t* handler_base = (uint8_t*)(dti + tries);
   uint8_t* hemit = handler_base;
   std::unordered_set<DexCatches, boost::hash<DexCatches>> catches_set;
-  for (auto dextry : m_tries) {
+  for (auto& dextry : m_tries) {
     catches_set.insert(dextry->m_catches);
   }
   hemit = write_uleb128(hemit, catches_set.size());
   int tryno = 0;
   std::unordered_map<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
-    DexTryItem* dextry = *it;
+    auto& dextry = *it;
     dti[tryno].start_addr = dextry->m_start_addr;
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
@@ -849,7 +847,7 @@ void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) {
 }
 
 void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {
-  for (auto tryit : m_tries) {
+  for (auto& tryit : m_tries) {
     for (auto const& it : tryit->m_catches) {
       if (it.first) {
         ltype.push_back(it.first);

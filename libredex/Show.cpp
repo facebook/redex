@@ -913,8 +913,6 @@ std::string show(TryEntryType t) {
     return "TRY_START";
   case TRY_END:
     return "TRY_END";
-  case TRY_CATCH:
-    return "TRY_CATCH";
   }
   not_reached();
 }
@@ -933,7 +931,11 @@ std::string show(const MethodItemEntry& mei) {
     }
     return ss.str();
   case MFLOW_TRY:
-    ss << "TRY: " << show(mei.tentry->type);
+    ss << "TRY: " << show(mei.tentry->type) <<
+      " (CATCH: " << mei.tentry->catch_start << ")";
+    return ss.str();
+  case MFLOW_CATCH:
+    ss << "CATCH: [" << &mei << "] " << show(mei.centry->catch_type);
     return ss.str();
   case MFLOW_DEBUG:
     ss << "DEBUG: " << show(mei.dbgop);

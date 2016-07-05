@@ -14,6 +14,7 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -486,6 +487,8 @@ struct DexTryItem {
   uint32_t m_start_addr;
   uint32_t m_insn_count;
   DexCatches m_catches;
+  DexTryItem(uint32_t start_addr, uint32_t insn_count):
+    m_start_addr(start_addr), m_insn_count(insn_count) {}
 };
 
 class DexCode {
@@ -493,7 +496,7 @@ class DexCode {
   uint16_t m_ins_size;
   uint16_t m_outs_size;
   std::vector<DexInstruction*> m_insns;
-  std::vector<DexTryItem*> m_tries;
+  std::vector<std::unique_ptr<DexTryItem>> m_tries;
   DexDebugItem* m_dbg;
 
  public:
@@ -511,9 +514,6 @@ class DexCode {
     for (auto const& op : m_insns) {
       delete op;
     }
-    for (auto const& ti : m_tries) {
-      delete ti;
-    }
     delete m_dbg;
   }
 
@@ -521,8 +521,10 @@ class DexCode {
   DexDebugItem* get_debug_item() const { return m_dbg; }
   std::vector<DexInstruction*>& get_instructions() { return m_insns; }
   const std::vector<DexInstruction*>& get_instructions() const { return m_insns; }
-  std::vector<DexTryItem*>& get_tries() { return m_tries; }
-  const std::vector<DexTryItem*>& get_tries() const { return m_tries; }
+  std::vector<std::unique_ptr<DexTryItem>>& get_tries() { return m_tries; }
+  const std::vector<std::unique_ptr<DexTryItem>>& get_tries() const {
+    return m_tries;
+  }
   uint16_t get_registers_size() const { return m_registers_size; }
   uint16_t get_ins_size() const { return m_ins_size; }
   uint16_t get_outs_size() const { return m_outs_size; }

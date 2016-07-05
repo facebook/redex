@@ -22,19 +22,23 @@
 enum TryEntryType {
   TRY_START = 0,
   TRY_END = 1,
-  TRY_CATCH = 2,
 };
 
 std::string show(TryEntryType t);
 
 struct TryEntry {
   TryEntryType type;
-  DexTryItem* tentry; /* The pointer is used to identify which DexTryEntry
-                       * the TryEntry is associated with. */
-  DexType* centry; /* nullptr indicates catchall */
-  uint32_t order; /* Only for non-nullptr centry catches, indicates test-type
-                   * order.
-                   */
+  MethodItemEntry* catch_start;
+  TryEntry(TryEntryType type, MethodItemEntry* catch_start):
+      type(type), catch_start(catch_start) {
+    always_assert(catch_start != nullptr);
+  }
+};
+
+struct CatchEntry {
+  DexType* catch_type;
+  MethodItemEntry* next; // always null for catchall
+  CatchEntry(DexType* catch_type): catch_type(catch_type), next(nullptr) {}
 };
 
 /*
@@ -59,12 +63,13 @@ struct BranchTarget {
 };
 
 enum MethodItemType {
-  MFLOW_TRY = 0,
-  MFLOW_OPCODE = 1,
-  MFLOW_TARGET = 2,
-  MFLOW_DEBUG = 3,
-  MFLOW_POSITION = 4,
-  MFLOW_FALLTHROUGH = 5,
+  MFLOW_TRY,
+  MFLOW_CATCH,
+  MFLOW_OPCODE,
+  MFLOW_TARGET,
+  MFLOW_DEBUG,
+  MFLOW_POSITION,
+  MFLOW_FALLTHROUGH,
 };
 
 struct MethodItemEntry {
@@ -73,19 +78,21 @@ struct MethodItemEntry {
   uint16_t addr;
   union {
     TryEntry* tentry;
+    CatchEntry* centry;
     DexInstruction* insn;
     BranchTarget* target;
     DexDebugInstruction* dbgop;
     DexPosition* pos;
   };
+  explicit MethodItemEntry(const MethodItemEntry&) = default;
   MethodItemEntry(DexInstruction* insn) {
     this->type = MFLOW_OPCODE;
     this->insn = insn;
   }
-  MethodItemEntry(TryEntry* tentry) {
-    this->type = MFLOW_TRY;
-    this->tentry = tentry;
-  }
+  MethodItemEntry(TryEntryType try_type, MethodItemEntry* catch_start):
+    type(MFLOW_TRY), tentry(new TryEntry(try_type, catch_start)) {}
+  MethodItemEntry(DexType* catch_type):
+    type(MFLOW_CATCH), centry(new CatchEntry(catch_type)) {}
   MethodItemEntry(BranchTarget* bt) {
     this->type = MFLOW_TARGET;
     this->target = bt;
@@ -99,6 +106,9 @@ struct MethodItemEntry {
     switch (type) {
       case MFLOW_TRY:
         delete tentry;
+        break;
+      case MFLOW_CATCH:
+        delete centry;
         break;
       case MFLOW_TARGET:
         delete target;
@@ -154,7 +164,7 @@ struct Block {
 
 inline bool is_catch(Block* b) {
   auto it = b->begin();
-  return it->type == MFLOW_TRY && it->tentry->type == TRY_CATCH;
+  return it->type == MFLOW_CATCH;
 }
 
 bool ends_with_may_throw(Block* b);

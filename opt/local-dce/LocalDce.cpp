@@ -266,12 +266,12 @@ class LocalDce {
     }
     // Gather the ops to delete.
     std::unordered_set<DexInstruction*> delete_ops;
-    std::unordered_set<DexTryItem*> delete_tries;
+    std::unordered_set<TryEntry*> delete_tries;
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
         delete_ops.insert(mei.insn);
       } else if (mei.type == MFLOW_TRY) {
-        delete_tries.insert(mei.tentry->tentry);
+        delete_tries.insert(mei.tentry);
       }
     }
     // Remove branch targets.
@@ -280,14 +280,10 @@ class LocalDce {
         delete it->target;
         it->type = MFLOW_FALLTHROUGH;
       } else if (it->type == MFLOW_TRY &&
-                 delete_tries.count(it->tentry->tentry)) {
+                 delete_tries.count(it->tentry)) {
         delete it->tentry;
         it->type = MFLOW_FALLTHROUGH;
       }
-    }
-    // Delete removed try items
-    for (auto tentry : delete_tries) {
-      delete tentry;
     }
     // Remove the instructions.
     for (auto& op : delete_ops) {
