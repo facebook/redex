@@ -300,7 +300,7 @@ TEST_F(PostVerify, InlineInvokeDirect) {
     classes, "Lcom/facebook/redexinline/InlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto noninlinable_invoke_direct =
-      find_invoke(m, OPCODE_INVOKE_STATIC, "noninlinable$redex");
+      find_invoke(m, OPCODE_INVOKE_STATIC, "noninlinable$redex0");
   ASSERT_NE(nullptr, noninlinable_invoke_direct);
   auto noninlinable = noninlinable_invoke_direct->get_method();
   ASSERT_EQ(show(noninlinable->get_proto()),
@@ -315,6 +315,6 @@ TEST_F(PostVerify, InlineInvokeDirect) {
             }));
   ASSERT_EQ(1,
             std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
-              return !strcmp("noninlinable$redex", m->get_name()->c_str());
+              return !strcmp("noninlinable$redex0", m->get_name()->c_str());
             }));
 }

@@ -65,6 +65,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexUtil.cpp \
 	libredex/JarLoader.cpp \
+	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
 	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \

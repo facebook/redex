@@ -24,6 +24,7 @@
 #include "DexInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Mutators.h"
 #include "Resolver.h"
 #include "PassManager.h"
 #include "Transform.h"
@@ -454,26 +455,6 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
   return true;
 }
 
-/**
- * If the wrappee wasn't initially static we need to make `this` an explicit
- * parameter.
- */
-void make_static_and_update_args(DexMethod* wrappee, DexMethod* wrapper) {
-  assert(can_update_wrappee(wrappee, wrapper));
-  DexProto* old_proto = wrappee->get_proto();
-  std::list<DexType*> new_args = old_proto->get_args()->get_type_list();
-  new_args.push_front(wrappee->get_class());
-  DexProto* new_proto = DexProto::make_proto(
-    old_proto->get_rtype(),
-    DexTypeList::make_type_list(std::move(new_args)));
-  DexMethodRef ref;
-  ref.proto = new_proto;
-  wrappee->change(ref);
-  auto& dmethods = type_class(wrappee->get_class())->get_dmethods();
-  dmethods.sort(compare_dexmethods);
-  wrappee->set_access(wrappee->get_access() | ACC_STATIC);
-}
-
 bool replace_method_wrapper(MethodTransformer& transform,
                             DexOpcodeMethod* meth_insn,
                             DexMethod* wrapper,
@@ -486,7 +467,8 @@ bool replace_method_wrapper(MethodTransformer& transform,
   assert(wrappee->is_concrete() && wrapper->is_concrete());
 
   if (is_static(wrapper) && !is_static(wrappee)) {
-    make_static_and_update_args(wrappee, wrapper);
+    assert(can_update_wrappee(wrappee, wrapper));
+    mutators::make_static(wrappee);
     ssms.promoted_to_static.insert(wrappee);
   }
   if (!is_private(wrapper)) {

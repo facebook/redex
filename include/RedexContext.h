@@ -71,7 +71,9 @@ struct RedexContext {
   DexMethod* get_method(DexType* type,
                         DexString* name,
                         DexProto* proto);
-  void mutate_method(DexMethod* method, const DexMethodRef& ref);
+  void mutate_method(DexMethod* method,
+                     const DexMethodRef& ref,
+                     bool rename_on_collision = false);
 
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);

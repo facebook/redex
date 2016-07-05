@@ -251,7 +251,9 @@ DexMethod* RedexContext::get_method(DexType* type,
   return rv;
 }
 
-void RedexContext::mutate_method(DexMethod* method, const DexMethodRef& ref) {
+void RedexContext::mutate_method(DexMethod* method,
+                                 const DexMethodRef& ref,
+                                 bool rename_on_collision /* = false */) {
   pthread_mutex_lock(&s_method_lock);
   s_method_map[method->m_ref.cls][method->m_ref.name].erase(
       method->m_ref.proto);
@@ -260,6 +262,18 @@ void RedexContext::mutate_method(DexMethod* method, const DexMethodRef& ref) {
   r.cls = ref.cls != nullptr ? ref.cls : method->m_ref.cls;
   r.name = ref.name != nullptr ? ref.name : method->m_ref.name;
   r.proto = ref.proto != nullptr ? ref.proto : method->m_ref.proto;
+  if (s_method_map[r.cls][r.name][r.proto] && rename_on_collision) {
+    std::string original_name(r.name->c_str());
+    for (uint16_t i = 0; i < 1000; ++i) {
+      r.name = DexString::make_string(
+          (original_name + "$redex" + std::to_string(i)).c_str());
+      if (!s_method_map[r.cls][r.name][r.proto]) {
+        break;
+      }
+    }
+  }
+  always_assert_log(!s_method_map[r.cls][r.name][r.proto],
+                    "Another method of the same signature already exists");
   method->m_ref = r;
   s_method_map[r.cls][r.name][r.proto] = method;
   pthread_mutex_unlock(&s_method_lock);

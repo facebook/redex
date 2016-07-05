@@ -670,8 +670,8 @@ class DexMethod {
   void set_code(DexCode* code) { m_code = code; }
 
   void make_concrete(DexAccessFlags access, DexCode* dc, bool is_virtual);
-  void change(const DexMethodRef& ref) {
-    g_redex->mutate_method(this, ref);
+  void change(const DexMethodRef& ref, bool rename_on_collision = false) {
+    g_redex->mutate_method(this, ref, rename_on_collision);
   }
   void become_virtual();
   void clear_annotations() {

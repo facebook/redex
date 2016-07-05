@@ -597,7 +597,7 @@ void do_mutations(
       from_cls->get_dmethods().remove(from_meth);
       DexMethodRef ref;
       ref.cls = to_cls->get_type();
-      from_meth->change(ref);
+      from_meth->change(ref, true /* rename_on_collision */);
       insert_sorted(to_cls->get_dmethods(), from_meth, compare_dexmethods);
       // Make the method public and make the target class public. They must
       // be public because the method may have been visible to other other

@@ -10,6 +10,7 @@
 #include "InlineHelper.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
+#include "Mutators.h"
 #include "Resolver.h"
 #include "walkers.h"
 
@@ -572,33 +573,6 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
 
 namespace {
 
-void make_static(DexMethod* method) {
-  TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
-  auto proto = method->get_proto();
-  auto params = proto->get_args()->get_type_list();
-  auto clstype = method->get_class();
-  params.push_front(clstype);
-  auto new_args = DexTypeList::make_type_list(std::move(params));
-  auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
-  DexMethodRef ref;
-  ref.proto = new_proto;
-  // since we've changed the method proto, we should rename the method in order
-  // to avoid proto collision with anther method of the same name
-  std::stringstream ss;
-  ss << method->get_name()->c_str();
-  ss << "$redex";
-  ref.name = DexString::make_string(ss.str().c_str());
-  method->change(ref);
-  method->set_access(method->get_access() | ACC_STATIC);
-
-  // changing the method proto means that we need to change its position in the
-  // dmethod list
-  auto cls = type_class(clstype);
-  auto& dmethods = cls->get_dmethods();
-  dmethods.remove(method);
-  insert_sorted(dmethods, method, compare_dexmethods);
-}
-
 DexOpcode direct_to_static_op(DexOpcode op) {
   switch (op) {
     case OPCODE_INVOKE_DIRECT:
@@ -614,7 +588,8 @@ DexOpcode direct_to_static_op(DexOpcode op) {
 
 void MultiMethodInliner::invoke_direct_to_static() {
   for (auto method : m_make_static) {
-    make_static(method);
+    TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
+    mutators::make_static(method);
   }
   walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, DexInstruction* opcode) {
