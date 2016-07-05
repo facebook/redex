@@ -882,7 +882,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   auto invoke_position =
     position_it == fcaller->rend() ? nullptr : position_it->pos;
   if (invoke_position != nullptr) {
-    TRACE(MTRANS, 5, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
+    TRACE(MTRANS, 3, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
         invoke_position->line);
   }
 
@@ -907,7 +907,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     }
   }
 
-  if (move_res != fcaller->end()) {
+  if (move_res != fcaller->end() && ret_it != fcallee->end()) {
     std::unique_ptr<DexInstruction> ret_insn(ret_it->insn->clone());
     remap_registers(ret_insn.get(), callee_reg_map);
     DexInstruction* move = move_result(ret_insn.get(), move_res->insn);
@@ -927,7 +927,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     fcaller->erase_and_dispose(move_res, FatMethodDisposer());
   }
 
-  if (it != fcallee->end()) {
+  if (ret_it != fcallee->end()) {
     if (callee_catch != nullptr) {
       fcaller->push_back(*(new MethodItemEntry(TRY_START, callee_catch)));
     } else if (caller_catch != nullptr) {

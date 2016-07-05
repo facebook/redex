@@ -311,10 +311,6 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
     if (writes_ins_reg(insn, temp_regs)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
     if (unknown_field(insn, callee)) return true;
-    if (insn->opcode() == OPCODE_THROW) {
-      info.throws++;
-      return true;
-    }
     if (insn->opcode() == FOPCODE_FILLED_ARRAY) {
       info.array_data++;
       return true;

@@ -83,6 +83,7 @@ public class InlineMain extends InstrumentationTestCase {
     return 1;
   }
 
+  @NoInline
   private void ignoreAndThrow(Object x) throws Exception {
     throw new Exception("foo");
   }
@@ -99,8 +100,8 @@ public class InlineMain extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
-       "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:87)",
-       "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:98)"
+       "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:88)",
+       "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:99)"
       ));
     }
   }
@@ -123,8 +124,8 @@ public class InlineMain extends InstrumentationTestCase {
           TraceUtil.traceToString(trace, 3),
           Arrays.asList(
             "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
-            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:112)",
-            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:119)"));
+            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:113)",
+            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:120)"));
     }
   }
 }

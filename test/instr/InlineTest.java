@@ -242,4 +242,23 @@ public class InlineTest {
   public void testInlineInvokeDirect() {
     hasNoninlinableInvokeDirect();
   }
+
+  private void throwsWithNoReturn() throws Exception {
+    if (mHello != null) {
+      throw new Exception("foo");
+    } else {
+      throw new ArithmeticException("foo");
+    }
+  }
+
+  @Test
+  public void testThrowsWithNoReturn() throws Exception {
+    boolean caught = false;
+    try {
+      throwsWithNoReturn();
+    } catch (ArithmeticException e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
 }

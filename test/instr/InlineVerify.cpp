@@ -318,3 +318,38 @@ TEST_F(PostVerify, InlineInvokeDirect) {
               return !strcmp("noninlinable$redex0", m->get_name()->c_str());
             }));
 }
+
+/*
+ * Ensure that testThrowsWithNoReturn() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineThrowsWithNoReturn) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testThrowsWithNoReturn");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsWithNoReturn");
+  auto no_return_meth = invoke->get_method();
+  unsigned int throw_count = 0;
+  for (auto insn : no_return_meth->get_code()->get_instructions()) {
+    ASSERT_FALSE(is_return(insn->opcode()));
+    if (insn->opcode() == OPCODE_THROW) {
+      throw_count++;
+    }
+  }
+  ASSERT_EQ(throw_count, 2);
+}
+
+TEST_F(PostVerify, InlineThrowsWithNoReturn) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testThrowsWithNoReturn");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsWithNoReturn");
+  ASSERT_EQ(nullptr, invoke);
+  unsigned int throw_count = 0;
+  for (auto insn : m->get_code()->get_instructions()) {
+    if (insn->opcode() == OPCODE_THROW) {
+      throw_count++;
+    }
+  }
+  ASSERT_EQ(throw_count, 2);
+}

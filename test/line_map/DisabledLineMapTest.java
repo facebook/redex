@@ -17,6 +17,7 @@ import org.junit.Test;
 
 public class DisabledLineMapTest {
 
+  @NoInline
   private void wrapsThrow() throws Exception {
     throw new Exception("foo");
   }
@@ -32,9 +33,9 @@ public class DisabledLineMapTest {
     } catch (Exception e) {
       List<StackTraceElement> trace = Arrays.asList(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 3)).isEqualTo(Arrays.asList(
-       "com.facebook.redexlinemap.DisabledLineMapTest.wrapsThrow(DisabledLineMapTest.java:21)",
-       "com.facebook.redexlinemap.DisabledLineMapTest.inlinedThrower(DisabledLineMapTest.java:25)",
-       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:31)"
+       "com.facebook.redexlinemap.DisabledLineMapTest.wrapsThrow(DisabledLineMapTest.java:22)",
+       "com.facebook.redexlinemap.DisabledLineMapTest.inlinedThrower(DisabledLineMapTest.java:26)",
+       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:32)"
       ));
     }
   }
