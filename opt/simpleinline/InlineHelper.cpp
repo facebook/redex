@@ -121,8 +121,9 @@ MultiMethodInliner::MultiMethodInliner(
     std::vector<DexClass*>& scope,
     DexClasses& primary_dex,
     std::unordered_set<DexMethod*>& candidates,
-    std::function<DexMethod*(DexMethod*, MethodSearch)> resolver)
-        : resolver(resolver) {
+    std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
+    bool try_catch_inline)
+        : resolver(resolver), m_try_catch_inline(try_catch_inline) {
   for (const auto& cls : primary_dex) {
     primary.insert(cls->get_type());
   }
@@ -178,7 +179,7 @@ void MultiMethodInliner::caller_inline(
       caller_inline(callee, maybe_caller->second, visited);
     }
   }
-  if (caller->get_code()->get_tries().size() > 0) {
+  if (!m_try_catch_inline && caller->get_code()->get_tries().size() > 0) {
     info.caller_tries++;
     return;
   }

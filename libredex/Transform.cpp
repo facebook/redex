@@ -851,6 +851,12 @@ bool MethodTransform::inline_16regs(InlineContext& context,
         invoke_position->line);
   }
 
+  // check if we are in a try block
+  auto try_it = pos;
+  while (++try_it != fcaller->end() && try_it->type != MFLOW_TRY);
+  auto active_catch = try_it != fcaller->end() && try_it->tentry->type == TRY_END
+    ? try_it->tentry->catch_start : nullptr;
+
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
   auto splice = MethodSplicer(callee_reg_map, invoke_position);
@@ -878,9 +884,18 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   if (move_res != fcaller->end()) {
     fcaller->erase_and_dispose(move_res, FatMethodDisposer());
   }
-  // Copy the opcodes in the callee after the return and put them at the end of
-  // the caller.
-  splice(fcaller, fcaller->end(), std::next(ret_it), fcallee->end());
+
+  if (it != fcallee->end()) {
+    if (active_catch != nullptr) {
+      fcaller->push_back(*(new MethodItemEntry(TRY_START, active_catch)));
+    }
+    // Copy the opcodes in the callee after the return and put them at the end
+    // of the caller.
+    splice(fcaller, fcaller->end(), std::next(ret_it), fcallee->end());
+    if (active_catch != nullptr) {
+      fcaller->push_back(*(new MethodItemEntry(TRY_END, active_catch)));
+    }
+  }
 
   // adjust method header
   caller->get_code()->set_registers_size(newregs);

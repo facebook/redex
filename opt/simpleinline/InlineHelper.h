@@ -33,7 +33,8 @@ class MultiMethodInliner {
       std::vector<DexClass*>& scope,
       DexClasses& primary_dex,
       std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethod*, MethodSearch)> resolver);
+      std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
+      bool try_catch_inline);
 
   /**
    * attempt inlining for all candidates.
@@ -194,6 +195,8 @@ class MultiMethodInliner {
     size_t not_in_primary{0};
   };
   InliningInfo info;
+
+  bool m_try_catch_inline;
 
  public:
   const InliningInfo& get_info() {

@@ -54,4 +54,69 @@ public class InlineTest {
   public void testInvokeRange() {
     needsInvokeRange(0, "a", 'c', 123, 1.1);
   }
+
+  public void wrapsThrow() throws Exception {
+    throw new Exception("foo");
+  }
+
+  private void throwsInElse() throws Exception {
+    if (mHello != null) {
+      String y = "x";
+    } else {
+      wrapsThrow();
+    }
+  }
+
+  @Test
+  public void testCallerTryCalleeElseThrows() {
+    boolean caught = false;
+    try {
+      throwsInElse();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
+
+  private void throwsInIf() throws Exception {
+    if (mHello == null) {
+      wrapsThrow();
+    } else {
+      String y = "x";
+    }
+  }
+
+  @Test
+  public void testCallerTryCalleeIfThrows() {
+    boolean caught = false;
+    try {
+      throwsInIf();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
+
+  private void throwsInElse2() throws Exception {
+    if (mHello != null) {
+      String y = "x";
+    } else {
+      wrapsThrow();
+    }
+  }
+
+  @Test
+  public void testCallerNestedTry() {
+    boolean caught = false;
+    try {
+      try {
+        throw new Exception("bar");
+      } catch (Exception e) {
+        throwsInElse2();
+      }
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
 }

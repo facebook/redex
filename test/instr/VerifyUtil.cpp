@@ -27,11 +27,25 @@ DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
   return it == vmethods.end() ? nullptr : *it;
 }
 
-DexInstruction* find_instruction(const DexMethod* m, uint32_t opcode) {
-  for (auto& insn : m->get_code()->get_instructions()) {
-    if (insn->opcode() == opcode) {
-      return insn;
-    }
-  }
-  return nullptr;
+DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
+    const char* target_mname) {
+  auto insns = m->get_code()->get_instructions();
+  return find_invoke(insns.begin(), insns.end(), opcode, target_mname);
+}
+
+DexOpcodeMethod* find_invoke(
+    std::vector<DexInstruction*>::iterator begin,
+    std::vector<DexInstruction*>::iterator end,
+    uint32_t opcode,
+    const char* target_mname) {
+  auto it = std::find_if(begin, end,
+    [opcode, target_mname](DexInstruction* insn) {
+      if (insn->opcode() != opcode) {
+        return false;
+      }
+      auto mname =
+        static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+      return mname == DexString::get_string(target_mname);
+    });
+  return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
 }

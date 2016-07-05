@@ -23,6 +23,7 @@ public:
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("virtual", true, m_virtual_inline);
+    pc.get("try_catch", false, m_try_catch_inline);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
   }
 
@@ -40,6 +41,9 @@ private:
 
   // inline virtual methods
   bool m_virtual_inline;
+
+  // inline methods with try-catch
+  bool m_try_catch_inline;
 
   // annotations indicating not to inline a function
   std::vector<std::string> m_no_inline_annos;
