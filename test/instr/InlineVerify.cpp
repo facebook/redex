@@ -159,3 +159,112 @@ TEST_F(PostVerify, InlineCallerNestedTry) {
   auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 3);
 }
+
+/*
+ * Ensure that testCalleeTryUncaught() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineCalleeTryUncaught) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsUncaught");
+  ASSERT_NE(nullptr, invoke);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 1);
+}
+
+TEST_F(PostVerify, InlineCalleeTryUncaught) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsUncaught");
+  ASSERT_EQ(nullptr, invoke);
+  auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
+  ASSERT_NE(nullptr, invoke_throws);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 2);
+}
+
+/*
+ * Ensure that testCalleeTryCaught() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineCalleeTryCaught) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsCaught");
+  ASSERT_NE(nullptr, invoke);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 1);
+}
+
+TEST_F(PostVerify, InlineCalleeTryCaught) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsCaught");
+  ASSERT_EQ(nullptr, invoke);
+  auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
+      "wrapsArithmeticThrow");
+  ASSERT_NE(nullptr, invoke_throws);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 2);
+}
+
+/*
+ * Ensure that testCalleeHandlerThrows() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineTryHandlerThrows) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "handlerThrows");
+  ASSERT_NE(nullptr, invoke);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 1);
+}
+
+TEST_F(PostVerify, InlineTryHandlerThrows) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "handlerThrows");
+  ASSERT_EQ(nullptr, invoke);
+  auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
+      "wrapsArithmeticThrow");
+  ASSERT_NE(nullptr, invoke_throws);
+  invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
+      "wrapsThrow");
+  ASSERT_NE(nullptr, invoke_throws);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 2);
+}
+
+/*
+ * Ensure that testInlineCalleeTryTwice() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineCalleeTryTwice) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
+  ASSERT_NE(nullptr, invoke);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 1);
+}
+
+TEST_F(PostVerify, InlineCalleeTryTwice) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
+  auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
+  ASSERT_EQ(nullptr, invoke);
+  auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
+  ASSERT_NE(nullptr, invoke_throws);
+  auto code = m->get_code();
+  ASSERT_EQ(code->get_tries().size(), 3);
+}

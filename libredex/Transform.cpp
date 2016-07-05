@@ -677,15 +677,19 @@ class MethodSplicer {
   std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
+  MethodItemEntry* m_active_catch;
 
  public:
-  MethodSplicer(const RegMap& callee_reg_map, DexPosition* invoke_position)
-      : m_callee_reg_map(callee_reg_map), m_invoke_position(invoke_position) {
+  MethodSplicer(const RegMap& callee_reg_map,
+                DexPosition* invoke_position,
+                MethodItemEntry* active_catch)
+      : m_callee_reg_map(callee_reg_map),
+        m_invoke_position(invoke_position),
+        m_active_catch(active_catch) {
     m_entry_map[nullptr] = nullptr;
     m_pos_map[nullptr] = nullptr;
   }
 
- private:
   MethodItemEntry* clone(MethodItemEntry* mei) {
     MethodItemEntry* cloned_mei;
     auto entry = m_entry_map.find(mei);
@@ -739,13 +743,44 @@ class MethodSplicer {
       auto mei = clone(&*it);
       remap_registers(*mei, m_callee_reg_map);
       it++;
-      if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
-        mei->pos->parent = m_invoke_position;
+      if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
+        auto tentry = mei->tentry;
+        // try ranges cannot be nested, so we flatten them here
+        switch (tentry->type) {
+          case TRY_START:
+            fcaller->insert(insert_pos,
+                *(new MethodItemEntry(TRY_END, m_active_catch)));
+            fcaller->insert(insert_pos, *mei);
+            break;
+          case TRY_END:
+            fcaller->insert(insert_pos, *mei);
+            fcaller->insert(insert_pos,
+                *(new MethodItemEntry(TRY_START, m_active_catch)));
+            break;
+        }
+      } else {
+        if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
+          mei->pos->parent = m_invoke_position;
+        }
+        // if a handler list does not terminate in a catch-all, have it point to
+        // the parent's active catch handler. TODO: Make this more precise by
+        // checking if the parent catch type is a subtype of the callee's.
+        if (mei->type == MFLOW_CATCH && mei->centry->next == nullptr &&
+            mei->centry->catch_type != nullptr) {
+          mei->centry->next = m_active_catch;
+        }
+        fcaller->insert(insert_pos, *mei);
       }
-      fcaller->insert(insert_pos, *mei);
     }
   }
 };
+
+MethodItemEntry* find_active_catch(FatMethod* method,
+                                   FatMethod::iterator pos) {
+  while (++pos != method->end() && pos->type != MFLOW_TRY);
+  return pos != method->end() && pos->tentry->type == TRY_END
+    ? pos->tentry->catch_start : nullptr;
+}
 }
 
 void MethodTransform::inline_tail_call(DexMethod* caller,
@@ -852,19 +887,26 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   }
 
   // check if we are in a try block
-  auto try_it = pos;
-  while (++try_it != fcaller->end() && try_it->type != MFLOW_TRY);
-  auto active_catch = try_it != fcaller->end() && try_it->tentry->type == TRY_END
-    ? try_it->tentry->catch_start : nullptr;
+  auto caller_catch = find_active_catch(fcaller, pos);
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  auto splice = MethodSplicer(callee_reg_map, invoke_position);
+  auto splice = MethodSplicer(callee_reg_map, invoke_position, caller_catch);
   auto ret_it =
       std::find_if(it, fcallee->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
   splice(fcaller, pos, it, ret_it);
+
+  // try items can span across a return opcode
+  auto callee_catch = splice.clone(find_active_catch(fcallee, ret_it));
+  if (callee_catch != nullptr) {
+    fcaller->insert(pos, *(new MethodItemEntry(TRY_END, callee_catch)));
+    if (caller_catch != nullptr) {
+      fcaller->insert(pos, *(new MethodItemEntry(TRY_START, caller_catch)));
+    }
+  }
+
   if (move_res != fcaller->end()) {
     std::unique_ptr<DexInstruction> ret_insn(ret_it->insn->clone());
     remap_registers(ret_insn.get(), callee_reg_map);
@@ -886,14 +928,16 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   }
 
   if (it != fcallee->end()) {
-    if (active_catch != nullptr) {
-      fcaller->push_back(*(new MethodItemEntry(TRY_START, active_catch)));
+    if (callee_catch != nullptr) {
+      fcaller->push_back(*(new MethodItemEntry(TRY_START, callee_catch)));
+    } else if (caller_catch != nullptr) {
+      fcaller->push_back(*(new MethodItemEntry(TRY_START, caller_catch)));
     }
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
     splice(fcaller, fcaller->end(), std::next(ret_it), fcallee->end());
-    if (active_catch != nullptr) {
-      fcaller->push_back(*(new MethodItemEntry(TRY_END, active_catch)));
+    if (caller_catch != nullptr) {
+      fcaller->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }
   }
 

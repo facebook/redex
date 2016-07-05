@@ -119,4 +119,90 @@ public class InlineTest {
     }
     assertThat(caught).isTrue();
   }
+
+  private void throwsUncaught() throws Exception {
+    try {
+      wrapsThrow();
+    } catch (ArithmeticException e) {
+    }
+  }
+
+  @Test
+  public void testCalleeTryUncaught() {
+    boolean caught = false;
+    try {
+      throwsUncaught();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
+
+  public void wrapsArithmeticThrow() throws Exception {
+    throw new ArithmeticException("foo");
+  }
+
+  private void throwsCaught() throws Exception {
+    try {
+      wrapsArithmeticThrow();
+    } catch (ArithmeticException e) {
+    }
+  }
+
+  @Test
+  public void testCalleeTryCaught() {
+    boolean caught = false;
+    try {
+      throwsCaught();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isFalse();
+  }
+
+  private void handlerThrows() throws Exception {
+    try {
+      wrapsArithmeticThrow();
+    } catch (ArithmeticException e) {
+      wrapsThrow();
+    }
+  }
+
+  @Test
+  public void testCalleeTryHandlerThrows() {
+    boolean caught = false;
+    try {
+      handlerThrows();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
+
+  private void inlineCalleeTryOnce() throws Exception {
+    try {
+      wrapsThrow();
+    } catch (ArrayIndexOutOfBoundsException e) {
+      System.out.println("");
+    }
+  }
+
+  private void inlineCalleeTryTwice() throws Exception {
+    try {
+      inlineCalleeTryOnce();
+    } catch (ArithmeticException e) {
+      System.out.println("");
+    }
+  }
+
+  @Test
+  public void testInlineCalleeTryTwice() {
+    boolean caught = false;
+    try {
+      inlineCalleeTryTwice();
+    } catch (Exception e) {
+      caught = true;
+    }
+    assertThat(caught).isTrue();
+  }
 }

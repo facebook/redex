@@ -243,7 +243,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   }
   if (is_enum_method(callee)) return false;
   if (over_16regs(caller, callee)) return false;
-  if (has_try_catch(callee)) return false;
+  if (!m_try_catch_inline && has_try_catch(callee)) return false;
 
   if (cannot_inline_opcodes(callee)) return false;
 
