@@ -4,13 +4,13 @@ id: home
 ---
 
 
-# Quick Start Guide
+## Quick Start Guide
 
-## Dependencies
+### Dependencies
 
 Getting these dependences is easiest using a package manager.
 
-### Mac OS X
+#### Mac OS X
 
 You'll need Xcode with command line tools installed.  To get the command line
 tools, use:
@@ -27,7 +27,7 @@ brew install boost double-conversion gflags glog libevent openssl jsoncpp
 brew link openssl --force
 ```
 
-### Ubuntu 14.04 LTS (64-bit)
+#### Ubuntu 14.04 LTS (64-bit)
 ```
 sudo apt-get install \
     g++ \
@@ -52,7 +52,7 @@ sudo apt-get install \
     libjsoncpp-dev
 ```
 
-## Download, Build and Install
+### Download, Build and Install
 
 Get ReDex from GitHub:
 
@@ -68,7 +68,7 @@ autoreconf -ivf && ./configure && make
 sudo make install
 ```
 
-## Test
+### Test
 
 Optionally, you can run our unit test suite.  We use gtest, which is downloaded
 via a setup script.
@@ -79,7 +79,7 @@ cd test
 make check
 ```
 
-## Usage
+### Usage
 
 To use ReDex, first build your app and find the APK for it.  Then run:
 
@@ -90,13 +90,13 @@ redex path/to/your.apk -o path/to/output.apk
 With any luck, the result `output.apk` should be smaller and faster than the
 input.  Enjoy!
 
-# Documentation
+## Documentation
 Right now we have a limited amount of [documentation](docs/README.md) which describes a few
 example Redex optimization passes as well as deployments of Redex (including Docker).
 
-# FAQ
+## FAQ
 
-## I'm getting "Couldn't find zipalign. See README.md to resolve this"
+### I'm getting "Couldn't find zipalign. See README.md to resolve this"
 
 `zipalign` is an optimization step that is bundled with the Android SDK.  You
 need to tell redex where to find it.  For example, if you installed the SDK at
@@ -112,7 +112,7 @@ You can alternatively add `zipalign` to your PATH, for example:
 PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
 ```
 
-## My app fails to install with `Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]`
+### My app fails to install with `Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]`
 
 After you run redex, you'll need to re-sign your app.  You can re-sign manually
 using these instructions:
@@ -135,7 +135,7 @@ appropriate args:
 -p [KEYPASS], --keypass [KEYPASS]
 ```
 
-## How does this compare to ProGuard?
+### How does this compare to ProGuard?
 
 ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
 ReDex, however, optimizes .dex bytecode, while ProGuard optimizes .class
@@ -152,16 +152,16 @@ improvements (about 25% on both dex size and cold start time) are based on using
 ReDex on an app already optimized with ProGuard.  We have no plans to measure
 performance without ProGuard.
 
-## How about DexGuard?
+### How about DexGuard?
 
 DexGuard operates on dex, but we haven't evaluated it at all since it's closed
 source.  We don't use it at Facebook and we have no plans to start.
 
-# More Information
+## More Information
 
 The blog [Optimizing Android bytecode with ReDex](https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex) provides an overview of the Redex project.
 
-# Issues
+## Issues
 Issues on GitHub are assigned priorities which reflect their urgency and how soon they are
 likely to be addressed.
 * P0: Unbreak now! A serious issue which should have someone working on it right now.
@@ -170,6 +170,6 @@ likely to be addressed.
 * P3: Low Priority. An important issue which may get dealt with at a later date.
 * P4: Wishlist: An issue with merit but low priority which is up for grabs but likely to be pruned if not addressed after a reasonable period.
 
-# License
+## License
 
 ReDex is BSD-licensed.  We also provide an additional patent grant.
