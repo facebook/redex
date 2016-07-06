@@ -164,6 +164,7 @@ The blog [Optimizing Android bytecode with ReDex](https://code.facebook.com/post
 ## Issues
 Issues on GitHub are assigned priorities which reflect their urgency and how soon they are
 likely to be addressed.
+
 * P0: Unbreak now! A serious issue which should have someone working on it right now.
 * P1: High Priority. An important issue that someone should be actively working on.
 * P2: Mid Priority. An important issue which is in the queue to be processed soon.
