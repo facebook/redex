@@ -14,11 +14,13 @@ Getting these dependences is easiest using a package manager.
 
 You'll need Xcode with command line tools installed.  To get the command line
 tools, use:
+
 ```
 xcode-select --install
 ```
 
 Install dependences using homebrew:
+
 ```
 brew install autoconf automake libtool python3
 brew install boost double-conversion gflags glog libevent openssl jsoncpp
