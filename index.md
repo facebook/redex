@@ -55,12 +55,14 @@ sudo apt-get install \
 ## Download, Build and Install
 
 Get ReDex from GitHub:
+
 ```
 git clone https://github.com/facebook/redex.git
 cd redex
 ```
 
 Now, build ReDex using autoconf and make.
+
 ```
 autoreconf -ivf && ./configure && make
 sudo make install
@@ -70,6 +72,7 @@ sudo make install
 
 Optionally, you can run our unit test suite.  We use gtest, which is downloaded
 via a setup script.
+
 ```
 ./test/setup.sh
 cd test
@@ -79,9 +82,11 @@ make check
 ## Usage
 
 To use ReDex, first build your app and find the APK for it.  Then run:
+
 ```
 redex path/to/your.apk -o path/to/output.apk
 ```
+
 With any luck, the result `output.apk` should be smaller and faster than the
 input.  Enjoy!
 
@@ -96,10 +101,13 @@ example Redex optimization passes as well as deployments of Redex (including Doc
 `zipalign` is an optimization step that is bundled with the Android SDK.  You
 need to tell redex where to find it.  For example, if you installed the SDK at
 `/path/to/android/sdk`, try:
+
 ```
 ANDROID_SDK=/path/to/android/sdk redex [... arguments ...]
 ```
+
 You can alternatively add `zipalign` to your PATH, for example:
+
 ```
 PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
 ```
