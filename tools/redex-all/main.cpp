@@ -173,7 +173,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       {nullptr, 0, nullptr, 0},
   };
   args.out_dir = ".";
-  char c;
+  int c;
 
   std::vector<std::string> json_values_from_command_line;
   std::vector<std::string> string_values_from_command_line;
