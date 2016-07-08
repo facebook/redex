@@ -266,12 +266,14 @@ class LocalDce {
     }
     // Gather the ops to delete.
     std::unordered_set<DexInstruction*> delete_ops;
-    std::unordered_set<TryEntry*> delete_tries;
+    std::unordered_set<MethodItemEntry*> delete_catches;
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
         delete_ops.insert(mei.insn);
       } else if (mei.type == MFLOW_TRY) {
-        delete_tries.insert(mei.tentry);
+        delete_catches.insert(mei.tentry->catch_start);
+      } else if (mei.type == MFLOW_CATCH) {
+        delete_catches.insert(&mei);
       }
     }
     // Remove branch targets.
@@ -280,8 +282,12 @@ class LocalDce {
         delete it->target;
         it->type = MFLOW_FALLTHROUGH;
       } else if (it->type == MFLOW_TRY &&
-                 delete_tries.count(it->tentry)) {
+                 delete_catches.count(it->tentry->catch_start)) {
         delete it->tentry;
+        it->type = MFLOW_FALLTHROUGH;
+      } else if (it->type == MFLOW_CATCH &&
+                 delete_catches.count(&*it)) {
+        delete it->centry;
         it->type = MFLOW_FALLTHROUGH;
       }
     }
