@@ -153,14 +153,14 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
       if (line_delta < DBG_LINE_BASE ||
               line_delta >= (DBG_LINE_RANGE + DBG_LINE_BASE)) {
         dbgops.emplace_back(new DexDebugInstruction(
-              DexDebugItemOpcode::DBG_ADVANCE_LINE, line_delta));
+              DBG_ADVANCE_LINE, line_delta));
         line_delta = 0;
       }
       auto special = (line_delta - DBG_LINE_BASE) +
                        (addr_delta * DBG_LINE_RANGE) + DBG_FIRST_SPECIAL;
       if (special & ~0xff) {
         dbgops.emplace_back(new DexDebugInstruction(
-              DexDebugItemOpcode::DBG_ADVANCE_PC, uint32_t(addr_delta)));
+              DBG_ADVANCE_PC, uint32_t(addr_delta)));
         special = line_delta - DBG_LINE_BASE + DBG_FIRST_SPECIAL;
       }
       dbgops.emplace_back(new DexDebugInstruction(
@@ -172,7 +172,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     for (auto insn : insns) {
       if (addr_delta != 0) {
         dbgops.emplace_back(new DexDebugInstruction(
-              DexDebugItemOpcode::DBG_ADVANCE_PC, addr_delta));
+              DBG_ADVANCE_PC, addr_delta));
         addr_delta = 0;
       }
       dbgops.emplace_back(insn->clone());

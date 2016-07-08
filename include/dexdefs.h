@@ -307,7 +307,8 @@ struct __attribute__((packed)) dex_annotations_directory_item {
   uint32_t parameters_size;
 };
 
-enum DexDebugItemOpcode {
+using DexDebugItemOpcode = uint8_t;
+enum DexDebugItemOpcodeValues : uint8_t {
   DBG_END_SEQUENCE         = 0x00,
   DBG_ADVANCE_PC           = 0x01,
   DBG_ADVANCE_LINE         = 0x02,
