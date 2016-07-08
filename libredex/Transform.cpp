@@ -281,6 +281,8 @@ static void associate_debug_entries(FatMethod* fm,
       case DexDebugEntryType::Position:
         mentry = new MethodItemEntry(entry.pos);
         break;
+      default:
+        not_reached();
     }
     insert_mentry_before(fm, mentry, insert_point);
   }
