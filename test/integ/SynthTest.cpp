@@ -63,12 +63,8 @@ bool assert_classes(const DexClasses& classes,
 TEST(SynthTest1, synthetic) {
   g_redex = new RedexContext();
 
-  // For testing with XCode set the working directory to the buck-out directory.
-  const char* dexfile = "gen/native/redex/test/integ/synth-test-dex/synth.dex";
-  if (access(dexfile, R_OK) != 0) {
-    dexfile = std::getenv("dexfile");
-    ASSERT_NE(nullptr, dexfile);
-  }
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));

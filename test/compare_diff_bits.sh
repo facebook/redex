@@ -7,6 +7,13 @@ fi
 
 APK=$1
 
+# REDEX_ROOT will be "native/redex" or "native/redex-stable"
+REDEX_ROOT=native/$(basename "$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )")
+if [ "$REDEX_ROOT" != "native/redex" ] && [ "$REDEX_ROOT" != "native/redex-stable" ]; then
+  echo "Unexpected REDEX_ROOT: $REDEX_ROOT"
+  exit 1
+fi
+
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 DIFF_HASH="$(hg log -l1 -T{node})"
@@ -26,14 +33,14 @@ echo "Will compare base $BASE_HASH to diff $DIFF_HASH"
 
 echo "Redexing with base $BASE_HASH"
 
-buck build native/redex:redex-all 2> /dev/null > /dev/null
+buck build $REDEX_ROOT:redex-all 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to build base redex"
   exit 1
 fi
 
-native/redex/facebook/fb-redex  --redex-binary buck-out/gen/native/redex/redex-all  -c native/redex/facebook/config/fb4a.config --o $BASE_OUT $APK 2> /dev/null > /dev/null
+$REDEX_ROOT/facebook/fb-redex  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $BASE_OUT $APK 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to redex apk with base"
@@ -49,14 +56,14 @@ fi
 
 echo "Redexing with diff $DIFF_HASH"
 
-buck build native/redex:redex-all 2> /dev/null > /dev/null
+buck build $REDEX_ROOT:redex-all 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to build diff redex"
   exit 1
 fi
 
-native/redex/facebook/fb-redex  --redex-binary buck-out/gen/native/redex/redex-all  -c native/redex/facebook/config/fb4a.config --o $DIFF_OUT $APK 2> /dev/null > /dev/null
+$REDEX_ROOT/facebook/fb-redex  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $DIFF_OUT $APK 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to redex apk with diff"

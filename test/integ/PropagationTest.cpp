@@ -25,7 +25,7 @@
 
 This test takes as input the Dex bytecode for the class generated
 from the Java source file:
-   fbsource/fbandroid/native/redex/test/integ/Propagation.java
+   <redex root>/test/integ/Propagation.java
 which is specified in Buck tests via an enviornment variable in the
 BUCK file. Before optimization, the code for the propagate method is:
 
@@ -51,12 +51,8 @@ instructions in the optimized method.
 TEST(PropagationTest1, localDCE1) {
   g_redex = new RedexContext();
 
-  // For testing with XCode set the working directory to the buck-out directory.
-	const char* dexfile = "gen/native/redex/test/integ/propagation-test-dex/propagation.dex";
-  if (access(dexfile, R_OK) != 0) {
-    dexfile = std::getenv("dexfile");
-    ASSERT_NE(nullptr, dexfile);
-  }
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));

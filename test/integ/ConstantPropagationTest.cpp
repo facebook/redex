@@ -25,7 +25,7 @@
 
 This test takes as input the Dex bytecode for the class generated
 from the Java source file:
-   fbsource/fbandroid/native/redex/test/integ/ConstantPropagation.java
+   <redex root>/test/integ/ConstantPropagation.java
 which is specified in Buck tests via an enviornment variable in the
 BUCK file. Before optimization, the code for the propagate method is:
 
@@ -105,12 +105,8 @@ ClassType filter_test_classes(const DexString *cls_name) {
 TEST(ConstantPropagationTest1, constantpropagation) {
   g_redex = new RedexContext();
 
-	const char* dexfile =
-    "gen/native/redex/test/integ/constant-propagation-test-dex/constant-propagation.dex";
-  if (access(dexfile, R_OK) != 0) {
-    dexfile = std::getenv("dexfile");
-    ASSERT_NE(nullptr, dexfile);
-  }
+	const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));

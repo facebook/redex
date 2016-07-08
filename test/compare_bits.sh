@@ -1,13 +1,9 @@
 #!/bin/bash
 
-ROOT=$((git rev-parse --show-toplevel || hg root) 2>/dev/null)
-REDEX=$ROOT/fbandroid/native/redex/redex.py
+REDEX=$(dirname $0)/../redex.py
 if [ ! -f "$REDEX" ]; then
-    REDEX="$ROOT/native/redex/redex.py"
-    if [ ! -f "$REDEX" ]; then
-        echo "Couldn't find redex"
-        exit 1
-    fi
+    echo "Couldn't find redex"
+    exit 1
 fi
 
 if [ $# != 2 ]; then
