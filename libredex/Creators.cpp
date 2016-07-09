@@ -393,7 +393,7 @@ MethodBlock* MethodBlock::if_else_testz(DexOpcode if_op,
   return make_if_else_block(op, true_block);
 }
 
-MethodBlock* MethodBlock::swtich_op(Location test,
+MethodBlock* MethodBlock::switch_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
   auto sw_opcode = new DexInstruction(OPCODE_PACKED_SWITCH);
   sw_opcode->set_src(0, reg_num(test));

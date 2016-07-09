@@ -283,7 +283,7 @@ struct MethodBlock {
                              MethodBlock** true_block);
 
   /**
-   * Emit an swtich opcode against the test Locations.
+   * Emit an switch opcode against the test Locations.
    * It returns the MethodBlock for the default case.
    * On return the std::map will contain MethodBlock for each case.
    * switch_op cond jump case1, case2,...
@@ -300,7 +300,7 @@ struct MethodBlock {
    *   code6
    *   goto end_switch_label // emitted automatically
    */
-  MethodBlock* swtich_op(Location test, std::map<int, MethodBlock*>& cases);
+  MethodBlock* switch_op(Location test, std::map<int, MethodBlock*>& cases);
 
  private:
   MethodBlock(FatMethod::iterator iterator, MethodCreator* creator);

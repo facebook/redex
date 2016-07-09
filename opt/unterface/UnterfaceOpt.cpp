@@ -284,7 +284,7 @@ void build_invoke(Unterface& unterface) {
     for (int idx = 0; idx < static_cast<int>(unterface.impls.size()); idx++) {
       cases[idx] = nullptr;
     }
-    auto def_block = mb->swtich_op(switch_loc, cases);
+    auto def_block = mb->switch_op(switch_loc, cases);
     if (ret != get_void_type()) {
       def_block->load_null(ret_loc);
       mb->ret(ret_loc);
