@@ -110,8 +110,10 @@ namespace {
         case OPCODE_IF_NEZ:
         case OPCODE_IF_EQZ:
           if (propagate_branch(inst)) {
-            TRACE(CONSTP, 2, "Class: %s\n",  SHOW(method->get_class()));
-            TRACE(CONSTP, 2, "Method: %s\n %s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
+            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
+            auto new_inst = (new DexInstruction(OPCODE_GOTO_16))->set_offset(inst->offset());
+            replaces.emplace_back(inst, new_inst);
+            m_branch_propagated++;
             changed = true;
           }
           break;
@@ -125,8 +127,7 @@ namespace {
         // Check if there is a constant returned. If so, propagate the value
         case OPCODE_MOVE_RESULT:
           if (last_inst != nullptr &&
-              (last_inst->opcode() == OPCODE_INVOKE_STATIC ||
-              last_inst->opcode() == OPCODE_INVOKE_VIRTUAL) &&
+              last_inst->opcode() == OPCODE_INVOKE_STATIC &&
               last_inst->has_methods()) {
               DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
               if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
@@ -139,8 +140,7 @@ namespace {
                 replaces.emplace_back(inst, new_inst);
                 dead_instructions.push_back(referred_method);
                 TRACE(CONSTP, 5, "Tranformed Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
-                propagate_constant(inst);
-                changed = true;
+                propagate_constant(new_inst);
               }
           }
           break;
@@ -180,28 +180,13 @@ namespace {
     // the branch will read value from register, do the evaluation and
     // change the conditional branch to a goto branch if possible
     bool propagate_branch(DexInstruction *inst) {
-      if (inst->srcs_size() == 1) {
-        if (inst->opcode() == OPCODE_IF_EQZ) {
-          auto src_reg = inst->src(0);
-          if (reg_values[src_reg].known && reg_values[src_reg].val == 0) {
-            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
-            auto new_inst = (new DexInstruction(OPCODE_GOTO_16))->set_offset(inst->offset());
-            replaces.emplace_back(inst, new_inst);
-            TRACE(CONSTP, 2, "to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
-            m_branch_propagated++;
+      auto src_reg = inst->src(0);
+      if (reg_values[src_reg].known) {
+        if (inst->opcode() == OPCODE_IF_EQZ && reg_values[src_reg].val == 0) {
             return true;
-          }
         }
-        if (inst->opcode() == OPCODE_IF_NEZ) {
-          auto src_reg = inst->src(0);
-          if (reg_values[src_reg].known && reg_values[src_reg].val != 0) {
-            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
-            auto new_inst = (new DexInstruction(OPCODE_GOTO_16))->set_offset(inst->offset());
-            replaces.emplace_back(inst, new_inst);
-            TRACE(CONSTP, 2, "to GOTO Branch offset: %d register %d has value 0\n", inst->offset(), src_reg);
-            m_branch_propagated++;
+        if (inst->opcode() == OPCODE_IF_NEZ && reg_values[src_reg].val != 0) {
             return true;
-          }
         }
       }
       return false;
