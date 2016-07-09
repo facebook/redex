@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
   bool anno = false;
   bool debug = false;
   uint32_t ddebug_offset = 0;
+  int no_dump_map = 0;
 
   char c;
   static const struct option options[] = {
@@ -81,6 +82,7 @@ int main(int argc, char* argv[]) {
     { "debug", no_argument, nullptr, 'd' },
     { "ddebug", required_argument, nullptr, 'D' },
     { "clean", no_argument, (int*)&clean, 1 },
+    { "no-dump-map", no_argument, &no_dump_map, 1 },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },
   };
@@ -156,7 +158,9 @@ int main(int argc, char* argv[]) {
     const char* dexfile = argv[optind++];
     ddump_data rd;
     open_dex_file(dexfile, &rd);
-    redump(format_map(&rd).c_str());
+    if (!no_dump_map) {
+      redump(format_map(&rd).c_str());
+    }
     if (string || all) {
       dump_strings(&rd);
     }
