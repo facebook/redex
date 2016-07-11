@@ -33,6 +33,7 @@ namespace {
     size_t m_constant_removed{0};
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
+    bool blocked = false;
 
     void propagate(DexMethod* method) {
       bool changed = true;
@@ -73,17 +74,18 @@ namespace {
             }
           }
           if (changed) {
-            remove_constants(method);
+            remove_constants();
             break;
           }
-          // Only propagate to next block when it's the only successive block
-          if (b->succs().size() == 1) {
-            for (auto succs_b: b->succs()) {
-              if (!visited[succs_b])
+          // Propagate successive blocks
+          for (auto succs_b: b->succs()) {
+            if (!visited[succs_b]) {
               blocks.push(succs_b);
             }
-          } else {
-            remove_constants(method);
+          }
+          if (b->succs().size() != 1) {
+            remove_constants();
+            blocked = true;
           }
         }
         for (auto const& p : replaces) {
@@ -96,7 +98,8 @@ namespace {
           transform->remove_opcode(dead);
         }
         dead_instructions.clear();
-        remove_constants(method);
+        remove_constants();
+        blocked = false;
         transform->sync();
       }
     }
@@ -120,7 +123,7 @@ namespace {
         // If returning a constant value from a known register
         // Save the return value for future use
         case OPCODE_RETURN:
-          if (reg_values[inst->src(0)].known)
+          if (reg_values[inst->src(0)].known && !blocked)
             method_returns[method] = reg_values[inst->src(0)].val;
           break;
         // When there's a move-result instruction following a static-invoke insn
@@ -134,12 +137,11 @@ namespace {
                 auto return_val = method_returns[referred_method->get_method()];
                 TRACE(CONSTP, 2, "invoke-static instruction: %s\n",  SHOW(last_inst));
                 TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
-                TRACE(CONSTP, 5, "Class: %s\n",  SHOW(method->get_class()));
+                TRACE(CONSTP, 5, "Class: %s %s\n",  SHOW(method->get_class()), SHOW(method->get_name()));
                 m_method_return_propagated++;
                 auto new_inst = (new DexInstruction(OPCODE_CONST_16))->set_dest(inst->dest())->set_literal(return_val);
                 replaces.emplace_back(inst, new_inst);
                 dead_instructions.push_back(referred_method);
-                TRACE(CONSTP, 5, "Tranformed Method: %s\n%s\n",  SHOW(method->get_name()), SHOW(method->get_code()));
                 propagate_constant(new_inst);
               }
           }
@@ -181,7 +183,7 @@ namespace {
     // change the conditional branch to a goto branch if possible
     bool propagate_branch(DexInstruction *inst) {
       auto src_reg = inst->src(0);
-      if (reg_values[src_reg].known) {
+      if (reg_values[src_reg].known && !blocked) {
         if (inst->opcode() == OPCODE_IF_EQZ && reg_values[src_reg].val == 0) {
             return true;
         }
@@ -193,7 +195,7 @@ namespace {
     }
 
     // This function reads the vector of reg_values and marks all regs to unknown
-    void remove_constants(DexMethod* method) {
+    inline void remove_constants() {
       for (auto &r: reg_values) {
         r.known = false;
         r.insn = nullptr;
@@ -263,7 +265,7 @@ void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg
     [&](DexClass* cls) {
       if (pre_opt_classes.find(cls) != pre_opt_classes.end() &&
       post_opt_classes.find(cls) == pre_opt_classes.end()) {
-        TRACE(DCE, 2, "Removed class: %s\n", cls->get_name()->c_str());
+        TRACE(DCE, 1, "Removed class: %s\n", cls->get_name()->c_str());
         return true; }
       return false; }),
     scope.end());
