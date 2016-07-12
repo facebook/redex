@@ -254,7 +254,7 @@ std::unordered_set<DexType*> get_black_list(
   return blacklist;
 }
 
-void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   auto pre_opt_classes = LocalDcePass::find_referenced_classes(scope);
   auto blacklist_classes = get_black_list(m_blacklist);

@@ -436,7 +436,7 @@ int DeadRefs::remove_unreachable() {
 
 }
 
-void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   if (!cfg.using_seeds) {
 	  TRACE(DELINIT, 1, "No seeds information so not running DelInit\n");
 		return;

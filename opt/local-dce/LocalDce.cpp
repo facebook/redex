@@ -478,7 +478,7 @@ std::unordered_set<const DexClass*> LocalDcePass::find_referenced_classes(const 
     return referenced_classes;
 }
 
-void LocalDcePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void LocalDcePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   auto pre_opt_classes = find_referenced_classes(scope);
   LocalDce(scope).run();

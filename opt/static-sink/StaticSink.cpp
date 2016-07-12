@@ -367,7 +367,7 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
 
 }
 
-void StaticSinkPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void StaticSinkPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto method_list = cfg.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);
   TRACE(SINK, 1, "methods used in coldstart: %lu\n", methods.size());

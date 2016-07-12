@@ -23,7 +23,7 @@ class RenameClassesPass : public Pass {
     pc.get("untouchable_hierarchies", {}, m_untouchable_hierarchies);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::string m_path;

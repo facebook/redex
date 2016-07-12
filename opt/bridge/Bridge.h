@@ -15,5 +15,5 @@ class BridgePass : public Pass {
  public:
   BridgePass() : Pass("BridgePass") {}
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 };

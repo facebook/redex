@@ -852,7 +852,7 @@ bool optimize(const std::vector<DexClass*>& classes,
   return ssms.next_pass;
 }
 
-void SynthPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void SynthPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(dexen);
   int passes = 0;
   do {

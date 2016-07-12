@@ -112,7 +112,7 @@ void remove_empty_classes(Scope& classes) {
 }
 
 void RemoveEmptyClassesPass::run_pass(
-    DexClassesVector& dexen, ConfigFiles& cfg) {
+    DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   remove_empty_classes(scope);
   post_dexen_changes(scope, dexen);

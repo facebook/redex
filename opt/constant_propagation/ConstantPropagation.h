@@ -28,7 +28,7 @@ class ConstantPropagationPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("blacklist", {}, m_blacklist);
   }
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
 private:
   std::vector<std::string> m_blacklist;

@@ -221,7 +221,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
       });
 }
 
-void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void AnnoKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   auto removable_annos = get_annos(m_remove_annos);
   auto blacklist_classes = get_blacklist(m_blacklist);

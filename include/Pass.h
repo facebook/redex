@@ -21,6 +21,7 @@ class DexClasses;
 class DexClass;
 using DexClassesVector = std::vector<DexClasses>;
 using Scope = std::vector<DexClass*>;
+class PassManager;
 
 class PassConfig {
  public:
@@ -105,7 +106,7 @@ class Pass {
   std::string name() const { return m_name; }
 
   virtual void configure_pass(const PassConfig&) {}
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) = 0;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) = 0;
 
  private:
   std::string m_name;

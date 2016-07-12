@@ -29,11 +29,11 @@ class SingleImplPass : public Pass {
     pc.get("package_black_list", {}, m_pass_config.package_black_list);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
   // count of removed interfaces
   size_t removed_count{0};
-  
+
   // count of invoke-interface changed to invoke-virtual
   static size_t s_invoke_intf_count;
 

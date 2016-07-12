@@ -20,7 +20,7 @@ class InterDexPass : public Pass {
     pc.get("emit_canaries", true, m_emit_canaries);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_static_prune;

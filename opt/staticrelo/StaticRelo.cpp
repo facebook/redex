@@ -633,7 +633,7 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 
 } // namespace
 
-void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   // Clear out counter
   s_cls_delete_count = 0;
   s_meth_delete_count = 0;

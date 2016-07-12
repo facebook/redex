@@ -34,7 +34,7 @@ public:
     pc.get("no_inline_annos", {}, m_no_inline_annos);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
 private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(

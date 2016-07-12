@@ -22,7 +22,7 @@ class ShortenSrcStringsPass : public Pass {
       m_filename_mappings);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::string m_filename_mappings;

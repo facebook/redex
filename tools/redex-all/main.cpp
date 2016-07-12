@@ -278,6 +278,21 @@ Json::Value get_stats(const dex_output_stats_t& stats) {
   return val;
 }
 
+Json::Value get_pass_stats(const PassManager& mgr) {
+  Json::Value all;
+  for (auto pass_metrics : mgr.get_metrics()) {
+    if (pass_metrics.second.empty()) {
+      continue;
+    }
+    Json::Value pass;
+    for (auto pass_metric : pass_metrics.second) {
+      pass[pass_metric.first] = pass_metric.second;
+    }
+    all[pass_metrics.first] = pass;
+  }
+  return all;
+}
+
 Json::Value get_detailed_stats(const std::vector<dex_output_stats_t> &dexes_stats) {
   Json::Value dexes;
   int i = 0;
@@ -287,10 +302,15 @@ Json::Value get_detailed_stats(const std::vector<dex_output_stats_t> &dexes_stat
   return dexes;
 }
 
-void output_stats(const char* path, const dex_output_stats_t& stats, const std::vector<dex_output_stats_t> &dexes_stats) {
+void output_stats(
+  const char* path,
+  const dex_output_stats_t& stats,
+  const std::vector<dex_output_stats_t> &dexes_stats,
+  PassManager& mgr) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
+  d["pass_stats"] = get_pass_stats(mgr);
   Json::StyledStreamWriter writer;
   std::ofstream out(path);
   writer.write(out, d);
@@ -459,7 +479,7 @@ int main(int argc, char* argv[]) {
     dexes_stats.push_back(stats);
   }
   pos_mapper->write_map();
-  output_stats(stats_output.c_str(), totals, dexes_stats);
+  output_stats(stats_output.c_str(), totals, dexes_stats, manager);
   output_moved_methods_map(method_move_map.c_str(), dexen, cfg);
   print_warning_summary();
   delete g_redex;

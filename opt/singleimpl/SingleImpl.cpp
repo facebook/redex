@@ -94,7 +94,7 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
 
 const int MAX_PASSES = 8;
 
-void SingleImplPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void SingleImplPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   int max_steps = 0;
   while (true) {

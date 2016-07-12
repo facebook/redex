@@ -27,7 +27,8 @@ PassManager::PassManager(
     const Json::Value& config)
   : m_config(config),
     m_registered_passes(passes),
-    m_proguard_rules(rules) {
+    m_proguard_rules(rules),
+    m_current_pass_metrics(nullptr) {
   if (config["redex"].isMember("passes")) {
     auto passes = config["redex"]["passes"];
     for (auto& pass : passes) {
@@ -47,14 +48,16 @@ void PassManager::run_passes(DexClassesVector& dexen, ConfigFiles& cfg) {
   for (auto pass : m_activated_passes) {
     using namespace std::chrono;
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
+    m_current_pass_metrics = &m_pass_metrics[pass->name()];
     auto start = high_resolution_clock::now();
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
-    pass->run_pass(dexen, cfg);
+    pass->run_pass(dexen, cfg, *this);
     auto end = high_resolution_clock::now();
     TRACE(PM, 1, "Pass %s completed in %.1lf seconds\n",
           pass->name().c_str(), duration<double>(end - start).count());
+    m_current_pass_metrics = nullptr;
   }
 
   MethodTransform::sync_all();
@@ -70,3 +73,13 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
   }
   always_assert_log(false, "No pass named %s!", name);
 }
+
+void PassManager::incr_metric(const std::string& key, int value) {
+  always_assert_log(m_current_pass_metrics != nullptr, "No current pass!");
+  (*m_current_pass_metrics)[key] += value;
+}
+
+std::map<std::string, std::map<std::string, int> > PassManager::get_metrics() const {
+  return m_pass_metrics;
+}
+

@@ -425,7 +425,7 @@ TypeRelationship exclude(InterfaceImplementations& interfaces,
 
 }
 
-void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(dexen);
 
   InterfaceImplementations interfaces(scope);

@@ -26,6 +26,8 @@
 #define MAX_IDENT_CHAR (52)
 #define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
 
+#define METRIC_RENAMED_CLASSES "renamed_classes"
+
 int match_short = 0;
 int match_long = 0;
 int match_inner = 0;
@@ -130,7 +132,8 @@ void rename_classes(
     const std::string& path,
     std::unordered_set<const DexType*>& untouchables,
     ProguardMap& proguard_map,
-    bool rename_annotations) {
+    bool rename_annotations,
+    PassManager& mgr) {
   unpackage_private(scope);
   int clazz_ident = 0;
   std::map<DexString*, DexString*> aliases;
@@ -183,6 +186,7 @@ void rename_classes(
       arraytype->assign_name_alias(dstring);
     }
   }
+  mgr.incr_metric(METRIC_RENAMED_CLASSES, match_short + match_long + match_inner);
   /* Now we need to re-write the Signature annotations.  They use
    * Strings rather than Type's, so they have to be explicitly
    * handled.
@@ -251,7 +255,7 @@ void rename_classes(
   }
 }
 
-void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
   std::unordered_set<const DexType*> untouchables;
   for (const auto& base : m_untouchable_hierarchies) {
@@ -265,7 +269,7 @@ void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
   }
   rename_classes(
       scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,
-      untouchables, cfg.get_proguard_map(), m_rename_annotations);
+      untouchables, cfg.get_proguard_map(), m_rename_annotations, mgr);
   TRACE(RENAME, 1,
       "renamed classes: %d anon classes, %d from single char patterns, "
       "%d from multi char patterns\n",

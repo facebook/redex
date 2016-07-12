@@ -124,6 +124,6 @@ static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
 }
 
 void ShortenSrcStringsPass::run_pass(
-    DexClassesVector& dexen, ConfigFiles& cfg) {
+    DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   return strip_src_strings(dexen, m_filename_mappings.c_str());
 }

@@ -16,5 +16,5 @@ class PeepholePass : public Pass {
   PeepholePass()
     : Pass("PeepholePass", DoesNotSync{}) {}
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 };

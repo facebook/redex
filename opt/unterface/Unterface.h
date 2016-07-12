@@ -15,5 +15,5 @@ class UnterfacePass : public Pass {
  public:
   UnterfacePass() : Pass("UnterfacePass") {}
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 };

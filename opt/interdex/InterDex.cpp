@@ -463,7 +463,7 @@ static DexClassesVector run_interdex(
 
 }
 
-void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg) {
+void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   emit_canaries = m_emit_canaries;
 
   auto first_attempt = run_interdex(dexen, cfg, true, m_static_prune);

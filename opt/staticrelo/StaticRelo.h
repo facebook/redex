@@ -20,7 +20,7 @@ class StaticReloPass : public Pass {
     pc.get("dont_optimize_annos", {}, m_dont_optimize_annos);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_dont_optimize_annos;

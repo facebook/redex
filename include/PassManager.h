@@ -23,6 +23,8 @@ class PassManager {
     const std::vector<KeepRule>& rules,
     const Json::Value& config = Json::Value(Json::objectValue));
   void run_passes(DexClassesVector&, ConfigFiles&);
+  void incr_metric(const std::string& key, int value);
+  std::map<std::string, std::map<std::string, int> > get_metrics() const;
 
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
@@ -33,4 +35,8 @@ class PassManager {
 
   //proguard rules
   const std::vector<KeepRule>& m_proguard_rules;
+
+  //per-pass metrics
+  std::map<std::string, std::map<std::string, int> > m_pass_metrics;
+  std::map<std::string, int>* m_current_pass_metrics;
 };
