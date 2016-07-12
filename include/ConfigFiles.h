@@ -61,14 +61,15 @@ struct ConfigFiles {
     return m_proguard_map;
   }
 
-	bool using_seeds = false;
+ public:
+  bool using_seeds{false};
 
  private:
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
 
  private:
-  bool m_move_map;
+  bool m_move_map{false};
   ProguardMap m_proguard_map;
   MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
