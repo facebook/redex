@@ -258,18 +258,6 @@ std::unordered_set<DexType*> get_black_list(
 
 void ConstantPropagationPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(dexen);
-  auto pre_opt_classes = LocalDcePass::find_referenced_classes(scope);
   auto blacklist_classes = get_black_list(m_blacklist);
   ConstantPropagation(scope).run(blacklist_classes);
-  MethodTransform::sync_all();
-  auto post_opt_classes = LocalDcePass::find_referenced_classes(scope);
-  scope.erase(remove_if(scope.begin(), scope.end(),
-    [&](DexClass* cls) {
-      if (pre_opt_classes.find(cls) != pre_opt_classes.end() &&
-      post_opt_classes.find(cls) == pre_opt_classes.end()) {
-        TRACE(DCE, 1, "Removed class: %s\n", cls->get_name()->c_str());
-        return true; }
-      return false; }),
-    scope.end());
-  post_dexen_changes(scope, dexen);
 }
