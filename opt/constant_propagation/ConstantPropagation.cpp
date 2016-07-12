@@ -33,6 +33,8 @@ namespace {
     size_t m_constant_removed{0};
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
+    // The variable blocked is used to track if the constant propagation is blocked
+    // The values in abstract registers will be cleared if the propagation is blocked by, for example, an if statement.
     bool blocked = false;
 
     void propagate(DexMethod* method) {
@@ -195,7 +197,7 @@ namespace {
     }
 
     // This function reads the vector of reg_values and marks all regs to unknown
-    inline void remove_constants() {
+    void remove_constants() {
       for (auto &r: reg_values) {
         r.known = false;
         r.insn = nullptr;
