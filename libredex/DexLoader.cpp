@@ -76,7 +76,8 @@ struct class_load_work {
   int num;
 };
 
-static void class_work(class_load_work* clw) {
+static void class_work(void* arg) {
+  auto clw = reinterpret_cast<class_load_work*>(arg);
   clw->dl->load_dex_class(clw->num);
 }
 
@@ -101,12 +102,12 @@ DexClasses DexLoader::load_dex(const char* location) {
   if (dh->class_defs_size <= 0) return DexClasses(0);
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
-  auto workptrs = new WorkItem<class_load_work>[dh->class_defs_size];
+  auto workptrs = new work_item[dh->class_defs_size];
   auto lwork = new class_load_work[dh->class_defs_size];
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;
-    workptrs[i].init(class_work, &lwork[i]);
+    workptrs[i] = work_item{class_work, &lwork[i]};
   }
   WorkQueue wq;
   wq.run_work_items(workptrs, dh->class_defs_size);

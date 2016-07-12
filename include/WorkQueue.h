@@ -28,17 +28,6 @@ struct work_item {
   void* arg;
 };
 
-template<typename T>
-struct WorkItem {
-  void init(void (*fn)(T*), T* arg) {
-    m_w.function = reinterpret_cast<work_routine>(fn);
-    m_w.arg = reinterpret_cast<void*>(arg);
-  }
-
- private:
-  work_item m_w;
-};  
-
 struct per_thread {
   work_item* wi __attribute__((aligned(64)));
   int next;
@@ -59,15 +48,8 @@ class WorkQueue {
   static void* worker_thread(void* priv);
   static bool steal_work(per_thread* self);
 
-  void run_work_items(work_item* witems, int count);
-
  public:
   WorkQueue();
-  
-  template<typename T>
-  void run_work_items(WorkItem<T>* witems, int count) {
-    static_assert(sizeof(WorkItem<T>) == sizeof(work_item),
-                  "WorkItem must be binary-compatible with work_item");
-    run_work_items(reinterpret_cast<work_item*>(witems), count);
-  }
+
+  void run_work_items(work_item* witems, int count);
 };

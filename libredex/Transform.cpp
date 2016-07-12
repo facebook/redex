@@ -1104,21 +1104,22 @@ void MethodTransform::build_cfg() {
   TRACE(CFG, 5, "%s", show(m_blocks).c_str());
 }
 
+static void mt_sync(void* arg) {
+  auto mt = reinterpret_cast<MethodTransform*>(arg);
+  mt->sync();
+}
+
 void MethodTransform::sync_all() {
   std::vector<MethodTransform*> transforms;
   for (auto& centry : s_cache) {
     transforms.push_back(centry.second);
   }
-  std::vector<WorkItem<MethodTransform>> workitems(transforms.size());
-  auto mt_sync = [](MethodTransform* mt) { mt->sync(); };
+  std::vector<work_item> workitems(transforms.size());
   for (size_t i = 0; i < transforms.size(); i++) {
-    workitems[i].init(mt_sync, transforms[i]);
+    workitems[i] = work_item{mt_sync, transforms[i]};
   }
   WorkQueue wq;
-
-  if (workitems.size() > 0) {
-    wq.run_work_items(&workitems[0], (int)workitems.size());
-  }
+  wq.run_work_items(workitems.data(), (int)workitems.size());
 }
 
 void MethodTransform::sync() {
