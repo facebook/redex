@@ -218,7 +218,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     break;
   }
   case 0x1d:
-    ss << "[ANNOTATION " << format_annotation_item(rd, &aitem) << "]";
+    ss << "[ANNOTATION " << format_annotation(rd, &aitem) << "]";
     break;
   case 0x1e:
     ss << "[NULL]";
@@ -233,14 +233,13 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   return ss.str();
 }
 
-std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem) {
+std::string format_annotation(ddump_data* rd, const uint8_t** _aitem) {
   std::stringstream ss;
   const uint8_t* aitem = *_aitem;
-  uint8_t viz = *aitem++;
   uint32_t type_idx = read_uleb128(&aitem);
   uint32_t size = read_uleb128(&aitem);
   char* tstring = dex_string_by_type_idx(rd, type_idx);
-  ss << "        " << tstring << ", Vis: " << viz_to_string(viz) << "\n";
+  ss << tstring << "\n";
   while (size--) {
     uint32_t name_idx = read_uleb128(&aitem);
     char* key = dex_string_by_idx(rd, name_idx);
@@ -248,6 +247,16 @@ std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem) {
        << "\n";
   }
   *_aitem = aitem;
+  return ss.str();
+}
+
+std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem) {
+  std::stringstream ss;
+  const uint8_t* aitem = *_aitem;
+  uint8_t viz = *aitem++;
+  *_aitem = aitem;
+  auto anno = format_annotation(rd, _aitem);
+  ss << "        Vis: " << viz_to_string(viz) << ", " << anno;
   return ss.str();
 }
 

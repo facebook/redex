@@ -14,6 +14,7 @@
 #include <string>
 
 std::string format_map(ddump_data* rd);
+std::string format_annotation(ddump_data* rd, const uint8_t** _aitem);
 std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem);
 std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem);
 std::string format_method(ddump_data* rd, int idx);
