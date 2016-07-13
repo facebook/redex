@@ -227,6 +227,7 @@ DexCode* DexCode::get_dex_code(
   dc->m_registers_size = code->registers_size;
   dc->m_ins_size = code->ins_size;
   dc->m_outs_size = code->outs_size;
+  dc->m_insns.reset(new std::vector<DexInstruction*>());
   const uint16_t* cdata = (const uint16_t*)(code + 1);
   uint32_t tries = code->tries_size;
   if (code->insns_size) {
@@ -235,7 +236,7 @@ DexCode* DexCode::get_dex_code(
       DexInstruction* dop = DexInstruction::make_instruction(idx, cdata);
       always_assert_log(
           dop != nullptr, "Failed to parse method at offset 0x%08x", offset);
-      dc->m_insns.push_back(dop);
+      dc->m_insns->push_back(dop);
     }
     /*
      * Padding, see dex-spec.
@@ -285,7 +286,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   /* Debug info is added later */
   code->debug_info_off = 0;
   uint16_t* insns = (uint16_t*)(code + 1);
-  for (auto opc : m_insns) {
+  for (auto const& opc : get_instructions()) {
     opc->encode(dodx, insns);
   }
   code->insns_size = (uint32_t) (insns - ((uint16_t*)(code + 1)));
@@ -857,7 +858,7 @@ void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {
 }
 
 void DexCode::gather_types(std::vector<DexType*>& ltype) {
-  for (auto opc : m_insns) {
+  for (auto const& opc : get_instructions()) {
     opc->gather_types(ltype);
   }
   gather_catch_types(ltype);
@@ -865,20 +866,20 @@ void DexCode::gather_types(std::vector<DexType*>& ltype) {
 }
 
 void DexCode::gather_strings(std::vector<DexString*>& lstring) {
-  for (auto opc : m_insns) {
+  for (auto const& opc : get_instructions()) {
     opc->gather_strings(lstring);
   }
   if (m_dbg) m_dbg->gather_strings(lstring);
 }
 
 void DexCode::gather_fields(std::vector<DexField*>& lfield) {
-  for (auto opc : m_insns) {
+  for (auto const& opc : get_instructions()) {
     opc->gather_fields(lfield);
   }
 }
 
 void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) {
-  for (auto opc : m_insns) {
+  for (auto const& opc : get_instructions()) {
     opc->gather_methods(lmethod);
   }
 }

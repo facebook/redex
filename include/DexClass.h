@@ -495,7 +495,7 @@ class DexCode {
   uint16_t m_registers_size;
   uint16_t m_ins_size;
   uint16_t m_outs_size;
-  std::vector<DexInstruction*> m_insns;
+  std::unique_ptr<std::vector<DexInstruction*>> m_insns;
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
   DexDebugItem* m_dbg;
 
@@ -511,7 +511,7 @@ class DexCode {
      , m_dbg(nullptr) {}
 
   ~DexCode() {
-    for (auto const& op : m_insns) {
+    for (auto const& op : *m_insns) {
       delete op;
     }
     delete m_dbg;
@@ -519,8 +519,21 @@ class DexCode {
 
  public:
   DexDebugItem* get_debug_item() const { return m_dbg; }
-  std::vector<DexInstruction*>& get_instructions() { return m_insns; }
-  const std::vector<DexInstruction*>& get_instructions() const { return m_insns; }
+  std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
+    return std::move(m_insns);
+  }
+  std::vector<DexInstruction*>& reset_instructions() {
+    m_insns.reset(new std::vector<DexInstruction*>());
+    return *m_insns;
+  }
+  std::vector<DexInstruction*>& get_instructions() {
+    assert(m_insns);
+    return *m_insns;
+  }
+  const std::vector<DexInstruction*>& get_instructions() const {
+    assert(m_insns);
+    return *m_insns;
+  }
   std::vector<std::unique_ptr<DexTryItem>>& get_tries() { return m_tries; }
   const std::vector<std::unique_ptr<DexTryItem>>& get_tries() const {
     return m_tries;

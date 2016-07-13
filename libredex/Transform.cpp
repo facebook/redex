@@ -326,12 +326,12 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
     return nullptr;
   }
   TRACE(MTRANS, 2, "Ballooning %s\n", SHOW(method));
-  auto opcodes = code->get_instructions();
+  auto opcodes = code->release_instructions();
   addr_mei_t addr_to_mei;
 
   FatMethod* fm = new FatMethod();
   uint32_t addr = 0;
-  for (auto opcode : opcodes) {
+  for (auto opcode : *opcodes) {
     MethodItemEntry* mei = new MethodItemEntry(opcode);
     fm->push_back(*mei);
     addr_to_mei[addr] = mei;
@@ -1135,8 +1135,7 @@ void MethodTransform::sync() {
 bool MethodTransform::try_sync() {
   TRACE(MTRANS, 5, "Syncing %s\n", SHOW(m_method));
   auto code = m_method->get_code();
-  auto& opout = code->get_instructions();
-  opout.clear();
+  auto& opout = code->reset_instructions();
   uint32_t addr = 0;
   addr_mei_t addr_to_mei;
   // Step 1, regenerate opcode list for the method, and

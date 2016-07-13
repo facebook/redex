@@ -660,7 +660,7 @@ std::string show(const DexCode* code) {
   std::stringstream ss;
   ss << "regs: " << code->m_registers_size << ", ins: " << code->m_ins_size
      << ", outs: " << code->m_outs_size << "\n";
-  for (auto insn : code->m_insns) {
+  for (auto const& insn : code->get_instructions()) {
     ss << show(insn) << "\n";
   }
   return ss.str();
