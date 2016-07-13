@@ -26,7 +26,12 @@
 #define MAX_IDENT_CHAR (52)
 #define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
 
-#define METRIC_RENAMED_CLASSES "renamed_classes"
+#define METRIC_CLASSES_IN_SCOPE "num_classes_in_scope"
+#define METRIC_RENAMED_CLASSES "**num_renamed**"
+#define METRIC_CANT_RENAME_ANNOTATION "num_cant_rename_annotations"
+#define METRIC_CANT_RENAME_UNTOUCHABLE "num_cant_rename_untouchable"
+#define METRIC_CANT_RENAME_AND_CANT_DELETE "num_cant_rename_and_cant_delete"
+#define METRIC_NOT_WHITELISTED "num_not_whitelisted"
 
 int match_short = 0;
 int match_long = 0;
@@ -82,9 +87,16 @@ bool should_rename(DexClass *clazz,
     std::vector<std::string>& pre_patterns,
     std::vector<std::string>& post_patterns,
     std::unordered_set<const DexType*>& untouchables,
-    bool rename_annotations) {
-  if (!rename_annotations && is_annotation(clazz)) return false;
-  if (untouchables.count(clazz->get_type())) return false;
+    bool rename_annotations,
+    PassManager& mgr) {
+  if (!rename_annotations && is_annotation(clazz)) {
+    mgr.incr_metric(METRIC_CANT_RENAME_ANNOTATION, 1);
+    return false;
+  }
+  if (untouchables.count(clazz->get_type())) {
+    mgr.incr_metric(METRIC_CANT_RENAME_UNTOUCHABLE, 1);
+    return false;
+  }
   auto chstring = clazz->get_type()->get_name()->c_str();
   /* We're assuming anonymous classes are safe always safe to rename. */
   auto substr = strrchr(chstring, '$');
@@ -108,6 +120,7 @@ bool should_rename(DexClass *clazz,
     }
   }
   if (!can_rename(clazz) && !can_delete(clazz)) {
+    mgr.incr_metric(METRIC_CANT_RENAME_AND_CANT_DELETE, 1);
     return false;
   }
   /* Check for wider, less precise filters */
@@ -122,6 +135,7 @@ bool should_rename(DexClass *clazz,
       return true;
     }
   }
+  mgr.incr_metric(METRIC_NOT_WHITELISTED, 1);
   return false;
 }
 
@@ -140,7 +154,7 @@ void rename_classes(
   for(auto clazz: scope) {
     if (!should_rename(
         clazz, pre_whitelist_patterns, post_whitelist_patterns,
-        untouchables, rename_annotations)) {
+        untouchables, rename_annotations, mgr)) {
       continue;
     }
     char clzname[4];
@@ -267,6 +281,7 @@ void RenameClassesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, Pass
       untouchables.insert(children.begin(), children.end());
     }
   }
+  mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
   rename_classes(
       scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,
       untouchables, cfg.get_proguard_map(), m_rename_annotations, mgr);
