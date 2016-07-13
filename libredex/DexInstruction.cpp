@@ -1385,19 +1385,3 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
     return nullptr;
   }
 }
-
-DexInstruction* copy_insn(DexInstruction* insn) {
-  if (insn->has_types()) {
-    return new DexOpcodeType(*(static_cast<DexOpcodeType*>(insn)));
-  }
-  if (insn->has_fields()) {
-    return new DexOpcodeField(*(static_cast<DexOpcodeField*>(insn)));
-  }
-  if (insn->has_methods()) {
-    return new DexOpcodeMethod(*(static_cast<DexOpcodeMethod*>(insn)));
-  }
-  if (insn->has_strings()) {
-    return new DexOpcodeString(*(static_cast<DexOpcodeString*>(insn)));
-  }
-  return new DexInstruction(*(static_cast<DexInstruction*>(insn)));
-}

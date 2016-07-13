@@ -363,6 +363,9 @@ class DexInstruction : public Gatherable {
  protected:
   uint16_t m_count;
 
+  // use clone() instead
+  DexInstruction(const DexInstruction&) = default;
+
   // Ref-less opcodes, largest size is 5 insns.
   // If the constructor is called with a non-numeric
   // count, we'll have to add a assert here.
