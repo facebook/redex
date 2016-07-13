@@ -483,18 +483,6 @@ FatMethod::iterator MethodCreator::make_switch_block(
   return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 
-MethodCreator::MethodCreator(DexMethod* meth)
-    : method(meth)
-    , meth_code(MethodTransform::get_new_method(method))
-    , out_count(0)
-    , top_reg(0)
-    , access(meth->get_access()) {
-  always_assert_log(meth->is_concrete(),
-      "Method must be concrete or use the other ctor");
-  load_locals(meth);
-  main_block = new MethodBlock(meth_code->main_block(), this);
-}
-
 MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
@@ -568,34 +556,4 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
   insert_sorted(target_cls->get_dmethods(), smeth, compare_dexmethods);
   meth->set_code(nullptr);
   return smeth;
-}
-
-void MethodCreator::forward_method_to(DexMethod* meth, DexMethod* smeth) {
-  auto code = meth->get_code();
-  if (code != nullptr) {
-    meth->set_code(nullptr);
-    delete code;
-  }
-  MethodCreator mc(meth);
-  MethodBlock* block = mc.get_main_block();
-  std::vector<Location> args;
-  auto proto = smeth->get_proto();
-  auto rtype = proto->get_rtype();
-  auto meth_args = proto->get_args();
-  if (meth_args != nullptr) {
-    uint16_t arg_count =
-        static_cast<uint16_t>(meth_args->get_type_list().size());
-    for (auto i = 0; i < arg_count; ++i) {
-      args.push_back(mc.get_local(i));
-    }
-  }
-  block->invoke(smeth, args);
-  if (rtype == get_void_type()) {
-    block->ret_void();
-  } else {
-    auto ret = mc.make_local(rtype);
-    block->move_result(ret, rtype);
-    block->ret(ret);
-  }
-  mc.create();
 }

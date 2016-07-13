@@ -336,7 +336,6 @@ struct MethodBlock {
  */
 struct MethodCreator {
  public:
-  MethodCreator(DexMethod* meth);
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,
