@@ -676,21 +676,29 @@ void DexOutput::generate_code_items() {
 
 void DexOutput::generate_static_values() {
   uint32_t sv_start = m_offset;
+  std::unordered_map<DexEncodedValueArray,
+                     uint32_t,
+                     boost::hash<DexEncodedValueArray>>
+      enc_arrays;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->get(i);
-    DexEncodedValueArray* deva = clz->get_static_values();
-    if (deva == nullptr) continue;
-    m_static_values[clz] = m_offset;
-    uint8_t* output = m_output + m_offset;
-    uint8_t* outputsv = output;
-    /* No alignment requirements */
-    deva->encode(dodx, output);
-    m_offset += output - outputsv;
-    m_stats.num_static_values++;
-    delete deva;
+    std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
+    if (!deva) continue;
+    if (enc_arrays.count(*deva)) {
+      m_static_values[clz] = enc_arrays.at(*deva);
+    } else {
+      uint8_t* output = m_output + m_offset;
+      uint8_t* outputsv = output;
+      /* No alignment requirements */
+      deva->encode(dodx, output);
+      enc_arrays.emplace(std::move(*deva.release()), m_offset);
+      m_static_values[clz] = m_offset;
+      m_offset += output - outputsv;
+      m_stats.num_static_values++;
+    }
   }
   if (m_static_values.size()) {
-    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t) m_static_values.size(), sv_start);
+    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t) enc_arrays.size(), sv_start);
   }
 }
 

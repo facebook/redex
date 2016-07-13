@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
 #include <list>
 #include <map>
 #include <sstream>
@@ -73,7 +74,22 @@ class DexEncodedValue : public Gatherable {
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
 
   virtual std::string show() const;
+  virtual bool operator==(const DexEncodedValue& that) {
+    return m_evtype == that.m_evtype && m_value == that.m_value;
+  }
+  virtual bool operator!=(const DexEncodedValue& that) {
+    return !(*this == that);
+  }
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, m_value);
+    return seed;
+  }
 };
+
+inline size_t hash_value(const DexEncodedValue& v) {
+  return v.hash_value();
+}
 
 class DexEncodedValueBit : public DexEncodedValue {
  public:
@@ -97,6 +113,18 @@ class DexEncodedValueString : public DexEncodedValue {
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   virtual std::string show() const { return ::show(m_string); }
+  virtual bool operator==(const DexEncodedValue& that) {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_string ==
+           static_cast<const DexEncodedValueString*>(&that)->m_string;
+  }
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_string);
+    return seed;
+  }
 };
 
 class DexEncodedValueType : public DexEncodedValue {
@@ -113,6 +141,17 @@ class DexEncodedValueType : public DexEncodedValue {
   DexType* type() const { return m_type; }
   void rewrite_type(DexType* type) { m_type = type; }
   virtual std::string show() const { return ::show(m_type); }
+  virtual bool operator==(const DexEncodedValue& that) {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_type == static_cast<const DexEncodedValueType*>(&that)->m_type;
+  }
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_type);
+    return seed;
+  }
 };
 
 class DexEncodedValueField : public DexEncodedValue {
@@ -130,6 +169,17 @@ class DexEncodedValueField : public DexEncodedValue {
   DexField* field() const { return m_field; }
   void rewrite_field(DexField* field) { m_field = field; }
   virtual std::string show() const { return ::show(m_field); }
+  virtual bool operator==(const DexEncodedValue& that) {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_field == static_cast<const DexEncodedValueField*>(&that)->m_field;
+  }
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_field);
+    return seed;
+  }
 };
 
 class DexEncodedValueMethod : public DexEncodedValue {
@@ -146,10 +196,22 @@ class DexEncodedValueMethod : public DexEncodedValue {
   DexMethod* method() const { return m_method; }
   void rewrite_method(DexMethod* method) { m_method = method; }
   virtual std::string show() const { return ::show(m_method); }
+  virtual bool operator==(const DexEncodedValue& that) {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_method ==
+           static_cast<const DexEncodedValueMethod*>(&that)->m_method;
+  }
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_method);
+    return seed;
+  }
 };
 
 class DexEncodedValueArray : public DexEncodedValue {
-  std::list<DexEncodedValue*>* m_evalues;
+  std::unique_ptr<std::list<DexEncodedValue*>> m_evalues;
   bool m_static_val;
 
  public:
@@ -159,14 +221,11 @@ class DexEncodedValueArray : public DexEncodedValue {
    */
   DexEncodedValueArray(std::list<DexEncodedValue*>* evalues,
                        bool static_val = false)
-      : DexEncodedValue(DEVT_ARRAY) {
-    m_evalues = evalues;
+      : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
     m_static_val = static_val;
   }
 
-  ~DexEncodedValueArray() { delete m_evalues; }
-
-  std::list<DexEncodedValue*>*& evalues() { return m_evalues; }
+  std::list<DexEncodedValue*>* const evalues() const { return m_evalues.get(); }
 
   DexEncodedValue* pop_next() {
     if (m_evalues->empty()) return nullptr;
@@ -182,6 +241,29 @@ class DexEncodedValueArray : public DexEncodedValue {
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   virtual std::string show() const;
+
+  bool operator==(const DexEncodedValueArray& that) const {
+    if (m_evalues->size() != that.m_evalues->size()) {
+      return false;
+    }
+    auto it = that.m_evalues->begin();
+    for (const auto& elem : *m_evalues) {
+      if (*elem != **it) {
+        return false;
+      }
+      it = std::next(it);
+    }
+    return m_evtype == that.m_evtype && m_static_val == that.m_static_val;
+  }
+
+  virtual size_t hash_value() const {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, m_static_val);
+    for (const auto& elem : *m_evalues) {
+      boost::hash_combine(seed, *elem);
+    }
+    return seed;
+  }
 };
 
 /* For loading static values */
