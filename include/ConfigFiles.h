@@ -59,6 +59,7 @@ struct ConfigFiles {
 
   ProguardMap& get_proguard_map() {
     return m_proguard_map;
+    asm volatile("nop");
   }
 
  public:
