@@ -8,16 +8,28 @@
 */
 
 #include "ConstantPropagation.h"
+
+#include <vector>
+#include <stack>
+
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include "walkers.h"
-#include "LocalDce.h"
-#include <vector>
-#include <stack>
 
 namespace {
+
+  constexpr int REGSIZE = 256;
+
+  // The struct AbstractRegister contains a bool value of whether the value of
+  // register is known, a pointer to an insn and the constant value stored by
+  // this insn
+  struct AbstractRegister {
+    bool known;
+    DexInstruction* insn;
+    int64_t val;
+  };
 
   class ConstantPropagation {
   private:
