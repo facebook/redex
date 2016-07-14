@@ -467,8 +467,9 @@ class DexDebugItem {
   DexDebugItem(DexIdx* idx, uint32_t offset, DexString* source_file);
 
  public:
-  static DexDebugItem* get_dex_debug(DexIdx* idx, uint32_t offset,
-      DexString* source_file);
+  static std::unique_ptr<DexDebugItem> get_dex_debug(DexIdx* idx,
+                                                     uint32_t offset,
+                                                     DexString* source_file);
 
  public:
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
@@ -497,7 +498,7 @@ class DexCode {
   uint16_t m_outs_size;
   std::unique_ptr<std::vector<DexInstruction*>> m_insns;
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
-  DexDebugItem* m_dbg;
+  std::unique_ptr<DexDebugItem> m_dbg;
 
  public:
   static DexCode* get_dex_code(DexIdx* idx, uint32_t offset,
@@ -514,11 +515,10 @@ class DexCode {
     for (auto const& op : *m_insns) {
       delete op;
     }
-    delete m_dbg;
   }
 
  public:
-  DexDebugItem* get_debug_item() const { return m_dbg; }
+  const std::unique_ptr<DexDebugItem>& get_debug_item() const { return m_dbg; }
   std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
     return std::move(m_insns);
   }
@@ -545,7 +545,6 @@ class DexCode {
   void set_registers_size(uint16_t sz) { m_registers_size = sz; }
   void set_ins_size(uint16_t sz) { m_ins_size = sz; }
   void set_outs_size(uint16_t sz) { m_outs_size = sz; }
-  void set_debug_item(DexDebugItem* dbg) { m_dbg = dbg; }
 
   /*
    * Returns number of bytes in encoded output, passed in

@@ -262,9 +262,9 @@ static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
 }
 
 static void associate_debug_entries(FatMethod* fm,
-                                    DexDebugItem* dbg,
+                                    DexDebugItem& dbg,
                                     addr_mei_t& addr_to_mei) {
-  for (auto& entry : dbg->get_entries()) {
+  for (auto& entry : dbg.get_entries()) {
     auto insert_point = addr_to_mei[entry.addr];
     if (!insert_point) {
       /* We don't have a way of emitting debug info for fopcodes.  To
@@ -286,6 +286,7 @@ static void associate_debug_entries(FatMethod* fm,
     }
     insert_mentry_before(fm, mentry, insert_point);
   }
+  dbg.get_entries().clear();
 }
 
 static void associate_try_items(FatMethod* fm,
@@ -341,9 +342,9 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
   }
   generate_branch_targets(fm, addr_to_mei);
   associate_try_items(fm, code, addr_to_mei);
-  auto debugitem = code->get_debug_item();
+  auto& debugitem = code->get_debug_item();
   if (debugitem) {
-    associate_debug_entries(fm, debugitem, addr_to_mei);
+    associate_debug_entries(fm, *debugitem, addr_to_mei);
   }
   return fm;
 }
@@ -1255,7 +1256,7 @@ bool MethodTransform::try_sync() {
 
   // Step 4, emit debug opcodes
   TRACE(MTRANS, 5, "Emitting debug opcodes\n");
-  auto debugitem = code->get_debug_item();
+  auto& debugitem = code->get_debug_item();
   if (debugitem) {
     auto& entries = debugitem->get_entries();
     entries.clear();

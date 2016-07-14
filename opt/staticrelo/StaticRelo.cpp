@@ -259,8 +259,8 @@ bool does_method_collide(
   const DexMethod* method,
   const std::vector<DexMethod*> methods) {
   for (auto other_method : methods) {
-    auto first_dbg = method->get_code()->get_debug_item();
-    auto sec_dbg = other_method->get_code()->get_debug_item();
+    auto& first_dbg = method->get_code()->get_debug_item();
+    auto& sec_dbg = other_method->get_code()->get_debug_item();
     bool line_nums_equal = false;
     // In a stack trace we can't disambiguate between
     // two methods if they have the same name and line number

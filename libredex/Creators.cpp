@@ -513,7 +513,6 @@ DexCode* MethodCreator::to_code() {
   code->set_registers_size(top_reg);
   code->set_ins_size(ins_count());
   code->set_outs_size(out_count);
-  code->set_debug_item(nullptr);
   method->set_code(code);
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {

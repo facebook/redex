@@ -102,10 +102,11 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset,
   m_dbg_entries = eval_debug_instructions(this, insns, source_file);
 }
 
-DexDebugItem* DexDebugItem::get_dex_debug(DexIdx* idx, uint32_t offset,
-    DexString* source_file) {
+std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(
+    DexIdx* idx, uint32_t offset, DexString* source_file) {
   if (offset == 0) return nullptr;
-  return new DexDebugItem(idx, offset, source_file);
+  return std::unique_ptr<DexDebugItem>(
+      new DexDebugItem(idx, offset, source_file));
 }
 
 namespace {

@@ -884,7 +884,7 @@ void DexOutput::generate_debug_items() {
   for (auto& it : m_code_item_emits) {
     DexCode* dc = it.first;
     dex_code_item* dci = it.second;
-    DexDebugItem* dbg = dc->get_debug_item();
+    auto& dbg = dc->get_debug_item();
     if (dbg == nullptr) continue;
     dbgcount++;
     // No align requirement for debug items.
