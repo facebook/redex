@@ -33,7 +33,7 @@ DexMethod* create_abstract_method(DexClass* cls, const char* name,
   auto method = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
   method->make_concrete(access, nullptr, true);
-  insert_sorted(cls->get_vmethods(), method, compare_dexmethods);
+  cls->add_method(method);
   return method;
 }
 
@@ -58,9 +58,7 @@ DexMethod* create_method(DexClass* cls, const char* name, DexProto* proto,
     main_block->ret(null_loc);
   }
   auto method = mcreator.create();
-  insert_sorted(
-      method->is_virtual() ? cls->get_vmethods() : cls->get_dmethods(),
-      method, compare_dexmethods);
+  cls->add_method(method);
   return method;
 }
 

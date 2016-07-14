@@ -552,7 +552,6 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
   auto smeth = DexMethod::make_method(target_cls->get_type(), name, proto);
   smeth->make_concrete(
       meth->get_access() | ACC_STATIC, meth->get_code(), false);
-  insert_sorted(target_cls->get_dmethods(), smeth, compare_dexmethods);
-  meth->set_code(nullptr);
+  target_cls->add_method(smeth);
   return smeth;
 }

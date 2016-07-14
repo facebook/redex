@@ -522,28 +522,14 @@ struct ClassCreator {
    * Add a DexField to the DexClass.
    */
   void add_field(DexField* field) {
-    always_assert_log(field->is_concrete() || field->is_external(),
-        "Field must be concrete");
-    always_assert(field->get_class() == m_cls->get_type());
-    if (field->get_access() & ACC_STATIC) {
-      m_cls->m_sfields.push_back(field);
-    } else {
-      m_cls->m_ifields.push_back(field);
-    }
+    m_cls->add_field(field);
   }
 
   /**
    * Add a DexMethod to the DexClass.
    */
   void add_method(DexMethod* method) {
-    always_assert_log(method->is_concrete() || method->is_external(),
-        "Method must be concrete");
-    always_assert(method->get_class() == m_cls->get_type());
-    if (method->is_virtual()) {
-      m_cls->m_vmethods.push_back(method);
-    } else {
-      m_cls->m_dmethods.push_back(method);
-    }
+    m_cls->add_method(method);
   }
 
   /**
@@ -559,10 +545,6 @@ struct ClassCreator {
       }
     }
     m_cls->m_has_class_data = true;
-    m_cls->m_sfields.sort(compare_dexfields);
-    m_cls->m_ifields.sort(compare_dexfields);
-    m_cls->m_dmethods.sort(compare_dexmethods);
-    m_cls->m_vmethods.sort(compare_dexmethods);
     m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
     build_type_system(m_cls);
     return m_cls;

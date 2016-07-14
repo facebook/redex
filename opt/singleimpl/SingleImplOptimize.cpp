@@ -180,20 +180,9 @@ void OptimizationImpl::rewrite_field_defs(DexType* intf, SingleImplData& data) {
       f->attach_annotation_set(field_anno);
     }
     f->make_concrete(field->get_access(), field->get_static_value());
-    bool is_static = f->get_access() & DexAccessFlags::ACC_STATIC;
     auto cls = type_class(field->get_class());
-    auto& fields = is_static ? cls->get_sfields() : cls->get_ifields();
-    DEBUG_ONLY bool erase = false;
-    for (auto it = fields.begin(); it != fields.end(); it++) {
-      if (*it == field) {
-        erase = true;
-        it = fields.erase(it);
-        break;
-      }
-    }
-    assert(erase);
-    fields.push_back(f);
-    fields.sort(compare_dexfields);
+    cls->remove_field(field);
+    cls->add_field(f);
     TRACE(INTF, 3, "(FDEF)\t=> %s\n", SHOW(f));
   }
 }
@@ -251,19 +240,8 @@ void OptimizationImpl::rewrite_method_defs(DexType* intf,
     setup_method(meth, new_meth);
     new_methods[method] = new_meth;
     auto owner = type_class(new_meth->get_class());
-    auto& meths =
-        new_meth->is_virtual() ? owner->get_vmethods() : owner->get_dmethods();
-    DEBUG_ONLY bool erased = false;
-    for (auto m = meths.begin(); m != meths.end(); m++) {
-      if (*m == meth) {
-        erased = true;
-        meths.erase(m);
-        break;
-      }
-    }
-    assert(erased);
-    meths.push_back(new_meth);
-    meths.sort(compare_dexmethods);
+    owner->remove_method(meth);
+    owner->add_method(new_meth);
     TRACE(INTF, 3, "(MDEF)\t=> %s\n", SHOW(new_meth));
   }
 }
@@ -347,8 +325,7 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
       assert(new_meth->is_virtual());
-      impl->get_vmethods().push_back(new_meth);
-      impl->get_vmethods().sort(compare_dexmethods);
+      impl->add_method(new_meth);
       TRACE(INTF, 3, "(MITF) moved interface method %s\n", SHOW(new_meth));
     } else {
       TRACE(INTF, 3, "(MITF) found method impl %s\n", SHOW(new_meth));

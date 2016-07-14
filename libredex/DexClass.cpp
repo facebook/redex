@@ -410,6 +410,58 @@ void DexClass::load_class_data_item(DexIdx* idx,
   }
 }
 
+void DexClass::add_method(DexMethod* m) {
+  always_assert_log(m->is_concrete() || m->is_external(),
+                    "Method %s must be concrete",
+                    SHOW(m));
+  always_assert(m->get_class() == get_type());
+  if (m->is_virtual()) {
+    insert_sorted(m_vmethods, m, compare_dexmethods);
+  } else {
+    insert_sorted(m_dmethods, m, compare_dexmethods);
+  }
+}
+
+void DexClass::remove_method(DexMethod* m) {
+  auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
+  DEBUG_ONLY bool erased = false;
+  for (auto it = meths.begin(); it != meths.end(); it++) {
+    if (*it == m) {
+      erased = true;
+      meths.erase(it);
+      break;
+    }
+  }
+  assert(erased);
+}
+
+void DexClass::add_field(DexField* f) {
+  always_assert_log(f->is_concrete() || f->is_external(),
+                    "Field %s must be concrete",
+                    SHOW(f));
+  always_assert(f->get_class() == get_type());
+  bool is_static = f->get_access() & DexAccessFlags::ACC_STATIC;
+  if (is_static) {
+    insert_sorted(m_sfields, f, compare_dexfields);
+  } else {
+    insert_sorted(m_ifields, f, compare_dexfields);
+  }
+}
+
+void DexClass::remove_field(DexField* f) {
+  bool is_static = f->get_access() & DexAccessFlags::ACC_STATIC;
+  auto& fields = is_static ? m_sfields : m_ifields;
+  DEBUG_ONLY bool erase = false;
+  for (auto it = fields.begin(); it != fields.end(); it++) {
+    if (*it == f) {
+      erase = true;
+      it = fields.erase(it);
+      break;
+    }
+  }
+  assert(erase);
+}
+
 int DexClass::encode(DexOutputIdx* dodx,
                      dexcode_to_offset& dco,
                      uint8_t* output) {

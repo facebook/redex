@@ -307,7 +307,7 @@ DexClass* move_statics_out(
     ref.cls = sink_class->get_type();
     meth->change(ref);
     set_public(meth);
-    insert_sorted(sink_class->get_dmethods(), meth, compare_dexmethods);
+    sink_class->add_method(meth);
     moved_count++;
   }
 

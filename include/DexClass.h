@@ -27,6 +27,7 @@
 #include "DexPosition.h"
 #include "Show.h"
 #include "Trace.h"
+#include "Util.h"
 #include "RedexContext.h"
 #include "ReferencedState.h"
 
@@ -773,10 +774,14 @@ class DexClass {
         "Unexpected external class %s\n", SHOW(m_self));
     return m_vmethods;
   }
+  void add_method(DexMethod* m);
+  void remove_method(DexMethod* m);
   const std::list<DexField*>& get_sfields() const { return m_sfields; }
   std::list<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
   const std::list<DexField*>& get_ifields() const { return m_ifields; }
   std::list<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
+  void add_field(DexField* f);
+  void remove_field(DexField* f);
   DexAnnotationDirectory* get_annotation_directory();
   DexAccessFlags get_access() const { return m_access_flags; }
   DexType* get_super_class() const { return m_super_class; }

@@ -202,14 +202,6 @@ void sort_unique(std::vector<T>& vec, Cmp cmp = std::less<T>()) {
 }
 
 /**
- * Insert into the proper location in a sorted container.
- */
-template <class Container, class T, class Compare>
-void insert_sorted(Container& c, const T& e, Compare comp) {
-  c.insert(std::lower_bound(c.begin(), c.end(), e, comp), e);
-}
-
-/**
  * True if this instruction is passing through all the args of its enclosing
  * method.  This predicate simplifies inlining optimizations since otherwise
  * the optimization would have to re-map the input regs.  The N arguments to

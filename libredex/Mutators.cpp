@@ -27,9 +27,9 @@ void make_static(DexMethod* method) {
 
   // changing the method proto means that we need to change its position in the
   // dmethod list
-  auto& dmethods = type_class(clstype)->get_dmethods();
-  dmethods.remove(method);
-  insert_sorted(dmethods, method, compare_dexmethods);
+  auto cls = type_class(clstype);
+  cls->remove_method(method);
+  cls->add_method(method);
 }
 
 }
