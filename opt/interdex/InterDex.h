@@ -18,6 +18,7 @@ class InterDexPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("static_prune", false, m_static_prune);
     pc.get("emit_canaries", true, m_emit_canaries);
+    pc.get("normal_primary_dex", false, m_normal_primary_dex);
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
@@ -25,4 +26,5 @@ class InterDexPass : public Pass {
  private:
   bool m_static_prune;
   bool m_emit_canaries;
+  bool m_normal_primary_dex;
 };

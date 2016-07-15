@@ -320,7 +320,8 @@ static DexClassesVector run_interdex(
   const DexClassesVector& dexen,
   ConfigFiles& cfg,
   bool allow_cutting_off_dex,
-  bool static_prune_classes) {
+  bool static_prune_classes,
+  bool normal_primary_dex) {
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
   global_vmeth_cnt = 0;
@@ -351,49 +352,53 @@ static DexClassesVector run_interdex(
 
   DexClassesVector outdex;
 
-  // build a separate lookup table for the primary dex,
-  // since we have to make sure we keep all classes
-  // in the same dex
-  auto const& primary_dex = dexen[0];
-  for (auto const& clazz : primary_dex) {
-    std::string clzname(clazz->get_type()->get_name()->c_str());
-    primary_det.clookup[clzname] = clazz;
-  }
+  // We have a bunch of special logic for the primary dex
+  // which we only use if we can't touch the primary dex.
+  if (!normal_primary_dex) {
+    // build a separate lookup table for the primary dex,
+    // since we have to make sure we keep all classes
+    // in the same dex
+    auto const& primary_dex = dexen[0];
+    for (auto const& clazz : primary_dex) {
+      std::string clzname(clazz->get_type()->get_name()->c_str());
+      primary_det.clookup[clzname] = clazz;
+    }
 
-  /* First emit just the primary dex, but sort it
-   * according to interdex order
-   **/
-  primary_det.la_size = 0;
-  // first add the classes in the interdex list
-  auto coldstart_classes_in_primary = 0;
-  for (auto& entry : interdexorder) {
-    auto it = primary_det.clookup.find(entry);
-    if (it == primary_det.clookup.end()) {
-      TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
-      continue;
+    /* First emit just the primary dex, but sort it
+     * according to interdex order
+     **/
+    primary_det.la_size = 0;
+    // first add the classes in the interdex list
+    auto coldstart_classes_in_primary = 0;
+    for (auto& entry : interdexorder) {
+      auto it = primary_det.clookup.find(entry);
+      if (it == primary_det.clookup.end()) {
+        TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
+        continue;
+      }
+      auto clazz = it->second;
+      if (unreferenced_classes.count(clazz)) {
+        TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
+        cls_skipped_in_primary++;
+        continue;
+      }
+      emit_class(primary_det, outdex, clazz, true);
+      coldstart_classes_in_primary++;
     }
-    auto clazz = it->second;
-    if (unreferenced_classes.count(clazz)) {
-      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
-      cls_skipped_in_primary++;
-      continue;
+    // now add the rest
+    for (auto const& clazz : primary_dex) {
+      emit_class(primary_det, outdex, clazz, true);
     }
-    emit_class(primary_det, outdex, clazz, true);
-    coldstart_classes_in_primary++;
-  }
-  // now add the rest
-  for (auto const& clazz : primary_dex) {
-    emit_class(primary_det, outdex, clazz, true);
-  }
-  TRACE(IDEX, 1,
-      "%d out of %lu classes in primary dex in interdex list\n",
-      coldstart_classes_in_primary,
-      primary_det.outs.size());
-  flush_out_dex(primary_det, outdex);
-  // record the primary dex classes in the main emit tracker,
-  // so we don't emit those classes again. *cough*
-  for (auto const& clazz : primary_dex) {
-    det.emitted.insert(clazz);
+    TRACE(IDEX, 1,
+        "%d out of %lu classes in primary dex in interdex list\n",
+        coldstart_classes_in_primary,
+        primary_det.outs.size());
+    flush_out_dex(primary_det, outdex);
+    // record the primary dex classes in the main emit tracker,
+    // so we don't emit those classes again. *cough*
+    for (auto const& clazz : primary_dex) {
+      det.emitted.insert(clazz);
+    }
   }
 
   det.la_size = 0;
@@ -466,11 +471,11 @@ static DexClassesVector run_interdex(
 void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   emit_canaries = m_emit_canaries;
 
-  auto first_attempt = run_interdex(dexen, cfg, true, m_static_prune);
+  auto first_attempt = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
   if (first_attempt.size() > dexen.size()) {
     TRACE(IDEX, 1, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
         Retrying without cutting off interdex dexes. \n", dexen.size(), first_attempt.size());
-    dexen = run_interdex(dexen, cfg, false, m_static_prune);
+    dexen = run_interdex(dexen, cfg, false, m_static_prune, m_normal_primary_dex);
   } else {
     dexen = std::move(first_attempt);
   }
