@@ -30,9 +30,10 @@
 class MultiMethodInliner {
  public:
   struct Config {
-    bool try_catch_inline;
+    bool try_catch_inline; // inline methods with try-catch
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
+    std::unordered_set<DexType*> black_list;
   };
 
   MultiMethodInliner(
@@ -83,7 +84,7 @@ class MultiMethodInliner {
    * Cannot inline enum methods because they can be called by code we do
    * not own.
    */
-  bool is_enum_method(DexMethod* callee);
+  bool is_blacklisted(DexMethod* callee);
 
   /**
    * Return true if inlining would cause the caller to have ore than 16
@@ -188,7 +189,7 @@ class MultiMethodInliner {
     size_t recursive{0};
     size_t caller_tries{0};
     size_t not_found{0};
-    size_t enum_callee{0};
+    size_t blacklisted{0};
     size_t more_than_16regs{0};
     size_t try_catch_block{0};
     size_t throws{0};

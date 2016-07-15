@@ -32,6 +32,13 @@ public:
            false,
            m_inliner_config.virtual_same_class_inline);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
+
+    std::vector<std::string> black_list;
+    pc.get("black_list", {}, black_list);
+    for (const auto& type_s : black_list) {
+      m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
+    }
+    m_inliner_config.black_list.emplace(DexType::make_type("Ljava/lang/Enum;"));
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
@@ -49,7 +56,6 @@ private:
   // inline virtual methods
   bool m_virtual_inline;
 
-  // inline methods with try-catch
   MultiMethodInliner::Config m_inliner_config;
 
   // annotations indicating not to inline a function

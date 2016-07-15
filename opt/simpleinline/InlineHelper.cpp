@@ -244,7 +244,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   if (primary.count(caller->get_class()) != 0 && refs_not_in_primary(callee)) {
     return false;
   }
-  if (is_enum_method(callee)) return false;
+  if (is_blacklisted(callee)) return false;
   if (over_16regs(caller, callee)) return false;
   if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
 
@@ -254,14 +254,18 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
 }
 
 /**
- * Return whether the method is in an Enum class.
- * Enum methods are invoked in different magic ways and should never
- * be removed.
+ * Return whether the method or any of its ancestors are in the blacklist.
+ * Typically used to prevent inlining / deletion of methods that are called
+ * via reflection.
  */
-bool MultiMethodInliner::is_enum_method(DexMethod* callee) {
-  if (type_class(callee->get_class())->get_super_class() == get_enum_type()) {
-    info.enum_callee++;
-    return true;
+bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
+  auto cls = type_class(callee->get_class());
+  while (cls != nullptr) {
+    if (m_config.black_list.count(cls->get_type())) {
+      info.blacklisted++;
+      return true;
+    }
+    cls = type_class(cls->get_super_class());
   }
   return false;
 }
