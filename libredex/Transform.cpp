@@ -17,6 +17,7 @@
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
+#include "RegAlloc.h"
 #include "WorkQueue.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -49,6 +50,25 @@ std::vector<Block*>&& PostOrderSort::get() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
+    : caller(caller) {
+  auto code = caller->get_code();
+  original_regs = code->get_registers_size();
+  if (use_liveness) {
+    MethodTransformer mtcaller(caller, true);
+    m_liveness = Liveness::analyze(mtcaller->cfg(), original_regs);
+  }
+}
+
+Liveness InlineContext::live_out(DexInstruction* insn) {
+  if (m_liveness) {
+    return m_liveness->at(insn);
+  } else {
+    // w/o liveness analysis we just assume that all caller regs are live
+    return Liveness(RegSet(original_regs, -1));
+  }
+}
 
 MethodTransform::~MethodTransform() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
@@ -488,6 +508,31 @@ FatMethod::iterator MethodTransform::make_switch_block(
 namespace {
 using RegMap = std::unordered_map<uint16_t, uint16_t>;
 
+/*
+ * If the callee has wide instructions, naive 1-to-1 remapping of registers
+ * won't work. Suppose we want to map v1 in the callee to v1 in the caller,
+ * because we know v1 is not live. If the instruction using v1 in the callee
+ * is wide, we need to check that v2 in the caller is also not live.
+ *
+ * Similarly, range opcodes require contiguity in their registers, and that
+ * cannot be handled by a naive 1-1 remapping.
+ */
+bool simple_reg_remap(DexCode* code) {
+  for (auto insn : code->get_instructions()) {
+    if (insn->is_wide() || insn->has_range_size()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const char* DEBUG_ONLY show_reg_map(RegMap& map) {
+  for (auto pair : map) {
+    TRACE(INL, 5, "%u -> %u\n", pair.first, pair.second);
+  }
+  return "";
+}
+
 void remap_dest(DexInstruction* inst, const RegMap& reg_map) {
   if (!inst->dests_size()) return;
   if (inst->dest_is_src()) return;
@@ -544,7 +589,7 @@ void remap_registers(FatMethod* fmethod, const RegMap& reg_map) {
   }
 }
 
-void remap_caller_regs(DexMethod* method,
+void enlarge_registers(DexMethod* method,
                        FatMethod* fmethod,
                        uint16_t newregs) {
   RegMap reg_map;
@@ -576,15 +621,20 @@ void remap_callee_regs(DexInstruction* invoke,
 /**
  * Builds a register map for a callee.
  */
-void build_remap_regs(RegMap& reg_map,
-                      DexInstruction* invoke,
-                      DexMethod* callee,
-                      uint16_t new_tmp_off) {
+RegMap build_callee_reg_map(DexInstruction* invoke,
+                            DexMethod* callee,
+                            RegSet invoke_live_in) {
+  RegMap reg_map;
   auto oldregs = callee->get_code()->get_registers_size();
   auto ins = callee->get_code()->get_ins_size();
   // remap all local regs (not args)
+  auto avail_regs = ~invoke_live_in;
+  auto caller_reg = avail_regs.find_first();
   for (uint16_t i = 0; i < oldregs - ins; ++i) {
-    reg_map[i] = new_tmp_off + i;
+    always_assert_log(caller_reg != RegSet::npos,
+                      "Ran out of caller registers for callee register %d", i);
+    reg_map[i] = caller_reg;
+    caller_reg = avail_regs.find_next(caller_reg);
   }
   if (is_invoke_range(invoke->opcode())) {
     auto base = invoke->range_base();
@@ -600,6 +650,7 @@ void build_remap_regs(RegMap& reg_map,
       reg_map[oldregs - ins + i] = invoke->src(i);
     }
   }
+  return reg_map;
 }
 
 /**
@@ -804,7 +855,7 @@ void MethodTransform::inline_tail_call(DexMethod* caller,
   always_assert(newregs <= 16);
 
   // Remap registers to account for possibly larger frame, more ins
-  remap_caller_regs(caller, fcaller, newregs);
+  enlarge_registers(caller, fcaller, newregs);
   remap_callee_regs(invoke, callee, fcallee, newregs);
 
   callee->get_code()->set_ins_size(bins);
@@ -840,23 +891,45 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   TRACE(INL, 2, "caller: %s\ncallee: %s\n",
       SHOW(context.caller), SHOW(callee));
   auto caller = context.caller;
+  uint16_t newregs = caller->get_code()->get_registers_size();
+  if (newregs > 16) {
+    return false;
+  }
+
+  auto callee_code = callee->get_code();
+  bool simple_remap_ok = simple_reg_remap(callee_code);
+  // if the simple approach won't work, just be conservative and assume all
+  // caller temp regs are live
+  auto invoke_live_out = context.live_out(invoke);
+  if (!simple_remap_ok) {
+    invoke_live_out = Liveness(RegSet(context.original_regs, -1));
+  }
+  // the caller liveness info is cached across multiple inlinings but the caller
+  // regs may have increased in the meantime, so update the liveness here
+  invoke_live_out.enlarge(caller->get_code()->get_ins_size(), newregs);
+  auto invoke_live_in = invoke_live_out.trans(invoke);
+
   MethodTransformer mtcaller(caller);
   MethodTransformer mtcallee(callee);
   auto fcaller = mtcaller->m_fmethod;
   auto fcallee = mtcallee->m_fmethod;
 
-  auto callee_code = callee->get_code();
   auto temps_needed =
       callee_code->get_registers_size() - callee_code->get_ins_size();
-  uint16_t newregs = caller->get_code()->get_registers_size();
-  if (context.inline_regs_used < temps_needed) {
-    newregs = newregs + temps_needed - context.inline_regs_used;
-    if (newregs > 16) return false;
-    remap_caller_regs(caller, fcaller, newregs);
-    context.inline_regs_used = temps_needed;
+  uint16_t temps_avail = newregs - invoke_live_in.bits().count();
+  if (temps_avail < temps_needed) {
+    newregs += temps_needed - temps_avail;
+    if (newregs > 16) {
+      return false;
+    }
+    enlarge_registers(caller, fcaller, newregs);
+    invoke_live_in.enlarge(caller->get_code()->get_ins_size(), newregs);
+    invoke_live_out.enlarge(caller->get_code()->get_ins_size(), newregs);
   }
-  RegMap callee_reg_map;
-  build_remap_regs(callee_reg_map, invoke, callee, context.new_tmp_off);
+  auto callee_reg_map =
+      build_callee_reg_map(invoke, callee, invoke_live_in.bits());
+  TRACE(INL, 5, "Callee reg map\n");
+  TRACE(INL, 5, "%s", show_reg_map(callee_reg_map));
 
   auto pos = std::find_if(
     fcaller->begin(), fcaller->end(),

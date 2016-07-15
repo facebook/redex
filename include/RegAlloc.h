@@ -9,6 +9,36 @@
 
 #pragma once
 
+#include <boost/dynamic_bitset.hpp>
+#include <memory>
+
 #include "DexClass.h"
+
+struct Block;
+
+using RegSet = boost::dynamic_bitset<>;
+using LivenessMap = std::unordered_map<DexInstruction*, Liveness>;
+
+class Liveness {
+  RegSet m_reg_set;
+ public:
+  Liveness(int nregs): m_reg_set(nregs) {}
+  Liveness(RegSet reg_set): m_reg_set(reg_set) {}
+
+  const RegSet& bits() { return m_reg_set; }
+
+  Liveness meet(const Liveness&) const;
+  Liveness trans(const DexInstruction*) const;
+  bool operator==(const Liveness&) const;
+  bool operator!=(const Liveness& that) const {
+    return !(*this == that);
+  };
+  void enlarge(uint16_t ins_size, uint16_t newregs);
+
+  static std::unique_ptr<LivenessMap> analyze(std::vector<Block*>&,
+                                              uint16_t nregs);
+
+  friend std::string show(const Liveness&);
+};
 
 void allocate_registers(DexMethod*);

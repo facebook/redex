@@ -37,6 +37,7 @@ struct DexDebugEntry;
 struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
+class Liveness;
 
 std::string show(const DexString*);
 std::string show(const DexType*);
@@ -58,6 +59,7 @@ std::string show(const MethodItemEntry&);
 std::string show(const std::vector<Block*>&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
+std::string show(const Liveness&);
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

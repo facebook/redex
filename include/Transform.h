@@ -18,6 +18,7 @@
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "RegAlloc.h"
 
 enum TryEntryType {
   TRY_START = 0,
@@ -189,19 +190,16 @@ class PostOrderSort {
 
 /**
  * Carry context for multiple inline into a single caller.
- * Particularly has info on the extra number of locals used when inlining
- * so that multiple callees can reuse the same registers.
+ * In particular, it caches the liveness analysis so that we can reuse it when
+ * multiple callees into the same caller.
  */
-struct InlineContext {
+class InlineContext {
+  std::unique_ptr<LivenessMap> m_liveness;
+ public:
   DexMethod* caller;
-  uint16_t new_tmp_off;
-  uint16_t inline_regs_used;
-
-  InlineContext(DexMethod* caller) : caller(caller) {
-    auto code = caller->get_code();
-    new_tmp_off = code->get_registers_size() - code->get_ins_size();
-    inline_regs_used = 0;
-  }
+  uint16_t original_regs;
+  InlineContext(DexMethod* caller, bool use_liveness);
+  Liveness live_out(DexInstruction*);
 };
 
 class MethodTransform {

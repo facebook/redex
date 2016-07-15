@@ -27,7 +27,7 @@ DexOpcodeFormat opcode_format(DexOpcode opcode) {
   case FOPCODE_FILLED_ARRAY:
     return FMT_fopcode;
   }
-  not_reached();
+  always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
 
 unsigned DexInstruction::count_from_opcode() const {
@@ -281,6 +281,10 @@ bool DexInstruction::src_is_wide(int i) const {
   default:
     return false;
   }
+}
+
+bool DexInstruction::is_wide() const {
+  return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
 }
 
 bool DexInstruction::dest_is_wide() const {

@@ -31,6 +31,7 @@ public:
     pc.get("virtual_same_class",
            false,
            m_inliner_config.virtual_same_class_inline);
+    pc.get("use_liveness", false, m_inliner_config.use_liveness);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
 
     std::vector<std::string> black_list;

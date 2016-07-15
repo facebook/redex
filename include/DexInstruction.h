@@ -428,6 +428,7 @@ class DexInstruction : public Gatherable {
    */
   bool src_is_wide(int i) const;
   bool dest_is_wide() const;
+  bool is_wide() const;
   int src_bit_width(int i) const;
   int dest_bit_width() const;
 

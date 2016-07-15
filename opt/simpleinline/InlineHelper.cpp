@@ -186,7 +186,7 @@ void MultiMethodInliner::caller_inline(
     info.caller_tries++;
     return;
   }
-  InlineContext inline_context(caller);
+  InlineContext inline_context(caller, m_config.use_liveness);
   inline_callees(inline_context, callees);
 }
 
@@ -229,8 +229,11 @@ void MultiMethodInliner::inline_callees(
         SHOW(caller),
         callee->get_code()->get_registers_size() -
         callee->get_code()->get_ins_size());
+    if (!MethodTransform::inline_16regs(inline_context, callee, mop)) {
+      info.more_than_16regs++;
+      continue;
+    }
     change_visibility(callee);
-    MethodTransform::inline_16regs(inline_context, callee, mop);
     info.calls_inlined++;
     inlined.insert(callee);
   }
@@ -245,7 +248,6 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
     return false;
   }
   if (is_blacklisted(callee)) return false;
-  if (over_16regs(caller, callee)) return false;
   if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
 
   if (cannot_inline_opcodes(callee, caller)) return false;
@@ -266,23 +268,6 @@ bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
       return true;
     }
     cls = type_class(cls->get_super_class());
-  }
-  return false;
-}
-
-/**
- * Return whether the number of registers to add to the caller, in order to
- * accommodate the callee, would spill over 16 registers.
- * More than 16 registers require special bytecodes for some operations and we
- * do not manage it now.
- */
-bool MultiMethodInliner::over_16regs(DexMethod* caller, DexMethod* callee) {
-  auto regs = caller->get_code()->get_registers_size();
-  regs += (callee->get_code()->get_registers_size() -
-      callee->get_code()->get_ins_size());
-  if (regs > 16) {
-    info.more_than_16regs++;
-    return true;
   }
   return false;
 }

@@ -33,6 +33,7 @@ class MultiMethodInliner {
     bool try_catch_inline; // inline methods with try-catch
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
+    bool use_liveness;
     std::unordered_set<DexType*> black_list;
   };
 
@@ -85,12 +86,6 @@ class MultiMethodInliner {
    * not own.
    */
   bool is_blacklisted(DexMethod* callee);
-
-  /**
-   * Return true if inlining would cause the caller to have ore than 16
-   * registers.
-   */
-  bool over_16regs(DexMethod* caller, DexMethod* callee);
 
   /**
    * Return true if the callee contains try/catch.

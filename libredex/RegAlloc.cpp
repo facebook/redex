@@ -7,30 +7,113 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "RegAlloc.h"
-
 #include <set>
-#include <boost/dynamic_bitset.hpp>
 
+#include "RegAlloc.h"
 #include "Transform.h"
 
-using LiveSet = boost::dynamic_bitset<>;
-
-std::vector<DexInstruction*> get_instruction_vector(
-  const std::vector<Block*>& blocks
-) {
-  std::vector<DexInstruction*> insns;
-  uint16_t id = 0;
-  for (auto& block : blocks) {
-    for (auto& i : *block) {
-      if (i.type == MFLOW_OPCODE) {
-        i.addr = id++;
-        insns.push_back(i.insn);
+template <typename T>
+std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
+    std::vector<Block*>& blocks, T bottom) {
+  auto insn_out_map =
+      std::make_unique<std::unordered_map<DexInstruction*, T>>();
+  std::vector<T> block_ins(blocks.size(), bottom);
+  bool changed;
+  do {
+    changed = false;
+    for (auto& block : blocks) {
+      auto prev_block_in = block_ins[block->id()];
+      auto insn_out = bottom;
+      for (auto& succ : block->succs()) {
+        insn_out = insn_out.meet(block_ins[succ->id()]);
+      }
+      for (auto it = block->rbegin(); it != block->rend(); ++it) {
+        if (it->type != MFLOW_OPCODE) {
+          continue;
+        }
+        auto insn = it->insn;
+        insn_out_map->erase(insn);
+        insn_out_map->emplace(insn, insn_out);
+        insn_out = insn_out.trans(insn);
+      }
+      block_ins[block->id()] = insn_out;
+      if (insn_out != prev_block_in) {
+        changed = true;
       }
     }
-  }
-  return insns;
+  } while (changed);
+
+  return insn_out_map;
 }
+
+//////////////////////////////////////////////////////////////////////////////
+
+bool Liveness::operator==(const Liveness& that) const {
+  return m_reg_set == that.m_reg_set;
+}
+
+void Liveness::enlarge(uint16_t ins_size, uint16_t newregs) {
+  if (m_reg_set.size() < newregs) {
+    auto oldregs = m_reg_set.size();
+    m_reg_set.resize(newregs);
+    for (uint16_t i = 0; i < ins_size; ++i) {
+      m_reg_set[newregs - 1 - i] = m_reg_set[oldregs - 1 - i];
+      m_reg_set[oldregs - 1 - i] = false;
+    }
+  }
+}
+
+Liveness Liveness::trans(const DexInstruction* inst) const {
+  auto analysis = *this;
+  if (inst->dests_size()) {
+    bool value = inst->dest_is_src();
+    analysis.m_reg_set.set(inst->dest(), value);
+    if (inst->dest_is_wide()) {
+      analysis.m_reg_set.set(inst->dest() + 1, value);
+    }
+  }
+  for (size_t i = 0; i < inst->srcs_size(); i++) {
+    analysis.m_reg_set.set(inst->src((int)i));
+    if (inst->src_is_wide((int)i)) {
+      analysis.m_reg_set.set(inst->src((int)i) + 1);
+    }
+  }
+  if (inst->has_range_base()) {
+    for (size_t i = 0; i < inst->range_size(); i++) {
+      analysis.m_reg_set.set(inst->range_base() + i);
+    }
+  }
+  return analysis;
+}
+
+Liveness Liveness::meet(const Liveness& that) const {
+  return Liveness(m_reg_set | that.m_reg_set);
+}
+
+std::unique_ptr<LivenessMap> Liveness::analyze(std::vector<Block*>& blocks,
+                                               uint16_t nregs) {
+  TRACE(REG, 5, "%s\n", SHOW(blocks));
+  auto liveness = backwards_dataflow<Liveness>(blocks, Liveness(nregs));
+
+  auto DEBUG_ONLY dump_liveness = [&](const LivenessMap& amap) {
+    for (auto& block : blocks) {
+      for (auto& mie : *block) {
+        if (mie.type != MFLOW_OPCODE) {
+          continue;
+        }
+        auto& analysis = amap.at(mie.insn);
+        TRACE(REG, 5, "%04x: %s", mie.addr, SHOW(mie.insn));
+        TRACE(REG, 5, " [Live registers:%s]\n", SHOW(analysis));
+      }
+    }
+    return "";
+  };
+  TRACE(REG, 5, "%s", dump_liveness(*liveness));
+
+  return liveness;
+}
+
+//////////////////////////////////////////////////////////////////////////////
 
 static bool candidate(DexMethod* m) {
   auto code = m->get_code();
@@ -122,71 +205,14 @@ void allocate_registers(DexMethod* m) {
     return;
   }
   TRACE(REG, 5, "Allocating: %s\n", SHOW(m));
+
   auto transform =
     MethodTransform::get_method_transform(m, true /* want_cfg */);
   auto& cfg = transform->cfg();
   auto blocks = PostOrderSort(cfg).get();
   auto nregs = m->get_code()->get_registers_size();
+  auto liveness_map = Liveness::analyze(blocks, nregs);
   auto ins = m->get_code()->get_ins_size();
-
-  TRACE(REG, 5, "%s\n", SHOW(blocks));
-
-  auto opcode_vector = get_instruction_vector(blocks);
-  std::vector<LiveSet> liveness(opcode_vector.size(), LiveSet(nregs));
-  std::vector<LiveSet> block_liveness(blocks.size(), LiveSet(nregs));
-  bool changed;
-  do {
-    changed = false;
-    for (auto& block : blocks) {
-      auto& bliveness = block_liveness[block->id()];
-      auto prev_liveness = bliveness;
-      bliveness.reset();
-      for (auto& succ : block->succs()) {
-        bliveness |= block_liveness[succ->id()];
-      }
-      auto livein = bliveness;
-      for (auto it = block->rbegin(); it != block->rend(); ++it) {
-        if (it->type != MFLOW_OPCODE) {
-          continue;
-        }
-        auto inst = it->insn;
-        auto& iliveness = liveness[it->addr];
-        iliveness = livein;
-        for (size_t i = 0; i < inst->srcs_size(); i++) {
-          iliveness.set(inst->src((int) i));
-        }
-        livein = iliveness;
-        if (inst->dests_size()) {
-          iliveness.set(inst->dest());
-        }
-      }
-      bliveness = livein;
-      if (bliveness != prev_liveness) {
-        changed = true;
-      }
-    }
-  } while (changed);
-
-  // Dump the liveness analysis.
-  auto DEBUG_ONLY dumpLiveness = [&] {
-    for (auto& block : blocks) {
-      for (auto& mie : *block) {
-        if (mie.type != MFLOW_OPCODE) {
-          continue;
-        }
-        auto& live = liveness[mie.addr];
-        TRACE(REG, 5, "%04x:", mie.addr);
-        for (size_t i = 0; i < live.size(); i++) {
-          if (live.test(i)) {
-            TRACE(REG, 5, " %lu", i);
-          }
-        }
-        TRACE(REG, 5, "\n");
-      }
-    }
-    return "";
-  };
-  TRACE(REG, 5, "%s", dumpLiveness());
 
   // Use liveness to build a conflict graph.
   std::vector<std::set<uint16_t>> conflicts(nregs);
@@ -195,12 +221,13 @@ void allocate_registers(DexMethod* m) {
       if (mie.type != MFLOW_OPCODE) {
         continue;
       }
-      auto& live = liveness[mie.addr];
+      auto& live_out = liveness_map->at(mie.insn);
+      auto live_in = live_out.trans(mie.insn);
       // These are probably sparse so this loop isn't the best choice, but it's
       // easy, and I bet the regsets aren't so big anyways.
-      for (size_t i = 0; i < live.size(); i++) {
-        for (size_t j = i; j < live.size(); j++) {
-          if (live.test(i) && live.test(j)) {
+      for (size_t i = 0; i < live_in.bits().size(); i++) {
+        for (size_t j = i; j < live_in.bits().size(); j++) {
+          if (live_in.bits().test(i) && live_in.bits().test(j)) {
             conflicts[i].emplace(j);
             conflicts[j].emplace(i);
           }
