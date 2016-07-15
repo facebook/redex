@@ -699,21 +699,6 @@ DexInstruction* move_result(DexInstruction* res, DexInstruction* move_res) {
   return move;
 }
 
-/* We need to cleanup two cases:
- * Duplicate DBG_SET_PROLOGUE_END
- * Uninitialized parameters
- *
- * The parameter names are part of the debug info for the method.
- * The technically correct solution would be to make a start
- * local for each of them.  However, that would also imply another
- * end local after the tail to correctly set what the register
- * is at the end.  This would bloat the debug info parameters for
- * a corner case.
- *
- * Instead, we just delete locals lifetime information for parameters.
- * This is an exceedingly rare case triggered by goofy code that
- * reuses parameters as locals.
- */
 void cleanup_callee_debug(FatMethod* fcallee) {
   std::unordered_set<uint16_t> valid_regs;
   auto it = fcallee->begin();
@@ -757,6 +742,7 @@ class MethodSplicer {
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
   MethodItemEntry* m_active_catch;
+  std::unordered_set<uint16_t> m_valid_dbg_regs;
 
  public:
   MethodSplicer(const RegMap& callee_reg_map,
@@ -812,16 +798,16 @@ class MethodSplicer {
     not_reached();
   }
 
- public:
   void operator()(FatMethod* fcaller,
                   FatMethod::iterator insert_pos,
                   FatMethod::iterator fcallee_start,
                   FatMethod::iterator fcallee_end) {
-    auto it = fcallee_start;
-    while (it != fcallee_end) {
+    for (auto it = fcallee_start; it != fcallee_end; ++it) {
+      if (should_skip_debug(&*it)) {
+        continue;
+      }
       auto mei = clone(&*it);
       remap_registers(*mei, m_callee_reg_map);
-      it++;
       if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
         auto tentry = mei->tentry;
         // try ranges cannot be nested, so we flatten them here
@@ -850,6 +836,47 @@ class MethodSplicer {
         }
         fcaller->insert(insert_pos, *mei);
       }
+    }
+  }
+
+ private:
+  /* We need to skip two cases:
+   * Duplicate DBG_SET_PROLOGUE_END
+   * Uninitialized parameters
+   *
+   * The parameter names are part of the debug info for the method.
+   * The technically correct solution would be to make a start
+   * local for each of them.  However, that would also imply another
+   * end local after the tail to correctly set what the register
+   * is at the end.  This would bloat the debug info parameters for
+   * a corner case.
+   *
+   * Instead, we just delete locals lifetime information for parameters.
+   * This is an exceedingly rare case triggered by goofy code that
+   * reuses parameters as locals.
+   */
+  bool should_skip_debug(const MethodItemEntry* mei) {
+    if (mei->type != MFLOW_DEBUG) {
+      return false;
+    }
+    switch (mei->dbgop->opcode()) {
+    case DBG_SET_PROLOGUE_END:
+      return true;
+    case DBG_START_LOCAL:
+    case DBG_START_LOCAL_EXTENDED: {
+      auto reg = mei->dbgop->uvalue();
+      m_valid_dbg_regs.insert(reg);
+      return false;
+    }
+    case DBG_END_LOCAL:
+    case DBG_RESTART_LOCAL: {
+      auto reg = mei->dbgop->uvalue();
+      if (m_valid_dbg_regs.find(reg) == m_valid_dbg_regs.end()) {
+        return true;
+      }
+    }
+    default:
+      return false;
     }
   }
 };
@@ -1006,11 +1033,6 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     move_res = fcaller->end();
   }
 
-  // Skip dbg prologue in callee, we don't need two.
-  auto it = fcallee->begin();
-  if (it->type == MFLOW_DEBUG && it->dbgop->opcode() == DBG_SET_PROLOGUE_END) {
-    ++it;
-  }
   // find the last position entry before the invoke.
   // we need to decrement the reverse iterator because it gets constructed
   // as pointing to the element preceding pos
@@ -1030,11 +1052,11 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
   auto splice = MethodSplicer(callee_reg_map, invoke_position, caller_catch);
-  auto ret_it =
-      std::find_if(it, fcallee->end(), [](const MethodItemEntry& mei) {
+  auto ret_it = std::find_if(
+      fcallee->begin(), fcallee->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
-  splice(fcaller, pos, it, ret_it);
+  splice(fcaller, pos, fcallee->begin(), ret_it);
 
   // try items can span across a return opcode
   auto callee_catch = splice.clone(find_active_catch(fcallee, ret_it));
