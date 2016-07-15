@@ -279,7 +279,7 @@ Json::Value get_stats(const dex_output_stats_t& stats) {
 }
 
 Json::Value get_pass_stats(const PassManager& mgr) {
-  Json::Value all;
+  Json::Value all(Json::ValueType::objectValue);
   for (auto pass_metrics : mgr.get_metrics()) {
     if (pass_metrics.second.empty()) {
       continue;
