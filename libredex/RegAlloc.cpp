@@ -7,8 +7,10 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <algorithm>
 #include <set>
 
+#include "DexInstruction.h"
 #include "RegAlloc.h"
 #include "Transform.h"
 
@@ -204,10 +206,7 @@ void allocate_registers(DexMethod* m) {
   if (!candidate(m)) {
     return;
   }
-  TRACE(REG, 5, "Allocating: %s\n", SHOW(m));
-
-  auto transform =
-    MethodTransform::get_method_transform(m, true /* want_cfg */);
+  MethodTransformer transform(m, true /* want_cfg */);
   auto& cfg = transform->cfg();
   auto blocks = PostOrderSort(cfg).get();
   auto nregs = m->get_code()->get_registers_size();
@@ -215,23 +214,23 @@ void allocate_registers(DexMethod* m) {
   auto ins = m->get_code()->get_ins_size();
 
   // Use liveness to build a conflict graph.
-  std::vector<std::set<uint16_t>> conflicts(nregs);
+  std::vector<RegSet> conflicts(nregs, RegSet(nregs));
   for (auto& block : blocks) {
     for (auto& mie : *block) {
       if (mie.type != MFLOW_OPCODE) {
         continue;
       }
-      auto& live_out = liveness_map->at(mie.insn);
-      auto live_in = live_out.trans(mie.insn);
-      // These are probably sparse so this loop isn't the best choice, but it's
-      // easy, and I bet the regsets aren't so big anyways.
-      for (size_t i = 0; i < live_in.bits().size(); i++) {
-        for (size_t j = i; j < live_in.bits().size(); j++) {
-          if (live_in.bits().test(i) && live_in.bits().test(j)) {
-            conflicts[i].emplace(j);
-            conflicts[j].emplace(i);
-          }
+      std::vector<uint16_t> dest_regs;
+      if (mie.insn->dests_size()) {
+        dest_regs.push_back(mie.insn->dest());
+        if (mie.insn->dest_is_wide()) {
+          dest_regs.push_back(mie.insn->dest() + 1);
         }
+      }
+      auto& live_out = liveness_map->at(mie.insn);
+      for (auto r : dest_regs) {
+        conflicts[r] |= live_out.bits();
+        conflicts[r][r] = false;
       }
     }
   }
@@ -240,8 +239,10 @@ void allocate_registers(DexMethod* m) {
   auto DEBUG_ONLY dumpConflicts = [&] {
     for (size_t i = 0; i < conflicts.size(); ++i) {
       TRACE(REG, 5, "%lu:", i);
-      for (auto& DEBUG_ONLY r : conflicts[i]) {
-        TRACE(REG, 5, " %d", r);
+      for (size_t j = 0; j < conflicts[i].size(); ++j) {
+        if (conflicts[i][j]) {
+          TRACE(REG, 5, " %d", j);
+        }
       }
       TRACE(REG, 5, "\n");
     }
@@ -251,51 +252,59 @@ void allocate_registers(DexMethod* m) {
 
   // Re-allocate everything but arguments
   std::unordered_map<uint16_t, uint16_t> reg_map;
+  size_t new_regs = 0;
   for (size_t i = 0; i < (size_t)(nregs - ins); ++i) {
-    boost::dynamic_bitset<> conflicted(nregs);
-    for (auto& r : conflicts[i]) {
-      auto it = reg_map.find(r);
+    RegSet conflicted(new_regs);
+    for (size_t j = 0; j < conflicts[i].size(); ++j) {
+      if (!conflicts[i][j] && !conflicts[j][i]) {
+        continue;
+      }
+      auto it = reg_map.find(j);
       if (it != reg_map.end()) {
         conflicted.set(it->second);
       }
     }
-    for (size_t j = 0; j < conflicted.size(); ++j) {
-      if (!conflicted.test(j)) {
-        reg_map[i] = j;
-        break;
-      }
+    RegSet available = ~conflicted;
+    auto first_avail = available.find_first();
+    if (first_avail == RegSet::npos) {
+      first_avail = new_regs;
     }
+    reg_map[i] = first_avail;
+    new_regs = std::max(new_regs, first_avail + 1);
   }
 
   // handle the arg registers
-  boost::dynamic_bitset<> arg_conflicts(nregs);
+  RegSet arg_conflicts(new_regs);
   for (size_t i = nregs - ins; i < nregs; ++i) {
-    for (auto& r : conflicts[i]) {
-      auto it = reg_map.find(r);
+    for (size_t j = 0; j < conflicts[i].size(); ++j) {
+      if (!conflicts[i][j] && !conflicts[j][i]) {
+        continue;
+      }
+      auto it = reg_map.find(j);
       if (it != reg_map.end()) {
         arg_conflicts.set(it->second);
       }
     }
   }
-  size_t least_arg = 0;
-  for (size_t j = nregs; j > 0; --j) {
+  int32_t least_arg = 0;
+  for (size_t j = new_regs; j > 0; --j) {
     if (arg_conflicts.test(j - 1)) {
       least_arg = j;
       break;
     }
   }
+  least_arg = std::max(least_arg, (int32_t)new_regs - ins);
   for (size_t i = 0; i < ins; ++i) {
     reg_map[nregs - ins + i] = least_arg++;
+    new_regs = least_arg;
+  }
+
+  if (new_regs > 16) {
+    return;
   }
 
   // Resize the code item's register set.
-  size_t new_regs = 0;
-  for (auto& rr : reg_map) {
-    if (rr.second > new_regs) {
-      new_regs = rr.second;
-    }
-  }
-  m->get_code()->set_registers_size(new_regs + 1);
+  m->get_code()->set_registers_size(new_regs);
 
   // Dump allocation
   auto DEBUG_ONLY dumpAllocation = [&] {
