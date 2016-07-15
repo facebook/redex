@@ -589,6 +589,16 @@ void remap_registers(FatMethod* fmethod, const RegMap& reg_map) {
   }
 }
 
+void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
+  RegSet mapped(newregs);
+  for (auto pair : reg_map) {
+    mapped[pair.second] = reg_set[pair.first];
+    reg_set[pair.first] = false;
+  }
+  reg_set.resize(newregs);
+  reg_set |= mapped;
+}
+
 void enlarge_registers(DexMethod* method,
                        FatMethod* fmethod,
                        uint16_t newregs) {
@@ -619,6 +629,31 @@ void remap_callee_regs(DexInstruction* invoke,
 }
 
 /**
+ * Maps the callee param registers to the argument registers of the caller's
+ * invoke instruction.
+ */
+RegMap build_callee_param_reg_map(DexInstruction* invoke, DexMethod* callee) {
+  RegMap reg_map;
+  auto oldregs = callee->get_code()->get_registers_size();
+  auto ins = callee->get_code()->get_ins_size();
+  if (is_invoke_range(invoke->opcode())) {
+    auto base = invoke->range_base();
+    auto range = invoke->range_size();
+    always_assert(ins == range);
+    for (uint16_t i = 0; i < range; ++i) {
+      reg_map[oldregs - ins + i] = base + i;
+    }
+  } else {
+    auto wc = invoke->arg_word_count();
+    always_assert(ins == wc);
+    for (uint16_t i = 0; i < wc; ++i) {
+      reg_map[oldregs - ins + i] = invoke->src(i);
+    }
+  }
+  return reg_map;
+}
+
+/**
  * Builds a register map for a callee.
  */
 RegMap build_callee_reg_map(DexInstruction* invoke,
@@ -636,19 +671,9 @@ RegMap build_callee_reg_map(DexInstruction* invoke,
     reg_map[i] = caller_reg;
     caller_reg = avail_regs.find_next(caller_reg);
   }
-  if (is_invoke_range(invoke->opcode())) {
-    auto base = invoke->range_base();
-    auto range = invoke->range_size();
-    always_assert(ins == range);
-    for (uint16_t i = 0; i < range; ++i) {
-      reg_map[oldregs - ins + i] = base + i;
-    }
-  } else {
-    auto wc = invoke->arg_word_count();
-    always_assert(ins == wc);
-    for (uint16_t i = 0; i < wc; ++i) {
-      reg_map[oldregs - ins + i] = invoke->src(i);
-    }
+  auto param_reg_map = build_callee_param_reg_map(invoke, callee);
+  for (auto pair : param_reg_map) {
+    reg_map[pair.first] = pair.second;
   }
   return reg_map;
 }
@@ -835,6 +860,36 @@ MethodItemEntry* find_active_catch(FatMethod* method,
   return pos != method->end() && pos->tentry->type == TRY_END
     ? pos->tentry->catch_start : nullptr;
 }
+
+/**
+ * Return a RegSet indicating the registers that the callee interferes with
+ * either via a check-cast to or by writing to one of the ins.
+ * When inlining, writing over one of the ins may change the type of the
+ * register to a type that breaks the invariants in the caller.
+ */
+RegSet ins_reg_defs(DexCode* code) {
+  RegSet def_ins(code->get_registers_size());
+  for (auto insn : code->get_instructions()) {
+    if (insn->opcode() == OPCODE_CHECK_CAST) {
+      def_ins.set(insn->src(0));
+    } else if (insn->dests_size() > 0) {
+      def_ins.set(insn->dest());
+      if (insn->dest_is_wide()) {
+        def_ins.set(insn->dest() + 1);
+      }
+    }
+  }
+  // temp_regs are the first n registers in the method that are not ins.
+  // Dx methods use the last k registers for the arguments (where k is the size
+  // of the args).
+  // So an instruction writes an ins if it has a destination and the
+  // destination is bigger or equal than temp_regs.
+  auto temp_regs = code->get_registers_size() - code->get_ins_size();
+  RegSet param_filter(temp_regs);
+  param_filter.resize(code->get_registers_size(), true);
+  return param_filter & def_ins;
+}
+
 }
 
 void MethodTransform::inline_tail_call(DexMethod* caller,
@@ -907,7 +962,13 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   // the caller liveness info is cached across multiple inlinings but the caller
   // regs may have increased in the meantime, so update the liveness here
   invoke_live_out.enlarge(caller->get_code()->get_ins_size(), newregs);
-  auto invoke_live_in = invoke_live_out.trans(invoke);
+
+  auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
+  auto def_ins = ins_reg_defs(callee_code);
+  remap_reg_set(def_ins, callee_param_reg_map, newregs);
+  if (def_ins.intersects(invoke_live_out.bits())) {
+    return false;
+  }
 
   MethodTransformer mtcaller(caller);
   MethodTransformer mtcallee(callee);
@@ -916,6 +977,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   auto temps_needed =
       callee_code->get_registers_size() - callee_code->get_ins_size();
+  auto invoke_live_in = invoke_live_out.trans(invoke);
   uint16_t temps_avail = newregs - invoke_live_in.bits().count();
   if (temps_avail < temps_needed) {
     newregs += temps_needed - temps_avail;

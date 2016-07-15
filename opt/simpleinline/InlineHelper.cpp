@@ -291,13 +291,9 @@ bool MultiMethodInliner::has_try_catch(DexMethod* callee) {
 bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
                                                DexMethod* caller) {
   int ret_count = 0;
-  auto code = callee->get_code();
-  uint16_t temp_regs =
-      static_cast<uint16_t>(code->get_registers_size() - code->get_ins_size());
   for (auto insn : callee->get_code()->get_instructions()) {
     if (create_vmethod(insn)) return true;
     if (is_invoke_super(insn)) return true;
-    if (writes_ins_reg(insn, temp_regs)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
     if (unknown_field(insn, callee)) return true;
     if (insn->opcode() == FOPCODE_FILLED_ARRAY) {
@@ -361,30 +357,6 @@ bool MultiMethodInliner::is_invoke_super(DexInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER ||
       insn->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
     info.invoke_super++;
-    return true;
-  }
-  return false;
-}
-
-/**
- * Return whether the callee contains a check-cast to or writes one of the ins.
- * When inlining writing over one of the ins may change the type of the
- * register to a type that breaks the invariants in the caller.
- */
-bool MultiMethodInliner::writes_ins_reg(DexInstruction* insn, uint16_t temp_regs) {
-  int reg = -1;
-  if (insn->opcode() == OPCODE_CHECK_CAST) {
-    reg = insn->src(0);
-  } else if (insn->dests_size() > 0) {
-    reg = insn->dest();
-  }
-  // temp_regs are the first n registers in the method that are not ins.
-  // Dx methods use the last k registers for the arguments (where k is the size
-  // of the args).
-  // So an instruction writes an ins if it has a destination and the
-  // destination is bigger or equal than temp_regs (0 is a reg).
-  if (reg >= 0 && static_cast<uint16_t>(reg) >= temp_regs) {
-    info.write_over_ins++;
     return true;
   }
   return false;
