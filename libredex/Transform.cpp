@@ -18,6 +18,7 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "RegAlloc.h"
+#include "Util.h"
 #include "WorkQueue.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -47,6 +48,59 @@ std::vector<Block*>&& PostOrderSort::get() {
     }
   }
   return std::move(m_postorder_list);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
+    : type(that.type), addr(that.addr) {
+  switch (type) {
+  case MFLOW_TRY:
+    tentry = that.tentry;
+    break;
+  case MFLOW_CATCH:
+    centry = that.centry;
+    break;
+  case MFLOW_OPCODE:
+    insn = that.insn;
+    break;
+  case MFLOW_TARGET:
+    target = that.target;
+    break;
+  case MFLOW_DEBUG:
+    new (&dbgop) std::unique_ptr<DexDebugInstruction>(that.dbgop->clone());
+    break;
+  case MFLOW_POSITION:
+    new (&pos) std::unique_ptr<DexPosition>(new DexPosition(*that.pos));
+    break;
+  case MFLOW_FALLTHROUGH:
+    break;
+  default:
+    not_reached();
+  }
+}
+
+MethodItemEntry::~MethodItemEntry() {
+  switch (type) {
+    case MFLOW_TRY:
+      delete tentry;
+      break;
+    case MFLOW_CATCH:
+      delete centry;
+      break;
+    case MFLOW_TARGET:
+      delete target;
+      break;
+    case MFLOW_DEBUG:
+      dbgop.~unique_ptr<DexDebugInstruction>();
+      break;
+    case MFLOW_POSITION:
+      pos.~unique_ptr<DexPosition>();
+      break;
+    default:
+      /* nothing to delete */
+      break;
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -296,10 +350,10 @@ static void associate_debug_entries(FatMethod* fm,
     MethodItemEntry* mentry;
     switch (entry.type) {
       case DexDebugEntryType::Instruction:
-        mentry = new MethodItemEntry(entry.insn);
+        mentry = new MethodItemEntry(std::move(entry.insn));
         break;
       case DexDebugEntryType::Position:
-        mentry = new MethodItemEntry(entry.pos);
+        mentry = new MethodItemEntry(std::move(entry.pos));
         break;
       default:
         not_reached();
@@ -549,15 +603,15 @@ void remap_srcs(DexInstruction* inst, const RegMap& reg_map) {
   }
 }
 
-void remap_debug(DexDebugInstruction* dbgop, const RegMap& reg_map) {
-  switch (dbgop->opcode()) {
+void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
+  switch (dbgop.opcode()) {
   case DBG_START_LOCAL:
   case DBG_START_LOCAL_EXTENDED:
   case DBG_END_LOCAL:
   case DBG_RESTART_LOCAL: {
-    auto it = reg_map.find(dbgop->uvalue());
+    auto it = reg_map.find(dbgop.uvalue());
     if (it == reg_map.end()) return;
-    dbgop->set_uvalue(it->second);
+    dbgop.set_uvalue(it->second);
     break;
   }
   default:
@@ -576,7 +630,7 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
     remap_registers(mei.insn, reg_map);
     break;
   case MFLOW_DEBUG:
-    remap_debug(mei.dbgop, reg_map);
+    remap_debug(*mei.dbgop, reg_map);
     break;
   default:
     break;
@@ -780,16 +834,9 @@ class MethodSplicer {
       cloned_mei->target->src = clone(cloned_mei->target->src);
       return cloned_mei;
     case MFLOW_DEBUG:
-      // XXX MethodItemEntry doesn't delete dbgop in its dtor, so this is
-      // probably
-      // a leak
-      cloned_mei->dbgop = cloned_mei->dbgop->clone();
       return cloned_mei;
     case MFLOW_POSITION:
-      // XXX MethodItemEntry doesn't delete pos in its dtor, so this is probably
-      // a leak
-      cloned_mei->pos = new DexPosition(*cloned_mei->pos);
-      m_pos_map[mei->pos] = cloned_mei->pos;
+      m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
       cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
       return cloned_mei;
     case MFLOW_FALLTHROUGH:
@@ -1039,9 +1086,10 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   auto position_it = --FatMethod::reverse_iterator(pos);
   while (++position_it != fcaller->rend()
       && position_it->type != MFLOW_POSITION);
-  auto invoke_position =
-    position_it == fcaller->rend() ? nullptr : position_it->pos;
-  if (invoke_position != nullptr) {
+  std::unique_ptr<DexPosition> pos_nullptr;
+  auto& invoke_position =
+    position_it == fcaller->rend() ? pos_nullptr : position_it->pos;
+  if (invoke_position) {
     TRACE(MTRANS, 3, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
         invoke_position->line);
   }
@@ -1051,7 +1099,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  auto splice = MethodSplicer(callee_reg_map, invoke_position, caller_catch);
+  auto splice = MethodSplicer(callee_reg_map, invoke_position.get(), caller_catch);
   auto ret_it = std::find_if(
       fcallee->begin(), fcallee->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
@@ -1076,8 +1124,10 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   }
   // ensure that the caller's code after the inlined method retain their
   // original position
-  if (invoke_position != nullptr) {
-    fcaller->insert(pos, *(new MethodItemEntry(invoke_position)));
+  if (invoke_position) {
+    fcaller->insert(pos,
+                    *(new MethodItemEntry(
+                        std::make_unique<DexPosition>(*invoke_position))));
   }
 
   // remove invoke
@@ -1416,12 +1466,11 @@ bool MethodTransform::try_sync() {
   auto& debugitem = code->get_debug_item();
   if (debugitem) {
     auto& entries = debugitem->get_entries();
-    entries.clear();
     for (auto& mentry : *m_fmethod) {
       if (mentry.type == MFLOW_DEBUG) {
-        entries.emplace_back(mentry.addr, mentry.dbgop->clone());
+        entries.emplace_back(mentry.addr, std::move(mentry.dbgop));
       } else if (mentry.type == MFLOW_POSITION) {
-        entries.emplace_back(mentry.addr, mentry.pos);
+        entries.emplace_back(mentry.addr, std::move(mentry.pos));
       }
     }
   }

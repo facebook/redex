@@ -82,10 +82,10 @@ struct MethodItemEntry {
     CatchEntry* centry;
     DexInstruction* insn;
     BranchTarget* target;
-    DexDebugInstruction* dbgop;
-    DexPosition* pos;
+    std::unique_ptr<DexDebugInstruction> dbgop;
+    std::unique_ptr<DexPosition> pos;
   };
-  explicit MethodItemEntry(const MethodItemEntry&) = default;
+  explicit MethodItemEntry(const MethodItemEntry&);
   MethodItemEntry(DexInstruction* insn) {
     this->type = MFLOW_OPCODE;
     this->insn = insn;
@@ -98,27 +98,12 @@ struct MethodItemEntry {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  MethodItemEntry(DexDebugInstruction* dbgop)
-      : type(MFLOW_DEBUG), dbgop(dbgop) {}
-  MethodItemEntry(DexPosition* pos)
-      : type(MFLOW_POSITION), pos(pos) {}
+  MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
+      : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
+  MethodItemEntry(std::unique_ptr<DexPosition> pos)
+      : type(MFLOW_POSITION), pos(std::move(pos)) {}
   MethodItemEntry() { this->type = MFLOW_FALLTHROUGH; }
-  ~MethodItemEntry() {
-    switch (type) {
-      case MFLOW_TRY:
-        delete tentry;
-        break;
-      case MFLOW_CATCH:
-        delete centry;
-        break;
-      case MFLOW_TARGET:
-        delete target;
-        break;
-      default:
-        /* nothing to delete */
-        break;
-    }
-  }
+  ~MethodItemEntry();
 };
 
 using MethodItemMemberListOption =

@@ -9,8 +9,9 @@
 
 #pragma once
 
-#include <string>
 #include <list>
+#include <memory>
+#include <string>
 #include <vector>
 
 /*
@@ -60,6 +61,11 @@ std::string show(const std::vector<Block*>&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
 std::string show(const Liveness&);
+
+template <typename T>
+std::string show(const std::unique_ptr<T>& ptr) {
+  return show(ptr.get());
+}
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

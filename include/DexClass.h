@@ -442,13 +442,17 @@ struct DexDebugEntry final {
   DexDebugEntryType type;
   uint32_t addr;
   union {
-    DexPosition* pos;
-    DexDebugInstruction* insn;
+    std::unique_ptr<DexPosition> pos;
+    std::unique_ptr<DexDebugInstruction> insn;
   };
-  DexDebugEntry(uint32_t addr, DexPosition* pos)
-    : type(DexDebugEntryType::Position), addr(addr), pos(pos) {}
-  DexDebugEntry(uint32_t addr, DexDebugInstruction* insn)
-    : type(DexDebugEntryType::Instruction), addr(addr), insn(insn) {}
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
+      : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn)
+      : type(DexDebugEntryType::Instruction),
+        addr(addr),
+        insn(std::move(insn)) {}
+  DexDebugEntry(DexDebugEntry&& other);
+  ~DexDebugEntry();
   void gather_strings(std::vector<DexString*>& lstring) {
     if (type == DexDebugEntryType::Instruction) {
       insn->gather_strings(lstring);

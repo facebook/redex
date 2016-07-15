@@ -21,6 +21,7 @@
 #include "DexDebugInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Util.h"
 #include "Warning.h"
 
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
@@ -37,6 +38,29 @@ void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   m_value = v;
   m_access = access_flags;
   m_concrete = true;
+}
+
+DexDebugEntry::DexDebugEntry(DexDebugEntry&& that)
+    : type(that.type), addr(that.addr) {
+  switch (type) {
+  case DexDebugEntryType::Position:
+    new (&pos) std::unique_ptr<DexPosition>(std::move(that.pos));
+    break;
+  case DexDebugEntryType::Instruction:
+    new (&insn) std::unique_ptr<DexDebugInstruction>(std::move(that.insn));
+    break;
+  }
+}
+
+DexDebugEntry::~DexDebugEntry() {
+  switch (type) {
+  case DexDebugEntryType::Position:
+    pos.~unique_ptr<DexPosition>();
+    break;
+  case DexDebugEntryType::Instruction:
+    insn.~unique_ptr<DexDebugInstruction>();
+    break;
+  }
 }
 
 /*
@@ -66,7 +90,7 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
     case DBG_END_SEQUENCE:
     case DBG_SET_PROLOGUE_END:
     case DBG_SET_EPILOGUE_BEGIN: {
-      entries.emplace_back(pc, opcode.release());
+      entries.emplace_back(pc, std::move(opcode));
       break;
     }
     case DBG_ADVANCE_PC: {
@@ -77,7 +101,8 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
       uint8_t adjustment = op - DBG_FIRST_SPECIAL;
       absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
       pc += adjustment / DBG_LINE_RANGE;
-      entries.emplace_back(pc, new DexPosition(source_file, absolute_line));
+      entries.emplace_back(
+          pc, std::make_unique<DexPosition>(source_file, absolute_line));
       break;
     }
     }
@@ -132,10 +157,10 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     for (; it != entries.end() && it->addr == addr; ++it) {
       switch (it->type) {
         case DexDebugEntryType::Position:
-          positions.push_back(it->pos);
+          positions.push_back(it->pos.get());
           break;
         case DexDebugEntryType::Instruction:
-          insns.push_back(it->insn);
+          insns.push_back(it->insn.get());
           break;
       }
     }
