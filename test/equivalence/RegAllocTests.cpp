@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "DexAsm.h"
 #include "TestGenerator.h"
 #include "Transform.h"
 #include "RegAlloc.h"
@@ -18,17 +19,12 @@ class RegAllocTest : public EquivalenceTest {
 };
 
 EQUIVALENCE_TEST(RegAllocTest, DeadCodeKills)(DexMethod* m) {
+  using namespace dex_asm;
   MethodTransformer mt(m);
-  auto cst1 = new DexInstruction(OPCODE_CONST_16);
-  cst1->set_dest(0);
-  cst1->set_literal(1);
-  mt->push_back(cst1);
-  auto cst2 = new DexInstruction(OPCODE_CONST_16);
-  cst2->set_dest(1);
-  cst2->set_literal(2);
-  mt->push_back(cst2);
-  auto ret = new DexInstruction(OPCODE_RETURN);
-  ret->set_src(0, 0);
-  mt->push_back(ret);
+  mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
+  // this assignment is dead, but regalloc must still avoid having it write to
+  // a live register
+  mt->push_back(dasm(OPCODE_CONST_16, {1_v, 0x2_L}));
+  mt->push_back(dasm(OPCODE_RETURN, {0_v}));
   m->get_code()->set_registers_size(2);
 }
