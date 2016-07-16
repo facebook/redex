@@ -136,7 +136,9 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the field
    * was package/protected and we move the access out of context.
    */
-  bool unknown_field(DexInstruction* insn, DexMethod* context);
+  bool unknown_field(DexInstruction* insn,
+                     DexMethod* callee,
+                     DexMethod* caller);
 
   /**
    * If caller is in the primary DEX and any opcode in callee refers to a

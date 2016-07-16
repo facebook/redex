@@ -295,7 +295,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
     if (create_vmethod(insn)) return true;
     if (is_invoke_super(insn)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
-    if (unknown_field(insn, callee)) return true;
+    if (unknown_field(insn, callee, caller)) return true;
     if (insn->opcode() == FOPCODE_FILLED_ARRAY) {
       info.array_data++;
       return true;
@@ -420,7 +420,16 @@ bool MultiMethodInliner::unknown_virtual(DexInstruction* insn,
  * But we need to make all fields public across the hierarchy and for fields
  * we don't know we have no idea whether the field was public or not anyway.
  */
-bool MultiMethodInliner::unknown_field(DexInstruction* insn, DexMethod* context) {
+bool MultiMethodInliner::unknown_field(DexInstruction* insn,
+                                       DexMethod* callee,
+                                       DexMethod* caller) {
+  // if the caller and callee are in the same class, we don't have to worry
+  // about unknown fields -- private / protected fields will remain
+  // accessible
+  if (m_config.virtual_same_class_inline &&
+      caller->get_class() == callee->get_class()) {
+    return false;
+  }
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
     auto fop = static_cast<DexOpcodeField*>(insn);
     auto field = fop->field();
