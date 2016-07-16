@@ -32,7 +32,7 @@
 namespace {
 
 DexMethod* match_pattern(DexMethod* bridge) {
-  auto code = bridge->get_code();
+  auto& code = bridge->get_code();
   if (!code) return nullptr;
   auto const& insts = code->get_instructions();
   auto it = insts.begin();
@@ -241,8 +241,8 @@ class BridgeRemover {
     }
   }
 
-  void exclude_referenced_bridgee(DexMethod* code_method, DexCode* code) {
-    auto const& insts = code->get_instructions();
+  void exclude_referenced_bridgee(DexMethod* code_method, const DexCode& code) {
+    auto const& insts = code.get_instructions();
     for (auto inst : insts) {
       if (!is_invoke(inst->opcode())) continue;
       auto method = static_cast<DexOpcodeMethod*>(inst)->get_method();
@@ -269,7 +269,7 @@ class BridgeRemover {
   void exclude_referenced_bridgees() {
     walk_code(*m_scope,
               [](DexMethod*) { return true; },
-              [&](DexMethod* m, DexCode* code) {
+              [&](DexMethod* m, DexCode& code) {
                 exclude_referenced_bridgee(m, code);
               });
   }

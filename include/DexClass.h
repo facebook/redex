@@ -506,8 +506,9 @@ class DexCode {
   std::unique_ptr<DexDebugItem> m_dbg;
 
  public:
-  static DexCode* get_dex_code(DexIdx* idx, uint32_t offset,
-      DexString* source_file);
+  static std::unique_ptr<DexCode> get_dex_code(DexIdx* idx,
+                                               uint32_t offset,
+                                               DexString* source_file);
 
   // TODO: make it private and find a better way to allow code creation
   DexCode()
@@ -580,7 +581,7 @@ class DexMethod {
   DexMethodRef m_ref;
   /* Concrete method members */
   DexAnnotationSet* m_anno;
-  DexCode* m_code;
+  std::unique_ptr<DexCode> m_code;
   DexAccessFlags m_access;
   bool m_concrete;
   bool m_virtual;
@@ -598,10 +599,6 @@ class DexMethod {
     m_ref.name = name;
     m_ref.proto = proto;
     m_access = static_cast<DexAccessFlags>(0);
-  }
-
-  ~DexMethod() {
-    delete m_code;
   }
 
  public:
@@ -651,7 +648,8 @@ class DexMethod {
   DexType* get_class() const { return m_ref.cls; }
   DexString* get_name() const { return m_ref.name; }
   DexProto* get_proto() const { return m_ref.proto; }
-  DexCode* get_code() const { return m_code; }
+  const std::unique_ptr<DexCode>& get_code() const { return m_code; }
+  std::unique_ptr<DexCode>& get_code() { return m_code; }
   bool is_concrete() const { return m_concrete; }
   bool is_virtual() const { return m_virtual; }
   bool is_external() const { return m_external; }
@@ -684,9 +682,11 @@ class DexMethod {
         "Unexpected concrete method %s\n", SHOW(this));
     m_external = true;
   }
-  void set_code(DexCode* code) { m_code = code; }
+  void set_code(std::unique_ptr<DexCode> code) { m_code = std::move(code); }
 
-  void make_concrete(DexAccessFlags access, DexCode* dc, bool is_virtual);
+  void make_concrete(DexAccessFlags access,
+                     std::unique_ptr<DexCode> dc,
+                     bool is_virtual);
   void change(const DexMethodRef& ref, bool rename_on_collision = false) {
     g_redex->mutate_method(this, ref, rename_on_collision);
   }

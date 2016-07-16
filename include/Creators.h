@@ -411,7 +411,7 @@ struct MethodCreator {
   // Helpers
   //
 
-  DexCode* to_code();
+  std::unique_ptr<DexCode>& to_code();
   void load_locals(DexMethod* meth);
   uint16_t ins_count() const;
 

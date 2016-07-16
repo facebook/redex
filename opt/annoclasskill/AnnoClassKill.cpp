@@ -99,8 +99,8 @@ void kill_annotation_classes(
   walk_code(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod* meth, DexCode* code) {
-      auto opcodes = code->get_instructions();
+    [&](DexMethod* meth, DexCode& code) {
+      auto opcodes = code.get_instructions();
       for (const auto& opcode : opcodes) {
         if (opcode->has_types()) {
           auto typeop = static_cast<DexOpcodeType*>(opcode);

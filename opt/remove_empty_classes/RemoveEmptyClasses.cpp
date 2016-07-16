@@ -58,8 +58,9 @@ void process_annotation(std::unordered_set<const DexType*>* class_references,
 }
 
 void process_code(std::unordered_set<const DexType*>* class_references,
-  DexMethod* meth, DexCode* code) {
-    auto opcodes = code->get_instructions();
+                  DexMethod* meth,
+                  DexCode& code) {
+    auto opcodes = code.get_instructions();
     for (const auto& opcode : opcodes) {
       if (opcode->has_types()) {
         auto typeop = static_cast<DexOpcodeType*>(opcode);
@@ -74,9 +75,9 @@ void process_code(std::unordered_set<const DexType*>* class_references,
     }
     // Also gather exception types that are caught.
     std::vector<DexType*> catch_types;
-    code->gather_catch_types(catch_types);
-    for (auto&  caught_type : catch_types) {
-       class_references->insert(caught_type);
+    code.gather_catch_types(catch_types);
+    for (auto& caught_type : catch_types) {
+      class_references->insert(caught_type);
     }
 }
 
@@ -91,8 +92,8 @@ void remove_empty_classes(Scope& classes) {
 
   walk_code(classes,
             [](DexMethod*) { return true; },
-            [&](DexMethod* meth, DexCode* code)
-               { process_code (&class_references, meth, code); });
+            [&](DexMethod* meth, DexCode& code)
+               { process_code(&class_references, meth, code); });
 
   size_t classes_before_size = classes.size();
 

@@ -259,9 +259,9 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
         }
         return false;
       },
-      [&](DexMethod* meth, DexCode* code) {
+      [&](DexMethod* meth, const DexCode& code) {
         auto base_cls = type_class(meth->get_class());
-        for (auto const& inst : code->get_instructions()) {
+        for (auto const& inst : code.get_instructions()) {
           DexClass* called_cls = nullptr;
           if (inst->has_methods()) {
             auto method_access = static_cast<DexOpcodeMethod*>(inst);

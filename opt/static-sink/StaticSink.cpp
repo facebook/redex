@@ -232,7 +232,7 @@ bool allow_type_access(DexType* type) {
 }
 
 bool illegal_access(DexMethod* method) {
-  auto code = method->get_code();
+  auto& code = method->get_code();
   if (!code) {
     return true;
   }

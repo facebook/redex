@@ -118,7 +118,7 @@ std::unique_ptr<LivenessMap> Liveness::analyze(std::vector<Block*>& blocks,
 //////////////////////////////////////////////////////////////////////////////
 
 static bool candidate(DexMethod* m) {
-  auto code = m->get_code();
+  auto& code = m->get_code();
   if (!code) {
     return false;
   }

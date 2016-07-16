@@ -207,7 +207,9 @@ void sort_unique(std::vector<T>& vec, Cmp cmp = std::less<T>()) {
  * the optimization would have to re-map the input regs.  The N arguments to
  * the invoke should be the last N registers of the frame.
  */
-bool passes_args_through(DexOpcodeMethod* insn, DexCode* code, int ignore = 0);
+bool passes_args_through(DexOpcodeMethod* insn,
+                         const DexCode& code,
+                         int ignore = 0);
 
 /**
  * Estimates the linear alloc space consumed by the class

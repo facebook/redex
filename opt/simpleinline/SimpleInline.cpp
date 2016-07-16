@@ -153,13 +153,13 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
 
-  const auto can_inline_method = [&](DexMethod* meth, DexCode* code) {
+  const auto can_inline_method = [&](DexMethod* meth, const DexCode& code) {
     if (has_anno(type_class(meth->get_class()), no_inline) ||
         has_anno(meth, no_inline)) {
       no_inline_anno_count++;
       return;
     }
-    if (code->get_instructions().size() < SMALL_CODE_SIZE) {
+    if (code.get_instructions().size() < SMALL_CODE_SIZE) {
       // always inline small methods even if they are not deletable
       inlinable.insert(meth);
     } else {
@@ -178,7 +178,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
         all_methods++;
         if (method->is_virtual()) return;
 
-        auto code = method->get_code();
+        auto& code = method->get_code();
         bool dont_inline = code == nullptr;
 
         direct_methods++;
@@ -192,18 +192,18 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
 
         if (dont_inline) return;
 
-        can_inline_method(method, code);
+        can_inline_method(method, *code);
       });
   if (m_virtual_inline) {
     auto non_virtual = devirtualize(scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
-      auto code = vmeth->get_code();
+      auto& code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
         continue;
       }
-      can_inline_method(vmeth, code);
+      can_inline_method(vmeth, *code);
     }
   }
 

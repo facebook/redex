@@ -146,7 +146,7 @@ private:
    * - Method args must all go into invoke without rearrangement
    */
   bool is_trivial_return_invoke_super(const DexMethod* meth) {
-    const DexCode* code = meth->get_code();
+    const auto& code = meth->get_code();
 
     // Must have code
     if (!code) {

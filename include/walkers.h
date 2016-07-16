@@ -52,21 +52,21 @@ void walk_fields(const T& scope, FieldWalkerFn walker) {
  */
 template <class T,
           class MethodFilterFn = bool(DexMethod*),
-          class CodeWalkerFn = void(DexMethod*, DexCode*)>
+          class CodeWalkerFn = void(DexMethod*, DexCode&)>
 void walk_code(const T& scope,
                MethodFilterFn methodFilter,
                CodeWalkerFn codeWalker) {
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
       if (methodFilter(dmethod)) {
-        auto code = dmethod->get_code();
-        if (code) codeWalker(dmethod, code);
+        auto& code = dmethod->get_code();
+        if (code) codeWalker(dmethod, *code);
       }
     }
     for (auto vmethod : cls->get_vmethods()) {
       if (methodFilter(vmethod)) {
-        auto code = vmethod->get_code();
-        if (code) codeWalker(vmethod, code);
+        auto& code = vmethod->get_code();
+        if (code) codeWalker(vmethod, *code);
       }
     }
   };
@@ -85,7 +85,7 @@ void walk_opcodes(const T& scope,
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
       if (methodFilter(dmethod)) {
-        auto code = dmethod->get_code();
+        auto& code = dmethod->get_code();
         if (code) {
           auto opcodes = code->get_instructions();
           for (const auto& opcode : opcodes) {
@@ -96,7 +96,7 @@ void walk_opcodes(const T& scope,
     }
     for (auto vmethod : cls->get_vmethods()) {
       if (methodFilter(vmethod)) {
-        auto code = vmethod->get_code();
+        auto& code = vmethod->get_code();
         if (code) {
           auto opcodes = code->get_instructions();
           for (const auto& opcode : opcodes) {

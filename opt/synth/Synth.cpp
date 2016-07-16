@@ -51,7 +51,7 @@ bool can_remove(DexMethod* meth, const SynthConfig& synthConfig) {
  *   return-TYPE vA
  */
 DexField* trivial_get_field_wrapper(DexMethod* m) {
-  DexCode* code = m->get_code();
+  auto& code = m->get_code();
   if (code == nullptr) return nullptr;
 
   auto& insns = code->get_instructions();
@@ -86,7 +86,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
  *   return-TYPE vA
  */
 DexField* trivial_get_static_field_wrapper(DexMethod* m) {
-  DexCode* code = m->get_code();
+  auto& code = m->get_code();
   if (code == nullptr) return nullptr;
 
   auto& insns = code->get_instructions();
@@ -123,7 +123,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
  *    | return-void )
  */
 DexMethod* trivial_method_wrapper(DexMethod* m) {
-  DexCode* code = m->get_code();
+  auto& code = m->get_code();
   if (code == nullptr) return nullptr;
   auto& insns = code->get_instructions();
   auto it = insns.begin();
@@ -156,7 +156,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
           SHOW(collision));
     return nullptr;
   }
-  if (!passes_args_through(invoke, code)) return nullptr;
+  if (!passes_args_through(invoke, *code)) return nullptr;
   if (++it == insns.end()) return nullptr;
 
   if (is_move_result((*it)->opcode())) {
@@ -178,7 +178,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
  *   return-void
  */
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
-  DexCode* code = m->get_code();
+  auto& code = m->get_code();
   if (code == nullptr) return nullptr;
   auto& insns = code->get_instructions();
   auto it = insns.begin();
@@ -187,7 +187,7 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
     return nullptr;
   }
   auto invoke = static_cast<DexOpcodeMethod*>(*it);
-  if (!passes_args_through(invoke, code, 1)) {
+  if (!passes_args_through(invoke, *code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s\n", SHOW(m));
     return nullptr;
   }
@@ -512,7 +512,7 @@ void replace_ctor_wrapper(MethodTransformer& transform,
 }
 
 void replace_wrappers(DexMethod* caller_method,
-                      DexCode* code,
+                      DexCode& code,
                       WrapperMethods& ssms) {
   std::vector<std::tuple<DexOpcodeMethod*, DexInstruction*, DexField*>> getter_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapper_calls;
@@ -520,7 +520,7 @@ void replace_wrappers(DexMethod* caller_method,
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> ctor_calls;
 
   TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
-  auto& insns = code->get_instructions();
+  auto& insns = code.get_instructions();
   for (auto it = insns.begin(); it != insns.end(); ++it) {
     auto insn = *it;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -783,7 +783,7 @@ void transform(const std::vector<DexClass*>& classes,
   }
   for (auto const& m : methods) {
     if (m->get_code()) {
-      replace_wrappers(m, m->get_code(), ssms);
+      replace_wrappers(m, *m->get_code(), ssms);
     }
   }
   // check that invokes to promoted static method is correct

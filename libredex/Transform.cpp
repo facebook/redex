@@ -107,7 +107,7 @@ MethodItemEntry::~MethodItemEntry() {
 
 InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
     : caller(caller) {
-  auto code = caller->get_code();
+  auto& code = caller->get_code();
   original_regs = code->get_registers_size();
   if (use_liveness) {
     MethodTransformer mtcaller(caller, true);
@@ -364,9 +364,9 @@ static void associate_debug_entries(FatMethod* fm,
 }
 
 static void associate_try_items(FatMethod* fm,
-                                DexCode* code,
+                                DexCode& code,
                                 addr_mei_t& addr_to_mei) {
-  auto const& tries = code->get_tries();
+  auto const& tries = code.get_tries();
   for (auto& tri : tries) {
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
@@ -396,7 +396,7 @@ static void associate_try_items(FatMethod* fm,
 }
 
 FatMethod* MethodTransform::balloon(DexMethod* method) {
-  auto code = method->get_code();
+  auto& code = method->get_code();
   if (code == nullptr) {
     return nullptr;
   }
@@ -415,7 +415,7 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
     addr += opcode->size();
   }
   generate_branch_targets(fm, addr_to_mei);
-  associate_try_items(fm, code, addr_to_mei);
+  associate_try_items(fm, *code, addr_to_mei);
   auto& debugitem = code->get_debug_item();
   if (debugitem) {
     associate_debug_entries(fm, *debugitem, addr_to_mei);
@@ -571,8 +571,8 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
  * Similarly, range opcodes require contiguity in their registers, and that
  * cannot be handled by a naive 1-1 remapping.
  */
-bool simple_reg_remap(DexCode* code) {
-  for (auto insn : code->get_instructions()) {
+bool simple_reg_remap(const DexCode& code) {
+  for (auto insn : code.get_instructions()) {
     if (insn->is_wide() || insn->has_range_size()) {
       return false;
     }
@@ -941,9 +941,9 @@ MethodItemEntry* find_active_catch(FatMethod* method,
  * When inlining, writing over one of the ins may change the type of the
  * register to a type that breaks the invariants in the caller.
  */
-RegSet ins_reg_defs(DexCode* code) {
-  RegSet def_ins(code->get_registers_size());
-  for (auto insn : code->get_instructions()) {
+RegSet ins_reg_defs(const DexCode& code) {
+  RegSet def_ins(code.get_registers_size());
+  for (auto insn : code.get_instructions()) {
     if (insn->opcode() == OPCODE_CHECK_CAST) {
       def_ins.set(insn->src(0));
     } else if (insn->dests_size() > 0) {
@@ -958,9 +958,9 @@ RegSet ins_reg_defs(DexCode* code) {
   // of the args).
   // So an instruction writes an ins if it has a destination and the
   // destination is bigger or equal than temp_regs.
-  auto temp_regs = code->get_registers_size() - code->get_ins_size();
+  auto temp_regs = code.get_registers_size() - code.get_ins_size();
   RegSet param_filter(temp_regs);
-  param_filter.resize(code->get_registers_size(), true);
+  param_filter.resize(code.get_registers_size(), true);
   return param_filter & def_ins;
 }
 
@@ -1025,8 +1025,8 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     return false;
   }
 
-  auto callee_code = callee->get_code();
-  bool simple_remap_ok = simple_reg_remap(callee_code);
+  auto& callee_code = callee->get_code();
+  bool simple_remap_ok = simple_reg_remap(*callee_code);
   // if the simple approach won't work, just be conservative and assume all
   // caller temp regs are live
   auto invoke_live_out = context.live_out(invoke);
@@ -1038,7 +1038,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   invoke_live_out.enlarge(caller->get_code()->get_ins_size(), newregs);
 
   auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
-  auto def_ins = ins_reg_defs(callee_code);
+  auto def_ins = ins_reg_defs(*callee_code);
   remap_reg_set(def_ins, callee_param_reg_map, newregs);
   if (def_ins.intersects(invoke_live_out.bits())) {
     return false;
@@ -1342,7 +1342,7 @@ void MethodTransform::sync() {
 
 bool MethodTransform::try_sync() {
   TRACE(MTRANS, 5, "Syncing %s\n", SHOW(m_method));
-  auto code = m_method->get_code();
+  auto& code = m_method->get_code();
   auto& opout = code->reset_instructions();
   uint32_t addr = 0;
   addr_mei_t addr_to_mei;

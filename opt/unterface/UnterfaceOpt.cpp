@@ -101,7 +101,7 @@ bool find_impl(DexType* type, Unterface& unterface) {
  * scenario.
  */
 void do_update_method(DexMethod* meth, Unterface& unterface) {
-  auto code = meth->get_code();
+  auto& code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
   auto mt = MethodTransform::get_method_transform(meth);
   DexInstruction* last = nullptr;
@@ -186,8 +186,8 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
       [&](DexMethod* meth) {
         return !find_impl(meth->get_class(), unterface);
       },
-      [&](DexMethod* meth, DexCode* code) {
-        auto insns = code->get_instructions();
+      [&](DexMethod* meth, const DexCode& code) {
+        const auto insns = code.get_instructions();
         for (auto insn : insns) {
           auto op = insn->opcode();
           switch (op) {

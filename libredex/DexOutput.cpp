@@ -661,14 +661,15 @@ void DexOutput::generate_code_items() {
       // There is no code item for ABSTRACT or NATIVE methods.
       continue;
     }
-    DexCode* code = meth->get_code();
+    std::unique_ptr<DexCode>& code = meth->get_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
         "Undefined method in generate_code_items()\n\t prototype: %s\n",
         show_short(meth).c_str());
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
-    m_code_item_emits.emplace_back(code, (dex_code_item*)(m_output + m_offset));
+    m_code_item_emits.emplace_back(code.get(),
+                                   (dex_code_item*)(m_output + m_offset));
     m_offset += size;
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
@@ -915,7 +916,7 @@ void DexOutput::generate_map() {
  * with the jumbo-ness of their stridx.
  */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
-  auto code = method->get_code();
+  auto& code = method->get_code();
   if (!code) return; // nothing to do for native methods
 
   auto& insts = code->get_instructions();

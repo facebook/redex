@@ -85,7 +85,7 @@ inline Trait operator&(const Trait& a, const Trait b) {
 
 Trait check_init(DexMethod* meth) {
   Trait trait = NO_TRAIT;
-  auto code = meth->get_code();
+  auto& code = meth->get_code();
   if (meth->get_proto()->get_args()->get_type_list().size() > 1) {
     trait |= MULTIPLE_ARGS_CTOR;
   }

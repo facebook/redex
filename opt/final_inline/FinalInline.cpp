@@ -198,7 +198,7 @@ void get_sput_in_clinit(DexClass* clazz,
     if (is_clinit(method)) {
       always_assert_log(is_static(method) && is_constructor(method),
           "static constructor doesn't have the proper access bits set\n");
-      auto code = method->get_code();
+      auto& code = method->get_code();
       auto opcodes = code->get_instructions();
       for (auto opcode : opcodes) {
         if (opcode->has_fields() && is_sput(opcode->opcode())) {

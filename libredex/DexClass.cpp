@@ -245,11 +245,12 @@ void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
   }
 }
 
-DexCode* DexCode::get_dex_code(
-    DexIdx* idx, uint32_t offset, DexString* source_file) {
-  if (offset == 0) return nullptr;
+std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx,
+                                               uint32_t offset,
+                                               DexString* source_file) {
+  if (offset == 0) return std::unique_ptr<DexCode>();
   const dex_code_item* code = (const dex_code_item*)idx->get_uint_data(offset);
-  DexCode* dc = new DexCode();
+  std::unique_ptr<DexCode> dc(new DexCode());
   dc->m_registers_size = code->registers_size;
   dc->m_ins_size = code->ins_size;
   dc->m_outs_size = code->outs_size;
@@ -372,10 +373,10 @@ void DexMethod::become_virtual() {
 }
 
 void DexMethod::make_concrete(DexAccessFlags access,
-                              DexCode* dc,
+                              std::unique_ptr<DexCode> dc,
                               bool is_virtual) {
   m_access = access;
-  m_code = dc;
+  m_code = std::move(dc);
   m_concrete = true;
   m_virtual = is_virtual;
 }
@@ -419,8 +420,9 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    DexCode* dc = DexCode::get_dex_code(idx, code_off, m_source_file);
-    dm->make_concrete(access_flags, dc, false);
+    std::unique_ptr<DexCode> dc =
+        DexCode::get_dex_code(idx, code_off, m_source_file);
+    dm->make_concrete(access_flags, std::move(dc), false);
     m_dmethods.push_back(dm);
   }
   ndex = 0;
@@ -429,8 +431,9 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    DexCode* dc = DexCode::get_dex_code(idx, code_off, m_source_file);
-    dm->make_concrete(access_flags, dc, true);
+    std::unique_ptr<DexCode> dc =
+        DexCode::get_dex_code(idx, code_off, m_source_file);
+    dm->make_concrete(access_flags, std::move(dc), true);
     m_vmethods.push_back(dm);
   }
 }
@@ -551,8 +554,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code())) {
-      code_off = dco[m->get_code()];
+    if (m->get_code() != nullptr && dco.count(m->get_code().get())) {
+      code_off = dco[m->get_code().get()];
     }
     encdata = write_uleb128(encdata, code_off);
   }
@@ -576,8 +579,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code())) {
-      code_off = dco[m->get_code()];
+    if (m->get_code() != nullptr && dco.count(m->get_code().get())) {
+      code_off = dco[m->get_code().get()];
     }
     encdata = write_uleb128(encdata, code_off);
   }

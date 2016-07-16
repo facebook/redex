@@ -75,9 +75,8 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
     }
   }
   new_method->make_concrete(
-      orig_method->get_access(), orig_method->get_code(),
+      orig_method->get_access(), std::move(orig_method->get_code()),
       orig_method->is_virtual());
-  orig_method->set_code(nullptr);
 }
 
 /**

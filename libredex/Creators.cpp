@@ -500,20 +500,20 @@ MethodCreator::MethodCreator(DexType* cls,
 
 DexMethod* MethodCreator::create() {
   if (method->is_concrete()) {
-    method->set_code(to_code());
+    method->set_code(std::move(to_code()));
   } else {
-    method->make_concrete(access, to_code(),
+    method->make_concrete(access, std::move(to_code()),
         !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
   }
   return method;
 }
 
-DexCode* MethodCreator::to_code() {
-  DexCode* code = new DexCode();
+std::unique_ptr<DexCode>& MethodCreator::to_code() {
+  std::unique_ptr<DexCode> code(new DexCode());
   code->set_registers_size(top_reg);
   code->set_ins_size(ins_count());
   code->set_outs_size(out_count);
-  method->set_code(code);
+  method->set_code(std::move(code));
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       DexInstruction* insn = mi.insn;
@@ -551,7 +551,7 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
   assert(!is_init(meth) && !is_clinit(meth));
   auto smeth = DexMethod::make_method(target_cls->get_type(), name, proto);
   smeth->make_concrete(
-      meth->get_access() | ACC_STATIC, meth->get_code(), false);
+      meth->get_access() | ACC_STATIC, std::move(meth->get_code()), false);
   target_cls->add_method(smeth);
   return smeth;
 }

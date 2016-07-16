@@ -44,7 +44,7 @@ inline bool has_n_args(const DexMethod* meth, size_t n) {
  * - Native methods are not considered to "have code"
  */
 inline bool has_code(const DexMethod* meth) {
-  return meth->get_code();
+  return meth->get_code() != nullptr;
 }
 
 /** Determine if the opcode matches any flavor of invoke-direct */
@@ -301,7 +301,7 @@ match_t<DexMethod, std::tuple<std::tuple<T...> > >
   opcodes(const std::tuple<T...>& t) {
   return {
     [](const DexMethod* meth, const std::tuple<T...>& t) {
-      auto code = meth->get_code();
+      auto& code = meth->get_code();
       if (!code) return false;
       auto it = code->get_instructions().cbegin();
       DexOpcodeSeq opcodes = { meth, it };

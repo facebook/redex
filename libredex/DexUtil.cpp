@@ -229,13 +229,13 @@ DexType* get_array_type(const DexType* type) {
 }
 
 bool passes_args_through(DexOpcodeMethod* insn,
-                         DexCode* code,
+                         const DexCode& code,
                          int ignore /* = 0 */
                          ) {
-  auto regs = code->get_registers_size();
-  auto ins = code->get_ins_size();
+  auto regs = code.get_registers_size();
+  auto ins = code.get_ins_size();
   auto wc = insn->arg_word_count();
-  if (wc != (code->get_ins_size() - ignore)) return false;
+  if (wc != (code.get_ins_size() - ignore)) return false;
   for (int i = 0; i < wc; i++) {
     if (insn->src(i) != (regs - ins + i)) {
       return false;
