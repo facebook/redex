@@ -32,6 +32,8 @@
 namespace {
 
 static std::unordered_set<const DexClass*> referenced_classes;
+// List of packages on the white list
+static std::vector<std::string> package_filter;
 
 // Note: this method will return nullptr if the dotname refers to an unknown
 // type.
@@ -47,6 +49,21 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   std::replace(buf.begin(), buf.end(), '.', '/');
   return DexType::get_type(buf.c_str());
 }
+
+// Search a class name in a list of package names, return true if there is a match
+bool find_package(const char* name) {
+  // If there's no whitelisted package, optimize every package by default
+  if (package_filter.size() == 0) {
+    return true;
+  }
+  for (auto& el_str : package_filter) {
+    auto const el_name = el_str.c_str();
+    if (strncmp(name, el_name, strlen(el_name)) == 0) {
+      return true;
+    }
+  }
+  return false;
+};
 
 void process_signature_anno(DexString* dstring) {
   const char* cstr = dstring->c_str();
@@ -148,6 +165,9 @@ bool can_remove(const DexField* f) {
  */
 bool filter_class(DexClass* clazz) {
   always_assert(!clazz->is_external());
+  if (!find_package(clazz->get_name()->c_str())) {
+    return true;
+  }
   return is_interface(clazz) || is_annotation(clazz) || !can_remove_class(clazz) ;
 }
 
@@ -437,10 +457,11 @@ int DeadRefs::remove_unreachable() {
 }
 
 void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  if (!cfg.using_seeds) {
-	  TRACE(DELINIT, 1, "No seeds information so not running DelInit\n");
-		return;
+  if (!cfg.using_seeds && m_package_filter.size() == 0) {
+  	TRACE(DELINIT, 1, "No seeds information so not running DelInit\n");
+  	return;
 	}
+  package_filter = m_package_filter;
   auto scope = build_class_scope(dexen);
   find_referenced_classes(scope);
   DeadRefs drefs;
