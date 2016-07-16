@@ -127,6 +127,25 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset,
   m_dbg_entries = eval_debug_instructions(this, insns, source_file);
 }
 
+DexDebugItem::DexDebugItem(const DexDebugItem& that)
+    : m_line_start(that.m_line_start), m_param_names(that.m_param_names) {
+  std::unordered_map<DexPosition*, DexPosition*> pos_map;
+  for (auto& entry : that.m_dbg_entries) {
+    switch (entry.type) {
+    case DexDebugEntryType::Position: {
+      auto pos = std::make_unique<DexPosition>(*entry.pos);
+      pos_map[entry.pos.get()] = pos.get();
+      pos->parent = pos_map[pos->parent];
+      m_dbg_entries.emplace_back(entry.addr, std::move(pos));
+      break;
+    }
+    case DexDebugEntryType::Instruction:
+      m_dbg_entries.emplace_back(entry.addr, entry.insn->clone());
+      break;
+    }
+  }
+}
+
 std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(
     DexIdx* idx, uint32_t offset, DexString* source_file) {
   if (offset == 0) return nullptr;
@@ -245,6 +264,21 @@ void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
   }
 }
 
+DexCode::DexCode(const DexCode& that)
+    : m_registers_size(that.m_registers_size),
+      m_ins_size(that.m_ins_size),
+      m_outs_size(that.m_outs_size) {
+  for (auto& insn : *that.m_insns) {
+    m_insns->emplace_back(insn->clone());
+  }
+  for (auto& try_ : that.m_tries) {
+    m_tries.emplace_back(new DexTryItem(*try_));
+  }
+  if (that.m_dbg) {
+    m_dbg.reset(new DexDebugItem(*that.m_dbg));
+  }
+}
+
 std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx,
                                                uint32_t offset,
                                                DexString* source_file) {
@@ -359,6 +393,26 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
   return (int) (hemit - ((uint8_t*)output));
+}
+
+DexMethod* DexMethod::make_method_from(DexMethod* that,
+                                       DexType* target_cls,
+                                       DexString* name) {
+  auto m = DexMethod::make_method(target_cls, name, that->get_proto());
+  assert(m != that);
+  if (that->m_anno) {
+    m->m_anno = new DexAnnotationSet(*that->m_anno);
+  }
+  m->m_code.reset(new DexCode(*that->m_code));
+  m->m_access = that->m_access;
+  m->m_concrete = that->m_concrete;
+  m->m_virtual = that->m_virtual;
+  m->m_external = that->m_external;
+  for (auto& pair : that->m_param_anno) {
+    // note: DexAnnotation's copy ctor only does a shallow copy
+    m->m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
+  }
+  return m;
 }
 
 void DexMethod::become_virtual() {

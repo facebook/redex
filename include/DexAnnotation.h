@@ -360,6 +360,11 @@ class DexAnnotationSet : public Gatherable {
   DexAnnotationSet() : Gatherable() {}
 
  public:
+  DexAnnotationSet(const DexAnnotationSet& that) {
+    for (const auto& anno : that.m_annotations) {
+      m_annotations.push_back(new DexAnnotation(*anno));
+    }
+  }
   virtual void gather_types(std::vector<DexType*>& ltype);
   virtual void gather_fields(std::vector<DexField*>& lfield);
   virtual void gather_methods(std::vector<DexMethod*>& lmethod);

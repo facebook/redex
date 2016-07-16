@@ -275,10 +275,13 @@ class MethodTransform {
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(DexInstruction* from, DexInstruction* to);
 
+  /* push_back will take ownership of insn */
+  void push_back(DexInstruction* insn);
+
   /* position = nullptr means at the head */
   void insert_after(DexInstruction* position, std::list<DexInstruction*>& opcodes);
 
-  /* Memory ownership of "op" passes to callee, it will delete it. */
+  /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(DexInstruction* insn);
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }

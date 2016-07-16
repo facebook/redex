@@ -440,6 +440,10 @@ void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
       show_short(m_method).c_str());
 }
 
+void MethodTransform::push_back(DexInstruction* insn) {
+  m_fmethod->push_back(*(new MethodItemEntry(insn)));
+}
+
 void MethodTransform::insert_after(DexInstruction* position,
                                    std::list<DexInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected

@@ -88,6 +88,10 @@ class DexString {
     return make_string(nstr, (uint32_t)strlen(nstr));
   }
 
+  static DexString* make_string(const std::string& nstr) {
+    return make_string(nstr.c_str());
+  }
+
   // Return an existing DexString or nullptr if one does not exist.
   static DexString* get_string(const char* nstr, uint32_t utfsize) {
     return g_redex->get_string(nstr, utfsize);
@@ -451,6 +455,9 @@ struct DexDebugEntry final {
       : type(DexDebugEntryType::Instruction),
         addr(addr),
         insn(std::move(insn)) {}
+  // should only be copied via DexDebugItem's copy ctor, which is responsible
+  // for remapping DexPositions' parent pointer
+  DexDebugEntry(const DexDebugEntry&) = delete;
   DexDebugEntry(DexDebugEntry&& other);
   ~DexDebugEntry();
   void gather_strings(std::vector<DexString*>& lstring) {
@@ -472,6 +479,7 @@ class DexDebugItem {
   DexDebugItem(DexIdx* idx, uint32_t offset, DexString* source_file);
 
  public:
+  DexDebugItem(const DexDebugItem&);
   static std::unique_ptr<DexDebugItem> get_dex_debug(DexIdx* idx,
                                                      uint32_t offset,
                                                      DexString* source_file);
@@ -516,6 +524,8 @@ class DexCode {
      , m_ins_size(0)
      , m_outs_size(0)
      , m_dbg(nullptr) {}
+
+  DexCode(const DexCode&);
 
   ~DexCode() {
     for (auto const& op : *m_insns) {
@@ -614,6 +624,13 @@ class DexMethod {
                                 DexProto* proto) {
     return g_redex->make_method(type, name, proto);
   }
+
+  /**
+   * Create a copy of method `that`
+   */
+  static DexMethod* make_method_from(DexMethod* that,
+                                     DexType* target_cls,
+                                     DexString* name);
 
   /**
    * This creates everything along the chain of Dex<Member>, so it should
