@@ -322,11 +322,11 @@ void allocate_registers(DexMethod* m) {
         continue;
       }
       auto insn = item.insn;
-      if (insn->dests_size()) {
-        insn->set_dest(reg_map[insn->dest()]);
-      }
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         insn->set_src((int) i, reg_map[insn->src((int) i)]);
+      }
+      if (insn->dests_size() && !insn->dest_is_src()) {
+        insn->set_dest(reg_map[insn->dest()]);
       }
     }
   }
