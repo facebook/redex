@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <unordered_set>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -393,6 +394,20 @@ static void associate_try_items(FatMethod* fm,
     insert_mentry_before(fm, try_end, end);
   }
 }
+
+bool has_aliased_arguments(DexInstruction* invoke) {
+  assert(invoke->has_methods());
+  std::unordered_set<uint16_t> seen;
+  for (size_t i = 0; i < invoke->srcs_size(); ++i) {
+    auto pair = seen.emplace(invoke->src(i));
+    bool did_insert = pair.second;
+    if (!did_insert) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }
 
 FatMethod* MethodTransform::balloon(DexMethod* method) {
@@ -1021,8 +1036,9 @@ void MethodTransform::inline_tail_call(DexMethod* caller,
 bool MethodTransform::inline_16regs(InlineContext& context,
                                     DexMethod *callee,
                                     DexOpcodeMethod *invoke) {
-  TRACE(INL, 2, "caller: %s\ncallee: %s\n",
-      SHOW(context.caller), SHOW(callee));
+  TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(context.caller), SHOW(callee));
+  TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller->get_code()));
+  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
   auto caller = context.caller;
   uint16_t newregs = caller->get_code()->get_registers_size();
   if (newregs > 16) {
@@ -1045,6 +1061,11 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   auto def_ins = ins_reg_defs(*callee_code);
   remap_reg_set(def_ins, callee_param_reg_map, newregs);
   if (def_ins.intersects(invoke_live_out.bits())) {
+    return false;
+  }
+  // if we map two callee registers v0 and v1 to the same caller register v2,
+  // and v1 gets written to in the callee, we're gonna have a bad time
+  if (def_ins.any() && has_aliased_arguments(invoke)) {
     return false;
   }
 

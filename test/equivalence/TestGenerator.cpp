@@ -20,6 +20,7 @@
 #include "TestGenerator.h"
 
 void EquivalenceTest::generate(DexClass* cls) {
+  setup(cls);
   auto ret = DexType::make_type("I");
   auto args = DexTypeList::make_type_list({});
   auto proto = DexProto::make_proto(ret, args); // I()
