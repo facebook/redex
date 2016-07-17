@@ -2,7 +2,7 @@
 
 set -e
 
-TMP=$(mktemp -d -t redex_test_equivalence)
+TMP=$(mktemp -d -t redex_test_equivalence_XXXXX)
 unzip $APK -d $TMP
 $GENERATOR $TMP/classes.dex
 rm -f $OUT

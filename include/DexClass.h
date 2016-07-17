@@ -523,6 +523,7 @@ class DexCode {
      : m_registers_size(0)
      , m_ins_size(0)
      , m_outs_size(0)
+     , m_insns(std::make_unique<std::vector<DexInstruction*>>())
      , m_dbg(nullptr) {}
 
   DexCode(const DexCode&);

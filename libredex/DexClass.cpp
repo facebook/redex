@@ -267,7 +267,8 @@ void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
 DexCode::DexCode(const DexCode& that)
     : m_registers_size(that.m_registers_size),
       m_ins_size(that.m_ins_size),
-      m_outs_size(that.m_outs_size) {
+      m_outs_size(that.m_outs_size),
+      m_insns(std::make_unique<std::vector<DexInstruction*>>()) {
   for (auto& insn : *that.m_insns) {
     m_insns->emplace_back(insn->clone());
   }
