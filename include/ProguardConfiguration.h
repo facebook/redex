@@ -10,12 +10,11 @@
 #pragma once
 
 #include <set>
+#include <string>
 #include <vector>
 
 namespace redex {
 
-  using namespace std;
-  
   enum class AccessFlag {
     PUBLIC,
     PRIVATE,
@@ -37,22 +36,22 @@ namespace redex {
   };
   
   struct MemberSpecification {
-    set<AccessFlag> requiredAccessFlags;
-    set<AccessFlag> unsetAccessFlags;
-    string annotationType;
-    string name;
-    string descriptor;
+    std::set<AccessFlag> requiredAccessFlags;
+    std::set<AccessFlag> unsetAccessFlags;
+    std::string annotationType;
+    std::string name;
+    std::string descriptor;
   };
   
   struct ClassSpecification {
-    set<AccessFlag> setAccessFlags;
-    set<AccessFlag>  unsetAccessFlags;
-    string annotationType;
-    string className;
-    string extendsAnnotationType; // An optional annotation for the extends/implements type.
-    string extendsClassName; // An optional class specification which this class extends or implements.
-    vector<MemberSpecification> fieldSpecifications;
-    vector<MemberSpecification> methodSpecifications;
+    std::set<AccessFlag> setAccessFlags;
+    std::set<AccessFlag>  unsetAccessFlags;
+    std::string annotationType;
+    std::string className;
+    std::string extendsAnnotationType; // An optional annotation for the extends/implements type.
+    std::string extendsClassName; // An optional class specification which this class extends or implements.
+    std::vector<MemberSpecification> fieldSpecifications;
+    std::vector<MemberSpecification> methodSpecifications;
   };
   
   struct KeepSpec {
@@ -65,30 +64,30 @@ namespace redex {
   
   struct ProguardConfiguration {
     bool ok;
-    vector<string> includes;
-		string basedirectory;
-    vector<string> injars;
-    vector<string> outjars;
-    vector<string> libraryjars;
-    vector<string> printmapping;
-    vector<string> printconfiguration;
-    vector<string> printseeds;
-    vector<string> printusage;
-    vector<string> keepdirectories;
+    std::vector<std::string> includes;
+    std::string basedirectory;
+    std::vector<std::string> injars;
+    std::vector<std::string> outjars;
+    std::vector<std::string> libraryjars;
+    std::vector<std::string> printmapping;
+    std::vector<std::string> printconfiguration;
+    std::vector<std::string> printseeds;
+    std::vector<std::string> printusage;
+    std::vector<std::string> keepdirectories;
     bool shrink = true;
-		bool optimize = true;
+    bool optimize = true;
     bool allowaccessmodification = false;
     bool dontusemixedcaseclassnames = false;
     bool dontpreverify = false;
     bool verbose = false;
-    string target_version;
-    vector<KeepSpec> keep_rules;
-    vector<KeepSpec> keepclassmembers_rules;
-    vector<KeepSpec> keepclasseswithmembers_rules;
-		vector<KeepSpec> assumesideeffects_rules;
-    vector<string> optimization_filters;
-    vector<string> keepattributes;
-    vector<string> dontwarn;
+    std::string target_version;
+    std::vector<KeepSpec> keep_rules;
+    std::vector<KeepSpec> keepclassmembers_rules;
+    std::vector<KeepSpec> keepclasseswithmembers_rules;
+    std::vector<KeepSpec> assumesideeffects_rules;
+    std::vector<std::string> optimization_filters;
+    std::vector<std::string> keepattributes;
+    std::vector<std::string> dontwarn;
   };
   
 } // namespace redex
