@@ -199,6 +199,22 @@ void keep_class_members(
   }
 }
 
+void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
+  std::set<std::string> methods_to_keep(ms.begin(), ms.end());
+  for (auto const& cls : scope) {
+    for (auto& m : cls->get_dmethods()) {
+      if (methods_to_keep.count(m->get_name()->c_str())) {
+        m->rstate.ref_by_string(false);
+      }
+    }
+    for (auto& m : cls->get_vmethods()) {
+      if (methods_to_keep.count(m->get_name()->c_str())) {
+        m->rstate.ref_by_string(false);
+      }
+    }
+  }
+}
+
 /*
  * Returns true iff this class or any of its super classes are in the set of
  * classes banned due to use of complex reflection.
@@ -235,45 +251,32 @@ void init_permanently_reachable_classes(
     const std::vector<KeepRule>& proguard_rules,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
 
+  PassConfig pc(config);
+
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
+  std::vector<std::string> annotations;
+  std::vector<std::string> class_members;
+  std::vector<std::string> methods;
 
-  auto config_apk_dir = config["apk_dir"];
-  if (config_apk_dir != Json::nullValue) {
-    apk_dir = config_apk_dir.asString();
+  pc.get("apk_dir", "", apk_dir);
+  pc.get("keep_packages", {}, reflected_package_names);
+  pc.get("keep_annotations", {}, annotations);
+  pc.get("keep_class_members", {}, class_members);
+  pc.get("keep_methods", {}, methods);
+
+  std::unordered_set<DexType*> annotation_types(
+    no_optimizations_anno.begin(),
+    no_optimizations_anno.end());
+  
+  for (auto const& annostr : annotations) {
+    DexType* anno = DexType::get_type(annostr.c_str());
+    if (anno) annotation_types.insert(anno);
   }
 
-  auto config_reflected_package_names = config["keep_packages"];
-  if (config_reflected_package_names != Json::nullValue) {
-    for (auto config_pkg_name : config_reflected_package_names) {
-      std::string pkg_name = config_pkg_name.asString();
-      reflected_package_names.push_back(pkg_name);
-    }
-  }
-
-  std::unordered_set<DexType*> keep_annotations;
-  auto config_keep_annotations = config["keep_annotations"];
-  if (config_keep_annotations != Json::nullValue) {
-    for (auto const& config_anno_name : config_keep_annotations) {
-      std::string anno_name = config_anno_name.asString();
-      DexType* anno = DexType::get_type(anno_name.c_str());
-      if (anno) keep_annotations.insert(anno);
-    }
-  }
-  for (const auto& anno : no_optimizations_anno) {
-    keep_annotations.insert(anno);
-  }
-  keep_annotated_classes(scope, keep_annotations);
-
-  std::vector<std::string> keep_class_mems;
-  auto config_keep_class_members = config["keep_class_members"];
-  if (config_keep_class_members != Json::nullValue) {
-    for (auto const& config_class_mem : config_keep_class_members) {
-      auto class_mem_name = config_class_mem.asString();
-      keep_class_mems.push_back(class_mem_name);
-    }
-  }
-  keep_class_members(scope, keep_class_mems);
+  keep_annotated_classes(scope, annotation_types);
+  keep_class_members(scope, class_members);
+  keep_methods(scope, methods);
 
   if (apk_dir.size()) {
     // Classes present in manifest

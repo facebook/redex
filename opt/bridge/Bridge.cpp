@@ -25,6 +25,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "ReachableClasses.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "walkers.h"
@@ -62,6 +63,10 @@ DexMethod* match_pattern(DexMethod* bridge) {
 }
 
 bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
+  if (!can_delete(bridgee)) {
+    TRACE(BRIDGE, 5, "Nope nope nope (bridge): %s\nNope nope nope (bridgee): %s\n", SHOW(bridge), SHOW(bridgee));
+    return false;
+  }
   if (!bridgee->get_code()) {
     TRACE(BRIDGE, 5, "Rejecting, bridgee has no code: `%s'\n", SHOW(bridge));
     return false;
@@ -278,6 +283,7 @@ class BridgeRemover {
     for (auto bpair : m_bridges_to_bridgees) {
       auto bridge = bpair.first;
       auto bridgee = bpair.second;
+      TRACE(BRIDGE, 5, "Inlining %s\n", SHOW(bridge));
       do_inlining(bridge, bridgee);
     }
   }
