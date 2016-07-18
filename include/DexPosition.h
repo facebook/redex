@@ -28,6 +28,7 @@ struct DexPosition final {
 
 class PositionMapper {
  public:
+  virtual ~PositionMapper() {};
   virtual DexString* get_source_file(const DexClass*) = 0;
   virtual uint32_t position_to_line(DexPosition*) = 0;
   virtual uint32_t get_next_line(const DexDebugItem*) = 0;

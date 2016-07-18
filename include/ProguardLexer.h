@@ -131,6 +131,7 @@ namespace redex {
       token type;
       unsigned int line;
       Token(token typ, unsigned int line_number) : type{typ}, line{line_number} {}
+      virtual ~Token() {}
       virtual std::string show() const { return "<token>"; }
       virtual bool is_command() const { return false; }
     };
