@@ -246,11 +246,11 @@ bool in_reflected_pkg(DexClass* dclass,
  *  - Classes reachable from native libraries
  */
 void init_permanently_reachable_classes(
-    const Scope& scope,
-    Json::Value& config,
-    const std::vector<KeepRule>& proguard_rules,
-    const std::unordered_set<DexType*>& no_optimizations_anno) {
-
+  const Scope& scope,
+  const Json::Value& config,
+  const std::vector<KeepRule>& proguard_rules,
+  const std::unordered_set<DexType*>& no_optimizations_anno
+) {
   PassConfig pc(config);
 
   std::string apk_dir;
@@ -417,7 +417,7 @@ void reportReachableClasses(const Scope& scope, std::string reportFileName) {
 
 void init_reachable_classes(
     const Scope& scope,
-    Json::Value& config,
+    const Json::Value& config,
     const std::vector<KeepRule>& proguard_rules,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex

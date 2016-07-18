@@ -15,9 +15,11 @@
 #include "DexUtil.h"
 #include "ProguardLoader.h"
 
-void init_reachable_classes(const Scope& scope, Json::Value& config,
-    const std::vector<KeepRule>& proguard_rules,
-    const std::unordered_set<DexType*>& no_optimizations_anno);
+void init_reachable_classes(
+  const Scope& scope,
+  const Json::Value& config,
+  const std::vector<KeepRule>& proguard_rules,
+  const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
 void reportReachableClasses(const Scope& scope, std::string reportFileName);
 unsigned int init_seed_classes(const std::string seeds_filename);
