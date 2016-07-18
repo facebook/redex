@@ -51,24 +51,29 @@ instructions in the optimized method.
 TEST(PropagationTest1, localDCE1) {
   g_redex = new RedexContext();
 
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  // Hardcoded path is for OSS automake test harness, environment variable is
+  // for Buck
+  const char* dexfile = "propagation-test-class.dex";
+  if (access(dexfile, R_OK) != 0) {
+    dexfile = std::getenv("dexfile");
+    ASSERT_NE(nullptr, dexfile);
+  }
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));
   DexClasses& classes = dexen.back();
   std::cout << "Loaded classes: " << classes.size() << std::endl ;
 
-	TRACE(DCE, 2, "Code before:\n");
+  TRACE(DCE, 2, "Code before:\n");
   for(const auto& cls : classes) {
-	  TRACE(DCE, 2, "Class %s\n", SHOW(cls));
-		for (const auto& dm : cls->get_dmethods()) {
-		  TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-			if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-			  TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-			}
-		}
-	}
+    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
+    for (const auto& dm : cls->get_dmethods()) {
+      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
+        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+      }
+    }
+  }
 
   std::vector<Pass*> passes = {
     new PeepholePass(),
@@ -82,21 +87,21 @@ TEST(PropagationTest1, localDCE1) {
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(dexen, dummy_cfg);
 
-	TRACE(DCE, 2, "Code after:\n");
-	for(const auto& cls : classes) {
-	  TRACE(DCE, 2, "Class %s\n", SHOW(cls));
-		for (const auto& dm : cls->get_dmethods()) {
-		  TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-			if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-			  TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-			  for (auto const instruction : dm->get_code()->get_instructions()) {
-					// Make sure there is no invoke-virtual in the optimized method.
-			    ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_VIRTUAL);
+  TRACE(DCE, 2, "Code after:\n");
+  for(const auto& cls : classes) {
+    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
+    for (const auto& dm : cls->get_dmethods()) {
+      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
+        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        for (auto const instruction : dm->get_code()->get_instructions()) {
+          // Make sure there is no invoke-virtual in the optimized method.
+          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_VIRTUAL);
           // Make sure there is no const-class in the optimized method.
           ASSERT_NE(instruction->opcode(), OPCODE_CONST_CLASS);
-			  }
-			}
-		}
-	}
+        }
+      }
+    }
+  }
 
 }

@@ -105,15 +105,20 @@ ClassType filter_test_classes(const DexString *cls_name) {
 TEST(ConstantPropagationTest1, constantpropagation) {
   g_redex = new RedexContext();
 
-	const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  // Hardcoded path is for OSS automake test harness, environment variable is
+  // for Buck
+  const char* dexfile = "constant-propagation-test-class.dex";
+  if (access(dexfile, R_OK) != 0) {
+    dexfile = std::getenv("dexfile");
+    ASSERT_NE(nullptr, dexfile);
+  }
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));
   DexClasses& classes = dexen.back();
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
-	TRACE(CONSTP, 2, "Code before:\n");
+  TRACE(CONSTP, 2, "Code before:\n");
   for(const auto& cls : classes) {
     TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) < 2) {

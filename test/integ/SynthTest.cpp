@@ -63,8 +63,13 @@ bool assert_classes(const DexClasses& classes,
 TEST(SynthTest1, synthetic) {
   g_redex = new RedexContext();
 
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  // Hardcoded path is for OSS automake test harness, environment variable is
+  // for Buck
+  const char* dexfile = "synth-test-class.dex";
+  if (access(dexfile, R_OK) != 0) {
+    dexfile = std::getenv("dexfile");
+    ASSERT_NE(nullptr, dexfile);
+  }
 
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));

@@ -38,7 +38,9 @@ AM_CPPFLAGS = \
 
 TESTS = \
 	synth_test \
-	empty_classes_test
+	empty_classes_test \
+	propagation_test \
+	constant_propagation_test
 
 TEST_LIBS = $(top_builddir)/test/libgtest_main.la $(top_builddir)/libredex.la
 
@@ -49,6 +51,14 @@ EXTRA_synth_test_DEPENDENCIES = synth-test-class.dex
 empty_classes_test_SOURCES = EmptyClassesTest.cpp
 empty_classes_test_LDADD = $(TEST_LIBS)
 EXTRA_empty_classes_test_DEPENDENCIES = empty-classes-test-class.dex
+
+propagation_test_SOURCES = PropagationTest.cpp
+propagation_test_LDADD = $(TEST_LIBS)
+EXTRA_propagation_test_DEPENDENCIES = propagation-test-class.dex
+
+constant_propagation_test_SOURCES = ConstantPropagationTest.cpp
+constant_propagation_test_LDADD = $(TEST_LIBS)
+EXTRA_constant_propagation_test_DEPENDENCIES = constant-propagation-test-class.dex
 
 check_PROGRAMS = $(TESTS)
 
@@ -67,3 +77,20 @@ empty-classes-test-class.jar: EmptyClasses.java EmptyClassesTest.java
 
 empty-classes-test-class.dex: empty-classes-test-class.jar
 	dx --dex --output=$@ $^
+
+propagation-test-class.jar: Propagation.java
+	mkdir -p propagation-test-class
+	javac -d propagation-test-class $^
+	jar cf $@ -C propagation-test-class .
+
+propagation-test-class.dex: propagation-test-class.jar
+	dx --dex --output=$@ $^
+
+constant-propagation-test-class.jar: ConstantPropagation.java
+	mkdir -p constant-propagation-test-class
+	javac -d constant-propagation-test-class $^
+	jar cf $@ -C constant-propagation-test-class .
+
+constant-propagation-test-class.dex: constant-propagation-test-class.jar
+	dx --dex --output=$@ $^
+
