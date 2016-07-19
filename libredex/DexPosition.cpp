@@ -15,7 +15,9 @@
 #include "DexPosition.h"
 
 DexPosition::DexPosition(DexString* file, uint32_t line)
-  : file(file), line(line), parent(nullptr) {}
+  : file(file), line(line), parent(nullptr) {
+  always_assert(file != nullptr);
+}
 
 void RealPositionMapper::register_position(DexPosition* pos) {
   m_pos_line_map[pos] = -1;

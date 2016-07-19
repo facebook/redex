@@ -101,8 +101,10 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
       uint8_t adjustment = op - DBG_FIRST_SPECIAL;
       absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
       pc += adjustment / DBG_LINE_RANGE;
-      entries.emplace_back(
-          pc, std::make_unique<DexPosition>(source_file, absolute_line));
+      if (source_file != nullptr) {
+        entries.emplace_back(
+            pc, std::make_unique<DexPosition>(source_file, absolute_line));
+      }
       break;
     }
     }
