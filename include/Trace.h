@@ -16,6 +16,7 @@
   TM(CFG)                                       \
   TM(CLASSKILL)                                 \
   TM(CONSTP)                                    \
+  TM(DBGSTRIP)                                  \
   TM(DC)                                        \
   TM(DCE)                                       \
   TM(DELINIT)                                   \

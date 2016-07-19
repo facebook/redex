@@ -486,7 +486,9 @@ class DexDebugItem {
 
  public:
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
+  void set_entries(std::vector<DexDebugEntry> dbg_entries) { m_dbg_entries.swap(dbg_entries); }
   uint32_t get_line_start() const { return m_line_start; }
+  void remove_parameter_names() { m_param_names.clear(); };
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
   int encode(DexOutputIdx* dodx, PositionMapper* pos_mapper, uint8_t* output);
@@ -536,6 +538,7 @@ class DexCode {
 
  public:
   const std::unique_ptr<DexDebugItem>& get_debug_item() const { return m_dbg; }
+  void remove_debug_item() { m_dbg = nullptr; }
   std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
     return std::move(m_insns);
   }
