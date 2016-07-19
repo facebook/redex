@@ -470,13 +470,5 @@ static DexClassesVector run_interdex(
 
 void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   emit_canaries = m_emit_canaries;
-
-  auto first_attempt = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
-  if (first_attempt.size() > dexen.size()) {
-    TRACE(IDEX, 1, "Warning, Interdex grew the number of dexes from %lu to %lu! \n \
-        Retrying without cutting off interdex dexes. \n", dexen.size(), first_attempt.size());
-    dexen = run_interdex(dexen, cfg, false, m_static_prune, m_normal_primary_dex);
-  } else {
-    dexen = std::move(first_attempt);
-  }
+  dexen = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
 }
