@@ -31,6 +31,11 @@
 
 namespace {
 
+#define METRIC_NUM_CANDIDATE_CLASSES "num_candidate_classes"
+#define METRIC_NUM_DELETED_CLASSES "**num_deleted_classes**"
+#define METRIC_NUM_MOVED_METHODS "num_moved_methods"
+
+
 // Counters for this optimization
 static size_t s_cls_delete_count;
 static size_t s_meth_delete_count;
@@ -682,6 +687,10 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMan
 
   // Perform all relocation mutations
   do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
+
+  mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
+  mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, s_cls_delete_count);
+  mgr.incr_metric(METRIC_NUM_MOVED_METHODS, s_meth_move_count);
 
   // Final report
   TRACE(
