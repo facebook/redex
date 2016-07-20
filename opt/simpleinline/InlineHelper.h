@@ -14,8 +14,8 @@
 #include "Resolver.h"
 
 #include <functional>
-#include <unordered_map>
-#include <unordered_set>
+#include <map>
+#include <set>
 #include <vector>
 
 /**
@@ -34,13 +34,13 @@ class MultiMethodInliner {
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
     bool use_liveness;
-    std::unordered_set<DexType*> black_list;
+    std::set<DexType*, dextypes_comparator> black_list;
   };
 
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
       DexClasses& primary_dex,
-      std::unordered_set<DexMethod*>& candidates,
+      std::set<DexMethod*, dexmethods_comparator>& candidates,
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
       const Config& config);
 
@@ -52,7 +52,7 @@ class MultiMethodInliner {
   /**
    * Return the count of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const {
+  std::set<DexMethod*, dexmethods_comparator> get_inlined() const {
     return inlined;
   }
 
@@ -65,7 +65,7 @@ class MultiMethodInliner {
   void caller_inline(
       DexMethod* caller,
       std::vector<DexMethod*>& callees,
-      std::unordered_set<DexMethod*>& visited);
+      std::set<DexMethod*, dexmethods_comparator>& visited);
 
   /**
    * Inline callees in the caller defined by InlineContext if is_inlinable
@@ -163,19 +163,19 @@ class MultiMethodInliner {
   /**
    * Set of classes in primary DEX.
    */
-  std::unordered_set<DexType*> primary;
+  std::set<DexType*, dextypes_comparator> primary;
 
   /**
    * Inlined methods.
    */
-  std::unordered_set<DexMethod*> inlined;
+  std::set<DexMethod*, dexmethods_comparator> inlined;
 
   //
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<DexMethod*, std::vector<DexMethod*>> callee_caller;
-  std::unordered_map<DexMethod*, std::vector<DexMethod*>> caller_callee;
+  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator> callee_caller;
+  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator> caller_callee;
 
  private:
   /**
@@ -208,7 +208,7 @@ class MultiMethodInliner {
 
   const Config& m_config;
 
-  std::unordered_set<DexMethod*> m_make_static;
+  std::set<DexMethod*, dexmethods_comparator> m_make_static;
 
  public:
   const InliningInfo& get_info() {

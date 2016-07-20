@@ -8,12 +8,13 @@
  */
 
 #include "Deleter.h"
+#include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "walkers.h"
 
 size_t delete_methods(
-    std::vector<DexClass*>& scope, std::unordered_set<DexMethod*>& removable,
+    std::vector<DexClass*>& scope, std::set<DexMethod*, dexmethods_comparator>& removable,
     std::function<DexMethod*(DexMethod*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete

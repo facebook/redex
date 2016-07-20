@@ -15,8 +15,8 @@
 #include "Resolver.h"
 #include "Transform.h"
 
-#include <unordered_map>
-#include <unordered_set>
+#include <map>
+#include <set>
 
 class SimpleInlinePass : public Pass {
 public:
@@ -45,10 +45,10 @@ public:
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
 
 private:
-  std::unordered_set<DexMethod*> gather_non_virtual_methods(
-      Scope& scope, const std::unordered_set<DexType*>& no_inline);
+  std::set<DexMethod*, dexmethods_comparator> gather_non_virtual_methods(
+      Scope& scope, const std::set<DexType*, dextypes_comparator>& no_inline);
   void select_single_called(
-      Scope& scope, std::unordered_set<DexMethod*>& methods);
+      Scope& scope, std::set<DexMethod*, dexmethods_comparator>& methods);
 
 private:
   // count of instructions that define a method as inlinable always
@@ -63,7 +63,7 @@ private:
   std::vector<std::string> m_no_inline_annos;
 
   // set of inlinable methods
-  std::unordered_set<DexMethod*> inlinable;
+  std::set<DexMethod*, dexmethods_comparator> inlinable;
 
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;

@@ -121,7 +121,7 @@ bool method_ok(DexType* type, DexMethod* meth) {
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
     DexClasses& primary_dex,
-    std::unordered_set<DexMethod*>& candidates,
+    std::set<DexMethod*, dexmethods_comparator>& candidates,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
     const Config& config)
     : resolver(resolver), m_scope(scope), m_config(config) {
@@ -153,7 +153,7 @@ void MultiMethodInliner::inline_methods() {
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
-    std::unordered_set<DexMethod*> visited;
+    std::set<DexMethod*, dexmethods_comparator> visited;
     visited.insert(caller);
     caller_inline(caller, it.second, visited);
   }
@@ -166,7 +166,7 @@ void MultiMethodInliner::inline_methods() {
 void MultiMethodInliner::caller_inline(
     DexMethod* caller,
     std::vector<DexMethod*>& callees,
-    std::unordered_set<DexMethod*>& visited) {
+    std::set<DexMethod*, dexmethods_comparator>& visited) {
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.

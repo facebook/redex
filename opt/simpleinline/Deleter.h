@@ -12,7 +12,7 @@
 #include "DexClass.h"
 #include "Resolver.h"
 #include <functional>
-#include <unordered_set>
+#include <set>
 #include <vector>
 
 /**
@@ -23,7 +23,7 @@
  */
 size_t delete_methods(
     std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable,
+    std::set<DexMethod*, dexmethods_comparator>& removable,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver);
 
 /**
@@ -34,7 +34,7 @@ size_t delete_methods(
  */
 inline size_t delete_methods(
     std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable) {
+    std::set<DexMethod*, dexmethods_comparator>& removable) {
   return delete_methods(scope, removable,
       [](DexMethod* method, MethodSearch search) {
         return resolve_method(method, search);
