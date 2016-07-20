@@ -62,9 +62,9 @@ void remove_unused_fields(Scope& scope,
   std::vector<DexClass*> smallscope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
   for (auto clazz : scope) {
-    if (!can_delete(clazz)) {
+    bool found = can_delete(clazz);
+    if (!found) {
       auto name = clazz->get_name()->c_str();
-      bool found = false;
       for (const auto& name_prefix : remove_members) {
         if (strstr(name, name_prefix.c_str()) != nullptr) {
           found = true;
@@ -81,7 +81,7 @@ void remove_unused_fields(Scope& scope,
       if ((sfield->get_access() & aflags) != aflags) continue;
       auto value = sfield->get_static_value();
       if (value == nullptr && !is_primitive(sfield->get_type())) continue;
-      if (!can_delete(sfield)) continue;
+      if (!found && !can_delete(sfield)) continue;
 
       moveable_fields.push_back(sfield);
       smallscope.push_back(clazz);

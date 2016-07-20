@@ -191,6 +191,7 @@ void keep_class_members(
         for (auto const& f : cls->get_sfields()) {
           if (rem_str.find(std::string(f->get_name()->c_str()))!=std::string::npos) {
             mark_only_reachable_directly(f);
+            mark_only_reachable_directly(cls);
           }
         }
         break;
@@ -268,7 +269,7 @@ void init_permanently_reachable_classes(
   std::unordered_set<DexType*> annotation_types(
     no_optimizations_anno.begin(),
     no_optimizations_anno.end());
-  
+
   for (auto const& annostr : annotations) {
     DexType* anno = DexType::get_type(annostr.c_str());
     if (anno) annotation_types.insert(anno);
