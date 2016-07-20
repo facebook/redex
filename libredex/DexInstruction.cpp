@@ -915,14 +915,7 @@ DexInstruction* DexInstruction::set_offset(int32_t offset) {
   not_reached();
 }
 
-bool DexInstruction::has_range_base() const {
-  auto format = opcode_format(opcode());
-  if (format == FMT_f3rc || format == FMT_f5rc)
-    return true;
-  return false;
-}
-
-bool DexInstruction::has_range_size() const {
+bool DexInstruction::has_range() const {
   auto format = opcode_format(opcode());
   if (format == FMT_f3rc || format == FMT_f5rc)
     return true;
@@ -1004,8 +997,10 @@ void DexInstruction::verify_encoding() const {
   for (unsigned i = 0; i < srcs_size(); i++) {
     test->set_src(i, src(i));
   }
-  if (has_range_base()) test->set_range_base(range_base());
-  if (has_range_size()) test->set_range_size(range_size());
+  if (has_range()) {
+    test->set_range_base(range_base());
+    test->set_range_size(range_size());
+  }
   if (has_arg_word_count()) test->set_arg_word_count(arg_word_count());
   if (has_literal()) test->set_literal(literal());
   if (has_offset()) test->set_offset(offset());

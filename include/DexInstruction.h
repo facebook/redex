@@ -415,8 +415,7 @@ class DexInstruction : public Gatherable {
    */
   unsigned dests_size() const;
   unsigned srcs_size() const;
-  bool has_range_base() const;
-  bool has_range_size() const;
+  bool has_range() const;
   bool has_arg_word_count() const;
   bool has_literal() const;
   bool has_offset() const;

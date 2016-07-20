@@ -80,7 +80,7 @@ Liveness Liveness::trans(const DexInstruction* inst) const {
       analysis.m_reg_set.set(inst->src((int)i) + 1);
     }
   }
-  if (inst->has_range_base()) {
+  if (inst->has_range()) {
     for (size_t i = 0; i < inst->range_size(); i++) {
       analysis.m_reg_set.set(inst->range_base() + i);
     }

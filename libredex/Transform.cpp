@@ -592,7 +592,7 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
  */
 bool simple_reg_remap(const DexCode& code) {
   for (auto insn : code.get_instructions()) {
-    if (insn->is_wide() || insn->has_range_size()) {
+    if (insn->is_wide() || insn->has_range()) {
       return false;
     }
   }
