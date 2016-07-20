@@ -27,8 +27,8 @@ class Liveness {
 
   const RegSet& bits() { return m_reg_set; }
 
-  Liveness meet(const Liveness&) const;
-  Liveness trans(const DexInstruction*) const;
+  void meet(const Liveness&);
+  void trans(const DexInstruction*);
   bool operator==(const Liveness&) const;
   bool operator!=(const Liveness& that) const {
     return !(*this == that);

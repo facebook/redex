@@ -27,7 +27,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
       auto prev_block_in = block_ins[block->id()];
       auto insn_out = bottom;
       for (auto& succ : block->succs()) {
-        insn_out = insn_out.meet(block_ins[succ->id()]);
+        insn_out.meet(block_ins[succ->id()]);
       }
       for (auto it = block->rbegin(); it != block->rend(); ++it) {
         if (it->type != MFLOW_OPCODE) {
@@ -36,7 +36,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
         auto insn = it->insn;
         insn_out_map->erase(insn);
         insn_out_map->emplace(insn, insn_out);
-        insn_out = insn_out.trans(insn);
+        insn_out.trans(insn);
       }
       block_ins[block->id()] = insn_out;
       if (insn_out != prev_block_in) {
@@ -65,31 +65,29 @@ void Liveness::enlarge(uint16_t ins_size, uint16_t newregs) {
   }
 }
 
-Liveness Liveness::trans(const DexInstruction* inst) const {
-  auto analysis = *this;
+void Liveness::trans(const DexInstruction* inst) {
   if (inst->dests_size()) {
     bool value = inst->dest_is_src();
-    analysis.m_reg_set.set(inst->dest(), value);
+    m_reg_set.set(inst->dest(), value);
     if (inst->dest_is_wide()) {
-      analysis.m_reg_set.set(inst->dest() + 1, value);
+      m_reg_set.set(inst->dest() + 1, value);
     }
   }
   for (size_t i = 0; i < inst->srcs_size(); i++) {
-    analysis.m_reg_set.set(inst->src((int)i));
+    m_reg_set.set(inst->src((int)i));
     if (inst->src_is_wide((int)i)) {
-      analysis.m_reg_set.set(inst->src((int)i) + 1);
+      m_reg_set.set(inst->src((int)i) + 1);
     }
   }
   if (inst->has_range()) {
     for (size_t i = 0; i < inst->range_size(); i++) {
-      analysis.m_reg_set.set(inst->range_base() + i);
+      m_reg_set.set(inst->range_base() + i);
     }
   }
-  return analysis;
 }
 
-Liveness Liveness::meet(const Liveness& that) const {
-  return Liveness(m_reg_set | that.m_reg_set);
+void Liveness::meet(const Liveness& that) {
+  m_reg_set |= that.m_reg_set;
 }
 
 std::unique_ptr<LivenessMap> Liveness::analyze(std::vector<Block*>& blocks,
