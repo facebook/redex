@@ -27,48 +27,39 @@ TypeVector empty_types;
 }
 
 DexType* get_object_type() {
-  static DexType* object = DexType::make_type("Ljava/lang/Object;");
-  return object;
+  return DexType::make_type("Ljava/lang/Object;");
 }
 
 DexType* get_void_type() {
-  static DexType* v = DexType::make_type("V");
-  return v;
+   return DexType::make_type("V");
 }
 
 DexType* get_int_type() {
-  static DexType* i = DexType::make_type("I");
-  return i;
+  return DexType::make_type("I");
 }
 
 DexType* get_long_type() {
-  static DexType* j = DexType::make_type("J");
-  return j;
+  return DexType::make_type("J");
 }
 
 DexType* get_boolean_type() {
-  static DexType* z = DexType::make_type("Z");
-  return z;
+  return DexType::make_type("Z");
 }
 
 DexType* get_double_type() {
-  static DexType* d = DexType::make_type("D");
-  return d;
+  return DexType::make_type("D");
 }
 
 DexType* get_string_type() {
-  static DexType* s = DexType::make_type("Ljava/lang/String;");
-  return s;
+  return DexType::make_type("Ljava/lang/String;");
 }
 
 DexType* get_class_type() {
-  static DexType* c = DexType::make_type("Ljava/lang/Class;");
-  return c;
+  return DexType::make_type("Ljava/lang/Class;");
 }
 
 DexType* get_enum_type() {
-  static DexType* en = DexType::make_type("Ljava/lang/Enum;");
-  return en;
+  return DexType::make_type("Ljava/lang/Enum;");
 }
 
 bool is_primitive(DexType* type) {
@@ -189,13 +180,11 @@ void get_all_children(const DexType* type, TypeVector& children) {
 }
 
 bool is_init(const DexMethod* method) {
-  static DexString* init = DexString::make_string("<init>");
-  return method->get_name() == init;
+  return strcmp(method->get_name()->c_str(), "<init>") == 0;
 }
 
 bool is_clinit(const DexMethod* method) {
-  static DexString* clinit = DexString::make_string("<clinit>");
-  return method->get_name() == clinit;
+  return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
 }
 
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
