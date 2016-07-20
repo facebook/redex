@@ -782,7 +782,7 @@ DexClass::DexClass(DexIdx* idx, dex_class_def* cdef) {
   load_class_annotations(idx, cdef->annotations_off);
   DexEncodedValueArray* deva = load_static_values(idx, cdef->static_values_off);
   load_class_data_item(idx, cdef->class_data_offset, deva);
-  build_type_system(this);
+  g_redex->build_type_system(this);
   delete (deva);
 }
 

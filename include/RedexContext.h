@@ -13,7 +13,9 @@
 #include <cstring>
 #include <list>
 #include <map>
+#include <mutex>
 #include <pthread.h>
+#include <unordered_map>
 
 class DexDebugInstruction;
 class DexString;
@@ -22,6 +24,7 @@ class DexField;
 class DexTypeList;
 class DexProto;
 class DexMethod;
+class DexClass;
 struct DexMethodRef;
 struct DexDebugEntry;
 struct DexPosition;
@@ -78,6 +81,10 @@ struct RedexContext {
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);
 
+  void build_type_system(DexClass*);
+  DexClass* type_class(const DexType* t);
+  const std::vector<const DexType*>& get_children(const DexType* type);
+
  private:
   struct carray_cmp {
     bool operator()(const char* a, const char* b) const {
@@ -106,10 +113,18 @@ struct RedexContext {
   std::map<DexType*, std::map<DexTypeList*, DexProto*>> s_proto_map;
   pthread_mutex_t s_proto_lock;
 
+  // DexMethod
   std::map<DexType*, std::map<DexString*, std::map<DexProto*, DexMethod*>>>
       s_method_map;
   pthread_mutex_t s_method_lock;
 
+  // Type-to-class map and class hierarchy
+  std::mutex m_type_system_mutex;
+  std::unordered_map<const DexType*, DexClass*> m_type_to_class;
+  std::unordered_map<
+    const DexType*, std::vector<const DexType*>> m_class_hierarchy;
+
+  const std::vector<const DexType*> m_empty_types;
 };
 
 template <typename V>

@@ -109,7 +109,9 @@ DataType type_to_datatype(const DexType* t);
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
  */
-DexClass* type_class(const DexType*);
+inline DexClass* type_class(const DexType* t) {
+  return g_redex->type_class(t);
+}
 
 /**
  * Return the DexClass that represents an internal DexType or nullptr if
@@ -134,7 +136,9 @@ bool check_cast(DexType* type, DexType* base_type);
 /**
  * Return the direct children of a type.
  */
-const TypeVector& get_children(const DexType*);
+inline const TypeVector& get_children(const DexType* type) {
+  return g_redex->get_children(type);
+}
 
 /**
  * Return true if the type is an array type.

@@ -9,22 +9,11 @@
 
 #include "DexUtil.h"
 
-#include <mutex>
-#include <unordered_map>
 #include <regex.h>
 #include <unordered_set>
 
 #include "Debug.h"
 #include "DexClass.h"
-
-namespace {
-static std::mutex type_system_mutex;
-
-static std::unordered_map<const DexType*, DexClass*> type_to_class;
-static std::unordered_map<const DexType*, TypeVector> class_hierarchy;
-TypeVector empty_types;
-
-}
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -111,19 +100,6 @@ DataType type_to_datatype(const DexType* t) {
   not_reached();
 }
 
-void build_type_system(DexClass* cls) {
-  std::lock_guard<std::mutex> l(type_system_mutex);
-  const DexType* type = cls->get_type();
-  type_to_class.emplace(type, cls);
-  const auto& super = cls->get_super_class();
-  if (super) class_hierarchy[super].push_back(type);
-}
-
-DexClass* type_class(const DexType* t) {
-  auto it = type_to_class.find(t);
-  return it != type_to_class.end() ? it->second : nullptr;
-}
-
 char type_shorty(DexType* type) {
   auto const name = type->get_name()->c_str();
   switch (name[0]) {
@@ -164,11 +140,6 @@ bool has_hierarchy_in_scope(DexClass* cls) {
     super_cls = type_class_internal(super);
   }
   return super == get_object_type();
-}
-
-const TypeVector& get_children(const DexType* type) {
-  const auto& it = class_hierarchy.find(type);
-  return it != class_hierarchy.end() ? it->second : empty_types;
 }
 
 void get_all_children(const DexType* type, TypeVector& children) {

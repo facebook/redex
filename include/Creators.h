@@ -546,7 +546,7 @@ struct ClassCreator {
     }
     m_cls->m_has_class_data = true;
     m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
-    build_type_system(m_cls);
+    g_redex->build_type_system(m_cls);
     return m_cls;
   }
 
