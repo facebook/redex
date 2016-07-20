@@ -1430,7 +1430,7 @@ bool MethodTransform::try_sync() {
   TRACE(MTRANS, 5, "Emitting multi-branches\n");
   // Step 3, generate multi-branch fopcodes
   for (auto multiopcode : multi_branches) {
-    auto targets = multis[multiopcode];
+    auto& targets = multis[multiopcode];
     std::sort(targets.begin(), targets.end(), multi_target_compare_index);
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
@@ -1441,7 +1441,7 @@ bool MethodTransform::try_sync() {
       uint32_t* spkeys = (uint32_t*)&sparse_payload[2];
       uint32_t* sptargets =
           (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
-      for (auto target : targets) {
+      for (BranchTarget* target : targets) {
         *spkeys++ = target->index;
         *sptargets++ = multi_targets[target] - multiopcode->addr;
       }
@@ -1467,7 +1467,7 @@ bool MethodTransform::try_sync() {
       packed_payload[1] = targets.size();
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       *psdata++ = targets.front()->index;
-      for (auto target : targets) {
+      for (BranchTarget* target : targets) {
         *psdata++ = multi_targets[target] - multiopcode->addr;
       }
       // Emit align nop

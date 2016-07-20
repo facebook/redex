@@ -16,30 +16,29 @@
 
 template <typename T>
 std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
-    std::vector<Block*>& blocks, T bottom) {
+    std::vector<Block*>& blocks, const T& bottom) {
   auto insn_out_map =
       std::make_unique<std::unordered_map<DexInstruction*, T>>();
   std::vector<T> block_ins(blocks.size(), bottom);
   bool changed;
   do {
     changed = false;
-    for (auto& block : blocks) {
-      auto prev_block_in = block_ins[block->id()];
+    for (const auto& block : blocks) {
       auto insn_out = bottom;
-      for (auto& succ : block->succs()) {
+      for (Block* succ : block->succs()) {
         insn_out.meet(block_ins[succ->id()]);
       }
       for (auto it = block->rbegin(); it != block->rend(); ++it) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        auto insn = it->insn;
+        DexInstruction* insn = it->insn;
         insn_out_map->erase(insn);
         insn_out_map->emplace(insn, insn_out);
         insn_out.trans(insn);
       }
-      block_ins[block->id()] = insn_out;
-      if (insn_out != prev_block_in) {
+      if (insn_out != block_ins[block->id()]) {
+        block_ins[block->id()] = std::move(insn_out);
         changed = true;
       }
     }

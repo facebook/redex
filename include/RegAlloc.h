@@ -23,7 +23,7 @@ class Liveness {
   RegSet m_reg_set;
  public:
   Liveness(int nregs): m_reg_set(nregs) {}
-  Liveness(RegSet reg_set): m_reg_set(reg_set) {}
+  Liveness(const RegSet&& reg_set): m_reg_set(std::move(reg_set)) {}
 
   const RegSet& bits() { return m_reg_set; }
 
