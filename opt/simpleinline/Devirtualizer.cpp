@@ -127,21 +127,15 @@ void log_final_results(MethodsNameMap& methods) {
 */
 
 /**
- * List of java.lang.Object virtual methods generated if java.lang.Object
- * is not known.
- */
-std::list<DexMethod*> object_methods;
-
-/**
  * Return the list of methods for a given type.
  * If the type is java.lang.Object and it is not known (no DexClass for it)
  * it generates fictional methods for it.
  */
-const std::list<DexMethod*>& get_vmethods(DexType* type) {
+std::list<DexMethod*> get_vmethods(DexType* type) {
   const DexClass* cls = type_class(type);
   if (cls != nullptr) return cls->get_vmethods();
   always_assert_log(type == get_object_type(), "Unknown type %s\n", SHOW(type));
-  if (object_methods.size() > 0) return object_methods;
+  std::list<DexMethod*> object_methods;
 
   // create the following methods:
   // protected java.lang.Object.clone()Ljava/lang/Object;
@@ -392,7 +386,7 @@ void impl_intf_methods(
 void analyze_parent_children_methods(
     const DexType* parent, MethodsNameMap& children_methods,
     InterfaceMethods& children_intf_methods, bool escape) {
-  auto& vmethods = get_vmethods(const_cast<DexType*>(parent));
+  auto const& vmethods = get_vmethods(const_cast<DexType*>(parent));
   for (auto& vmeth : vmethods) {
     auto meth_acc = std::make_pair(vmeth, TOP_DEF);
     if (escape) meth_acc.second |= IMPL;

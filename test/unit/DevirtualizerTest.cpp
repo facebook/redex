@@ -400,7 +400,6 @@ bool check_classes(const std::vector<DexMethod*>& methods,
 // Tests
 //
 
-/*
 TEST(OneClass2Finals, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_1();
@@ -519,7 +518,6 @@ TEST(InterfaceWithImplInBaseMultipleClassesAndOverloads6Final, empty) {
   EXPECT_TRUE(check_classes(methods, types));
   delete g_redex;
 }
-*/
 
 TEST(InterfacesWithImplInBaseMultipleClassesAndOverloads3Final, empty) {
   g_redex = new RedexContext();
