@@ -246,10 +246,11 @@ class LocalDce {
     if (first->type == MFLOW_FALLTHROUGH) {
       return false;
     }
-    auto last = b->rbegin();
-    if (last->type == MFLOW_OPCODE &&
-        last->insn->opcode() == FOPCODE_FILLED_ARRAY) {
-      return false;
+    for (auto last = b->rbegin(); last != b->rend(); ++last) {
+      if (last->type == MFLOW_OPCODE &&
+          last->insn->opcode() == FOPCODE_FILLED_ARRAY) {
+        return false;
+      }
     }
     // Skip if it contains nothing but debug info.
     for (; first != b->end(); ++first) {
