@@ -8,7 +8,7 @@
  */
 
 #include <algorithm>
-#include <set>
+#include <deque>
 
 #include "DexInstruction.h"
 #include "RegAlloc.h"
@@ -16,29 +16,33 @@
 
 template <typename T>
 std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
-    std::vector<Block*>& blocks, const T& bottom) {
+    const std::vector<Block*>& blocks, const T& bottom) {
   std::vector<T> block_ins(blocks.size(), bottom);
-  bool changed;
-  do {
-    changed = false;
-    for (const auto& block : blocks) {
-      auto insn_out = bottom;
-      for (Block* succ : block->succs()) {
-        insn_out.meet(block_ins[succ->id()]);
+  std::deque<Block*> work_list(blocks.begin(), blocks.end());
+  while (!work_list.empty()) {
+    auto block = work_list.front();
+    work_list.pop_front();
+    auto insn_out = bottom;
+    for (Block* succ : block->succs()) {
+      insn_out.meet(block_ins[succ->id()]);
+    }
+    for (auto it = block->rbegin(); it != block->rend(); ++it) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
       }
-      for (auto it = block->rbegin(); it != block->rend(); ++it) {
-        if (it->type != MFLOW_OPCODE) {
-          continue;
+      DexInstruction* insn = it->insn;
+      insn_out.trans(insn);
+    }
+    if (insn_out != block_ins[block->id()]) {
+      block_ins[block->id()] = std::move(insn_out);
+      for (auto pred : block->preds()) {
+        if (std::find(work_list.begin(), work_list.end(), pred) ==
+            work_list.end()) {
+          work_list.push_back(pred);
         }
-        DexInstruction* insn = it->insn;
-        insn_out.trans(insn);
-      }
-      if (insn_out != block_ins[block->id()]) {
-        block_ins[block->id()] = std::move(insn_out);
-        changed = true;
       }
     }
-  } while (changed);
+  }
 
   // Now we do a final pass and record the live-out at each instruction.  We
   // didn't record this information during the iterative analysis because we
