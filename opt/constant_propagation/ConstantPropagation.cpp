@@ -61,17 +61,15 @@ namespace {
         changed = false;
         auto transform = MethodTransform::get_method_transform(method, true);
         auto& cfg = transform->cfg();
+        std::unordered_map<Block *, bool> visited;
         std::stack<Block *> blocks;
         blocks.push(cfg[0]);
-        std::unordered_map<Block *, bool> visited;
-        for (const auto b: cfg) {
-          visited[b] = false;
-        }
+        visited[cfg[0]] = true;
+        remove_constants();
         // This loop traverses each block by depth-first
-        while (!blocks.empty()) {
+        while (!blocks.empty() && !changed) {
           auto b = blocks.top();
           blocks.pop();
-          visited[b] = true;
           DexInstruction *last_inst = nullptr;
           for (auto it = b->begin(); it != b->end() && !changed; ++it) {
             if (it->type != MFLOW_OPCODE) {
@@ -87,14 +85,11 @@ namespace {
               changed = propagate_insn(inst, last_inst, method);
             }
           }
-          if (changed) {
-            remove_constants();
-            break;
-          }
           // Propagate successive blocks
           for (auto succs_b: b->succs()) {
             if (!visited[succs_b]) {
               blocks.push(succs_b);
+              visited[succs_b] = true;
             }
           }
           if (b->succs().size() != 1) {
@@ -112,7 +107,6 @@ namespace {
           transform->remove_opcode(dead);
         }
         dead_instructions.clear();
-        remove_constants();
         blocked = false;
         transform->sync();
       }
@@ -144,7 +138,8 @@ namespace {
         // Check if there is a constant returned. If so, propagate the value
         case OPCODE_MOVE_RESULT:
           if (last_inst != nullptr &&
-              last_inst->opcode() == OPCODE_INVOKE_STATIC &&
+             (last_inst->opcode() == OPCODE_INVOKE_STATIC ||
+              last_inst->opcode() == OPCODE_INVOKE_DIRECT) &&
               last_inst->has_methods()) {
               DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
               if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
