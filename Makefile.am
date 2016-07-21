@@ -144,7 +144,7 @@ redexdump_SOURCES = \
 	tools/common/DexCommon.cpp \
 	tools/common/Formatters.cpp
 
-redexdump_LDALL = libredex.la
+redexdump_LDADD = libredex.la
 
 #
 # redex: Python driver script

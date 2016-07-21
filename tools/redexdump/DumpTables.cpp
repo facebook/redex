@@ -10,8 +10,10 @@
 #include "DexDebugInstruction.h"
 #include "Formatters.h"
 #include "PrintUtil.h"
+#include "Unicode.h"
 #include <RedexDump.h>
 #include <sstream>
+#include <vector>
 #include <string.h>
 #include <string>
 
@@ -432,14 +434,39 @@ static std::string get_debug_item(const uint8_t** pdebug_item) {
 }
 
 // Dump a string_data_item (i.e., an entry in the string data
-// section), advancing POS_INOUT over the item.  BUG: we dump the
-// MUTF8 string as if it were standard UTF8.  Shame on us.
+// section), advancing POS_INOUT over the item.
 static const char string_data_header[] = "u16len [contents]";
 static void dump_string_data_item(const uint8_t** pos_inout) {
   const uint8_t* pos = *pos_inout;
   uint32_t utf16_code_point_count = read_uleb128(&pos); // Not byte count!
   size_t utf8_length = strlen((char*) pos);
-  redump("%03u [%s]\n", (unsigned) utf16_code_point_count, pos);
+  std::string cleansed_data;
+  const char* string_to_print;
+  if (raw) { // Output whatever bytes we have
+    string_to_print = (char*) pos;
+  } else { // Translate to UTF-8; strip control characters
+    std::vector<char32_t> code_points;
+    const char* enc_pos = (char*) pos;
+    uint32_t cp;
+    while ((cp = mutf8_next_code_point(enc_pos))) {
+      if (cp < ' ' || cp == 255 /* DEL */) {
+        cp = '.';
+      }
+      code_points.push_back(cp);
+    }
+    ssize_t nr_utf8_bytes = utf32_to_utf8_length(
+      &code_points[0], code_points.size());
+    if (nr_utf8_bytes < 0 && utf8_length == 0) {
+      cleansed_data = "";
+    } else if (nr_utf8_bytes < 0) {
+      cleansed_data = "{invalid encoding?}";
+    } else {
+      cleansed_data.resize(nr_utf8_bytes);
+      utf32_to_utf8(&code_points[0], code_points.size(), &cleansed_data[0]);
+    }
+    string_to_print = cleansed_data.c_str();
+  }
+  redump("%03u [%s]\n", (unsigned) utf16_code_point_count, string_to_print);
   *pos_inout = pos + utf8_length + 1;
 }
 
