@@ -17,8 +17,6 @@
 template <typename T>
 std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
     std::vector<Block*>& blocks, const T& bottom) {
-  auto insn_out_map =
-      std::make_unique<std::unordered_map<DexInstruction*, T>>();
   std::vector<T> block_ins(blocks.size(), bottom);
   bool changed;
   do {
@@ -33,8 +31,6 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
           continue;
         }
         DexInstruction* insn = it->insn;
-        insn_out_map->erase(insn);
-        insn_out_map->emplace(insn, insn_out);
         insn_out.trans(insn);
       }
       if (insn_out != block_ins[block->id()]) {
@@ -43,6 +39,28 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
       }
     }
   } while (changed);
+
+  // Now we do a final pass and record the live-out at each instruction.  We
+  // didn't record this information during the iterative analysis because we
+  // would end up discarding all the information generated before the final
+  // iteration, and it turns out that allocating and deallocating lots of
+  // dynamic_bitsets is very expensive.
+  auto insn_out_map =
+      std::make_unique<std::unordered_map<DexInstruction*, T>>();
+  for (const auto& block : blocks) {
+    auto insn_out = bottom;
+    for (Block* succ : block->succs()) {
+      insn_out.meet(block_ins[succ->id()]);
+    }
+    for (auto it = block->rbegin(); it != block->rend(); ++it) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      DexInstruction* insn = it->insn;
+      insn_out_map->emplace(insn, insn_out);
+      insn_out.trans(insn);
+    }
+  }
 
   return insn_out_map;
 }
