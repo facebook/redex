@@ -15,7 +15,7 @@
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 #include "ReachableClasses.h"
 #include "Devirtualizer.h"
 

@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <unordered_set>
 
-#include "walkers.h"
+#include "Walkers.h"
 #include "ReachableClasses.h"
 #include "RemoveEmptyClasses.h"
 #include "DexClass.h"

@@ -16,7 +16,7 @@
 #include <unordered_map>
 
 #include "Debug.h"
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
 #include "DexOutput.h"

@@ -20,7 +20,7 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 /*

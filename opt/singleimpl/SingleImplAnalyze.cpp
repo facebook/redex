@@ -24,7 +24,7 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope, DexClasses& primary_dex)

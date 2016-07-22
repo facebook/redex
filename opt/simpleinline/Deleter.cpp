@@ -11,7 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 size_t delete_methods(
     std::vector<DexClass*>& scope, std::set<DexMethod*, dexmethods_comparator>& removable,

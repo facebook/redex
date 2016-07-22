@@ -8,7 +8,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

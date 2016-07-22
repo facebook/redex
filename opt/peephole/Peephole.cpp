@@ -18,7 +18,7 @@
 #include "PassManager.h"
 #include "Transform.h"
 #include "DexUtil.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 const DexMethod* method_Class_getSimpleName() {

@@ -9,7 +9,7 @@
 
 #include <sstream>
 
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
 #include "DexClass.h"

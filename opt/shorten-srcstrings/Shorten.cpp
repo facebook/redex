@@ -22,7 +22,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 #include "Warning.h"
 
 static bool maybe_file_name(const char* str, size_t len) {

@@ -22,7 +22,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
-#include "walkers.h"
+#include "Walkers.h"
 #include "UnterfaceOpt.h"
 
 namespace {

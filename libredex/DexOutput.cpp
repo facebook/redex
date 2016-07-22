@@ -24,7 +24,7 @@
 #include "Sha1.h"
 #include "Trace.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 #include "WorkQueue.h"
 
 /*

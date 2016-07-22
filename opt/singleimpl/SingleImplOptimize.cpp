@@ -24,7 +24,7 @@
 #include "Resolver.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "DexLoader.h"
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "DexAccess.h"
 #include "Trace.h"
 #include "WorkQueue.h"

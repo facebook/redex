@@ -19,7 +19,7 @@
 #include <string>
 
 #include "DexIdx.h"
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
@@ -909,4 +909,3 @@ struct dexstrings_comparator {
     return compare_dexstrings(a, b);
   }
 };
-

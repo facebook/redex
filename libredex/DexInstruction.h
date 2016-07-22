@@ -16,7 +16,7 @@
 #include <utility>
 
 #include "Debug.h"
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "Gatherable.h"
 
 /*

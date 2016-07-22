@@ -16,7 +16,7 @@
 #include <unordered_set>
 #include <unordered_map>
 
-#include "walkers.h"
+#include "Walkers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"

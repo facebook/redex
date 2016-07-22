@@ -24,7 +24,7 @@
 #include "ConfigFiles.h"
 #include "ReachableClasses.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

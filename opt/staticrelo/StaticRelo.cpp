@@ -27,7 +27,7 @@
 #include "Resolver.h"
 #include "Match.h"
 #include "ConfigFiles.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

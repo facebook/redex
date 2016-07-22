@@ -12,7 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Creators.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

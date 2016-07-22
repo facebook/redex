@@ -2,8 +2,8 @@ AM_CXXFLAGS = --std=gnu++11
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/test/gtest-1.7.0/include \
 	-I$(top_srcdir)/configparser \
-	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/liblocator \
+	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
 	-I$(top_srcdir)/libresource/android \
 	-I$(top_srcdir)/libresource/androidfw \
@@ -93,4 +93,3 @@ constant-propagation-test-class.jar: ConstantPropagation.java
 
 constant-propagation-test-class.dex: constant-propagation-test-class.jar
 	dx --dex --output=$@ $^
-

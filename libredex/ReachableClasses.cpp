@@ -15,7 +15,7 @@
 #include <fstream>
 #include <string>
 
-#include "walkers.h"
+#include "Walkers.h"
 #include "DexClass.h"
 #include "Predicate.h"
 #include "RedexResources.h"

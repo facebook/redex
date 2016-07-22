@@ -18,7 +18,7 @@
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "PassManager.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

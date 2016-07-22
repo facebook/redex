@@ -11,6 +11,6 @@
 
 #include "DexClass.h"
 #include "DexIdx.h"
-#include "dexdefs.h"
+#include "DexDefs.h"
 
 DexClasses load_classes_from_dex(const char* location);

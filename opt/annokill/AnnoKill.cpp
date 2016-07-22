@@ -18,7 +18,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 /*
  * Within FB current consensus is that annotations are degenerate and there

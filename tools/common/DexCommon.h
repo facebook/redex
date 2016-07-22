@@ -10,7 +10,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "DexAccess.h"
 
 typedef uint32_t symdstr; // Offset into symtool string table.

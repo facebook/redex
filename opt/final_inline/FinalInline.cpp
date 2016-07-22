@@ -23,7 +23,7 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 static size_t unhandled_inline = 0;
 

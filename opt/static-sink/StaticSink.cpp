@@ -22,7 +22,7 @@
 #include "Resolver.h"
 #include "ConfigFiles.h"
 #include "ReachableClasses.h"
-#include "walkers.h"
+#include "Walkers.h"
 #include "Warning.h"
 
 ////////////////////////////////////////////////////////////////////////////////

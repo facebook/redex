@@ -19,7 +19,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 typedef std::unordered_set<DexClass*> class_set_t;
 

@@ -11,7 +11,7 @@
 
 #include <list>
 
-#include "dexdefs.h"
+#include "DexDefs.h"
 #include "Gatherable.h"
 #include "Util.h"
 

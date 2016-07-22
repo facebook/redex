@@ -28,7 +28,7 @@
 #include "ReachableClasses.h"
 #include "Trace.h"
 #include "Transform.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 namespace {
 

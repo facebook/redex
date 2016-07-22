@@ -29,7 +29,7 @@
 #include "PassManager.h"
 #include "Transform.h"
 #include "ReachableClasses.h"
-#include "walkers.h"
+#include "Walkers.h"
 
 #include "SynthConfig.h"
 

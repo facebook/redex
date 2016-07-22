@@ -12,7 +12,7 @@
 #include <assert.h>
 #include <string>
 
-#include "dexdefs.h"
+#include "DexDefs.h"
 
 class DexType;
 class DexTypeList;
