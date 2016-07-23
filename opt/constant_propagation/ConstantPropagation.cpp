@@ -45,9 +45,6 @@ namespace {
     size_t m_constant_removed{0};
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
-    // The variable blocked is used to track if the constant propagation is blocked
-    // The values in abstract registers will be cleared if the propagation is blocked by, for example, an if statement.
-    bool blocked = false;
 
     void propagate(DexMethod* method) {
       bool changed = true;
@@ -65,11 +62,17 @@ namespace {
         std::stack<Block *> blocks;
         blocks.push(cfg[0]);
         visited[cfg[0]] = true;
-        remove_constants();
+        // block_preds saves the re-calculated number of predecessors of each block
+        // This number may change as new unreachable blocks are added in each loop
+        std::unordered_map<Block*, int> block_preds;
+        find_reachable_predecessors(cfg, block_preds);
         // This loop traverses each block by depth-first
         while (!blocks.empty() && !changed) {
           auto b = blocks.top();
           blocks.pop();
+          if (block_preds[b] != 1) {
+            remove_constants();
+          }
           DexInstruction *last_inst = nullptr;
           for (auto it = b->begin(); it != b->end() && !changed; ++it) {
             if (it->type != MFLOW_OPCODE) {
@@ -94,7 +97,6 @@ namespace {
           }
           if (b->succs().size() != 1) {
             remove_constants();
-            blocked = true;
           }
         }
         for (auto const& p : replaces) {
@@ -107,7 +109,6 @@ namespace {
           transform->remove_opcode(dead);
         }
         dead_instructions.clear();
-        blocked = false;
         transform->sync();
       }
     }
@@ -121,7 +122,7 @@ namespace {
         case OPCODE_IF_NEZ:
         case OPCODE_IF_EQZ:
           if (propagate_branch(inst)) {
-            TRACE(CONSTP, 2, "Changed conditional branch %s ", SHOW(inst));
+            TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
             auto new_inst = (new DexInstruction(OPCODE_GOTO_16))->set_offset(inst->offset());
             replaces.emplace_back(inst, new_inst);
             m_branch_propagated++;
@@ -131,7 +132,7 @@ namespace {
         // If returning a constant value from a known register
         // Save the return value for future use
         case OPCODE_RETURN:
-          if (reg_values[inst->src(0)].known && !blocked)
+          if (reg_values[inst->src(0)].known)
             method_returns[method] = reg_values[inst->src(0)].val;
           break;
         // When there's a move-result instruction following a static-invoke insn
@@ -192,7 +193,7 @@ namespace {
     // change the conditional branch to a goto branch if possible
     bool propagate_branch(DexInstruction *inst) {
       auto src_reg = inst->src(0);
-      if (reg_values[src_reg].known && !blocked) {
+      if (reg_values[src_reg].known) {
         if (inst->opcode() == OPCODE_IF_EQZ && reg_values[src_reg].val == 0) {
             return true;
         }
@@ -208,6 +209,30 @@ namespace {
       for (auto &r: reg_values) {
         r.known = false;
         r.insn = nullptr;
+      }
+    }
+
+    // This method calculates number of reachable predecessors of each block
+    // The difference between this method and remove_unreachable_blocks in LocalDCE is that
+    // this method only finds unreachable classes without deleting any edge or block
+    void find_reachable_predecessors(std::vector<Block*>& blocks,
+                                     std::unordered_map<Block*, int>& block_preds) {
+      std::vector<Block*> unreachable_blocks;
+      for (size_t i = 1; i < blocks.size(); ++i) {
+        auto pred_size = blocks[i]->preds().size();
+        block_preds[blocks[i]] = pred_size;
+        if (pred_size == 0) {
+          unreachable_blocks.push_back(blocks[i]);
+        }
+      }
+      while (unreachable_blocks.size() > 0) {
+        auto b = unreachable_blocks.back();
+        unreachable_blocks.pop_back();
+        for (auto succs_b: b->succs()) {
+          if (--block_preds[succs_b] == 0) {
+            unreachable_blocks.push_back(succs_b);
+          }
+        }
       }
     }
 
