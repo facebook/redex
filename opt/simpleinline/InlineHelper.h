@@ -208,7 +208,7 @@ class MultiMethodInliner {
 
   const Config& m_config;
 
-  std::set<DexMethod*, dexmethods_comparator> m_make_static;
+  std::unordered_set<DexMethod*> m_make_static;
 
  public:
   const InliningInfo& get_info() {
