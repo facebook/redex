@@ -18,6 +18,7 @@
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -39,6 +40,7 @@ size_t global_fieldref_cnt;
 size_t global_cls_cnt;
 size_t cls_skipped_in_primary = 0;
 size_t cls_skipped_in_secondary = 0;
+size_t cold_start_set_dex_count = 1000;
 
 bool emit_canaries = false;
 
@@ -322,6 +324,7 @@ static DexClassesVector run_interdex(
   bool allow_cutting_off_dex,
   bool static_prune_classes,
   bool normal_primary_dex) {
+
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
   global_vmeth_cnt = 0;
@@ -437,6 +440,9 @@ static DexClassesVector run_interdex(
     }
   }
 
+  // -1 because we're not counting the primary dex
+  cold_start_set_dex_count = outdex.size();
+
   /* Now emit the kerf that wasn't specified in the head
    * or primary list.
    */
@@ -466,9 +472,11 @@ static DexClassesVector run_interdex(
   return outdex;
 }
 
-}
+} // End namespace
+
 
 void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   emit_canaries = m_emit_canaries;
   dexen = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
+  mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT, cold_start_set_dex_count);
 }

@@ -11,9 +11,13 @@
 
 #include "Pass.h"
 
+#define METRIC_COLD_START_SET_DEX_COUNT "cold_start_set_dex_count"
+
+#define INTERDEX_PASS_NAME "InterDexPass"
+
 class InterDexPass : public Pass {
  public:
-  InterDexPass() : Pass("InterDexPass") {}
+  InterDexPass() : Pass(INTERDEX_PASS_NAME) {}
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("static_prune", false, m_static_prune);

@@ -28,6 +28,7 @@
   TM(INL)                                       \
   TM(INTF)                                      \
   TM(LOC)                                       \
+  TM(MAGIC_FIELDS)                              \
   TM(MAIN)                                      \
   TM(MMINL)                                     \
   TM(MTRANS)                                    \
