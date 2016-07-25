@@ -304,6 +304,8 @@ class DexDebugInstructionReader {
   }
   virtual void handle_default(DexDebugItemOpcode op) = 0;
  public:
+  virtual ~DexDebugInstructionReader() {}
+
   void read(const uint8_t*& data) {
     uint32_t u1, u2, u3, u4;
     int32_t s1;
