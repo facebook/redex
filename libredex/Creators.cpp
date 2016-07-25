@@ -35,7 +35,7 @@ DexProto* make_static_sig(DexMethod* meth) {
  * Return the register number that would correctly work after flipping the reg.
  * For wide registers returns the high reg.
  */
-int reg_num(Location& loc) {
+int reg_num(const Location& loc) {
   auto type = loc.get_type();
   char t = type_shorty(type);
   always_assert(type != get_void_type());
@@ -46,7 +46,7 @@ int reg_num(Location& loc) {
 MethodBlock::MethodBlock(FatMethod::iterator iterator, MethodCreator* creator)
     : mc(creator), curr(iterator) {}
 
-void MethodBlock::invoke(DexMethod* meth, std::vector<Location>& args) {
+void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());
   DexOpcode opcode;
   if (meth->is_virtual()) {
@@ -67,13 +67,13 @@ void MethodBlock::invoke(DexMethod* meth, std::vector<Location>& args) {
 
 void MethodBlock::invoke(DexOpcode opcode,
                          DexMethod* meth,
-                         std::vector<Location>& args) {
+                         const std::vector<Location>& args) {
   always_assert(is_invoke(opcode));
   auto invk = new DexOpcodeMethod(opcode, meth, 0);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
   invk->set_arg_word_count(arg_count);
   for (uint16_t i = 0; i < arg_count; i++) {
-    auto arg = args[i];
+    auto arg = args.at(i);
     invk->set_src(i, reg_num(arg));
   }
   if (arg_count > mc->out_count) mc->out_count = arg_count;
@@ -356,6 +356,17 @@ void MethodBlock::load_null(Location& loc) {
   push_instruction(load);
 }
 
+void MethodBlock::binop_2addr(DexOpcode op,
+                              const Location& dest,
+                              const Location& src) {
+  always_assert(OPCODE_ADD_INT_2ADDR <= op && op <= OPCODE_REM_DOUBLE_2ADDR);
+  always_assert(dest.type == src.type);
+  DexInstruction* insn = new DexInstruction(op);
+  insn->set_src(0, reg_num(dest));
+  insn->set_src(1, reg_num(src));
+  push_instruction(insn);
+}
+
 MethodBlock* MethodBlock::if_test(DexOpcode if_op,
                                   Location first,
                                   Location second) {
@@ -483,6 +494,18 @@ FatMethod::iterator MethodCreator::make_switch_block(
   return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 
+MethodCreator::MethodCreator(DexMethod* meth)
+    : method(meth)
+    , meth_code(MethodTransform::get_new_method(method))
+    , out_count(0)
+    , top_reg(0)
+    , access(meth->get_access()) {
+  always_assert_log(meth->is_concrete(),
+      "Method must be concrete or use the other ctor");
+  load_locals(meth);
+  main_block = new MethodBlock(meth_code->main_block(), this);
+}
+
 MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
@@ -517,7 +540,7 @@ std::unique_ptr<DexCode>& MethodCreator::to_code() {
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       DexInstruction* insn = mi.insn;
-      if (insn->dests_size()) {
+      if (insn->dests_size() && !insn->dest_is_src()) {
         insn->set_dest(get_real_reg_num(insn->dest()));
       }
       for (int i = 0; i < static_cast<int>(insn->srcs_size()); i++) {

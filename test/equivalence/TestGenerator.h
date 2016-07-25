@@ -62,6 +62,9 @@ class EquivalenceTest {
   static void generate_all(DexClass* cls);
 };
 
+#define REGISTER_TEST(TestName)\
+  static TestName TestName ## _singleton;
+
 /**
  * Typically, we'll want to run a number of dex methods as input into a
  * transformation. EQUIVALENCE_TEST expedites this common case.
@@ -78,5 +81,5 @@ class EquivalenceTest {
     }\
     virtual void build_method(DexMethod*);\
   };\
-  static TestName TestName ## _singleton;\
+  REGISTER_TEST(TestName);\
   void TestName::build_method

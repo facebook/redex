@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "Creators.h"
 #include "DexAsm.h"
 #include "TestGenerator.h"
 #include "Transform.h"
@@ -78,4 +79,93 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   }
 };
 
-static InlinerTestAliasedInputs InlinerTestAliasedInputs_self;
+REGISTER_TEST(InlinerTestAliasedInputs);
+
+class InlinerTestLargeIfOffset : public EquivalenceTest {
+ protected:
+  DexMethod* m_callee;
+ public:
+  virtual void setup(DexClass* cls) {
+    auto ret = DexType::make_type("V");
+    auto args = DexTypeList::make_type_list({});
+    auto proto = DexProto::make_proto(ret, args); // V()
+    m_callee =
+        DexMethod::make_method(cls->get_type(),
+                               DexString::make_string("callee_" + test_name()),
+                               proto);
+    m_callee->make_concrete(
+        ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
+    {
+      using namespace dex_asm;
+      MethodTransformer mt(m_callee);
+      // if-* opcodes store their jump offset as a 16-bit signed int. Let's
+      // insert enough opcodes such that the offset overflows that width.
+      for (size_t i = 0; i < 1 << 15; ++i) {
+        mt->push_back(dasm(OPCODE_NOP));
+      }
+      mt->push_back(dasm(OPCODE_RETURN_VOID));
+      m_callee->get_code()->set_registers_size(0);
+      m_callee->get_code()->set_ins_size(0);
+    }
+    cls->add_method(m_callee);
+  }
+
+  virtual DexOpcode if_op() = 0;
+
+  virtual void build_method(DexMethod* m) {
+    using namespace dex_asm;
+    MethodCreator mc(m);
+    MethodBlock* main_block = mc.get_main_block();
+    auto loc = mc.make_local(DexType::make_type("I"));
+    auto addend = mc.make_local(DexType::make_type("I"));
+    main_block->load_const(loc, 1);
+    main_block->load_const(addend, 2);
+
+    MethodBlock* false_block = main_block->if_testz(if_op(), loc);
+    false_block->invoke(m_callee, {});
+    false_block->binop_2addr(OPCODE_ADD_INT_2ADDR, loc, addend);
+
+    main_block->binop_2addr(OPCODE_SUB_INT_2ADDR, loc, addend);
+    main_block->ret(loc);
+    mc.create();
+  }
+
+  virtual void transform_method(DexMethod* m) {
+    DexOpcodeMethod* mop = nullptr;
+    for (const auto& insn : m->get_code()->get_instructions()) {
+      if (insn->opcode() == OPCODE_INVOKE_STATIC) {
+        mop = static_cast<DexOpcodeMethod*>(insn);
+        assert(mop->get_method() == m_callee);
+        break;
+      }
+    }
+    InlineContext context(m, true /* use_liveness */);
+    MethodTransform::inline_16regs(context, m_callee, mop);
+  }
+};
+
+class InlinerTestLargeIfOffsetTrueBranch : public InlinerTestLargeIfOffset {
+ public:
+  virtual std::string test_name() {
+    return "InlinerTestLargeIfOffsetTrueBranch";
+  }
+
+  virtual DexOpcode if_op() {
+    return OPCODE_IF_NEZ;
+  }
+};
+
+REGISTER_TEST(InlinerTestLargeIfOffsetTrueBranch);
+
+class InlinerTestLargeIfOffsetFalseBranch : public InlinerTestLargeIfOffset {
+ public:
+  virtual std::string test_name() {
+    return "InlinerTestLargeIfOffsetFalseBranch";
+  }
+
+  virtual DexOpcode if_op() {
+    return OPCODE_IF_EQZ;
+  }
+};
+
+REGISTER_TEST(InlinerTestLargeIfOffsetFalseBranch);

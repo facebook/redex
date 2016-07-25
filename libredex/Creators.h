@@ -91,7 +91,7 @@ struct MethodBlock {
    * Emit an invoke* opcode to the given method with the given arguments.
    * The method must be a method def.
    */
-  void invoke(DexMethod* meth, std::vector<Location>& args);
+  void invoke(DexMethod* meth, const std::vector<Location>& args);
 
   /**
    * Emit the given invoke opcode to the given method with the given arguments.
@@ -104,7 +104,7 @@ struct MethodBlock {
    */
   void invoke(DexOpcode opcode,
               DexMethod* meth,
-              std::vector<Location>& args);
+              const std::vector<Location>& args);
 
   /**
    * Instance field getter.
@@ -202,6 +202,8 @@ struct MethodBlock {
    * Load null into the given Location.
    */
   void load_null(Location& loc);
+
+  void binop_2addr(DexOpcode op, const Location&, const Location&);
 
   //
   // branch instruction
@@ -336,6 +338,7 @@ struct MethodBlock {
  */
 struct MethodCreator {
  public:
+  MethodCreator(DexMethod* meth);
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,
@@ -344,7 +347,7 @@ struct MethodCreator {
   /**
    * Get an existing local.
    */
-  Location& get_local(int i) {
+  Location get_local(int i) {
     always_assert(i < static_cast<int>(locals.size()));
     return locals.at(i);
   }
@@ -352,7 +355,7 @@ struct MethodCreator {
   /**
    * Make a new local of the given type.
    */
-  Location& make_local(DexType* type) {
+  Location make_local(DexType* type) {
     Location local{type, top_reg};
     locals.push_back(std::move(local));
     top_reg += Location::loc_size(type);
@@ -396,15 +399,6 @@ struct MethodCreator {
                                      DexProto* proto,
                                      DexMethod* meth,
                                      DexClass* target_cls);
-
-  /**
-   * Forward a method to another method.
-   * This will delete the current DexCode if the method had one.
-   * It is usually used together with make_static_from() in order to
-   * forward the "promoted" method to the static method.
-   * Methods must be signature compatible.
-   */
-  static void forward_method_to(DexMethod* meth, DexMethod* smeth);
 
  private:
   //

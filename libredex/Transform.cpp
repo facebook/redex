@@ -164,49 +164,58 @@ MethodTransform* MethodTransform::get_new_method(DexMethod* method) {
 namespace {
 typedef std::unordered_map<uint32_t, MethodItemEntry*> addr_mei_t;
 
-struct EncodeResult {
-  bool success;
-  DexOpcode newopcode;
-};
-
-EncodeResult encode_offset(DexInstruction* insn, int32_t offset) {
+int bytecount(int32_t v) {
   int bytecount = 4;
-  if ((int32_t)((int8_t)(offset & 0xff)) == offset) {
+  if ((int32_t)((int8_t)(v & 0xff)) == v) {
     bytecount = 1;
-  } else if ((int32_t)((int16_t)(offset & 0xffff)) == offset) {
+  } else if ((int32_t)((int16_t)(v & 0xffff)) == v) {
     bytecount = 2;
   }
+  return bytecount;
+}
 
-  auto op = insn->opcode();
-  if (is_conditional_branch(op)) {
-    always_assert_log(bytecount <= 2,
-                      "Overflowed 16-bit encoding for offset in %s",
-                      SHOW(insn));
+DexOpcode goto_for_offset(int32_t offset) {
+  switch (bytecount(offset)) {
+  case 1:
+    return OPCODE_GOTO;
+  case 2:
+    return OPCODE_GOTO_16;
+  case 4:
+    return OPCODE_GOTO_32;
+  default:
+    always_assert_log(false, "Invalid bytecount %d", offset);
   }
-  if (is_goto(op)) {
-    // Use the smallest encoding possible.
-    auto newopcode = [&] {
-      // branch offset 0 must use goto/32, as per the spec.
-      if (offset == 0) {
-        return OPCODE_GOTO_32;
-      }
-      switch (bytecount) {
-      case 1:
-        return OPCODE_GOTO;
-      case 2:
-        return OPCODE_GOTO_16;
-      case 4:
-        return OPCODE_GOTO_32;
-      }
-      always_assert_log(false, "Invalid bytecount for %s", SHOW(insn));
-    }();
+}
 
-    if (newopcode != op) {
-      return {false, newopcode};
-    }
+DexOpcode invert_conditional_branch(DexOpcode op) {
+  switch (op) {
+  case OPCODE_IF_EQ:
+    return OPCODE_IF_NE;
+  case OPCODE_IF_NE:
+    return OPCODE_IF_EQ;
+  case OPCODE_IF_LT:
+    return OPCODE_IF_GE;
+  case OPCODE_IF_GE:
+    return OPCODE_IF_LT;
+  case OPCODE_IF_GT:
+    return OPCODE_IF_LE;
+  case OPCODE_IF_LE:
+    return OPCODE_IF_GT;
+  case OPCODE_IF_EQZ:
+    return OPCODE_IF_NEZ;
+  case OPCODE_IF_NEZ:
+    return OPCODE_IF_EQZ;
+  case OPCODE_IF_LTZ:
+    return OPCODE_IF_GEZ;
+  case OPCODE_IF_GEZ:
+    return OPCODE_IF_LTZ;
+  case OPCODE_IF_GTZ:
+    return OPCODE_IF_LEZ;
+  case OPCODE_IF_LEZ:
+    return OPCODE_IF_GTZ;
+  default:
+    always_assert_log(false, "Invalid conditional opcode %s", SHOW(op));
   }
-  insn->set_offset(offset);
-  return {true, op};
 }
 
 static MethodItemEntry* get_target(MethodItemEntry* mei,
@@ -243,8 +252,53 @@ static void insert_branch_target(FatMethod* fm,
   bt->src = src;
 
   MethodItemEntry* mentry = new MethodItemEntry(bt);
-  ;
   insert_mentry_before(fm, mentry, target);
+}
+
+// Returns true if the offset could be encoded without modifying fm.
+bool encode_offset(FatMethod* fm,
+                   MethodItemEntry* branch_op_mie,
+                   int32_t offset) {
+  DexOpcode bop = branch_op_mie->insn->opcode();
+  if (is_goto(bop)) {
+    DexOpcode goto_op = goto_for_offset(offset);
+    if (goto_op != bop) {
+      auto insn = branch_op_mie->insn;
+      branch_op_mie->insn = new DexInstruction(goto_op);
+      delete insn;
+      return false;
+    }
+  } else if (is_conditional_branch(bop)) {
+    // if-* opcodes can only encode up to 16-bit offsets. To handle larger ones
+    // we use a goto/32 and have the inverted if-* opcode skip over it. E.g.
+    //
+    //   if-gt <large offset>
+    //   nop
+    //
+    // becomes
+    //
+    //   if-le <label>
+    //   goto/32 <large offset>
+    //   label:
+    //   nop
+    if (bytecount(offset) > 2) {
+      auto insn = branch_op_mie->insn;
+      branch_op_mie->insn = new DexInstruction(OPCODE_GOTO_32);
+      delete insn;
+
+      DexOpcode inverted = invert_conditional_branch(bop);
+      MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
+      insert_mentry_before(fm, mei, branch_op_mie);
+
+      // this iterator should always be valid -- an if-* instruction cannot
+      // be the last opcode in a well-formed method
+      auto next_insn_it = std::next(fm->iterator_to(*branch_op_mie));
+      insert_branch_target(fm, &*next_insn_it, mei);
+      return false;
+    }
+  }
+  branch_op_mie->insn->set_offset(offset);
+  return true;
 }
 
 static void insert_fallthrough(FatMethod* fm, MethodItemEntry* dest) {
@@ -1411,17 +1465,14 @@ bool MethodTransform::try_sync() {
         // We can't fix the primary switch opcodes address until we emit
         // the fopcode, which comes later.
       } else if (bt->type == BRANCH_SIMPLE) {
-        MethodItemEntry* tomutate = bt->src;
-        int32_t branchoffset = mentry->addr - tomutate->addr;
-        if ((tomutate->insn->opcode() == OPCODE_FILL_ARRAY_DATA) &&
+        MethodItemEntry* branch_op_mie = bt->src;
+        int32_t branchoffset = mentry->addr - branch_op_mie->addr;
+        if ((branch_op_mie->insn->opcode() == OPCODE_FILL_ARRAY_DATA) &&
             (mentry->addr & 1)) {
           ++branchoffset; // account for nop spacer
         }
-        auto encode_result = encode_offset(tomutate->insn, branchoffset);
-        if (!encode_result.success) {
-          auto inst = tomutate->insn;
-          tomutate->insn = new DexInstruction(encode_result.newopcode);
-          delete inst;
+
+        if (!encode_offset(m_fmethod, branch_op_mie, branchoffset)) {
           return false;
         }
       }
@@ -1456,7 +1507,7 @@ bool MethodTransform::try_sync() {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      encode_offset(multiopcode->insn, addr - multiopcode->addr);
+      multiopcode->insn->set_offset(addr - multiopcode->addr);
       multiopcode->insn->set_opcode(OPCODE_SPARSE_SWITCH);
       addr += count;
     } else {
@@ -1481,7 +1532,7 @@ bool MethodTransform::try_sync() {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      encode_offset(multiopcode->insn, addr - multiopcode->addr);
+      multiopcode->insn->set_offset(addr - multiopcode->addr);
       multiopcode->insn->set_opcode(OPCODE_PACKED_SWITCH);
       addr += count;
     }
