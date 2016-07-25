@@ -799,6 +799,20 @@ class DexClass {
         "Unexpected external class %s\n", SHOW(m_self));
     return m_vmethods;
   }
+
+  /* Gets the clinit method, aka the class initializer method.
+   *
+   * Unlike constructors, there's only ever one clinit method.
+   * It takes no arguments and returns void.
+   */
+  const DexMethod* get_clinit() const {
+    DexType* return_type = DexType::make_type("V");
+    DexString* method_name = DexString::get_string("<clinit>");
+    DexTypeList* argument_list = DexTypeList::get_type_list({});
+    DexProto* proto = DexProto::get_proto(return_type, argument_list);
+    return DexMethod::get_method(m_self, method_name, proto);
+  }
+
   void add_method(DexMethod* m);
   void remove_method(DexMethod* m);
   const std::list<DexField*>& get_sfields() const { return m_sfields; }
