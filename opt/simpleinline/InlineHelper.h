@@ -34,13 +34,13 @@ class MultiMethodInliner {
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
     bool use_liveness;
-    std::set<DexType*, dextypes_comparator> black_list;
+    std::unordered_set<DexType*> black_list;
   };
 
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
       DexClasses& primary_dex,
-      std::set<DexMethod*, dexmethods_comparator>& candidates,
+      std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
       const Config& config);
 
@@ -52,7 +52,7 @@ class MultiMethodInliner {
   /**
    * Return the count of unique inlined methods.
    */
-  std::set<DexMethod*, dexmethods_comparator> get_inlined() const {
+  std::unordered_set<DexMethod*> get_inlined() const {
     return inlined;
   }
 
@@ -65,7 +65,7 @@ class MultiMethodInliner {
   void caller_inline(
       DexMethod* caller,
       std::vector<DexMethod*>& callees,
-      std::set<DexMethod*, dexmethods_comparator>& visited);
+      std::unordered_set<DexMethod*>& visited);
 
   /**
    * Inline callees in the caller defined by InlineContext if is_inlinable
@@ -163,19 +163,22 @@ class MultiMethodInliner {
   /**
    * Set of classes in primary DEX.
    */
-  std::set<DexType*, dextypes_comparator> primary;
+  std::unordered_set<DexType*> primary;
 
   /**
    * Inlined methods.
    */
-  std::set<DexMethod*, dexmethods_comparator> inlined;
+  std::unordered_set<DexMethod*> inlined;
 
   //
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator> callee_caller;
-  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator> caller_callee;
+  std::unordered_map<DexMethod*, std::vector<DexMethod*>> callee_caller;
+  // this map is ordered in order that we inline our methods in a repeatable
+  // fashion so as to create reproducible binaries
+  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
+      caller_callee;
 
  private:
   /**

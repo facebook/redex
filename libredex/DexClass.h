@@ -894,32 +894,8 @@ class DexClasses {
   const_iterator end() const { return m_classes.cend(); }
 };
 
-struct dexclasses_comparator {
-  bool operator()(const DexClass* a, const DexClass* b) const {
-    return compare_dextypes(a->get_type(), b->get_type());
-  }
-};
-
 struct dexmethods_comparator {
   bool operator()(const DexMethod* a, const DexMethod* b) const {
     return compare_dexmethods(a, b);
-  }
-};
-
-struct dextypes_comparator {
-  bool operator()(const DexType* a, const DexType* b) const {
-    return compare_dextypes(a, b);
-  }
-};
-
-struct dexprotos_comparator {
-  bool operator()(const DexProto* a, const DexProto* b) const {
-    return compare_dexprotos(a, b);
-  }
-};
-
-struct dexstrings_comparator {
-  bool operator()(const DexString* a, const DexString* b) const {
-    return compare_dexstrings(a, b);
   }
 };

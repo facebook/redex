@@ -47,11 +47,11 @@ DEBUG_ONLY bool method_breakup(
   return true;
 }
 
-std::set<DexType*, dextypes_comparator> no_inline_annos(
+std::unordered_set<DexType*> no_inline_annos(
   const std::vector<std::string>& annos,
   ConfigFiles& cfg
 ) {
-  std::set<DexType*, dextypes_comparator> no_inline;
+  std::unordered_set<DexType*> no_inline;
   for (const auto& anno : cfg.get_no_optimizations_annos()) {
     no_inline.insert(anno);
   }
@@ -66,7 +66,7 @@ std::set<DexType*, dextypes_comparator> no_inline_annos(
 }
 
 template<typename DexMember>
-bool has_anno(DexMember* m, const std::set<DexType*, dextypes_comparator>& no_inline) {
+bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
   if (no_inline.size() == 0) return false;
   if (m != nullptr && m->get_anno_set() != nullptr) {
     for (const auto& anno : m->get_anno_set()->get_annotations()) {
@@ -134,8 +134,8 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassM
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
  */
-std::set<DexMethod*, dexmethods_comparator> SimpleInlinePass::gather_non_virtual_methods(
-    Scope& scope, const std::set<DexType*, dextypes_comparator>& no_inline) {
+std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
+    Scope& scope, const std::unordered_set<DexType*>& no_inline) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -151,7 +151,7 @@ std::set<DexMethod*, dexmethods_comparator> SimpleInlinePass::gather_non_virtual
   size_t non_virt_methods = 0;
 
   // collect all non virtual methods (dmethods and vmethods)
-  std::set<DexMethod*, dexmethods_comparator> methods;
+  std::unordered_set<DexMethod*> methods;
 
   const auto can_inline_method = [&](DexMethod* meth, const DexCode& code) {
     if (has_anno(type_class(meth->get_class()), no_inline) ||
@@ -230,8 +230,8 @@ std::set<DexMethod*, dexmethods_comparator> SimpleInlinePass::gather_non_virtual
  * Add to the list the single called.
  */
 void SimpleInlinePass::select_single_called(
-    Scope& scope, std::set<DexMethod*, dexmethods_comparator>& methods) {
-  std::map<DexMethod*, int, dexmethods_comparator> calls;
+    Scope& scope, std::unordered_set<DexMethod*>& methods) {
+  std::unordered_map<DexMethod*, int> calls;
   for (const auto& method : methods) {
     calls[method] = 0;
   }

@@ -38,16 +38,16 @@ inline MethodAccess operator|=(MethodAccess& a, const MethodAccess b) {
                                         static_cast<uint16_t>(b)));
 }
 
-using ClassSet = std::set<DexClass*, dexclasses_comparator>;
-using TypeSet = std::set<const DexType*, dextypes_comparator>;
-using ProtoSet = std::set<DexProto*, dexprotos_comparator>;
+using ClassSet = std::unordered_set<DexClass*>;
+using TypeSet = std::unordered_set<const DexType*>;
+using ProtoSet = std::unordered_set<DexProto*>;
 
 using MethAcc = std::pair<DexMethod*, MethodAccess>;
 
-using ClassHierarchy = std::map<const DexType*, TypeSet, dextypes_comparator>;
-using MethodsSigMap = std::map<DexProto*, std::vector<MethAcc>, dexprotos_comparator>;
-using MethodsNameMap = std::map<DexString*, MethodsSigMap, dexstrings_comparator>;
-using InterfaceMethods = std::map<DexString*, ProtoSet, dexstrings_comparator>;
+using ClassHierarchy = std::map<const DexType*, TypeSet>;
+using MethodsSigMap = std::unordered_map<DexProto*, std::vector<MethAcc>>;
+using MethodsNameMap = std::unordered_map<DexString*, MethodsSigMap>;
+using InterfaceMethods = std::unordered_map<DexString*, ProtoSet>;
 
 /*
 std::ofstream logfile;

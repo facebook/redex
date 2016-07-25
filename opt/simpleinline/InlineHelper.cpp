@@ -121,7 +121,7 @@ bool method_ok(DexType* type, DexMethod* meth) {
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
     DexClasses& primary_dex,
-    std::set<DexMethod*, dexmethods_comparator>& candidates,
+    std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
     const Config& config)
     : resolver(resolver), m_scope(scope), m_config(config) {
@@ -153,7 +153,7 @@ void MultiMethodInliner::inline_methods() {
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
-    std::set<DexMethod*, dexmethods_comparator> visited;
+    std::unordered_set<DexMethod*> visited;
     visited.insert(caller);
     caller_inline(caller, it.second, visited);
   }
@@ -166,7 +166,7 @@ void MultiMethodInliner::inline_methods() {
 void MultiMethodInliner::caller_inline(
     DexMethod* caller,
     std::vector<DexMethod*>& callees,
-    std::set<DexMethod*, dexmethods_comparator>& visited) {
+    std::unordered_set<DexMethod*>& visited) {
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
@@ -564,7 +564,25 @@ DexOpcode direct_to_static_op(DexOpcode op) {
 }
 
 void MultiMethodInliner::invoke_direct_to_static() {
-  for (auto method : m_make_static) {
+  // We sort the methods here because make_static renames methods on collision,
+  // and which collisions occur is order-dependent. E.g. if we have the
+  // following methods in m_make_static:
+  //
+  //   Foo Foo::bar()
+  //   Foo Foo::bar(Foo f)
+  //
+  // making Foo::bar() static first would make it collide with Foo::bar(Foo f),
+  // causing it to get renamed to bar$redex0(). But if Foo::bar(Foo f) gets
+  // static-ified first, it becomes Foo::bar(Foo f, Foo f), so when bar() gets
+  // made static later there is no collision. So in the interest of having
+  // reproducible binaries, we sort the methods first.
+  //
+  // Also, we didn't use an std::set keyed by method signature here because
+  // make_static is mutating the signatures. The tree that implements the set
+  // would have to be rebalanced after the mutations.
+  std::vector<DexMethod*> methods(m_make_static.begin(), m_make_static.end());
+  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
     mutators::make_static(method);
   }

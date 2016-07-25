@@ -23,7 +23,7 @@
  */
 size_t delete_methods(
     std::vector<DexClass*>& scope,
-    std::set<DexMethod*, dexmethods_comparator>& removable,
+    std::unordered_set<DexMethod*>& removable,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver);
 
 /**
@@ -34,7 +34,7 @@ size_t delete_methods(
  */
 inline size_t delete_methods(
     std::vector<DexClass*>& scope,
-    std::set<DexMethod*, dexmethods_comparator>& removable) {
+    std::unordered_set<DexMethod*>& removable) {
   return delete_methods(scope, removable,
       [](DexMethod* method, MethodSearch search) {
         return resolve_method(method, search);
