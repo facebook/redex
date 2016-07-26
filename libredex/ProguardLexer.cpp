@@ -47,7 +47,7 @@ void skip_whitespace(std::istream& config, unsigned int* line) {
   while (isspace(config.peek())) {
     config >> std::noskipws >> ch;
     if (ch == '\n') {
-      line++;
+      ++(*line);
     }
   }
 }
@@ -75,12 +75,10 @@ std::string read_path(std::istream& config, unsigned int* line) {
 std::vector<std::string> read_paths(std::istream& config, unsigned int* line) {
   std::vector<std::string> paths;
   paths.push_back(read_path(config, line));
-  skip_whitespace(config, line);
   while (config.peek() == ':') {
     char ch;
     config >> ch;
     paths.push_back(read_path(config, line));
-    config >> std::ws;
   }
   return paths;
 }
@@ -143,7 +141,6 @@ std::vector<std::string> lex_filter_list(
     return filter_list;
   }
   filter_list.push_back(filter);
-  skip_whitespace(config, line);
   while (ok && config.peek() == ',') {
     // Swallow up the comma.
     char ch ;
@@ -151,7 +148,6 @@ std::vector<std::string> lex_filter_list(
     ok = lex_filter(config, &filter, line);
     if (ok) {
       filter_list.push_back(filter);
-      skip_whitespace(config, line);
     }
   }
   return filter_list;
