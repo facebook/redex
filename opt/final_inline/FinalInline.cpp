@@ -218,6 +218,7 @@ void inline_field_values(Scope& fullscope) {
   std::unordered_set<DexField*> cheap_inline_field;
   std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
+
   for (auto clazz : fullscope) {
     std::unordered_map<DexField*, bool> blank_statics;
     get_sput_in_clinit(clazz, blank_statics);

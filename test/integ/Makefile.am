@@ -31,6 +31,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/synth \
+	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/tools/redex-all \
 	-I$(top_srcdir)/util \

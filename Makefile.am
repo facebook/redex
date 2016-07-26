@@ -38,6 +38,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/synth \
+	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/util \
 	-I/usr/include/jsoncpp
@@ -115,6 +116,7 @@ libredex_la_SOURCES = \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
 	opt/synth/Synth.cpp \
+	opt/track_resources/TrackResources.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
 	util/Sha1.cpp
