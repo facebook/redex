@@ -173,19 +173,7 @@ class PostOrderSort {
   std::vector<Block*>&& get();
 };
 
-/**
- * Carry context for multiple inline into a single caller.
- * In particular, it caches the liveness analysis so that we can reuse it when
- * multiple callees into the same caller.
- */
-class InlineContext {
-  std::unique_ptr<LivenessMap> m_liveness;
- public:
-  DexMethod* caller;
-  uint16_t original_regs;
-  InlineContext(DexMethod* caller, bool use_liveness);
-  Liveness live_out(DexInstruction*);
-};
+class InlineContext;
 
 class MethodTransform {
  private:
@@ -306,4 +294,18 @@ class MethodTransformer {
   ~MethodTransformer() { m_transform->sync(); }
 
   MethodTransform* operator->() { return m_transform; }
+};
+
+/**
+ * Carry context for multiple inline into a single caller.
+ * In particular, it caches the liveness analysis so that we can reuse it when
+ * multiple callees into the same caller.
+ */
+class InlineContext {
+  std::unique_ptr<LivenessMap> m_liveness;
+ public:
+  MethodTransformer mtcaller;
+  uint16_t original_regs;
+  InlineContext(DexMethod* caller, bool use_liveness);
+  Liveness live_out(DexInstruction*);
 };

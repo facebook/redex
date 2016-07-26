@@ -107,11 +107,10 @@ MethodItemEntry::~MethodItemEntry() {
 ////////////////////////////////////////////////////////////////////////////////
 
 InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
-    : caller(caller) {
+    : mtcaller(caller, use_liveness) {
   auto& code = caller->get_code();
   original_regs = code->get_registers_size();
   if (use_liveness) {
-    MethodTransformer mtcaller(caller, true);
     m_liveness = Liveness::analyze(mtcaller->cfg(), original_regs);
   }
 }
@@ -1090,10 +1089,9 @@ void MethodTransform::inline_tail_call(DexMethod* caller,
 bool MethodTransform::inline_16regs(InlineContext& context,
                                     DexMethod *callee,
                                     DexOpcodeMethod *invoke) {
-  TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(context.caller), SHOW(callee));
-  TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller->get_code()));
+  auto caller = context.mtcaller->m_method;
+  TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
-  auto caller = context.caller;
   uint16_t newregs = caller->get_code()->get_registers_size();
   if (newregs > 16) {
     return false;
@@ -1123,9 +1121,8 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     return false;
   }
 
-  MethodTransformer mtcaller(caller);
   MethodTransformer mtcallee(callee);
-  auto fcaller = mtcaller->m_fmethod;
+  auto fcaller = context.mtcaller->m_fmethod;
   auto fcallee = mtcallee->m_fmethod;
 
   auto temps_needed =

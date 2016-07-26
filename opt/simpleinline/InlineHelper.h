@@ -71,8 +71,7 @@ class MultiMethodInliner {
    * Inline callees in the caller defined by InlineContext if is_inlinable
    * below returns true.
    */
-  void inline_callees(
-      InlineContext& inline_context, std::vector<DexMethod*>& callees);
+  void inline_callees(DexMethod* caller, std::vector<DexMethod*>& callees);
 
   /**
    * Return true if the callee is inlinable into the caller.

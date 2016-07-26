@@ -186,14 +186,12 @@ void MultiMethodInliner::caller_inline(
     info.caller_tries++;
     return;
   }
-  InlineContext inline_context(caller, m_config.use_liveness);
-  inline_callees(inline_context, callees);
+  inline_callees(caller, callees);
 }
 
-void MultiMethodInliner::inline_callees(
-    InlineContext& inline_context, std::vector<DexMethod*>& callees) {
+void MultiMethodInliner::inline_callees(DexMethod* caller,
+                                        std::vector<DexMethod*>& callees) {
   size_t found = 0;
-  auto caller = inline_context.caller;
   auto insns = caller->get_code()->get_instructions();
 
   // walk the caller opcodes collecting all candidates to inline
@@ -218,6 +216,7 @@ void MultiMethodInliner::inline_callees(
   }
 
   // attempt to inline all inlinable candidates
+  InlineContext inline_context(caller, m_config.use_liveness);
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
     auto mop = inlinable.second;

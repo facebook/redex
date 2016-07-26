@@ -66,7 +66,6 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    InlineContext context(m, true /* use_liveness */);
     DexOpcodeMethod* mop = nullptr;
     for (const auto& insn : m->get_code()->get_instructions()) {
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -75,6 +74,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         break;
       }
     }
+    InlineContext context(m, true /* use_liveness */);
     MethodTransform::inline_16regs(context, m_callee, mop);
   }
 };
