@@ -89,13 +89,15 @@ namespace {
             }
           }
           // Propagate successive blocks
+          int succ_num = 0;
           for (auto succs_b: b->succs()) {
             if (!visited[succs_b]) {
               blocks.push(succs_b);
               visited[succs_b] = true;
+              succ_num++;
             }
           }
-          if (b->succs().size() != 1) {
+          if (succ_num != 1) {
             remove_constants();
           }
         }
@@ -139,8 +141,7 @@ namespace {
         // Check if there is a constant returned. If so, propagate the value
         case OPCODE_MOVE_RESULT:
           if (last_inst != nullptr &&
-             (last_inst->opcode() == OPCODE_INVOKE_STATIC ||
-              last_inst->opcode() == OPCODE_INVOKE_DIRECT) &&
+              last_inst->opcode() == OPCODE_INVOKE_STATIC &&
               last_inst->has_methods()) {
               DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
               if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
