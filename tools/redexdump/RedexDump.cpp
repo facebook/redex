@@ -45,6 +45,7 @@ static const char ddump_usage_string[] =
     "-D, --ddebug=<addr>: disassemble debug info item at <addr>\n"
     "\nprinting options:\n"
     "--clean: does not print indexes or offsets making the output "
+    "--raw: print all bytes, even control characters "
     "usable for a diff\n";
 
 int main(int argc, char* argv[]) {
@@ -82,6 +83,7 @@ int main(int argc, char* argv[]) {
     { "debug", no_argument, nullptr, 'd' },
     { "ddebug", required_argument, nullptr, 'D' },
     { "clean", no_argument, (int*)&clean, 1 },
+    { "raw", no_argument, (int*)&raw, 1 },
     { "no-dump-map", no_argument, &no_dump_map, 1 },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },
