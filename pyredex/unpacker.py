@@ -7,6 +7,7 @@
 
 import hashlib
 import os
+import subprocess
 import shutil
 import zipfile
 
