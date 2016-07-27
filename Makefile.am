@@ -41,6 +41,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/util \
+	-I$(top_srcdir)/tools/common \
+	-I$(top_srcdir)/tools/redexdump \
 	-I/usr/include/jsoncpp
 
 #
@@ -129,13 +131,22 @@ libredex_la_LIBADD = \
 #
 # redex-all: the main executable
 #
-bin_PROGRAMS = redex-all
+bin_PROGRAMS = redex-all redexdump
 
 redex_all_SOURCES = \
 	tools/redex-all/main.cpp \
 	tools/redex-all/Passes.cpp
 
 redex_all_LDADD = libredex.la
+
+redexdump_SOURCES = \
+	tools/redexdump/DumpTables.cpp \
+	tools/redexdump/PrintUtil.cpp \
+	tools/redexdump/RedexDump.cpp \
+	tools/common/DexCommon.cpp \
+	tools/common/Formatters.cpp
+
+redexdump_LDALL = libredex.la
 
 #
 # redex: Python driver script
