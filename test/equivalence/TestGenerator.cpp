@@ -72,8 +72,8 @@ int main(int argc, char* argv[]) {
                        nullptr /* LocatorIndex* */,
                        0,
                        cfg,
-                       pos_mapper.get(),
-                       nullptr /* method_mapping */);
+                       json,
+                       pos_mapper.get());
 
   delete g_redex;
   return 0;

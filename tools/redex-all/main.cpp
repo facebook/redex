@@ -455,11 +455,9 @@ int main(int argc, char* argv[]) {
   dex_output_stats_t totals;
   std::vector<dex_output_stats_t> dexes_stats;
 
-  auto methodmapping = args.config.get("method_mapping", "").asString();
-  auto stats_output = args.config.get("stats_output", "").asString();
-  auto method_move_map = args.config.get("method_move_map", "").asString();
   auto pos_output = args.config.get("line_number_map", "").asString();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
+
   for (size_t i = 0; i < dexen.size(); i++) {
     std::stringstream ss;
     ss << args.out_dir + "/classes";
@@ -473,11 +471,15 @@ int main(int argc, char* argv[]) {
       locator_index,
       i,
       cfg,
-      pos_mapper.get(),
-      methodmapping.c_str());
+      args.config,
+      pos_mapper.get());
     totals += stats;
     dexes_stats.push_back(stats);
   }
+
+  auto stats_output = args.config.get("stats_output", "").asString();
+  auto method_move_map = args.config.get("method_move_map", "").asString();
+
   pos_mapper->write_map();
   output_stats(stats_output.c_str(), totals, dexes_stats, manager);
   output_moved_methods_map(method_move_map.c_str(), dexen, cfg);

@@ -21,6 +21,7 @@
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Pass.h"
 #include "Sha1.h"
 #include "Trace.h"
 #include "Transform.h"
@@ -66,6 +67,8 @@ typedef bool (*cmp_dmethod)(const DexMethod*, const DexMethod*);
  * strings at the class level, but also gather strings for all types discovered
  * at the class level.
  */
+
+
 class GatheredTypes {
  private:
   std::vector<DexString*> m_lstring;
@@ -73,6 +76,9 @@ class GatheredTypes {
   std::vector<DexField*> m_lfield;
   std::vector<DexMethod*> m_lmethod;
   DexClasses* m_classes;
+  std::map<const DexString*, unsigned int> m_cls_load_strings;
+  std::map<const DexString*, unsigned int> m_cls_strings;
+  std::map<const DexMethod*, unsigned int> m_methods_in_cls_order;
 
   void gather_components();
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -81,16 +87,50 @@ class GatheredTypes {
   dexfield_to_idx* get_field_index(cmp_dfield cmp = compare_dexfields);
   dexmethod_to_idx* get_method_index(cmp_dmethod cmp = compare_dexmethods);
 
+  void build_cls_load_map();
+  void build_cls_map();
+  void build_method_map();
+
  public:
   GatheredTypes(DexClasses* classes);
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
   std::vector<DexString*> get_dexstring_emitlist(T cmp = compare_dexstrings);
+  std::vector<DexString*> get_cls_order_dexstring_emitlist();
+  std::vector<DexString*> keep_cls_strings_together_emitlist();
   template <class T = decltype(compare_dexmethods)>
   std::vector<DexMethod*> get_dexmethod_emitlist(T cmp = compare_dexmethods);
+  std::vector<DexMethod*> get_cls_order_dexmethod_emitlist();
   void gather_class(int num);
 
   std::unordered_set<DexString*> index_type_names();
+};
+
+template<class T, class U>
+class CustomSort {
+  private:
+    std::map<const T*, unsigned int> m_map;
+    U m_cmp;
+
+  public:
+    CustomSort(std::map<const T*, unsigned int> input_map, U cmp) {
+      m_map = input_map;
+      m_cmp = cmp;
+    }
+
+    bool operator()(const T* a, const T* b) {
+      bool a_in = m_map.count(a);
+      bool b_in = m_map.count(b);
+      if (!a_in && !b_in) {
+        return m_cmp(a,b);
+      } else if (a_in && b_in) {
+        return (m_map[a] < m_map[b]);
+      } else if (a_in) {
+        return true;
+      } else {
+        return false;
+      }
+    }
 };
 
 GatheredTypes::GatheredTypes(DexClasses* classes)
@@ -99,6 +139,12 @@ GatheredTypes::GatheredTypes(DexClasses* classes)
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
+
+  // build maps for the different custom sorting options
+  build_cls_load_map();
+  build_cls_map();
+  build_method_map();
+
   gather_components();
 }
 
@@ -117,6 +163,18 @@ std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   return strlist;
 }
 
+std::vector<DexString*> GatheredTypes::get_cls_order_dexstring_emitlist() {
+  return get_dexstring_emitlist(CustomSort<DexString, cmp_dstring>(
+        m_cls_load_strings,
+        compare_dexstrings));
+}
+
+std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
+  return get_dexstring_emitlist(CustomSort<DexString, cmp_dstring>(
+        m_cls_strings,
+        compare_dexstrings));
+}
+
 template <class T>
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
   std::vector<DexMethod*> methlist;
@@ -128,6 +186,12 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
   }
   std::sort(methlist.begin(), methlist.end(), cmp);
   return methlist;
+}
+
+std::vector<DexMethod*> GatheredTypes::get_cls_order_dexmethod_emitlist() {
+  return get_dexmethod_emitlist(CustomSort<DexMethod, cmp_dmethod>(
+        m_methods_in_cls_order,
+        compare_dexmethods));
 }
 
 DexOutputIdx* GatheredTypes::get_dodx(const uint8_t* base) {
@@ -205,6 +269,88 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   return sidx;
 }
 
+void GatheredTypes::build_cls_load_map() {
+  unsigned int index = 0;
+  int type_strings = 0;
+  int init_strings = 0;
+  int total_strings = 0;
+  for (const auto& cls : *m_classes) {
+    // gather type first, assuming class load will check all components of a class first
+    std::vector<DexType*> cls_types;
+    cls->gather_types(cls_types);
+    for (const auto& t : cls_types) {
+      if (!m_cls_load_strings.count(t->get_name())) {
+        m_cls_load_strings[t->get_name()] = index;
+        index++;
+        type_strings++;
+      }
+    }
+    // now add in any strings found in <clinit>
+    // since they are likely to be accessed during class load
+    for (const auto& m: cls->get_dmethods()) {
+      if (is_clinit(m)) {
+        std::vector<DexString*> method_strings;
+        m->gather_strings(method_strings);
+        for (const auto& s : method_strings) {
+          if (!m_cls_load_strings.count(s)) {
+            m_cls_load_strings[s] = index;
+            index++;
+            init_strings++;
+          }
+        }
+      }
+    }
+  }
+  total_strings += type_strings + init_strings;
+  for (const auto& cls : *m_classes) {
+    // now add all other strings in class order. This way we get some
+    // locality if a random class in a dex is loaded and then executes some methods
+    std::vector<const DexClass*> v;
+    v.push_back(cls);
+    walk_methods(v, [&](DexMethod* m) {
+      std::vector<DexString*> method_strings;
+      m->gather_strings(method_strings);
+      for (const auto& s : method_strings) {
+        if (!m_cls_load_strings.count(s)) {
+          m_cls_load_strings[s] = index;
+          index++;
+          total_strings++;
+        }
+      }
+    });
+  }
+  TRACE(CUSTOMSORT, 1, "found %d strings from types, %d from strings in init methods, %d total strings\n",
+      type_strings,
+      init_strings,
+      total_strings);
+}
+
+void GatheredTypes::build_cls_map() {
+  int index = 0;
+  for (const auto& cls : *m_classes) {
+      if (!m_cls_strings.count(cls->get_name())) {
+        m_cls_strings[cls->get_name()] = index++;
+      }
+  }
+}
+
+void GatheredTypes::build_method_map() {
+  auto index = 0;
+  for (const auto& cls : *m_classes) {
+    for (const auto& m : cls->get_dmethods()) {
+      if (!m_methods_in_cls_order.count(m)) {
+        m_methods_in_cls_order[m] = index;
+      }
+    }
+    for (const auto& m : cls->get_vmethods()) {
+      if (!m_methods_in_cls_order.count(m)) {
+        m_methods_in_cls_order[m] = index;
+      }
+    }
+    index++;
+  }
+}
+
 void GatheredTypes::gather_components() {
   // Gather references reachable from each class.
   for (auto const& cls : *m_classes) {
@@ -269,14 +415,14 @@ public:
   ConfigFiles& m_config_files;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
-  void generate_string_data();
+  void generate_string_data(SortMode mode = SortMode::DEFAULT);
   void generate_type_data();
   void generate_proto_data();
   void generate_field_data();
   void generate_method_data();
   void generate_class_data();
   void generate_class_data_items();
-  void generate_code_items();
+  void generate_code_items(SortMode mode = SortMode::DEFAULT);
   void generate_static_values();
   void unique_annotations(annomap_t& annomap,
                           std::vector<DexAnnotation*>& annolist);
@@ -312,7 +458,7 @@ public:
     PositionMapper* pos_mapper,
     const char* method_mapping_path);
   ~DexOutput();
-  void prepare();
+  void prepare(SortMode string_mode, SortMode code_mode);
   void write();
 };
 
@@ -404,7 +550,7 @@ DexOutput::locator_for_descriptor(
   return nullptr;
 }
 
-void DexOutput::generate_string_data() {
+void DexOutput::generate_string_data(SortMode mode) {
   /*
    * This is a index to position within the string data.  There
    * is no specific ordering specified here for the dex spec.
@@ -413,7 +559,17 @@ void DexOutput::generate_string_data() {
    * for strings that are used by the opcode const-string.  Whereas
    * this should be ordered by access for page-cache efficiency.
    */
-  std::vector<DexString*> string_order = m_gtypes->get_dexstring_emitlist();
+  std::vector<DexString*> string_order;
+  if (mode == CLASS_ORDER) {
+    TRACE(CUSTOMSORT, 1, "using class order for string pool sorting\n");
+    string_order = m_gtypes->get_cls_order_dexstring_emitlist();
+  } else if (mode == CLASS_STRINGS) {
+    TRACE(CUSTOMSORT, 1, "using class names pack for string pool sorting\n");
+    string_order = m_gtypes->keep_cls_strings_together_emitlist();
+  } else {
+    TRACE(CUSTOMSORT, 1, "using default string pool sorting\n");
+    string_order = m_gtypes->get_dexstring_emitlist();
+  }
   dex_string_id* stringids = (dex_string_id*)(m_output + hdr.string_ids_off);
 
   std::unordered_set<DexString*> type_names = m_gtypes->index_type_names();
@@ -440,6 +596,7 @@ void DexOutput::generate_string_data() {
 
     // Emit the string itself
     uint32_t idx = dodx->stringidx(str);
+    TRACE(CUSTOMSORT, 3, "str emit %s\n", SHOW(str));
     stringids[idx].offset = m_offset;
     str->encode(m_output + m_offset);
     m_offset += str->get_entry_size();
@@ -648,19 +805,28 @@ void DexOutput::generate_class_data_items() {
   insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t) m_cdi_offsets.size(), cdi_start);
 }
 
-void DexOutput::generate_code_items() {
+void DexOutput::generate_code_items(SortMode mode) {
   /*
    * Optimization note:  We should pass a sort routine to the
    * emitlist to optimize pagecache efficiency.
    */
   align_output();
   uint32_t ci_start = m_offset;
-  std::vector<DexMethod*> lmeth = m_gtypes->get_dexmethod_emitlist();
+
+  std::vector<DexMethod*> lmeth;
+  if (mode == CLASS_ORDER) {
+    TRACE(CUSTOMSORT, 1, "using class order for bytecode sorting\n");
+    lmeth = m_gtypes->get_cls_order_dexmethod_emitlist();
+  } else {
+    TRACE(CUSTOMSORT, 1, "using default bytecode sorting\n");
+    lmeth = m_gtypes->get_dexmethod_emitlist();
+  }
   for (DexMethod* meth : lmeth) {
     if (meth->get_access() & (DEX_ACCESS_ABSTRACT | DEX_ACCESS_NATIVE)) {
       // There is no code item for ABSTRACT or NATIVE methods.
       continue;
     }
+    TRACE(CUSTOMSORT, 3, "method emit %s %s\n", SHOW(meth->get_class()), SHOW(meth));
     std::unique_ptr<DexCode>& code = meth->get_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
@@ -1015,13 +1181,13 @@ void DexOutput::finalize_header() {
   memcpy(m_output, &hdr, sizeof(hdr));
 }
 
-void DexOutput::prepare() {
+void DexOutput::prepare(SortMode string_mode, SortMode code_mode) {
   fix_jumbos(m_classes, dodx);
   init_header_offsets();
   generate_static_values();
   generate_typelist_data();
-  generate_string_data();
-  generate_code_items();
+  generate_string_data(string_mode);
+  generate_code_items(code_mode);
   generate_class_data_items();
   generate_type_data();
   generate_proto_data();
@@ -1052,9 +1218,22 @@ write_classes_to_dex(
   LocatorIndex* locator_index,
   size_t dex_number,
   ConfigFiles& cfg,
-  PositionMapper* pos_mapper,
-  const char* method_mapping_filename)
+  const Json::Value& json_cfg,
+  PositionMapper* pos_mapper)
 {
+  auto method_mapping_filename = json_cfg.get("method_mapping", "").asString().c_str();
+  auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
+  auto sort_bytecode = json_cfg.get("bytecode_sort_mode", "").asString();
+  SortMode string_sort_mode = DEFAULT;
+  SortMode code_sort_mode = DEFAULT;
+  if (sort_strings == "class_strings") {
+    string_sort_mode = CLASS_STRINGS;
+  } else if (sort_strings == "class_order") {
+    string_sort_mode = CLASS_ORDER;
+  }
+  if (sort_bytecode == "class_order") {
+    code_sort_mode = CLASS_ORDER;
+  }
   DexOutput dout = DexOutput(
     filename.c_str(),
     classes,
@@ -1063,7 +1242,7 @@ write_classes_to_dex(
     cfg,
     pos_mapper,
     method_mapping_filename);
-  dout.prepare();
+  dout.prepare(string_sort_mode, code_sort_mode);
   dout.write();
   return dout.m_stats;
 }

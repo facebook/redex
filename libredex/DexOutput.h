@@ -29,6 +29,12 @@ typedef std::unordered_map<DexMethod*, uint32_t> dexmethod_to_idx;
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(const DexClassesVector& dexen);
 
+enum SortMode {
+  CLASS_ORDER = 1,
+  CLASS_STRINGS = 2,
+  DEFAULT = 100
+};
+
 class DexOutputIdx {
  private:
   dexstring_to_idx* m_string;
@@ -106,5 +112,5 @@ dex_output_stats_t write_classes_to_dex(
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
   ConfigFiles& cfg,
-  PositionMapper* line_mapper,
-  const char* method_mapping_filename);
+  const Json::Value& json_cfg,
+  PositionMapper* line_mapper);

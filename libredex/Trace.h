@@ -41,6 +41,7 @@
   TM(SHORTEN)                                   \
   TM(SINK)                                      \
   TM(SINL)                                      \
+  TM(CUSTOMSORT)                                \
   TM(SUPER)                                     \
   TM(SYNT)                                      \
   TM(UNTF)
