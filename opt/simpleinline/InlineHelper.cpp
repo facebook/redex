@@ -261,6 +261,10 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
  */
 bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
   auto cls = type_class(callee->get_class());
+  // Enums are all blacklisted
+  if (cls->get_access() & ACC_ENUM) {
+    return true;
+  }
   while (cls != nullptr) {
     if (m_config.black_list.count(cls->get_type())) {
       info.blacklisted++;

@@ -39,7 +39,6 @@ public:
     for (const auto& type_s : black_list) {
       m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
     }
-    m_inliner_config.black_list.emplace(DexType::make_type("Ljava/lang/Enum;"));
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
