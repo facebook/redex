@@ -293,40 +293,15 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
             else:
                 print(line.rstrip(), file=output)
 
-def copy_line_map_to_out_dir(tmp, apk_output_path):
+def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_dir = os.path.dirname(apk_output_path)
-    output_path = os.path.join(output_dir, "redex-line-number-map")
-    if os.path.isfile(tmp + '/redex-line-number-map'):
-        subprocess.check_call(['cp', tmp + '/redex-line-number-map', output_path])
-        log('Copying line number map to output dir')
+    output_path = os.path.join(output_dir, out_name)
+    tmp_path = tmp + '/' + name
+    if os.path.isfile(tmp_path):
+        subprocess.check_call(['cp', tmp_path, output_path])
+        log('Copying ' + human_name + ' map to output dir')
     else:
-        log('Skipping line number map copy, since no file found to copy')
-
-def copy_stats_to_out_dir(tmp, apk_output_path):
-    output_dir = os.path.dirname(apk_output_path)
-    output_stats_path = os.path.join(output_dir, "redex-stats.txt")
-    if os.path.isfile(tmp + '/stats.txt'):
-        subprocess.check_call(['cp', tmp + '/stats.txt', output_stats_path])
-        log('Copying stats to output dir')
-    else:
-        log('Skipping stats copy, since no file found to copy')
-
-def copy_filename_map_to_out_dir(tmp, apk_output_path):
-    output_dir = os.path.dirname(apk_output_path)
-    output_filemap_path = os.path.join(output_dir, "redex-src-strings-map.txt")
-    if os.path.isfile(tmp + '/filename_mappings.txt'):
-        subprocess.check_call(['cp', tmp + '/filename_mappings.txt', output_filemap_path])
-        log('Copying src string map to output dir')
-    else:
-        log('Skipping src string map copy, since no file found to copy')
-
-    output_methodmap_path = os.path.join(output_dir, "redex-method-id-map.txt")
-    if os.path.isfile(tmp + '/method_mapping.txt'):
-        subprocess.check_call(['cp', tmp + '/method_mapping.txt', output_methodmap_path])
-        log('Copying method id map to output dir')
-    else:
-        log('Skipping method id map copy, since no file found to copy')
-
+        log('Skipping ' + human_name + ' copy, since no file found to copy')
 
 def arg_parser(
         binary=None,
@@ -492,9 +467,10 @@ def run_redex(args):
             args.keyalias, args.keypass)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
-    copy_line_map_to_out_dir(newtmp, args.out)
-    copy_stats_to_out_dir(newtmp, args.out)
-    copy_filename_map_to_out_dir(newtmp, args.out)
+    copy_file_to_out_dir(newtmp, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
+    copy_file_to_out_dir(newtmp, args.out, 'stats.txt', 'stats', 'redex-stats.txt')
+    copy_file_to_out_dir(newtmp, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
+    copy_file_to_out_dir(newtmp, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
 
     if 'RenameClassesPass' in passes_list:
         merge_proguard_map_with_rename_output(
