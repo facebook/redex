@@ -174,6 +174,9 @@ int bytecount(int32_t v) {
 }
 
 DexOpcode goto_for_offset(int32_t offset) {
+  if (offset == 0) {
+    return OPCODE_GOTO_32;
+  }
   switch (bytecount(offset)) {
   case 1:
     return OPCODE_GOTO;
