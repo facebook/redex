@@ -103,6 +103,8 @@ class MyBy2Or3 implements By2Or3 {
 // An exception which occurs in a throw and catch which are
 // in code which is used. Do not delete.
 class WombatException extends Exception {}
+// An exception which is thrown but not caught.
+class NumbatException extends Exception {}
 
 // This class is used in the main program so do not delete.
 class Wombat {
@@ -120,6 +122,12 @@ class Wombat {
         b = MaybeExplode(bang);
       } catch (WombatException e) {}
       return b;
+  }
+
+  static void MaybeBadWombat(boolean bang) throws NumbatException {
+    if (bang) {
+      throw new NumbatException();
+    }
   }
 }
 

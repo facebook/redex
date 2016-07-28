@@ -97,6 +97,7 @@ TEST(EmptyClassesTest1, emptyclasses) {
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/By2Or3;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/MyBy2Or3;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/WombatException;"));
+  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NumbatException;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/Wombat;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/EmptyButLaterExtended;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/Extender;"));
