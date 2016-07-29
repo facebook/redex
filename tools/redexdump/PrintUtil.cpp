@@ -12,6 +12,7 @@
 #include <cstdarg>
 
 bool clean = false;
+bool raw = false;
 
 void redump(const char* format, ...) {
   va_list va;
