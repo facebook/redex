@@ -117,9 +117,6 @@ namespace {
 
     bool propagate_insn(DexInstruction *inst, DexInstruction *&last_inst, DexMethod *method) {
       bool changed = false;
-      if (inst->dests_size()) {
-        reg_values[inst->dest()].known = false;
-      }
       switch (inst->opcode()) {
         case OPCODE_IF_NEZ:
         case OPCODE_IF_EQZ:
@@ -140,6 +137,7 @@ namespace {
         // When there's a move-result instruction following a static-invoke insn
         // Check if there is a constant returned. If so, propagate the value
         case OPCODE_MOVE_RESULT:
+          reg_values[inst->dest()].known = false;
           if (last_inst != nullptr &&
               last_inst->opcode() == OPCODE_INVOKE_STATIC &&
               last_inst->has_methods()) {
@@ -161,13 +159,13 @@ namespace {
           // Propagate the value to the dest register
         case OPCODE_MOVE:
         case OPCODE_MOVE_OBJECT:
-          if (reg_values[inst->src(0)].known) {
-            auto &src_reg_value = reg_values[inst->src(0)];
-            reg_values[inst->dest()].known = true;
-            reg_values[inst->dest()].val = src_reg_value.val;
-          }
+          reg_values[inst->dest()].known = reg_values[inst->src(0)].known;
+          reg_values[inst->dest()].val = reg_values[inst->src(0)].val;
           break;
         default:
+          if (inst->dests_size()) {
+            reg_values[inst->dest()].known = false;
+          }
           break;
       }
       last_inst = inst;
