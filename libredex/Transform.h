@@ -73,6 +73,15 @@ enum MethodItemType {
   MFLOW_FALLTHROUGH,
 };
 
+/*
+ * MethodItemEntry (and the FatMethods that it gets linked into) is a data
+ * structure of DEX methods that is easier to modify than DexMethod.
+ *
+ * For example, when inserting a new instruction into a DexMethod, one needs
+ * to recalculate branch offsets, try-catch regions, and debug info. None of
+ * that is necessary when inserting into a FatMethod; it gets done when the
+ * FatMethod gets translated back into a DexMethod by MethodTransform::sync().
+ */
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
   MethodItemType type;
@@ -186,6 +195,7 @@ class MethodTransform {
 
   ~MethodTransform();
 
+  /* Create a FatMethod from a DexMethod. */
   static FatMethod* balloon(DexMethod* method);
 
   /* try_sync() is the work-horse of sync.  It's intended such that it can fail
