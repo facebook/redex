@@ -1453,6 +1453,7 @@ bool MethodTransform::try_sync() {
   std::vector<MethodItemEntry*> multi_branches;
   std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
   std::unordered_map<BranchTarget*, uint32_t> multi_targets;
+  bool needs_resync = false;
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE) {
@@ -1475,12 +1476,12 @@ bool MethodTransform::try_sync() {
             (mentry->addr & 1)) {
           ++branchoffset; // account for nop spacer
         }
-
-        if (!encode_offset(m_fmethod, branch_op_mie, branchoffset)) {
-          return false;
-        }
+        needs_resync |= !encode_offset(m_fmethod, branch_op_mie, branchoffset);
       }
     }
+  }
+  if (needs_resync) {
+    return false;
   }
   TRACE(MTRANS, 5, "Emitting multi-branches\n");
   // Step 3, generate multi-branch fopcodes
