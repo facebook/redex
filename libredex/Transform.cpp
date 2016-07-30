@@ -120,7 +120,9 @@ Liveness InlineContext::live_out(DexInstruction* insn) {
     return m_liveness->at(insn);
   } else {
     // w/o liveness analysis we just assume that all caller regs are live
-    return Liveness(RegSet(original_regs, -1));
+    auto rs = RegSet(original_regs);
+    rs.flip();
+    return Liveness(std::move(rs));
   }
 }
 
@@ -1106,7 +1108,9 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   // caller temp regs are live
   auto invoke_live_out = context.live_out(invoke);
   if (!simple_remap_ok) {
-    invoke_live_out = Liveness(RegSet(context.original_regs, -1));
+    auto rs = RegSet(context.original_regs);
+    rs.flip();
+    invoke_live_out = Liveness(std::move(rs));
   }
   // the caller liveness info is cached across multiple inlinings but the caller
   // regs may have increased in the meantime, so update the liveness here
