@@ -14,11 +14,11 @@
 void dump_strings(ddump_data* rd);
 void dump_stringdata(ddump_data* rd);
 void dump_types(ddump_data* rd);
-void dump_protos(ddump_data* rd);
-void dump_fields(ddump_data* rd);
-void dump_methods(ddump_data* rd);
-void dump_clsdefs(ddump_data* rd);
-void dump_clsdata(ddump_data* rd);
+void dump_protos(ddump_data* rd, bool print_headers);
+void dump_fields(ddump_data* rd, bool print_headers);
+void dump_methods(ddump_data* rd, bool print_headers);
+void dump_clsdefs(ddump_data* rd, bool print_headers);
+void dump_clsdata(ddump_data* rd, bool print_headers);
 void dump_code(ddump_data* rd);
 void dump_enarr(ddump_data* rd);
 void dump_anno(ddump_data* rd);

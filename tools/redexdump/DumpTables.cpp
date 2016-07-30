@@ -527,55 +527,65 @@ void dump_types(ddump_data* rd) {
   }
 }
 
-void dump_protos(ddump_data* rd) {
+void dump_protos(ddump_data* rd, bool print_headers) {
   auto size = rd->dexh->proto_ids_size;
-  redump("\nPROTO IDS TABLE: %d\n", size);
-  redump("[proto_ids_off] shorty proto\n");
+  if (print_headers) {
+    redump("\nPROTO IDS TABLE: %d\n", size);
+    redump("[proto_ids_off] shorty proto\n");
+  }
   for (uint32_t i = 0; i < size; i++) {
     redump(i, "%s\n", get_proto(rd, i).c_str());
   }
 }
 
-void dump_fields(ddump_data* rd) {
+void dump_fields(ddump_data* rd, bool print_headers) {
   auto size = rd->dexh->field_ids_size;
-  redump("\nFIELD IDS TABLE: %d\n", size);
-  redump("[field_ids_off] class type name\n");
+  if (print_headers) {
+    redump("\nFIELD IDS TABLE: %d\n", size);
+    redump("[field_ids_off] class type name\n");
+  }
   for (uint32_t i = 0; i < size; i++) {
     redump(i, "%s\n", get_field(rd, i).c_str());
   }
 }
 
-void dump_methods(ddump_data* rd) {
+void dump_methods(ddump_data* rd, bool print_headers) {
   uint32_t size = rd->dexh->method_ids_size;
-  redump("\nMETHOD IDS TABLE: %d\n", size);
-  redump("[method_ids_off] class name proto_no_shorty\n");
+  if (print_headers) {
+    redump("\nMETHOD IDS TABLE: %d\n", size);
+    redump("[method_ids_off] class name proto_no_shorty\n");
+  }
   for (uint32_t i = 0; i < size; i++) {
     redump(i, "%s\n", get_method(rd, i).c_str());
   }
 }
 
-void dump_clsdefs(ddump_data* rd) {
+void dump_clsdefs(ddump_data* rd, bool print_headers) {
   auto size = rd->dexh->class_defs_size;
-  redump("\nCLASS DEFS TABLE: %d\n", size);
-  redump(
-      "[class_def_off] flags class 'extends' superclass"
-      "['implements' interfaces]\n"
-      "\t[file: <filename>] [anno: annotation_off] data: class_data_off "
-      "[static values: static_value_off]\n");
+  if (print_headers) {
+    redump("\nCLASS DEFS TABLE: %d\n", size);
+    redump(
+        "[class_def_off] flags class 'extends' superclass"
+        "['implements' interfaces]\n"
+        "\t[file: <filename>] [anno: annotation_off] data: class_data_off "
+        "[static values: static_value_off]\n");
+  }
   for (uint32_t i = 0; i < size; i++) {
     redump(i, "%s\n", get_class_def(rd, i).c_str());
   }
 }
 
-void dump_clsdata(ddump_data* rd) {
+void dump_clsdata(ddump_data* rd, bool print_headers) {
   auto size = rd->dexh->class_defs_size;
-  redump("\nCLASS DATA TABLE: %d\n", size);
-  redump(
-      "[cls_data_off] class\n"
-      "sfields: <count> followed by sfields\n"
-      "ifields: <count> followed by ifields\n"
-      "dmethods: <count> followed by dmethods\n"
-      "vmethods: <count> followed by vmethods\n");
+  if (print_headers) {
+    redump("\nCLASS DATA TABLE: %d\n", size);
+    redump(
+        "[cls_data_off] class\n"
+        "sfields: <count> followed by sfields\n"
+        "ifields: <count> followed by ifields\n"
+        "dmethods: <count> followed by dmethods\n"
+        "vmethods: <count> followed by vmethods\n");
+  }
   for (uint32_t i = 0; i < size; i++) {
     const dex_class_def* class_defs =
         (dex_class_def*)(rd->dexmmap + rd->dexh->class_defs_off) + i;

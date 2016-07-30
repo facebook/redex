@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   bool anno = false;
   bool debug = false;
   uint32_t ddebug_offset = 0;
-  int no_dump_map = 0;
+  int no_headers = 0;
 
   char c;
   static const struct option options[] = {
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
     { "ddebug", required_argument, nullptr, 'D' },
     { "clean", no_argument, (int*)&clean, 1 },
     { "raw", no_argument, (int*)&raw, 1 },
-    { "no-dump-map", no_argument, &no_dump_map, 1 },
+    { "no-headers", no_argument, &no_headers, 1 },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },
   };
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
     const char* dexfile = argv[optind++];
     ddump_data rd;
     open_dex_file(dexfile, &rd);
-    if (!no_dump_map) {
+    if (!no_headers) {
       redump(format_map(&rd).c_str());
     }
     if (string || all) {
@@ -173,19 +173,19 @@ int main(int argc, char* argv[]) {
       dump_types(&rd);
     }
     if (proto || all) {
-      dump_protos(&rd);
+      dump_protos(&rd, !no_headers);
     }
     if (field || all) {
-      dump_fields(&rd);
+      dump_fields(&rd, !no_headers);
     }
     if (meth || all) {
-      dump_methods(&rd);
+      dump_methods(&rd, !no_headers);
     }
     if (clsdef || all) {
-      dump_clsdefs(&rd);
+      dump_clsdefs(&rd, !no_headers);
     }
     if (clsdata || all) {
-      dump_clsdata(&rd);
+      dump_clsdata(&rd, !no_headers);
     }
     if (code || all) {
       dump_code(&rd);
