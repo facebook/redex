@@ -180,6 +180,7 @@ void MultiMethodInliner::caller_inline(
     if (maybe_caller != caller_callee.end()) {
       visited.insert(callee);
       caller_inline(callee, maybe_caller->second, visited);
+      visited.erase(callee);
     }
   }
   if (!m_config.try_catch_inline && caller->get_code()->get_tries().size() > 0) {
