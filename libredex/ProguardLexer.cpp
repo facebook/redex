@@ -16,8 +16,6 @@
 
 #include "ProguardLexer.h"
 
-using namespace std;
-
 namespace redex {
 namespace proguard_parser {
 
