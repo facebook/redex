@@ -404,7 +404,7 @@ public:
   const char* m_filename;
   size_t m_dex_number;
   PositionMapper* m_pos_mapper;
-  const char* m_method_mapping_filename;
+  std::string m_method_mapping_filename;
   std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
   std::map<DexClass*, uint32_t> m_cdi_offsets;
@@ -456,7 +456,7 @@ public:
     size_t dex_number,
     ConfigFiles& config_files,
     PositionMapper* pos_mapper,
-    const char* method_mapping_path);
+    std::string method_mapping_path);
   ~DexOutput();
   void prepare(SortMode string_mode, SortMode code_mode);
   void write();
@@ -469,8 +469,9 @@ DexOutput::DexOutput(
   size_t dex_number,
   ConfigFiles& config_files,
   PositionMapper* pos_mapper,
-  const char* method_mapping_path):
-    m_config_files(config_files) {
+  std::string method_mapping_path)
+    : m_config_files(config_files)
+{
   m_classes = classes;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
@@ -677,19 +678,16 @@ void DexOutput::generate_field_data() {
 namespace {
 
 void write_method_mapping(
-  const char* filename,
+  std::string filename,
   const DexOutputIdx* dodx,
   const ProguardMap& proguard_map,
   size_t dex_number
 ) {
-  if (!filename || filename[0] == '\0') return;
-  FILE* fd = fopen(filename, "a");
-  if (!fd) {
-    fprintf(stderr, "Can't open method mapping file %s: %s\n",
-            filename,
-            strerror(errno));
-    return;
-  }
+  if (filename.empty()) return;
+  FILE* fd = fopen(filename.c_str(), "a");
+  assert_log(fd, "Can't open method mapping file %s: %s\n",
+             filename.c_str(),
+             strerror(errno));
   for (auto& it : dodx->method_to_idx()) {
     auto method = it.first;
     auto idx = it.second;
@@ -1221,7 +1219,7 @@ write_classes_to_dex(
   const Json::Value& json_cfg,
   PositionMapper* pos_mapper)
 {
-  auto method_mapping_filename = json_cfg.get("method_mapping", "").asString().c_str();
+  auto method_mapping_filename = json_cfg.get("method_mapping", "").asString();
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   auto sort_bytecode = json_cfg.get("bytecode_sort_mode", "").asString();
   SortMode string_sort_mode = DEFAULT;
