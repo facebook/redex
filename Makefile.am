@@ -70,6 +70,7 @@ libredex_la_SOURCES = \
 	libredex/JarLoader.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
+	libredex/ProguardLexer.cpp \
 	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ReachableClasses.cpp \
