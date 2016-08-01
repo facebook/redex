@@ -118,13 +118,13 @@ class CustomSort {
       m_cmp = cmp;
     }
 
-    bool operator()(const T* a, const T* b) {
+    bool operator()(const T* a, const T* b) const {
       bool a_in = m_map.count(a);
       bool b_in = m_map.count(b);
       if (!a_in && !b_in) {
         return m_cmp(a,b);
       } else if (a_in && b_in) {
-        return (m_map[a] < m_map[b]);
+        return (m_map.at(a) < m_map.at(b));
       } else if (a_in) {
         return true;
       } else {
@@ -159,7 +159,7 @@ std::unordered_set<DexString*> GatheredTypes::index_type_names() {
 template <class T>
 std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   std::vector<DexString*> strlist(m_lstring);
-  std::sort(strlist.begin(), strlist.end(), cmp);
+  std::sort(strlist.begin(), strlist.end(), std::cref(cmp));
   return strlist;
 }
 
@@ -184,7 +184,7 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
     methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
     methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());
   }
-  std::sort(methlist.begin(), methlist.end(), cmp);
+  std::sort(methlist.begin(), methlist.end(), std::cref(cmp));
   return methlist;
 }
 
