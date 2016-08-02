@@ -154,7 +154,7 @@ redexdump_LDADD = libredex.la
 #
 # redex: Python driver script
 #
-bin_SCRIPTS = redex
+bin_SCRIPTS = redex apkutil
 CLEANFILES = $(bin_SCRIPTS)
 EXTRA_DIST = redex.py
 
