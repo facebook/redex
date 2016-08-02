@@ -177,12 +177,11 @@ class LocalDce {
         auto& bliveness = liveness.at(b->id());
         bliveness.reset();
         TRACE(DCE, 5, "B%lu: %s\n", b->id(), show(bliveness).c_str());
-        bool loop = false;
 
         // Compute live-out for this block from its successors.
         for (auto& s : b->succs()) {
           if(s->id() == b->id()) {
-            loop = true;
+            bliveness |= prev_liveness;
           }
           TRACE(DCE,
                 5,
@@ -190,20 +189,6 @@ class LocalDce {
                 s->id(),
                 show(liveness[s->id()]).c_str());
           bliveness |= liveness[s->id()];
-        }
-
-        if (loop) {
-          for (auto it = b->rbegin(); it != b->rend(); ++it) {
-            if (it->type != MFLOW_OPCODE) {
-              continue;
-            }
-            if (is_required(it->insn, bliveness)) {
-              update_liveness(it->insn, bliveness);
-            }
-          }
-          for (auto& s : b->succs()) {
-            bliveness |= liveness[s->id()];
-          }
         }
 
         // Compute live-in for this block by walking its instruction list in
