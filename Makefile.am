@@ -74,6 +74,7 @@ libredex_la_SOURCES = \
 	libredex/ProguardParser.cpp \
 	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \
+	libredex/ProguardMatcher.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
 	libredex/RegAlloc.cpp \

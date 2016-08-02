@@ -41,6 +41,21 @@ inline bool can_rename(DexMember* member) {
 }
 
 template<class DexMember>
+inline bool keep(DexMember* member) {
+  return member->rstate.keep();
+}
+
+template<class DexMember>
+inline bool keepclassmembers(DexMember* member) {
+  return member->rstate.keepclassmembers();
+}
+
+template<class DexMember>
+inline bool keepclasseswithmembers(DexMember* member) {
+  return member->rstate.keepclasseswithmembers();
+}
+
+template<class DexMember>
 inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
 
 // Check to see if a class can be removed. At a later stage when we

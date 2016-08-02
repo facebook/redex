@@ -24,6 +24,13 @@ class ReferencedState {
   bool m_computed;
   bool m_seed;
 
+  // ProGuard keep settings
+  bool m_keep; // Specify classes and class members that are entry-points.
+  bool m_keepclassmembers; // Speicfy member to be preserved if the
+  // class is preserved.
+  bool m_keepclasseswithmembers; // Specify that all classes with the given
+  // members should be specified.
+
  public:
   ReferencedState() {
     m_bytype = m_bystring = false;
@@ -33,6 +40,11 @@ class ReferencedState {
   bool can_delete() const { return !m_bytype; }
   bool can_rename() const { return !m_bystring; }
   bool is_seed() const { return m_seed; }
+
+  // ProGuard option
+  bool keep() const { return m_keep; }
+  bool keepclassmembers() const { return m_keepclassmembers; }
+  bool keepclasseswithmembers() const { return m_keepclasseswithmembers; }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
@@ -45,9 +57,7 @@ class ReferencedState {
   }
 
   // A direct reference from code (not reflection)
-  void ref_by_type() {
-    m_bytype = true;
-  }
+  void ref_by_type() { m_bytype = true; }
 
   /* Called before recompute */
   void clear_if_compute() {
@@ -57,8 +67,12 @@ class ReferencedState {
   }
 
   // A class marked to be kept from the list of seedds from ProGuard
-  void ref_by_seed() {
-    m_seed = true;
-  }
+  void ref_by_seed() { m_seed = true; }
 
+  // ProGuaurd keep information.
+  void set_keep() { m_keep = true; }
+
+  void set_keepclassmembers() { m_keepclassmembers = true; }
+
+  void set_keepclasseswithmembers() { m_keepclasseswithmembers = true; }
 };
