@@ -136,7 +136,9 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
   std::vector<Pass*> passes = {
     new ConstantPropagationPass(),
-    new LocalDcePass()
+    new LocalDcePass(),
+    new DelInitPass(),
+    new RemoveEmptyClassesPass()
   };
 
   std::vector<KeepRule> null_rules;
@@ -150,7 +152,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   TRACE(CONSTP, 2, "Code after:\n");
   for(const auto& cls : classes) {
     TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
-    //ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
+    ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
         TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
