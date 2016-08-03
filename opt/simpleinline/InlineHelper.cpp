@@ -165,8 +165,10 @@ void MultiMethodInliner::inline_methods() {
 
 void MultiMethodInliner::caller_inline(
     DexMethod* caller,
-    std::vector<DexMethod*>& callees,
+    const std::vector<DexMethod*>& callees,
     std::unordered_set<DexMethod*>& visited) {
+  std::vector<DexMethod*> nonrecursive_callees;
+  nonrecursive_callees.reserve(callees.size());
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
@@ -176,6 +178,8 @@ void MultiMethodInliner::caller_inline(
       info.recursive++;
       continue;
     }
+    nonrecursive_callees.push_back(callee);
+
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
       visited.insert(callee);
@@ -187,11 +191,11 @@ void MultiMethodInliner::caller_inline(
     info.caller_tries++;
     return;
   }
-  inline_callees(caller, callees);
+  inline_callees(caller, nonrecursive_callees);
 }
 
-void MultiMethodInliner::inline_callees(DexMethod* caller,
-                                        std::vector<DexMethod*>& callees) {
+void MultiMethodInliner::inline_callees(
+    DexMethod* caller, const std::vector<DexMethod*>& callees) {
   size_t found = 0;
   auto insns = caller->get_code()->get_instructions();
 
