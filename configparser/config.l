@@ -114,7 +114,8 @@ T_ARGS_END ")"
 T_COMMENT #[^\n]*
 
 /* For the moment we conflate tokens for patterns and filenames. TODO: fix. */
-T_PATTERN [A-Za-z*[.0-9/$_%!]+[A-Za-z*\[\].0-9/$_#%!-]*
+T_PATTERN [A-Za-z*[.0-9/$_]+[A-Za-z*\[\].0-9/$_#-]*
+
 
 %%
 
