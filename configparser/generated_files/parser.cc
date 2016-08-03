@@ -247,7 +247,7 @@ extern "C" FILE *yyin;
 extern "C" int line_number;
 
 // #define WARN(x) printf("WARNING: %s\n", x)
-#define WARN(x) 
+#define WARN(x)
 #define ASSERT(x, y) if (!(x)) { printf("ERROR: %s", y); exit(-1);}
 
 void yyerror(const char* msg);
@@ -360,7 +360,7 @@ typedef int YYSTYPE;
 
 
 /* Line 216 of yacc.c.  */
-#line 364 "generated_files/parser.cc"
+#line 364 "parser.cc"
 
 #ifdef short
 # undef short
@@ -1504,7 +1504,7 @@ yyparse ()
 #endif
 #endif
 {
-  
+
   int yystate;
   int yyn;
   int yyresult;
@@ -1750,233 +1750,233 @@ yyreduce:
     {
         case 12:
 #line 199 "config.y"
-    { library_jars->emplace(duplicate(yylval)); }
+    { library_jars->emplace(duplicate(yylval)); ;}
     break;
 
   case 13:
 #line 203 "config.y"
-    {keep_rule_start();}
+    {keep_rule_start();;}
     break;
 
   case 14:
 #line 205 "config.y"
-    {keep_rule_end();}
+    {keep_rule_end();;}
     break;
 
   case 15:
 #line 208 "config.y"
     {keeprule->allow_deletion = false;
-      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;}
+      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 16:
 #line 210 "config.y"
     {keeprule->allow_deletion = true;
-      keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;}
+      keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 17:
 #line 212 "config.y"
     {keeprule->allow_deletion = false;
-      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;}
+      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = true;;}
     break;
 
   case 18:
 #line 214 "config.y"
     {keeprule->allow_deletion = true;
-      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;}
+      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 19:
 #line 216 "config.y"
     {keeprule->allow_deletion = false;
-      keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;}
+      keeprule->allow_cls_rename = false; keeprule->allow_member_rename = false;;}
     break;
 
   case 20:
 #line 218 "config.y"
     {keeprule->allow_deletion = true;
-      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;}
+      keeprule->allow_cls_rename = true; keeprule->allow_member_rename = false;;}
     break;
 
   case 23:
 #line 226 "config.y"
-    {WARN("'allowobfuscation' is not supported.\n"); }
+    {WARN("'allowobfuscation' is not supported.\n"); ;}
     break;
 
   case 24:
 #line 227 "config.y"
-    {WARN("'allowoptimization' is not supported.\n");}
+    {WARN("'allowoptimization' is not supported.\n");;}
     break;
 
   case 25:
 #line 228 "config.y"
-    {keeprule->allow_deletion = true;}
+    {keeprule->allow_deletion = true;;}
     break;
 
   case 26:
 #line 231 "config.y"
-    {flags = 0;}
+    {flags = 0;;}
     break;
 
   case 27:
 #line 231 "config.y"
-    {if (keeprule) keeprule->flags = flags;}
+    {if (keeprule) keeprule->flags = flags;;}
     break;
 
   case 29:
 #line 237 "config.y"
-    {if (keeprule) keeprule->class_type = keeprules::ANY_CLASS_TYPE;}
+    {if (keeprule) keeprule->class_type = keeprules::ANY_CLASS_TYPE;;}
     break;
 
   case 30:
 #line 238 "config.y"
-    {if (keeprule) keeprule->class_type = keeprules::CLASS;}
+    {if (keeprule) keeprule->class_type = keeprules::CLASS;;}
     break;
 
   case 31:
 #line 239 "config.y"
-    {if (keeprule) keeprule->class_type = keeprules::ENUMERATION;}
+    {if (keeprule) keeprule->class_type = keeprules::ENUMERATION;;}
     break;
 
   case 32:
 #line 240 "config.y"
-    {if (keeprule) keeprule->class_type = keeprules::INTERFACE;}
+    {if (keeprule) keeprule->class_type = keeprules::INTERFACE;;}
     break;
 
   case 33:
 #line 241 "config.y"
-    {if (keeprule) keeprule->class_type = keeprules::ANNOTATION;}
+    {if (keeprule) keeprule->class_type = keeprules::ANNOTATION;;}
     break;
 
   case 34:
 #line 244 "config.y"
-    {if (keeprule) keeprule->classname = duplicate(yylval);}
+    {if (keeprule) keeprule->classname = duplicate(yylval);;}
     break;
 
   case 35:
 #line 247 "config.y"
-    {if (keeprule) keeprule->extends = nullptr;}
+    {if (keeprule) keeprule->extends = nullptr;;}
     break;
 
   case 36:
 #line 248 "config.y"
-    {if (keeprule) keeprule->extends = duplicate(yylval);}
+    {if (keeprule) keeprule->extends = duplicate(yylval);;}
     break;
 
   case 37:
 #line 249 "config.y"
-    {if (keeprule) keeprule->extends = duplicate(yylval);}
+    {if (keeprule) keeprule->extends = duplicate(yylval);;}
     break;
 
   case 42:
 #line 260 "config.y"
-    {member_start();}
+    {member_start();;}
     break;
 
   case 43:
 #line 266 "config.y"
-    {member_end();}
+    {member_end();;}
     break;
 
   case 45:
 #line 270 "config.y"
-    {member_annotation = duplicate(yylval);}
+    {member_annotation = duplicate(yylval);;}
     break;
 
   case 47:
 #line 274 "config.y"
-    {flags |= keeprules::PUBLIC;}
+    {flags |= keeprules::PUBLIC;;}
     break;
 
   case 48:
 #line 275 "config.y"
-    {flags |= keeprules::PRIVATE;}
+    {flags |= keeprules::PRIVATE;;}
     break;
 
   case 49:
 #line 276 "config.y"
-    {flags |= keeprules::PROTECTED;}
+    {flags |= keeprules::PROTECTED;;}
     break;
 
   case 54:
 #line 287 "config.y"
-    {flags |= keeprules::STATIC;}
+    {flags |= keeprules::STATIC;;}
     break;
 
   case 55:
 #line 288 "config.y"
-    {flags |= keeprules::FINAL;}
+    {flags |= keeprules::FINAL;;}
     break;
 
   case 56:
 #line 289 "config.y"
-    {flags |= keeprules::TRANSIENT;}
+    {flags |= keeprules::TRANSIENT;;}
     break;
 
   case 57:
 #line 290 "config.y"
-    {flags |= keeprules::NATIVE;}
+    {flags |= keeprules::NATIVE;;}
     break;
 
   case 61:
 #line 296 "config.y"
-    {member_type = "*"; member_name = "*";}
+    {member_type = "*"; member_name = "*";;}
     break;
 
   case 62:
 #line 297 "config.y"
-    {member_type = "*";}
+    {member_type = "*";;}
     break;
 
   case 63:
 #line 297 "config.y"
-    {member_name = duplicate(yylval);}
+    {member_name = duplicate(yylval);;}
     break;
 
   case 64:
 #line 298 "config.y"
-    {member_type = duplicate(yylval);}
+    {member_type = duplicate(yylval);;}
     break;
 
   case 65:
 #line 298 "config.y"
-    {member_name = "*";}
+    {member_name = "*";;}
     break;
 
   case 66:
 #line 299 "config.y"
-    {member_type = duplicate(yylval);}
+    {member_type = duplicate(yylval);;}
     break;
 
   case 67:
 #line 299 "config.y"
-    {member_name = duplicate(yylval);}
+    {member_name = duplicate(yylval);;}
     break;
 
   case 69:
 #line 304 "config.y"
-    {member_args_start(); member_args_end();/* Method that takes no args */}
+    {member_args_start(); member_args_end();/* Method that takes no args */;}
     break;
 
   case 71:
 #line 305 "config.y"
-    {member_args_start(); /* Method with args */}
+    {member_args_start(); /* Method with args */;}
     break;
 
   case 72:
 #line 305 "config.y"
-    {member_args_end();}
+    {member_args_end();;}
     break;
 
   case 76:
 #line 312 "config.y"
-    {if (method_filter) { method_filter->params.push_back(duplicate(yylval));}}
+    {if (method_filter) { method_filter->params.push_back(duplicate(yylval));};}
     break;
 
 
 /* Line 1267 of yacc.c.  */
-#line 1980 "generated_files/parser.cc"
+#line 1980 "parser.cc"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -2214,4 +2214,3 @@ bool parse_proguard_file(const char * file, std::vector<KeepRule>* passed_rules,
 void yyerror(char const * msg) {
     printf("Parse error on line %d: %s\n", line_number, msg);
 }
-
