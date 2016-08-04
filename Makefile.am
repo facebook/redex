@@ -161,3 +161,6 @@ EXTRA_DIST = redex.py
 redex: redex.py Makefile
 	cp $(srcdir)/redex.py redex
 	chmod +x redex
+
+install-exec-hook:
+	cp -r $(srcdir)/pyredex $(bindir)
