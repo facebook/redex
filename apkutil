@@ -8,6 +8,7 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import os
+import re
 import subprocess
 import sys
 import zipfile
@@ -63,6 +64,23 @@ def codesize(dexfiles, apk_dir, *args):
     log('Total code size: {:.2f}MB in {} dex files'.format(
             total_size / one_mb, dex_count))
     log('Primary dex size: {:.2f}MB'.format(primary_dex_size / one_mb))
+
+
+@command(name='classes',
+         desc='Prints list of classes. Use -j for java-style names.')
+def classes(dexfiles, apk_dir, *args):
+    java_style = '-j' in args
+    proc = subprocess.Popen(['dexdump', '-f'] + dexfiles,
+            stdout=subprocess.PIPE)
+
+    pattern = b"  Class descriptor  : '([^']+)'"
+    for line in proc.stdout:
+        match = re.match(pattern, line)
+        if match:
+            classname = match.group(1).decode()
+            if java_style:
+                classname = classname[1:-1].replace('/', '.')
+            print(classname)
 
 
 # ------------------------- End Command Definitions ---------------------------
