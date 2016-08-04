@@ -74,6 +74,7 @@ struct RedexContext {
   DexMethod* get_method(DexType* type,
                         DexString* name,
                         DexProto* proto);
+  void erase_method(DexMethod*);
   void mutate_method(DexMethod* method,
                      const DexMethodRef& ref,
                      bool rename_on_collision = false);

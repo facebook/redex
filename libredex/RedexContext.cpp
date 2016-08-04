@@ -252,6 +252,14 @@ DexMethod* RedexContext::get_method(DexType* type,
   return rv;
 }
 
+void RedexContext::erase_method(DexMethod* meth) {
+  pthread_mutex_lock(&s_method_lock);
+  s_method_map[meth->get_class()][meth->get_name()].erase(meth->get_proto());
+  delete meth;
+  pthread_mutex_unlock(&s_method_lock);
+  return;
+}
+
 void RedexContext::mutate_method(DexMethod* method,
                                  const DexMethodRef& ref,
                                  bool rename_on_collision /* = false */) {

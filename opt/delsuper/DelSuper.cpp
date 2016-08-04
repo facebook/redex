@@ -10,10 +10,8 @@
 #include "DelSuper.h"
 
 #include <algorithm>
-#include <map>
 #include <string>
 #include <vector>
-#include <unordered_set>
 #include <unordered_map>
 
 #include "Walkers.h"
@@ -45,7 +43,8 @@ class DelSuper {
 
 private:
   const std::vector<DexClass*>& m_scope;
-  std::vector<DexMethod*> m_delmeths;
+  // trivial return invoke super method -> invoked super method
+  std::unordered_map<DexMethod*, DexMethod*> m_delmeths;
   int m_num_methods;
   int m_num_passed;
   int m_num_trivial;
@@ -144,21 +143,24 @@ private:
    * - Method vis must match vis of super method
    * - Method return src register must match move-result dest register
    * - Method args must all go into invoke without rearrangement
+   *
+   * Returns the super method, or null if this is not a trivial return invoke
+   * super.
    */
-  bool is_trivial_return_invoke_super(const DexMethod* meth) {
+  DexMethod* get_trivial_return_invoke_super(const DexMethod* meth) {
     const auto& code = meth->get_code();
 
     // Must have code
     if (!code) {
       m_num_culled_no_code++;
-      return false;
+      return nullptr;
     }
 
     // Must have at least two instructions
     const auto& insns = code->get_instructions();
     if (insns.size() < 2) {
       m_num_culled_too_short++;
-      return false;
+      return nullptr;
     }
 
     // Must satisfy one of the four "trivial invoke super" patterns
@@ -167,13 +169,13 @@ private:
       are_opcs_equal(insns, s_return_invoke_super_wide_opcs, 3) ||
       are_opcs_equal(insns, s_return_invoke_super_obj_opcs, 3))) {
       m_num_culled_not_trivial++;
-      return false;
+      return nullptr;
     }
 
     // Must not be static
     if (meth->get_access() & ACC_STATIC) {
       m_num_culled_static++;
-      return false;
+      return nullptr;
     }
 
     // Must not be private
@@ -198,45 +200,45 @@ private:
     // Invoked method name must match
     if (meth->get_name() != invoked_meth->get_name()) {
       m_num_culled_name_differs++;
-      return false;
+      return nullptr;
     }
 
     // Invoked method proto must match
     if (meth->get_proto() != invoked_meth->get_proto()) {
       m_num_culled_proto_differs++;
-      return false;
+      return nullptr;
     }
 
     // Method return src register must match move-result dest register
     if (move_res_opc && return_opc &&
         move_res_opc->dest() != return_opc->src(0)) {
       m_num_culled_return_move_result_differs++;
-      return false;
+      return nullptr;
     }
 
     // Method args must pass through directly
     if (!do_invoke_meth_args_pass_through(meth, insns[0])) {
       m_num_culled_args_differs++;
-      return false;
+      return nullptr;
     }
 
     // If the invoked method does not have access flags, we can't operate
     // on it at all.
     if (!invoked_meth->is_def()) {
       m_num_culled_super_not_def++;
-      return false;
+      return nullptr;
     }
     // If invoked method is not public, make it public
     if (!is_public(invoked_meth)) {
       if (!invoked_meth->is_concrete()) {
         m_num_culled_super_is_non_public_sdk++;
-        return false;
+        return nullptr;
       }
       set_public(invoked_meth);
       m_num_relaxed_vis++;
     }
 
-    return true;
+    return invoked_meth;
   }
 
 public:
@@ -263,18 +265,37 @@ public:
     walk_methods(m_scope,
       [&](DexMethod* meth) {
         m_num_methods++;
-        if (is_trivial_return_invoke_super(meth)) {
+        auto invoked_meth = get_trivial_return_invoke_super(meth);
+        if (invoked_meth) {
           TRACE(SUPER, 5, "Found trivial return invoke-super: %s\n",
             SHOW(meth));
-          m_delmeths.push_back(meth);
+          m_delmeths.emplace(meth, invoked_meth);
           m_num_passed++;
         }
       });
     if (do_delete) {
-      for (const auto meth : m_delmeths) {
+      // we technically don't have to rewrite the opcodes -- we could just
+      // remove the method declarations and the runtime semantics would be
+      // unchanged -- but this ensures that we have no more references to
+      // that method_id and can avoid emitting it in the dex output.
+      walk_opcodes(m_scope,
+                   [](DexMethod* meth) { return true; },
+                   [&](DexMethod* meth, DexInstruction* insn) {
+                     if (is_invoke(insn->opcode())) {
+                       auto mop = static_cast<DexOpcodeMethod*>(insn);
+                       auto method = mop->get_method();
+                       while (m_delmeths.count(method)) {
+                         method = m_delmeths.at(method);
+                       }
+                       mop->rewrite_method(method);
+                     }
+                   });
+      for (const auto& pair : m_delmeths) {
+        auto meth = pair.first;
         auto clazz = type_class(meth->get_class());
         always_assert(meth->is_virtual());
         clazz->get_vmethods().remove(meth);
+        DexMethod::erase_method(meth);
         TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s\n",
           SHOW(meth));
       }

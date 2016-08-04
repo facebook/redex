@@ -663,6 +663,10 @@ class DexMethod {
     return g_redex->get_method(type, name, proto);
   }
 
+  static void erase_method(DexMethod* m) {
+    return g_redex->erase_method(m);
+  }
+
  public:
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }

@@ -17,18 +17,21 @@ import org.junit.Test;
 public class DelSuperTest {
   private C1 c1;
   private C2 c2;
+  private C3 c3;
 
   @Before
   public void setup() {
     c1 = new C1();
     c2 = new C2();
+    c3 = new C3();
   }
 
   @Test
   public void testOptimized1() {
-    // Should be optimized and C2 should yield C1's response
+    // Should be optimized and C2/C3 should yield C1's response
     assertThat(c1.optimized1()).isEqualTo(-1);
     assertThat(c2.optimized1()).isEqualTo(-1);
+    assertThat(c3.optimized1()).isEqualTo(-1);
   }
 
   @Test
@@ -106,6 +109,12 @@ public class DelSuperTest {
     }
     public int notOptimized4(int x, int y) {
       return super.notOptimized4(y, x);
+    }
+  }
+
+  public static class C3 extends C2 {
+    public int optimized1() {
+      return super.optimized1();
     }
   }
 }

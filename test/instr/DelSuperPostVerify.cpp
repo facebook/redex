@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include <string>
 
+#include "DexInstruction.h"
 #include "Match.h"
 #include "VerifyUtil.h"
 
@@ -49,4 +50,22 @@ TEST_F(PostVerify, DelSuper) {
     m::any_vmethods(m::named<DexMethod>("notOptimized4"));
   ASSERT_TRUE(m3.matches(c1));
   ASSERT_TRUE(m3.matches(c2));
+
+  // check that the invoke instructions are fixed up as well
+  auto test_class = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/DelSuperTest;");
+  auto test_opt_1 = find_vmethod_named(*test_class, "testOptimized1");
+  int optimized1_count = 0;
+  for (auto& insn : test_opt_1->get_code()->get_instructions()) {
+    if (is_invoke(insn->opcode())) {
+      auto mop = static_cast<DexOpcodeMethod*>(insn);
+      auto m = mop->get_method();
+      if (strcmp(m->get_name()->c_str(), "optimized1") == 0) {
+        ASSERT_STREQ(m->get_class()->get_name()->c_str(),
+                     "Lcom/facebook/redex/test/instr/DelSuperTest$C1;");
+        ++optimized1_count;
+      }
+    }
+  }
+  ASSERT_EQ(optimized1_count, 3);
 }
