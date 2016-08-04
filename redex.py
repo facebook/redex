@@ -8,7 +8,6 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import argparse
-import atexit
 import distutils.version
 import functools
 import glob
@@ -28,35 +27,12 @@ from os.path import abspath, basename, dirname, getsize, isdir, isfile, join, \
         realpath, split
 
 import pyredex.unpacker as unpacker
-import pyredex.utils as utils
+from pyredex.utils import abs_glob, make_temp_dir
+from pyredex.log import log
 
 timer = timeit.default_timer
 
 per_file_compression = {}
-
-def want_trace():
-    try:
-        trace = os.environ['TRACE']
-    except KeyError:
-        return False
-    for t in trace.split(','):
-        try:
-            return int(t) > 0
-        except ValueError:
-            pass
-        try:
-            (module, level) = t.split(':')
-            if module == 'REDEX' and int(level) > 0:
-                return True
-        except ValueError:
-            pass
-    return False
-
-
-def log(*stuff):
-    if want_trace():
-        print(*stuff, file=sys.stderr)
-
 
 def find_android_build_tools():
     VERSION_REGEXP = '\d+\.\d+(\.\d+)$'
@@ -167,18 +143,7 @@ def move_dexen_to_directories(root, dexpaths):
     return res
 
 
-def make_temp_dir(name='', debug=False):
-    """ Make a temporary directory which will be automatically deleted """
-    directory = tempfile.mkdtemp(name)
-
-    if not debug:  # In debug mode, don't delete the directory
-        def remove_directory():
-            shutil.rmtree(directory)
-        atexit.register(remove_directory)
-    return directory
-
-
-def extract_apk(apk, destination_directory):
+def unzip_apk(apk, destination_directory):
     with zipfile.ZipFile(apk) as z:
         for info in z.infolist():
             per_file_compression[info.filename] = info.compress_type
@@ -205,7 +170,7 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
         key_alias, key_password):
 
     # Remove old signature files
-    for f in utils.abs_glob(extracted_apk_dir, 'META-INF/*'):
+    for f in abs_glob(extracted_apk_dir, 'META-INF/*'):
         cert_path = join(extracted_apk_dir, f)
         if isfile(cert_path):
             os.remove(cert_path)
@@ -386,7 +351,7 @@ def run_redex(args):
     extracted_apk_dir = make_temp_dir('.redex_extracted_apk', debug_mode)
 
     log('Extracting apk...')
-    extract_apk(args.input_apk, extracted_apk_dir)
+    unzip_apk(args.input_apk, extracted_apk_dir)
 
     dex_mode = unpacker.detect_secondary_dex_mode(extracted_apk_dir)
     log('Detected dex mode ' + str(type(dex_mode).__name__))
