@@ -442,8 +442,10 @@ void skip_to_semicolon(std::vector<unique_ptr<Token>>::iterator* it) {
   }
 }
 
-MemberSpecification parse_member_specification(
-    std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
+void parse_member_specification(
+    std::vector<unique_ptr<Token>>::iterator* it,
+    ClassSpecification* class_spec,
+    bool* ok) {
   MemberSpecification member_specification;
   *ok = true;
   member_specification.annotationType = parse_annotation_type(it);
@@ -455,21 +457,23 @@ MemberSpecification parse_member_specification(
     cerr << "Problem parsing access flags for member specification.\n";
     *ok = false;
     skip_to_semicolon(it);
-    return member_specification;
+    return;
   }
   // Check for <methods>
   if ((**it)->type == token::methods) {
     member_specification.name = "<methods>";
     (*it)++;
     gobble_semicolon(it, ok);
-    return member_specification;
+    class_spec->methodSpecifications.push_back(member_specification);
+    return;
   }
   // Check for <fields>
   if ((**it)->type == token::fields) {
     member_specification.name = "<fields>";
     (*it)++;
     gobble_semicolon(it, ok);
-    return member_specification;
+    class_spec->fieldSpecifications.push_back(member_specification);
+    return;
   }
   // Check for <init>
   if ((**it)->type == token::init) {
@@ -477,7 +481,7 @@ MemberSpecification parse_member_specification(
     (*it)++;
     // TODO(satnamsingh): parse arguments for <init>
     skip_to_semicolon(it);
-    return member_specification;
+    return;
   }
   // The next token better be an identifier.
   if ((**it)->type != token::identifier) {
@@ -485,7 +489,7 @@ MemberSpecification parse_member_specification(
          << " at line " << (**it)->line << endl;
     *ok = false;
     skip_to_semicolon(it);
-    return member_specification;
+    return;
   }
   std::string ident = static_cast<Identifier*>((*it)->get())->ident;
   // Check for "*".
@@ -493,31 +497,25 @@ MemberSpecification parse_member_specification(
     member_specification.name = "*";
     (*it)++;
     gobble_semicolon(it, ok);
-    return member_specification;
+    class_spec->methodSpecifications.push_back(member_specification);
+    class_spec->fieldSpecifications.push_back(member_specification);
+    return;
   }
   // This token is the type for the member specification.
   member_specification.descriptor = parse_type(it);
   skip_to_semicolon(it);
-  return member_specification;
+  return;
 }
 
 void parse_member_specifications(std::vector<unique_ptr<Token>>::iterator* it,
-                                 ClassSpecification class_spec,
+                                 ClassSpecification* class_spec,
                                  bool* ok) {
   if ((**it)->type == token::openCurlyBracket) {
     (*it)++;
     while (((**it)->type != token::closeCurlyBracket) &&
            ((**it)->type != token::eof_token)) {
-      MemberSpecification member_specification =
-          parse_member_specification(it, ok);
-      if (*ok) {
-        if ((member_specification.name == "*") ||
-            (member_specification.descriptor[0] == '(')) {
-          class_spec.methodSpecifications.push_back(member_specification);
-        } else {
-          class_spec.fieldSpecifications.push_back(member_specification);
-        }
-      } else {
+      parse_member_specification(it, class_spec, ok);
+      if (!*ok) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
         skip_to_semicolon(it);
@@ -588,7 +586,7 @@ ClassSpecification parse_class_specification(
     (*it)++;
   }
   // Parse the member specifications, if there are any
-  parse_member_specifications(it, class_spec, ok);
+  parse_member_specifications(it, &class_spec, ok);
   return class_spec;
 }
 

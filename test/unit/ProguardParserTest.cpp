@@ -394,9 +394,28 @@ TEST(ProguardParserTest, member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    // ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
   }
-  
+
+  { ProguardConfiguration config;
+    std::istringstream ss("-keep class Alpha { <methods>; }");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+  }
+
+  { ProguardConfiguration config;
+    std::istringstream ss("-keep class Alpha { <fields>; }");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 0);
+  }
+
   { ProguardConfiguration config;
     std::istringstream ss("-keepclasseswithmembers,allowshrinking class * {"
                           "  native <methods>;"
