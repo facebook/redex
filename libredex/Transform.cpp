@@ -474,18 +474,21 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
     return nullptr;
   }
   TRACE(MTRANS, 2, "Ballooning %s\n", SHOW(method));
-  auto opcodes = code->release_instructions();
+  auto instructions = code->release_instructions();
   addr_mei_t addr_to_mei;
 
   FatMethod* fm = new FatMethod();
   uint32_t addr = 0;
-  for (auto opcode : *opcodes) {
-    MethodItemEntry* mei = new MethodItemEntry(opcode);
-    fm->push_back(*mei);
-    addr_to_mei[addr] = mei;
-    mei->addr = addr;
-    TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(opcode), mei);
-    addr += opcode->size();
+  for (auto insn : *instructions) {
+    // NOPs are used for alignment, which FatMethod doesn't care about
+    if (insn->opcode() != OPCODE_NOP) {
+      MethodItemEntry* mei = new MethodItemEntry(insn);
+      fm->push_back(*mei);
+      addr_to_mei[addr] = mei;
+      mei->addr = addr;
+      TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
+    }
+    addr += insn->size();
   }
   generate_branch_targets(fm, addr_to_mei);
   associate_try_items(fm, *code, addr_to_mei);
