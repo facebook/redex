@@ -9,15 +9,24 @@
 
 package com.facebook.redex.test.proguard;
 
-public class Alpha {
+public class Delta {
 
-    private int wombat;
+  public class A {}
 
-    public Alpha () {
-        wombat = 18;
-    }
+  public class B {}
 
-    public int doubleWombat() {
-        return 2 * wombat;
-    }
+  public class C {
+    int i;
+    public int iValue() { return i; }
+  }
+
+  public class D {
+    int i;
+    public int iValue() { return i; }
+  }
+
+  public class E {
+    int i;
+    public int iValue() { return i; }
+  }
 }
