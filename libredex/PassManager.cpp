@@ -41,9 +41,9 @@ PassManager::PassManager(
 }
 
 void PassManager::run_passes(DexClassesVector& dexen, ConfigFiles& cfg) {
-  init_reachable_classes(build_class_scope(dexen), m_config,
-      m_proguard_rules, cfg.get_no_optimizations_annos());
   Scope scope = build_class_scope(dexen);
+  init_reachable_classes(scope, m_config,
+      m_proguard_rules, cfg.get_no_optimizations_annos());
   // reportReachableClasses(scope, "reachable");
   for (auto pass : m_activated_passes) {
     using namespace std::chrono;
@@ -82,4 +82,3 @@ void PassManager::incr_metric(const std::string& key, int value) {
 std::map<std::string, std::map<std::string, int> > PassManager::get_metrics() const {
   return m_pass_metrics;
 }
-
