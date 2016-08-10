@@ -261,4 +261,20 @@ public class InlineTest {
     }
     assertThat(caught).isTrue();
   }
+
+  @Test
+  public void testArrayDataInCaller() throws Exception {
+    int[] arr = {3, 1, 2};
+    calleeWithIf();
+    assertThat(likely(true)).isTrue();
+    assertThat(arr[0]).isEqualTo(3);
+  }
+
+  private void calleeWithIf() throws Exception {
+    if (mHello != null) {
+      wrapsThrow();
+      return;
+    }
+    String y = "x";
+  }
 }

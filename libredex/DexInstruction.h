@@ -782,3 +782,8 @@ inline bool may_throw(DexOpcode op) {
 inline bool is_const(DexOpcode op) {
   return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_CLASS;
 }
+
+inline bool is_fopcode(DexOpcode op) {
+  return op == FOPCODE_PACKED_SWITCH || op == FOPCODE_SPARSE_SWITCH ||
+         op == FOPCODE_FILLED_ARRAY;
+}

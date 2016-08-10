@@ -318,3 +318,35 @@ TEST_F(PostVerify, InlineInvokeDirect) {
               return !strcmp("noninlinable$redex0", m->get_name()->c_str());
             }));
 }
+
+/*
+ * Ensure that pseudo-opcodes remain at the end of the caller.
+ */
+
+TEST_F(PreVerify, testArrayDataInCaller) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testArrayDataInCaller");
+
+  // check that the callee indeed has a non-terminal if, which will exercise
+  // the inliner code path that searches for fopcodes in the caller
+  auto callee = find_invoke(m, OPCODE_INVOKE_DIRECT, "calleeWithIf");
+  auto insns = callee->get_method()->get_code()->get_instructions();
+  auto ret_it =
+      std::find_if(insns.begin(), insns.end(), [&](DexInstruction* insn) {
+        return is_return(insn->opcode());
+      });
+  ASSERT_NE(ret_it, insns.end());
+
+  auto last_insn = m->get_code()->get_instructions().back();
+  ASSERT_EQ(last_insn->opcode(), FOPCODE_FILLED_ARRAY);
+}
+
+TEST_F(PostVerify, testArrayDataInCaller) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testArrayDataInCaller");
+  ASSERT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_DIRECT, "callerWithIf"));
+  auto last_insn = m->get_code()->get_instructions().back();
+  ASSERT_EQ(last_insn->opcode(), FOPCODE_FILLED_ARRAY);
+}

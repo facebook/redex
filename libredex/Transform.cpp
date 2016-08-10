@@ -1015,6 +1015,18 @@ MethodItemEntry* find_active_catch(FatMethod* method,
     ? pos->tentry->catch_start : nullptr;
 }
 
+/*
+ * Returns an iterator that points one past the end of the last real opcode.
+ */
+FatMethod::iterator after_last_real_opcode(FatMethod* fm) {
+  auto last =
+      std::find_if(fm->rbegin(), fm->rend(), [](const MethodItemEntry& mei) {
+        return mei.type == MFLOW_TRY ||
+               (mei.type == MFLOW_OPCODE && !is_fopcode(mei.insn->opcode()));
+      });
+  return last.base();
+}
+
 /**
  * Return a RegSet indicating the registers that the callee interferes with
  * either via a check-cast to or by writing to one of the ins.
@@ -1232,7 +1244,10 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     }
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
-    splice(fcaller, fcaller->end(), std::next(ret_it), fcallee->end());
+    splice(fcaller,
+           after_last_real_opcode(fcaller),
+           std::next(ret_it),
+           fcallee->end());
     if (caller_catch != nullptr) {
       fcaller->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }
