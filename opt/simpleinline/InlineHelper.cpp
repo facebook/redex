@@ -301,7 +301,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
   int ret_count = 0;
   for (auto insn : callee->get_code()->get_instructions()) {
     if (create_vmethod(insn)) return true;
-    if (is_invoke_super(insn)) return true;
+    if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
     if (unknown_field(insn, callee, caller)) return true;
     if (insn->opcode() == OPCODE_THROW) {
@@ -362,12 +362,19 @@ bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
 }
 
 /**
- * Return whether the callee contains an invoke-super.
+ * Return true if a callee contains an invoke super to a different method
+ * in the hierarchy, and the callee and caller are in different classes.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::is_invoke_super(DexInstruction* insn) {
+bool MultiMethodInliner::nonrelocatable_invoke_super(DexInstruction* insn,
+                                                     DexMethod* callee,
+                                                     DexMethod* caller) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER ||
       insn->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
+    if (m_config.super_same_class_inline &&
+        callee->get_class() == caller->get_class()) {
+      return false;
+    }
     info.invoke_super++;
     return true;
   }

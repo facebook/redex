@@ -33,6 +33,7 @@ class MultiMethodInliner {
     bool try_catch_inline; // inline methods with try-catch
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
+    bool super_same_class_inline;
     bool use_liveness;
     std::unordered_set<DexType*> black_list;
   };
@@ -108,10 +109,12 @@ class MultiMethodInliner {
 
   /**
    * Return true if a callee contains an invoke super to a different method
-   * in the hierarchy.
+   * in the hierarchy, and the callee and caller are in different classes.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool is_invoke_super(DexInstruction* insn);
+  bool nonrelocatable_invoke_super(DexInstruction* insn,
+                                   DexMethod* callee,
+                                   DexMethod* caller);
 
   /**
    * Return true if a callee overrides one of the input registers.
