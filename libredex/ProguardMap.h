@@ -88,18 +88,6 @@ struct ProguardMap {
   void update_class_mapping(const std::string& oldname, const std::string& newname);
 
   /**
-   * Update the method mapping. Used when we do something to the class name
-   * inside of redex.
-   */
-  void update_method_mapping(const DexMethod* dm, const std::string& newname);
-
-  /**
-   * Update the field mapping. Used when we do something to the class name
-   * inside of redex.
-   */
-  void update_field_mapping(const DexField* df, const std::string& newname);
-
-  /**
    * Translate obfuscated class name to un-obfuscated name using dynamic map
    */
   std::string deobfuscate_class_dynamic(const std::string& cls) const;
@@ -115,23 +103,17 @@ struct ProguardMap {
   std::string deobfuscate_field_dynamic(const std::string& field) const;
 
  private:
-  void parse_proguard_map(std::istream& fp) {
-    std::string line;
-    while (std::getline(fp, line)) {
-      parse_line(line);
-    }
-  }
+  void parse_proguard_map(std::istream& fp);
 
-  void parse_line(const std::string& line);
   bool parse_class(const std::string& line);
   bool parse_field(const std::string& line);
   bool parse_method(const std::string& line);
 
   void add_method_mapping(
-      const char* type,
-      const char* methodname,
-      const char* newname,
-      const char* args);
+    const char* type,
+    const char* methodname,
+    const char* newname,
+    const char* args);
 
  private:
   // Unobfuscated to obfuscated maps
