@@ -15,11 +15,14 @@
 #include <iostream>
 #include <algorithm>
 
+#include "DexStore.h"
 #include "ConfigFiles.h"
 
 class DexClasses;
 class DexClass;
+class DexStore;
 using DexClassesVector = std::vector<DexClasses>;
+using DexStoresVector = std::vector<DexStore>;
 using Scope = std::vector<DexClass*>;
 class PassManager;
 
@@ -107,6 +110,10 @@ class Pass {
 
   virtual void configure_pass(const PassConfig&) {}
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) = 0;
+  virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+    DexClassesVector& dexen = stores[0].get_dexen();
+    run_pass(dexen, cfg, mgr);
+  };
 
  private:
   std::string m_name;

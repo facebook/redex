@@ -22,7 +22,7 @@ class PassManager {
     const std::vector<Pass*>& passes,
     const std::vector<KeepRule>& rules,
     const Json::Value& config = Json::Value(Json::objectValue));
-  void run_passes(DexClassesVector&, ConfigFiles&);
+  void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   std::map<std::string, std::map<std::string, int> > get_metrics() const;
 

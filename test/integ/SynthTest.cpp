@@ -71,9 +71,11 @@ TEST(SynthTest1, synthetic) {
     ASSERT_NE(nullptr, dexfile);
   }
 
-  std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
-  DexClasses& classes = dexen.back();
+  std::vector<DexStore> stores;
+  DexStore root_store;
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   std::vector<Pass*> passes = {
@@ -85,7 +87,7 @@ TEST(SynthTest1, synthetic) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(dexen, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {

@@ -113,9 +113,11 @@ TEST(ConstantPropagationTest1, constantpropagation) {
     ASSERT_NE(nullptr, dexfile);
   }
 
-  std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
-  DexClasses& classes = dexen.back();
+  std::vector<DexStore> stores;
+  DexStore root_store;
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   TRACE(CONSTP, 2, "Code before:\n");
@@ -147,7 +149,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   dummy_cfg.using_seeds = true;
-  manager.run_passes(dexen, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   TRACE(CONSTP, 2, "Code after:\n");
   for(const auto& cls : classes) {

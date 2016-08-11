@@ -40,8 +40,8 @@ PassManager::PassManager(
   }
 }
 
-void PassManager::run_passes(DexClassesVector& dexen, ConfigFiles& cfg) {
-  Scope scope = build_class_scope(dexen);
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
+  Scope scope = build_class_scope(stores[0].get_dexen());
   init_reachable_classes(scope, m_config,
       m_proguard_rules, cfg.get_no_optimizations_annos());
   // reportReachableClasses(scope, "reachable");
@@ -53,7 +53,7 @@ void PassManager::run_passes(DexClassesVector& dexen, ConfigFiles& cfg) {
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
-    pass->run_pass(dexen, cfg, *this);
+    pass->run_pass(stores, cfg, *this);
     auto end = high_resolution_clock::now();
     TRACE(PM, 1, "Pass %s completed in %.1lf seconds\n",
           pass->name().c_str(), duration<double>(end - start).count());

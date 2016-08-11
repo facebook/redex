@@ -36,9 +36,11 @@ TEST(EmptyClassesTest1, emptyclasses) {
     ASSERT_NE(nullptr, dexfile);
   }
 
-  std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
-  DexClasses& classes = dexen.back();
+  std::vector<DexStore> stores;
+  DexStore root_store;
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
   size_t before = classes.size();
   TRACE(EMPTY, 3, "Loaded classes: %ld\n", classes.size());
   // Report the classes that were loaded through tracing.
@@ -67,11 +69,11 @@ TEST(EmptyClassesTest1, emptyclasses) {
   );
   ConfigFiles dummy_cfg(conf_obj);
   dummy_cfg.using_seeds = true;
-  manager.run_passes(dexen, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   size_t after = 0;
   std::set<std::string> remaining_classes;
-  for (const auto& dex_classes : dexen) {
+  for (const auto& dex_classes : stores[0].get_dexen()) {
     for (const auto cls : dex_classes) {
       TRACE(EMPTY, 3, "Output class: %s\n",
           cls->get_type()->get_name()->c_str());

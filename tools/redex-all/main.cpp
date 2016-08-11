@@ -318,7 +318,6 @@ void output_stats(
 }
 
 void output_moved_methods_map(const char* path,
-                              DexClassesVector& dexen,
                               ConfigFiles& cfg) {
   // print out moved methods map
   if (cfg.save_move_map() && strcmp(path, "")) {
@@ -417,10 +416,13 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  DexClassesVector dexen;
+  DexStore root_store;
   for (int i = start; i < argc; i++) {
-    dexen.emplace_back(load_classes_from_dex(argv[i]));
+    DexClasses classes = load_classes_from_dex(argv[i]);
+    root_store.add_classes(std::move(classes));
   }
+  DexStoresVector stores;
+  stores.emplace_back(std::move(root_store));
 
   for (const auto& library_jar : library_jars) {
     TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
@@ -440,7 +442,7 @@ int main(int argc, char* argv[]) {
   }
 
   PassManager manager(passes, rules, args.config);
-  manager.run_passes(dexen, cfg);
+  manager.run_passes(stores, cfg);
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
 
@@ -449,7 +451,7 @@ int main(int argc, char* argv[]) {
     TRACE(LOC,
           1,
           "Will emit class-locator strings for classloader optimization\n");
-    locator_index = new LocatorIndex(make_locator_index(dexen));
+    locator_index = new LocatorIndex(make_locator_index(stores[0].get_dexen()));
   }
 
   dex_output_stats_t totals;
@@ -457,24 +459,25 @@ int main(int argc, char* argv[]) {
 
   auto pos_output = args.config.get("line_number_map", "").asString();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
-
-  for (size_t i = 0; i < dexen.size(); i++) {
-    std::stringstream ss;
-    ss << args.out_dir + "/classes";
-    if (i > 0) {
-      ss << (i + 1);
+  for (auto& store : stores) {
+    for (size_t i = 0; i < store.get_dexen().size(); i++) {
+      std::stringstream ss;
+      ss << args.out_dir << "/classes";
+      if (i > 0) {
+        ss << (i + 1);
+      }
+      ss << ".dex";
+      auto stats = write_classes_to_dex(
+        ss.str(),
+        &store.get_dexen()[i],
+        locator_index,
+        i,
+        cfg,
+        args.config,
+        pos_mapper.get());
+      totals += stats;
+      dexes_stats.push_back(stats);
     }
-    ss << ".dex";
-    auto stats = write_classes_to_dex(
-      ss.str(),
-      &dexen[i],
-      locator_index,
-      i,
-      cfg,
-      args.config,
-      pos_mapper.get());
-    totals += stats;
-    dexes_stats.push_back(stats);
   }
 
   auto stats_output = args.config.get("stats_output", "").asString();
@@ -482,7 +485,7 @@ int main(int argc, char* argv[]) {
 
   pos_mapper->write_map();
   output_stats(stats_output.c_str(), totals, dexes_stats, manager);
-  output_moved_methods_map(method_move_map.c_str(), dexen, cfg);
+  output_moved_methods_map(method_move_map.c_str(), cfg);
   print_warning_summary();
   delete g_redex;
   TRACE(MAIN, 1, "Done.\n");
