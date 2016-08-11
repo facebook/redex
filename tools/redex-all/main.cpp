@@ -326,9 +326,9 @@ void output_moved_methods_map(const char* path,
       perror("Error opening method move file");
       return;
     }
-    auto move_map = cfg.get_moved_methods_map();
+    auto const& move_map = cfg.get_moved_methods_map();
     std::string dummy = "dummy";
-    for (const auto& it : *move_map) {
+    for (const auto& it : move_map) {
       MethodTuple mt = it.first;
       auto cls_name = std::get<0>(mt);
       auto meth_name = std::get<1>(mt);
@@ -436,9 +436,13 @@ int main(int argc, char* argv[]) {
   }
 
   ConfigFiles cfg(args.config);
+  apply_deobfuscated_names(stores[0].get_dexen(), cfg.get_proguard_map());
   cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
-    cfg.using_seeds = init_seed_classes(args.seeds_filename) > 0;
+    auto nseeds = init_seed_classes(
+      args.seeds_filename,
+      cfg.get_proguard_map());
+    cfg.using_seeds = nseeds > 0;
   }
 
   PassManager manager(passes, rules, args.config);

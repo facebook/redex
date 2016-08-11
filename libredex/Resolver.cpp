@@ -34,7 +34,6 @@ DexMethod* check_dmethods(const DexString* name,
 DexMethod* resolve_intf_methodref(DexType* intf, DexMethod* meth) {
 
   auto find_method = [&](const DexClass* cls) -> DexMethod* {
-    always_assert(cls->get_access() & ACC_INTERFACE);
     const auto& vmethods = cls->get_vmethods();
     for (const auto vmethod : vmethods) {
       if (vmethod->get_name() == meth->get_name() &&
@@ -167,4 +166,3 @@ DexField* resolve_field(
   }
   return nullptr;
 }
-

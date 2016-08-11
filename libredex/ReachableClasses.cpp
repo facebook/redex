@@ -22,21 +22,6 @@
 
 namespace {
 
-// Note: this method will return nullptr if the dotname refers to an unknown
-// type.
-DexType* get_dextype_from_dotname(const char* dotname) {
-  if (dotname == nullptr) {
-    return nullptr;
-  }
-  std::string buf;
-  buf.reserve(strlen(dotname) + 2);
-  buf += 'L';
-  buf += dotname;
-  buf += ';';
-  std::replace(buf.begin(), buf.end(), '.', '/');
-  return DexType::get_type(buf.c_str());
-}
-
 /**
  * Class is used directly in code (As opposed to used via reflection)
  *
@@ -118,14 +103,24 @@ void mark_reachable_by_classname(std::string& classname, bool from_code) {
   mark_reachable_by_classname(dclass, from_code);
 }
 
-void mark_reachable_by_seed(DexClass* dclass) {
+template<typename T>
+void mark_reachable_by_seed(T dclass) {
   if (dclass == nullptr) return;
   dclass->rstate.ref_by_seed();
+}
+
+template<typename T>
+void mark_reachable_by_renamed_seed(T t) {
+  if (t) t->rstate.ref_by_renamed_seed();
 }
 
 void mark_reachable_by_seed(DexType* dtype) {
   if (dtype == nullptr) return;
   mark_reachable_by_seed(type_class_internal(dtype));
+}
+
+void mark_reachable_by_renamed_seed(DexType* dtype) {
+  mark_reachable_by_renamed_seed(type_class_internal(dtype));
 }
 
 template <typename DexMember>
@@ -433,10 +428,176 @@ void init_reachable_classes(
   recompute_classes_reachable_from_code(scope);
 }
 
-unsigned int init_seed_classes(const std::string seeds_filename) {
+namespace {
+struct SeedsParser {
+  SeedsParser(const ProguardMap& pgmap) : m_pgmap(pgmap) {}
+
+  bool parse_seed_line(std::string line) {
+    if (line.find(':') == std::string::npos) {
+      return parse_class(line);
+    }
+    if (line.find('(') == std::string::npos) {
+      return parse_field(line);
+    }
+    return parse_method(line);
+  }
+
+ private:
+  bool parse_class(std::string line) {
+    auto canon_name = convert_type(line);
+    auto xlate_name = m_pgmap.translate_class(canon_name);
+    auto dex_type = DexType::get_type(xlate_name.c_str());
+    TRACE(PGR, 2,
+          "Parsing seed class: %s\n"
+          "  canon: %s\n"
+          "  xlate: %s\n"
+          "  interned: %s\n",
+          line.c_str(), canon_name.c_str(), xlate_name.c_str(), SHOW(dex_type));
+    auto nonrenamed_type = DexType::get_type(canon_name.c_str());
+    if (!dex_type && !nonrenamed_type) {
+      TRACE(PGR, 2,
+            "Seed file contains class for which Dex type can't be found: %s\n",
+            line.c_str());
+      return false;
+    }
+    if (dex_type) {
+      mark_reachable_by_renamed_seed(dex_type);
+    }
+    if (line.find('$') == std::string::npos) {
+      if (nonrenamed_type) {
+        mark_reachable_by_seed(nonrenamed_type);
+      }
+    }
+    return true;
+  }
+
+  std::string convert_field(
+    std::string cls,
+    std::string type,
+    std::string name
+  ) {
+    return convert_type(cls) + "." + name + ":" + convert_type(type);
+  }
+
+  std::string canonicalize_field(std::string line) {
+    auto cpos = line.find(':');
+    auto cls = line.substr(0, cpos);
+    auto spos = line.find(' ', cpos + 2);
+    auto type = line.substr(cpos + 2, spos - (cpos + 2));
+    auto name = line.substr(spos + 1);
+    return convert_field(cls, type, name);
+  }
+
+  bool parse_field(std::string line) {
+    auto canon_field = canonicalize_field(line);
+    auto xlate_name = m_pgmap.translate_field(canon_field);
+    auto cls_end = xlate_name.find('.');
+    auto name_start = cls_end + 1;
+    auto name_end = xlate_name.find(':', name_start);
+    auto type_start = name_end + 1;
+    auto clsstr = xlate_name.substr(0, cls_end);
+    auto namestr = xlate_name.substr(name_start, name_end - name_start);
+    auto typestr = xlate_name.substr(type_start);
+    auto dex_field = DexField::get_field(
+      DexType::get_type(clsstr.c_str()),
+      DexString::get_string(namestr.c_str()),
+      DexType::get_type(typestr.c_str()));
+    TRACE(PGR, 2,
+          "Parsing seed field: %s\n"
+          "  canon: %s\n"
+          "  xlate: %s\n"
+          "  interned: %s\n",
+          line.c_str(), canon_field.c_str(), xlate_name.c_str(),
+          SHOW(dex_field));
+    if (!dex_field) {
+      TRACE(PGR, 2,
+            "Seed file contains field not found in dex: %s (obfuscated: %s)\n",
+            canon_field.c_str(), xlate_name.c_str());
+      return false;
+    }
+    mark_reachable_by_seed(dex_field);
+    return true;
+  }
+
+  std::string convert_args(std::string args) {
+    std::string ret;
+    std::stringstream ss(args);
+    std::string arg;
+    while (std::getline(ss, arg, ',')) {
+      ret += convert_type(arg);
+    }
+    return ret;
+  }
+
+  std::string convert_method(
+    std::string cls,
+    std::string type,
+    std::string name,
+    std::string args
+  ) {
+    return
+      convert_type(cls)
+      + "." + name
+      + "(" + convert_args(args) + ")"
+      + convert_type(type);
+  }
+
+  std::string canonicalize_method(std::string line) {
+    auto cls_end = line.find(':');
+    auto type_start = cls_end + 2;
+    auto type_end = line.find(' ', type_start);
+    if (type_end == std::string::npos) {
+      // It's an <init> constructor.
+      auto args_start = line.find('(', type_start) + 1;
+      auto args_end = line.find(')', args_start);
+      auto cls = line.substr(0, cls_end);
+      auto args = line.substr(args_start, args_end - args_start);
+      return convert_method(cls, "void", "<init>", args);
+    }
+    auto name_start = type_end + 1;
+    auto name_end = line.find('(', name_start);
+    auto args_start = name_end + 1;
+    auto args_end = line.find(')', args_start);
+    auto cls = line.substr(0, cls_end);
+    auto type = line.substr(type_start, type_end - type_start);
+    auto name = line.substr(name_start, name_end - name_start);
+    auto args = line.substr(args_start, args_end - args_start);
+    return convert_method(cls, type, name, args);
+  }
+
+  bool parse_method(std::string line) {
+    auto canon_method = canonicalize_method(line);
+    auto xlate_method = m_pgmap.translate_method(canon_method);
+    auto dex_method = DexMethod::get_method(xlate_method);
+    TRACE(PGR, 2,
+          "Parsing seed method: %s\n"
+          "  canon: %s\n"
+          "  xlate: %s\n"
+          "  interned: %s\n",
+          line.c_str(), canon_method.c_str(), xlate_method.c_str(),
+          SHOW(dex_method));
+    if (!dex_method) {
+      TRACE(PGR, 2,
+            "Seed file contains method not found in dex: %s (obfuscated: %s)\n",
+            canon_method.c_str(), xlate_method.c_str());
+      return false;
+    }
+    mark_reachable_by_seed(dex_method);
+    return true;
+  }
+
+ private:
+  const ProguardMap& m_pgmap;
+};
+}
+
+unsigned int init_seed_classes(
+  const std::string seeds_filename, const ProguardMap& pgmap
+) {
     TRACE(PGR, 8, "Reading seed classes from %s\n", seeds_filename.c_str());
     auto start = std::chrono::high_resolution_clock::now();
     std::ifstream seeds_file(seeds_filename);
+    SeedsParser parser(pgmap);
     unsigned int count = 0;
     if (!seeds_file) {
       TRACE(PGR, 8, "Seeds file %s was not found (ignoring error).",
@@ -445,19 +606,8 @@ unsigned int init_seed_classes(const std::string seeds_filename) {
     } else {
       std::string line;
       while (getline(seeds_file, line)) {
-        if (line.find(":") == std::string::npos && line.find("$") ==
-            std::string::npos) {
-          auto dex_type = get_dextype_from_dotname(line.c_str());
-          if (dex_type != nullptr) {
-            mark_reachable_by_seed(dex_type);
-            count++;
-          } else {
-            TRACE(PGR, 2,
-                "Seed file contains class for which "
-                "Dex type can't be found: %s\n",
-                line.c_str());
-          }
-        }
+        TRACE(PGR, 2, "Parsing seeds line: %s\n", line.c_str());
+        if (parser.parse_seed_line(line)) ++count;
       }
       seeds_file.close();
     }

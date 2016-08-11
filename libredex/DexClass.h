@@ -231,6 +231,7 @@ class DexField {
   DexAccessFlags m_access;
   bool m_concrete;
   bool m_external;
+  std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   DexField(DexType* container, DexString* name, DexType* type) {
@@ -289,6 +290,9 @@ class DexField {
         "Unexpected concrete field %s\n", SHOW(this));
     m_external = true;
   }
+
+  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  std::string get_deobfuscated_name() { return m_deobfuscated_name; }
 
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
   void clear_annotations() {
@@ -601,6 +605,7 @@ class DexMethod {
   bool m_virtual;
   bool m_external;
   ParamAnnotations m_param_anno;
+  std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   DexMethod(DexType* type, DexString* name, DexProto* proto) {
@@ -656,6 +661,11 @@ class DexMethod {
     return make_method(cls, name, DexProto::make_proto(rtype, dtl));
   }
 
+  /**
+   * Get a method using a canonical name: Lcls;.name(args)rtype
+   */
+  static DexMethod* get_method(std::string canon);
+
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethod* get_method(DexType* type,
                                DexString* name,
@@ -689,6 +699,9 @@ class DexMethod {
     if (m_param_anno.size() == 0) return nullptr;
     return &m_param_anno;
   }
+
+  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  std::string get_deobfuscated_name() { return m_deobfuscated_name; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
@@ -777,6 +790,7 @@ class DexClass {
   std::list<DexMethod*> m_vmethods;
   bool m_has_class_data;
   bool m_external;
+  std::string m_deobfuscated_name;
 
   DexClass(){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
@@ -837,6 +851,8 @@ class DexClass {
   DexEncodedValueArray* get_static_values();
   DexAnnotationSet* get_anno_set() const { return m_anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
+  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  std::string get_deobfuscated_name() { return m_deobfuscated_name; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,

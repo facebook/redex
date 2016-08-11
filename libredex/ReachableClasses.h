@@ -22,7 +22,9 @@ void init_reachable_classes(
   const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
 void reportReachableClasses(const Scope& scope, std::string reportFileName);
-unsigned int init_seed_classes(const std::string seeds_filename);
+unsigned int init_seed_classes(
+  const std::string seeds_filename,
+  const ProguardMap& pgmap);
 
 /* Note-
  * The lack of convenience functions for DexType* is
