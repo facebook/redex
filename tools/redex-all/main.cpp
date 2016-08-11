@@ -416,7 +416,7 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  DexStore root_store;
+  DexStore root_store("classes");
   for (int i = start; i < argc; i++) {
     DexClasses classes = load_classes_from_dex(argv[i]);
     root_store.add_classes(std::move(classes));
@@ -462,7 +462,7 @@ int main(int argc, char* argv[]) {
   for (auto& store : stores) {
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::stringstream ss;
-      ss << args.out_dir << "/classes";
+      ss << args.out_dir << "/" << store.get_name();
       if (i > 0) {
         ss << (i + 1);
       }

@@ -9,6 +9,10 @@
 
 #include "DexStore.h"
 
+std::string DexStore::get_name() {
+  return m_name;
+}
+
 std::vector<DexClasses>& DexStore::get_dexen() {
   return m_dexen;
 }

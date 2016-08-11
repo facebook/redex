@@ -17,12 +17,16 @@ class DexClasses;
 
 class DexStore {
   std::vector<DexClasses> m_dexen;
+  std::string m_name;
 
  public:
-  DexStore() {};
+  DexStore(const std::string name) :
+    m_name(name) {
+  };
   DexStore(const DexStore&) = delete;
   DexStore(DexStore&&) = default;
 
+  std::string get_name();
   std::vector<DexClasses>& get_dexen();
 
   void add_classes(DexClasses classes);

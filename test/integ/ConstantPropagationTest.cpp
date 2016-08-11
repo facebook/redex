@@ -114,7 +114,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   }
 
   std::vector<DexStore> stores;
-  DexStore root_store;
+  DexStore root_store("classes");
   root_store.add_classes(load_classes_from_dex(dexfile));
   DexClasses& classes = root_store.get_dexen().back();
   stores.emplace_back(std::move(root_store));
