@@ -136,6 +136,18 @@ struct ProguardMap {
   std::string m_currNewClass;
 };
 
+/**
+ * Deobfuscate all items in all dexes, and cache those names in the objects
+ * themselves, so that they're automatically carried through optimization
+ * passes.
+ */
+void apply_deobfuscated_names(
+  const std::vector<DexClasses>&,
+  const ProguardMap&);
+
+/**
+ * Return the dexdump-formatted name of the object.
+ */
 std::string proguard_name(DexType* cls);
 std::string proguard_name(DexClass* cls);
 std::string proguard_name(DexMethod* method);
