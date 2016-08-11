@@ -418,6 +418,54 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   return m;
 }
 
+namespace {
+std::vector<std::string> split_args(std::string args) {
+  std::vector<std::string> ret;
+  auto begin = size_t{0};
+  while (begin < args.length()) {
+    auto ch = args[begin];
+    auto end = begin + 1;
+    if (ch == '[') {
+      while (args[end] == '[') {
+        ++end;
+      }
+      ch = args[end];
+      ++end;
+    }
+    if (ch == 'L') {
+      auto semipos = args.find(';', end);
+      assert(semipos != std::string::npos);
+      end = semipos + 1;
+    }
+    ret.emplace_back(args.substr(begin, end - begin));
+    begin = end;
+  }
+  return ret;
+}
+}
+
+DexMethod* DexMethod::get_method(std::string canon) {
+  auto cls_end = canon.find('.');
+  auto name_start = cls_end + 1;
+  auto name_end = canon.find('(', name_start);
+  auto args_start = name_end + 1;
+  auto args_end = canon.find(')', args_start);
+  auto rtype_start = args_end + 1;
+  auto cls_str = canon.substr(0, cls_end);
+  auto name_str = canon.substr(name_start, name_end - name_start);
+  auto args_str = canon.substr(args_start, args_end - args_start);
+  auto rtype_str = canon.substr(rtype_start);
+  std::list<DexType*> args;
+  for (auto const& arg_str : split_args(args_str)) {
+    args.push_back(DexType::get_type(arg_str.c_str()));
+  }
+  auto dtl = DexTypeList::get_type_list(std::move(args));
+  return get_method(
+    DexType::get_type(cls_str.c_str()),
+    DexString::get_string(name_str.c_str()),
+    DexProto::get_proto(DexType::get_type(rtype_str.c_str()), dtl));
+}
+
 void DexMethod::become_virtual() {
   assert(!m_virtual);
   m_virtual = true;

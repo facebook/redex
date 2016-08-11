@@ -661,6 +661,11 @@ class DexMethod {
     return make_method(cls, name, DexProto::make_proto(rtype, dtl));
   }
 
+  /**
+   * Get a method using a canonical name: Lcls;.name(args)rtype
+   */
+  static DexMethod* get_method(std::string canon);
+
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethod* get_method(DexType* type,
                                DexString* name,

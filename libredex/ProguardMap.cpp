@@ -27,7 +27,7 @@ std::string find_or_same(
   return it->second;
 }
 
-std::string convert_scalar_type(const char* type) {
+std::string convert_scalar_type(std::string type) {
   static const std::map<std::string, std::string> prim_map =
     {{"void",    "V"},
      {"boolean", "Z"},
@@ -45,14 +45,6 @@ std::string convert_scalar_type(const char* type) {
   std::string ret(type);
   std::replace(ret.begin(), ret.end(), '.', '/');
   return std::string("L") + ret + ";";
-}
-
-std::string convert_type(const char* type) {
-  if (type[strlen(type) - 1] == ']') {
-    std::string elem_type(type, strrchr(type, '[') - type);
-    return std::string("[") + convert_type(elem_type.c_str());
-  }
-  return convert_scalar_type(type);
 }
 
 std::string convert_field(std::string cls, std::string type, std::string name) {
@@ -336,4 +328,14 @@ std::string proguard_name(DexField* field) {
     + proguard_name(field->get_type());
 
   return str;
+}
+
+std::string convert_type(std::string type) {
+  auto dimpos = type.find('[');
+  if (dimpos == std::string::npos) {
+    return convert_scalar_type(type);
+  }
+  auto ndims = std::count(type.begin() + dimpos, type.end(), '[');
+  std::string res(ndims, '[');
+  return res + convert_scalar_type(type.substr(0, dimpos));
 }

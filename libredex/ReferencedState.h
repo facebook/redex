@@ -11,8 +11,8 @@
 
 class ReferencedState {
  private:
-  bool m_bytype;
-  bool m_bystring;
+  bool m_bytype{false};
+  bool m_bystring{false};
   /* m_computed is a "clear-only" flag;  If one of the reflects is
    * non-computed, all subsequents should be non-computed.
    * Reflect marking which is computed from code means that
@@ -21,25 +21,33 @@ class ReferencedState {
    * a reflection target will then allow that reflection
    * target to be re-evaluated.
    */
-  bool m_computed;
-  bool m_seed;
+  bool m_computed{true};
+  bool m_seed{false};
+  bool m_renamed_seed{false};
 
   // ProGuard keep settings
-  bool m_keep; // Specify classes and class members that are entry-points.
-  bool m_keepclassmembers; // Speicfy member to be preserved if the
-  // class is preserved.
-  bool m_keepclasseswithmembers; // Specify that all classes with the given
-  // members should be specified.
+  bool m_keep{false}; // Specify classes and class members that are entry-points
+  bool m_keepclassmembers{false}; // Specify member to be preserved if the
+                                  // class is preserved.
+  bool m_keepclasseswithmembers{false}; // Specify that all classes with the
+                                        // given members should be specified.
 
  public:
-  ReferencedState() {
-    m_bytype = m_bystring = false;
-    m_computed = true;
-    m_seed = false;
-  }
+  ReferencedState() = default;
   bool can_delete() const { return !m_bytype; }
   bool can_rename() const { return !m_bystring; }
+
+  /**
+   * Is this item a "seed" according to ProGuard's analysis?
+   */
   bool is_seed() const { return m_seed; }
+
+  /**
+   * Is this item a "seed" when we take into account renaming done by ProGuard?
+   * We don't always want to consider renamed seeds; using this flag will give
+   * more conservative results than `is_seed()`
+   */
+  bool is_renamed_seed() const { return m_renamed_seed; }
 
   // ProGuard option
   bool keep() const { return m_keep; }
@@ -66,8 +74,11 @@ class ReferencedState {
     }
   }
 
-  // A class marked to be kept from the list of seedds from ProGuard
+  // A class marked to be kept from the list of seeds from ProGuard
   void ref_by_seed() { m_seed = true; }
+
+  // Mark item to be kept, even if it's been renamed by ProGuard
+  void ref_by_renamed_seed() { m_renamed_seed = true; }
 
   // ProGuaurd keep information.
   void set_keep() { m_keep = true; }

@@ -152,3 +152,11 @@ std::string proguard_name(DexType* cls);
 std::string proguard_name(DexClass* cls);
 std::string proguard_name(DexMethod* method);
 std::string proguard_name(DexField* field);
+
+/**
+ * Convert a dot-style name to a dexdump-style name, e.g.:
+ *   com.foo.MyClass -> Lcom/foo/MyClass;
+ *   void -> V
+ *   java.util.ArrayList[][] -> [[Ljava/util/ArrayList;
+ */
+std::string convert_type(std::string);
