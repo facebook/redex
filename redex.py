@@ -27,7 +27,7 @@ from os.path import abspath, basename, dirname, getsize, isdir, isfile, join, \
         realpath, split
 
 import pyredex.unpacker as unpacker
-from pyredex.utils import abs_glob, make_temp_dir
+from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs
 from pyredex.log import log
 
 timer = timeit.default_timer
@@ -447,6 +447,7 @@ def run_redex(args):
         log('Skipping rename map merging, because we didn\'t run the rename pass')
 
     shutil.rmtree(newtmp)
+    remove_temp_dirs()
 
 
 if __name__ == '__main__':

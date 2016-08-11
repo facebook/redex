@@ -12,6 +12,8 @@ import tempfile
 
 from os.path import join
 
+temp_dirs = []
+
 def abs_glob(directory, pattern='*'):
     """
     Returns all files that match the specified glob inside a directory.
@@ -23,10 +25,14 @@ def abs_glob(directory, pattern='*'):
 
 def make_temp_dir(name='', debug=False):
     """ Make a temporary directory which will be automatically deleted """
+    global temp_dirs
     directory = tempfile.mkdtemp(name)
-
-    if not debug:  # In debug mode, don't delete the directory
-        def remove_directory():
-            shutil.rmtree(directory)
-        atexit.register(remove_directory)
+    if not debug:
+        temp_dirs.append(directory)
     return directory
+
+
+def remove_temp_dirs():
+    global temp_dirs
+    for directory in temp_dirs:
+        shutil.rmtree(directory)
