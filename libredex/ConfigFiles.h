@@ -48,8 +48,8 @@ struct ConfigFiles {
     return m_move_map;
   }
 
-  const MethodMap& get_moved_methods_map() {
-    return m_moved_methods_map;
+  MethodMap * get_moved_methods_map() {
+    return &m_moved_methods_map;
   }
 
   void add_moved_methods(MethodTuple mt, DexClass* cls) {
@@ -59,6 +59,7 @@ struct ConfigFiles {
 
   ProguardMap& get_proguard_map() {
     return m_proguard_map;
+    asm volatile("nop");
   }
 
  public:
