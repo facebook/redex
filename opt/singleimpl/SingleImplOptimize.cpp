@@ -235,7 +235,6 @@ void OptimizationImpl::rewrite_method_defs(DexType* intf,
     assert(proto != meth->get_proto());
     auto new_meth = DexMethod::make_method(
         meth->get_class(), meth->get_name(), proto);
-    new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
     assert(new_meth != meth);
     setup_method(meth, new_meth);
     new_methods[method] = new_meth;
@@ -277,7 +276,6 @@ void OptimizationImpl::rewrite_method_refs(DexType* intf,
     auto proto = get_or_make_proto(intf, data.cls, new_meth->get_proto());
     new_meth = DexMethod::make_method(
             new_meth->get_class(), new_meth->get_name(), proto);
-    new_meth->set_deobfuscated_name(method->get_deobfuscated_name());
     new_methods[method] = new_meth;
     TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(new_meth));
     for (auto opcode : mrefit.second) {
@@ -323,7 +321,6 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     if (!new_meth) {
       new_meth = DexMethod::make_method(impl->get_type(), meth->get_name(),
           meth->get_proto());
-      new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
       assert(new_meth->is_virtual());

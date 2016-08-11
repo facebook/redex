@@ -67,7 +67,7 @@ std::string translate_type(std::string type, const ProguardMap& pm) {
   return array_prefix + pm.translate_class(base_type);
 }
 }
-
+ 
 ProguardMap::ProguardMap(const std::string& filename) {
   if (!filename.empty()) {
     std::ifstream fp(filename);
@@ -257,45 +257,6 @@ void ProguardMap::add_method_mapping(
 void ProguardMap::update_class_mapping(const std::string& oldname, const std::string& newname) {
   auto unobf_clsname = find_or_same(oldname, m_dynObfClassMap);
   m_dynObfClassMap[newname] = unobf_clsname;
-}
-
-void apply_deobfuscated_names(
-  const std::vector<DexClasses>& dexen,
-  const ProguardMap& pm
-) {
-  for (auto const& dex : dexen) {
-    for (auto const& cls : dex) {
-      TRACE(PGR, 4, "deob cls %s %s\n",
-            proguard_name(cls).c_str(),
-            pm.deobfuscate_class(proguard_name(cls)).c_str());
-      cls->set_deobfuscated_name(pm.deobfuscate_class(proguard_name(cls)));
-      for (auto const& m : cls->get_dmethods()) {
-        TRACE(PGR, 4, "deob meth %s %s\n",
-              proguard_name(m).c_str(),
-              pm.deobfuscate_method(proguard_name(m)).c_str());
-        m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
-      }
-      for (auto const& m : cls->get_vmethods()) {
-        TRACE(PM, 4, "deob meth %s %s\n",
-              proguard_name(m).c_str(),
-              pm.deobfuscate_method(proguard_name(m)).c_str());
-        m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
-      }
-
-      for (auto const& f : cls->get_ifields()) {
-        TRACE(PM, 4, "deob field %s %s\n",
-              proguard_name(f).c_str(),
-              pm.deobfuscate_field(proguard_name(f)).c_str());
-        f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));
-      }
-      for (auto const& f : cls->get_sfields()) {
-        TRACE(PM, 4, "deob field %s %s\n",
-              proguard_name(f).c_str(),
-              pm.deobfuscate_field(proguard_name(f)).c_str());
-        f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));
-      }
-    }
-  }
 }
 
 std::string proguard_name(DexType* type) {

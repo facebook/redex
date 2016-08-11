@@ -436,7 +436,6 @@ int main(int argc, char* argv[]) {
   }
 
   ConfigFiles cfg(args.config);
-  apply_deobfuscated_names(dexen, cfg.get_proguard_map());
   cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
     auto nseeds = init_seed_classes(

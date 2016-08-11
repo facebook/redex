@@ -22,7 +22,6 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Pass.h"
-#include "Resolver.h"
 #include "Sha1.h"
 #include "Trace.h"
 #include "Transform.h"
@@ -693,38 +692,8 @@ void write_method_mapping(
     auto method = it.first;
     auto idx = it.second;
 
-    // Types (and methods) internal to our app have a cached deobfuscated name
-    // that comes from the proguard map.  If we don't have one, it's a
-    // system/framework class, so we can just return the name.
-    auto const& typecls = method->get_class();
-    auto const& cls = type_class(typecls);
-    auto deobf_class = [&] {
-      if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
-        if (!deobname.empty()) return cls->get_deobfuscated_name();
-      }
-      return proguard_name(typecls);
-    }();
-
-    // Some method refs aren't "concrete" (e.g., referring to a method defined
-    // by a superclass via a subclass).  We only know how to deobfuscate
-    // concrete names, so resolve this ref to an actual definition.
-    auto resolved_method = [&] {
-      if (cls) {
-        auto intf_mr = resolve_intf_methodref(method);
-        if (intf_mr) return intf_mr;
-        auto resm = resolve_method(method, MethodSearch::Any);
-        if (resm) return resm;
-      }
-      return method;
-    }();
-
-    // Consult the cached method names, or just give it back verbatim.
-    auto deobf_method = [&] {
-      auto deobfname = resolved_method->get_deobfuscated_name();
-      if (!deobfname.empty()) return deobfname;
-      return proguard_name(resolved_method);
-    }();
+    auto deobf_class = proguard_map.deobfuscate_class_dynamic(proguard_name(method->get_class()));
+    auto deobf_method = proguard_map.deobfuscate_method(proguard_name(method));
 
     // Format is <cls>.<name>(<args>)<ret>
     // We only want the name here.

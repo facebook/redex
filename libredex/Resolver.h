@@ -206,3 +206,4 @@ inline DexField* resolve_field(
   return resolve_field(
       field->get_class(), field->get_name(), field->get_type(), search);
 }
+
