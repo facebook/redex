@@ -101,6 +101,7 @@ TEST(ProguardTest, assortment) {
   ASSERT_TRUE(pg_config.ok);
 
   Scope scope = build_class_scope(dexen);
+  apply_deobfuscated_names(dexen, *proguard_map);
   process_proguard_rules(pg_config, proguard_map, scope);
 
   { // Alpha is explicitly used and should not be deleted.
@@ -147,6 +148,7 @@ TEST(ProguardTest, assortment) {
     // Make sure its fields and methods have been kept by the "*;" directive.
     auto iField = find_instance_field_named(delta_c, "i");
     ASSERT_NE(iField, nullptr);
+    ASSERT_TRUE(keep(iField));
     auto iValue = find_vmethod_named(delta_c, "iValue");
     ASSERT_NE(iValue, nullptr);
   }
@@ -207,7 +209,35 @@ TEST(ProguardTest, assortment) {
     auto wombatValue = find_vmethod_named(
         delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombatValue()I");
     ASSERT_NE(wombatValue, nullptr);
+    ASSERT_TRUE(keep(wombatField));
   }
+
+  { // Inner class Delta.H is kept.
+    // The config only keeps the int wombat field, everything else
+    // should be removed.
+    auto delta_h =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$H;");
+    ASSERT_NE(delta_h, nullptr);
+    ASSERT_TRUE(keep(delta_h));
+    ASSERT_TRUE(allowobfuscation(delta_h));
+    ASSERT_TRUE(
+        class_has_been_renamed("Lcom/facebook/redex/test/proguard/Delta$H;"));
+    auto wombatField = find_instance_field_named(
+        delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.wombat:I");
+    ASSERT_NE(wombatField, nullptr);
+    ASSERT_TRUE(keep(wombatField));
+    auto numbatField = find_instance_field_named(
+        delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.numbat:Z");
+    ASSERT_EQ(numbatField, nullptr);
+    auto myIntValue = find_vmethod_named(
+        delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.myIntValue()I");
+    ASSERT_EQ(myIntValue, nullptr);
+    auto myBoolValue = find_vmethod_named(
+        delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.myBoolValue()Z");
+    ASSERT_EQ(myBoolValue, nullptr);
+}
+
+  //ASSERT_TRUE(false);
 
   delete g_redex;
 }

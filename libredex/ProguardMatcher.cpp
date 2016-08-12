@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <iostream>
 #include <string>
 
 #include "ProguardMap.h"
@@ -40,6 +41,40 @@ void apply_keep_modifiers(const KeepSpec& k, DexClass* cls) {
   }
 }
 
+// From a fully qualified descriptor for a field, exract just the
+// name of the field which occurs between the ;. and : characters.
+std::string extract_fieldname(std::string qualified_fieldname) {
+  auto p = qualified_fieldname.find(";.");
+  auto e = qualified_fieldname.find(":");
+  return qualified_fieldname.substr(p+2, e-p-2);
+}
+
+// Currently only field level keeps of wildcard * specifications
+// and literal identifier matches (but no wildcards yet).
+void apply_field_keeps(ProguardMap* proguard_map, DexClass* cls,
+                       std::vector<MemberSpecification> fieldSpecifications) {
+  if (fieldSpecifications.empty()) {
+    return;
+  }
+  for (auto field : cls->get_ifields()) {
+    for (const auto& fieldSpecification : fieldSpecifications) {
+      auto pg_name = proguard_name(field);
+      auto qualified_name = field->get_deobfuscated_name();
+      auto field_name = extract_fieldname(qualified_name);
+      // Check for a wildcard match for any field.
+      if (fieldSpecification.name == "") {
+        field->rstate.set_keep();
+      } else {
+        // Check to see if the field names match. We do not need to
+        // check the types for fields since they can't be overloaded.
+        if (fieldSpecification.name == field_name) {
+          field->rstate.set_keep();
+        }
+      }
+    }
+  }
+}
+
 void process_proguard_rules(const ProguardConfiguration& pg_config,
                             ProguardMap* proguard_map,
                             Scope& classes) {
@@ -62,6 +97,8 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
         cls->rstate.set_keep();
         // Apply the keep option modifiers.
         apply_keep_modifiers(k, cls);
+        // Apply any field-level keep specifications.
+        apply_field_keeps(proguard_map, cls, k.class_spec.fieldSpecifications);
       }
     }
   }

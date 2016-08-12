@@ -20,3 +20,7 @@
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$G {
   *;
 }
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$H
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$H {
+  int wombat;
+}

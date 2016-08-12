@@ -40,4 +40,11 @@ public class Delta {
     int wombat;
     public int wombatValue() { return wombat; }
   }
+
+  public class H {
+    int wombat ;
+    boolean numbat;
+    public int myIntValue() { return wombat; }
+    public boolean myBoolValue() { return numbat; }
+  }
 }

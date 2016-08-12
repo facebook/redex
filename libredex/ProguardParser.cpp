@@ -12,6 +12,7 @@
 #include <memory>
 
 #include "ProguardLexer.h"
+#include "ProguardMap.h"
 #include "ProguardParser.h"
 
 #include <algorithm>
@@ -29,23 +30,6 @@ bool parse_boolean_command(std::vector<unique_ptr<Token>>::iterator* it,
   (*it)++;
   *option = value;
   return true;
-}
-
-std::string parse_type(std::vector<unique_ptr<Token>>::iterator* it) {
-  // If the next token is not an identifier then we can't parse
-  // this type so return an empty std::string for the type descriptor.
-  if ((**it)->type != token::identifier) {
-    return "";
-  }
-  std::string descriptor = static_cast<Identifier*>((*it)->get())->ident;
-  (*it)++;
-  // Convert dots to slashes.
-  std::replace(descriptor.begin(), descriptor.end(), '.', '/');
-  while ((**it)->type == token::arrayType) {
-    (*it)++;
-    descriptor = "[" + descriptor;
-  }
-  return descriptor + ";";
 }
 
 void skip_to_next_command(std::vector<unique_ptr<Token>>::iterator* it) {
@@ -142,7 +126,7 @@ bool parse_optional_filepath_command(
     return false;
   }
   (*it)++; // Consume the command token.
-  // Pars an optional filepath argument.
+  // Parse an optional filepath argument.
   if ((**it)->type == token::filepath) {
     filepaths->push_back(static_cast<Filepath*>((*it)->get())->path);
     (*it)++;
@@ -494,7 +478,7 @@ void parse_member_specification(
   std::string ident = static_cast<Identifier*>((*it)->get())->ident;
   // Check for "*".
   if (ident == "*") {
-    member_specification.name = "*";
+    member_specification.name = "";
     (*it)++;
     gobble_semicolon(it, ok);
     class_spec->methodSpecifications.push_back(member_specification);
@@ -502,8 +486,32 @@ void parse_member_specification(
     return;
   }
   // This token is the type for the member specification.
-  member_specification.descriptor = parse_type(it);
+  if ((**it)->type != token::identifier) {
+    cerr << "Expecting type identifier but got " << (**it)->show()
+         << " at line " << (**it)->line << endl;
+    *ok = false;
+    skip_to_semicolon(it);
+    return;
+  }
+  std::string typ = static_cast<Identifier*>((*it)->get())->ident;
+  (*it)++;
+  member_specification.descriptor = convert_type(typ);
+  if ((**it)->type != token::identifier) {
+    cerr << "Expecting identifier name for class member but got " << (**it)->show()
+         << " at line " << (**it)->line << endl;
+    *ok = false;
+    skip_to_semicolon(it);
+    return;
+  }
+  member_specification.name = static_cast<Identifier*>((*it)->get())->ident;
+  (*it)++;
+  // For the moment just skip past the argument specification for methods.
   skip_to_semicolon(it);
+  if (member_specification.descriptor[0] == '(') {
+    class_spec->methodSpecifications.push_back(member_specification);
+  } else {
+    class_spec->fieldSpecifications.push_back(member_specification);
+  }
   return;
 }
 

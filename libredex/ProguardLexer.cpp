@@ -21,7 +21,7 @@ namespace proguard_parser {
 
 bool is_deliminator(char ch) {
   return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == '[' || ch == ']' || ch == ';' || ch == ':' ||
+         ch == ',' || ch == ';' || ch == ':' ||
          ch == EOF;
 }
 
