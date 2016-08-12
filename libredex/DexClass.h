@@ -205,6 +205,7 @@ class DexType {
   }
 
   DexString* get_name() const { return m_name; }
+  const char* c_str() const { return get_name()->c_str(); }
 
   friend std::string show(const DexType*);
 
@@ -270,6 +271,7 @@ class DexField {
   DexEncodedValue* get_static_value() { return m_value; }
   DexType* get_class() const { return m_class; }
   DexString* get_name() const { return m_name; }
+  const char* c_str() const { return get_name()->c_str(); }
   DexType* get_type() const { return m_type; }
   bool is_def() const { return is_concrete() || is_external(); }
   DexAccessFlags get_access() const {
@@ -682,6 +684,7 @@ class DexMethod {
   DexAnnotationSet* get_anno_set() { return m_anno; }
   DexType* get_class() const { return m_ref.cls; }
   DexString* get_name() const { return m_ref.name; }
+  const char* c_str() const { return get_name()->c_str(); }
   DexProto* get_proto() const { return m_ref.proto; }
   const std::unique_ptr<DexCode>& get_code() const { return m_code; }
   std::unique_ptr<DexCode>& get_code() { return m_code; }
@@ -844,6 +847,7 @@ class DexClass {
   DexType* get_super_class() const { return m_super_class; }
   DexType* get_type() const { return m_self; }
   DexString* get_name() const { return m_self->get_name(); }
+  const char* c_str() const { return get_name()->c_str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const { return m_has_class_data; }

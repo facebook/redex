@@ -26,11 +26,20 @@ class ReferencedState {
   bool m_renamed_seed{false};
 
   // ProGuard keep settings
-  bool m_keep{false}; // Specify classes and class members that are entry-points
-  bool m_keepclassmembers{false}; // Specify member to be preserved if the
-                                  // class is preserved.
-  bool m_keepclasseswithmembers{false}; // Specify that all classes with the
-                                        // given members should be specified.
+  // Specify classes and class members that are entry-points.
+  bool m_keep{false};
+  // Speicfy member to be preserved if the class is preserved.
+  bool m_keepclassmembers{false};
+  // Specify that all classes with the given members should be specified.
+  bool m_keepclasseswithmembers{false};
+  // Useful for keeping native methods.
+  bool m_includedescriptorclasses{false};
+  // Specify items that can be deleted.
+  bool m_allowshrinking{false};
+  // Not used by the Redex ProGuard rule matcher.
+  bool m_allowoptimization{false};
+  // Not used by the Redex ProGuard rule matcher.
+  bool m_allowobfuscation{false};
 
  public:
   ReferencedState() = default;
@@ -49,10 +58,15 @@ class ReferencedState {
    */
   bool is_renamed_seed() const { return m_renamed_seed; }
 
-  // ProGuard option
+  // ProGuard keep options
   bool keep() const { return m_keep; }
   bool keepclassmembers() const { return m_keepclassmembers; }
   bool keepclasseswithmembers() const { return m_keepclasseswithmembers; }
+  // ProGaurd keep option modifiers
+  bool includedescriptorclasses() const { return m_includedescriptorclasses; }
+  bool allowshrinking() const { return m_allowshrinking; }
+  bool allowoptimization() const { return m_allowoptimization; }
+  bool allowobfuscation() const { return m_allowobfuscation; }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
@@ -86,4 +100,12 @@ class ReferencedState {
   void set_keepclassmembers() { m_keepclassmembers = true; }
 
   void set_keepclasseswithmembers() { m_keepclasseswithmembers = true; }
+
+  void set_includedescriptorclasses() { m_includedescriptorclasses = true; }
+
+  void set_allowshrinking() { m_allowshrinking = true; }
+
+  void set_allowoptimization() { m_allowoptimization = true; }
+
+  void set_allowobfuscation() { m_allowobfuscation = true; }
 };

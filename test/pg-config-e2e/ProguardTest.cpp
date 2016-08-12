@@ -8,10 +8,10 @@
  */
 
 #include <cstdint>
-#include <iostream>
 #include <cstdlib>
-#include <memory>
 #include <gtest/gtest.h>
+#include <iostream>
+#include <memory>
 #include <string>
 
 #include "DexClass.h"
@@ -19,30 +19,29 @@
 #include "DexLoader.h"
 #include "Match.h"
 #include "ProguardConfiguration.h"
-#include "ProguardParser.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
+#include "ProguardParser.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
 /**
 The objective of these tests are to make sure the ProGuard rules are
-properly applied to a set of test classes. Currently, this is testing
-ProGuard itself since the incoming dex files have been processed with
-ProGuard to perform the keep rules. However, if the ProGuard step is
-omitted then these tests act on the keep matching functionality in Redex.
+properly applied to a set of test classes. The incomming APK is currently
+already processed by ProGuard. This test makes sure the expected classes
+and methods are present (or absent) as required and performs checks on the
+Redex ProGuard rule matcher to make sure the ProGuard rules were properly
+interpreted.
 **/
 
 ProguardMap* proguard_map;
 
 DexClass* find_class_named(const DexClasses& classes, const std::string name) {
   auto mapped_search_name = std::string(proguard_map->translate_class(name));
-  auto it = std::find_if(classes.begin(),
-                         classes.end(),
-                         [&mapped_search_name](DexClass* cls) {
-                           return mapped_search_name ==
-                                  std::string(cls->get_name()->c_str());
-                         });
+  auto it = std::find_if(
+      classes.begin(), classes.end(), [&mapped_search_name](DexClass* cls) {
+        return mapped_search_name == std::string(cls->c_str());
+      });
   if (it == classes.end()) {
     return nullptr;
   } else {
@@ -52,26 +51,29 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 
 DexMethod* find_vmethod_named(const DexClass* cls, const std::string name) {
   auto vmethods = cls->get_vmethods();
-  auto mapped_search_name = std::string(proguard_map->translate_class(name));
-  auto it = std::find_if(vmethods.begin(),
-                         vmethods.end(),
-                         [&mapped_search_name](DexMethod* m) {
-                           return mapped_search_name ==
-                                  std::string(m->get_name()->c_str());
-                         });
+  auto mapped_search_name = std::string(proguard_map->translate_method(name));
+  auto it = std::find_if(
+      vmethods.begin(), vmethods.end(), [&mapped_search_name](DexMethod* m) {
+        return (mapped_search_name == std::string(m->c_str()) ||
+                (mapped_search_name == proguard_name(m)));
+      });
   return it == vmethods.end() ? nullptr : *it;
 }
 
 DexField* find_instance_field_named(const DexClass* cls, const char* name) {
   auto fields = cls->get_ifields();
-  auto mapped_search_name = std::string(proguard_map->translate_class(name));
-  auto it = std::find_if(fields.begin(),
-                         fields.end(),
-                         [&mapped_search_name](DexField* f) {
-                           return mapped_search_name ==
-                                  std::string(f->get_name()->c_str());
-                         });
+  auto mapped_search_name = std::string(proguard_map->translate_field(name));
+  auto it = std::find_if(
+      fields.begin(), fields.end(), [&mapped_search_name](DexField* f) {
+        return (mapped_search_name == std::string(f->c_str()) ||
+                (mapped_search_name == proguard_name(f)));
+      });
   return it == fields.end() ? nullptr : *it;
+}
+
+bool class_has_been_renamed(const std::string class_name) {
+  auto mapped_name = std::string(proguard_map->translate_class(class_name));
+  return class_name != mapped_name;
 }
 
 /**
@@ -86,7 +88,6 @@ TEST(ProguardTest, assortment) {
   std::vector<DexClasses> dexen;
   dexen.emplace_back(load_classes_from_dex(dexfile));
   DexClasses& classes = dexen.back();
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   // Load the Proguard map
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
@@ -121,6 +122,8 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Gamma;");
     ASSERT_NE(gamma, nullptr);
     ASSERT_TRUE(keep(gamma));
+    ASSERT_FALSE(keepclassmembers(gamma));
+    ASSERT_FALSE(keepclasseswithmembers(gamma));
   }
 
   { // Inner class Delta.A should be removed.
@@ -133,12 +136,14 @@ TEST(ProguardTest, assortment) {
     auto delta_b =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$B;");
     ASSERT_NE(delta_b, nullptr);
+    ASSERT_TRUE(keep(delta_b));
   }
 
-  { // Inner class C is kept.
+  { // Inner class Delta.C is kept.
     auto delta_c =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$C;");
     ASSERT_NE(delta_c, nullptr);
+    ASSERT_TRUE(keep(delta_c));
     // Make sure its fields and methods have been kept by the "*;" directive.
     auto iField = find_instance_field_named(delta_c, "i");
     ASSERT_NE(iField, nullptr);
@@ -146,10 +151,11 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(iValue, nullptr);
   }
 
-  { // Inner class D is kept.
+  { // Inner class Delta.D is kept.
     auto delta_d =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$D;");
     ASSERT_NE(delta_d, nullptr);
+    ASSERT_TRUE(keep(delta_d));
     // Make sure its fields are kept by "<fields>" but not its methods.
     auto iField = find_instance_field_named(delta_d, "i");
     ASSERT_NE(iField, nullptr);
@@ -157,15 +163,50 @@ TEST(ProguardTest, assortment) {
     ASSERT_EQ(iValue, nullptr);
   }
 
-  { // Inner class E is kept.
+  { // Inner class Delta.E is kept.
     auto delta_e =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$E;");
     ASSERT_NE(delta_e, nullptr);
+    ASSERT_TRUE(keep(delta_e));
     // Make sure its methods are kept by "<methods>" but not its fields.
     auto iField = find_instance_field_named(delta_e, "i");
     ASSERT_EQ(iField, nullptr);
     auto iValue = find_vmethod_named(delta_e, "iValue");
     ASSERT_NE(iValue, nullptr);
+  }
+
+  { // Inner class Delta.F is kept and its final fields are kept.
+    auto delta_f =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$F;");
+    ASSERT_NE(delta_f, nullptr);
+    ASSERT_TRUE(keep(delta_f));
+    // Make sure only the final fields are kept.
+    // wombat is not a final field, so it should not be kept.
+    auto wombatField = find_instance_field_named(delta_f, "wombat");
+    ASSERT_EQ(wombatField, nullptr);
+    // numbat is a final field so it should be kept
+    auto numbatField = find_instance_field_named(delta_f, "numbat");
+    ASSERT_NE(numbatField, nullptr);
+    // The numbatValue method should not be kept.
+    auto numbatValue = find_vmethod_named(delta_f, "numbatValue");
+    ASSERT_EQ(numbatValue, nullptr);
+  }
+
+  { // Inner class Delta.G is kept.
+    auto delta_g =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$G;");
+    ASSERT_NE(delta_g, nullptr);
+    ASSERT_TRUE(keep(delta_g));
+    ASSERT_TRUE(allowobfuscation(delta_g));
+    ASSERT_TRUE(
+        class_has_been_renamed("Lcom/facebook/redex/test/proguard/Delta$G;"));
+    // Make sure its fields and methods have been kept by the "*;" directive.
+    auto wombatField = find_instance_field_named(
+        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombat:I");
+    ASSERT_NE(wombatField, nullptr);
+    auto wombatValue = find_vmethod_named(
+        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombatValue()I");
+    ASSERT_NE(wombatValue, nullptr);
   }
 
   delete g_redex;

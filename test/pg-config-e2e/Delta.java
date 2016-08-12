@@ -29,4 +29,15 @@ public class Delta {
     int i;
     public int iValue() { return i; }
   }
+
+  public class F {
+    int wombat;
+    final int numbat = 42;
+    public int numbatValue() { return numbat; }
+  }
+
+  public class G {
+    int wombat;
+    public int wombatValue() { return wombat; }
+  }
 }

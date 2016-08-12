@@ -12,3 +12,11 @@
 -keep class com.facebook.redex.test.proguard.Delta$E {
   <methods>;
 }
+-keep class com.facebook.redex.test.proguard.Delta$F
+-keep class com.facebook.redex.test.proguard.Delta$F {
+  final <fields>;
+}
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$G
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$G {
+  *;
+}

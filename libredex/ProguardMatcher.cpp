@@ -25,6 +25,21 @@ std::string dextype_from_dotname(std::string dotname) {
   return buf;
 }
 
+void apply_keep_modifiers(const KeepSpec& k, DexClass* cls) {
+  if (k.includedescriptorclasses) {
+    cls->rstate.set_includedescriptorclasses();
+  }
+  if (k.allowoptimization) {
+    cls->rstate.set_allowoptimization();
+  }
+  if (k.allowshrinking) {
+    cls->rstate.set_allowshrinking();
+  }
+  if (k.allowobfuscation) {
+    cls->rstate.set_allowobfuscation();
+  }
+}
+
 void process_proguard_rules(const ProguardConfiguration& pg_config,
                             ProguardMap* proguard_map,
                             Scope& classes) {
@@ -43,8 +58,10 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
                        cname,
                        translated_keep_name.size(),
                        cls_len)) {
-				TRACE(PGR, 8, "Setting keep for %s\n", cname);
+        TRACE(PGR, 8, "Setting keep for %s\n", cname);
         cls->rstate.set_keep();
+        // Apply the keep option modifiers.
+        apply_keep_modifiers(k, cls);
       }
     }
   }
