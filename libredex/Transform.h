@@ -85,7 +85,7 @@ enum MethodItemType {
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
   MethodItemType type;
-  uint16_t addr;
+  uint32_t addr;
   union {
     TryEntry* tentry;
     CatchEntry* centry;
