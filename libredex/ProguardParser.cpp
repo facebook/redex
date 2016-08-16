@@ -445,7 +445,7 @@ void parse_member_specification(
   }
   // Check for <methods>
   if ((**it)->type == token::methods) {
-    member_specification.name = "<methods>";
+    member_specification.name = "";
     (*it)++;
     gobble_semicolon(it, ok);
     class_spec->methodSpecifications.push_back(member_specification);
@@ -453,7 +453,7 @@ void parse_member_specification(
   }
   // Check for <fields>
   if ((**it)->type == token::fields) {
-    member_specification.name = "<fields>";
+    member_specification.name = "";
     (*it)++;
     gobble_semicolon(it, ok);
     class_spec->fieldSpecifications.push_back(member_specification);

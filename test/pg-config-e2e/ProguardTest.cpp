@@ -71,6 +71,17 @@ DexField* find_instance_field_named(const DexClass* cls, const char* name) {
   return it == fields.end() ? nullptr : *it;
 }
 
+DexField* find_static_field_named(const DexClass* cls, const char* name) {
+  auto fields = cls->get_sfields();
+  auto mapped_search_name = std::string(proguard_map->translate_field(name));
+  auto it = std::find_if(
+      fields.begin(), fields.end(), [&mapped_search_name](DexField* f) {
+        return (mapped_search_name == std::string(f->c_str()) ||
+                (mapped_search_name == proguard_name(f)));
+      });
+  return it == fields.end() ? nullptr : *it;
+}
+
 bool class_has_been_renamed(const std::string class_name) {
   auto mapped_name = std::string(proguard_map->translate_class(class_name));
   return class_name != mapped_name;
@@ -189,6 +200,7 @@ TEST(ProguardTest, assortment) {
     // numbat is a final field so it should be kept
     auto numbatField = find_instance_field_named(delta_f, "numbat");
     ASSERT_NE(numbatField, nullptr);
+    ASSERT_TRUE(keep(numbatField));
     // The numbatValue method should not be kept.
     auto numbatValue = find_vmethod_named(delta_f, "numbatValue");
     ASSERT_EQ(numbatValue, nullptr);
@@ -235,9 +247,29 @@ TEST(ProguardTest, assortment) {
     auto myBoolValue = find_vmethod_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.myBoolValue()Z");
     ASSERT_EQ(myBoolValue, nullptr);
-}
+  }
 
-  //ASSERT_TRUE(false);
+  { // Make sure !public static <fields> is observed.
+     auto delta =
+           find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
+     ASSERT_NE(delta, nullptr);
+     // The field "public staitc int alpha" should not match because of the
+     // public.
+     auto alpha = find_static_field_named(
+            delta, "Lcom/facebook/redex/test/proguard/Delta;.alpha:I");
+     ASSERT_EQ(alpha, nullptr);
+     // The field "private static int beta" should match because it is
+     // private (i.e. not public) and static.
+     auto beta = find_static_field_named(
+            delta, "Lcom/facebook/redex/test/proguard/Delta;.beta:I");
+     ASSERT_NE(beta, nullptr);
+     ASSERT_TRUE(keep(beta));
+     // The field "private final int gamma = 42" should not match because
+     // it is an instance field.
+     auto gamma = find_instance_field_named(
+       delta, "Lcom/facebook/redex/test/proguard/Delta$H;.gamma:I");
+     ASSERT_EQ(gamma, nullptr);
+}
 
   delete g_redex;
 }

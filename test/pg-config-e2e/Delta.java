@@ -11,6 +11,10 @@ package com.facebook.redex.test.proguard;
 
 public class Delta {
 
+  public static int alpha;
+  private static int beta;
+  private final int gamma = 42;
+
   public class A {}
 
   public class B {}

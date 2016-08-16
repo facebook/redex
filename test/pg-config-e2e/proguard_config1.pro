@@ -24,3 +24,7 @@
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$H {
   int wombat;
 }
+-keep class com.facebook.redex.test.proguard.Delta
+-keep class com.facebook.redex.test.proguard.Delta {
+  !public static <fields>;
+}
