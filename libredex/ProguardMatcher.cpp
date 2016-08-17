@@ -8,6 +8,7 @@
  */
 
 #include <iostream>
+#include <regex>
 #include <string>
 
 #include "DexAccess.h"
@@ -246,6 +247,19 @@ std::string extract_fieldname(std::string qualified_fieldname) {
   return qualified_fieldname.substr(p + 2, e - p - 2);
 }
 
+// Convert * to .* in ProGuard wildcard matches to
+// form a std::regex pattern.
+std::string form_regex(std::string proguard_regex) {
+  std::string r;
+  for (const char ch : proguard_regex) {
+    if (ch == '*') {
+      r += ".";
+   }
+   r += ch;
+  }
+  return r;
+}
+
 // Currently only field level keeps of wildcard * specifications
 // and literal identifier matches (but no wildcards yet).
 void keep_fields(ProguardMap* proguard_map,
@@ -264,7 +278,8 @@ void keep_fields(ProguardMap* proguard_map,
         // Check to see if the field names match. We do not need to
         // check the types for fields since they can't be overloaded.
         TRACE(PGR, 8, "Comparing %s vs. %s\n", fieldSpecification.name.c_str(), field_name.c_str());
-        if (fieldSpecification.name == field_name) {
+        std::regex fieldname_regex(form_regex(fieldSpecification.name));
+        if (std::regex_match(field_name, fieldname_regex)) {
           TRACE(PGR, 8, "====> Got filedname match for %s\n", field_name.c_str());
           field->rstate.set_keep();
         }

@@ -271,5 +271,27 @@ TEST(ProguardTest, assortment) {
      ASSERT_EQ(gamma, nullptr);
 }
 
+{ // Tests for field * regex matching.
+  auto delta_i =
+      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$I;");
+  ASSERT_NE(delta_i, nullptr);
+  ASSERT_TRUE(keep(delta_i));
+  // Make sure all the wombat* fields were found.
+  // wombat matches wombat.* from "wombat*"
+  auto wombat = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat:I");
+  ASSERT_NE(wombat, nullptr);
+  ASSERT_TRUE(keep(wombat));
+  // wombat_alpha matches wombat.* from "wombat*"
+  auto wombat_alpha = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat_alpha:I");
+  ASSERT_NE(wombat_alpha, nullptr);
+  ASSERT_TRUE(keep(wombat_alpha));
+  // numbat does not match wombat.* from "wombat*"
+  auto numbat = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
+  ASSERT_EQ(numbat, nullptr);
+ }
+
   delete g_redex;
 }

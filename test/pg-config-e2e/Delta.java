@@ -51,4 +51,10 @@ public class Delta {
     public int myIntValue() { return wombat; }
     public boolean myBoolValue() { return numbat; }
   }
+
+  public class I {
+    int wombat;
+    int wombat_alpha;
+    int numbat;
+  }
 }
