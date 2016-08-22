@@ -8,12 +8,13 @@
  */
 
 #include <iostream>
-#include <regex>
+#include <boost/regex.hpp>
 #include <string>
 
 #include "DexAccess.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
+#include "ProguardRegex.h"
 #include "keeprules.h"
 
 namespace redex {
@@ -247,22 +248,9 @@ std::string extract_fieldname(std::string qualified_fieldname) {
   return qualified_fieldname.substr(p + 2, e - p - 2);
 }
 
-// Convert * to .* in ProGuard wildcard matches to
-// form a std::regex pattern.
-std::string form_regex(std::string proguard_regex) {
-  std::string r;
-  for (const char ch : proguard_regex) {
-    if (ch == '*') {
-      r += ".";
-   }
-   r += ch;
-  }
-  return r;
-}
-
 // Currently only field level keeps of wildcard * specifications
 // and literal identifier matches (but no wildcards yet).
-void keep_fields(ProguardMap* proguard_map,
+void keep_fields(const ProguardMap* proguard_map,
                  std::list<DexField*> fields,
                  const std::vector<MemberSpecification>& fieldSpecifications) {
   for (auto field : fields) {
@@ -278,8 +266,8 @@ void keep_fields(ProguardMap* proguard_map,
         // Check to see if the field names match. We do not need to
         // check the types for fields since they can't be overloaded.
         TRACE(PGR, 8, "Comparing %s vs. %s\n", fieldSpecification.name.c_str(), field_name.c_str());
-        std::regex fieldname_regex(form_regex(fieldSpecification.name));
-        if (std::regex_match(field_name, fieldname_regex)) {
+        boost::regex fieldname_regex(proguard_parser::form_member_regex(fieldSpecification.name));
+        if (boost::regex_match(field_name, fieldname_regex)) {
           TRACE(PGR, 8, "====> Got filedname match for %s\n", field_name.c_str());
           field->rstate.set_keep();
         }
@@ -290,7 +278,7 @@ void keep_fields(ProguardMap* proguard_map,
 
 // Currently only field level keeps of wildcard * specifications
 // and literal identifier matches (but no wildcards yet).
-void apply_field_keeps(ProguardMap* proguard_map,
+void apply_field_keeps(const ProguardMap* proguard_map,
                        DexClass* cls,
                        const std::vector<MemberSpecification>& fieldSpecifications) {
   if (fieldSpecifications.empty()) {
@@ -298,6 +286,26 @@ void apply_field_keeps(ProguardMap* proguard_map,
   }
   keep_fields(proguard_map, cls->get_ifields(), fieldSpecifications);
   keep_fields(proguard_map, cls->get_sfields(), fieldSpecifications);
+}
+
+void keep_methods(const ProguardMap* proguard_map,
+                 std::list<DexMethod*> methods,
+                 const std::vector<MemberSpecification>& methodSpecifications) {
+  for (const auto& method : methods) {
+    auto pg_name = proguard_name(method).c_str();
+    auto qualified_name = proguard_map->deobfuscate_method(pg_name);
+    TRACE(PGR, 8, "Checking keeps for method %s | %s | %s\n", method->c_str(), pg_name, qualified_name.c_str());
+  }
+}
+
+void apply_method_keeps(const ProguardMap* proguard_map,
+                        DexClass* cls,
+                        const std::vector<MemberSpecification>& methodSpecifications) {
+  if (methodSpecifications.empty()) {
+    return;
+  }
+  keep_methods(proguard_map, cls->get_vmethods(), methodSpecifications);
+  keep_methods(proguard_map, cls->get_dmethods(), methodSpecifications);
 }
 
 void process_proguard_rules(const ProguardConfiguration& pg_config,
@@ -329,6 +337,8 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
         apply_keep_modifiers(k, cls);
         // Apply any field-level keep specifications.
         apply_field_keeps(proguard_map, cls, k.class_spec.fieldSpecifications);
+        // Apply any method-level keep specifications.
+        apply_method_keeps(proguard_map, cls, k.class_spec.methodSpecifications);
       }
     }
   }

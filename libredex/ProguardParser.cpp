@@ -462,8 +462,10 @@ void parse_member_specification(
   // Check for <init>
   if ((**it)->type == token::init) {
     member_specification.name = "<init>";
+    // Currently only support <init>()
+    member_specification.descriptor = "()V";
+    class_spec->methodSpecifications.push_back(member_specification);
     (*it)++;
-    // TODO(satnamsingh): parse arguments for <init>
     skip_to_semicolon(it);
     return;
   }

@@ -270,26 +270,26 @@ void apply_deobfuscated_names(
             pm.deobfuscate_class(proguard_name(cls)).c_str());
       cls->set_deobfuscated_name(pm.deobfuscate_class(proguard_name(cls)));
       for (auto const& m : cls->get_dmethods()) {
-        TRACE(PGR, 4, "deob meth %s %s\n",
+        TRACE(PGR, 4, "deob dmeth %s %s\n",
               proguard_name(m).c_str(),
               pm.deobfuscate_method(proguard_name(m)).c_str());
         m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
       }
       for (auto const& m : cls->get_vmethods()) {
-        TRACE(PM, 4, "deob meth %s %s\n",
+        TRACE(PM, 4, "deob vmeth %s %s\n",
               proguard_name(m).c_str(),
               pm.deobfuscate_method(proguard_name(m)).c_str());
         m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
       }
 
       for (auto const& f : cls->get_ifields()) {
-        TRACE(PM, 4, "deob field %s %s\n",
+        TRACE(PM, 4, "deob ifield %s %s\n",
               proguard_name(f).c_str(),
               pm.deobfuscate_field(proguard_name(f)).c_str());
         f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));
       }
       for (auto const& f : cls->get_sfields()) {
-        TRACE(PM, 4, "deob field %s %s\n",
+        TRACE(PM, 4, "deob sfield %s %s\n",
               proguard_name(f).c_str(),
               pm.deobfuscate_field(proguard_name(f)).c_str());
         f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));

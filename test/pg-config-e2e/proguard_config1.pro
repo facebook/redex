@@ -26,6 +26,8 @@
 }
 -keep class com.facebook.redex.test.proguard.Delta
 -keep class com.facebook.redex.test.proguard.Delta {
+  public <init>();
+  public <init>(int);
   !public static <fields>;
 }
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$I

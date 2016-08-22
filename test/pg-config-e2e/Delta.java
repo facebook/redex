@@ -15,6 +15,9 @@ public class Delta {
   private static int beta;
   private final int gamma = 42;
 
+  public Delta() {}
+  public Delta(int i) {}
+
   public class A {}
 
   public class B {}

@@ -9,18 +9,13 @@
 
 #pragma once
 
-#include <memory>
-#include <set>
-#include <vector>
-
-#include "ProguardConfiguration.h"
-#include "ProguardLexer.h"
+#include <string>
 
 namespace redex {
 namespace proguard_parser {
 
-void parse_file(const std::string filename, ProguardConfiguration* pg_config);
-void parse(istream& config, ProguardConfiguration* pg_config);
+std::string form_member_regex(std::string proguard_regex);
+std::string form_type_regex(std::string proguard_regex);
 
 } // namespace proguard_parser
 } // namespace redex

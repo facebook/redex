@@ -52,8 +52,10 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 DexMethod* find_vmethod_named(const DexClass* cls, const std::string name) {
   auto vmethods = cls->get_vmethods();
   auto mapped_search_name = std::string(proguard_map->translate_method(name));
+  TRACE(PGR, 8, "Searching for vmethod %s\n", mapped_search_name.c_str());
   auto it = std::find_if(
       vmethods.begin(), vmethods.end(), [&mapped_search_name](DexMethod* m) {
+        TRACE(PGR, 8, "==> Comparing against vmethod %s %s\n", m->c_str(), proguard_name(m).c_str());
         return (mapped_search_name == std::string(m->c_str()) ||
                 (mapped_search_name == proguard_name(m)));
       });
@@ -293,5 +295,13 @@ TEST(ProguardTest, assortment) {
   ASSERT_EQ(numbat, nullptr);
  }
 
-  delete g_redex;
+ { // Test handling of <init>
+  auto delta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
+  ASSERT_NE(delta, nullptr);
+  auto init =  find_vmethod_named(
+      delta, "init");
+ }
+
+ delete g_redex;
 }
