@@ -57,28 +57,53 @@ void process_annotation(std::unordered_set<const DexType*>* class_references,
     }
 }
 
+DexType* array_base_type(DexType* type) {
+  while (is_array(type)) {
+    type = get_array_type(type);
+  }
+  return type;
+}
+
+void process_proto(std::unordered_set<const DexType*>* class_references,
+                   DexMethod* meth) {
+  // Types referenced in protos.
+  auto const& proto = meth->get_proto();
+  class_references->insert(array_base_type(proto->get_rtype()));
+  for (auto const& ptype : proto->get_args()->get_type_list()) {
+    class_references->insert(array_base_type(ptype));
+  }
+}  
+
 void process_code(std::unordered_set<const DexType*>* class_references,
                   DexMethod* meth,
                   DexCode& code) {
-    auto opcodes = code.get_instructions();
-    for (const auto& opcode : opcodes) {
-      if (opcode->has_types()) {
-        auto typeop = static_cast<DexOpcodeType*>(opcode);
-        auto typ = typeop->get_type();
-        while (is_array(typ)) {
-          typ = get_array_type(typ);
-        }
-        TRACE(EMPTY, 4, "Adding type from code to keep list: %s\n",
-              typ->get_name()->c_str());
-        class_references->insert(typ);
-      }
+  process_proto(class_references, meth);
+  // Types referenced in code.
+  auto opcodes = code.get_instructions();
+  for (const auto& opcode : opcodes) {
+    if (opcode->has_types()) {
+      auto typeop = static_cast<DexOpcodeType*>(opcode);
+      auto typ = array_base_type(typeop->get_type());
+      TRACE(EMPTY, 4, "Adding type from code to keep list: %s\n",
+            typ->get_name()->c_str());
+      class_references->insert(typ);
     }
-    // Also gather exception types that are caught.
-    std::vector<DexType*> catch_types;
-    code.gather_catch_types(catch_types);
-    for (auto& caught_type : catch_types) {
-      class_references->insert(caught_type);
+    if (opcode->has_fields()) {
+      auto const& field = static_cast<DexOpcodeField*>(opcode)->field();
+      class_references->insert(array_base_type(field->get_class()));
+      class_references->insert(array_base_type(field->get_type()));
     }
+    if (opcode->has_methods()) {
+      auto const& m = static_cast<DexOpcodeMethod*>(opcode)->get_method();
+      process_proto(class_references, m);
+    }
+  }
+  // Also gather exception types that are caught.
+  std::vector<DexType*> catch_types;
+  code.gather_catch_types(catch_types);
+  for (auto& caught_type : catch_types) {
+    class_references->insert(caught_type);
+  }
 }
 
 void remove_empty_classes(Scope& classes) {
