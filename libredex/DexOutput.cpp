@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <memory>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <list>
 #include <stdlib.h>
 #include <unordered_set>
@@ -1231,12 +1232,16 @@ void DexOutput::prepare(SortMode string_mode, SortMode code_mode) {
 }
 
 void DexOutput::write() {
+  struct stat st;
   int fd = open(m_filename, O_CREAT | O_TRUNC | O_WRONLY, 0660);
   if (fd == -1) {
     perror("Error writing dex");
     return;
   }
   ::write(fd, m_output, m_offset);
+  if (0 == fstat(fd, &st)) {
+    m_stats.num_bytes = st.st_size;
+  }
   close(fd);
 }
 
@@ -1315,5 +1320,6 @@ dex_output_stats_t&
   lhs.num_static_values += rhs.num_static_values;
   lhs.num_annotations += rhs.num_annotations;
   lhs.num_type_lists += rhs.num_type_lists;
+  lhs.num_bytes += rhs.num_bytes;
   return lhs;
 }
