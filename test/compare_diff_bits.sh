@@ -40,7 +40,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-$REDEX_ROOT/facebook/fb-redex.py  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $BASE_OUT $APK 2> /dev/null > /dev/null
+$REDEX_ROOT/facebook/fb-redex  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $BASE_OUT $APK 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to redex apk with base"
@@ -63,7 +63,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-$REDEX_ROOT/facebook/fb-redex.py  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $DIFF_OUT $APK 2> /dev/null > /dev/null
+$REDEX_ROOT/facebook/fb-redex  --redex-binary buck-out/gen/$REDEX_ROOT/redex-all  -c $REDEX_ROOT/facebook/config/fb4a.config --o $DIFF_OUT $APK 2> /dev/null > /dev/null
 
 if [ $? -ne 0 ]; then
   echo "Failed to redex apk with diff"
