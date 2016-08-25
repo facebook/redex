@@ -9,6 +9,7 @@
 
 import argparse
 import distutils.version
+import errno
 import functools
 import glob
 import hashlib
@@ -20,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import timeit
 import zipfile
 
@@ -89,15 +91,23 @@ def run_pass(
 
     start = timer()
 
-    args = ' '.join(shlex.quote(x) for x in args)
-    if script_args.time:
-        args = 'time ' + args
-
     if script_args.debug:
         print(args)
         sys.exit()
 
-    subprocess.check_call(args, shell=True)
+    # Our CI system occasionally fails because it is trying to write the
+    # redex-all binary when this tries to run.  This shouldn't happen, and
+    # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
+    for i in range(5):
+        try:
+            subprocess.check_call(args)
+        except OSError as err:
+            if err.errno == errno.ETXTBSY:
+                if i < 4:
+                    time.sleep(5)
+                    continue
+            raise err
+        break
     log('Dex processing finished in {:.2f} seconds'.format(timer() - start))
 
 
@@ -294,9 +304,6 @@ Given an APK, produce a better APK!
 
     parser.add_argument('-c', '--config', default=config,
             help='Configuration file')
-
-    parser.add_argument('-t', '--time', action='store_true',
-            help='Run redex passes with `time` to print CPU and wall time')
 
     parser.add_argument('--sign', action='store_true',
             help='Sign the apk after optimizing it')
