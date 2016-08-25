@@ -21,7 +21,7 @@
 #include "utils/String16.h"
 #include "utils/String8.h"
 
-#include "Predicate.h"
+#include "StringUtil.h"
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;

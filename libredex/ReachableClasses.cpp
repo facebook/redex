@@ -17,8 +17,8 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "Predicate.h"
 #include "RedexResources.h"
+#include "StringUtil.h"
 
 namespace {
 

@@ -12,16 +12,7 @@
 #include <cstring>
 
 inline bool starts_with(const char* test, const char* prefix) {
-  while (true) {
-    if (*prefix == '\0') {
-      return true;
-    }
-    if (*test != *prefix) {
-      return false;
-    }
-    ++test;
-    ++prefix;
-  }
+  return strncmp(test, prefix, strlen(prefix)) == 0;
 }
 
 inline bool ends_with(const char* test, const char* suffix) {
@@ -30,13 +21,5 @@ inline bool ends_with(const char* test, const char* suffix) {
   if (slen > tlen) {
     return false;
   }
-  test += (tlen - slen);
-  while (*suffix) {
-    if (*suffix != *test) {
-      return false;
-    }
-    ++suffix;
-    ++test;
-  }
-  return true;
+  return strncmp(test + tlen - slen, suffix, slen) == 0;
 }
