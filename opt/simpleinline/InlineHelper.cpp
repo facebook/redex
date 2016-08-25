@@ -253,7 +253,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   }
   if (is_blacklisted(callee)) return false;
   if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
-
+  if (m_config.try_catch_inline && has_external_catch(callee)) return false;
   if (cannot_inline_opcodes(callee, caller)) return false;
 
   return true;
@@ -289,6 +289,25 @@ bool MultiMethodInliner::has_try_catch(DexMethod* callee) {
   if (callee->get_code()->get_tries().size() > 0) {
     info.try_catch_block++;
     return true;
+  }
+  return false;
+}
+
+/**
+ * Returns true if the callee has catch type which is external and not public,
+ * in which case we cannot inline.
+ */
+bool MultiMethodInliner::has_external_catch(DexMethod* callee) {
+  // Check if catch exception types is external and not public.
+  for(auto &tryit : callee->get_code()->get_tries()) {
+    for (auto const& it : tryit->m_catches) {
+      if (it.first) {
+        auto cls = type_class(it.first);
+        if (cls != nullptr && cls->is_external() && !is_public(cls)) {
+          return true;
+        }
+      }
+    }
   }
   return false;
 }
@@ -563,6 +582,19 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
         set_public(cls);
       }
       continue;
+    }
+  }
+
+  // Changing visibility of catch exception types.
+  for(auto &tryit : callee->get_code()->get_tries()) {
+    for (auto const& it : tryit->m_catches) {
+      if (it.first) {
+        auto cls = type_class(it.first);
+        if (cls != nullptr && !cls->is_external()) {
+          TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(it.first));
+          set_public(cls);
+        }
+      }
     }
   }
 }

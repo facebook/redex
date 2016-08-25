@@ -95,6 +95,12 @@ class MultiMethodInliner {
   bool has_try_catch(DexMethod* callee);
 
   /**
+   * Return true if the callee contains external catch exception types
+   * which are not public.
+   */
+  bool has_external_catch(DexMethod* callee);
+
+  /**
    * Return true if the callee contains certain opcodes that are difficult
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
