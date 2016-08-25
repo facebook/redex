@@ -24,6 +24,7 @@
 #include "DexUtil.h"
 #include "ConfigFiles.h"
 #include "ReachableClasses.h"
+#include "StringUtil.h"
 #include "Transform.h"
 #include "Walkers.h"
 
@@ -66,7 +67,7 @@ static const size_t kCanaryClassBufsize = sizeof(kCanaryClassFormat);
 static const int kMaxDexNum = 99;
 
 struct dex_emit_tracker {
-  int la_size;
+  unsigned la_size;
   mrefs_t mrefs;
   frefs_t frefs;
   std::vector<DexClass*> outs;
@@ -189,13 +190,75 @@ static bool is_canary(DexClass* clazz) {
   return false;
 }
 
+struct PenaltyPattern {
+  const char* suffix;
+  unsigned penalty;
+
+  PenaltyPattern(const char* str, unsigned pen)
+    : suffix(str),
+      penalty(pen)
+  {}
+};
+
+static const PenaltyPattern kPatterns[] = {
+  { "Layout;", 1500 },
+  { "View;", 1500 },
+  { "ViewGroup;", 1800 },
+  { "Activity;", 1500 },
+};
+
+const unsigned kObjectVtable = 48;
+const unsigned kMethodSize = 52;
+const unsigned kInstanceFieldSize = 16;
+const unsigned kVtableSlotSize = 4;
+
+static bool matches_penalty(const char* str, unsigned& penalty) {
+  for (auto const& pattern : kPatterns) {
+    if (ends_with(str, pattern.suffix)) {
+      penalty = pattern.penalty;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Estimates the linear alloc space consumed by the class at runtime.
+ */
+static unsigned estimate_linear_alloc(DexClass* clazz) {
+  unsigned lasize = 0;
+  /*
+   * VTable guestimate.  Technically we could do better here,
+   * but only so much.  Try to stay bug-compatible with
+   * DalvikStatsTool.
+   */
+  if (!(clazz->get_access() & DEX_ACCESS_INTERFACE)) {
+    unsigned vtablePenalty = kObjectVtable;
+    if (!matches_penalty(clazz->get_type()->get_name()->c_str(), vtablePenalty)
+        && clazz->get_super_class() != nullptr) {
+      /* what?, we could be redexing object some day... :) */
+      matches_penalty(
+          clazz->get_super_class()->get_name()->c_str(), vtablePenalty);
+    }
+    lasize += vtablePenalty;
+    lasize += clazz->get_vmethods().size() * kVtableSlotSize;
+  }
+  /* Dmethods... */
+  lasize += clazz->get_dmethods().size() * kMethodSize;
+  /* Vmethods... */
+  lasize += clazz->get_vmethods().size() * kMethodSize;
+  /* Instance Fields */
+  lasize += clazz->get_ifields().size() * kInstanceFieldSize;
+  return lasize;
+}
+
 static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
     DexClass *clazz, bool is_primary) {
   if(det.emitted.count(clazz) != 0)
     return;
   if(is_canary(clazz))
     return;
-  int laclazz = estimate_linear_alloc(clazz);
+  unsigned laclazz = estimate_linear_alloc(clazz);
   auto mrefs_size = det.mrefs.size();
   auto frefs_size = det.frefs.size();
   gather_mrefs(clazz, det.mrefs, det.frefs);

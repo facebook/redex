@@ -216,12 +216,6 @@ bool passes_args_through(DexOpcodeMethod* insn,
                          int ignore = 0);
 
 /**
- * Estimates the linear alloc space consumed by the class
- * at runtime.
- */
-int estimate_linear_alloc(DexClass* clazz);
-
-/**
  * Generates a Scope& object from a set of Dexes.
  *
  */

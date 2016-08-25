@@ -9,7 +9,6 @@
 
 #include "DexUtil.h"
 
-#include <regex.h>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -203,68 +202,6 @@ bool passes_args_through(DexOpcodeMethod* insn,
   }
   return true;
 }
-
-struct PenaltyPattern {
-  regex_t regex;
-  int penalty;
-  PenaltyPattern(const char* str, int pen) {
-    regcomp(&this->regex, str, 0);
-    this->penalty = pen;
-  }
-};
-
-std::vector<PenaltyPattern*>* compile_regexes() {
-  auto rv = new std::vector<PenaltyPattern*>;
-  rv->push_back(new PenaltyPattern("Layout;$", 1500));
-  rv->push_back(new PenaltyPattern("View;$", 1500));
-  rv->push_back(new PenaltyPattern("ViewGroup;$", 1800));
-  rv->push_back(new PenaltyPattern("Activity;$", 1500));
-  return rv;
-}
-
-const int kObjectVtable = 48;
-const int kMethodSize = 52;
-const int kInstanceFieldSize = 16;
-const int kVtableSlotSize = 4;
-
-inline bool matches_penalty(const char* string, int& penalty) {
-  static std::vector<PenaltyPattern*>* patterns = compile_regexes();
-  for (auto pattern : *patterns) {
-    if (regexec(&pattern->regex, string, 0, nullptr, 0) == 0) {
-      penalty = pattern->penalty;
-      return true;
-    }
-  }
-  return false;
-}
-
-int estimate_linear_alloc(DexClass* clazz) {
-  int lasize = 0;
-  /*
-   * VTable guestimate.  Technically we could do better here,
-   * but only so much.  Try to stay bug-compatible with
-   * DalvikStatsTool.
-   */
-  if (!(clazz->get_access() & DEX_ACCESS_INTERFACE)) {
-    int vtablePenalty = kObjectVtable;
-    if (!matches_penalty(clazz->get_type()->get_name()->c_str(), vtablePenalty)
-        && clazz->get_super_class() != nullptr) {
-      /* what?, we could be redexing object some day... :) */
-      matches_penalty(
-          clazz->get_super_class()->get_name()->c_str(), vtablePenalty);
-    }
-    lasize += vtablePenalty;
-    lasize += clazz->get_vmethods().size() * kVtableSlotSize;
-  }
-  /* Dmethods... */
-  lasize += clazz->get_dmethods().size() * kMethodSize;
-  /* Vmethods... */
-  lasize += clazz->get_vmethods().size() * kMethodSize;
-  /* Instance Fields */
-  lasize += clazz->get_ifields().size() * kInstanceFieldSize;
-  return lasize;
-}
-
 
 Scope build_class_scope(const DexClassesVector& dexen) {
   Scope v;
