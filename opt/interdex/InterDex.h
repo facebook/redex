@@ -26,6 +26,7 @@ class InterDexPass : public Pass {
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_static_prune;

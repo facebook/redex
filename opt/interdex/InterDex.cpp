@@ -543,3 +543,11 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManag
   dexen = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
   mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT, cold_start_set_dex_count);
 }
+
+void InterDexPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  for (auto& store : stores) {
+    if (store.get_name() == "classes") {
+      run_pass(store.get_dexen(), cfg, mgr);
+    }
+  }
+}
