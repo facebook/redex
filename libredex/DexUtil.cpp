@@ -203,6 +203,16 @@ bool passes_args_through(DexOpcodeMethod* insn,
   return true;
 }
 
+Scope build_class_scope(const DexStoreClassesIterator& dexen) {
+  Scope v;
+  for (auto const& classes : dexen) {
+    for (auto clazz : classes) {
+      v.push_back(clazz);
+    }
+  }
+  return v;
+}
+
 Scope build_class_scope(const DexClassesVector& dexen) {
   Scope v;
   for (auto const& classes : dexen) {

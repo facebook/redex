@@ -220,6 +220,7 @@ bool passes_args_through(DexOpcodeMethod* insn,
  *
  */
 Scope build_class_scope(const DexClassesVector& dexen);
+Scope build_class_scope(const DexStoreClassesIterator& dexen);
 
 /**
  * Posts the changes made to the Scope& object to the
