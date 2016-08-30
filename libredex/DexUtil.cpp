@@ -223,6 +223,31 @@ Scope build_class_scope(const DexClassesVector& dexen) {
   return v;
 }
 
+void post_dexen_changes(const Scope& v, const DexStoreClassesIterator& dexen) {
+  std::unordered_set<DexClass*> clookup(v.begin(), v.end());
+  for (auto& classes : dexen) {
+    classes.erase(
+      std::remove_if(
+        classes.begin(),
+        classes.end(),
+        [&](DexClass* cls) {
+          return !clookup.count(cls);
+        }),
+      classes.end());
+  }
+  if (debug) {
+    std::unordered_set<DexClass*> dlookup;
+    for (auto const& classes : dexen) {
+      for (auto const& cls : classes) {
+        dlookup.insert(cls);
+      }
+    }
+    for (auto const& cls : clookup) {
+      assert_log(dlookup.count(cls), "Can't add classes in post_dexen_changes");
+    }
+  }
+}
+
 void post_dexen_changes(const Scope& v, DexClassesVector& dexen) {
   std::unordered_set<DexClass*> clookup(v.begin(), v.end());
   for (auto& classes : dexen) {

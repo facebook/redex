@@ -228,3 +228,4 @@ Scope build_class_scope(const DexStoreClassesIterator& dexen);
  *
  */
 void post_dexen_changes(const Scope& v, DexClassesVector& dexen);
+void post_dexen_changes(const Scope& v, const DexStoreClassesIterator& dexen);
