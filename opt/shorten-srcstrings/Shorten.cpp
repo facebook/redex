@@ -60,13 +60,13 @@ DexString* get_suitable_string(std::unordered_set<DexString*>& set,
   return nullptr;
 }
 
-static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
+static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
   size_t shortened = 0;
   size_t string_savings = 0;
   std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
   std::unordered_set<DexString*> shortened_used;
 
-  for (auto& classes : dexen) {
+  for (auto& classes : DexStoreClassesIterator(&stores)) {
     std::unordered_map<DexString*, DexString*> src_to_shortened;
     std::vector<DexString*> current_dex_strings;
     for (auto const& clazz : classes) {
@@ -124,6 +124,6 @@ static void strip_src_strings(DexClassesVector& dexen, const char* map_path) {
 }
 
 void ShortenSrcStringsPass::run_pass(
-    DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  return strip_src_strings(dexen, m_filename_mappings.c_str());
+    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  return strip_src_strings(stores, m_filename_mappings.c_str());
 }
