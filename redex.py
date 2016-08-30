@@ -367,6 +367,16 @@ def run_redex(args):
     log('Unpacking dex files')
     dex_mode.unpackage(extracted_apk_dir, dex_dir)
 
+    log('Detecting Application Modules')
+    application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
+    store_files = []
+    for module in application_modules:
+        log('found module: ' + module.get_name() + ' ' + module.get_canary_prefix())
+        store_path = os.path.join(dex_dir, module.get_name())
+        os.mkdir(store_path)
+        module.unpackage(extracted_apk_dir, store_path)
+        store_files.append(module.write_redex_metadata(store_path))
+
     # Some of the native libraries can be concatenated together into one
     # xz-compressed file. We need to decompress that file so that we can scan
     # through it looking for classnames.
@@ -386,6 +396,8 @@ def run_redex(args):
     # Move each dex to a separate temporary directory to be operated by
     # redex.
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
+    for store in store_files:
+        dexen.append(store)
     log('Unpacking APK finished in {:.2f} seconds'.format(
             timer() - unpack_start_time))
 
@@ -433,6 +445,11 @@ def run_redex(args):
     log('Repacking dex files')
     have_locators = config_dict.get("emit_locator_strings")
     dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
+
+    for module in application_modules:
+        log('repacking module: ' + module.get_name())
+        module.repackage(extracted_apk_dir, dex_dir, have_locators)
+
 
     log('Creating output apk')
     create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
