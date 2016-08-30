@@ -110,10 +110,7 @@ class Pass {
 
   virtual void configure_pass(const PassConfig&) {}
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) {}
-  virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-    DexClassesVector& dexen = stores[0].get_dexen();
-    run_pass(dexen, cfg, mgr);
-  };
+  virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) = 0;
 
  private:
   std::string m_name;
