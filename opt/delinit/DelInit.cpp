@@ -456,13 +456,13 @@ int DeadRefs::remove_unreachable() {
 
 }
 
-void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (!cfg.using_seeds && m_package_filter.size() == 0) {
     TRACE(DELINIT, 1, "No seeds information so not running DelInit\n");
     return;
   }
   package_filter = m_package_filter;
-  auto scope = build_class_scope(dexen);
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
@@ -474,5 +474,5 @@ void DelInitPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManage
       drefs.del_init_res.deleted_ifields);
   TRACE(DELINIT, 1, "Removed %d dmethods\n",
       drefs.del_init_res.deleted_dmeths);
-  post_dexen_changes(scope, dexen);
+  post_dexen_changes(scope, DexStoreClassesIterator(&stores));
 }
