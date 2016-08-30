@@ -29,7 +29,7 @@ class SingleImplPass : public Pass {
     pc.get("package_black_list", {}, m_pass_config.package_black_list);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // count of removed interfaces
   size_t removed_count{0};

@@ -94,8 +94,9 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
 
 const int MAX_PASSES = 8;
 
-void SingleImplPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(dexen);
+void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  DexStoreClassesIterator it = DexStoreClassesIterator(&stores);
+  auto scope = build_class_scope(it.begin());
   int max_steps = 0;
   while (true) {
     DEBUG_ONLY size_t scope_size = scope.size();
@@ -107,7 +108,7 @@ void SingleImplPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMan
 
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(
-            scope, dexen[0], single_impl, intfs, m_pass_config);
+            scope, stores[0].get_dexen()[0], single_impl, intfs, m_pass_config);
     auto optimized = optimize(std::move(single_impls), scope);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
     removed_count += optimized;
@@ -118,5 +119,5 @@ void SingleImplPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMan
   TRACE(INTF, 1,
           "Updated invoke-interface to invoke-virtual %ld\n",
           s_invoke_intf_count);
-  post_dexen_changes(scope, dexen);
+  post_dexen_changes(scope, it);
 }
