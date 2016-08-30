@@ -17,6 +17,41 @@ from os.path import basename, dirname, getsize, isdir, isfile, join
 from pyredex.utils import abs_glob, make_temp_dir
 from pyredex.log import log
 
+class DexMetadata(object):
+    def __init__(self,
+                 store=None,
+                 dependencies=None,
+                 have_locators=False,
+                 is_root_relative=False):
+        self._have_locators = False
+        self._store = store
+        self._dependencies = dependencies
+        self._have_locators = have_locators
+        self._is_root_relative = is_root_relative
+        self._dexen = []
+
+    def add_dex(self, dex_path, canary_class, hash=None):
+        if hash is None:
+            with open(dex_path, 'rb') as dex:
+                sha1hash = hashlib.sha1(dex.read()).hexdigest()
+        else:
+            sha1hash = hash
+        self._dexen.append(
+            (os.path.basename(dex_path), sha1hash, canary_class))
+
+    def write(self, path):
+        with open(path, 'w') as meta:
+            if self._store is not None:
+                meta.write('.id ' + self._store + '\n')
+            if self._dependencies is not None:
+                for dependency in self._dependencies:
+                    meta.write('.requires ' + dependency + '\n')
+            if self._is_root_relative:
+                meta.write('.root_relative\n')
+            if self._have_locators:
+                meta.write('.locators\n')
+            for dex in self._dexen:
+                meta.write(' '.join(dex) + '\n')
 
 class Api21DexMode(object):
     """
@@ -43,37 +78,24 @@ class Api21DexMode(object):
         for path in abs_glob(extracted_apk_dir, '*.dex'):
             shutil.move(path, dex_dir)
 
-    def write_meta(self, extracted_apk_dir, dex_dir, have_locators):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
+
         if not os.path.exists(join(extracted_apk_dir, self._secondary_dir)):
             return
         jar_meta_path = join(extracted_apk_dir,
                              self._secondary_dir,
                              'metadata.txt')
-        with open(jar_meta_path, 'w') as jar_meta:
-            jar_meta.write('.root_relative\n')
-            if have_locators:
-                jar_meta.write('.locators\n')
-            for i in range(2, 100):
-                dex_path = join(dex_dir, 'classes%d.dex' % i)
-                if not isfile(dex_path):
-                    break
-                with open(dex_path, 'rb') as dex:
-                    sha1hash = hashlib.sha1(dex.read()).hexdigest()
-                jar_meta.write(
-                    'classes%d.dex %s secondary.dex%02d.Canary\n'
-                    % (i, sha1hash, i - 1))
-                shutil.move(dex_path, extracted_apk_dir)
-
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
-
-        self.write_meta(extracted_apk_dir, dex_dir, have_locators)
+        metadata = DexMetadata(is_root_relative=True,
+                               have_locators=have_locators)
         for i in range(2, 100):
             dex_path = join(dex_dir, 'classes%d.dex' % i)
             if not isfile(dex_path):
                 break
+            canary_class = 'secondary.dex%02d.Canary' % (i - 1)
+            metadata.add_dex(dex_path, canary_class)
             shutil.move(dex_path, extracted_apk_dir)
-
+        metadata.write(jar_meta_path)
 
 class SubdirDexMode(object):
     """
@@ -101,32 +123,33 @@ class SubdirDexMode(object):
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
         shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
 
+        metadata = DexMetadata(have_locators=have_locators)
+
+        for i in range(1, 100):
+            oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
+            dexpath = join(dex_dir, 'secondary-%d.dex' % i)
+            if not isfile(oldpath):
+                break
+            shutil.move(oldpath, dexpath)
+
+            jarpath = dexpath + '.jar'
+            create_dex_jar(jarpath, dexpath)
+            canary_class = 'secondary.dex%02d.Canary' % i
+            metadata.add_dex(jarpath, canary_class)
+
+            dex_meta_base = jarpath + '.meta'
+            dex_meta_path = join(dex_dir, dex_meta_base)
+            with open(dex_meta_path, 'w') as dex_meta:
+                dex_meta.write('jar:%d dex:%d\n' %
+                               (getsize(jarpath), getsize(dexpath)))
+
+            shutil.move(dex_meta_path,
+                        join(extracted_apk_dir, self._secondary_dir))
+            shutil.move(jarpath, join(extracted_apk_dir,
+                                      self._secondary_dir))
+
         jar_meta_path = join(dex_dir, 'metadata.txt')
-        with open(jar_meta_path, 'w') as jar_meta:
-            if have_locators:
-                jar_meta.write('.locators\n')
-            for i in range(1, 100):
-                oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
-                dexpath = join(dex_dir, 'secondary-%d.dex' % i)
-                if not isfile(oldpath):
-                    break
-                shutil.move(oldpath, dexpath)
-                jarpath = dexpath + '.jar'
-                create_dex_jar(jarpath, dexpath)
-                dex_meta_base = 'secondary-%d.dex.jar.meta' % i
-                dex_meta_path = join(dex_dir, dex_meta_base)
-                with open(dex_meta_path, 'w') as dex_meta:
-                    dex_meta.write('jar:%d dex:%d\n' %
-                                   (getsize(jarpath), getsize(dexpath)))
-                with open(jarpath, 'rb') as jar:
-                    sha1hash = hashlib.sha1(jar.read()).hexdigest()
-                shutil.move(dex_meta_path,
-                            join(extracted_apk_dir, self._secondary_dir))
-                shutil.move(jarpath, join(extracted_apk_dir,
-                                          self._secondary_dir))
-                jar_meta.write(
-                    'secondary-%d.dex.jar %s secondary.dex%02d.Canary\n'
-                    % (i, sha1hash, i))
+        metadata.write(jar_meta_path)
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
 
 class XZSDexMode(object):
@@ -203,45 +226,42 @@ class XZSDexMode(object):
         dex_sizes = {}
         jar_sizes = {}
 
-        # Package each dex into a jar
-        for i in range(1, 100):
-            oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
-            if not isfile(oldpath):
-                break
-            dexpath = join(dex_dir, 'secondary-%d.dex' % i)
-            shutil.move(oldpath, dexpath)
-            jarpath = dexpath + '.jar'
-            create_dex_jar(jarpath, dexpath)
-            dex_sizes[jarpath] = getsize(dexpath)
-            jar_sizes[jarpath] = getsize(jarpath)
-
         concat_jar_path = join(dex_dir, 'secondary.dex.jar')
         concat_jar_meta = join(dex_dir, 'metadata.txt')
+        dex_metadata = DexMetadata(have_locators=have_locators)
 
-        # Concatenate the jar files and create corresponding metadata files
         with open(concat_jar_path, 'wb') as concat_jar:
-            with open(concat_jar_meta, 'w') as concat_meta:
-                if have_locators:
-                    concat_meta.write('.locators\n')
 
-                for i in range(1, 100):
-                    jarpath = join(dex_dir, 'secondary-%d.dex.jar' % i)
-                    if not isfile(jarpath):
-                        break
+            for i in range(1, 100):
+                oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
+                if not isfile(oldpath):
+                    break
+                dexpath = join(dex_dir, 'secondary-%d.dex' % i)
 
-                    with open(jarpath + '.xzs.tmp~.meta', 'wb') as metadata:
-                        sizes = 'jar:{} dex:{}'.format(
-                            jar_sizes[jarpath], dex_sizes[jarpath])
-                        metadata.write(bytes(sizes, 'ascii'))
+                # Package each dex into a jar
+                shutil.move(oldpath, dexpath)
+                jarpath = dexpath + '.jar'
+                create_dex_jar(jarpath, dexpath)
+                dex_sizes[jarpath] = getsize(dexpath)
+                jar_sizes[jarpath] = getsize(jarpath)
 
-                    with open(jarpath, 'rb') as jar:
-                        contents = jar.read()
-                        concat_jar.write(contents)
-                        sha1hash = hashlib.sha1(contents).hexdigest()
+                # Concatenate the jar files and create corresponding metadata files
+                with open(jarpath + '.xzs.tmp~.meta', 'wb') as metadata:
+                    sizes = 'jar:{} dex:{}'.format(
+                        jar_sizes[jarpath], dex_sizes[jarpath])
+                    metadata.write(bytes(sizes, 'ascii'))
 
-                    concat_meta.write(
-                        '%s.xzs.tmp~ %s secondary.dex%02d.Canary\n'
-                        % (basename(jarpath), sha1hash, i))
+                with open(jarpath, 'rb') as jar:
+                    contents = jar.read()
+                    concat_jar.write(contents)
+                    sha1hash = hashlib.sha1(contents).hexdigest()
+
+                canary_class = 'secondary.dex%02d.Canary' % i
+                dex_metadata.add_dex(jarpath + '.xzs.tmp~',
+                                     canary_class,
+                                     hash=sha1hash)
+
+        dex_metadata.write(concat_jar_meta)
 
         assert getsize(concat_jar_path) == sum(getsize(x)
                 for x in abs_glob(dex_dir, 'secondary-*.dex.jar'))
