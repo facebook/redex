@@ -53,7 +53,23 @@ class DexMetadata(object):
             for dex in self._dexen:
                 meta.write(' '.join(dex) + '\n')
 
-class Api21DexMode(object):
+
+class BaseDexMode(object):
+    def __init__(self, dex_prefix, canary_prefix):
+        self._dex_prefix = dex_prefix
+        self._canary_prefix = canary_prefix
+
+    def unpackage(self, extracted_apk_dir, dex_dir):
+        primary_dex = join(extracted_apk_dir, self._dex_prefix + '.dex')
+        if os.path.exists(primary_dex):
+            shutil.move(primary_dex, dex_dir)
+
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+        primary_dex = join(dex_dir, self._dex_prefix + '.dex')
+        if os.path.exists(primary_dex):
+            shutil.move(primary_dex, extracted_apk_dir)
+
+class Api21DexMode(BaseDexMode):
     """
     On API 21+, secondary dex files are in the root of the apk and are named
     classesN.dex for N in [2, 3, 4, ... ]
@@ -62,15 +78,19 @@ class Api21DexMode(object):
     secondary dex files.
     """
 
-    _secondary_dir = 'assets/secondary-program-dex-jars'
+    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', dex_prefix='classes', canary_prefix='secondary'):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+        self._secondary_dir = dex_asset_dir
 
     def detect(self, extracted_apk_dir):
         # Note: This mode is the fallback and we only check for it after
         # checking for the other modes. This should return true for any
         # apk.
-        return isfile(join(extracted_apk_dir, 'classes.dex'))
+        return isfile(join(extracted_apk_dir, self._dex_prefix + '.dex'))
 
     def unpackage(self, extracted_apk_dir, dex_dir):
+        BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
+
         jar_meta_path = join(extracted_apk_dir, self._secondary_dir,
                              'metadata.txt')
         if os.path.exists(jar_meta_path):
@@ -79,7 +99,7 @@ class Api21DexMode(object):
             shutil.move(path, dex_dir)
 
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
+        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
         if not os.path.exists(join(extracted_apk_dir, self._secondary_dir)):
             return
@@ -89,20 +109,23 @@ class Api21DexMode(object):
         metadata = DexMetadata(is_root_relative=True,
                                have_locators=have_locators)
         for i in range(2, 100):
-            dex_path = join(dex_dir, 'classes%d.dex' % i)
+            dex_path = join(dex_dir, self._dex_prefix + '%d.dex' % i)
             if not isfile(dex_path):
                 break
-            canary_class = 'secondary.dex%02d.Canary' % (i - 1)
+            canary_class = self._canary_prefix + '.dex%02d.Canary' % (i - 1)
             metadata.add_dex(dex_path, canary_class)
             shutil.move(dex_path, extracted_apk_dir)
         metadata.write(jar_meta_path)
 
-class SubdirDexMode(object):
+class SubdirDexMode(BaseDexMode):
     """
     `buck build katana` places secondary dexes in a subdir with no compression
     """
 
-    _secondary_dir = 'assets/secondary-program-dex-jars'
+    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', store_name='secondary', dex_prefix='classes', canary_prefix='secondary'):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+        self._secondary_dir = dex_asset_dir
+        self._store_name = store_name
 
     def detect(self, extracted_apk_dir):
         secondary_dex_dir = join(extracted_apk_dir, self._secondary_dir)
@@ -115,26 +138,25 @@ class SubdirDexMode(object):
         for jar in jars:
             dexpath = join(dex_dir, basename(jar))[:-4]
             extract_dex_from_jar(jar, dexpath)
-            os.remove(jar + ".meta")
+            os.remove(jar + '.meta')
             os.remove(jar)
         os.remove(join(extracted_apk_dir, self._secondary_dir, 'metadata.txt'))
-        shutil.move(join(extracted_apk_dir, 'classes.dex'), dex_dir)
+        BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
+        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
         metadata = DexMetadata(have_locators=have_locators)
-
         for i in range(1, 100):
-            oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
-            dexpath = join(dex_dir, 'secondary-%d.dex' % i)
+            oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
+            dexpath = join(dex_dir, self._store_name + '-%d.dex' % i)
             if not isfile(oldpath):
                 break
             shutil.move(oldpath, dexpath)
 
             jarpath = dexpath + '.jar'
             create_dex_jar(jarpath, dexpath)
-            canary_class = 'secondary.dex%02d.Canary' % i
+            canary_class = self._canary_prefix + '.dex%02d.Canary' % i
             metadata.add_dex(jarpath, canary_class)
 
             dex_meta_base = jarpath + '.meta'
@@ -147,20 +169,23 @@ class SubdirDexMode(object):
                         join(extracted_apk_dir, self._secondary_dir))
             shutil.move(jarpath, join(extracted_apk_dir,
                                       self._secondary_dir))
-
         jar_meta_path = join(dex_dir, 'metadata.txt')
         metadata.write(jar_meta_path)
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
 
-class XZSDexMode(object):
+class XZSDexMode(BaseDexMode):
     """
     Secondary dex files are packaged in individual jar files where are then
     concatenated together and compressed with xz.
 
     ... This format is completely insane.
     """
-    _xzs_dir = 'assets/secondary-program-dex-jars'
-    _xzs_filename = 'secondary.dex.jar.xzs'
+
+    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', store_name='secondary', dex_prefix='classes', canary_prefix='secondary'):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+        self._xzs_dir = dex_asset_dir
+        self._xzs_filename = store_name + '.dex.jar.xzs'
+        self._store_name = store_name
 
     def detect(self, extracted_apk_dir):
         path = join(extracted_apk_dir, self._xzs_dir,
@@ -176,7 +201,7 @@ class XZSDexMode(object):
         shutil.move(src, dest)
 
         # concat_jar is a bunch of .dex.jar files concatenated together.
-        concat_jar = join(dex_dir, 'secondary.dex.jar')
+        concat_jar = join(dex_dir, self._xzs_filename[:-4])
         cmd = 'cat {} | xz -d --threads 6 > {}'.format(dest, concat_jar)
         subprocess.check_call(cmd, shell=True)
 
@@ -186,7 +211,7 @@ class XZSDexMode(object):
         secondary_dir = join(extracted_apk_dir, self._xzs_dir)
         jar_sizes = {}
         for i in range(1, 100):
-            filename = 'secondary-' + str(i) + '.dex.jar.xzs.tmp~.meta'
+            filename = self._store_name + '-' + str(i) + '.dex.jar.xzs.tmp~.meta'
             metadata_path = join(secondary_dir, filename)
             if isfile(metadata_path):
                 with open(metadata_path) as f:
@@ -198,12 +223,12 @@ class XZSDexMode(object):
 
         with open(concat_jar, 'rb') as cj:
             for i in range(1, len(jar_sizes) + 1):
-                jarpath = join(dex_dir, 'secondary-%d.dex.jar' % i)
+                jarpath = join(dex_dir, self._store_name + '-%d.dex.jar' % i)
                 with open(jarpath, 'wb') as jar:
                     jar.write(cj.read(jar_sizes[i]))
 
         for j in jar_sizes.keys():
-            assert jar_sizes[j] == getsize(dex_dir + '/secondary-' + str(j) + '.dex.jar')
+            assert jar_sizes[j] == getsize(dex_dir + '/' + self._store_name + '-' + str(j) + '.dex.jar')
 
         assert sum(jar_sizes.values()) == getsize(concat_jar)
 
@@ -215,28 +240,25 @@ class XZSDexMode(object):
         for jarpath in abs_glob(dex_dir, '*.jar'):
             extract_dex_from_jar(jarpath, jarpath[:-4])
             os.remove(jarpath)
-
-        # Move primary dex
-        shutil.move(join(extracted_apk_dir, 'classes.dex'), dex_dir)
+        BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        # Move primary dex
-        shutil.move(join(dex_dir, 'classes.dex'), extracted_apk_dir)
+        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
         dex_sizes = {}
         jar_sizes = {}
 
-        concat_jar_path = join(dex_dir, 'secondary.dex.jar')
+        concat_jar_path = join(dex_dir, self._store_name + '.dex.jar')
         concat_jar_meta = join(dex_dir, 'metadata.txt')
         dex_metadata = DexMetadata(have_locators=have_locators)
 
         with open(concat_jar_path, 'wb') as concat_jar:
 
             for i in range(1, 100):
-                oldpath = join(dex_dir, 'classes%d.dex' % (i + 1))
+                oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
                 if not isfile(oldpath):
                     break
-                dexpath = join(dex_dir, 'secondary-%d.dex' % i)
+                dexpath = join(dex_dir, self._store_name + '-%d.dex' % i)
 
                 # Package each dex into a jar
                 shutil.move(oldpath, dexpath)
@@ -256,7 +278,7 @@ class XZSDexMode(object):
                     concat_jar.write(contents)
                     sha1hash = hashlib.sha1(contents).hexdigest()
 
-                canary_class = 'secondary.dex%02d.Canary' % i
+                canary_class = self._canary_prefix + '.dex%02d.Canary' % i
                 dex_metadata.add_dex(jarpath + '.xzs.tmp~',
                                      canary_class,
                                      hash=sha1hash)
@@ -264,7 +286,7 @@ class XZSDexMode(object):
         dex_metadata.write(concat_jar_meta)
 
         assert getsize(concat_jar_path) == sum(getsize(x)
-                for x in abs_glob(dex_dir, 'secondary-*.dex.jar'))
+                for x in abs_glob(dex_dir, self._store_name + '-*.dex.jar'))
 
         # XZ-compress the result
         subprocess.check_call(['xz', '-z6', '--check=crc32', '--threads=6',
@@ -272,7 +294,7 @@ class XZSDexMode(object):
 
         # Copy all the archive and metadata back to the apk directory
         secondary_dex_dir = join(extracted_apk_dir, self._xzs_dir)
-        for path in abs_glob(dex_dir, '*.meta'):
+        for path in abs_glob(dex_dir, self._store_name + '*.meta'):
             shutil.copy(path, secondary_dex_dir)
         shutil.copy(concat_jar_meta, join(secondary_dex_dir, 'metadata.txt'))
         shutil.copy(concat_jar_path + '.xz',
