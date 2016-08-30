@@ -10,12 +10,58 @@ import os
 import re
 import subprocess
 import shutil
+import string
 import zipfile
 
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
 from pyredex.utils import abs_glob, make_temp_dir
 from pyredex.log import log
+
+class ApplicationModule(object):
+
+    def __init__(self, extracted_apk_dir, name):
+        self.name = name
+        self.path = join('assets', name)
+
+    @staticmethod
+    def detect(extracted_apk_dir):
+        modules = []
+        for candidate in abs_glob(extracted_apk_dir, 'assets/*/metadata.txt'):
+            with open(candidate) as metadata:
+                for line in metadata.read().splitlines():
+                    tokens = line.split()
+                    if tokens[0] == '.id':
+                        modules.append(ApplicationModule(extracted_apk_dir, tokens[1]))
+
+        return modules
+
+    def get_name(self):
+        return self.name
+
+    def unpackage(self, extracted_apk_dir, dex_dir):
+        self.dex_mode = XZSDexMode(self.path, self.name)
+        if (self.dex_mode.detect(extracted_apk_dir)):
+            log('module ' + self.name + ' is xzs')
+            self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+            return
+        self.dex_mode = SubdirDexMode(self.path)
+        if (self.dex_mode.detect(extracted_apk_dir)):
+            log('module ' + self.name + ' is subdir')
+            self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+            return
+        self.dex_mode = None
+        log('module ' + self.name + ' is not detected')
+        for path in abs_glob(self.path, self.name + '*.dex'):
+            shutil.move(path, dex_dir)
+            return
+
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+        if self.dex_mode is None:
+            for path in abs_glob(dex_dir, self.name + '*.dex'):
+                shutil.move(path, join(extracted_apk_dir, self.path))
+            return
+        self.dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
 
 class DexMetadata(object):
     def __init__(self,
