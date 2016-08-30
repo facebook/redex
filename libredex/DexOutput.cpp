@@ -1134,13 +1134,9 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   }
   if (jumbo_mismatches.empty()) return;
   MethodTransformer trans_method(method);
-  ;
   for (auto str_opcode : jumbo_mismatches) {
-    auto new_str_op = new DexOpcodeString(
-        str_opcode->jumbo() ? OPCODE_CONST_STRING : OPCODE_CONST_STRING_JUMBO,
-        str_opcode->get_string());
-    new_str_op->set_dest(str_opcode->dest());
-    trans_method->replace_opcode(str_opcode, new_str_op);
+    str_opcode->set_opcode(
+      str_opcode->jumbo() ? OPCODE_CONST_STRING : OPCODE_CONST_STRING_JUMBO);
   }
 }
 
