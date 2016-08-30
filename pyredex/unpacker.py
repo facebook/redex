@@ -6,6 +6,7 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -54,6 +55,18 @@ class ApplicationModule(object):
 
     def get_canary_prefix(self):
         return self.canary_prefix
+
+    def write_redex_metadata(self, path):
+        files = []
+        for x in abs_glob(path, '*.dex'):
+            files.append(x)
+        store_file = os.path.join(path, 'store.txt')
+        metadata = {'id': self.name,
+                    'requires': self.dependencies,
+                    'files': files}
+        with open(store_file, 'w') as store_metadata:
+            json.dump(metadata, store_metadata)
+        return store_file
 
     def unpackage(self, extracted_apk_dir, dex_dir):
         self.dex_mode = XZSDexMode(dex_asset_dir=self.path,
