@@ -34,18 +34,22 @@ std::string form_member_regex(std::string proguard_regex) {
 }
 
 // Convert a ProGuard type regex to a boost::regex
-// Example: "%" -> "(byte|short|int|long|boolean|float|double|char)"
-// Example: "alpha?beta" -> "alpha.beta"
-// Example: "alpha/*/beta" -> "alpha/([^\\/]+)/beta"
-// Example: "alpha/**/beta" ->  "alpha/([^\\/]+(?:\\/[^\\/]+)*)/beta"
+// Example: "%" -> "(?:B|S|I|J|Z|F|D|C)"
+// Example: "alpha?beta" -> "Lalpha.beta"
+// Example: "alpha/*/beta" -> "Lalpha\\/([^\\/]+)\\/beta"
+// Example: "alpha/**/beta" ->  "Lalpha\\/([^\\/]+(?:\\/[^\\/]+)*)\\/beta"
 std::string form_type_regex(std::string proguard_regex) {
+  // Convert % to a match against primvitive types without
+  // creating a capture group.
+  if (proguard_regex == "%") {
+    return "(?:B|S|I|J|Z|F|D|C)";
+  }
   std::string r;
   for (size_t i = 0; i < proguard_regex.size(); i++) {
     const char ch = proguard_regex[i];
-    // Convert % to a match against primvitive types without
-    // creating a capture group.
-    if (ch == '%') {
-      r += "(?:byte|short|int|long|boolean|float|double|char)";
+    // Convert the . to a slash
+    if (ch == '.') {
+      r += "\\/";
       continue;
     }
     // ? should match any character except the class seperator.
@@ -64,7 +68,7 @@ std::string form_type_regex(std::string proguard_regex) {
     }
     r += ch;
   }
-  return r;
+  return "L" + r;
 }
 
 } // namespace proguard_parser

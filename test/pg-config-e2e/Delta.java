@@ -9,11 +9,13 @@
 
 package com.facebook.redex.test.proguard;
 
+import java.util.List;
+
 public class Delta {
 
   public static int alpha;
   private static int beta;
-  private final int gamma = 42;
+  private final int gamma = 48;
 
   public Delta() {}
   public Delta(int i) {}
@@ -59,5 +61,23 @@ public class Delta {
     int wombat;
     int wombat_alpha;
     int numbat;
+  }
+
+  // Keep rule rule will match black_bear but not brown_bear because
+  // $$ will not match against primitive types.
+  // -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J {
+  //   $$ <fields>;
+  // }
+  public class J {
+     public int brown_bear;
+     public String black_bear;
+     public int[] grizzly_bear;
+     public String[] polar_bear;
+     public int alpha0;
+     public int[] alpha1;
+     public int[][] alpha2;
+     public int beta0;
+     public List<String> beta;
+     public List<Integer> beta1;
   }
 }

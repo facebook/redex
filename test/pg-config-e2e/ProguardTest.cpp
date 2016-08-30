@@ -38,10 +38,12 @@ ProguardMap* proguard_map;
 
 DexClass* find_class_named(const DexClasses& classes, const std::string name) {
   auto mapped_search_name = std::string(proguard_map->translate_class(name));
-  auto it = std::find_if(
-      classes.begin(), classes.end(), [&mapped_search_name](DexClass* cls) {
-        return mapped_search_name == std::string(cls->c_str());
-      });
+  auto it =
+      std::find_if(classes.begin(),
+                   classes.end(),
+                   [&mapped_search_name](DexClass* cls) {
+                     return mapped_search_name == std::string(cls->c_str());
+                   });
   if (it == classes.end()) {
     return nullptr;
   } else {
@@ -52,35 +54,66 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 DexMethod* find_vmethod_named(const DexClass* cls, const std::string name) {
   auto vmethods = cls->get_vmethods();
   auto mapped_search_name = std::string(proguard_map->translate_method(name));
-  TRACE(PGR, 8, "Searching for vmethod %s\n", mapped_search_name.c_str());
+  TRACE(PGR, 8, "==> Searching for vmethod %s\n", mapped_search_name.c_str());
   auto it = std::find_if(
-      vmethods.begin(), vmethods.end(), [&mapped_search_name](DexMethod* m) {
-        TRACE(PGR, 8, "==> Comparing against vmethod %s %s\n", m->c_str(), proguard_name(m).c_str());
-        return (mapped_search_name == std::string(m->c_str()) ||
-                (mapped_search_name == proguard_name(m)));
+      vmethods.begin(),
+      vmethods.end(),
+      [&mapped_search_name](DexMethod* m) {
+        auto deob_meth = proguard_map->deobfuscate_method(proguard_name(m));
+        TRACE(PGR,
+              8,
+              "====> Comparing against vmethod %s %s\n",
+              m->c_str(),
+              deob_meth.c_str());
+        bool found = (mapped_search_name == std::string(m->c_str()) ||
+                      (mapped_search_name == proguard_name(m)));
+        TRACE(PGR, 8, "=====> Found %s.\n", mapped_search_name.c_str());
+        return found;
       });
+  if (it == vmethods.end()) {
+    TRACE(PGR, 8, "===> %s not found.\n", mapped_search_name.c_str());
+  } else {
+    TRACE(PGR, 8, "===> %s found.\n", mapped_search_name.c_str());
+  }
   return it == vmethods.end() ? nullptr : *it;
 }
 
 DexField* find_instance_field_named(const DexClass* cls, const char* name) {
   auto fields = cls->get_ifields();
   auto mapped_search_name = std::string(proguard_map->translate_field(name));
-  auto it = std::find_if(
-      fields.begin(), fields.end(), [&mapped_search_name](DexField* f) {
-        return (mapped_search_name == std::string(f->c_str()) ||
-                (mapped_search_name == proguard_name(f)));
-      });
+  TRACE(PGR,
+        8,
+        "==> Searching for instance field %s [%s]\n",
+        name,
+        mapped_search_name.c_str());
+  auto it =
+      std::find_if(fields.begin(),
+                   fields.end(),
+                   [&mapped_search_name](DexField* f) {
+                     TRACE(PGR,
+                           8,
+                           "====> Comparing against %s [%s]\n",
+                           f->c_str(), proguard_name(f).c_str());
+                     bool found = (mapped_search_name == std::string(f->c_str()) ||
+                             (mapped_search_name == proguard_name(f)));
+                     if (found) {
+                        TRACE(PGR, 8, "====> Matched.\n");
+                     }
+                     return found;
+                   });
   return it == fields.end() ? nullptr : *it;
 }
 
 DexField* find_static_field_named(const DexClass* cls, const char* name) {
   auto fields = cls->get_sfields();
   auto mapped_search_name = std::string(proguard_map->translate_field(name));
-  auto it = std::find_if(
-      fields.begin(), fields.end(), [&mapped_search_name](DexField* f) {
-        return (mapped_search_name == std::string(f->c_str()) ||
-                (mapped_search_name == proguard_name(f)));
-      });
+  auto it =
+      std::find_if(fields.begin(),
+                   fields.end(),
+                   [&mapped_search_name](DexField* f) {
+                     return (mapped_search_name == std::string(f->c_str()) ||
+                             (mapped_search_name == proguard_name(f)));
+                   });
   return it == fields.end() ? nullptr : *it;
 }
 
@@ -252,56 +285,70 @@ TEST(ProguardTest, assortment) {
   }
 
   { // Make sure !public static <fields> is observed.
-     auto delta =
-           find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
-     ASSERT_NE(delta, nullptr);
-     // The field "public staitc int alpha" should not match because of the
-     // public.
-     auto alpha = find_static_field_named(
-            delta, "Lcom/facebook/redex/test/proguard/Delta;.alpha:I");
-     ASSERT_EQ(alpha, nullptr);
-     // The field "private static int beta" should match because it is
-     // private (i.e. not public) and static.
-     auto beta = find_static_field_named(
-            delta, "Lcom/facebook/redex/test/proguard/Delta;.beta:I");
-     ASSERT_NE(beta, nullptr);
-     ASSERT_TRUE(keep(beta));
-     // The field "private final int gamma = 42" should not match because
-     // it is an instance field.
-     auto gamma = find_instance_field_named(
-       delta, "Lcom/facebook/redex/test/proguard/Delta$H;.gamma:I");
-     ASSERT_EQ(gamma, nullptr);
-}
-
-{ // Tests for field * regex matching.
-  auto delta_i =
-      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$I;");
-  ASSERT_NE(delta_i, nullptr);
-  ASSERT_TRUE(keep(delta_i));
-  // Make sure all the wombat* fields were found.
-  // wombat matches wombat.* from "wombat*"
-  auto wombat = find_instance_field_named(
-        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat:I");
-  ASSERT_NE(wombat, nullptr);
-  ASSERT_TRUE(keep(wombat));
-  // wombat_alpha matches wombat.* from "wombat*"
-  auto wombat_alpha = find_instance_field_named(
-        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat_alpha:I");
-  ASSERT_NE(wombat_alpha, nullptr);
-  ASSERT_TRUE(keep(wombat_alpha));
-  // numbat does not match wombat.* from "wombat*"
-  auto numbat = find_instance_field_named(
-        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
-  ASSERT_EQ(numbat, nullptr);
- }
-
- { // Test handling of <init>
-  auto delta =
+    auto delta =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
-  ASSERT_NE(delta, nullptr);
-  auto init =  find_vmethod_named(
-      delta, "init");
- }
+    ASSERT_NE(delta, nullptr);
+    // The field "public staitc int alpha" should not match because of the
+    // public.
+    auto alpha = find_static_field_named(
+        delta, "Lcom/facebook/redex/test/proguard/Delta;.alpha:I");
+    ASSERT_EQ(alpha, nullptr);
+    // The field "private static int beta" should match because it is
+    // private (i.e. not public) and static.
+    auto beta = find_static_field_named(
+        delta, "Lcom/facebook/redex/test/proguard/Delta;.beta:I");
+    ASSERT_NE(beta, nullptr);
+    ASSERT_TRUE(keep(beta));
+    // The field "private final int gamma = 42" should not match because
+    // it is an instance field.
+    auto gamma = find_instance_field_named(
+        delta, "Lcom/facebook/redex/test/proguard/Delta$H;.gamma:I");
+    ASSERT_EQ(gamma, nullptr);
+  }
 
- delete g_redex;
+  { // Tests for field * regex matching.
+    auto delta_i =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$I;");
+    ASSERT_NE(delta_i, nullptr);
+    ASSERT_TRUE(keep(delta_i));
+    // Make sure all the wombat* fields were found.
+    // wombat matches wombat.* from "wombat*"
+    auto wombat = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat:I");
+    ASSERT_NE(wombat, nullptr);
+    ASSERT_TRUE(keep(wombat));
+    // wombat_alpha matches wombat.* from "wombat*"
+    auto wombat_alpha = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat_alpha:I");
+    ASSERT_NE(wombat_alpha, nullptr);
+    ASSERT_TRUE(keep(wombat_alpha));
+    // numbat does not match wombat.* from "wombat*"
+    auto numbat = find_instance_field_named(
+        delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
+    ASSERT_EQ(numbat, nullptr);
+  }
+
+  { // Test handling of <init>
+    auto delta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
+    ASSERT_NE(delta, nullptr);
+    auto init = find_vmethod_named(delta, "init");
+  }
+
+  { // Test handling of $$ to make sure it does not match against
+    // primitive types.
+    auto delta_j =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$J;");
+    ASSERT_NE(nullptr, delta_j);
+    ASSERT_TRUE(keep(delta_j));
+    // Make sure the field brown_bear is gone.
+    auto brown_bear = find_instance_field_named(delta_j, "brown_bear");
+    ASSERT_EQ(nullptr, brown_bear);
+    // Make sure the field back_bear is kept.
+    auto black_bear = find_instance_field_named(delta_j, "black_bear");
+    ASSERT_NE(nullptr, black_bear);
+    ASSERT_TRUE(keep(black_bear));
+  }
+
+  delete g_redex;
 }
