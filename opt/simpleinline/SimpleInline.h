@@ -42,7 +42,7 @@ public:
     }
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
 private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(

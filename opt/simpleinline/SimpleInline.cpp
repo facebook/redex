@@ -80,10 +80,10 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 
 }
 
-void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
 
-  auto scope = build_class_scope(dexen);
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope, no_inline);
   select_single_called(scope, methods);
@@ -94,7 +94,7 @@ void SimpleInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassM
 
   // inline candidates
   MultiMethodInliner inliner(
-      scope, dexen[0], inlinable, resolver, m_inliner_config);
+      scope, stores[0].get_dexen()[0], inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
   // delete all methods that can be deleted
