@@ -20,34 +20,54 @@ from pyredex.log import log
 
 class ApplicationModule(object):
 
-    def __init__(self, extracted_apk_dir, name):
+    def __init__(self, extracted_apk_dir, name, canary_prefix):
         self.name = name
         self.path = join('assets', name)
+        self.canary_prefix = canary_prefix
 
     @staticmethod
     def detect(extracted_apk_dir):
         modules = []
         for candidate in abs_glob(extracted_apk_dir, 'assets/*/metadata.txt'):
+            name = None
+            canary_match = None
+            canary_prefix = None
             with open(candidate) as metadata:
                 for line in metadata.read().splitlines():
                     tokens = line.split()
                     if tokens[0] == '.id':
-                        modules.append(ApplicationModule(extracted_apk_dir, tokens[1]))
-
+                        name = tokens[1]
+                    if tokens[0][0] != '.':
+                        canary_match = re.search('([A-Za-z0-9]*)[.]dex[0-9]+[.]Canary', tokens[2])
+                        if canary_match is not None:
+                            canary_prefix = canary_match.group(1)
+                if name is not None:
+                    modules.append(ApplicationModule(extracted_apk_dir, name, canary_prefix))
         return modules
 
     def get_name(self):
         return self.name
 
+    def get_canary_prefix(self):
+        return self.canary_prefix
+
     def unpackage(self, extracted_apk_dir, dex_dir):
-        self.dex_mode = XZSDexMode(self.path, self.name)
+        self.dex_mode = XZSDexMode(dex_asset_dir=self.path,
+                                   store_name=self.name,
+                                   dex_prefix=self.name,
+                                   canary_prefix=self.canary_prefix,
+                                   store_id=self.name)
         if (self.dex_mode.detect(extracted_apk_dir)):
-            log('module ' + self.name + ' is xzs')
+            log('module ' + self.name + ' is XZSDexMode')
             self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
             return
-        self.dex_mode = SubdirDexMode(self.path)
+        self.dex_mode = SubdirDexMode(dex_asset_dir=self.path,
+                                      store_name=self.name,
+                                      dex_prefix=self.name,
+                                      canary_prefix=self.canary_prefix,
+                                      store_id=self.name)
         if (self.dex_mode.detect(extracted_apk_dir)):
-            log('module ' + self.name + ' is subdir')
+            log('module ' + self.name + ' is SubdirDexMode')
             self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
             return
         self.dex_mode = None
@@ -101,9 +121,10 @@ class DexMetadata(object):
 
 
 class BaseDexMode(object):
-    def __init__(self, dex_prefix, canary_prefix):
+    def __init__(self, dex_prefix, canary_prefix, store_id):
         self._dex_prefix = dex_prefix
         self._canary_prefix = canary_prefix
+        self._store_id = store_id
 
     def unpackage(self, extracted_apk_dir, dex_dir):
         primary_dex = join(extracted_apk_dir, self._dex_prefix + '.dex')
@@ -127,8 +148,12 @@ class Api21DexMode(BaseDexMode):
     secondary dex files.
     """
 
-    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', dex_prefix='classes', canary_prefix='secondary'):
-        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+    def __init__(self,
+                 dex_asset_dir='assets/secondary-program-dex-jars',
+                 dex_prefix='classes',
+                 canary_prefix='secondary',
+                 store_id=None):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix, store_id)
         self._secondary_dir = dex_asset_dir
 
     def detect(self, extracted_apk_dir):
@@ -170,8 +195,13 @@ class SubdirDexMode(BaseDexMode):
     `buck build katana` places secondary dexes in a subdir with no compression
     """
 
-    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', store_name='secondary', dex_prefix='classes', canary_prefix='secondary'):
-        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+    def __init__(self,
+                 dex_asset_dir='assets/secondary-program-dex-jars',
+                 store_name='secondary',
+                 dex_prefix='classes',
+                 canary_prefix='secondary',
+                 store_id=None):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix, store_id)
         self._secondary_dir = dex_asset_dir
         self._store_name = store_name
 
@@ -228,8 +258,13 @@ class XZSDexMode(BaseDexMode):
     ... This format is completely insane.
     """
 
-    def __init__(self, dex_asset_dir='assets/secondary-program-dex-jars', store_name='secondary', dex_prefix='classes', canary_prefix='secondary'):
-        BaseDexMode.__init__(self, dex_prefix, canary_prefix)
+    def __init__(self,
+                 dex_asset_dir='assets/secondary-program-dex-jars',
+                 store_name='secondary',
+                 dex_prefix='classes',
+                 canary_prefix='secondary',
+                 store_id=None):
+        BaseDexMode.__init__(self, dex_prefix, canary_prefix, store_id)
         self._xzs_dir = dex_asset_dir
         self._xzs_filename = store_name + '.dex.jar.xzs'
         self._store_name = store_name
