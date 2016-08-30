@@ -49,6 +49,7 @@ private:
   int m_num_passed;
   int m_num_trivial;
   int m_num_relaxed_vis;
+  int m_num_cls_relaxed_vis;
   int m_num_private;
   int m_num_culled_no_code;
   int m_num_culled_too_short;
@@ -59,6 +60,7 @@ private:
   int m_num_culled_return_move_result_differs;
   int m_num_culled_args_differs;
   int m_num_culled_super_is_non_public_sdk;
+  int m_num_culled_super_cls_non_public;
   int m_num_culled_super_not_def;
 
 
@@ -238,6 +240,16 @@ private:
       m_num_relaxed_vis++;
     }
 
+    auto cls = type_class(invoked_meth->get_class());
+    if (!(cls->get_access() & ACC_PUBLIC)) {
+      if (cls->is_external()) {
+        m_num_culled_super_cls_non_public++;
+        return nullptr;
+      }
+      set_public(cls);
+      m_num_cls_relaxed_vis++;
+    }
+
     return invoked_meth;
   }
 
@@ -248,6 +260,7 @@ public:
       m_num_passed(0),
       m_num_trivial(0),
       m_num_relaxed_vis(0),
+      m_num_cls_relaxed_vis(0),
       m_num_private(0),
       m_num_culled_no_code(0),
       m_num_culled_too_short(0),
@@ -258,6 +271,7 @@ public:
       m_num_culled_return_move_result_differs(0),
       m_num_culled_args_differs(0),
       m_num_culled_super_is_non_public_sdk(0),
+      m_num_culled_super_cls_non_public(0),
       m_num_culled_super_not_def(0) {
   }
 
@@ -320,6 +334,8 @@ public:
       m_num_culled_args_differs);
     TRACE(SUPER, 5, "Culled %d due to non-public super method in sdk\n",
       m_num_culled_super_is_non_public_sdk);
+    TRACE(SUPER, 5, "Culled %d due to non-public super class in sdk\n",
+      m_num_culled_super_cls_non_public);
     TRACE(SUPER, 1, "Found %d trivial return invoke-super methods\n",
       m_num_passed);
     if (do_delete) {
@@ -327,12 +343,16 @@ public:
         m_num_passed);
       TRACE(SUPER, 1, "Promoted %d methods to public visibility\n",
         m_num_relaxed_vis);
+      TRACE(SUPER, 1, "Promoted %d classes to public visibility\n",
+        m_num_cls_relaxed_vis);
     } else {
       TRACE(SUPER, 1, "Preview-only; not performing any changes.\n");
       TRACE(SUPER, 1, "Would delete %d trivial return invoke-super methods\n",
         m_num_passed);
       TRACE(SUPER, 1, "Would promote %d methods to public visibility\n",
         m_num_relaxed_vis);
+      TRACE(SUPER, 1, "Would promote %d classes to public visibility\n",
+        m_num_cls_relaxed_vis);
     }
   }
 };
