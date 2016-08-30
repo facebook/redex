@@ -311,8 +311,8 @@ struct Rebinder {
 
 }
 
-void ReBindRefsPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  Scope scope = build_class_scope(dexen);
+void ReBindRefsPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  Scope scope = build_class_scope(DexStoreClassesIterator(&stores));
   Rebinder rb(scope);
   rb.rewrite_refs();
   rb.print_stats();

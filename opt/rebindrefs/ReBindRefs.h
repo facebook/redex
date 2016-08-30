@@ -15,6 +15,6 @@ class ReBindRefsPass : public Pass {
  public:
   ReBindRefsPass() : Pass("ReBindRefsPass") {}
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
 };
