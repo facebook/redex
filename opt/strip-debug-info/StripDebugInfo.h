@@ -18,7 +18,7 @@ class StripDebugInfoPass : public Pass {
     pc.get("drop_src_files", false, m_drop_src_files);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_cls_patterns;

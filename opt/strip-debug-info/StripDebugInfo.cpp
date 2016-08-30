@@ -83,8 +83,8 @@ void strip_debug_info(Scope& scope,
 
 }
 
-void StripDebugInfoPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(dexen);
+void StripDebugInfoPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   strip_debug_info(scope,
       m_use_whitelist,
       m_cls_patterns,
