@@ -21,7 +21,7 @@ class FinalInlinePass : public Pass {
     pc.get("remove_class_members", {}, m_remove_class_members);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_keep_class_member_annos;

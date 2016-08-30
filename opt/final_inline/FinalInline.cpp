@@ -272,8 +272,8 @@ void inline_field_values(Scope& fullscope) {
   MethodTransform::sync_all();
 }
 
-void FinalInlinePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(dexen);
+void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   inline_field_values(scope);
   remove_unused_fields(scope, m_remove_class_members);
 }
