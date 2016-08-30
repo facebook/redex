@@ -425,8 +425,8 @@ TypeRelationship exclude(InterfaceImplementations& interfaces,
 
 }
 
-void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  Scope scope = build_class_scope(dexen);
+void UnterfacePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  Scope scope = build_class_scope(DexStoreClassesIterator(&stores));
 
   InterfaceImplementations interfaces(scope);
   assert(interfaces.print_all());
@@ -453,7 +453,7 @@ void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMana
 
   // write back
   DexClassesVector outdex;
-  DexClasses& orig_classes = dexen[0];
+  DexClasses& orig_classes = stores[0].get_dexen()[0];
   DexClasses classes((size_t)(orig_classes.size() + untfs.size() - removed.size()));
   int pos = 0;
   for (size_t i = 0; i < orig_classes.size(); ++i) {
@@ -466,8 +466,8 @@ void UnterfacePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMana
     classes.insert_at(untf, pos++);
   }
   outdex.emplace_back(std::move(classes));
-  for (size_t i = 1; i < dexen.size(); i++) {
-    outdex.emplace_back(std::move(dexen[i]));
+  for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {
+    outdex.emplace_back(std::move(stores[0].get_dexen()[i]));
   }
-  dexen = std::move(outdex);
+  stores[0].get_dexen() = std::move(outdex);
 }
