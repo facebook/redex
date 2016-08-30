@@ -75,3 +75,15 @@ public:
   bool operator!=(const DexStoreClassesIterator& rhs) { return m_current_classes != rhs.m_current_classes; }
   DexClasses& operator*() { return *m_current_classes; }
 };
+
+class DexMetadata {
+  std::string id;
+  std::vector<std::string> dependencies;
+  std::vector<std::string> files;
+
+public:
+  const std::string& get_id() { return id; }
+  const std::vector<std::string> get_files() { return files; }
+
+  void parse(const std::string& path);
+};

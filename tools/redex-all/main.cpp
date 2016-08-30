@@ -418,12 +418,26 @@ int main(int argc, char* argv[]) {
   }
 
   DexStore root_store("classes");
-  for (int i = start; i < argc; i++) {
-    DexClasses classes = load_classes_from_dex(argv[i]);
-    root_store.add_classes(std::move(classes));
-  }
   DexStoresVector stores;
   stores.emplace_back(std::move(root_store));
+
+  for (int i = start; i < argc; i++) {
+    const std::string filename(argv[i]);
+    if (filename.compare(filename.size()-3, 3, "dex") == 0) {
+      DexClasses classes = load_classes_from_dex(filename.c_str());
+      stores[0].add_classes(std::move(classes));
+    } else {
+      DexMetadata store_metadata;
+      store_metadata.parse(filename);
+      DexStore store(store_metadata.get_id().c_str());
+      for (auto file_path : store_metadata.get_files()) {
+        DexClasses classes = load_classes_from_dex(file_path.c_str());
+        store.add_classes(std::move(classes));
+      }
+      stores.emplace_back(std::move(store));
+    }
+  }
+
 
   for (const auto& library_jar : library_jars) {
     TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
@@ -468,8 +482,16 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::stringstream ss;
       ss << args.out_dir << "/" << store.get_name();
-      if (i > 0) {
-        ss << (i + 1);
+      if (store.get_name().compare("classes") == 0) {
+        // primary/secondary dex store, primary has no numeral and secondaries
+        // start at 2
+        if (i > 0) {
+          ss << (i + 1);
+        }
+      } else {
+        // other dex stores do not have a primary,
+        // so it makes sense to start at 2
+        ss << (i + 2);
       }
       ss << ".dex";
       auto stats = write_classes_to_dex(
