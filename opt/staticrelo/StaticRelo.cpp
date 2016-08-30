@@ -638,7 +638,7 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 
 } // namespace
 
-void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   // Clear out counter
   s_cls_delete_count = 0;
   s_meth_delete_count = 0;
@@ -650,47 +650,51 @@ void StaticReloPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassMan
   s_single_ref_moved_count = 0;
   s_line_conflict_but_sig_fine_count = 0;
 
-  auto scope = build_class_scope(dexen);
-  auto cls_to_dex = build_class_to_dex_map(dexen);
-  auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
-  auto dont_optimize_annos = get_dont_optimize_annos(
-    m_dont_optimize_annos, cfg);
+  //relocate statics on a per-dex store basis
+  for (auto& store : stores) {
+    DexClassesVector& dexen = store.get_dexen();
+    auto scope = build_class_scope(dexen);
+    auto cls_to_dex = build_class_to_dex_map(dexen);
+    auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
+    auto dont_optimize_annos = get_dont_optimize_annos(
+      m_dont_optimize_annos, cfg);
 
-  // Make one pass through all code to find dmethod refs and class refs,
-  // needed later on for refining eligibility as well as performing the
-  // actual rebinding
-  refs_t<DexMethod> dmethod_refs;
-  refs_t<DexClass> class_refs;
-  build_refs(scope, dmethod_refs, class_refs);
+    // Make one pass through all code to find dmethod refs and class refs,
+    // needed later on for refining eligibility as well as performing the
+    // actual rebinding
+    refs_t<DexMethod> dmethod_refs;
+    refs_t<DexClass> class_refs;
+    build_refs(scope, dmethod_refs, class_refs);
 
-  // Find candidates
-  candidates_t candidates = build_candidates(
-      scope, class_refs, dont_optimize_annos);
+    // Find candidates
+    candidates_t candidates = build_candidates(
+        scope, class_refs, dont_optimize_annos);
 
-  // Find the relocation target for each dex
-  auto dex_to_target = build_dex_to_target_map(
-    candidates, cls_to_dex);
+    // Find the relocation target for each dex
+    auto dex_to_target = build_dex_to_target_map(
+      candidates, cls_to_dex);
 
-  // Build up all the mutations for relocation
-  std::unordered_map<DexMethod*, DexClass*> meth_moves;
-  std::unordered_set<DexMethod*> meth_deletes;
-  std::unordered_set<DexClass*> cls_deletes;
-  build_mutations(
-    candidates,
-    dmethod_refs,
-    cls_to_pgo_order,
-    cls_to_dex,
-    dex_to_target,
-    meth_moves,
-    meth_deletes,
-    cls_deletes);
+    // Build up all the mutations for relocation
+    std::unordered_map<DexMethod*, DexClass*> meth_moves;
+    std::unordered_set<DexMethod*> meth_deletes;
+    std::unordered_set<DexClass*> cls_deletes;
+    build_mutations(
+      candidates,
+      dmethod_refs,
+      cls_to_pgo_order,
+      cls_to_dex,
+      dex_to_target,
+      meth_moves,
+      meth_deletes,
+      cls_deletes);
 
-  // Perform all relocation mutations
-  do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
+    // Perform all relocation mutations
+    do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
 
-  mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
-  mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, s_cls_delete_count);
-  mgr.incr_metric(METRIC_NUM_MOVED_METHODS, s_meth_move_count);
+    mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
+    mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, s_cls_delete_count);
+    mgr.incr_metric(METRIC_NUM_MOVED_METHODS, s_meth_move_count);
+  }
 
   // Final report
   TRACE(
