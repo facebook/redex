@@ -152,9 +152,9 @@ std::unordered_set<DexType*> get_kill_annos(
   return kill_annos;
 }
 
-void AnnoClassKillPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(dexen);
+void AnnoClassKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   auto kill_annos = get_kill_annos(m_kill_annos);
   kill_annotation_classes(scope, kill_annos);
-  post_dexen_changes(scope, dexen);
+  post_dexen_changes(scope, DexStoreClassesIterator(&stores));
 }
