@@ -23,7 +23,7 @@ class SynthPass : public Pass {
     pc.get("remove_pub", true, m_pass_config.remove_pub);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   SynthConfig m_pass_config;
