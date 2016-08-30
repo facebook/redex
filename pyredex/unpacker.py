@@ -115,6 +115,9 @@ class BaseDexMode(object):
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, extracted_apk_dir)
 
+    def get_canary(self, i):
+        return self._canary_prefix + '.dex%02d.Canary' % i
+
 class Api21DexMode(BaseDexMode):
     """
     On API 21+, secondary dex files are in the root of the apk and are named
@@ -158,8 +161,7 @@ class Api21DexMode(BaseDexMode):
             dex_path = join(dex_dir, self._dex_prefix + '%d.dex' % i)
             if not isfile(dex_path):
                 break
-            canary_class = self._canary_prefix + '.dex%02d.Canary' % (i - 1)
-            metadata.add_dex(dex_path, canary_class)
+            metadata.add_dex(dex_path, BaseDexMode.get_canary(self, i - 1))
             shutil.move(dex_path, extracted_apk_dir)
         metadata.write(jar_meta_path)
 
@@ -202,8 +204,7 @@ class SubdirDexMode(BaseDexMode):
 
             jarpath = dexpath + '.jar'
             create_dex_jar(jarpath, dexpath)
-            canary_class = self._canary_prefix + '.dex%02d.Canary' % i
-            metadata.add_dex(jarpath, canary_class)
+            metadata.add_dex(jarpath, BaseDexMode.get_canary(self, i))
 
             dex_meta_base = jarpath + '.meta'
             dex_meta_path = join(dex_dir, dex_meta_base)
@@ -257,7 +258,7 @@ class XZSDexMode(BaseDexMode):
         secondary_dir = join(extracted_apk_dir, self._xzs_dir)
         jar_sizes = {}
         for i in range(1, 100):
-            filename = self._store_name + '-' + str(i) + '.dex.jar.xzs.tmp~.meta'
+            filename = self._store_name + '-%d.dex.jar.xzs.tmp~.meta' % i
             metadata_path = join(secondary_dir, filename)
             if isfile(metadata_path):
                 with open(metadata_path) as f:
@@ -299,7 +300,6 @@ class XZSDexMode(BaseDexMode):
         dex_metadata = DexMetadata(have_locators=have_locators)
 
         with open(concat_jar_path, 'wb') as concat_jar:
-
             for i in range(1, 100):
                 oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
                 if not isfile(oldpath):
@@ -324,9 +324,8 @@ class XZSDexMode(BaseDexMode):
                     concat_jar.write(contents)
                     sha1hash = hashlib.sha1(contents).hexdigest()
 
-                canary_class = self._canary_prefix + '.dex%02d.Canary' % i
                 dex_metadata.add_dex(jarpath + '.xzs.tmp~',
-                                     canary_class,
+                                     BaseDexMode.get_canary(self, i),
                                      hash=sha1hash)
 
         dex_metadata.write(concat_jar_meta)
