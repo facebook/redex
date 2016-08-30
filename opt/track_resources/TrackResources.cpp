@@ -174,11 +174,11 @@ std::unordered_set<DexClass*> build_tracked_cls_set(
 
 }
 
-void TrackResourcesPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   std::unordered_set<DexField*> recorded_fields;
   const auto& pg_map = cfg.get_proguard_map();
   auto tracked_classes = build_tracked_cls_set(m_classes_to_track, pg_map);
-  auto scope = build_class_scope(dexen);
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   inline_field_values(scope, cfg, tracked_classes, recorded_fields);
   write_found_fields(m_tracked_fields_output, recorded_fields);
 }

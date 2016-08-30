@@ -20,7 +20,7 @@ class TrackResourcesPass : public Pass {
     pc.get("tracked_fields_output", "", m_tracked_fields_output);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_classes_to_track;
