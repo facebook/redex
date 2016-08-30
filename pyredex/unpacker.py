@@ -78,28 +78,26 @@ class ApplicationModule(object):
         if (self.dex_mode.detect(extracted_apk_dir)):
             log('module ' + self.name + ' is XZSDexMode')
             self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
-            return
-        self.dex_mode = SubdirDexMode(dex_asset_dir=self.path,
-                                      store_name=self.name,
-                                      dex_prefix=self.name,
-                                      canary_prefix=self.canary_prefix,
-                                      store_id=self.name,
-                                      dependencies=self.dependencies)
-        if (self.dex_mode.detect(extracted_apk_dir)):
-            log('module ' + self.name + ' is SubdirDexMode')
-            self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
-            return
-        self.dex_mode = None
-        log('module ' + self.name + ' is not detected')
-        for path in abs_glob(self.path, self.name + '*.dex'):
-            shutil.move(path, dex_dir)
-            return
+        else:
+            self.dex_mode = SubdirDexMode(dex_asset_dir=self.path,
+                                          store_name=self.name,
+                                          dex_prefix=self.name,
+                                          canary_prefix=self.canary_prefix,
+                                          store_id=self.name,
+                                          dependencies=self.dependencies)
+            if (self.dex_mode.detect(extracted_apk_dir)):
+                log('module ' + self.name + ' is SubdirDexMode')
+                self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+            else:
+                self.dex_mode = Api21ModuleDexMode(dex_asset_dir=self.path,
+                                                   store_name=self.name,
+                                                   canary_prefix=self.canary_prefix,
+                                                   store_id=self.name,
+                                                   dependencies=self.dependencies)
+                log('module ' + self.name + ' is Api21ModuleDexMode')
+                self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
 
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        if self.dex_mode is None:
-            for path in abs_glob(dex_dir, self.name + '*.dex'):
-                shutil.move(path, join(extracted_apk_dir, self.path))
-            return
         self.dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
 
 class DexMetadata(object):
@@ -172,10 +170,11 @@ class Api21DexMode(BaseDexMode):
                  dex_asset_dir='assets/secondary-program-dex-jars',
                  dex_prefix='classes',
                  canary_prefix='secondary',
-                 store_id=None,
-                 dependencies=None):
+                 is_root_relative=True,
+                 store_id=None, dependencies=None):
         BaseDexMode.__init__(self, dex_prefix, canary_prefix, store_id, dependencies)
         self._secondary_dir = dex_asset_dir
+        self._is_root_relative = is_root_relative
 
     def detect(self, extracted_apk_dir):
         # Note: This mode is the fallback and we only check for it after
@@ -186,30 +185,64 @@ class Api21DexMode(BaseDexMode):
     def unpackage(self, extracted_apk_dir, dex_dir):
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
-        jar_meta_path = join(extracted_apk_dir, self._secondary_dir,
-                             'metadata.txt')
+        metadata_dir = join(extracted_apk_dir, self._secondary_dir)
+        jar_meta_path = join(metadata_dir, 'metadata.txt')
         if os.path.exists(jar_meta_path):
             os.remove(jar_meta_path)
-        for path in abs_glob(extracted_apk_dir, '*.dex'):
+        if self._is_root_relative:
+            extracted_dex_dir = extracted_apk_dir
+        else:
+            extracted_dex_dir = metadata_dir
+        for path in abs_glob(extracted_dex_dir, '*.dex'):
             shutil.move(path, dex_dir)
 
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
+        metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
-        if not os.path.exists(join(extracted_apk_dir, self._secondary_dir)):
+        if not os.path.exists(metadata_dir):
             return
-        jar_meta_path = join(extracted_apk_dir,
-                             self._secondary_dir,
-                             'metadata.txt')
-        metadata = DexMetadata(is_root_relative=True,
-                               have_locators=have_locators)
+        jar_meta_path = join(metadata_dir, 'metadata.txt')
+        metadata = DexMetadata(is_root_relative=self._is_root_relative,
+                               have_locators=have_locators,
+                               store=self._store_id,
+                               dependencies=self._dependencies)
         for i in range(2, 100):
             dex_path = join(dex_dir, self._dex_prefix + '%d.dex' % i)
             if not isfile(dex_path):
                 break
             metadata.add_dex(dex_path, BaseDexMode.get_canary(self, i - 1))
-            shutil.move(dex_path, extracted_apk_dir)
+            if self._is_root_relative:
+                shutil.move(dex_path, extracted_apk_dir)
+            else:
+                shutil.move(dex_path, metadata_dir)
         metadata.write(jar_meta_path)
+
+class Api21ModuleDexMode(Api21DexMode):
+    """
+    modules built in Api21 builds will just have <store_name><i>.dex files in
+    the module directory.  This should only be used by modules.
+    """
+
+    def __init__(self,
+                 dex_asset_dir,
+                 store_name='secondary',
+                 canary_prefix='secondary',
+                 store_id=None,
+                 dependencies=None):
+        Api21DexMode.__init__(self,
+                              dex_asset_dir=dex_asset_dir,
+                              dex_prefix=store_name,
+                              canary_prefix=canary_prefix,
+                              store_id=store_id,
+                              dependencies=dependencies,
+                              is_root_relative=False)
+        self._secondary_dir = dex_asset_dir
+        self._store_name = store_name
+
+    def detect(self, extracted_apk_dir):
+        secondary_dex_dir = join(extracted_apk_dir, self._secondary_dir)
+        return len(list(abs_glob(secondary_dex_dir, '*.dex')))
 
 class SubdirDexMode(BaseDexMode):
     """
@@ -246,7 +279,9 @@ class SubdirDexMode(BaseDexMode):
     def repackage(self, extracted_apk_dir, dex_dir, have_locators):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
-        metadata = DexMetadata(have_locators=have_locators)
+        metadata = DexMetadata(have_locators=have_locators,
+                               store=self._store_id,
+                               dependencies=self._dependencies)
         for i in range(1, 100):
             oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
             dexpath = join(dex_dir, self._store_name + '-%d.dex' % i)
@@ -355,7 +390,9 @@ class XZSDexMode(BaseDexMode):
 
         concat_jar_path = join(dex_dir, self._store_name + '.dex.jar')
         concat_jar_meta = join(dex_dir, 'metadata.txt')
-        dex_metadata = DexMetadata(have_locators=have_locators)
+        dex_metadata = DexMetadata(have_locators=have_locators,
+                                   store=self._store_id,
+                                   dependencies=self._dependencies)
 
         with open(concat_jar_path, 'wb') as concat_jar:
             for i in range(1, 100):
@@ -387,7 +424,6 @@ class XZSDexMode(BaseDexMode):
                                      hash=sha1hash)
 
         dex_metadata.write(concat_jar_meta)
-
         assert getsize(concat_jar_path) == sum(getsize(x)
                 for x in abs_glob(dex_dir, self._store_name + '-*.dex.jar'))
 
