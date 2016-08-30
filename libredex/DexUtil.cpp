@@ -203,72 +203,11 @@ bool passes_args_through(DexOpcodeMethod* insn,
   return true;
 }
 
-Scope build_class_scope(const DexStoreClassesIterator& dexen) {
-  Scope v;
-  for (auto const& classes : dexen) {
-    for (auto clazz : classes) {
-      v.push_back(clazz);
-    }
-  }
-  return v;
+Scope build_class_scope(DexStoresVector& stores) {
+  return build_class_scope(DexStoreClassesIterator(stores));
 }
 
-Scope build_class_scope(const DexClassesVector& dexen) {
-  Scope v;
-  for (auto const& classes : dexen) {
-    for (auto clazz : classes) {
-      v.push_back(clazz);
-    }
-  }
-  return v;
-}
-
-void post_dexen_changes(const Scope& v, const DexStoreClassesIterator& dexen) {
-  std::unordered_set<DexClass*> clookup(v.begin(), v.end());
-  for (auto& classes : dexen) {
-    classes.erase(
-      std::remove_if(
-        classes.begin(),
-        classes.end(),
-        [&](DexClass* cls) {
-          return !clookup.count(cls);
-        }),
-      classes.end());
-  }
-  if (debug) {
-    std::unordered_set<DexClass*> dlookup;
-    for (auto const& classes : dexen) {
-      for (auto const& cls : classes) {
-        dlookup.insert(cls);
-      }
-    }
-    for (auto const& cls : clookup) {
-      assert_log(dlookup.count(cls), "Can't add classes in post_dexen_changes");
-    }
-  }
-}
-
-void post_dexen_changes(const Scope& v, DexClassesVector& dexen) {
-  std::unordered_set<DexClass*> clookup(v.begin(), v.end());
-  for (auto& classes : dexen) {
-    classes.erase(
-      std::remove_if(
-        classes.begin(),
-        classes.end(),
-        [&](DexClass* cls) {
-          return !clookup.count(cls);
-        }),
-      classes.end());
-  }
-  if (debug) {
-    std::unordered_set<DexClass*> dlookup;
-    for (auto const& classes : dexen) {
-      for (auto const& cls : classes) {
-        dlookup.insert(cls);
-      }
-    }
-    for (auto const& cls : clookup) {
-      assert_log(dlookup.count(cls), "Can't add classes in post_dexen_changes");
-    }
-  }
+void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
+  DexStoreClassesIterator iter(stores);
+  post_dexen_changes(v, iter);
 }

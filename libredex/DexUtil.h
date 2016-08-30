@@ -219,13 +219,46 @@ bool passes_args_through(DexOpcodeMethod* insn,
  * Generates a Scope& object from a set of Dexes.
  *
  */
-Scope build_class_scope(const DexClassesVector& dexen);
-Scope build_class_scope(const DexStoreClassesIterator& dexen);
+template <class T>
+Scope build_class_scope(const T& dexen) {
+  Scope v;
+  for (auto const& classes : dexen) {
+    for (auto clazz : classes) {
+      v.push_back(clazz);
+    }
+  }
+  return v;
+};
+Scope build_class_scope(DexStoresVector& stores);
 
 /**
  * Posts the changes made to the Scope& object to the
  * Dexes.
  *
  */
-void post_dexen_changes(const Scope& v, DexClassesVector& dexen);
-void post_dexen_changes(const Scope& v, const DexStoreClassesIterator& dexen);
+template <class T>
+void post_dexen_changes(const Scope& v, T& dexen) {
+  std::unordered_set<DexClass*> clookup(v.begin(), v.end());
+  for (auto& classes : dexen) {
+    classes.erase(
+      std::remove_if(
+        classes.begin(),
+        classes.end(),
+        [&](DexClass* cls) {
+          return !clookup.count(cls);
+        }),
+      classes.end());
+  }
+  if (debug) {
+    std::unordered_set<DexClass*> dlookup;
+    for (auto const& classes : dexen) {
+      for (auto const& cls : classes) {
+        dlookup.insert(cls);
+      }
+    }
+    for (auto const& cls : clookup) {
+      assert_log(dlookup.count(cls), "Can't add classes in post_dexen_changes");
+    }
+  }
+};
+void post_dexen_changes(const Scope& v, DexStoresVector& stores);

@@ -328,7 +328,7 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
   std::unordered_map<DexMethod*, DexClass*> statics_to_callers;
   std::unordered_set<DexClass*> class_set(classes.begin(), classes.end());
   std::unordered_set<DexMethod*> static_set(statics.begin(), statics.end());
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   walk_opcodes(
     scope,
     [&](DexMethod* m) {

@@ -66,7 +66,7 @@ static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
   std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
   std::unordered_set<DexString*> shortened_used;
 
-  for (auto& classes : DexStoreClassesIterator(&stores)) {
+  for (auto& classes : DexStoreClassesIterator(stores)) {
     std::unordered_map<DexString*, DexString*> src_to_shortened;
     std::vector<DexString*> current_dex_strings;
     for (auto const& clazz : classes) {

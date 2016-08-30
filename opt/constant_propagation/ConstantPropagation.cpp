@@ -269,7 +269,7 @@ std::unordered_set<DexType*> get_black_list(
 }
 
 void ConstantPropagationPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   auto blacklist_classes = get_black_list(m_blacklist);
   ConstantPropagation(scope).run(blacklist_classes);
 }

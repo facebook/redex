@@ -426,7 +426,7 @@ TypeRelationship exclude(InterfaceImplementations& interfaces,
 }
 
 void UnterfacePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  Scope scope = build_class_scope(DexStoreClassesIterator(&stores));
+  Scope scope = build_class_scope(stores);
 
   InterfaceImplementations interfaces(scope);
   assert(interfaces.print_all());

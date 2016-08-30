@@ -430,6 +430,6 @@ class LocalDce {
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   LocalDce(scope).run();
 }

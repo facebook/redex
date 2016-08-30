@@ -462,7 +462,7 @@ void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManage
     return;
   }
   package_filter = m_package_filter;
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
@@ -474,5 +474,5 @@ void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManage
       drefs.del_init_res.deleted_ifields);
   TRACE(DELINIT, 1, "Removed %d dmethods\n",
       drefs.del_init_res.deleted_dmeths);
-  post_dexen_changes(scope, DexStoreClassesIterator(&stores));
+  post_dexen_changes(scope, stores);
 }

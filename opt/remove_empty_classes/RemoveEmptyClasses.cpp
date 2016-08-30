@@ -139,7 +139,7 @@ void remove_empty_classes(Scope& classes) {
 
 void RemoveEmptyClassesPass::run_pass(
     DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   remove_empty_classes(scope);
-  post_dexen_changes(scope, DexStoreClassesIterator(&stores));
+  post_dexen_changes(scope, stores);
 }

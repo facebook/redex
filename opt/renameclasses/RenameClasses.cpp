@@ -270,7 +270,7 @@ void rename_classes(
 }
 
 void RenameClassesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   std::unordered_set<const DexType*> untouchables;
   for (const auto& base : m_untouchable_hierarchies) {
     auto base_type = DexType::get_type(base.c_str());

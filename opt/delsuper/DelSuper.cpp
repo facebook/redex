@@ -360,6 +360,6 @@ public:
 }
 
 void DelSuperPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  const auto& scope = build_class_scope(DexStoreClassesIterator(&stores));
+  const auto& scope = build_class_scope(stores);
   DelSuper(scope).run(/* do_delete = */true);
 }

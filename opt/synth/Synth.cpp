@@ -853,7 +853,7 @@ bool optimize(const std::vector<DexClass*>& classes,
 }
 
 void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  Scope scope = build_class_scope(DexStoreClassesIterator(&stores));
+  Scope scope = build_class_scope(stores);
   int passes = 0;
   do {
     TRACE(SYNT, 1, "Synth removal, pass %d\n", passes);

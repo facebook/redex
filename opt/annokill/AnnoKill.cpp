@@ -222,7 +222,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
 }
 
 void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   auto removable_annos = get_annos(m_remove_annos);
   auto blacklist_classes = get_blacklist(m_blacklist);
   auto blacklist_classes_containing_class_annotations =

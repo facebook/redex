@@ -323,6 +323,6 @@ class BridgeRemover {
 ////////////////////////////////////////////////////////////////////////////////
 
 void BridgePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  Scope scope = build_class_scope(DexStoreClassesIterator(&stores));
+  Scope scope = build_class_scope(stores);
   BridgeRemover(scope).run();
 }

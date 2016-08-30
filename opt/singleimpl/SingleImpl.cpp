@@ -95,8 +95,7 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
 const int MAX_PASSES = 8;
 
 void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  DexStoreClassesIterator it = DexStoreClassesIterator(&stores);
-  auto scope = build_class_scope(it.begin());
+  auto scope = build_class_scope(stores);
   int max_steps = 0;
   while (true) {
     DEBUG_ONLY size_t scope_size = scope.size();
@@ -119,5 +118,5 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   TRACE(INTF, 1,
           "Updated invoke-interface to invoke-virtual %ld\n",
           s_invoke_intf_count);
-  post_dexen_changes(scope, it);
+  post_dexen_changes(scope, stores);
 }

@@ -83,7 +83,7 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
 
-  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
+  auto scope = build_class_scope(stores);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope, no_inline);
   select_single_called(scope, methods);

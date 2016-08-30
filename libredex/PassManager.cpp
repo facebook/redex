@@ -41,7 +41,7 @@ PassManager::PassManager(
 }
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
-  DexStoreClassesIterator it(&stores);
+  DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   init_reachable_classes(scope, m_config,
       m_proguard_rules, cfg.get_no_optimizations_annos());
