@@ -24,7 +24,7 @@ class AnnoKillPass : public Pass {
          m_blacklist_classes_containing_class_annotations);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_remove_build;
