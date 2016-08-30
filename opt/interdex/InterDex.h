@@ -25,7 +25,7 @@ class InterDexPass : public Pass {
     pc.get("normal_primary_dex", false, m_normal_primary_dex);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) override;
+  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&);
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

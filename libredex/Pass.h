@@ -109,7 +109,6 @@ class Pass {
   std::string name() const { return m_name; }
 
   virtual void configure_pass(const PassConfig&) {}
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&) {}
   virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) = 0;
 
  private:
