@@ -359,7 +359,7 @@ public:
 
 }
 
-void DelSuperPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  const auto& scope = build_class_scope(dexen);
+void DelSuperPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  const auto& scope = build_class_scope(DexStoreClassesIterator(&stores));
   DelSuper(scope).run(/* do_delete = */true);
 }
