@@ -225,7 +225,7 @@ class PeepholeOptimizer {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void PeepholePass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
-  auto scope = build_class_scope(dexen);
+void PeepholePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  auto scope = build_class_scope(DexStoreClassesIterator(&stores));
   PeepholeOptimizer(scope).run();
 }
