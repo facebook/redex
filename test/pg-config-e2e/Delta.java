@@ -65,19 +65,21 @@ public class Delta {
 
   // Keep rule rule will match black_bear but not brown_bear because
   // $$ will not match against primitive types.
-  // -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J {
-  //   $$ <fields>;
+  // -keep class com.facebook.redex.test.proguard.Delta$J {
+  //  ** *_bear;
+  //  public *** alpha?;
+  //  public ** beta*;
   // }
   public class J {
-     public int brown_bear;
-     public String black_bear;
-     public int[] grizzly_bear;
-     public String[] polar_bear;
-     public int alpha0;
-     public int[] alpha1;
-     public int[][] alpha2;
-     public int beta0;
-     public List<String> beta;
-     public List<Integer> beta1;
+     public int brown_bear; // not kept, primitive type
+     public String black_bear; // kept, class type
+     public int[] grizzly_bear; // not kept, array type
+     public String[] polar_bear; // not kept, array type
+     public int alpha0; // kept by *** alpha?
+     public int[] alpha1; // kept by *** alpha?
+     public int[][] alpha2; // kept by *** alpha?
+     public int beta0; // not kept, primitive type
+     public List<String> beta; // kept, class type
+     public List<Integer>[] beta1; // not kept, array type
   }
 }

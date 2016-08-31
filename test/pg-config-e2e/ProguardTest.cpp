@@ -341,6 +341,8 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$J;");
     ASSERT_NE(nullptr, delta_j);
     ASSERT_TRUE(keep(delta_j));
+    // Check for matching using ** *_bear
+    // which should match class types but not primitive types or array types.
     // Make sure the field brown_bear is gone.
     auto brown_bear = find_instance_field_named(delta_j, "brown_bear");
     ASSERT_EQ(nullptr, brown_bear);
@@ -348,6 +350,35 @@ TEST(ProguardTest, assortment) {
     auto black_bear = find_instance_field_named(delta_j, "black_bear");
     ASSERT_NE(nullptr, black_bear);
     ASSERT_TRUE(keep(black_bear));
+    // grizzly_bear is an array type of a primtive type so should not be kept.
+    auto grizzly_bear = find_instance_field_named(delta_j, "grizzly_bear");
+    ASSERT_EQ(nullptr, grizzly_bear);
+    // polar_bear is an array type of a class type so should not be kept.
+    auto polar_bear = find_instance_field_named(delta_j, "polar_bear");
+    ASSERT_EQ(nullptr, polar_bear);
+    // Check for matches against *** alpha?
+    // which should match any type.
+    auto alpha0 = find_instance_field_named(delta_j, "alpha0");
+    ASSERT_NE(nullptr, alpha0);
+    ASSERT_TRUE(keep(alpha0));
+    auto alpha1 = find_instance_field_named(delta_j, "alpha1");
+    ASSERT_NE(nullptr, alpha1);
+    ASSERT_TRUE(keep(alpha1));
+    auto alpha2 = find_instance_field_named(delta_j, "alpha2");
+    ASSERT_NE(nullptr, alpha2);
+    ASSERT_TRUE(keep(alpha2));
+    // Check for matches against ** beta*
+    // which should only match class types.
+    // beta0 is a primitive type, so not kept.
+    auto beta0 = find_instance_field_named(delta_j, "beta0");
+    ASSERT_EQ(nullptr, beta0);
+    // beta is a class type, so kept
+    auto beta = find_instance_field_named(delta_j, "beta");
+    ASSERT_NE(nullptr, beta);
+    ASSERT_TRUE(keep(beta));
+    // beta1 is an array of a class type, so not kept.
+    auto beta1 = find_instance_field_named(delta_j, "beta1");
+    ASSERT_EQ(nullptr, beta1);
   }
 
   delete g_redex;

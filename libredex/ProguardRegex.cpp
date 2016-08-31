@@ -44,6 +44,10 @@ std::string form_type_regex(std::string proguard_regex) {
   if (proguard_regex == "%") {
     return "(?:B|S|I|J|Z|F|D|C)";
   }
+  // The pattern *** matches any type.
+  if (proguard_regex == "***") {
+    return ".*";
+  }
   std::string r;
   for (size_t i = 0; i < proguard_regex.size(); i++) {
     const char ch = proguard_regex[i];
@@ -68,7 +72,7 @@ std::string form_type_regex(std::string proguard_regex) {
     }
     r += ch;
   }
-  return "L" + r;
+  return "L" + r + ";";
 }
 
 } // namespace proguard_parser

@@ -101,46 +101,46 @@ TEST(ProguardRegexTest, types) {
     ASSERT_FALSE(boost::regex_match("void", matcher));
   }
 
-  { auto proguard_regex = "com.*.redex.test.proguard.Delta;";
+  { auto proguard_regex = "com.*.redex.test.proguard.Delta";
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(proguard_regex);
     ASSERT_EQ("Lcom\\/([^\\/]+)\\/redex\\/test\\/proguard\\/Delta;", r);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_search("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
     ASSERT_EQ(2, m.size());
     ASSERT_EQ("facebook", std::string(m[1]));
   }
 
-  { auto proguard_regex = "com.*.redex.*.proguard.Delta;";
+  { auto proguard_regex = "com.*.redex.*.proguard.Delta";
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(proguard_regex);
     ASSERT_EQ("Lcom\\/([^\\/]+)\\/redex\\/([^\\/]+)\\/proguard\\/Delta;", r);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_search("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
     ASSERT_EQ(3, m.size());
     ASSERT_EQ("facebook", std::string(m[1]));
     ASSERT_EQ("test", std::string(m[2]));
 
     // Match against the first * but not the second *
-    ASSERT_FALSE(boost::regex_search("Lcom/facebook/redex/", m, matcher));
+    ASSERT_FALSE(boost::regex_match("Lcom/facebook/redex/", m, matcher));
   }
 
   { // Test matching using ** to match agaist a package name with any
     // number of separators.
-    auto proguard_regex = "com.**.proguard.Delta;";
+    auto proguard_regex = "com.**.proguard.Delta";
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(proguard_regex);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_search("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
     ASSERT_EQ(2, m.size());
     ASSERT_EQ("facebook/redex/test", std::string(m[1]));
   }
 
-  { auto proguard_regex = "com.**.proguard.**;";
+  { auto proguard_regex = "com.**.proguard.**";
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(proguard_regex);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_search("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
     ASSERT_EQ(3, m.size());
     ASSERT_EQ("facebook/redex/test", std::string(m[1]));
     ASSERT_EQ("Delta", std::string(m[2]));
@@ -151,18 +151,33 @@ TEST(ProguardRegexTest, types) {
     auto proguard_regex = "com.alpha?beta.gamma";
     auto r = proguard_parser::form_type_regex(proguard_regex);
     boost::regex matcher(r);
-    ASSERT_EQ("Lcom\\/alpha[^\\/]beta\\/gamma", r);
-    ASSERT_TRUE(boost::regex_search("Lcom/alpha1beta/gamma;", matcher));
-    ASSERT_FALSE(boost::regex_search("Lcom/alphabeta/gamma;", matcher));
-    ASSERT_FALSE(boost::regex_search("Lcom/alpha12beta/gamma;", matcher));
-    ASSERT_FALSE(boost::regex_search("Lcom/alpha/beta/gamma;", matcher));
+    ASSERT_EQ("Lcom\\/alpha[^\\/]beta\\/gamma;", r);
+    ASSERT_TRUE(boost::regex_match("Lcom/alpha1beta/gamma;", matcher));
+    ASSERT_FALSE(boost::regex_match("Lcom/alphabeta/gamma;", matcher));
+    ASSERT_FALSE(boost::regex_match("Lcom/alpha12beta/gamma;", matcher));
+    ASSERT_FALSE(boost::regex_match("Lcom/alpha/beta/gamma;", matcher));
   }
 
-  { // Make sure ** does not match primitive types.
+  { // Make sure ** does not match primitive types or array types.
     auto proguard_regex = "**";
     auto r = proguard_parser::form_type_regex(proguard_regex);
+    ASSERT_EQ("L([^\\/]+(?:\\/[^\\/]+)*);", r);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_search("Ljava/lang/String;", matcher));
-    ASSERT_FALSE(boost::regex_search("I", matcher));
+    ASSERT_TRUE(boost::regex_match("Ljava/lang/String;", matcher));
+    ASSERT_FALSE(boost::regex_match("I", matcher));
+    ASSERT_FALSE(boost::regex_match("[I", matcher));
+    ASSERT_FALSE(boost::regex_match("[Ljava/util/List;", matcher));
+  }
+
+
+  { // Make sure *** matches any type.
+    auto proguard_regex = "***";
+    auto r = proguard_parser::form_type_regex(proguard_regex);
+    ASSERT_EQ(".*", r);
+    boost::regex matcher(r);
+    ASSERT_TRUE(boost::regex_match("Ljava/lang/String;", matcher));
+    ASSERT_TRUE(boost::regex_match("I", matcher));
+    ASSERT_TRUE(boost::regex_match("[I", matcher));
+    ASSERT_TRUE(boost::regex_match("[Ljava/util/List;", matcher));
   }
 }
