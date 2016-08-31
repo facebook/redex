@@ -33,6 +33,14 @@ std::string form_member_regex(std::string proguard_regex) {
   return r;
 }
 
+bool is_array_type(std::string typ) {
+  if (typ.length() < 2) {
+    return false;
+  }
+  return typ[typ.length()-2] == '[' &&
+         typ[typ.length()-1] == ']';
+}
+
 // Convert a ProGuard type regex to a boost::regex
 // Example: "%" -> "(?:B|S|I|J|Z|F|D|C)"
 // Example: "alpha?beta" -> "Lalpha.beta"
@@ -72,7 +80,12 @@ std::string form_type_regex(std::string proguard_regex) {
     }
     r += ch;
   }
-  return "L" + r + ";";
+  r = "L" + r;
+  // Process any array types.
+  while (is_array_type(r)) {
+    r = "\\[" + r.substr(0, r.length()-2);
+  }
+  return r + ";";
 }
 
 } // namespace proguard_parser

@@ -69,6 +69,7 @@ public class Delta {
   //  ** *_bear;
   //  public *** alpha?;
   //  public ** beta*;
+  //  public **[] gamma*;
   // }
   public class J {
      public int brown_bear; // not kept, primitive type
@@ -81,5 +82,7 @@ public class Delta {
      public int beta0; // not kept, primitive type
      public List<String> beta; // kept, class type
      public List<Integer>[] beta1; // not kept, array type
+     public int[] gamma1; // not kept because ** does not match primtivie int
+     public String[] gamma2; // kept because ** matches class and [] matches array
   }
 }

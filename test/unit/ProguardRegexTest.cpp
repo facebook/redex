@@ -169,6 +169,29 @@ TEST(ProguardRegexTest, types) {
     ASSERT_FALSE(boost::regex_match("[Ljava/util/List;", matcher));
   }
 
+  { // Make sure ** works with array types.
+    auto proguard_regex = "**[]";
+    auto r = proguard_parser::form_type_regex(proguard_regex);
+    ASSERT_EQ("\\[L([^\\/]+(?:\\/[^\\/]+)*);", r);
+    boost::regex matcher(r);
+    ASSERT_FALSE(boost::regex_match("Ljava/lang/String;", matcher));
+    ASSERT_FALSE(boost::regex_match("I", matcher));
+    ASSERT_FALSE(boost::regex_match("[I", matcher));
+    ASSERT_TRUE(boost::regex_match("[Ljava/util/List;", matcher));
+    ASSERT_FALSE(boost::regex_match("[[Ljava/util/List;", matcher));
+  }
+
+  { // Make sure ** works with multiple array types.
+    auto proguard_regex = "java.**[][]";
+    auto r = proguard_parser::form_type_regex(proguard_regex);
+    ASSERT_EQ("\\[\\[Ljava\\/([^\\/]+(?:\\/[^\\/]+)*);", r);
+    boost::regex matcher(r);
+    ASSERT_FALSE(boost::regex_match("Ljava/lang/String;", matcher));
+    ASSERT_FALSE(boost::regex_match("I", matcher));
+    ASSERT_FALSE(boost::regex_match("[I", matcher));
+    ASSERT_FALSE(boost::regex_match("[Ljava/util/List;", matcher));
+    ASSERT_TRUE(boost::regex_match("[[Ljava/util/List;", matcher));
+  }
 
   { // Make sure *** matches any type.
     auto proguard_regex = "***";

@@ -49,4 +49,5 @@
   ** *_bear;
   public *** alpha?;
   public ** beta*;
+  public **[] gamma*;
 }

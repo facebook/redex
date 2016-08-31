@@ -379,6 +379,14 @@ TEST(ProguardTest, assortment) {
     // beta1 is an array of a class type, so not kept.
     auto beta1 = find_instance_field_named(delta_j, "beta1");
     ASSERT_EQ(nullptr, beta1);
+    // Check for matches against public **[] gamma*
+    // gamma1 is not kept because int does not match **
+    auto gamma1 = find_instance_field_named(delta_j, "gamma1");
+    ASSERT_EQ(nullptr, gamma1);
+    // gamma2 is kept because String matches **
+    auto gamma2 = find_instance_field_named(delta_j, "gamma2");
+    ASSERT_NE(nullptr, gamma2);
+    ASSERT_TRUE(keep(gamma2));
   }
 
   delete g_redex;
