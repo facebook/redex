@@ -383,34 +383,6 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
                });
 }
 
-void reportReachableClasses(const Scope& scope, std::string reportFileName) {
-  TRACE(PGR, 4, "Total numner of classes: %d\n", scope.size());
-  // Report classes that the reflection filter says can't be deleted.
-  std::ofstream reportFileCanDelete(reportFileName + ".cant_delete");
-  for (auto const& cls : scope) {
-    if (!can_delete(cls)) {
-      reportFileCanDelete << cls->get_name()->c_str() << "\n";
-    }
-  }
-  reportFileCanDelete.close();
-  // Report classes that the reflection filter says can't be renamed.
-  std::ofstream reportFileCanRename(reportFileName + ".cant_rename");
-  for (auto const& cls : scope) {
-    if (!can_rename(cls)) {
-      reportFileCanRename << cls->get_name()->c_str() << "\n";
-    }
-  }
-  reportFileCanRename.close();
-  // Report classes marked for keep from ProGuard flat file list.
-  std::ofstream reportFileKeep(reportFileName + ".must_keep");
-  for (auto const& cls : scope) {
-    if (is_seed(cls)) {
-      reportFileKeep << cls->get_name()->c_str() << "\n";
-    }
-  }
-  reportFileKeep.close();
-}
-
 void init_reachable_classes(
     const Scope& scope,
     const Json::Value& config,
@@ -594,25 +566,23 @@ struct SeedsParser {
 unsigned int init_seed_classes(
   const std::string seeds_filename, const ProguardMap& pgmap
 ) {
-    TRACE(PGR, 8, "Reading seed classes from %s\n", seeds_filename.c_str());
-    auto start = std::chrono::high_resolution_clock::now();
-    std::ifstream seeds_file(seeds_filename);
-    SeedsParser parser(pgmap);
-    unsigned int count = 0;
-    if (!seeds_file) {
-      TRACE(PGR, 8, "Seeds file %s was not found (ignoring error).",
+  TRACE(PGR, 8, "Reading seed classes from %s\n", seeds_filename.c_str());
+  auto start = std::chrono::high_resolution_clock::now();
+  std::ifstream seeds_file(seeds_filename);
+  SeedsParser parser(pgmap);
+  unsigned int count = 0;
+  if (!seeds_file) {
+    TRACE(PGR, 8, "Seeds file %s was not found (ignoring error).",
           seeds_filename.c_str());
-			return 0;
-    } else {
-      std::string line;
-      while (getline(seeds_file, line)) {
-        TRACE(PGR, 2, "Parsing seeds line: %s\n", line.c_str());
-        if (parser.parse_seed_line(line)) ++count;
-      }
-      seeds_file.close();
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
-          std::chrono::duration<double>(end - start).count());
-		return count;
+    return 0;
+  }
+  std::string line;
+  while (getline(seeds_file, line)) {
+    TRACE(PGR, 2, "Parsing seeds line: %s\n", line.c_str());
+    if (parser.parse_seed_line(line)) ++count;
+  }
+  auto end = std::chrono::high_resolution_clock::now();
+  TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
+        std::chrono::duration<double>(end - start).count());
+  return count;
 }

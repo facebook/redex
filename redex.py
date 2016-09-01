@@ -92,7 +92,7 @@ def run_pass(
     start = timer()
 
     if script_args.debug:
-        print(args)
+        print(' '.join(args))
         sys.exit()
 
     # Our CI system occasionally fails because it is trying to write the

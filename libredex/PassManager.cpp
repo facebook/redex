@@ -45,7 +45,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   Scope scope = build_class_scope(it);
   init_reachable_classes(scope, m_config,
       m_proguard_rules, cfg.get_no_optimizations_annos());
-  // reportReachableClasses(scope, "reachable");
   for (auto pass : m_activated_passes) {
     using namespace std::chrono;
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
@@ -80,6 +79,7 @@ void PassManager::incr_metric(const std::string& key, int value) {
   (*m_current_pass_metrics)[key] += value;
 }
 
-std::map<std::string, std::map<std::string, int> > PassManager::get_metrics() const {
+std::map<std::string, std::map<std::string, int>>
+PassManager::get_metrics() const {
   return m_pass_metrics;
 }

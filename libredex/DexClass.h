@@ -911,7 +911,7 @@ class DexClasses {
     return m_classes.erase(begin, end);
   }
 
-  size_t size() { return m_classes.size(); }
+  size_t size() const { return m_classes.size(); }
   iterator begin() { return m_classes.begin(); }
   iterator end() { return m_classes.end(); }
   const_iterator begin() const { return m_classes.cbegin(); }
