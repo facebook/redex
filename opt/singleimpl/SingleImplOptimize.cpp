@@ -174,6 +174,8 @@ void OptimizationImpl::rewrite_field_defs(DexType* intf, SingleImplData& data) {
         field->get_class(), field->get_name(), data.cls);
     assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s\n", SHOW(field));
+    f->set_deobfuscated_name(field->get_deobfuscated_name());
+    f->rstate = field->rstate;
     auto field_anno = field->get_anno_set();
     if (field_anno) {
       f->attach_annotation_set(field_anno);
@@ -195,6 +197,8 @@ void OptimizationImpl::rewrite_field_refs(DexType* intf, SingleImplData& data) {
     assert(!single_impls->is_escaped(field->get_class()));
     DexField* f = DexField::make_field(
         field->get_class(), field->get_name(), data.cls);
+    f->set_deobfuscated_name(field->get_deobfuscated_name());
+    f->rstate = field->rstate;
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
       assert(f != opcode->field());
@@ -236,6 +240,7 @@ void OptimizationImpl::rewrite_method_defs(DexType* intf,
     auto new_meth = DexMethod::make_method(
         meth->get_class(), meth->get_name(), proto);
     new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
+    new_meth->rstate = meth->rstate;
     assert(new_meth != meth);
     setup_method(meth, new_meth);
     new_methods[method] = new_meth;
@@ -278,6 +283,7 @@ void OptimizationImpl::rewrite_method_refs(DexType* intf,
     new_meth = DexMethod::make_method(
             new_meth->get_class(), new_meth->get_name(), proto);
     new_meth->set_deobfuscated_name(method->get_deobfuscated_name());
+    new_meth->rstate = method->rstate;
     new_methods[method] = new_meth;
     TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(new_meth));
     for (auto opcode : mrefit.second) {
@@ -324,6 +330,7 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       new_meth = DexMethod::make_method(impl->get_type(), meth->get_name(),
           meth->get_proto());
       new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
+      new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
       assert(new_meth->is_virtual());
