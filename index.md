@@ -91,8 +91,11 @@ With any luck, the result `output.apk` should be smaller and faster than the
 input.  Enjoy!
 
 ## Documentation
-Right now we have a limited amount of [documentation](docs/README.md) which describes a few
-example Redex optimization passes as well as deployments of Redex (including Docker).
+
+Right now we have a limited amount of
+[documentation](https://github.com/facebook/redex/blob/master/docs/README.md)
+which describes a few example Redex optimization passes as well as deployments
+of Redex (including Docker).
 
 ## FAQ
 
