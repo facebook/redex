@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # Copyright (c) 2016-present, Facebook, Inc.
 # All rights reserved.
@@ -6,6 +6,11 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree. An additional grant
 # of patent rights can be found in the PATENTS file in the same directory.
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import distutils.version
@@ -16,7 +21,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -347,7 +351,7 @@ def relocate_tmp(d, newtmp):
         if isinstance(v, dict):
             relocate_tmp(v, newtmp)
         else:
-            if isinstance(v, str) and v.startswith("/tmp/"):
+            if (isinstance(v, str) or isinstance(v, unicode)) and v.startswith("/tmp/"):
                 d[k] = newtmp + "/" + v[5:]
                 log("Replaced {0} in config with {1}".format(v, d[k]))
 
@@ -383,9 +387,7 @@ def run_redex(args):
     xz_compressed_libs = join(extracted_apk_dir, 'assets/lib/libs.xzs')
     temporary_lib_file = join(extracted_apk_dir, 'lib/concated_native_libs.so')
     if os.path.exists(xz_compressed_libs):
-        cmd = 'xz -d --stdout {} > {}'.format(
-                shlex.quote(xz_compressed_libs),
-                shlex.quote(temporary_lib_file))
+        cmd = 'xz -d --stdout {} > {}'.format(xz_compressed_libs, temporary_lib_file)
         subprocess.check_call(cmd, shell=True)
 
     if args.unpack_only:

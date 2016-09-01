@@ -409,10 +409,10 @@ class XZSDexMode(BaseDexMode):
                 jar_sizes[jarpath] = getsize(jarpath)
 
                 # Concatenate the jar files and create corresponding metadata files
-                with open(jarpath + '.xzs.tmp~.meta', 'wb') as metadata:
+                with open(jarpath + '.xzs.tmp~.meta', 'w') as metadata:
                     sizes = 'jar:{} dex:{}'.format(
                         jar_sizes[jarpath], dex_sizes[jarpath])
-                    metadata.write(bytes(sizes, 'ascii'))
+                    metadata.write(sizes)
 
                 with open(jarpath, 'rb') as jar:
                     contents = jar.read()

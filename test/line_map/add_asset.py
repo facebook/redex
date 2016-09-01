@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 # @lint-avoid-python-3-compatibility-imports
 
 import argparse
