@@ -66,7 +66,7 @@ def run_pass(
         ):
 
     if executable_path is None:
-        executable_path = shutil.which('redex-all')
+        executable_path = subprocess.check_output(['which', 'redex-all']).rstrip()
         if executable_path is None:
             executable_path = join(dirname(abspath(__file__)), 'redex-all')
     if not isfile(executable_path) or not os.access(executable_path, os.X_OK):
