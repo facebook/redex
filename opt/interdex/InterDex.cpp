@@ -44,6 +44,7 @@ size_t cls_skipped_in_secondary = 0;
 size_t cold_start_set_dex_count = 1000;
 
 bool emit_canaries = false;
+static int64_t linear_alloc_limit;
 
 static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
   std::vector<DexMethod*> method_refs;
@@ -54,11 +55,6 @@ static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
   frefs.insert(field_refs.begin(), field_refs.end());
 }
 
-#ifdef GINGER_BREAD
-static const int kMaxLinearAlloc = (2600 * 1024);
-#else
-static const int kMaxLinearAlloc = (11600 * 1024);
-#endif
 static const int kMaxMethodRefs = ((64 * 1024) - 1);
 static const int kMaxFieldRefs = 64 * 1024 - 1;
 static const char kCanaryPrefix[] = "Lsecondary/dex";
@@ -112,7 +108,7 @@ static void flush_out_dex(
     "%lu:%d\n",
     det.outs.size(),
     det.la_size,
-    kMaxLinearAlloc,
+    linear_alloc_limit,
     mrefs_size,
     kMaxMethodRefs,
     frefs_size,
@@ -262,7 +258,7 @@ static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
   auto mrefs_size = det.mrefs.size();
   auto frefs_size = det.frefs.size();
   gather_mrefs(clazz, det.mrefs, det.frefs);
-  if ((det.la_size + laclazz) > kMaxLinearAlloc ||
+  if ((det.la_size + laclazz) > linear_alloc_limit ||
       det.mrefs.size() >= kMaxMethodRefs ||
       det.frefs.size() >= kMaxFieldRefs) {
     /* Emit out list */
@@ -270,7 +266,7 @@ static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
       "would have to do an early flush on the primary dex\n"
       "la %d:%d , mrefs %lu:%d frefs %lu:%d\n",
       det.la_size + laclazz,
-      kMaxLinearAlloc,
+      linear_alloc_limit,
       det.mrefs.size(),
       kMaxMethodRefs,
       det.frefs.size(),
@@ -540,6 +536,7 @@ static DexClassesVector run_interdex(
 
 void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
   emit_canaries = m_emit_canaries;
+  linear_alloc_limit = m_linear_alloc_limit;
   dexen = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
   mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT, cold_start_set_dex_count);
 }

@@ -23,6 +23,7 @@ class InterDexPass : public Pass {
     pc.get("static_prune", false, m_static_prune);
     pc.get("emit_canaries", true, m_emit_canaries);
     pc.get("normal_primary_dex", false, m_normal_primary_dex);
+    pc.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
   }
 
   virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&);
@@ -32,4 +33,5 @@ class InterDexPass : public Pass {
   bool m_static_prune;
   bool m_emit_canaries;
   bool m_normal_primary_dex;
+  int64_t m_linear_alloc_limit;
 };
