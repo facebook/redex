@@ -10,7 +10,6 @@
 #include "PassManager.h"
 
 #include <cstdio>
-#include <chrono>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -19,6 +18,7 @@
 #include "DexUtil.h"
 #include "ConfigFiles.h"
 #include "ReachableClasses.h"
+#include "Timer.h"
 #include "Transform.h"
 
 PassManager::PassManager(
@@ -43,20 +43,19 @@ PassManager::PassManager(
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
-  init_reachable_classes(scope, m_config,
-      m_proguard_rules, cfg.get_no_optimizations_annos());
+  {
+    Timer t("Initializing reachable classes");
+    init_reachable_classes(
+      scope, m_config, m_proguard_rules, cfg.get_no_optimizations_annos());
+  }
   for (auto pass : m_activated_passes) {
-    using namespace std::chrono;
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
+    Timer t(pass->name());
     m_current_pass_metrics = &m_pass_metrics[pass->name()];
-    auto start = high_resolution_clock::now();
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
     pass->run_pass(stores, cfg, *this);
-    auto end = high_resolution_clock::now();
-    TRACE(PM, 1, "Pass %s completed in %.1lf seconds\n",
-          pass->name().c_str(), duration<double>(end - start).count());
     m_current_pass_metrics = nullptr;
   }
 

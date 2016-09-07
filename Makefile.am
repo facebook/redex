@@ -82,6 +82,7 @@ libredex_la_SOURCES = \
 	libredex/RegAlloc.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
+	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/Vinfo.cpp \

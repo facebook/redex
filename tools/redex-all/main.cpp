@@ -34,6 +34,7 @@
 #include "ProguardLoader.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "Timer.h"
 #include "Warning.h"
 
 /**
@@ -359,6 +360,8 @@ int main(int argc, char* argv[]) {
   signal(SIGABRT, crash_backtrace);
   signal(SIGBUS, crash_backtrace);
 
+  Timer t("redex-all main()");
+
   g_redex = new RedexContext();
 
   auto passes = create_passes();
@@ -385,6 +388,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (!args.proguard_config.empty()) {
+    Timer t("Load proguard config");
     if (!load_proguard_config_file(
             args.proguard_config.c_str(), &rules, &library_jars)) {
       fprintf(stderr,
@@ -421,39 +425,48 @@ int main(int argc, char* argv[]) {
   DexStoresVector stores;
   stores.emplace_back(std::move(root_store));
 
-  for (int i = start; i < argc; i++) {
-    const std::string filename(argv[i]);
-    if (filename.compare(filename.size()-3, 3, "dex") == 0) {
-      DexClasses classes = load_classes_from_dex(filename.c_str());
-      stores[0].add_classes(std::move(classes));
-    } else {
-      DexMetadata store_metadata;
-      store_metadata.parse(filename);
-      DexStore store(store_metadata.get_id().c_str());
-      for (auto file_path : store_metadata.get_files()) {
-        DexClasses classes = load_classes_from_dex(file_path.c_str());
-        store.add_classes(std::move(classes));
+  {
+    Timer t("Load classes from dexes");
+    for (int i = start; i < argc; i++) {
+      const std::string filename(argv[i]);
+      if (filename.compare(filename.size() - 3, 3, "dex") == 0) {
+        DexClasses classes = load_classes_from_dex(filename.c_str());
+        stores[0].add_classes(std::move(classes));
+      } else {
+        DexMetadata store_metadata;
+        store_metadata.parse(filename);
+        DexStore store(store_metadata.get_id().c_str());
+        for (auto file_path : store_metadata.get_files()) {
+          DexClasses classes = load_classes_from_dex(file_path.c_str());
+          store.add_classes(std::move(classes));
+        }
+        stores.emplace_back(std::move(store));
       }
-      stores.emplace_back(std::move(store));
     }
   }
 
-
-  for (const auto& library_jar : library_jars) {
-    TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
-    if (!load_jar_file(library_jar.c_str())) {
-      fprintf(
+  if (!library_jars.empty()) {
+    Timer t("Load library jars");
+    for (const auto& library_jar : library_jars) {
+      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+      if (!load_jar_file(library_jar.c_str())) {
+        fprintf(
           stderr,
           "WARNING: Error in jar %s - continue. This may lead to unexpected "
           "behavior, please check your jars\n",
           library_jar.c_str());
+      }
     }
   }
 
   ConfigFiles cfg(args.config);
-  apply_deobfuscated_names(stores[0].get_dexen(), cfg.get_proguard_map());
+  {
+    Timer t("Deobfuscating dex elements");
+    apply_deobfuscated_names(stores[0].get_dexen(), cfg.get_proguard_map());
+  }
   cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
+    Timer t("Init seed classes");
     auto nseeds = init_seed_classes(
       args.seeds_filename,
       cfg.get_proguard_map());
@@ -461,8 +474,10 @@ int main(int argc, char* argv[]) {
   }
 
   PassManager manager(passes, rules, args.config);
-  manager.run_passes(stores, cfg);
-
+  {
+    Timer t("Running optimization passes");
+    manager.run_passes(stores, cfg);
+  }
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
 
   LocatorIndex* locator_index = nullptr;
@@ -479,6 +494,7 @@ int main(int argc, char* argv[]) {
   auto pos_output = args.config.get("line_number_map", "").asString();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
   for (auto& store : stores) {
+    Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::stringstream ss;
       ss << args.out_dir << "/" << store.get_name();
@@ -507,14 +523,20 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  auto stats_output = args.config.get("stats_output", "").asString();
-  auto method_move_map = args.config.get("method_move_map", "").asString();
+  {
+    Timer t("Writing stats");
+    auto stats_output = args.config.get("stats_output", "").asString();
+    auto method_move_map = args.config.get("method_move_map", "").asString();
 
-  pos_mapper->write_map();
-  output_stats(stats_output.c_str(), totals, dexes_stats, manager);
-  output_moved_methods_map(method_move_map.c_str(), cfg);
-  print_warning_summary();
-  delete g_redex;
+    pos_mapper->write_map();
+    output_stats(stats_output.c_str(), totals, dexes_stats, manager);
+    output_moved_methods_map(method_move_map.c_str(), cfg);
+    print_warning_summary();
+  }
+  {
+    Timer t("Freeing global memory");
+    delete g_redex;
+  }
   TRACE(MAIN, 1, "Done.\n");
 
   return 0;

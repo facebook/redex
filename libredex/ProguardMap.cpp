@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "Debug.h"
+#include "Timer.h"
 
 namespace {
 
@@ -70,6 +71,7 @@ std::string translate_type(std::string type, const ProguardMap& pm) {
 
 ProguardMap::ProguardMap(const std::string& filename) {
   if (!filename.empty()) {
+    Timer t("Parsing proguard map");
     std::ifstream fp(filename);
     always_assert_log(fp, "Can't open proguard map: %s\n", filename.c_str());
     parse_proguard_map(fp);

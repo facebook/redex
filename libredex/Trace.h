@@ -16,6 +16,7 @@
   TM(CFG)                                       \
   TM(CLASSKILL)                                 \
   TM(CONSTP)                                    \
+  TM(CUSTOMSORT)                                \
   TM(DBGSTRIP)                                  \
   TM(DC)                                        \
   TM(DCE)                                       \
@@ -33,17 +34,17 @@
   TM(MMINL)                                     \
   TM(MTRANS)                                    \
   TM(PEEPHOLE)                                  \
-  TM(PM)                                        \
   TM(PGR)                                       \
+  TM(PM)                                        \
   TM(REG)                                       \
   TM(RELO)                                      \
   TM(RENAME)                                    \
   TM(SHORTEN)                                   \
   TM(SINK)                                      \
   TM(SINL)                                      \
-  TM(CUSTOMSORT)                                \
   TM(SUPER)                                     \
   TM(SYNT)                                      \
+  TM(TIME)                                      \
   TM(UNTF)
 
 enum TraceModule {
