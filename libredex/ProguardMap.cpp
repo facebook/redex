@@ -21,7 +21,7 @@ constexpr size_t kBufSize = 4096;
 
 std::string find_or_same(
   const std::string& key,
-  const std::map<std::string, std::string>& map
+  const std::unordered_map<std::string, std::string>& map
 ) {
   auto it = map.find(key);
   if (it == map.end()) return key;
@@ -29,7 +29,7 @@ std::string find_or_same(
 }
 
 std::string convert_scalar_type(std::string type) {
-  static const std::map<std::string, std::string> prim_map =
+  static const std::unordered_map<std::string, std::string> prim_map =
     {{"void",    "V"},
      {"boolean", "Z"},
      {"byte",    "B"},
@@ -165,8 +165,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   const char* args;
   const char* newname;
 
-  char* linecopy = strdup(line.c_str());
-  char* p = linecopy;
+  char* p = const_cast<char*>(line.c_str());
 
   while (!isalpha(*p)) {
     if (!*p) goto no_match;
@@ -206,11 +205,9 @@ bool ProguardMap::parse_method(const std::string& line) {
   newname = p;
 
   add_method_mapping(type, methodname, newname, args);
-  free(linecopy);
   return true;
 
  no_match:
-  free(linecopy);
   return false;
 }
 
@@ -222,10 +219,17 @@ void ProguardMap::add_method_mapping(
 ) {
   std::string old_args;
   std::string new_args;
-  std::stringstream ss(args);
-  std::string arg;
-  while (std::getline(ss, arg, ',')) {
-    auto old_arg = convert_type(arg.c_str());
+  char* p = const_cast<char*>(args);
+  while (*p) {
+    auto start = p;
+    while (*p && *p != ',') {
+      p++;
+    }
+    if (*p == ',') {
+      *p = '\0';
+      p++;
+    }
+    auto old_arg = convert_type(start);
     auto new_arg = translate_type(old_arg, *this);
     old_args += old_arg;
     new_args += new_arg;

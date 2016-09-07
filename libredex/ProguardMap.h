@@ -11,7 +11,7 @@
 
 #include <cstddef>
 #include <fstream>
-#include <map>
+#include <unordered_map>
 #include <string>
 
 #include "DexClass.h"
@@ -96,14 +96,14 @@ struct ProguardMap {
 
  private:
   // Unobfuscated to obfuscated maps
-  std::map<std::string, std::string> m_classMap;
-  std::map<std::string, std::string> m_fieldMap;
-  std::map<std::string, std::string> m_methodMap;
+  std::unordered_map<std::string, std::string> m_classMap;
+  std::unordered_map<std::string, std::string> m_fieldMap;
+  std::unordered_map<std::string, std::string> m_methodMap;
 
   // Obfuscated to unobfuscated maps from proguard
-  std::map<std::string, std::string> m_obfClassMap;
-  std::map<std::string, std::string> m_obfFieldMap;
-  std::map<std::string, std::string> m_obfMethodMap;
+  std::unordered_map<std::string, std::string> m_obfClassMap;
+  std::unordered_map<std::string, std::string> m_obfFieldMap;
+  std::unordered_map<std::string, std::string> m_obfMethodMap;
 
   std::string m_currClass;
   std::string m_currNewClass;
