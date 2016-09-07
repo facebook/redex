@@ -102,18 +102,6 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
   return find_or_same(method, m_obfMethodMap);
 }
 
-std::string ProguardMap::deobfuscate_class_dynamic(const std::string& cls) const {
-  return find_or_same(cls, m_dynObfClassMap);
-}
-
-std::string ProguardMap::deobfuscate_method_dynamic(const std::string& method) const {
-  return find_or_same(method, m_dynObfMethodMap);
-}
-
-std::string ProguardMap::deobfuscate_field_dynamic(const std::string& field) const {
-  return find_or_same(field, m_dynObfFieldMap);
-}
-
 void ProguardMap::parse_proguard_map(std::istream& fp) {
   std::string line;
   while (std::getline(fp, line)) {
@@ -150,8 +138,6 @@ bool ProguardMap::parse_class(const std::string& line) {
   m_currNewClass = convert_type(newname);
   m_classMap[m_currClass] = m_currNewClass;
   m_obfClassMap[m_currNewClass] = m_currClass;
-  // initialize the dynamic map with the PG mapping
-  m_dynObfClassMap[m_currNewClass] = m_currClass;
   return true;
 }
 
@@ -170,8 +156,6 @@ bool ProguardMap::parse_field(const std::string& line) {
   auto pgold = convert_field(m_currClass, ctype.c_str(), fieldname);
   m_fieldMap[pgold] = pgnew;
   m_obfFieldMap[pgnew] = pgold;
-  // initialize the dynamic map with the PG mapping
-  m_dynObfFieldMap[pgnew] = pgold;
   return true;
 }
 
@@ -252,13 +236,6 @@ void ProguardMap::add_method_mapping(
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
-  // initialize the dynamic map with the PG mapping
-  m_dynObfMethodMap[pgnew] = pgold;
-}
-
-void ProguardMap::update_class_mapping(const std::string& oldname, const std::string& newname) {
-  auto unobf_clsname = find_or_same(oldname, m_dynObfClassMap);
-  m_dynObfClassMap[newname] = unobf_clsname;
 }
 
 void apply_deobfuscated_names(

@@ -178,7 +178,6 @@ void rename_classes(
     dtype->assign_name_alias(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
-    proguard_map.update_class_mapping(old_str, new_str);
     base_strings_size += strlen(oldname->c_str());
     base_strings_size += strlen(dstring->c_str());
     TRACE(RENAME, 4, "'%s'->'%s'\n", oldname->c_str(), descriptor);
