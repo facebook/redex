@@ -39,7 +39,6 @@ enum class token {
   colon,
   notToken,
   comma,
-  dot,
   slash,
   classToken,
   publicToken,
@@ -64,9 +63,6 @@ enum class token {
   varargs,
   command,
   identifier,
-  init,
-  fields,
-  methods,
   arrayType,
   filepath,
   target_version_token,
@@ -189,12 +185,6 @@ class Comma : public Token {
  public:
   Comma(unsigned int line_number) : Token(token::comma, line_number){};
   string show() const override { return ","; }
-};
-
-class Dot : public Token {
- public:
-  Dot(unsigned int line_number) : Token(token::dot, line_number){};
-  string show() const override { return "."; }
 };
 
 class Slash : public Token {
@@ -350,24 +340,6 @@ class Identifier : public Token {
   Identifier(unsigned int line_number, string idenifier)
       : Token(token::identifier, line_number), ident{idenifier} {}
   string show() const override { return "identifier: " + ident; }
-};
-
-class Init : public Token {
- public:
-  Init(unsigned int line_number) : Token(token::init, line_number) {}
-  string show() const override { return "<init>"; }
-};
-
-class Fields : public Token {
- public:
-  Fields(unsigned int line_number) : Token(token::fields, line_number) {}
-  string show() const override { return "<fields>"; }
-};
-
-class Methods : public Token {
- public:
-  Methods(unsigned int line_number) : Token(token::methods, line_number) {}
-  string show() const override { return "<methods>"; }
 };
 
 class ArrayType : public Token {

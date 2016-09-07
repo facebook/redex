@@ -14,6 +14,7 @@
 #include "ProguardLexer.h"
 #include "ProguardMap.h"
 #include "ProguardParser.h"
+#include "ProguardRegex.h"
 
 #include <algorithm>
 
@@ -292,11 +293,6 @@ bool parse_modifiers(std::vector<unique_ptr<Token>>::iterator* it,
   return true;
 }
 
-bool parse_classname(std::vector<unique_ptr<Token>>::iterator* it,
-                     KeepSpec* keep) {
-  return true;
-}
-
 AccessFlag process_access_modifier(token type, bool* is_access_flag) {
   *is_access_flag = true;
   switch (type) {
@@ -405,15 +401,27 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
   return true;
 }
 
-void gobble_semicolon(std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
-  *ok = true;
-  if ((**it)->type != token::semiColon) {
-    cerr << "Expecting a semicolon but found " << (**it)->show() << " at line "
-         << (**it)->line << std::endl;
-    *ok = false;
-    return;
+// Consume an expected token, indicating if that token was found.
+// If some other token is found, then it is not consumed and false
+// is returned.
+bool consume_token(std::vector<unique_ptr<Token>>::iterator* it,
+                   const token& tok) {
+  if ((**it)->type != tok) {
+    cerr << "Unexpected token " << (**it)->show() << std::endl;
+    return false;
   }
   (*it)++;
+  return true;
+}
+
+// Consume an expected semicolon, complaining if one was not found.
+void gobble_semicolon(std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
+  *ok = consume_token(it, token::semiColon);
+  if (!*ok) {
+    cerr << "Expecting a semicolon but found " << (**it)->show() << " at line "
+         << (**it)->line << std::endl;
+    return;
+  }
 }
 
 void skip_to_semicolon(std::vector<unique_ptr<Token>>::iterator* it) {
@@ -426,10 +434,9 @@ void skip_to_semicolon(std::vector<unique_ptr<Token>>::iterator* it) {
   }
 }
 
-void parse_member_specification(
-    std::vector<unique_ptr<Token>>::iterator* it,
-    ClassSpecification* class_spec,
-    bool* ok) {
+void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
+                                ClassSpecification* class_spec,
+                                bool* ok) {
   MemberSpecification member_specification;
   *ok = true;
   member_specification.annotationType = parse_annotation_type(it);
@@ -440,32 +447,6 @@ void parse_member_specification(
     // for now.
     cerr << "Problem parsing access flags for member specification.\n";
     *ok = false;
-    skip_to_semicolon(it);
-    return;
-  }
-  // Check for <methods>
-  if ((**it)->type == token::methods) {
-    member_specification.name = "";
-    (*it)++;
-    gobble_semicolon(it, ok);
-    class_spec->methodSpecifications.push_back(member_specification);
-    return;
-  }
-  // Check for <fields>
-  if ((**it)->type == token::fields) {
-    member_specification.name = "";
-    (*it)++;
-    gobble_semicolon(it, ok);
-    class_spec->fieldSpecifications.push_back(member_specification);
-    return;
-  }
-  // Check for <init>
-  if ((**it)->type == token::init) {
-    member_specification.name = "<init>";
-    // Currently only support <init>()
-    member_specification.descriptor = "()V";
-    class_spec->methodSpecifications.push_back(member_specification);
-    (*it)++;
     skip_to_semicolon(it);
     return;
   }
@@ -481,34 +462,105 @@ void parse_member_specification(
   // Check for "*".
   if (ident == "*") {
     member_specification.name = "";
+    member_specification.descriptor = "";
     (*it)++;
     gobble_semicolon(it, ok);
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
     return;
   }
-  // This token is the type for the member specification.
-  if ((**it)->type != token::identifier) {
-    cerr << "Expecting type identifier but got " << (**it)->show()
-         << " at line " << (**it)->line << endl;
-    *ok = false;
-    skip_to_semicolon(it);
+  // Check for <methods>
+  if (ident == "<methods>") {
+    member_specification.name = "";
+    member_specification.descriptor = "";
+    (*it)++;
+    gobble_semicolon(it, ok);
+    class_spec->methodSpecifications.push_back(member_specification);
     return;
   }
-  std::string typ = static_cast<Identifier*>((*it)->get())->ident;
-  (*it)++;
-  member_specification.descriptor = convert_type(typ);
-  if ((**it)->type != token::identifier) {
-    cerr << "Expecting identifier name for class member but got " << (**it)->show()
-         << " at line " << (**it)->line << endl;
-    *ok = false;
-    skip_to_semicolon(it);
+  // Check for <fields>
+  if (ident == "<fields>") {
+    member_specification.name = "";
+    member_specification.descriptor = "";
+    (*it)++;
+    gobble_semicolon(it, ok);
+    class_spec->fieldSpecifications.push_back(member_specification);
     return;
   }
-  member_specification.name = static_cast<Identifier*>((*it)->get())->ident;
-  (*it)++;
-  // For the moment just skip past the argument specification for methods.
-  skip_to_semicolon(it);
+  // Check for <init>
+  if (ident == "<init>") {
+    member_specification.name = "<init>";
+    member_specification.descriptor = "V";
+    (*it)++;
+  } else {
+    // This token is the type for the member specification.
+    if ((**it)->type != token::identifier) {
+      cerr << "Expecting type identifier but got " << (**it)->show()
+           << " at line " << (**it)->line << endl;
+      *ok = false;
+      skip_to_semicolon(it);
+      return;
+    }
+    std::string typ = static_cast<Identifier*>((*it)->get())->ident;
+    (*it)++;
+    member_specification.descriptor = convert_wildcard_type(typ);
+    if ((**it)->type != token::identifier) {
+      cerr << "Expecting identifier name for class member but got "
+           << (**it)->show() << " at line " << (**it)->line << endl;
+      *ok = false;
+      skip_to_semicolon(it);
+      return;
+    }
+    member_specification.name = static_cast<Identifier*>((*it)->get())->ident;
+    (*it)++;
+  }
+  // Check to see if this is a method specification.
+  if ((**it)->type == token::openBracket) {
+    consume_token(it, token::openBracket);
+    std::string arg = "(";
+    while (true) {
+      // If there is a ")" next we are done.
+      if ((**it)->type == token::closeBracket) {
+        consume_token(it, token::closeBracket);
+        break;
+      }
+      if ((**it)->type != token::identifier) {
+        std::cerr << "Expecting type identifier but got " << (**it)->show()
+                  << " at line " << (**it)->line << std::endl;
+        *ok = false;
+        return;
+      }
+      std::string typ = static_cast<Identifier*>((*it)->get())->ident;
+      consume_token(it, token::identifier);
+      arg += convert_wildcard_type(typ);
+      // The next token better be a comma or a closing bracket.
+      if ((**it)->type != token::comma && (**it)->type != token::closeBracket) {
+        std::cerr << "Expecting comma or ) but got " << (**it)->show()
+                  << " at line " << (**it)->line << std::endl;
+        *ok = false;
+        return;
+      }
+      // If the next token is a comma (rather than closing bracket) consume
+      // it and check that it is followed by an identifier.
+      if ((**it)->type == token::comma) {
+        consume_token(it, token::comma);
+        if ((**it)->type != token::identifier) {
+          std::cerr << "Expecting type identifier after comma but got "
+                    << (**it)->show() << " at line " << (**it)->line
+                    << std::endl;
+          *ok = false;
+          return;
+        }
+      }
+    }
+    arg += ")";
+    member_specification.descriptor = arg + member_specification.descriptor;
+  }
+  // Make sure member specification ends with a semicolon.
+  gobble_semicolon(it, ok);
+  if (!ok) {
+    return;
+  }
   if (member_specification.descriptor[0] == '(') {
     class_spec->methodSpecifications.push_back(member_specification);
   } else {

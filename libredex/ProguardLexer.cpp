@@ -214,11 +214,6 @@ vector<unique_ptr<Token>> lex(istream& config) {
       continue;
     }
 
-    if (ch == '.') {
-      tokens.push_back(unique_ptr<Token>(new Dot(line)));
-      continue;
-    }
-
     if (ch == '/') {
       tokens.push_back(unique_ptr<Token>(new Slash(line)));
       continue;
@@ -245,37 +240,6 @@ vector<unique_ptr<Token>> lex(istream& config) {
         continue;
       }
       // Any token other than a ']' next is a bad token.
-    }
-
-    if (ch == '<') {
-      string word = "<";
-      while (ch != '>' && ch != '\n') {
-        config.get(ch);
-        word += ch;
-      }
-      if (ch == '\n') {
-        line++;
-      }
-      // Check to see if we reached the end of the file before encountering
-      // the closing angle brace.
-      if (ch != '>') {
-        tokens.push_back(unique_ptr<Token>(new UnknownToken(word, line)));
-        continue;
-      }
-      if (word == "<init>") {
-        tokens.push_back(unique_ptr<Token>(new Init(line)));
-        continue;
-      }
-      if (word == "<fields>") {
-        tokens.push_back(unique_ptr<Token>(new Fields(line)));
-        continue;
-      }
-      if (word == "<methods>") {
-        tokens.push_back(unique_ptr<Token>(new Methods(line)));
-        continue;
-      }
-      tokens.push_back(unique_ptr<Token>(new UnknownToken(word, line)));
-      continue;
     }
 
     // Check for commands.

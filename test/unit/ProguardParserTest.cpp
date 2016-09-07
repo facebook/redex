@@ -389,7 +389,8 @@ TEST(ProguardParserTest, annotationclass) {
 
 // Member specifications
 TEST(ProguardParserTest, member_specification) {
-  { ProguardConfiguration config;
+  {
+    ProguardConfiguration config;
     std::istringstream ss("-keep class Alpha { *; }");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
@@ -398,7 +399,8 @@ TEST(ProguardParserTest, member_specification) {
     ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
   }
 
-  { ProguardConfiguration config;
+  {
+    ProguardConfiguration config;
     std::istringstream ss("-keep class Alpha { <methods>; }");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
@@ -407,7 +409,8 @@ TEST(ProguardParserTest, member_specification) {
     ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
   }
 
-  { ProguardConfiguration config;
+  {
+    ProguardConfiguration config;
     std::istringstream ss("-keep class Alpha { <fields>; }");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
@@ -416,11 +419,167 @@ TEST(ProguardParserTest, member_specification) {
     ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 0);
   }
 
-  { ProguardConfiguration config;
-    std::istringstream ss("-keepclasseswithmembers,allowshrinking class * {"
-                          "  native <methods>;"
-                          "}");
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keepclasseswithmembers,allowshrinking class * {"
+        "  native <methods>;"
+        "}");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
   }
+}
+
+// Method member specifications
+TEST(ProguardParserTest, method_member_specification) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public int omega(int, boolean, java.lang.String, char);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(IZLjava/lang/String;C)I", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega();"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("()V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(int);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(I)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(java.lang.String);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(Ljava/lang/String;)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(%);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(%)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(java.lang.Str?ng);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(Ljava/lang/Str?ng;)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(java.*.String);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(Ljava/*/String;)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(java.**.String);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(Ljava/**/String;)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(***);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(***)V", keep.descriptor);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep class * {"
+        "  public void omega(...);"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    ASSERT_EQ("(...)V", keep.descriptor);
+  }
+
 }

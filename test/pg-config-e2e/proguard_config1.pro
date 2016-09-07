@@ -44,10 +44,14 @@
   int wombat*;
 }
 
--keep class com.facebook.redex.test.proguard.Delta$J
--keep class com.facebook.redex.test.proguard.Delta$J {
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J {
+  public <init>();
   ** *_bear;
   public *** alpha?;
   public ** beta*;
   public **[] gamma*;
+  public int omega(int, boolean, java.lang.String, char);
+  public int omega(%);
+  public int theta(...);
 }

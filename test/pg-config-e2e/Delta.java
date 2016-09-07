@@ -72,6 +72,8 @@ public class Delta {
   //  public **[] gamma*;
   // }
   public class J {
+     private int j1;
+     public J() { j1 = 42; }
      public int brown_bear; // not kept, primitive type
      public String black_bear; // kept, class type
      public int[] grizzly_bear; // not kept, array type
@@ -84,5 +86,20 @@ public class Delta {
      public List<Integer>[] beta1; // not kept, array type
      public int[] gamma1; // not kept because ** does not match primtivie int
      public String[] gamma2; // kept because ** matches class and [] matches array
+     public int omega(int int_arg, boolean bool_arg, String string_arg, char char_arg)
+                { return int_arg + string_arg.length(); }
+     public int omega(short s) { return 42; };
+     public int omega(String s) { return s.length(); } // No keep rule, so pruned.
+     // All thetas kept by (...)
+     public int theta(int int_arg, boolean bool_arg, String string_arg, char char_arg)
+                { return int_arg + string_arg.length(); }
+     public int theta(short s) { return 42; };
+     public int theta(String s) { return s.length(); }
+     // Checking handling of *
+     public int iota(int int_arg, boolean bool_arg, String string_arg, char char_arg)
+                { return int_arg + string_arg.length(); }
+     public int iota(short s) { return 42; };
+     public int iota(short[] s) { return 42; };
+     public int iota(String s) { return s.length(); }
   }
 }

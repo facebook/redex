@@ -26,7 +26,7 @@ TEST(ProguardLexerTest, empty) {
 TEST(ProguardLexerTest, assortment) {
   // The ss stream below should result in the vector of tokens in the expected variable
   // that occurs below this. Please keep ss and expected in sync.
-  std::stringstream ss("{ } ( ) ; : ! , . / class public final abstract interface\n"
+  std::stringstream ss("{ } ( ) ; : ! , / class public final abstract interface\n"
                        "enum extends implements private protected static\n"
                        "volatile @ transient @interface synchronized native\n"
                        "strictfp synthetic bridge varargs wombat <init> <fields>\n"
@@ -57,7 +57,6 @@ TEST(ProguardLexerTest, assortment) {
          {1, redex::proguard_parser::token::colon},
          {1, redex::proguard_parser::token::notToken},
          {1, redex::proguard_parser::token::comma},
-         {1, redex::proguard_parser::token::dot},
          {1, redex::proguard_parser::token::slash},
          {1, redex::proguard_parser::token::classToken},
          {1, redex::proguard_parser::token::publicToken},
@@ -81,9 +80,9 @@ TEST(ProguardLexerTest, assortment) {
          {4, redex::proguard_parser::token::bridge},
          {4, redex::proguard_parser::token::varargs},
          {4, redex::proguard_parser::token::identifier},
-         {4, redex::proguard_parser::token::init},
-         {4, redex::proguard_parser::token::fields},
-         {5, redex::proguard_parser::token::methods},
+         {4, redex::proguard_parser::token::identifier},
+         {4, redex::proguard_parser::token::identifier},
+         {5, redex::proguard_parser::token::identifier},
          {5, redex::proguard_parser::token::arrayType},
          {6, redex::proguard_parser::token::target},
          {6, redex::proguard_parser::token::target_version_token},
@@ -131,11 +130,9 @@ TEST(ProguardLexerTest, assortment) {
          {19, redex::proguard_parser::token::command},
          {20, redex::proguard_parser::token::classToken},
          {20, redex::proguard_parser::token::identifier},
-         {21, redex::proguard_parser::token::init},
+         {21, redex::proguard_parser::token::identifier},
          {21, redex::proguard_parser::token::openBracket},
-         {21, redex::proguard_parser::token::dot},
-         {21, redex::proguard_parser::token::dot},
-         {21, redex::proguard_parser::token::dot},
+         {21, redex::proguard_parser::token::identifier},
          {21, redex::proguard_parser::token::closeBracket},
          {21, redex::proguard_parser::token::semiColon},
          {22, redex::proguard_parser::token::eof_token},
@@ -143,6 +140,7 @@ TEST(ProguardLexerTest, assortment) {
   std::vector<std::unique_ptr<redex::proguard_parser::Token>> tokens = redex::proguard_parser::lex(ss);
   ASSERT_EQ(tokens.size(), expected.size());
   for (auto i = 0; i < expected.size(); i++) {
+    std::cerr << "Performing test " << i << std::endl;
     ASSERT_EQ(expected[i].first, tokens[i]->line);
     ASSERT_EQ(expected[i].second, tokens[i]->type);
   }

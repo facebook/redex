@@ -19,16 +19,6 @@
 
 namespace redex {
 
-std::string dextype_from_dotname(std::string dotname) {
-  std::string buf;
-  buf.reserve(dotname.size() + 2);
-  buf += 'L';
-  buf += dotname;
-  buf += ';';
-  std::replace(buf.begin(), buf.end(), '.', '/');
-  return buf;
-}
-
 void apply_keep_modifiers(const KeepSpec& k, DexClass* cls) {
   if (k.includedescriptorclasses) {
     cls->rstate.set_includedescriptorclasses();
@@ -265,10 +255,10 @@ void keep_fields(const ProguardMap* proguard_map,
       } else {
         // Check to see if the field names match. We do not need to
         // check the types for fields since they can't be overloaded.
-        TRACE(PGR, 8, "Comparing %s vs. %s\n", fieldSpecification.name.c_str(), field_name.c_str());
+        TRACE(PGR, 8, "====> Comparing %s vs. %s\n", fieldSpecification.name.c_str(), field_name.c_str());
         boost::regex fieldname_regex(proguard_parser::form_member_regex(fieldSpecification.name));
         if (boost::regex_match(field_name, fieldname_regex)) {
-          TRACE(PGR, 8, "====> Got filedname match for %s\n", field_name.c_str());
+          TRACE(PGR, 8, "====> Got fieldname match for %s\n", field_name.c_str());
           field->rstate.set_keep();
         }
       }
@@ -289,56 +279,71 @@ void apply_field_keeps(const ProguardMap* proguard_map,
 }
 
 void keep_methods(const ProguardMap* proguard_map,
-                 std::list<DexMethod*> methods,
-                 const std::vector<MemberSpecification>& methodSpecifications) {
+                  std::list<DexMethod*> methods,
+                  const boost::regex& method_regex) {
   for (const auto& method : methods) {
     auto pg_name = proguard_name(method).c_str();
     auto qualified_name = proguard_map->deobfuscate_method(pg_name);
-    TRACE(PGR, 8, "Checking keeps for method %s | %s | %s\n", method->c_str(), pg_name, qualified_name.c_str());
+    TRACE(PGR, 8, "====> Checking keeps for method %s | %s | %s\n", method->c_str(), pg_name, qualified_name.c_str());
+    if (boost::regex_match(qualified_name.c_str(), method_regex)) {
+      TRACE(PGR, 8, "======> Match found, setting keep for %s.\n", qualified_name.c_str());
+      method->rstate.set_keep();
+    }
   }
 }
 
 void apply_method_keeps(const ProguardMap* proguard_map,
                         DexClass* cls,
+                        const std::string classname,
                         const std::vector<MemberSpecification>& methodSpecifications) {
-  if (methodSpecifications.empty()) {
-    return;
+  for (const auto& method_spec : methodSpecifications) {
+    auto descriptor = proguard_parser::convert_wildcard_type(classname);
+    auto desc_regex = proguard_parser::form_type_regex(descriptor);
+    auto qualified_method_name = desc_regex + "\\." +
+                                 proguard_parser::form_member_regex(method_spec.name) +
+                                 proguard_parser::form_type_regex(method_spec.descriptor);
+    TRACE(PGR, 8, "====> Method match against regex method: %s.%s%s\n", classname.c_str(), method_spec.name.c_str(), method_spec.descriptor.c_str());
+    TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_name.c_str());
+    boost::regex method_regex(qualified_method_name);
+    keep_methods(proguard_map, cls->get_vmethods(), method_regex);
+    keep_methods(proguard_map, cls->get_dmethods(), method_regex);
   }
-  keep_methods(proguard_map, cls->get_vmethods(), methodSpecifications);
-  keep_methods(proguard_map, cls->get_dmethods(), methodSpecifications);
 }
 
 void process_proguard_rules(const ProguardConfiguration& pg_config,
                             ProguardMap* proguard_map,
                             Scope& classes) {
-  for (const auto& cls : classes) {
-    auto cname = cls->get_type()->get_name()->c_str();
-    auto cls_len = strlen(cname);
-    TRACE(PGR, 8, "Examining class %s deobfu: %s\n", cname, cls->get_deobfuscated_name().c_str());
-    for (const auto& k : pg_config.keep_rules) {
-      auto keep_name = dextype_from_dotname(k.class_spec.className);
-      std::string translated_keep_name =
-          proguard_map->translate_class(keep_name);
-      TRACE(PGR,
-            8,
-            "==> Checking against keep rule for %s (%s)\n",
-            keep_name.c_str(),
-            translated_keep_name.c_str());
-      if (type_matches(translated_keep_name.c_str(),
-                       cname,
-                       translated_keep_name.size(),
-                       cls_len) &&
-          access_matches(k.class_spec.setAccessFlags,
-                         k.class_spec.unsetAccessFlags,
+  // Process each keep rule.
+  for (const auto& keep_rule : pg_config.keep_rules) {
+    // Form a regex for matching against classes in the scope.
+    TRACE(PGR, 8, "Processing keep rule for class %s\n", keep_rule.class_spec.className.c_str());
+    auto descriptor = proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
+    TRACE(PGR, 8, "==> Descriptor: %s\n", descriptor.c_str());
+    auto desc_regex = proguard_parser::form_type_regex(descriptor);
+    boost::regex matcher(desc_regex);
+    // Iterate over each class and process the ones that match this rule.
+    for (const auto& cls : classes) {
+      auto cname = cls->get_type()->get_name()->c_str();
+      auto deob_name = cls->get_deobfuscated_name();
+      TRACE(PGR, 8, "==> Examining class %s deobfu: %s\n", cname, deob_name.c_str());
+      if (boost::regex_match(deob_name, matcher)) {
+         TRACE(PGR, 8, "==> Got name match for class %s\n", deob_name.c_str());
+         if ( access_matches(keep_rule.class_spec.setAccessFlags,
+                         keep_rule.class_spec.unsetAccessFlags,
                          cls->get_access())) {
-        TRACE(PGR, 8, "Setting keep for class %s\n", cls->get_deobfuscated_name().c_str());
+           TRACE(PGR, 8, "==> Also got access match\n");
+        TRACE(PGR, 8, "====> Setting keep for class %s\n", cls->get_deobfuscated_name().c_str());
         cls->rstate.set_keep();
         // Apply the keep option modifiers.
-        apply_keep_modifiers(k, cls);
+        apply_keep_modifiers(keep_rule, cls);
         // Apply any field-level keep specifications.
-        apply_field_keeps(proguard_map, cls, k.class_spec.fieldSpecifications);
+        apply_field_keeps(proguard_map, cls, keep_rule.class_spec.fieldSpecifications);
         // Apply any method-level keep specifications.
-        apply_method_keeps(proguard_map, cls, k.class_spec.methodSpecifications);
+        apply_method_keeps(proguard_map, cls, keep_rule.class_spec.className, keep_rule.class_spec.methodSpecifications);
+
+        } else {
+           TRACE(PGR, 8, "==> Failed access match.\n");
+       }
       }
     }
   }
