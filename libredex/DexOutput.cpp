@@ -407,6 +407,7 @@ public:
   size_t m_dex_number;
   PositionMapper* m_pos_mapper;
   std::string m_method_mapping_filename;
+  std::string m_class_mapping_filename;
   std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
   std::map<DexClass*, uint32_t> m_cdi_offsets;
@@ -444,6 +445,7 @@ public:
   void generate_map();
   void finalize_header();
   void init_header_offsets();
+  void write_symbol_files();
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
   std::unique_ptr<Locator> locator_for_descriptor(
@@ -458,7 +460,8 @@ public:
     size_t dex_number,
     ConfigFiles& config_files,
     PositionMapper* pos_mapper,
-    std::string method_mapping_path);
+    std::string method_mapping_path,
+    std::string class_mapping_path);
   ~DexOutput();
   void prepare(SortMode string_mode, SortMode code_mode);
   void write();
@@ -471,7 +474,8 @@ DexOutput::DexOutput(
   size_t dex_number,
   ConfigFiles& config_files,
   PositionMapper* pos_mapper,
-  std::string method_mapping_path)
+  std::string method_mapping_path,
+  std::string class_mapping_path)
     : m_config_files(config_files)
 {
   m_classes = classes;
@@ -483,6 +487,7 @@ DexOutput::DexOutput(
   m_filename = path;
   m_pos_mapper = pos_mapper,
   m_method_mapping_filename = method_mapping_path;
+  m_class_mapping_filename = class_mapping_path;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
 }
@@ -677,74 +682,6 @@ void DexOutput::generate_field_data() {
   }
 }
 
-namespace {
-
-void write_method_mapping(
-  std::string filename,
-  const DexOutputIdx* dodx,
-  const ProguardMap& proguard_map,
-  size_t dex_number
-) {
-  if (filename.empty()) return;
-  FILE* fd = fopen(filename.c_str(), "a");
-  assert_log(fd, "Can't open method mapping file %s: %s\n",
-             filename.c_str(),
-             strerror(errno));
-  for (auto& it : dodx->method_to_idx()) {
-    auto method = it.first;
-    auto idx = it.second;
-
-    // Types (and methods) internal to our app have a cached deobfuscated name
-    // that comes from the proguard map.  If we don't have one, it's a
-    // system/framework class, so we can just return the name.
-    auto const& typecls = method->get_class();
-    auto const& cls = type_class(typecls);
-    auto deobf_class = [&] {
-      if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
-        if (!deobname.empty()) return cls->get_deobfuscated_name();
-      }
-      return proguard_name(typecls);
-    }();
-
-    // Some method refs aren't "concrete" (e.g., referring to a method defined
-    // by a superclass via a subclass).  We only know how to deobfuscate
-    // concrete names, so resolve this ref to an actual definition.
-    auto resolved_method = [&] {
-      if (cls) {
-        auto intf_mr = resolve_intf_methodref(method);
-        if (intf_mr) return intf_mr;
-        auto resm = resolve_method(method, MethodSearch::Any);
-        if (resm) return resm;
-      }
-      return method;
-    }();
-
-    // Consult the cached method names, or just give it back verbatim.
-    auto deobf_method = [&] {
-      auto deobfname = resolved_method->get_deobfuscated_name();
-      if (!deobfname.empty()) return deobfname;
-      return proguard_name(resolved_method);
-    }();
-
-    // Format is <cls>.<name>(<args>)<ret>
-    // We only want the name here.
-    auto begin = deobf_method.find('.') + 1;
-    auto end = deobf_method.rfind('(');
-    auto deobf_method_name = deobf_method.substr(begin, end-begin);
-
-    fprintf(fd,
-            "%u %lu %s %s\n",
-            idx,
-            dex_number,
-            deobf_method_name.c_str(),
-            deobf_class.c_str());
-  }
-  fclose(fd);
-}
-
-}
-
 void DexOutput::generate_method_data() {
   constexpr size_t kMaxMethodRefs = 64 * 1024;
   constexpr size_t kMaxFieldRefs = 64 * 1024;
@@ -768,12 +705,6 @@ void DexOutput::generate_method_data() {
     if (method->is_concrete()) m_stats.num_methods++;
     m_stats.num_method_refs++;
   }
-  write_method_mapping(
-    m_method_mapping_filename,
-    dodx,
-    m_config_files.get_proguard_map(),
-    m_dex_number
-  );
 }
 
 void DexOutput::generate_class_data() {
@@ -1207,6 +1138,121 @@ void DexOutput::finalize_header() {
   memcpy(m_output, &hdr, sizeof(hdr));
 }
 
+namespace {
+
+void write_method_mapping(
+  std::string filename,
+  const DexOutputIdx* dodx,
+  const ProguardMap& proguard_map,
+  size_t dex_number
+) {
+  if (filename.empty()) return;
+  FILE* fd = fopen(filename.c_str(), "a");
+  assert_log(fd, "Can't open method mapping file %s: %s\n",
+             filename.c_str(),
+             strerror(errno));
+  for (auto& it : dodx->method_to_idx()) {
+    auto method = it.first;
+    auto idx = it.second;
+
+    // Types (and methods) internal to our app have a cached deobfuscated name
+    // that comes from the proguard map.  If we don't have one, it's a
+    // system/framework class, so we can just return the name.
+    auto const& typecls = method->get_class();
+    auto const& cls = type_class(typecls);
+    auto deobf_class = [&] {
+      if (cls) {
+        auto deobname = cls->get_deobfuscated_name();
+        if (!deobname.empty()) return deobname;
+      }
+      return proguard_name(typecls);
+    }();
+
+    // Some method refs aren't "concrete" (e.g., referring to a method defined
+    // by a superclass via a subclass).  We only know how to deobfuscate
+    // concrete names, so resolve this ref to an actual definition.
+    auto resolved_method = [&] {
+      if (cls) {
+        auto intf_mr = resolve_intf_methodref(method);
+        if (intf_mr) return intf_mr;
+        auto resm = resolve_method(method, MethodSearch::Any);
+        if (resm) return resm;
+      }
+      return method;
+    }();
+
+    // Consult the cached method names, or just give it back verbatim.
+    auto deobf_method = [&] {
+      auto deobfname = resolved_method->get_deobfuscated_name();
+      if (!deobfname.empty()) return deobfname;
+      return proguard_name(resolved_method);
+    }();
+
+    // Format is <cls>.<name>(<args>)<ret>
+    // We only want the name here.
+    auto begin = deobf_method.find('.') + 1;
+    auto end = deobf_method.rfind('(');
+    auto deobf_method_name = deobf_method.substr(begin, end-begin);
+
+    fprintf(fd,
+            "%u %lu %s %s\n",
+            idx,
+            dex_number,
+            deobf_method_name.c_str(),
+            deobf_class.c_str());
+  }
+  fclose(fd);
+}
+
+void write_class_mapping(
+  std::string filename,
+  DexClasses* classes,
+  const size_t class_defs_size,
+  const ProguardMap& proguard_map,
+  const size_t dex_number
+) {
+  if (filename.empty()) return;
+  FILE* fd = fopen(filename.c_str(), "a");
+
+  for (uint32_t idx = 0; idx < class_defs_size; idx++) {
+
+    DexClass* cls = classes->get(idx);
+    auto deobf_class = [&] {
+      if (cls) {
+        auto deobname = cls->get_deobfuscated_name();
+        if (!deobname.empty()) return deobname;
+      }
+      return proguard_name(cls);
+    }();
+
+    fprintf(fd,
+            "%u %lu %s\n",
+            idx,
+            dex_number,
+            deobf_class.c_str());
+  }
+
+  fclose(fd);
+}
+
+} // namespace
+
+void DexOutput::write_symbol_files() {
+  write_method_mapping(
+    m_method_mapping_filename,
+    dodx,
+    m_config_files.get_proguard_map(),
+    m_dex_number
+  );
+  write_class_mapping(
+    m_class_mapping_filename,
+    m_classes,
+    hdr.class_defs_size,
+    m_config_files.get_proguard_map(),
+    m_dex_number
+  );
+}
+
 void DexOutput::prepare(SortMode string_mode, SortMode code_mode) {
   fix_jumbos(m_classes, dodx);
   init_header_offsets();
@@ -1239,6 +1285,8 @@ void DexOutput::write() {
     m_stats.num_bytes = st.st_size;
   }
   close(fd);
+
+  write_symbol_files();
 }
 
 dex_output_stats_t
@@ -1252,6 +1300,7 @@ write_classes_to_dex(
   PositionMapper* pos_mapper)
 {
   auto method_mapping_filename = json_cfg.get("method_mapping", "").asString();
+  auto class_mapping_filename = json_cfg.get("class_mapping", "").asString();
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   auto sort_bytecode = json_cfg.get("bytecode_sort_mode", "").asString();
   SortMode string_sort_mode = DEFAULT;
@@ -1271,7 +1320,8 @@ write_classes_to_dex(
     dex_number,
     cfg,
     pos_mapper,
-    method_mapping_filename);
+    method_mapping_filename,
+    class_mapping_filename);
   dout.prepare(string_sort_mode, code_sort_mode);
   dout.write();
   return dout.m_stats;
