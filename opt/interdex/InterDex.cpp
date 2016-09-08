@@ -147,7 +147,7 @@ static void flush_out_secondary(
     std::string canaryname(buf);
     auto it = det.clookup.find(canaryname);
     if (it == det.clookup.end()) {
-      TRACE(IDEX, 1, "Warning, no canary class %s found\n", buf);
+      TRACE(IDEX, 2, "Warning, no canary class %s found\n", buf);
       auto canary_type = DexType::make_type(canaryname.c_str());
       auto canary_cls = type_class(canary_type);
       if (canary_cls == nullptr) {

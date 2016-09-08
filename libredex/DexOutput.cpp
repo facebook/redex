@@ -569,13 +569,13 @@ void DexOutput::generate_string_data(SortMode mode) {
    */
   std::vector<DexString*> string_order;
   if (mode == CLASS_ORDER) {
-    TRACE(CUSTOMSORT, 1, "using class order for string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using class order for string pool sorting\n");
     string_order = m_gtypes->get_cls_order_dexstring_emitlist();
   } else if (mode == CLASS_STRINGS) {
-    TRACE(CUSTOMSORT, 1, "using class names pack for string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using class names pack for string pool sorting\n");
     string_order = m_gtypes->keep_cls_strings_together_emitlist();
   } else {
-    TRACE(CUSTOMSORT, 1, "using default string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using default string pool sorting\n");
     string_order = m_gtypes->get_dexstring_emitlist();
   }
   dex_string_id* stringids = (dex_string_id*)(m_output + hdr.string_ids_off);
@@ -776,10 +776,10 @@ void DexOutput::generate_code_items(SortMode mode) {
 
   std::vector<DexMethod*> lmeth;
   if (mode == CLASS_ORDER) {
-    TRACE(CUSTOMSORT, 1, "using class order for bytecode sorting\n");
+    TRACE(CUSTOMSORT, 2, "using class order for bytecode sorting\n");
     lmeth = m_gtypes->get_cls_order_dexmethod_emitlist();
   } else {
-    TRACE(CUSTOMSORT, 1, "using default bytecode sorting\n");
+    TRACE(CUSTOMSORT, 2, "using default bytecode sorting\n");
     lmeth = m_gtypes->get_dexmethod_emitlist();
   }
   for (DexMethod* meth : lmeth) {
