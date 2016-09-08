@@ -387,6 +387,7 @@ void init_reachable_classes(
     const Scope& scope,
     const Json::Value& config,
     const std::vector<KeepRule>& proguard_rules,
+    const redex::ProguardConfiguration& pg_config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex
   // passes will cause them to be no longer reachable.  For example, if a

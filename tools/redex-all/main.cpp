@@ -31,7 +31,9 @@
 #include "JarLoader.h"
 #include "DexOutput.h"
 #include "PassManager.h"
-#include "ProguardLoader.h"
+#include "ProguardConfiguration.h" // New ProGuard configuration
+#include "ProguardParser.h" // New ProGuard Parser
+#include "ProguardLoader.h" // Old ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Timer.h"
@@ -387,6 +389,7 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
+  // Old ProGuard parser
   if (!args.proguard_config.empty()) {
     Timer t("Load proguard config");
     if (!load_proguard_config_file(
@@ -414,6 +417,12 @@ int main(int argc, char* argv[]) {
             dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
     }
+  }
+
+  // New ProGuard parser
+  redex::ProguardConfiguration pg_config;
+  if (!args.proguard_config.empty()) {
+    redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
   }
 
   if (start == 0 || start == argc) {
@@ -473,7 +482,7 @@ int main(int argc, char* argv[]) {
     cfg.using_seeds = nseeds > 0;
   }
 
-  PassManager manager(passes, rules, args.config);
+  PassManager manager(passes, rules, pg_config, args.config);
   {
     Timer t("Running optimization passes");
     manager.run_passes(stores, cfg);

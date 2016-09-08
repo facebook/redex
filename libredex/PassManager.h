@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "ProguardConfiguration.h"
 #include "ProguardLoader.h"
 
 #include <string>
@@ -26,6 +27,12 @@ class PassManager {
   void incr_metric(const std::string& key, int value);
   std::map<std::string, std::map<std::string, int> > get_metrics() const;
 
+  PassManager(
+    const std::vector<Pass*>& passes,
+    const std::vector<KeepRule>& rules,
+    const redex::ProguardConfiguration& pg_config,
+    const Json::Value& config = Json::Value(Json::objectValue));
+
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
@@ -39,4 +46,6 @@ class PassManager {
   //per-pass metrics
   std::map<std::string, std::map<std::string, int> > m_pass_metrics;
   std::map<std::string, int>* m_current_pass_metrics;
+
+  const redex::ProguardConfiguration m_pg_config;
 };

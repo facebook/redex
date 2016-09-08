@@ -18,7 +18,7 @@ public class ProguardTest extends Activity {
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     TextView text = new TextView(this);
-    text.setText("Redex Proguard Tests");
+    text.setText("Redex Proguard Tests\n");
     setContentView(text);
     Alpha a = new Alpha();
     text.append("doubleWombat = " + a.doubleWombat());

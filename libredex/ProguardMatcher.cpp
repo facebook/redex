@@ -240,7 +240,7 @@ std::string extract_fieldname(std::string qualified_fieldname) {
 
 // Currently only field level keeps of wildcard * specifications
 // and literal identifier matches (but no wildcards yet).
-void keep_fields(const ProguardMap* proguard_map,
+void keep_fields(const ProguardMap& proguard_map,
                  std::list<DexField*> fields,
                  const std::vector<MemberSpecification>& fieldSpecifications) {
   for (auto field : fields) {
@@ -268,7 +268,7 @@ void keep_fields(const ProguardMap* proguard_map,
 
 // Currently only field level keeps of wildcard * specifications
 // and literal identifier matches (but no wildcards yet).
-void apply_field_keeps(const ProguardMap* proguard_map,
+void apply_field_keeps(const ProguardMap& proguard_map,
                        DexClass* cls,
                        const std::vector<MemberSpecification>& fieldSpecifications) {
   if (fieldSpecifications.empty()) {
@@ -278,12 +278,12 @@ void apply_field_keeps(const ProguardMap* proguard_map,
   keep_fields(proguard_map, cls->get_sfields(), fieldSpecifications);
 }
 
-void keep_methods(const ProguardMap* proguard_map,
+void keep_methods(const ProguardMap& proguard_map,
                   std::list<DexMethod*> methods,
                   const boost::regex& method_regex) {
   for (const auto& method : methods) {
     auto pg_name = proguard_name(method).c_str();
-    auto qualified_name = proguard_map->deobfuscate_method(pg_name);
+    auto qualified_name = proguard_map.deobfuscate_method(pg_name);
     TRACE(PGR, 8, "====> Checking keeps for method %s | %s | %s\n", method->c_str(), pg_name, qualified_name.c_str());
     if (boost::regex_match(qualified_name.c_str(), method_regex)) {
       TRACE(PGR, 8, "======> Match found, setting keep for %s.\n", qualified_name.c_str());
@@ -292,7 +292,7 @@ void keep_methods(const ProguardMap* proguard_map,
   }
 }
 
-void apply_method_keeps(const ProguardMap* proguard_map,
+void apply_method_keeps(const ProguardMap& proguard_map,
                         DexClass* cls,
                         const std::string classname,
                         const std::vector<MemberSpecification>& methodSpecifications) {
@@ -311,7 +311,7 @@ void apply_method_keeps(const ProguardMap* proguard_map,
 }
 
 void process_proguard_rules(const ProguardConfiguration& pg_config,
-                            ProguardMap* proguard_map,
+                            const ProguardMap& proguard_map,
                             Scope& classes) {
   // Process each keep rule.
   for (const auto& keep_rule : pg_config.keep_rules) {
