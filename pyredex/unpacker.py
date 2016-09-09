@@ -345,12 +345,23 @@ class XZSDexMode(BaseDexMode):
         cmd = 'cat {} | xz -d --threads 6 > {}'.format(dest, concat_jar)
         subprocess.check_call(cmd, shell=True)
 
+        dex_order = []
+        with open(join(extracted_apk_dir, self._xzs_dir, 'metadata.txt')) as dex_metadata:
+            for line in dex_metadata.read().splitlines():
+                if line[0] != '.':
+                    tokens = line.split()
+                    search_pattern = self._store_name + '-(\d+)\.dex\.jar\.xzs\.tmp~'
+                    match = re.search(search_pattern, tokens[0])
+                    if match is None:
+                        raise Exception('unable to find match in ' + tokens[0] + ' for ' + search_pattern)
+                    dex_order.append(int(match.group(1)))
+
         # Sizes of the concatenated .dex.jar files are stored in .meta files.
         # Read the sizes of each .dex.jar file and un-concatenate them.
         jar_size_regex = 'jar:(\d+)'
         secondary_dir = join(extracted_apk_dir, self._xzs_dir)
         jar_sizes = {}
-        for i in range(1, 100):
+        for i in dex_order:
             filename = self._store_name + '-%d.dex.jar.xzs.tmp~.meta' % i
             metadata_path = join(secondary_dir, filename)
             if isfile(metadata_path):
@@ -358,17 +369,20 @@ class XZSDexMode(BaseDexMode):
                     jar_sizes[i] = \
                             int(re.match(jar_size_regex, f.read()).group(1))
                 os.remove(metadata_path)
+                log('found jar ' + filename + ' of size ' + str(jar_sizes[i]))
             else:
                 break
 
         with open(concat_jar, 'rb') as cj:
-            for i in range(1, len(jar_sizes) + 1):
+            for i in dex_order:
                 jarpath = join(dex_dir, self._store_name + '-%d.dex.jar' % i)
                 with open(jarpath, 'wb') as jar:
                     jar.write(cj.read(jar_sizes[i]))
 
         for j in jar_sizes.keys():
-            assert jar_sizes[j] == getsize(dex_dir + '/' + self._store_name + '-' + str(j) + '.dex.jar')
+            jar_size = getsize(dex_dir + '/' + self._store_name + '-' + str(j) + '.dex.jar')
+            log('validating ' + self._store_name + '-' + str(j) + '.dex.jar size=' + str(jar_size) + ' expecting=' + str(jar_sizes[j]))
+            assert jar_sizes[j] == jar_size
 
         assert sum(jar_sizes.values()) == getsize(concat_jar)
 
