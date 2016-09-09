@@ -67,7 +67,9 @@ DexMethod* find_method_named(const std::list<DexMethod*> methods,
                            deobfuscated_method.c_str());
                      bool found = (name == std::string(m->c_str()) ||
                                    (name == deobfuscated_method));
-                     TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
+                     if (found) {
+                        TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
+                     }
                      return found;
                    });
   if (it == methods.end()) {
@@ -86,9 +88,8 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string name) {
   return find_method_named(cls->get_dmethods(), name);
 }
 
-DexField* find_instance_field_named(const DexClass* cls, const char* name) {
-  auto fields = cls->get_ifields();
-  TRACE(PGR, 8, "==> Searching for instance field %s [%s]\n", name);
+DexField* find_field_named(const std::list<DexField*> fields, const char* name) {
+  TRACE(PGR, 8, "==> Searching for field %s\n", name);
   auto it =
       std::find_if(fields.begin(),
                    fields.end(),
@@ -111,17 +112,12 @@ DexField* find_instance_field_named(const DexClass* cls, const char* name) {
   return it == fields.end() ? nullptr : *it;
 }
 
+DexField* find_instance_field_named(const DexClass* cls, const char* name) {
+  return find_field_named(cls->get_ifields(), name);
+}
+
 DexField* find_static_field_named(const DexClass* cls, const char* name) {
-  auto fields = cls->get_sfields();
-  auto mapped_search_name = std::string(proguard_map->translate_field(name));
-  auto it =
-      std::find_if(fields.begin(),
-                   fields.end(),
-                   [&mapped_search_name](DexField* f) {
-                     return (mapped_search_name == std::string(f->c_str()) ||
-                             (mapped_search_name == proguard_name(f)));
-                   });
-  return it == fields.end() ? nullptr : *it;
+  return find_field_named(cls->get_sfields(), name);
 }
 
 bool class_has_been_renamed(const std::string class_name) {
@@ -242,10 +238,10 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(delta_c, nullptr);
     ASSERT_TRUE(keep(delta_c));
     // Make sure its fields and methods have been kept by the "*;" directive.
-    auto iField = find_instance_field_named(delta_c, "i");
+    auto iField = find_instance_field_named(delta_c, "Lcom/facebook/redex/test/proguard/Delta$C;.i:I");
     ASSERT_NE(iField, nullptr);
     ASSERT_TRUE(keep(iField));
-    auto iValue = find_vmethod_named(delta_c, "iValue");
+    auto iValue = find_vmethod_named(delta_c, "Lcom/facebook/redex/test/proguard/Delta$C;.iValue()I");
     ASSERT_NE(iValue, nullptr);
   }
 
@@ -255,22 +251,22 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(delta_d, nullptr);
     ASSERT_TRUE(keep(delta_d));
     // Make sure its fields are kept by "<fields>" but not its methods.
-    auto iField = find_instance_field_named(delta_d, "i");
-    ASSERT_NE(iField, nullptr);
-    auto iValue = find_vmethod_named(delta_d, "iValue");
-    ASSERT_EQ(iValue, nullptr);
+    auto iField = find_instance_field_named(delta_d, "Lcom/facebook/redex/test/proguard/Delta$D;.i:I");
+    ASSERT_NE(nullptr, iField);
+    auto iValue = find_vmethod_named(delta_d, "Lcom/facebook/redex/test/proguard/Delta$D;.iValue()I");
+    ASSERT_EQ(nullptr, iValue);
   }
 
-  { // Inner class Delta.E is kept.
+  { // Inner class Delta.E is kept and methods are kept but not fields.
     auto delta_e =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$E;");
     ASSERT_NE(delta_e, nullptr);
     ASSERT_TRUE(keep(delta_e));
     // Make sure its methods are kept by "<methods>" but not its fields.
-    auto iField = find_instance_field_named(delta_e, "i");
-    ASSERT_EQ(iField, nullptr);
-    auto iValue = find_vmethod_named(delta_e, "iValue");
-    ASSERT_NE(iValue, nullptr);
+    auto iField = find_instance_field_named(delta_e, "Lcom/facebook/redex/test/proguard/Delta$E;.i:I");
+    ASSERT_EQ(nullptr, iField);
+    auto iValue = find_vmethod_named(delta_e, "Lcom/facebook/redex/test/proguard/Delta$E;.iValue()I");
+    ASSERT_NE(nullptr, iValue);
   }
 
   { // Inner class Delta.F is kept and its final fields are kept.
@@ -280,14 +276,14 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(delta_f));
     // Make sure only the final fields are kept.
     // wombat is not a final field, so it should not be kept.
-    auto wombatField = find_instance_field_named(delta_f, "wombat");
+    auto wombatField = find_instance_field_named(delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.wombat:I");
     ASSERT_EQ(wombatField, nullptr);
     // numbat is a final field so it should be kept
-    auto numbatField = find_instance_field_named(delta_f, "numbat");
+    auto numbatField = find_instance_field_named(delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.numbat:I");
     ASSERT_NE(numbatField, nullptr);
     ASSERT_TRUE(keep(numbatField));
     // The numbatValue method should not be kept.
-    auto numbatValue = find_vmethod_named(delta_f, "numbatValue");
+    auto numbatValue = find_vmethod_named(delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.numbatValue()I");
     ASSERT_EQ(numbatValue, nullptr);
   }
 
@@ -410,6 +406,9 @@ TEST(ProguardTest, assortment) {
         delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.alpha2:[[I");
     ASSERT_NE(nullptr, alpha2);
     ASSERT_TRUE(keep(alpha2));
+    auto alpha3 = find_vmethod_named(
+        delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.alpha3()V");
+    ASSERT_EQ(nullptr, alpha3);
     // Check for matches against ** beta*
     // which should only match class types.
     // beta0 is a primitive type, so not kept.
@@ -469,6 +468,7 @@ TEST(ProguardTest, assortment) {
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Delta$J;.theta(Ljava/lang/String;)I");
     ASSERT_NE(nullptr, theta_3);
+    ASSERT_TRUE(keep(theta_3));
 
     // Check handling of constructor fors inner class.
     auto init_V = find_dmethod_named(delta_j,
@@ -490,6 +490,29 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
     ASSERT_FALSE(allowobfuscation(init_S));
+
+    // Make sure there are no iotas.
+    auto iota_1 = find_vmethod_named(delta_j,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Delta$J;.iota(IZLjava/lang/String;C)I");
+    ASSERT_EQ(nullptr, iota_1);
+    auto iota_2 = find_vmethod_named(
+        delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.iota(S)I");
+    ASSERT_EQ(nullptr, iota_2);
+    auto iota_3 = find_vmethod_named(delta_j,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Delta$J;.iota(Ljava/lang/String;)I");
+    ASSERT_EQ(nullptr, iota_3);
+
+    // Checking handling of % matches against void
+    auto zeta0 = find_vmethod_named(
+        delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.zeta0()V");
+    ASSERT_NE(nullptr, zeta0);
+    ASSERT_TRUE(keep(zeta0));
+    auto zeta1 = find_vmethod_named(
+        delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.zeta1()Ljava/lang/String;");
+    ASSERT_EQ(nullptr, zeta1);
+
   }
 
   { // Check handling of annotations.

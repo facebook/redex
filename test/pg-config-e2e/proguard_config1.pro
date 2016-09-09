@@ -55,6 +55,7 @@
   public int omega(int, boolean, java.lang.String, char);
   public int omega(%);
   public int theta(...);
+  public % zeta?();
 }
 
 # DoNotStrip Annotation

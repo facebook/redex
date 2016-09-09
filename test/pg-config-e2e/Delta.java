@@ -39,7 +39,7 @@ public class Delta {
 
   public class E {
     int i;
-    public int iValue() { return i; }
+    public int iValue() { return 42; }
   }
 
   public class F {
@@ -85,6 +85,7 @@ public class Delta {
      public int alpha0; // kept by *** alpha?
      public int[] alpha1; // kept by *** alpha?
      public int[][] alpha2; // kept by *** alpha?
+     public void alpha3() {}
      public int beta0; // not kept, primitive type
      public List<String> beta; // kept, class type
      public List<Integer>[] beta1; // not kept, array type
@@ -99,12 +100,14 @@ public class Delta {
                 { return int_arg + string_arg.length(); }
      public int theta(short s) { return 42; };
      public int theta(String s) { return s.length(); }
-     // Checking handling of *
+     // No iotas should be matched.
      public int iota(int int_arg, boolean bool_arg, String string_arg, char char_arg)
                 { return int_arg + string_arg.length(); }
      public int iota(short s) { return 42; };
      public int iota(short[] s) { return 42; };
      public int iota(String s) { return s.length(); }
+     public void zeta0() {}
+     public String zeta1() { return "and everything"; }
   }
 
   @DoNotStrip public class K {

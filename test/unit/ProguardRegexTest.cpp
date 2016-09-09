@@ -84,7 +84,7 @@ TEST(ProguardRegexTest, types) {
   { // Translate % to (?:B|S|I|J|Z|F|D|C)
     auto proguard_regex = "%";
     auto r = proguard_parser::form_type_regex(proguard_regex);
-    ASSERT_EQ("(?:B|S|I|J|Z|F|D|C)", r);
+    ASSERT_EQ("(?:B|S|I|J|Z|F|D|C|V)", r);
     boost::regex matcher(r);
     boost::cmatch m;
     ASSERT_TRUE(boost::regex_match("B", m, matcher));

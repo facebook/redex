@@ -39,7 +39,7 @@ std::string form_member_regex(std::string proguard_regex) {
 }
 
 // Convert a ProGuard type regex to a boost::regex
-// Example: "%" -> "(?:B|S|I|J|Z|F|D|C)"
+// Example: "%" -> "(?:B|S|I|J|Z|F|D|C|V)"
 // Example: "Lalpha?beta;" -> "Lalpha.beta;"
 // Example: "Lalpha/*/beta;" -> "Lalpha\\/([^\\/]+)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/([^\\/]+(?:\\/[^\\/]+)*)\\/beta;"
@@ -50,7 +50,7 @@ std::string form_type_regex(std::string proguard_regex) {
     // Convert % to a match against primvitive types without
     // creating a capture group.
     if (ch == '%') {
-      r += "(?:B|S|I|J|Z|F|D|C)";
+      r += "(?:B|S|I|J|Z|F|D|C|V)";
       continue;
     }
     // Escape the $ character
