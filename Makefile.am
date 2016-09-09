@@ -130,8 +130,9 @@ libredex_la_SOURCES = \
 	util/Sha1.cpp
 
 libredex_la_LIBADD = \
-	-lboost_filesystem \
-	-lboost_system \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
 	-lpthread
 
 #
@@ -143,7 +144,13 @@ redex_all_SOURCES = \
 	tools/redex-all/main.cpp \
 	tools/redex-all/Passes.cpp
 
-redex_all_LDADD = libredex.la
+redex_all_LDADD = \
+	libredex.la \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
+	-lpthread
+
 
 redexdump_SOURCES = \
 	tools/redexdump/DumpTables.cpp \
@@ -152,13 +159,18 @@ redexdump_SOURCES = \
 	tools/common/DexCommon.cpp \
 	tools/common/Formatters.cpp
 
-redexdump_LDADD = libredex.la
+redexdump_LDADD = \
+	libredex.la \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
+	-lpthread
 
 #
 # redex: Python driver script
 #
 bin_SCRIPTS = redex apkutil
-CLEANFILES = $(bin_SCRIPTS)
+CLEANFILES = redex
 EXTRA_DIST = redex.py
 
 redex: redex.py Makefile
