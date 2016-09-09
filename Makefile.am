@@ -30,6 +30,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/rebindrefs \
+	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
