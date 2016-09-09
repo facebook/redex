@@ -56,3 +56,10 @@
   public int omega(%);
   public int theta(...);
 }
+
+# DoNotStrip Annotation
+-keep @interface com.facebook.redex.test.proguard.DoNotStrip
+-keep @com.facebook.redex.test.proguard.DoNotStrip class **
+-keep @com.facebook.redex.test.proguard.DoNotStrip class ** {
+  @com.facebook.redex.test.proguard.DoNotStrip *;
+}

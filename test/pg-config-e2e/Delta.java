@@ -106,4 +106,12 @@ public class Delta {
      public int iota(short[] s) { return 42; };
      public int iota(String s) { return s.length(); }
   }
+
+  @DoNotStrip public class K {
+     public int alpha;
+     @DoNotStrip public int beta;
+     public void gamma() {}
+     @DoNotStrip public void omega() {}
+  }
+
 }

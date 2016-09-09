@@ -492,5 +492,26 @@ TEST(ProguardTest, assortment) {
     ASSERT_FALSE(allowobfuscation(init_S));
   }
 
+  { // Check handling of annotations.
+    auto delta_k =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$K;");
+    ASSERT_NE(nullptr, delta_k);
+    ASSERT_TRUE(keep(delta_k));
+    auto alpha = find_instance_field_named(
+        delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.alpha:I");
+    ASSERT_EQ(nullptr, alpha);
+    auto beta = find_instance_field_named(
+        delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.beta:I");
+    ASSERT_NE(nullptr, beta);
+    ASSERT_TRUE(keep(beta));
+    auto gamma = find_vmethod_named(
+        delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.gamma()V");
+    ASSERT_EQ(nullptr, gamma);
+    auto omega = find_vmethod_named(
+        delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.omega()V");
+    ASSERT_NE(nullptr, omega);
+    ASSERT_TRUE(keep(omega));
+}
+
   delete g_redex;
 }

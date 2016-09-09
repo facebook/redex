@@ -225,6 +225,21 @@ bool check_required_unset_access_flags(
   return true;
 }
 
+template <class DexMember>
+bool has_annotation(const DexMember* member, const std::string& annotation) {
+  auto annos = member->get_anno_set();
+  if (annos != nullptr) {
+    auto annotation_regex = proguard_parser::convert_wildcard_type(annotation);
+    boost::regex annotation_matcher(annotation_regex);
+    for (const auto& anno : annos->get_annotations()) {
+      if (boost::regex_match(anno->type()->c_str(), annotation_matcher)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool access_matches(const std::set<AccessFlag>& requiredSet,
                     const std::set<AccessFlag>& requiredUnset,
                     const DexAccessFlags& access_flags) {
@@ -246,6 +261,11 @@ void keep_fields(const ProguardMap& proguard_map,
   auto fieldSpecifications = keep_rule.class_spec.fieldSpecifications;
   for (auto field : fields) {
     for (const auto& fieldSpecification : fieldSpecifications) {
+      if (fieldSpecification.annotationType != "") {
+        if (!has_annotation(field, fieldSpecification.annotationType)) {
+          continue;
+        }
+      }
       auto pg_name = proguard_name(field);
       auto qualified_name = field->get_deobfuscated_name();
       auto field_name = extract_fieldname(qualified_name);
@@ -285,10 +305,16 @@ void apply_field_keeps(const ProguardMap& proguard_map,
 }
 
 void keep_methods(const redex::KeepSpec& keep_rule,
+                  const redex::MemberSpecification& methodSpecification,
                   const ProguardMap& proguard_map,
                   std::list<DexMethod*> methods,
                   const boost::regex& method_regex) {
   for (const auto& method : methods) {
+    if (methodSpecification.annotationType != "") {
+      if (!has_annotation(method, methodSpecification.annotationType)) {
+        continue;
+      }
+    }
     auto pg_name = proguard_name(method).c_str();
     auto qualified_name = proguard_map.deobfuscate_method(pg_name);
     TRACE(PGR,
@@ -328,8 +354,16 @@ void apply_method_keeps(const ProguardMap& proguard_map,
           method_spec.descriptor.c_str());
     TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_name.c_str());
     boost::regex method_regex(qualified_method_name);
-    keep_methods(keep_rule, proguard_map, cls->get_vmethods(), method_regex);
-    keep_methods(keep_rule, proguard_map, cls->get_dmethods(), method_regex);
+    keep_methods(keep_rule,
+                 method_spec,
+                 proguard_map,
+                 cls->get_vmethods(),
+                 method_regex);
+    keep_methods(keep_rule,
+                 method_spec,
+                 proguard_map,
+                 cls->get_dmethods(),
+                 method_regex);
   }
 }
 
@@ -343,6 +377,12 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
           8,
           "Processing keep rule for class %s\n",
           keep_rule.class_spec.className.c_str());
+    if (keep_rule.class_spec.annotationType != "") {
+      TRACE(PGR,
+            8,
+            "Using annotation type %s\n",
+            keep_rule.class_spec.annotationType.c_str());
+    }
     auto descriptor =
         proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
     TRACE(PGR, 8, "==> Descriptor: %s\n", descriptor.c_str());
@@ -350,6 +390,12 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
     boost::regex matcher(desc_regex);
     // Iterate over each class and process the ones that match this rule.
     for (const auto& cls : classes) {
+      // Check to see if we need to match an annotation type.
+      if (keep_rule.class_spec.annotationType != "") {
+        if (!has_annotation(cls, keep_rule.class_spec.annotationType)) {
+          continue;
+        }
+      }
       auto cname = cls->get_type()->get_name()->c_str();
       auto deob_name = cls->get_deobfuscated_name();
       TRACE(PGR,
