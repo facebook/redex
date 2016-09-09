@@ -15,10 +15,11 @@ public class Delta {
 
   public static int alpha;
   private static int beta;
-  private final int gamma = 48;
+  private int gamma;
 
   public Delta() {}
   public Delta(int i) {}
+  public Delta(String s) {}
 
   public class A {}
 
@@ -26,6 +27,8 @@ public class Delta {
 
   public class C {
     int i;
+    C() {}
+    C(int i) {}
     public int iValue() { return i; }
   }
 
@@ -72,8 +75,9 @@ public class Delta {
   //  public **[] gamma*;
   // }
   public class J {
-     private int j1;
-     public J() { j1 = 42; }
+     public J() {}
+     public J(int i) {}
+     public J(String s) {}
      public int brown_bear; // not kept, primitive type
      public String black_bear; // kept, class type
      public int[] grizzly_bear; // not kept, array type

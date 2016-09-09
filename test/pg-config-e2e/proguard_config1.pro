@@ -10,7 +10,7 @@
 -keep class com.facebook.redex.test.proguard.Delta
 -keep class com.facebook.redex.test.proguard.Delta {
   public <init>();
-  public <init>(int);
+  public <init>(java.lang.String);
   !public static <fields>;
 }
 
@@ -44,9 +44,10 @@
   int wombat*;
 }
 
--keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J
+-keep class com.facebook.redex.test.proguard.Delta$J
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$J {
-  public <init>();
+  public <init>(com.facebook.redex.test.proguard.Delta);
+  public <init>(com.facebook.redex.test.proguard.Delta, java.lang.String);
   ** *_bear;
   public *** alpha?;
   public ** beta*;
