@@ -38,10 +38,12 @@ ProguardMap* proguard_map;
 
 DexClass* find_class_named(const DexClasses& classes, const std::string name) {
   auto mapped_search_name = std::string(proguard_map->translate_class(name));
-  auto it = std::find_if(
-      classes.begin(), classes.end(), [&mapped_search_name](DexClass* cls) {
-        return mapped_search_name == std::string(cls->c_str());
-      });
+  auto it =
+      std::find_if(classes.begin(),
+                   classes.end(),
+                   [&mapped_search_name](DexClass* cls) {
+                     return mapped_search_name == std::string(cls->c_str());
+                   });
   if (it == classes.end()) {
     return nullptr;
   } else {
@@ -52,19 +54,22 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 DexMethod* find_method_named(const std::list<DexMethod*> methods,
                              const std::string name) {
   TRACE(PGR, 8, "==> Searching for method %s\n", name.c_str());
-  auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
-    auto deobfuscated_method =
-        proguard_map->deobfuscate_method(proguard_name(m));
-    TRACE(PGR,
-          8,
-          "====> Comparing against method %s [%s]\n",
-          m->c_str(),
-          deobfuscated_method.c_str());
-    bool found =
-        (name == std::string(m->c_str()) || (name == deobfuscated_method));
-    TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
-    return found;
-  });
+  auto it =
+      std::find_if(methods.begin(),
+                   methods.end(),
+                   [&name](DexMethod* m) {
+                     auto deobfuscated_method =
+                         proguard_map->deobfuscate_method(proguard_name(m));
+                     TRACE(PGR,
+                           8,
+                           "====> Comparing against method %s [%s]\n",
+                           m->c_str(),
+                           deobfuscated_method.c_str());
+                     bool found = (name == std::string(m->c_str()) ||
+                                   (name == deobfuscated_method));
+                     TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
+                     return found;
+                   });
   if (it == methods.end()) {
     TRACE(PGR, 8, "===> %s not found.\n", name.c_str());
   } else {
@@ -84,32 +89,38 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string name) {
 DexField* find_instance_field_named(const DexClass* cls, const char* name) {
   auto fields = cls->get_ifields();
   TRACE(PGR, 8, "==> Searching for instance field %s [%s]\n", name);
-  auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
-    auto deobfuscated_field = proguard_map->deobfuscate_field(proguard_name(f));
-    TRACE(PGR,
-          8,
-          "====> Comparing against %s [%s] <%s>\n",
-          f->c_str(),
-          proguard_name(f).c_str(),
-          deobfuscated_field.c_str());
-    bool found =
-        (name == std::string(f->c_str()) || (name == deobfuscated_field));
-    if (found) {
-      TRACE(PGR, 8, "====> Matched.\n");
-    }
-    return found;
-  });
+  auto it =
+      std::find_if(fields.begin(),
+                   fields.end(),
+                   [&name](DexField* f) {
+                     auto deobfuscated_field =
+                         proguard_map->deobfuscate_field(proguard_name(f));
+                     TRACE(PGR,
+                           8,
+                           "====> Comparing against %s [%s] <%s>\n",
+                           f->c_str(),
+                           proguard_name(f).c_str(),
+                           deobfuscated_field.c_str());
+                     bool found = (name == std::string(f->c_str()) ||
+                                   (name == deobfuscated_field));
+                     if (found) {
+                       TRACE(PGR, 8, "====> Matched.\n");
+                     }
+                     return found;
+                   });
   return it == fields.end() ? nullptr : *it;
 }
 
 DexField* find_static_field_named(const DexClass* cls, const char* name) {
   auto fields = cls->get_sfields();
   auto mapped_search_name = std::string(proguard_map->translate_field(name));
-  auto it = std::find_if(
-      fields.begin(), fields.end(), [&mapped_search_name](DexField* f) {
-        return (mapped_search_name == std::string(f->c_str()) ||
-                (mapped_search_name == proguard_name(f)));
-      });
+  auto it =
+      std::find_if(fields.begin(),
+                   fields.end(),
+                   [&mapped_search_name](DexField* f) {
+                     return (mapped_search_name == std::string(f->c_str()) ||
+                             (mapped_search_name == proguard_name(f)));
+                   });
   return it == fields.end() ? nullptr : *it;
 }
 
@@ -153,6 +164,7 @@ TEST(ProguardTest, assortment) {
     ASSERT_FALSE(keep(alpha));
     ASSERT_FALSE(keepclassmembers(alpha));
     ASSERT_FALSE(keepclasseswithmembers(alpha));
+    ASSERT_FALSE(allowobfuscation(alpha));
   }
 
   // Beta is not used and should not occur in the input.
@@ -174,6 +186,8 @@ TEST(ProguardTest, assortment) {
     auto delta =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
     ASSERT_NE(nullptr, delta);
+    ASSERT_TRUE(keep(delta));
+    ASSERT_FALSE(allowobfuscation(delta));
     // The field "public static int alpha" should not match because of the
     // public.
     auto alpha = find_static_field_named(
@@ -185,6 +199,7 @@ TEST(ProguardTest, assortment) {
         delta, "Lcom/facebook/redex/test/proguard/Delta;.beta:I");
     ASSERT_NE(nullptr, beta);
     ASSERT_TRUE(keep(beta));
+    ASSERT_FALSE(allowobfuscation(beta));
     // The field "private int gamma" should not match because
     // it is an instance field.
     auto gamma = find_instance_field_named(
@@ -195,6 +210,7 @@ TEST(ProguardTest, assortment) {
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>()V");
     ASSERT_NE(nullptr, init_V);
     ASSERT_TRUE(keep(init_V));
+    ASSERT_FALSE(allowobfuscation(init_V));
     auto init_I = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>(I)V");
     ASSERT_EQ(nullptr, init_I);
@@ -203,6 +219,7 @@ TEST(ProguardTest, assortment) {
         "Lcom/facebook/redex/test/proguard/Delta;.<init>(Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
+    ASSERT_FALSE(allowobfuscation(init_S));
   }
 
   { // Inner class Delta.A should be removed.
@@ -216,6 +233,7 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$B;");
     ASSERT_NE(delta_b, nullptr);
     ASSERT_TRUE(keep(delta_b));
+    ASSERT_FALSE(allowobfuscation(delta_b));
   }
 
   { // Inner class Delta.C is kept.
@@ -273,7 +291,7 @@ TEST(ProguardTest, assortment) {
     ASSERT_EQ(numbatValue, nullptr);
   }
 
-  { // Inner class Delta.G is kept.
+  { // Inner class Delta.G is kept, make sure constructor is not renamed.
     auto delta_g =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$G;");
     ASSERT_NE(delta_g, nullptr);
@@ -288,7 +306,15 @@ TEST(ProguardTest, assortment) {
     auto wombatValue = find_vmethod_named(
         delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombatValue()I");
     ASSERT_NE(wombatValue, nullptr);
-    ASSERT_TRUE(keep(wombatField));
+    ASSERT_TRUE(keep(wombatValue));
+    ASSERT_TRUE(allowobfuscation(wombatValue));
+    // Check that the constructor is not renamed.
+    auto init_V = find_dmethod_named(delta_g,
+                                     "Lcom/facebook/redex/test/proguard/"
+                                     "Delta$G;.<init>(Lcom/facebook/redex/test/"
+                                     "proguard/Delta;)V");
+    ASSERT_NE(nullptr, init_V);
+    ASSERT_FALSE(allowobfuscation(init_V));
   }
 
   { // Inner class Delta.H is kept.
@@ -321,17 +347,20 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$I;");
     ASSERT_NE(delta_i, nullptr);
     ASSERT_TRUE(keep(delta_i));
+    ASSERT_TRUE(allowobfuscation(delta_i));
     // Make sure all the wombat* fields were found.
     // wombat matches wombat.* from "wombat*"
     auto wombat = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat:I");
     ASSERT_NE(wombat, nullptr);
     ASSERT_TRUE(keep(wombat));
+    ASSERT_TRUE(allowobfuscation(wombat));
     // wombat_alpha matches wombat.* from "wombat*"
     auto wombat_alpha = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat_alpha:I");
     ASSERT_NE(wombat_alpha, nullptr);
     ASSERT_TRUE(keep(wombat_alpha));
+    ASSERT_TRUE(allowobfuscation(wombat_alpha));
     // numbat does not match wombat.* from "wombat*"
     auto numbat = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
@@ -448,6 +477,7 @@ TEST(ProguardTest, assortment) {
                                      "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
     ASSERT_TRUE(keep(init_V));
+    ASSERT_FALSE(allowobfuscation(init_V));
     auto init_I = find_dmethod_named(delta_j,
                                      "Lcom/facebook/redex/test/proguard/"
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
@@ -459,6 +489,7 @@ TEST(ProguardTest, assortment) {
                                      "proguard/Delta;Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
+    ASSERT_FALSE(allowobfuscation(init_S));
   }
 
   delete g_redex;
