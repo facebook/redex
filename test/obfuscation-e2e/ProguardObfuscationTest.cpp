@@ -25,15 +25,6 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
-/**
-The objective of these tests are to make sure the ProGuard rules are
-properly applied to a set of test classes. The incomming APK is currently
-already processed by ProGuard. This test makes sure the expected classes
-and methods are present (or absent) as required and performs checks on the
-Redex ProGuard rule matcher to make sure the ProGuard rules were properly
-interpreted.
-**/
-
 DexClass* find_class_named(const ProguardMap& proguard_map,
                            const DexClasses& classes,
                            const std::string name) {
@@ -49,20 +40,17 @@ DexClass* find_class_named(const ProguardMap& proguard_map,
   }
 }
 
-// Returns true if the specified field is not renamed.
-bool field_is_not_renamed(const ProguardMap& proguard_map,
-                          const std::list<DexField*> fields,
-                          const std::string name) {
-  auto it = std::find_if(
-      fields.begin(), fields.end(), [&name, &proguard_map](DexField* f) {
-        auto deobfuscated_name =
-            proguard_map.deobfuscate_field(proguard_name(f));
-        if (name == std::string(f->c_str()) || (name == deobfuscated_name)) {
-          return deobfuscated_name == name;
-        }
-        return false;
-      });
-  return it != fields.end();
+// Returns true if the specified field is renamed.
+bool field_is_renamed(const ProguardMap& proguard_map,
+                      const std::list<DexField*> fields,
+                      const std::string name) {
+  for (const auto& field : fields) {
+    auto deobfuscated_name = proguard_map.deobfuscate_field(proguard_name(field));
+    if (name == std::string(field->c_str()) || (name == deobfuscated_name)) {
+      return deobfuscated_name != proguard_name(field);
+    }
+  }
+  return false;
 }
 
 /**
@@ -91,13 +79,13 @@ TEST(ProguardTest, obfuscation) {
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(pg_config, &proguard_map, scope);
+  process_proguard_rules(pg_config, proguard_map, scope);
 
   // Make sure the fields class Alpha are renamed.
   auto alpha = find_class_named(
       proguard_map, classes, "Lcom/facebook/redex/test/proguard/Alpha;");
   ASSERT_NE(alpha, nullptr);
-  ASSERT_TRUE(field_is_not_renamed(
+  ASSERT_TRUE(field_is_renamed(
       proguard_map,
       alpha->get_ifields(),
       "Lcom/facebook/redex/test/proguard/Alpha;.wombat:I"));
@@ -106,9 +94,9 @@ TEST(ProguardTest, obfuscation) {
   auto beta = find_class_named(
       proguard_map, classes, "Lcom/facebook/redex/test/proguard/Beta;");
   ASSERT_NE(beta, nullptr);
-  ASSERT_FALSE(field_is_not_renamed(
+  ASSERT_FALSE(field_is_renamed(
       proguard_map,
-      alpha->get_ifields(),
+      beta->get_ifields(),
       "Lcom/facebook/redex/test/proguard/Beta;.wombatBeta:I"));
 
   delete g_redex;
