@@ -110,6 +110,7 @@ libredex_la_SOURCES = \
 	opt/peephole/Peephole.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
+	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \

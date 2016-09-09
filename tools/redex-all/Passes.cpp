@@ -23,6 +23,7 @@
 #include "Peephole.h"
 #include "ReBindRefs.h"
 #include "RemoveEmptyClasses.h"
+#include "RemoveUnreachable.h"
 #include "RenameClasses.h"
 #include "Shorten.h"
 #include "SimpleInline.h"
@@ -46,6 +47,7 @@ std::vector<Pass*> create_passes() {
     new PeepholePass(),
     new ReBindRefsPass(),
     new RemoveEmptyClassesPass(),
+    new RemoveUnreachablePass(),
     new RenameClassesPass(),
     new ShortenSrcStringsPass(),
     new SimpleInlinePass(),

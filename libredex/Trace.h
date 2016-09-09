@@ -39,6 +39,7 @@
   TM(REG)                                       \
   TM(RELO)                                      \
   TM(RENAME)                                    \
+  TM(RMU)                                       \
   TM(SHORTEN)                                   \
   TM(SINK)                                      \
   TM(SINL)                                      \
