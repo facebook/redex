@@ -194,6 +194,7 @@ TEST(ProguardTest, assortment) {
     auto init_V = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>()V");
     ASSERT_NE(nullptr, init_V);
+    ASSERT_TRUE(keep(init_V));
     auto init_I = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>(I)V");
     ASSERT_EQ(nullptr, init_I);
@@ -201,6 +202,7 @@ TEST(ProguardTest, assortment) {
         delta,
         "Lcom/facebook/redex/test/proguard/Delta;.<init>(Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
+    ASSERT_TRUE(keep(init_S));
   }
 
   { // Inner class Delta.A should be removed.
@@ -445,6 +447,7 @@ TEST(ProguardTest, assortment) {
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
                                      "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
+    ASSERT_TRUE(keep(init_V));
     auto init_I = find_dmethod_named(delta_j,
                                      "Lcom/facebook/redex/test/proguard/"
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
@@ -455,6 +458,7 @@ TEST(ProguardTest, assortment) {
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
                                      "proguard/Delta;Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
+    ASSERT_TRUE(keep(init_S));
   }
 
   delete g_redex;
