@@ -534,7 +534,51 @@ TEST(ProguardTest, assortment) {
         delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.omega()V");
     ASSERT_NE(nullptr, omega);
     ASSERT_TRUE(keep(omega));
-}
+  }
+
+  { // Check handling of conflicting access modifiers.
+     auto delta_l =
+         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$L;");
+     ASSERT_NE(nullptr, delta_l);
+     ASSERT_TRUE(keep(delta_l));
+     auto alpha0 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.alpha0()V");
+     ASSERT_NE(nullptr, alpha0);
+     ASSERT_TRUE(keep(alpha0));
+     auto alpha1 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.alpha1()V");
+     ASSERT_NE(nullptr, alpha1);
+     ASSERT_TRUE(keep(alpha1));
+     auto alpha2 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;alpha2()V");
+     ASSERT_EQ(nullptr, alpha2);
+
+     auto beta0 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.beta0()V");
+     ASSERT_NE(nullptr, beta0);
+     ASSERT_TRUE(keep(beta0));
+     auto beta1 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.beta1()V");
+     ASSERT_NE(nullptr, beta1);
+     ASSERT_TRUE(keep(beta1));
+     auto beta2 = find_dmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.beta2()V");
+     ASSERT_NE(nullptr, beta2);
+     ASSERT_TRUE(keep(beta2));
+
+     auto gamma0 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.gamma0()V");
+     ASSERT_NE(nullptr, gamma0);
+     ASSERT_TRUE(keep(gamma0));
+     auto gamma1 = find_vmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.gamma1()V");
+     ASSERT_NE(nullptr, gamma1);
+     ASSERT_TRUE(keep(gamma1));
+     auto gamma2 = find_dmethod_named(
+        delta_l, "Lcom/facebook/redex/test/proguard/Delta$L;.gamma2()V");
+     ASSERT_NE(nullptr, gamma2);
+     ASSERT_TRUE(keep(gamma2));
+  }
 
   delete g_redex;
 }

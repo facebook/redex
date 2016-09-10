@@ -64,3 +64,11 @@
 -keep @com.facebook.redex.test.proguard.DoNotStrip class ** {
   @com.facebook.redex.test.proguard.DoNotStrip *;
 }
+
+-keep class com.facebook.redex.test.proguard.Delta$L
+-keep class com.facebook.redex.test.proguard.Delta$L {
+  public protected void alpha?();
+  private void alpha0();
+  void beta?();
+  public protected private void gamma?();
+}

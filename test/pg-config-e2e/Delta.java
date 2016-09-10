@@ -117,4 +117,16 @@ public class Delta {
      @DoNotStrip public void omega() {}
   }
 
+  public class L {
+     public void alpha0() {}
+     protected void alpha1() {}
+     private void alpha2() {}
+     public void beta0() {}
+     protected void beta1() {}
+     private void beta2() {}
+     public void gamma0() {}
+     protected void gamma1() {}
+     private void gamma2() {}
+  }
+
 }

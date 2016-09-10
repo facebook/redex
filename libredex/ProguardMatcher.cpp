@@ -38,20 +38,48 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
 
 bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
                                  const DexAccessFlags& access_flags) {
+  auto require_public = requiredSet.count(AccessFlag::PUBLIC);
+  auto require_private = requiredSet.count(AccessFlag::PRIVATE);
+  auto require_protectd = requiredSet.count(AccessFlag::PROTECTED);
+  bool match_one = require_public + require_private + require_protectd > 0;
   for (const AccessFlag& af : requiredSet) {
     switch (af) {
     case AccessFlag::PUBLIC:
       if (!(access_flags & ACC_PUBLIC)) {
+        if (match_one) {
+          if (require_private && (access_flags & ACC_PRIVATE)) {
+             continue;
+          }
+          if (require_protectd && (access_flags & ACC_PROTECTED)) {
+             continue;
+          }
+        }
         return false;
       }
       break;
     case AccessFlag::PRIVATE:
       if (!(access_flags & ACC_PRIVATE)) {
+        if (match_one) {
+          if (require_public && (access_flags & ACC_PUBLIC)) {
+             continue;
+          }
+          if (require_protectd && (access_flags & ACC_PROTECTED)) {
+             continue;
+          }
+        }
         return false;
       }
       break;
     case AccessFlag::PROTECTED:
       if (!(access_flags & ACC_PROTECTED)) {
+        if (match_one) {
+          if (require_public && (access_flags & ACC_PUBLIC)) {
+             continue;
+          }
+          if (require_private && (access_flags & ACC_PRIVATE)) {
+             continue;
+          }
+        }
         return false;
       }
       break;
