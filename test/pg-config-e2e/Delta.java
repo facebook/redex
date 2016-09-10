@@ -17,6 +17,8 @@ public class Delta {
   private static int beta;
   private int gamma;
 
+  public static boolean sigma = true;
+
   public Delta() {}
   public Delta(int i) {}
   public Delta(String s) {}

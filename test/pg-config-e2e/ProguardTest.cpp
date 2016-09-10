@@ -216,7 +216,13 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
     ASSERT_FALSE(allowobfuscation(init_S));
-  }
+    // Check clinit
+    auto clinit = find_dmethod_named(
+            delta,
+            "Lcom/facebook/redex/test/proguard/Delta;.<clinit>()V");
+    ASSERT_NE(nullptr, clinit);
+    ASSERT_FALSE(allowobfuscation(clinit));
+}
 
   { // Inner class Delta.A should be removed.
     auto delta_a =
