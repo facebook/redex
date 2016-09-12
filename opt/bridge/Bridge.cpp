@@ -272,6 +272,47 @@ class BridgeRemover {
   }
 
   void exclude_referenced_bridgees() {
+    std::vector<DexMethod*> refs;
+
+    auto visit_methods = [&refs](DexMethod* m) {
+        auto const& anno = m->get_anno_set();
+        if (anno) anno->gather_methods(refs);
+        auto const& param_anno = m->get_param_anno();
+        if (param_anno) {
+          for (auto const& pair : *param_anno) {
+            pair.second->gather_methods(refs);
+          }
+        }
+    };
+
+    for (auto const& cls : *m_scope) {
+      auto const& anno = cls->get_anno_set();
+      if (anno) anno->gather_methods(refs);
+      for (auto const& m : cls->get_dmethods()) {
+        visit_methods(m);
+      }
+      for (auto const& m : cls->get_vmethods()) {
+        visit_methods(m);
+      }
+      for (auto const& f : cls->get_sfields()) {
+        f->gather_methods(refs);
+      }
+      for (auto const& f : cls->get_ifields()) {
+        f->gather_methods(refs);
+      }
+    }
+
+    std::unordered_set<DexMethod*> refs_set(refs.begin(), refs.end());
+    std::vector<DexMethod*> kill_me;
+    for (auto const& p : m_bridges_to_bridgees) {
+      if (refs_set.count(p.second)) {
+        kill_me.push_back(p.first);
+      }
+    }
+    for (auto const& kill : kill_me) {
+      m_bridges_to_bridgees.erase(kill);
+    }
+
     walk_code(*m_scope,
               [](DexMethod*) { return true; },
               [&](DexMethod* m, DexCode& code) {
@@ -301,6 +342,7 @@ class BridgeRemover {
       assert(!bridgee->is_virtual());
       auto cls = type_class(bridgee->get_class());
       cls->get_dmethods().remove(bridgee);
+      DexMethod::erase_method(bridgee);
     }
   }
 
