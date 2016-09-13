@@ -124,6 +124,7 @@ TEST(RemoveUnreachableTest, synthetic) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
+  dummy_cfg.using_seeds = true;
 
   init_test_seeds(dummy_cfg.get_proguard_map());
 
