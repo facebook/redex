@@ -16,5 +16,16 @@ public class SynthTest {
     System.out.println("2b = " + b.doublex());
     SyntheticConstructor s = new SyntheticConstructor(1);
     SyntheticConstructor.InnerClass i = s.new InnerClass();
+    String str = "";
+    try {
+      java.io.Writer writer = new java.io.StringWriter();
+      writer.write("hello");
+      Gamma g = new Gamma(writer);
+      Gamma.Delta d = g.new Delta();
+      str = d.getWriter().toString();
+    } catch (java.io.IOException e) {
+      str = e.toString();
+    }
+    System.setProperty("foo", str);
   }
 }

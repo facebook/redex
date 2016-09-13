@@ -28,13 +28,8 @@
 TEST(EmptyClassesTest1, emptyclasses) {
   g_redex = new RedexContext();
 
-  // Hardcoded path is for OSS automake test harness, environment variable is
-  // for Buck
-  const char* dexfile = "empty-classes-test-class.dex";
-  if (access(dexfile, R_OK) != 0) {
-    dexfile = std::getenv("dexfile");
-    ASSERT_NE(nullptr, dexfile);
-  }
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexStore> stores;
   DexStore root_store("classes");
