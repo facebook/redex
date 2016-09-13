@@ -12,11 +12,31 @@ import static org.fest.assertions.api.Assertions.*;
 import org.junit.Test;
 
 public class RemoveUnreachableTest {
-    @Test
-    public void test() {
-      TestHasher h = new TestHasher();
-      UseHasher.use(h);
+  private static boolean classExists(String s) {
+    try {
+      Class.forName(s);
+    } catch (ClassNotFoundException e) {
+      return false;
     }
+    return true;
+  }
+
+  @Test
+  public void testSeeds() {
+    assertThat(classExists("A")).isFalse();
+  }
+
+  /**
+   * Inheritance test from Guava.
+   */
+  @Test
+  public void testHasher() {
+    TestHasher h = new TestHasher();
+    UseHasher.use(h);
+  }
+}
+
+class A {
 }
 
 // This example is distilled from Guava

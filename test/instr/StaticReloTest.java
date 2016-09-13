@@ -40,6 +40,7 @@ public class StaticReloTest {
     assertThat(C2.m2()).isEqualTo(2);
     assertThat(C2.dupe()).isEqualTo(101);
     assertThat(C3.m3()).isEqualTo(3);
+    assertThat(new C4()).isNotNull();
     assertThat(C4.m4()).isEqualTo(4);
     assertThat(C5.m5()).isEqualTo(5);
     assertThat(new C6().v()).isEqualTo(0);

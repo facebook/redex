@@ -52,16 +52,17 @@ public class RemoveUnusedClass {
         return "Zeta";
     }
 
+    private static boolean classExists(String clsName) {
+        try {
+            Class.forName(clsName);
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+        return true;
+    }
+
     @Test
     public void test() {
-        String zetaClassName = prefix() + "." + suffix();
-        Class<?> zetaClass = null;
-        boolean makeClassNameShoudFail = false;
-        try {
-            zetaClass = Class.forName(zetaClassName);
-        } catch (ClassNotFoundException e) {
-            makeClassNameShoudFail = true;
-        }
-        assertThat(makeClassNameShoudFail).isEqualTo(false);
+        assertThat(classExists("com.facebook.redex.test.instr")).isFalse();
     }
 }
