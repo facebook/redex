@@ -157,9 +157,9 @@ void build_refs(
   refs_t<DexClass>& class_refs) {
   // Looking for direct/static invokes or class refs
   auto match =
-    m::invoke_static<DexInstruction>()
-    or m::invoke_direct<DexInstruction>()
-    or m::has_types<DexInstruction>();
+    m::invoke_static()
+    or m::invoke_direct()
+    or m::has_types();
   visit_opcodes(scope, match, [&](const DexMethod* meth, DexInstruction* insn){
     if (insn->has_types()) {
       const auto top = static_cast<DexOpcodeType*>(insn);

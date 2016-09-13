@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <type_traits>
 #include <vector>
 
 #include "DexClass.h"
@@ -53,6 +54,37 @@ inline bool is_invoke_direct(const DexInstruction* insn) {
   return op == OPCODE_INVOKE_DIRECT ||
     op == OPCODE_INVOKE_DIRECT_RANGE;
 }
+
+// Helpers
+
+namespace m {
+
+// N.B. recursive template for matching opcode pattern against insn sequence
+template<typename T, typename N>
+struct insns_matcher {
+  static bool matches_at(
+    int at,
+    const std::vector<DexInstruction*>& insns,
+    const T& t) {
+    const auto& insn = insns.at(at);
+    typename std::tuple_element<N::value, T>::type insn_match = std::get<N::value>(t);
+    return insn_match.matches(insn) &&
+        insns_matcher<T, std::integral_constant<size_t, N::value+1> >::matches_at(at+1, insns, t);
+  }
+};
+
+// N.B. base case of recursive template where N = opcode pattern length
+template<typename T>
+struct insns_matcher<T, std::integral_constant<size_t, std::tuple_size<T>::value> > {
+  static bool matches_at(
+    int at,
+    const std::vector<DexInstruction*>& insns,
+    const T& t) {
+    return true;
+  }
+};
+
+} // namespace
 
 namespace m {
 
@@ -211,103 +243,153 @@ inline match_t<DexClass, std::tuple<> > is_interface() {
   };
 }
 
-struct DexOpcodeSeq {
-public:
-  const DexMethod* meth;
-  std::vector<DexInstruction*>::const_iterator& it;
+/**
+ * Matches DexInstructions
+ */
+
+/** Any instruction which holds a type reference */
+inline match_t<DexInstruction> has_types() {
+  return {
+    [](const DexInstruction* insn) {
+      return insn->has_types();
+    }
+  };
+}
+
+/** const-string flavors */
+inline match_t<DexInstruction> const_string() {
+  return {
+    [](const DexInstruction* insn) {
+      auto opcode = insn->opcode();
+      return opcode == OPCODE_CONST_STRING ||
+        opcode == OPCODE_CONST_STRING_JUMBO;
+    }
+  };
+}
+
+/** invoke-direct flavors */
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
+  invoke_direct(const match_t<DexInstruction, P>& p) {
+  return {
+    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+      auto opcode = insn->opcode();
+      if (opcode == OPCODE_INVOKE_DIRECT ||
+        opcode == OPCODE_INVOKE_DIRECT_RANGE) {
+        return p.matches(insn);
+      } else {
+        return false;
+      }
+    },
+    p
+  };
+}
+
+inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  invoke_direct() {
+    return invoke_direct(any<DexInstruction>());
 };
 
-inline DexInstruction* next(const DexOpcodeSeq* opcs) {
-  auto opcode = *(opcs->it);
-  std::advance(opcs->it, 1);
-  return opcode;
-}
-
-inline const DexInstruction* next(const DexInstruction* insn) {
-  return insn;
-}
-
-// Some of these matchers can work with single opcodes, or
-// sequences (iterators) of opcodes. Some can only work with sequences.
-
-/**
- * Matches any class ref opcode, e.g. const-class
- */
-template <typename T = DexOpcodeSeq>
-match_t<T> has_types() {
+/** invoke-static flavors */
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
+  invoke_static(const match_t<DexInstruction, P>& p) {
   return {
-    [](const T* opcodes) {
-      auto opcode = next(opcodes);
-      return opcode->has_types();
-    }
+    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+      auto opcode = insn->opcode();
+      if (opcode == OPCODE_INVOKE_STATIC ||
+        opcode == OPCODE_INVOKE_STATIC_RANGE) {
+        return p.matches(insn);
+      } else {
+        return false;
+      }
+    },
+    p
   };
 }
 
-template <typename T = DexOpcodeSeq>
-match_t<T> invoke_direct() {
-  return {
-    [](const T* opcodes) {
-      auto opcode = next(opcodes)->opcode();
-      return opcode == OPCODE_INVOKE_DIRECT ||
-        opcode == OPCODE_INVOKE_DIRECT_RANGE;
-    }
-  };
-}
+inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  invoke_static() {
+    return invoke_static(any<DexInstruction>());
+};
 
-template <typename T = DexOpcodeSeq>
-match_t<T> invoke_static() {
+/** return-void */
+inline match_t<DexInstruction> return_void() {
   return {
-    [](const T* opcodes) {
-      auto opcode = next(opcodes)->opcode();
-      return opcode == OPCODE_INVOKE_STATIC ||
-        opcode == OPCODE_INVOKE_STATIC_RANGE;
-    }
-  };
-}
-
-template <typename T = DexOpcodeSeq>
-match_t<T> return_void() {
-  return {
-    [](const T* opcodes) {
-      auto opcode = next(opcodes)->opcode();
+    [](const DexInstruction* insn) {
+      auto opcode = insn->opcode();
       return opcode == OPCODE_RETURN_VOID;
     }
   };
 }
 
-template<size_t N, typename T>
-struct for_each_opcode_match {
-  static bool visit(
-    const T& t, const DexOpcodeSeq* opcodes) {
-    // N.B. recursive template here to unwind our tuple of opcode matchers
-    if (!for_each_opcode_match<N-1, T>::visit(t, opcodes)) return false;
-    typename std::tuple_element<N-1, T>::type opc = std::get<N-1>(t);
-    return opc.matches(opcodes);
-  }
-};
+/** Matches instructions with specified number of arguments. Supports /range. */
+inline match_t<DexInstruction, std::tuple<int> > has_n_args(int n) {
+  return {
+    // N.B. "int n" must be const ref in order to appease N-ary matcher template
+    [](const DexInstruction* insn, const int& n) {
+      assert(insn->has_arg_word_count() || insn->has_range());
+      if (insn->has_arg_word_count()) {
+        return insn->arg_word_count() == n;
+      } else if (insn->has_range()) {
+        // N.B. seems like invoke-*/range should never occur with 0 args,
+        // so let's make sure this assumption holds...
+        assert(insn->range_size() > 0);
+        return insn->range_size() == n;
+      } else {
+        assert(false);
+      }
+    },
+    n
+  };
+}
 
+/** Matchers that map from DexInstruction -> other types */
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexMethod, P> > >
+  opcode_method(const match_t<DexMethod, P>& p) {
+  return {
+    [](const DexInstruction* insn, const match_t<DexMethod, P>& p) {
+      auto method_insn = (DexOpcodeMethod*)insn;
+      return p.matches(method_insn->get_method());
+    },
+    p
+  };
+}
+
+/** Match methods that are bound to the given class. */
 template<typename T>
-struct for_each_opcode_match<0, T> {
-  static bool visit(
-    // N.B. base case of recursive template
-    const T& t, const DexOpcodeSeq* opcodes) {
-    return true;
-  }
-};
+match_t<T, std::tuple<const std::string> > on_class(const std::string& type) {
+  return {
+    [](const T* t, const std::string& type) {
+      return !strcmp(t->get_class()->get_name()->c_str(), type.c_str());
+    },
+    type
+  };
+}
 
 /** Match methods whose code satisfied the given opcodes match */
 template <typename ...T>
-match_t<DexMethod, std::tuple<std::tuple<T...> > >
-  opcodes(const std::tuple<T...>& t) {
+match_t<DexMethod, std::tuple<std::tuple<T...> > > has_opcodes(const std::tuple<T...>& t) {
   return {
     [](const DexMethod* meth, const std::tuple<T...>& t) {
       auto& code = meth->get_code();
-      if (!code) return false;
-      auto it = code->get_instructions().cbegin();
-      DexOpcodeSeq opcodes = { meth, it };
-      return for_each_opcode_match<
-        std::tuple_size<std::tuple<T...> >::value,
-        std::tuple<T...> >::visit(t, &opcodes);
+      if (code) {
+        const size_t N = std::tuple_size<std::tuple<T...> >::value;
+        const std::vector<DexInstruction*>& insns = code->get_instructions();
+        // No way to match if we have less insns than N
+        if (insns.size() < N) {
+          return false;
+        }
+        // Try to match starting at i, we advance along insns until the length of the tuple
+        // would cause us to extend beyond the end of insns to make the match.
+        for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
+          if (insns_matcher<std::tuple<T...>, std::integral_constant<size_t, 0> >::matches_at(i, insns, t)) {
+            return true;
+          }
+        }
+      }
+      return false;
     },
     t
   };
@@ -321,7 +403,7 @@ inline match_t<DexMethod, std::tuple<> > is_default_constructor() {
               is_constructor(meth) &&
               has_no_args(meth) &&
               has_code(meth) &&
-              opcodes(std::make_tuple(
+              has_opcodes(std::make_tuple(
                 invoke_direct(),
                 return_void()
               )).matches(meth);
