@@ -1,3 +1,5 @@
+-dontoptimize
+
 -keep class com.facebook.redex.test.proguard.Gamma
 
 -keep class com.facebook.redex.test.proguard.Delta$B
@@ -72,3 +74,19 @@
   void beta?();
   public protected private void gamma?();
 }
+
+# DontKillMe Annotation
+-keep @interface com.facebook.redex.test.proguard.DontKillMe
+
+-keep public !final class ** extends com.facebook.redex.test.proguard.Epsilon
+-keep class ** extends com.facebook.redex.test.proguard.Delta$G
+-keep class ** extends android.widget.TextView
+-keep class ** extends @com.facebook.redex.test.proguard.DontKillMe com.facebook.redex.test.proguard.Delta$R?
+
+-keep class ** extends com.facebook.redex.test.proguard.External3
+
+-keep class ** implements com.facebook.redex.test.proguard.Eta$T0
+
+-keep class com.facebook.redex.test.proguard.Theta
+
+-keep class com.facebook.redex.test.proguard.Eta$T?

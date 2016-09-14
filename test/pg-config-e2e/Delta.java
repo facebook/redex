@@ -131,4 +131,23 @@ public class Delta {
      private void gamma2() {}
   }
 
+  public class M extends Epsilon {}
+  public class N extends M {}
+  public final class O extends Epsilon {}
+  public class P extends G {}
+  public class Q extends External {}
+
+  @DontKillMe
+  public class R0 {}
+
+  public class R1 {}
+
+  public class S0 extends R0 {}
+  public class S1 extends R1 {}
+
+  public interface S3 {}
+  public interface S4 extends S3 {}
+  public interface S5 extends S4 {}
+  public class S6 implements S4, S5 {}
+
 }

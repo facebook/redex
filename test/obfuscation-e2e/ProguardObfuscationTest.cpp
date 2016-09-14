@@ -79,7 +79,7 @@ TEST(ProguardTest, obfuscation) {
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(pg_config, proguard_map, scope);
+  process_proguard_rules(pg_config, scope);
 
   // Make sure the fields class Alpha are renamed.
   auto alpha = find_class_named(

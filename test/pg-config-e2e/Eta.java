@@ -7,17 +7,16 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#pragma once
+package com.facebook.redex.test.proguard;
 
-#include "DexClass.h"
-#include "ProguardConfiguration.h"
+public class Eta {
 
-namespace redex {
+  public interface T0 {
+    public int wombat();
+  }
 
-using Scope = std::vector<DexClass*>;
+  public interface T1 extends T0 {
+    public int numbat();
+  }
 
-void process_proguard_rules(const ProguardConfiguration& pg_config,
-                            Scope& classes);
 }
-
-// namespace redex

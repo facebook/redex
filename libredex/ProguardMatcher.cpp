@@ -7,11 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <iostream>
 #include <boost/regex.hpp>
+#include <iostream>
+#include <set>
 #include <string>
 
 #include "DexAccess.h"
+#include "DexUtil.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardRegex.h"
@@ -41,17 +43,17 @@ bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
   auto require_public = requiredSet.count(AccessFlag::PUBLIC);
   auto require_private = requiredSet.count(AccessFlag::PRIVATE);
   auto require_protectd = requiredSet.count(AccessFlag::PROTECTED);
-  bool match_one = require_public + require_private + require_protectd > 0;
+  bool match_one = require_public + require_private + require_protectd > 1;
   for (const AccessFlag& af : requiredSet) {
     switch (af) {
     case AccessFlag::PUBLIC:
       if (!(access_flags & ACC_PUBLIC)) {
         if (match_one) {
           if (require_private && (access_flags & ACC_PRIVATE)) {
-             continue;
+            continue;
           }
           if (require_protectd && (access_flags & ACC_PROTECTED)) {
-             continue;
+            continue;
           }
         }
         return false;
@@ -61,10 +63,10 @@ bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
       if (!(access_flags & ACC_PRIVATE)) {
         if (match_one) {
           if (require_public && (access_flags & ACC_PUBLIC)) {
-             continue;
+            continue;
           }
           if (require_protectd && (access_flags & ACC_PROTECTED)) {
-             continue;
+            continue;
           }
         }
         return false;
@@ -74,10 +76,10 @@ bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
       if (!(access_flags & ACC_PROTECTED)) {
         if (match_one) {
           if (require_public && (access_flags & ACC_PUBLIC)) {
-             continue;
+            continue;
           }
           if (require_private && (access_flags & ACC_PRIVATE)) {
-             continue;
+            continue;
           }
         }
         return false;
@@ -283,8 +285,7 @@ std::string extract_fieldname(std::string qualified_fieldname) {
   return qualified_fieldname.substr(p + 2, e - p - 2);
 }
 
-void keep_fields(const ProguardMap& proguard_map,
-                 std::list<DexField*> fields,
+void keep_fields(std::list<DexField*> fields,
                  const redex::KeepSpec& keep_rule) {
   auto fieldSpecifications = keep_rule.class_spec.fieldSpecifications;
   for (auto field : fields) {
@@ -325,16 +326,13 @@ void keep_fields(const ProguardMap& proguard_map,
   }
 }
 
-void apply_field_keeps(const ProguardMap& proguard_map,
-                       DexClass* cls,
-                       const redex::KeepSpec& keep_rule) {
-  keep_fields(proguard_map, cls->get_ifields(), keep_rule);
-  keep_fields(proguard_map, cls->get_sfields(), keep_rule);
+void apply_field_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
+  keep_fields(cls->get_ifields(), keep_rule);
+  keep_fields(cls->get_sfields(), keep_rule);
 }
 
 void keep_methods(const redex::KeepSpec& keep_rule,
                   const redex::MemberSpecification& methodSpecification,
-                  const ProguardMap& proguard_map,
                   std::list<DexMethod*> methods,
                   const boost::regex& method_regex) {
   for (const auto& method : methods) {
@@ -343,13 +341,11 @@ void keep_methods(const redex::KeepSpec& keep_rule,
         continue;
       }
     }
-    auto pg_name = proguard_name(method).c_str();
-    auto qualified_name = proguard_map.deobfuscate_method(pg_name);
+    auto qualified_name = method->get_deobfuscated_name();
     TRACE(PGR,
           8,
-          "====> Checking keeps for method %s | %s | %s\n",
+          "====> Checking keeps for method %s | %s\n",
           method->c_str(),
-          pg_name,
           qualified_name.c_str());
     if (boost::regex_match(qualified_name.c_str(), method_regex)) {
       TRACE(PGR,
@@ -362,9 +358,7 @@ void keep_methods(const redex::KeepSpec& keep_rule,
   }
 }
 
-void apply_method_keeps(const ProguardMap& proguard_map,
-                        DexClass* cls,
-                        const redex::KeepSpec& keep_rule) {
+void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
   auto classname = keep_rule.class_spec.className;
   auto methodSpecifications = keep_rule.class_spec.methodSpecifications;
   for (const auto& method_spec : methodSpecifications) {
@@ -382,21 +376,138 @@ void apply_method_keeps(const ProguardMap& proguard_map,
           method_spec.descriptor.c_str());
     TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_name.c_str());
     boost::regex method_regex(qualified_method_name);
-    keep_methods(keep_rule,
-                 method_spec,
-                 proguard_map,
-                 cls->get_vmethods(),
-                 method_regex);
-    keep_methods(keep_rule,
-                 method_spec,
-                 proguard_map,
-                 cls->get_dmethods(),
-                 method_regex);
+    keep_methods(keep_rule, method_spec, cls->get_vmethods(), method_regex);
+    keep_methods(keep_rule, method_spec, cls->get_dmethods(), method_regex);
   }
 }
 
+// This function checks to see of a class satisfies a match
+// against an annotation type and a class wildcard.
+bool type_and_annotation_match(const DexClass* cls,
+                               const std::string& extends_class_name,
+                               const std::string& annotation) {
+  if (cls == nullptr) {
+    return false;
+  }
+  auto cname = cls->get_name()->c_str();
+  if (std::string(cname) == "Ljava/lang/Object;") {
+    return false;
+  }
+  TRACE(PGR,
+        8,
+        "====> Parent search at %s [%s]\n",
+        cls->get_name()->c_str(),
+        cls->get_deobfuscated_name().c_str());
+  // First check to see if an annotation type needs to be matched.
+  if (annotation != "") {
+    if (!has_annotation(cls, annotation)) {
+      return false;
+    }
+  }
+  // Now try to match against the class name.
+  auto deob_name = cls->get_deobfuscated_name();
+  auto descriptor = proguard_parser::convert_wildcard_type(extends_class_name);
+  auto desc_regex = proguard_parser::form_type_regex(descriptor);
+  boost::regex matcher(desc_regex);
+  return boost::regex_match(deob_name, matcher);
+}
+
+bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
+                                   const DexClass* cls,
+                                   const std::string& extends_class_name,
+                                   const std::string& annotation);
+
+bool search_interfaces(std::set<const DexClass*>* visited,
+                       const DexClass* cls,
+                       const std::string& name,
+                       const std::string& annotation) {
+  TRACE(PGR,
+        8,
+        "Searching the interfaces of %s\n",
+        cls->get_deobfuscated_name().c_str());
+  auto interfaces = cls->get_interfaces();
+  if (interfaces) {
+    TRACE(PGR,
+          8,
+          "Class %s implements %d interfaces\n",
+          cls->get_deobfuscated_name().c_str(),
+          interfaces->get_type_list().size());
+    for (const auto& impl : interfaces->get_type_list()) {
+      TRACE(PGR, 8, "Interface search from type %s\n", impl->c_str());
+      auto impl_class = type_class(impl);
+      if (impl_class) {
+        TRACE(PGR,
+              8,
+              "Searching from interface %s\n",
+              impl_class->get_deobfuscated_name().c_str());
+        if (search_extends_and_interfaces(
+                visited, impl_class, name, annotation)) {
+          return true;
+        }
+      } else {
+        TRACE(PGR, 8, "WARNING: Can't find class for type %s\n", impl->c_str());
+      }
+    }
+  }
+  return false;
+}
+
+bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
+                                   const DexClass* cls,
+                                   const std::string& extends_class_name,
+                                   const std::string& annotation) {
+  if (cls == nullptr) {
+    return false;
+  }
+  // Have we already visited this class? If yes, then the result is false.
+  if (visited->find(cls) != visited->end()) {
+    return false;
+  }
+  // Does this class match the annotation and type wildcard?
+  if (type_and_annotation_match(cls, extends_class_name, annotation)) {
+    return true;
+  }
+  // Do any of the classes and interface above match?
+  auto super_type = cls->get_super_class();
+  if (super_type) {
+    auto super_class = type_class(super_type);
+    if (super_type) {
+      if (search_extends_and_interfaces(
+              visited, super_class, extends_class_name, annotation)) {
+        return true;
+      }
+    } else {
+      TRACE(PGR,
+            8,
+            "WARNING: Can't find class for type %s\n",
+            super_type->get_name()->c_str());
+    }
+  }
+  // Do any of the interfaces from here and up match?
+  bool found = search_interfaces(visited, cls, extends_class_name, annotation);
+  visited->emplace(cls);
+  return found;
+}
+
+bool extends(const DexClass* cls,
+             const std::string& extends_class_name,
+             const std::string& annotation) {
+  if (extends_class_name == "") {
+    return true;
+  }
+  auto deob_name = cls->get_deobfuscated_name();
+  TRACE(PGR,
+        8,
+        "Looking for class %s extending <@%s> %s\n",
+        deob_name.c_str(),
+        annotation.c_str(),
+        extends_class_name.c_str());
+  std::set<const DexClass*> visited;
+  return search_extends_and_interfaces(
+      &visited, cls, extends_class_name, annotation);
+}
+
 void process_proguard_rules(const ProguardConfiguration& pg_config,
-                            const ProguardMap& proguard_map,
                             Scope& classes) {
   // Process each keep rule.
   for (const auto& keep_rule : pg_config.keep_rules) {
@@ -418,6 +529,12 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
     boost::regex matcher(desc_regex);
     // Iterate over each class and process the ones that match this rule.
     for (const auto& cls : classes) {
+      // Check for extends / implements
+      if (!extends(cls,
+                   keep_rule.class_spec.extendsClassName,
+                   keep_rule.class_spec.extendsAnnotationType)) {
+        continue;
+      }
       // Check to see if we need to match an annotation type.
       if (keep_rule.class_spec.annotationType != "") {
         if (!has_annotation(cls, keep_rule.class_spec.annotationType)) {
@@ -445,9 +562,9 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
           // Apply the keep option modifiers.
           apply_keep_modifiers(keep_rule, cls);
           // Apply any field-level keep specifications.
-          apply_field_keeps(proguard_map, cls, keep_rule);
+          apply_field_keeps(cls, keep_rule);
           // Apply any method-level keep specifications.
-          apply_method_keeps(proguard_map, cls, keep_rule);
+          apply_method_keeps(cls, keep_rule);
 
         } else {
           TRACE(PGR, 8, "==> Failed access match.\n");
