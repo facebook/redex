@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#pragma once
+
 #include <algorithm>
 #include <functional>
 #include <type_traits>
@@ -18,7 +20,7 @@
 #include "ReachableClasses.h"
 
 /**
- * Determine if the method is a constructore.
+ * Determine if the method is a constructor.
  *
  * Notes:
  * - Does NOT distinguish between <init> and <clinit>, will return true

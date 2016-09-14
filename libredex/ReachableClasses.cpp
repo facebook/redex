@@ -17,6 +17,7 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
+#include "Match.h"
 #include "RedexResources.h"
 #include "StringUtil.h"
 
@@ -248,6 +249,27 @@ void init_permanently_reachable_classes(
   const std::unordered_set<DexType*>& no_optimizations_anno
 ) {
   PassConfig pc(config);
+
+  auto match = std::make_tuple(
+    m::const_string(/* const-string {vX}, <any string> */),
+    m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
+      m::opcode_method(m::named<DexMethod>("forName") && m::on_class<DexMethod>("Ljava/lang/Class;"))
+      && m::has_n_args(1))
+  );
+
+  walk_matching_opcodes(scope, match, [&](const DexMethod* meth, size_t n, DexInstruction** insns){
+    DexOpcodeString* const_string = (DexOpcodeString*)insns[0];
+    DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
+    // Make sure that the registers agree
+    if (const_string->dest() == invoke_static->src(0)) {
+      std::string classname(const_string->get_string()->c_str());
+      classname = "L" + classname + ";";
+      std::replace(classname.begin(), classname.end(), '.', '/');
+      TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
+        const_string->get_string()->c_str(), classname.c_str());
+      mark_reachable_by_classname(classname, true);
+    }
+  });
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;

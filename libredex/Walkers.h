@@ -13,6 +13,7 @@
 #include <vector>
 #include "DexClass.h"
 #include "DexAnnotation.h"
+#include "Match.h"
 
 /**
  * Walk all methods of all classes defined in 'scope' calling back
@@ -144,4 +145,73 @@ void walk_annotations(const T& scope, AnnotationWalkerFn annotation_walker) {
                    }
                  }
                });
+}
+
+/**
+ * Visit sequences of opcodes that satisfy the give matcher.
+ *
+ * Example
+ * -------
+ *
+ * The following code (taken from ReachableClasses) visits all opcode sequences
+ * that match the the form "const-string, invoke-static" where invoke-static is specifically
+ * invoking Class.forName that takes one argument.
+ *
+ * In the walker callback, you can see that the opcodes are further inspected to ensure that
+ * the register that const-string loads into is actually the register that is referenced by
+ * invoke-static. (Without captures, this can't be expressed in the matcher language alone)
+ *
+ * The opcodes that match are passed in as a pointer to an array of DexInstruction pointers.
+ * The size of the array is passed in as 'n'.
+ *
+ * Example Code
+ * ------------
+ *
+ *  auto match = std::make_tuple(
+ *    m::const_string(),
+ *    m::invoke_static(
+ *      m::opcode_method(
+ *        m::named<DexMethod>("forName") &&
+ *        m::on_class<DexMethod>("Ljava/lang/Class;"))
+ *      && m::has_n_args(1))
+ *  );
+ *
+ *  match_opcodes(scope, match, [&](const DexMethod* meth, size_t n, DexInstruction** insns){
+ *    DexOpcodeString* const_string = (DexOpcodeString*)insns[0];
+ *    DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
+ *    // Make sure that the registers agree
+ *    if (const_string->dest() == invoke_static->src(0)) {
+ *      TRACE(PGR, 1, "Class.forName: %s\n", const_string->get_string()->c_str());
+ *    }
+ *  });
+ *
+ */
+template<
+    typename P,
+    size_t N = std::tuple_size<P>::value,
+    typename V = void(const DexMethod*, size_t n, DexInstruction**)>
+void walk_matching_opcodes(
+  const Scope& scope, const P& p, const V& v) {
+  walk_methods(
+    scope,
+    [&](const DexMethod* m) {
+      auto& code = m->get_code();
+      if (code) {
+        const std::vector<DexInstruction*>& insns = code->get_instructions();
+        // No way to match if we have less insns than N
+        if (insns.size() < N) {
+          return;
+        }
+        // Try to match starting at i
+        for (size_t i = 0 ; i < insns.size() - N ; ++i) {
+          if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
+            DexInstruction* insns_array[N];
+            for ( size_t c = 0 ; c < N ; ++c ) {
+              insns_array[c] = insns.at(i+c);
+            }
+            v(m, N, insns_array);
+          }
+        }
+      }
+    });
 }
