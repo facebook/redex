@@ -294,7 +294,9 @@ class DexField {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const { return m_deobfuscated_name; }
+  const std::string get_deobfuscated_name() const {
+    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+  }
 
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
   void clear_annotations() {
@@ -704,7 +706,9 @@ class DexMethod {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const { return m_deobfuscated_name; }
+  const std::string get_deobfuscated_name() const {
+    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+  }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
@@ -856,7 +860,9 @@ class DexClass {
   DexAnnotationSet* get_anno_set() const { return m_anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const { return m_deobfuscated_name; }
+  const std::string get_deobfuscated_name() const {
+    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+  }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
