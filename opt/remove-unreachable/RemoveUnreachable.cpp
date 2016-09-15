@@ -232,7 +232,7 @@ struct UnreachableCodeRemover {
           visit(cls);
         }
         for (auto const& f : cls->get_ifields()) {
-          if (is_seed(f)) {
+          if (is_seed(f) || is_volatile(f)) {
             TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(f));
             visit(f);
           }
