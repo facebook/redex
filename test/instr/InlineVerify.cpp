@@ -350,3 +350,12 @@ TEST_F(PostVerify, testArrayDataInCaller) {
   auto last_insn = m->get_code()->get_instructions().back();
   ASSERT_EQ(last_insn->opcode(), FOPCODE_FILLED_ARRAY);
 }
+
+TEST_F(PostVerify, testForceInline) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/InlineTest;");
+  auto m = find_vmethod_named(*cls, "testForceInlineOne");
+  EXPECT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_DIRECT, "multipleCallers"));
+  m = find_vmethod_named(*cls, "testForceInlineTwo");
+  EXPECT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_DIRECT, "multipleCallers"));
+}

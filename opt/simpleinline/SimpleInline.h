@@ -34,6 +34,7 @@ public:
     pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
     pc.get("use_liveness", false, m_inliner_config.use_liveness);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
+    pc.get("force_inline_annos", {}, m_force_inline_annos);
 
     std::vector<std::string> black_list;
     pc.get("black_list", {}, black_list);
@@ -46,7 +47,9 @@ public:
 
 private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(
-      Scope& scope, const std::unordered_set<DexType*>& no_inline);
+    Scope& scope,
+    const std::unordered_set<DexType*>& no_inline,
+    const std::unordered_set<DexType*>& force_inline);
   void select_single_called(
       Scope& scope, std::unordered_set<DexMethod*>& methods);
 
@@ -61,6 +64,9 @@ private:
 
   // annotations indicating not to inline a function
   std::vector<std::string> m_no_inline_annos;
+
+  // annotations indicating to always inline a function
+  std::vector<std::string> m_force_inline_annos;
 
   // set of inlinable methods
   std::unordered_set<DexMethod*> inlinable;

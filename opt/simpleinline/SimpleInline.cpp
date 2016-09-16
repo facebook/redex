@@ -65,6 +65,18 @@ std::unordered_set<DexType*> no_inline_annos(
   return no_inline;
 }
 
+std::unordered_set<DexType*> force_inline_annos(
+    const std::vector<std::string>& annos) {
+  std::unordered_set<DexType*> force_inline;
+  for (auto const& force_inline_anno : annos) {
+    auto type = DexType::get_type(force_inline_anno.c_str());
+    if (type != nullptr) {
+      force_inline.insert(type);
+    }
+  }
+  return force_inline;
+}
+
 template<typename DexMember>
 bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
   if (no_inline.size() == 0) return false;
@@ -82,10 +94,11 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 
 void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
+  const auto force_inline = force_inline_annos(m_force_inline_annos);
 
   auto scope = build_class_scope(stores);
   // gather all inlinable candidates
-  auto methods = gather_non_virtual_methods(scope, no_inline);
+  auto methods = gather_non_virtual_methods(scope, no_inline, force_inline);
   select_single_called(scope, methods);
 
   auto resolver = [&](DexMethod* method, MethodSearch search) {
@@ -135,7 +148,9 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
  * for inlining.
  */
 std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
-    Scope& scope, const std::unordered_set<DexType*>& no_inline) {
+    Scope& scope,
+    const std::unordered_set<DexType*>& no_inline,
+    const std::unordered_set<DexType*>& force_inline) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -154,7 +169,8 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   std::unordered_set<DexMethod*> methods;
 
   const auto can_inline_method = [&](DexMethod* meth, const DexCode& code) {
-    if (has_anno(type_class(meth->get_class()), no_inline) ||
+    DexClass* cls = type_class(meth->get_class());
+    if (has_anno(cls, no_inline) ||
         has_anno(meth, no_inline)) {
       no_inline_anno_count++;
       return;
@@ -170,6 +186,10 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
       } else {
         methods.insert(meth);
       }
+    }
+
+    if (has_anno(meth, force_inline)) {
+      inlinable.insert(meth);
     }
   };
 

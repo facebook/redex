@@ -277,4 +277,19 @@ public class InlineTest {
     }
     String y = "x";
   }
+
+  @ForceInline
+  private String multipleCallers() {
+    return Integer.toString(1) + Integer.toString(2);
+  }
+
+  @Test
+  public void testForceInlineOne() {
+    multipleCallers();
+  }
+
+  @Test
+  public void testForceInlineTwo() {
+    multipleCallers();
+  }
 }
