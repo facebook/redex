@@ -9,6 +9,10 @@
 
 package com.facebook.redex.test.proguard;
 
+import android.app.Activity;
+import android.graphics.Color;
+import android.text.SpannableStringBuilder;
+
 import java.util.List;
 
 public class Delta {
@@ -135,7 +139,9 @@ public class Delta {
   public class N extends M {}
   public final class O extends Epsilon {}
   public class P extends G {}
-  public class Q extends External {}
+
+  public class Q1 extends android.graphics.Color {}
+  public class Q2 extends SpannableStringBuilder {}
 
   @DontKillMe
   public class R0 {}

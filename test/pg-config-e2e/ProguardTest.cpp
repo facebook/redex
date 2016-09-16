@@ -36,10 +36,10 @@ interpreted.
 **/
 
 DexClass* find_class_named(const DexClasses& classes, const std::string name) {
-  auto it = std::find_if(
-      classes.begin(),
-      classes.end(),
-      [&name](DexClass* cls) { return name == cls->get_deobfuscated_name(); });
+  auto it =
+      std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
+        return name == cls->get_deobfuscated_name();
+      });
   if (it == classes.end()) {
     return nullptr;
   } else {
@@ -47,26 +47,23 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
   }
 }
 
-DexMethod* find_method_named(const std::list<DexMethod*> methods,
-                             const std::string name) {
+DexMethod* find_method_named(const std::list<DexMethod*>& methods,
+                             const std::string& name) {
   TRACE(PGR, 8, "==> Searching for method %s\n", name.c_str());
-  auto it = std::find_if(methods.begin(),
-                         methods.end(),
-                         [&name](DexMethod* m) {
-                           auto deobfuscated_method =
-                               m->get_deobfuscated_name();
-                           TRACE(PGR,
-                                 8,
-                                 "====> Comparing against method %s [%s]\n",
-                                 m->c_str(),
-                                 deobfuscated_method.c_str());
-                           bool found = (name == std::string(m->c_str()) ||
-                                         (name == deobfuscated_method));
-                           if (found) {
-                             TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
-                           }
-                           return found;
-                         });
+  auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
+    auto deobfuscated_method = m->get_deobfuscated_name();
+    TRACE(PGR,
+          8,
+          "====> Comparing against method %s [%s]\n",
+          m->c_str(),
+          deobfuscated_method.c_str());
+    bool found =
+        (name == std::string(m->c_str()) || (name == deobfuscated_method));
+    if (found) {
+      TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
+    }
+    return found;
+  });
   if (it == methods.end()) {
     TRACE(PGR, 8, "===> %s not found.\n", name.c_str());
   } else {
@@ -75,34 +72,32 @@ DexMethod* find_method_named(const std::list<DexMethod*> methods,
   return it == methods.end() ? nullptr : *it;
 }
 
-DexMethod* find_vmethod_named(const DexClass* cls, const std::string name) {
+DexMethod* find_vmethod_named(const DexClass* cls, const std::string& name) {
   return find_method_named(cls->get_vmethods(), name);
 }
 
-DexMethod* find_dmethod_named(const DexClass* cls, const std::string name) {
+DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
   return find_method_named(cls->get_dmethods(), name);
 }
 
-DexField* find_field_named(const std::list<DexField*> fields,
+DexField* find_field_named(const std::list<DexField*>& fields,
                            const char* name) {
   TRACE(PGR, 8, "==> Searching for field %s\n", name);
-  auto it = std::find_if(fields.begin(),
-                         fields.end(),
-                         [&name](DexField* f) {
-                           auto deobfuscated_field = f->get_deobfuscated_name();
-                           TRACE(PGR,
-                                 8,
-                                 "====> Comparing against %s [%s] <%s>\n",
-                                 f->c_str(),
-                                 proguard_name(f).c_str(),
-                                 deobfuscated_field.c_str());
-                           bool found = (name == std::string(f->c_str()) ||
-                                         (name == deobfuscated_field));
-                           if (found) {
-                             TRACE(PGR, 8, "====> Matched.\n");
-                           }
-                           return found;
-                         });
+  auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
+    auto deobfuscated_field = f->get_deobfuscated_name();
+    TRACE(PGR,
+          8,
+          "====> Comparing against %s [%s] <%s>\n",
+          f->c_str(),
+          proguard_name(f).c_str(),
+          deobfuscated_field.c_str());
+    bool found =
+        (name == std::string(f->c_str()) || (name == deobfuscated_field));
+    if (found) {
+      TRACE(PGR, 8, "====> Matched.\n");
+    }
+    return found;
+  });
   return it == fields.end() ? nullptr : *it;
 }
 
@@ -142,10 +137,10 @@ TEST(ProguardTest, assortment) {
   redex::proguard_parser::parse_file(configuraiton_file, &pg_config);
   ASSERT_TRUE(pg_config.ok);
 
-  const char* ext_jar = std::getenv("ext_jar");
-  ASSERT_NE(nullptr, ext_jar);
-  TRACE(PGR, 8, "Reading external JAR from %s\n", ext_jar);
-  load_jar_file(ext_jar);
+  auto android_sdk = std::getenv("ANDROID_SDK");
+  ASSERT_NE(nullptr, android_sdk);
+  auto sdk_jar = std::string(android_sdk) + "/platforms/android-16/android.jar";
+  load_jar_file(sdk_jar.c_str());
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
@@ -605,19 +600,23 @@ TEST(ProguardTest, assortment) {
     auto delta_o =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$O;");
     ASSERT_EQ(nullptr, delta_o);
+
     auto delta_p =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$P;");
     ASSERT_NE(nullptr, delta_p);
     ASSERT_TRUE(keep(delta_p));
 
-    auto external_class = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/External;");
-    ASSERT_EQ(nullptr, external_class);
+    // Check direct extends into dependent jar.
+    auto delta_q1 = find_class_named(
+        classes, "Lcom/facebook/redex/test/proguard/Delta$Q1;");
+    ASSERT_NE(nullptr, delta_q1);
+    ASSERT_TRUE(keep(delta_q1));
+    // Check deeper extends into dependent jar.
+    auto delta_q2 = find_class_named(
+        classes, "Lcom/facebook/redex/test/proguard/Delta$Q2;");
+    ASSERT_NE(nullptr, delta_q2);
+    ASSERT_TRUE(keep(delta_q2));
 
-    auto delta_q =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$Q;");
-    ASSERT_NE(nullptr, delta_q);
-    ASSERT_TRUE(keep(delta_q));
     // Check handling of extends for classes with annotation filters.
     auto delta_s0 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S0;");

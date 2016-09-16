@@ -1,3 +1,5 @@
+# Configuration for ProGuard matcher e2e tests.
+
 -dontoptimize
 
 -keep class com.facebook.redex.test.proguard.Gamma
@@ -83,7 +85,8 @@
 -keep class ** extends android.widget.TextView
 -keep class ** extends @com.facebook.redex.test.proguard.DontKillMe com.facebook.redex.test.proguard.Delta$R?
 
--keep class ** extends com.facebook.redex.test.proguard.External3
+-keep class ** extends android.graphics.Color
+-keep class ** implements android.text.Editable
 
 -keep class ** implements com.facebook.redex.test.proguard.Eta$T0
 

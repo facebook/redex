@@ -389,15 +389,16 @@ bool type_and_annotation_match(const DexClass* cls,
   if (cls == nullptr) {
     return false;
   }
-  auto cname = cls->get_name()->c_str();
-  if (std::string(cname) == "Ljava/lang/Object;") {
+  if (cls->get_type() == get_object_type()) {
     return false;
   }
   TRACE(PGR,
         8,
-        "====> Parent search at %s [%s]\n",
+        "====> type_and_annotation_match %s [%s] against @%s %s\n",
         cls->get_name()->c_str(),
-        cls->get_deobfuscated_name().c_str());
+        cls->get_deobfuscated_name().c_str(),
+        annotation.c_str(),
+        extends_class_name.c_str());
   // First check to see if an annotation type needs to be matched.
   if (annotation != "") {
     if (!has_annotation(cls, annotation)) {
@@ -409,7 +410,9 @@ bool type_and_annotation_match(const DexClass* cls,
   auto descriptor = proguard_parser::convert_wildcard_type(extends_class_name);
   auto desc_regex = proguard_parser::form_type_regex(descriptor);
   boost::regex matcher(desc_regex);
-  return boost::regex_match(deob_name, matcher);
+  bool matched = boost::regex_match(deob_name, matcher);
+  TRACE(PGR, 8, "      %s\n", (matched ? "MATCHED" : "NO MATCH"));
+  return matched;
 }
 
 bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
@@ -423,7 +426,7 @@ bool search_interfaces(std::set<const DexClass*>* visited,
                        const std::string& annotation) {
   TRACE(PGR,
         8,
-        "Searching the interfaces of %s\n",
+        "      Searching the interfaces of %s\n",
         cls->get_deobfuscated_name().c_str());
   auto interfaces = cls->get_interfaces();
   if (interfaces) {
@@ -456,9 +459,7 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
                                    const DexClass* cls,
                                    const std::string& extends_class_name,
                                    const std::string& annotation) {
-  if (cls == nullptr) {
-    return false;
-  }
+  assert(cls != nullptr);
   // Have we already visited this class? If yes, then the result is false.
   if (visited->find(cls) != visited->end()) {
     return false;
@@ -469,9 +470,13 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
   }
   // Do any of the classes and interface above match?
   auto super_type = cls->get_super_class();
-  if (super_type) {
+  if (super_type && super_type != get_object_type()) {
+    TRACE(PGR,
+          8,
+          "      Searching super-type %s\n",
+          super_type->get_name()->c_str());
     auto super_class = type_class(super_type);
-    if (super_type) {
+    if (super_class) {
       if (search_extends_and_interfaces(
               visited, super_class, extends_class_name, annotation)) {
         return true;
@@ -479,7 +484,7 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
     } else {
       TRACE(PGR,
             8,
-            "WARNING: Can't find class for type %s\n",
+            "      WARNING: Can't find class for type %s\n",
             super_type->get_name()->c_str());
     }
   }
@@ -498,7 +503,7 @@ bool extends(const DexClass* cls,
   auto deob_name = cls->get_deobfuscated_name();
   TRACE(PGR,
         8,
-        "Looking for class %s extending <@%s> %s\n",
+        "Checking if class %s extends or implements <@%s> %s\n",
         deob_name.c_str(),
         annotation.c_str(),
         extends_class_name.c_str());
