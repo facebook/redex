@@ -19,6 +19,10 @@ bool is_seed(const T& t) {
   return t->rstate.is_seed() || t->rstate.is_renamed_seed();
 }
 
+bool is_canary(const DexClass* cls) {
+  return strstr(cls->get_name()->c_str(), "Canary");
+}
+
 bool signatures_match(const DexMethod* a, const DexMethod* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
@@ -227,7 +231,7 @@ struct UnreachableCodeRemover {
   void mark() {
     for (auto const& dex : DexStoreClassesIterator(m_stores)) {
       for (auto const& cls : dex) {
-        if (is_seed(cls)) {
+        if (is_seed(cls) || is_canary(cls)) {
           TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(cls));
           visit(cls);
         }
