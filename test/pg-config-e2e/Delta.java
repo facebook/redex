@@ -101,6 +101,7 @@ public class Delta {
                 { return int_arg + string_arg.length(); }
      public int omega(short s) { return 42; };
      public int omega(String s) { return s.length(); } // No keep rule, so pruned.
+     public int omega(int hastings) { return 1066; } // Kept by the rule  public int omega(%);
      // All thetas kept by (...)
      public int theta(int int_arg, boolean bool_arg, String string_arg, char char_arg)
                 { return int_arg + string_arg.length(); }

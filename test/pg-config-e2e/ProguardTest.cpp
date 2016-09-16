@@ -462,6 +462,11 @@ TEST(ProguardTest, assortment) {
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Delta$J;.omega(Ljava/lang/String;)I");
     ASSERT_EQ(nullptr, omega_3);
+    auto omega_4 = find_vmethod_named(delta_j,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Delta$J;.omega(I)I");
+    ASSERT_NE(nullptr, omega_4);
+    ASSERT_TRUE(keep(omega_4));
 
     // Check handling of ...
     auto theta_1 = find_vmethod_named(delta_j,
