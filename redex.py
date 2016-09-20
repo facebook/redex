@@ -371,12 +371,15 @@ def run_redex(args):
     log('Detecting Application Modules')
     application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
     store_files = []
+    store_metadata_dir = make_temp_dir('.application_module_metadata', debug_mode)
     for module in application_modules:
         log('found module: ' + module.get_name() + ' ' + module.get_canary_prefix())
         store_path = os.path.join(dex_dir, module.get_name())
         os.mkdir(store_path)
         module.unpackage(extracted_apk_dir, store_path)
-        store_files.append(module.write_redex_metadata(store_path))
+        store_metadata = os.path.join(store_metadata_dir, module.get_name() + '.json')
+        module.write_redex_metadata(store_path, store_metadata)
+        store_files.append(store_metadata)
 
     # Some of the native libraries can be concatenated together into one
     # xz-compressed file. We need to decompress that file so that we can scan
