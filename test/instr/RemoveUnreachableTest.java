@@ -10,8 +10,11 @@
 import static org.fest.assertions.api.Assertions.*;
 
 import org.junit.Test;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 public class RemoveUnreachableTest {
+  volatile long counter;
+
   private static boolean classExists(String s) {
     try {
       Class.forName(s);
@@ -33,6 +36,14 @@ public class RemoveUnreachableTest {
   public void testHasher() {
     TestHasher h = new TestHasher();
     UseHasher.use(h);
+  }
+
+  @Test
+  public void testAtomicUpdater() {
+    AtomicLongFieldUpdater<RemoveUnreachableTest> up
+      = AtomicLongFieldUpdater.newUpdater(
+          RemoveUnreachableTest.class,
+          "counter");
   }
 }
 
