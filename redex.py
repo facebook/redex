@@ -115,29 +115,26 @@ def run_pass(
     log('Dex processing finished in {:.2f} seconds'.format(timer() - start))
 
 
+def extract_dex_number(dexfilename):
+    m = re.search('(classes|.*-)(\d+)', basename(dexfilename))
+    if m is None:
+        raise Exception('Bad secondary dex name: ' + dexfilename)
+    return int(m.group(2))
+
+
 def dex_glob(directory):
     """
     Return the dexes in a given directory, with the primary dex first.
     """
-    primary = 'classes.dex'
-    result = []
-    if isfile(join(directory, primary)):
-        result.append(join(directory, primary))
+    primary = join(directory, 'classes.dex')
+    if not isfile(primary):
+        raise Exception('No primary dex found')
 
-    if isfile(join(directory, 'classes2.dex')):
-        format = 'classes%d.dex'
-        start = 2
-    else:
-        format = 'secondary-%d.dex'
-        start = 1
+    secondaries = [d for d in glob.glob(join(directory, '*.dex'))
+                   if not d.endswith('classes.dex')]
+    secondaries.sort(key=extract_dex_number)
 
-    for i in range(start, 100):
-        dex = join(directory, format % i)
-        if not isfile(dex):
-            break
-        result += [dex]
-
-    return result
+    return [primary] + secondaries
 
 
 def move_dexen_to_directories(root, dexpaths):
