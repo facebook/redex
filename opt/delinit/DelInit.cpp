@@ -476,3 +476,5 @@ void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManage
       drefs.del_init_res.deleted_dmeths);
   post_dexen_changes(scope, stores);
 }
+
+static DelInitPass s_pass;

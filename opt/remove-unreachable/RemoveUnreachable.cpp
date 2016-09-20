@@ -317,3 +317,5 @@ void RemoveUnreachablePass::run_pass(
   ucr.mark_sweep();
   trace_stats("after", stores);
 }
+
+static RemoveUnreachablePass s_pass;

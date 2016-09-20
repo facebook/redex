@@ -368,3 +368,5 @@ void BridgePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager
   Scope scope = build_class_scope(stores);
   BridgeRemover(scope).run();
 }
+
+static BridgePass s_pass;

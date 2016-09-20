@@ -98,3 +98,5 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pas
       num_var_dropped);
   strip_src_files(scope, m_drop_src_files);
 }
+
+static StripDebugInfoPass s_pass;

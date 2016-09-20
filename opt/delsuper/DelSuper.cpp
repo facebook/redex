@@ -363,3 +363,5 @@ void DelSuperPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   const auto& scope = build_class_scope(stores);
   DelSuper(scope).run(/* do_delete = */true);
 }
+
+static DelSuperPass s_pass;

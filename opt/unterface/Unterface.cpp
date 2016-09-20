@@ -471,3 +471,5 @@ void UnterfacePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMana
   }
   stores[0].get_dexen() = std::move(outdex);
 }
+
+static UnterfacePass s_pass;

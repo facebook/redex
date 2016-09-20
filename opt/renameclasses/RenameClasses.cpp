@@ -293,3 +293,5 @@ void RenameClassesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pass
   TRACE(RENAME, 1, "String savings, at least %d bytes \n",
       base_strings_size - ren_strings_size);
 }
+
+static RenameClassesPass s_pass;

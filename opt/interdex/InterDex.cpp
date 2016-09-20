@@ -548,3 +548,5 @@ void InterDexPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
     }
   }
 }
+
+static InterDexPass s_pass;

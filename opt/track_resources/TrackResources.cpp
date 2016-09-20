@@ -182,3 +182,5 @@ void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pas
   inline_field_values(scope, cfg, tracked_classes, recorded_fields);
   write_found_fields(m_tracked_fields_output, recorded_fields);
 }
+
+static TrackResourcesPass s_pass;

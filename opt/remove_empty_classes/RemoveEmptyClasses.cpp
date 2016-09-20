@@ -143,3 +143,5 @@ void RemoveEmptyClassesPass::run_pass(
   remove_empty_classes(scope);
   post_dexen_changes(scope, stores);
 }
+
+static RemoveEmptyClassesPass s_pass;

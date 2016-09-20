@@ -270,3 +270,5 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
       s_kcount.field_asets_cleared,
       s_kcount.field_asets);
 }
+
+static AnnoKillPass s_pass;

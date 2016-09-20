@@ -285,3 +285,5 @@ void SimpleInlinePass::select_single_called(
     inlinable.insert(callee);
   }
 }
+
+static SimpleInlinePass s_pass;

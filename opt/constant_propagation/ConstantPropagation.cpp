@@ -273,3 +273,5 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg
   auto blacklist_classes = get_black_list(m_blacklist);
   ConstantPropagation(scope).run(blacklist_classes);
 }
+
+static ConstantPropagationPass s_pass;

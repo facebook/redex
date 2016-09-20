@@ -277,3 +277,5 @@ void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMa
   inline_field_values(scope);
   remove_unused_fields(scope, m_remove_class_members);
 }
+
+static FinalInlinePass s_pass;

@@ -31,6 +31,7 @@
 #include "JarLoader.h"
 #include "DexOutput.h"
 #include "PassManager.h"
+#include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ProguardLoader.h" // Old ProGuard Parser
@@ -38,12 +39,6 @@
 #include "RedexContext.h"
 #include "Timer.h"
 #include "Warning.h"
-
-/**
- * Create a vector that registers all possible passes.  Forward-declared to
- * make it easy to separate open-source from non-public passes.
- */
-std::vector<Pass*> create_passes();
 
 static void usage() {
   fprintf(
@@ -366,8 +361,6 @@ int main(int argc, char* argv[]) {
 
   g_redex = new RedexContext();
 
-  auto passes = create_passes();
-
   Arguments args;
   std::vector<KeepRule> rules;
   // Currently there are two sources that specify the library jars:
@@ -482,6 +475,7 @@ int main(int argc, char* argv[]) {
     cfg.using_seeds = nseeds > 0;
   }
 
+  auto const& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, rules, pg_config, args.config);
   {
     Timer t("Running optimization passes");

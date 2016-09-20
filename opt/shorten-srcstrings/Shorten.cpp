@@ -127,3 +127,5 @@ void ShortenSrcStringsPass::run_pass(
     DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   return strip_src_strings(stores, m_filename_mappings.c_str());
 }
+
+static ShortenSrcStringsPass s_pass;

@@ -72,11 +72,12 @@ libredex_la_SOURCES = \
 	libredex/JarLoader.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
+	libredex/PassRegistry.cpp \
 	libredex/ProguardLexer.cpp \
-	libredex/ProguardParser.cpp \
 	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
+	libredex/ProguardParser.cpp \
 	libredex/ProguardRegex.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
@@ -99,6 +100,20 @@ libredex_la_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
+	util/Sha1.cpp
+
+libredex_la_LIBADD = \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
+	-lpthread
+
+#
+# redex-all: the main executable
+#
+bin_PROGRAMS = redex-all redexdump
+
+redex_all_SOURCES = \
 	opt/annoclasskill/AnnoClassKill.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
@@ -129,22 +144,7 @@ libredex_la_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
-	util/Sha1.cpp
-
-libredex_la_LIBADD = \
-	$(BOOST_FILESYSTEM_LIB) \
-	$(BOOST_SYSTEM_LIB) \
-	$(BOOST_REGEX_LIB) \
-	-lpthread
-
-#
-# redex-all: the main executable
-#
-bin_PROGRAMS = redex-all redexdump
-
-redex_all_SOURCES = \
-	tools/redex-all/main.cpp \
-	tools/redex-all/Passes.cpp
+	tools/redex-all/main.cpp
 
 redex_all_LDADD = \
 	libredex.la \

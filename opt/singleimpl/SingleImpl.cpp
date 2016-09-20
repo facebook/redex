@@ -120,3 +120,5 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
           s_invoke_intf_count);
   post_dexen_changes(scope, stores);
 }
+
+static SingleImplPass s_pass;

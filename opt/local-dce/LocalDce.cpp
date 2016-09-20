@@ -433,3 +433,5 @@ void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   auto scope = build_class_scope(stores);
   LocalDce(scope).run();
 }
+
+static LocalDcePass s_pass;

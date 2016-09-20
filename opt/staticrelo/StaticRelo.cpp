@@ -719,3 +719,5 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     s_meth_could_not_move_count,
     s_line_conflict_but_sig_fine_count);
 }
+
+static StaticReloPass s_pass;

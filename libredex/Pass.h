@@ -17,6 +17,7 @@
 
 #include "DexStore.h"
 #include "ConfigFiles.h"
+#include "PassRegistry.h"
 
 class DexClasses;
 class DexClass;
@@ -97,11 +98,15 @@ class Pass {
 
   Pass(std::string name)
      : m_name(name),
-       m_assumes_sync(true) {}
+       m_assumes_sync(true) {
+    PassRegistry::get().register_pass(this);
+  }
 
   Pass(std::string name, DoesNotSync)
      : m_name(name),
-       m_assumes_sync(false) {}
+       m_assumes_sync(false) {
+    PassRegistry::get().register_pass(this);
+  }
 
   virtual ~Pass() {}
 

@@ -387,3 +387,5 @@ void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   dc.insert_at(holder, 0);
   root_store.emplace_back(std::move(dc));
 }
+
+static StaticSinkPass s_pass;

@@ -317,3 +317,5 @@ void ReBindRefsPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   rb.rewrite_refs();
   rb.print_stats();
 }
+
+static ReBindRefsPass s_pass;

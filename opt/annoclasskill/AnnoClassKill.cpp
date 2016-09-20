@@ -158,3 +158,5 @@ void AnnoClassKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pass
   kill_annotation_classes(scope, kill_annos);
   post_dexen_changes(scope, stores);
 }
+
+static AnnoClassKillPass s_pass;

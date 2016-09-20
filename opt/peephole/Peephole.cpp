@@ -229,3 +229,5 @@ void PeepholePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   auto scope = build_class_scope(stores);
   PeepholeOptimizer(scope).run();
 }
+
+static PeepholePass s_pass;

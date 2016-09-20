@@ -861,3 +861,5 @@ void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager&
     if (!more_opt_needed) break;
   } while (++passes < m_pass_config.max_passes);
 }
+
+static SynthPass s_pass;
