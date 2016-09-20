@@ -452,7 +452,6 @@ def run_redex(args):
         log('repacking module: ' + module.get_name())
         module.repackage(extracted_apk_dir, dex_dir, have_locators)
 
-
     log('Creating output apk')
     create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
             args.keyalias, args.keypass)
