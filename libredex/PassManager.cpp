@@ -71,7 +71,11 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
-  process_proguard_rules(m_pg_config, scope);
+  {
+    Timer t("Processing proguard rules");
+    // TODO(t13457913): process_proguard_rules is really slow
+    // process_proguard_rules(m_pg_config, scope);
+  }
   {
     Timer t("Initializing reachable classes");
     init_reachable_classes(

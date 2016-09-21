@@ -415,6 +415,7 @@ int main(int argc, char* argv[]) {
   // New ProGuard parser
   redex::ProguardConfiguration pg_config;
   if (!args.proguard_config.empty()) {
+    Timer t("New proguard parser");
     redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
   }
 
