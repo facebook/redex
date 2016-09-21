@@ -17,8 +17,6 @@
 
 namespace {
 
-constexpr size_t kBufSize = 4096;
-
 std::string find_or_same(
   const std::string& key,
   const std::unordered_map<std::string, std::string>& map
@@ -66,6 +64,58 @@ std::string translate_type(std::string type, const ProguardMap& pm) {
   auto array_prefix = type.substr(0, base_start);
   auto base_type = type.substr(base_start);
   return array_prefix + pm.translate_class(base_type);
+}
+
+void whitespace(const char*& p) {
+  while (isspace(*p)) {
+    ++p;
+  }
+}
+
+void digits(const char*& p) {
+  while (isdigit(*p)) {
+    ++p;
+  }
+}
+
+bool isseparator(uint32_t cp) {
+  return cp == '\0' ||
+    cp == ' ' ||
+    cp == ':' ||
+    cp == ',' ||
+    cp == '\n' ||
+    cp == '(' ||
+    cp == ')';
+}
+
+bool id(const char*& p, std::string& s) {
+  auto b = p;
+  auto first = mutf8_next_code_point(p);
+  if (isdigit(first)) return false;
+  while (true) {
+    auto prev = p;
+    auto cp = mutf8_next_code_point(p);
+    if (isseparator(cp)) {
+      p = prev;
+      s = std::string(b, p - b);
+      return true;
+    }
+  }
+}
+
+bool literal(const char*& p, const char* s) {
+  auto len = strlen(s);
+  bool rv = !strncmp(p, s, len);
+  p += len;
+  return rv;
+}
+
+bool literal(const char*& p, char s) {
+  if (*p == s) {
+    ++p;
+    return true;
+  }
+  return false;
 }
 }
 
@@ -127,13 +177,12 @@ void ProguardMap::parse_proguard_map(std::istream& fp) {
 }
 
 bool ProguardMap::parse_class(const std::string& line) {
-  char classname[kBufSize];
-  char newname[kBufSize];
-  int n;
-  n = sscanf(line.c_str(), "%s -> %[^:]:", classname, newname);
-  if (n != 2) {
-    return false;
-  }
+  std::string classname;
+  std::string newname;
+  auto p = line.c_str();
+  if (!id(p, classname)) return false;
+  if (!literal(p, " -> ")) return false;
+  if (!id(p, newname)) return false;
   m_currClass = convert_type(classname);
   m_currNewClass = convert_type(newname);
   m_classMap[m_currClass] = m_currNewClass;
@@ -142,14 +191,18 @@ bool ProguardMap::parse_class(const std::string& line) {
 }
 
 bool ProguardMap::parse_field(const std::string& line) {
-  char type[kBufSize];
-  char fieldname[kBufSize];
-  char newname[kBufSize];
-  int n = sscanf(line.c_str(), " %s %[a-zA-Z0-9$_] -> %s",
-                 type, fieldname, newname);
-  if (n != 3) {
-    return false;
-  }
+  std::string type;
+  std::string fieldname;
+  std::string newname;
+
+  auto p = line.c_str();
+  whitespace(p);
+  if (!id(p, type)) return false;
+  whitespace(p);
+  if (!id(p, fieldname)) return false;
+  if (!literal(p, " -> ")) return false;
+  if (!id(p, newname)) return false;
+
   auto ctype = convert_type(type);
   auto xtype = translate_type(ctype, *this);
   auto pgnew = convert_field(m_currNewClass, xtype.c_str(), newname);
@@ -160,86 +213,51 @@ bool ProguardMap::parse_field(const std::string& line) {
 }
 
 bool ProguardMap::parse_method(const std::string& line) {
-  const char* type;
-  const char* methodname;
-  const char* args;
-  const char* newname;
-
-  char* p = const_cast<char*>(line.c_str());
-
-  while (!isalpha(*p)) {
-    if (!*p) goto no_match;
-    p++;
-  }
-  type = p;
-
-  while (!isspace(*p)) {
-    if (!*p) goto no_match;
-    p++;
-  }
-  *p++ = '\0';
-  methodname = p;
-
-  while (*p != '(') {
-    if (!*p) goto no_match;
-    p++;
-  }
-  *p++ = '\0';
-  args = p;
-
-  while (*p != ')') {
-    if (!*p) goto no_match;
-    p++;
-  }
-  *p++ = '\0';
-
-  while (*p != ' ') {
-    if (!*p) goto no_match;
-    p++;
-  }
-
-  if (strncmp(p, " -> ", 4)) {
-    goto no_match;
-  }
-  p += 4;
-  newname = p;
-
-  add_method_mapping(type, methodname, newname, args);
-  return true;
-
- no_match:
-  return false;
-}
-
-void ProguardMap::add_method_mapping(
-  const char* rtype,
-  const char* methodname,
-  const char* newname,
-  const char* args
-) {
+  std::string type;
+  std::string methodname;
   std::string old_args;
   std::string new_args;
-  char* p = const_cast<char*>(args);
-  while (*p) {
-    auto start = p;
-    while (*p && *p != ',') {
-      p++;
-    }
-    if (*p == ',') {
-      *p = '\0';
-      p++;
-    }
-    auto old_arg = convert_type(start);
+  std::string newname;
+
+  auto p = line.c_str();
+  whitespace(p);
+  digits(p);
+  literal(p, ':');
+  digits(p);
+  literal(p, ':');
+
+  if (!id(p, type)) return false;
+  whitespace(p);
+
+  if (!id(p, methodname)) return false;
+
+  if (!literal(p, '(')) return false;
+  while (true) {
+    std::string arg;
+    if (literal(p, ')')) break;
+    id(p, arg);
+    auto old_arg = convert_type(arg);
     auto new_arg = translate_type(old_arg, *this);
     old_args += old_arg;
     new_args += new_arg;
+    literal(p, ',');
   }
-  auto old_rtype = convert_type(rtype);
+
+  literal(p, ':');
+  digits(p);
+  literal(p, ':');
+  digits(p);
+  literal(p, " -> ");
+
+  if (!id(p, newname)) return false;
+  
+  auto old_rtype = convert_type(type);
   auto new_rtype = translate_type(old_rtype, *this);
   auto pgold = convert_method(m_currClass, old_rtype, methodname, old_args);
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
+  return true;
 }
 
 void apply_deobfuscated_names(

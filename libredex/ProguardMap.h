@@ -88,12 +88,6 @@ struct ProguardMap {
   bool parse_field(const std::string& line);
   bool parse_method(const std::string& line);
 
-  void add_method_mapping(
-    const char* type,
-    const char* methodname,
-    const char* newname,
-    const char* args);
-
  private:
   // Unobfuscated to obfuscated maps
   std::unordered_map<std::string, std::string> m_classMap;

@@ -17,6 +17,7 @@ TEST(ProguardMapTest, empty) {
   std::stringstream ss(
     "com.foo.bar -> A:\n"
     "    int do1 -> a\n"
+    "    java.lang.String ƒKEY_FILTER -> ƒKEY_FILTER\n"
     "    3:3:void <init>() -> <init>\n"
     "    8:929:java.util.ArrayList getCopy() -> a\n"
     "    1807:1807:android.content.Context android.support.v7.view.menu.MenuBuilder.getContext():807:807 -> addSubMenu\n"
