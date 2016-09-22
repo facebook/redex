@@ -26,6 +26,7 @@ class PassManager {
   void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   std::map<std::string, std::map<std::string, int> > get_metrics() const;
+  const Json::Value& get_config() const { return m_config; }
 
   PassManager(
     const std::vector<Pass*>& passes,

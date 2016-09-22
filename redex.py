@@ -223,12 +223,18 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
 
 
 def merge_proguard_map_with_rename_output(
+        passes_list,
         input_apk_path,
         apk_output_path,
         config_dict,
         pg_file):
     log('running merge proguard step')
-    redex_rename_map_path = config_dict['RenameClassesPass']['class_rename']
+    if 'RenameClassesPass' in passes_list:
+        redex_rename_map_path = config_dict['RenameClassesPass']['class_rename']
+    elif 'RenameClassesPassV2' in passes_list:
+        redex_rename_map_path = config_dict['RenameClassesPassV2']['class_rename']
+    else:
+        raise ValueError("merge_proguard_map_with_rename_output called with a rename classes pass")
     log('redex map is at ' + str(redex_rename_map_path))
     if os.path.isfile(redex_rename_map_path):
         redex_pg_file = "redex-class-rename-map.txt"
@@ -462,8 +468,9 @@ def run_redex(args):
     copy_file_to_out_dir(newtmp, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
     copy_file_to_out_dir(newtmp, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
 
-    if 'RenameClassesPass' in passes_list:
+    if 'RenameClassesPass' in passes_list or 'RenameClassesPassV2' in passes_list:
         merge_proguard_map_with_rename_output(
+            passes_list,
             args.input_apk,
             args.out,
             config_dict,

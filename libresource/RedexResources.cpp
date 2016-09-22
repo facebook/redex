@@ -70,7 +70,6 @@ std::string dotname_to_dexname(const std::string& classname) {
   return dexname;
 }
 
-
 /*
  * Parse AndroidManifest from buffer, return a list of class names that are referenced
  */
@@ -132,11 +131,14 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
         if (classname.size()) {
           result.insert(dotname_to_dexname(classname));
         }
+        classname = get_attribute_value(parser, name);
+        if (classname.size()) {
+          result.insert(dotname_to_dexname(classname));
+        }
       }
     }
   } while (type != android::ResXMLParser::BAD_DOCUMENT &&
            type != android::ResXMLParser::END_DOCUMENT);
-
   return result;
 }
 
@@ -148,6 +150,9 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
 
   std::unordered_set<std::string> result;
 
+  android::String16 name("name");
+  android::String16 klazz("class");
+
   if (parser.getError() != android::NO_ERROR) {
     return result;
   }
@@ -158,9 +163,14 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
     if (type == android::ResXMLParser::START_TAG) {
       size_t len;
       android::String16 tag(parser.getElementName(&len));
-      std::string converted = std::string("L") +
-          convert_from_string16(tag) +
-          std::string(";");
+      std::string classname = convert_from_string16(tag);
+      if (!strcmp(classname.c_str(), "fragment") || !strcmp(classname.c_str(), "view")) {
+        classname = get_attribute_value(parser, klazz);
+        if (classname.empty()) {
+          classname = get_attribute_value(parser, name);
+        }
+      }
+      std::string converted = std::string("L") + classname + std::string(";");
 
       bool is_classname = converted.find('.') != std::string::npos;
       if (is_classname) {
@@ -170,7 +180,6 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
     }
   } while (type != android::ResXMLParser::BAD_DOCUMENT &&
            type != android::ResXMLParser::END_DOCUMENT);
-
   return result;
 }
 

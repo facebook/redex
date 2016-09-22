@@ -66,6 +66,7 @@ class DexEncodedValue : public Gatherable {
  public:
   DexEncodedValueTypes evtype() const { return m_evtype; }
   bool is_evtype_primitive() const;
+  void value(uint64_t value) { m_value = value; }
   uint64_t value() const { return m_value; }
   static DexEncodedValue* get_encoded_value(DexIdx* idx,
                                             const uint8_t*& encdata);
