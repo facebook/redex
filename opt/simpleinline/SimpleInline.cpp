@@ -141,6 +141,9 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   TRACE(SINL, 1,
       "%ld inlined calls over %ld methods and %ld methods removed\n",
       inliner.get_info().calls_inlined, inlined_count, deleted);
+
+  mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
+  mgr.incr_metric("methods_removed", deleted);
 }
 
 /**
