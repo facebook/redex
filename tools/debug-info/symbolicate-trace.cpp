@@ -8,6 +8,7 @@
  */
 
 #include <boost/regex.hpp>
+#include <boost/scope_exit.hpp>
 #include <fcntl.h>
 #include <iostream>
 #include <memory>
@@ -32,29 +33,42 @@ struct Position {
 struct PositionMap {
   std::vector<std::string> string_pool;
   std::unique_ptr<PositionItem[]> positions;
+  size_t positions_size;
 };
 
 std::unique_ptr<PositionMap> read_map(const char* filename) {
   int fd = open(filename, O_RDONLY);
+  if (fd == -1) {
+    std::cerr << "open failed for file (" << filename
+              << ") with error: " << strerror(errno) << std::endl;
+    return nullptr;
+  }
   struct stat buf;
   if (fstat(fd, &buf)) {
-    std::cerr << "Cannot fstat file\n";
+    std::cerr << "Cannot fstat file (" << filename
+              << ") with error: " << strerror(errno) << std::endl;
     return nullptr;
   }
   uint8_t* mapping = (uint8_t*)mmap(
       nullptr, buf.st_size, PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
   uint32_t magic = *(uint32_t*)mapping;
   mapping += sizeof(uint32_t);
+  if (mapping == MAP_FAILED) {
+    std::cerr << "mmap failed for file (" << filename
+              << ") with error: " << strerror(errno) << std::endl;
+    return nullptr;
+  }
+  BOOST_SCOPE_EXIT_ALL(=, &buf) {
+    munmap(mapping, buf.st_size);
+  };
   if (magic != 0xfaceb000) {
     std::cerr << "Magic number mismatch\n";
-    munmap(mapping, buf.st_size);
     return nullptr;
   }
   uint32_t version = *(uint32_t*)mapping;
   mapping += sizeof(uint32_t);
   if (version != 1) {
     std::cerr << "Version mismatch\n";
-    munmap(mapping, buf.st_size);
     return nullptr;
   }
 
@@ -72,13 +86,12 @@ std::unique_ptr<PositionMap> read_map(const char* filename) {
   mapping += sizeof(uint32_t);
   map->positions.reset(new PositionItem[pos_count]);
   memcpy(map->positions.get(), mapping, pos_count * sizeof(PositionItem));
-  munmap(mapping, buf.st_size);
   return map;
 }
 
 std::vector<Position> get_stack(const PositionMap& map, int64_t idx) {
   std::vector<Position> stack;
-  while (idx >= 0) {
+  while (idx >= 0 && (size_t)idx < map.positions_size) {
     auto pi = map.positions[idx];
     stack.push_back(Position(map.string_pool[pi.file_id], pi.line));
     idx = (int64_t)pi.parent - 1;
