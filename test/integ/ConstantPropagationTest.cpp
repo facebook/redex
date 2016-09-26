@@ -26,7 +26,7 @@
 This test takes as input the Dex bytecode for the class generated
 from the Java source file:
    <redex root>/test/integ/ConstantPropagation.java
-which is specified in Buck tests via an enviornment variable in the
+which is specified in Buck tests via an environment variable in the
 BUCK file. Before optimization, the code for the propagate method is:
 
 dmethod: propagation_1

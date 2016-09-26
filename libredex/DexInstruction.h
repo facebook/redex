@@ -714,7 +714,6 @@ inline bool may_throw(DexOpcode op) {
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
   case OPCODE_CHECK_CAST:
-  case OPCODE_THROW:
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
   case OPCODE_AGET_OBJECT:

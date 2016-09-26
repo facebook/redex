@@ -945,7 +945,8 @@ std::string show(const MethodItemEntry& mei) {
     ss << "POSITION: " << show(mei.pos);
     return ss.str();
   case MFLOW_FALLTHROUGH:
-    return "FALLTHROUGH:";
+    ss << "FALLTHROUGH: [" << mei.throwing_mie << "]";
+    return ss.str();
   }
   not_reached();
 }
