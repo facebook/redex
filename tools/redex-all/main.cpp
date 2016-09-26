@@ -180,7 +180,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
   const char* apk_dir = nullptr;
 
   while ((c = getopt_long(
-              argc, argv, ":a:c:o:w:p:S::J::", &options[0], nullptr)) != -1) {
+              argc, argv, ":a:c:j:p:s:o:w:S::J::", &options[0], nullptr)) != -1) {
     switch (c) {
     case 'a':
       apk_dir = optarg;
