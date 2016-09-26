@@ -45,6 +45,11 @@ public class RemoveUnreachableTest {
           RemoveUnreachableTest.class,
           "counter");
   }
+
+  @Test
+  public void testFoo() {
+    FooDoer.doFoo(new ActualFoo());
+  }
 }
 
 class A {
@@ -70,5 +75,25 @@ class TestHasher extends AbstractHasher {
 class UseHasher {
   public static void use(AbstractHasher ah) {
     ah.putString();
+  }
+}
+
+interface IFoo {
+  void foo();
+}
+
+abstract class BaseFoo implements IFoo {
+}
+
+abstract class SemiFoo extends BaseFoo {
+}
+
+class ActualFoo extends SemiFoo {
+  @Override public void foo() {}
+}
+
+class FooDoer {
+  public static void doFoo(SemiFoo sf) {
+    sf.foo();
   }
 }

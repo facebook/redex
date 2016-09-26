@@ -48,6 +48,29 @@ bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
   return false;
 }
 
+DexMethod* resolve(const DexMethod* method, const DexClass* cls) {
+  if (!cls) return nullptr;
+  for (auto const& m : cls->get_vmethods()) {
+    if (signatures_match(method, m)) {
+      return m;
+    }
+  }
+  {
+    auto const& superclass = type_class(cls->get_super_class());
+    auto const resolved = resolve(method, superclass);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
+    auto const resolved = resolve(method, type_class(interface));
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return nullptr;
+}
+
 void trace_stats(const char* label, DexStoresVector& stores) {
   size_t nclasses = 0;
   size_t nfields = 0;
@@ -197,8 +220,7 @@ struct UnreachableCodeRemover {
     if (marked(method)) return;
     TRACE(RMU, 3, "Visiting method: %s\n", SHOW(method));
     mark(method);
-    visit(resolve_method(method, MethodSearch::Any));
-    visit(resolve_intf_methodref(method));
+    visit(resolve(method, type_class(method->get_class())));
     gather_and_visit(method);
     visit(type_class(method->get_class()));
     visit(type_class(method->get_proto()->get_rtype()));
