@@ -144,7 +144,7 @@ TEST(ProguardTest, assortment) {
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(pg_config, scope);
+  process_proguard_rules(proguard_map, pg_config, scope);
 
   { // Alpha is explicitly used and should not be deleted.
     auto alpha =

@@ -73,8 +73,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   Scope scope = build_class_scope(it);
   {
     Timer t("Processing proguard rules");
-    // TODO(t13457913): process_proguard_rules is really slow
-    // process_proguard_rules(m_pg_config, scope);
+    process_proguard_rules(cfg.get_proguard_map(), m_pg_config, scope);
   }
   {
     Timer t("Initializing reachable classes");

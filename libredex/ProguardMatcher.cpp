@@ -17,6 +17,7 @@
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardRegex.h"
+#include "RedexContext.h"
 #include "keeprules.h"
 
 namespace redex {
@@ -256,13 +257,14 @@ bool check_required_unset_access_flags(
 }
 
 template <class DexMember>
-bool has_annotation(const DexMember* member, const std::string& annotation) {
+bool has_annotation(const DexMember* member,
+                    const std::string& annotation) {
   auto annos = member->get_anno_set();
   if (annos != nullptr) {
     auto annotation_regex = proguard_parser::convert_wildcard_type(annotation);
-    boost::regex annotation_matcher(annotation_regex);
+    boost::regex matcher(annotation_regex);
     for (const auto& anno : annos->get_annotations()) {
-      if (boost::regex_match(anno->type()->c_str(), annotation_matcher)) {
+      if (boost::regex_match(anno->type()->c_str(), matcher)) {
         return true;
       }
     }
@@ -291,7 +293,8 @@ void keep_fields(std::list<DexField*> fields,
   for (auto field : fields) {
     for (const auto& fieldSpecification : fieldSpecifications) {
       if (fieldSpecification.annotationType != "") {
-        if (!has_annotation(field, fieldSpecification.annotationType)) {
+        if (!has_annotation(
+                field, fieldSpecification.annotationType)) {
           continue;
         }
       }
@@ -313,9 +316,9 @@ void keep_fields(std::list<DexField*> fields,
               "====> Comparing %s vs. %s\n",
               fieldSpecification.name.c_str(),
               field_name.c_str());
-        boost::regex fieldname_regex(
+        boost::regex matcher(
             proguard_parser::form_member_regex(fieldSpecification.name));
-        if (boost::regex_match(field_name, fieldname_regex)) {
+        if (boost::regex_match(field_name, matcher)) {
           TRACE(
               PGR, 8, "====> Got fieldname match for %s\n", field_name.c_str());
           field->rstate.set_keep();
@@ -326,7 +329,8 @@ void keep_fields(std::list<DexField*> fields,
   }
 }
 
-void apply_field_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
+void apply_field_keeps(DexClass* cls,
+                       const redex::KeepSpec& keep_rule) {
   keep_fields(cls->get_ifields(), keep_rule);
   keep_fields(cls->get_sfields(), keep_rule);
 }
@@ -337,7 +341,8 @@ void keep_methods(const redex::KeepSpec& keep_rule,
                   const boost::regex& method_regex) {
   for (const auto& method : methods) {
     if (methodSpecification.annotationType != "") {
-      if (!has_annotation(method, methodSpecification.annotationType)) {
+      if (!has_annotation(
+              method, methodSpecification.annotationType)) {
         continue;
       }
     }
@@ -358,7 +363,8 @@ void keep_methods(const redex::KeepSpec& keep_rule,
   }
 }
 
-void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
+void apply_method_keeps(DexClass* cls,
+                        const redex::KeepSpec& keep_rule) {
   auto classname = keep_rule.class_spec.className;
   auto methodSpecifications = keep_rule.class_spec.methodSpecifications;
   for (const auto& method_spec : methodSpecifications) {
@@ -375,9 +381,11 @@ void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
           method_spec.name.c_str(),
           method_spec.descriptor.c_str());
     TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_name.c_str());
-    boost::regex method_regex(qualified_method_name);
-    keep_methods(keep_rule, method_spec, cls->get_vmethods(), method_regex);
-    keep_methods(keep_rule, method_spec, cls->get_dmethods(), method_regex);
+    boost::regex matcher (qualified_method_name);
+    keep_methods(
+        keep_rule, method_spec, cls->get_vmethods(), matcher);
+    keep_methods(
+        keep_rule, method_spec, cls->get_dmethods(), matcher);
   }
 }
 
@@ -489,7 +497,8 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
     }
   }
   // Do any of the interfaces from here and up match?
-  bool found = search_interfaces(visited, cls, extends_class_name, annotation);
+  bool found =
+      search_interfaces(visited, cls, extends_class_name, annotation);
   visited->emplace(cls);
   return found;
 }
@@ -512,8 +521,56 @@ bool extends(const DexClass* cls,
       &visited, cls, extends_class_name, annotation);
 }
 
-void process_proguard_rules(const ProguardConfiguration& pg_config,
+bool classname_contains_wildcard(const std::string& classname) {
+  for (char ch : classname) {
+    if (ch == '*' || ch == '?') {
+      return true;
+    }
+  }
+  return false;
+}
+
+void process_class(const KeepSpec& keep_rule,
+                   DexClass* cls) {
+  // Don't process external classes
+  if (cls->is_external()) {
+    return;
+  }
+  // Check for extends / implements
+  if (!extends(cls,
+               keep_rule.class_spec.extendsClassName,
+               keep_rule.class_spec.extendsAnnotationType)) {
+    return;
+  }
+  // Check to see if we need to match an annotation type.
+  if (keep_rule.class_spec.annotationType != "") {
+    if (!has_annotation(cls, keep_rule.class_spec.annotationType)) {
+      return;
+    }
+  }
+  if (!access_matches(keep_rule.class_spec.setAccessFlags,
+                      keep_rule.class_spec.unsetAccessFlags,
+                      cls->get_access())) {
+    return;
+  }
+  TRACE(PGR, 8, "==> Also got access match\n");
+  TRACE(PGR,
+        8,
+        "====> Setting keep for class %s\n",
+        cls->get_deobfuscated_name().c_str());
+  cls->rstate.set_keep();
+  // Apply the keep option modifiers.
+  apply_keep_modifiers(keep_rule, cls);
+  // Apply any field-level keep specifications.
+  apply_field_keeps(cls, keep_rule);
+  // Apply any method-level keep specifications.
+  apply_method_keeps(cls, keep_rule);
+}
+
+void process_proguard_rules(const ProguardMap& pg_map,
+                            const ProguardConfiguration& pg_config,
                             Scope& classes) {
+  boost::regex matcher;
   // Process each keep rule.
   for (const auto& keep_rule : pg_config.keep_rules) {
     // Form a regex for matching against classes in the scope.
@@ -521,59 +578,35 @@ void process_proguard_rules(const ProguardConfiguration& pg_config,
           8,
           "Processing keep rule for class %s\n",
           keep_rule.class_spec.className.c_str());
-    if (keep_rule.class_spec.annotationType != "") {
-      TRACE(PGR,
-            8,
-            "Using annotation type %s\n",
-            keep_rule.class_spec.annotationType.c_str());
-    }
     auto descriptor =
         proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
     TRACE(PGR, 8, "==> Descriptor: %s\n", descriptor.c_str());
-    auto desc_regex = proguard_parser::form_type_regex(descriptor);
-    boost::regex matcher(desc_regex);
-    // Iterate over each class and process the ones that match this rule.
-    for (const auto& cls : classes) {
-      // Check for extends / implements
-      if (!extends(cls,
-                   keep_rule.class_spec.extendsClassName,
-                   keep_rule.class_spec.extendsAnnotationType)) {
+    // Look up concrete class names directly.
+    if (!classname_contains_wildcard(keep_rule.class_spec.className)) {
+      DexType* typ = DexType::get_type(pg_map.translate_class(descriptor).c_str());
+      if (typ == nullptr) {
         continue;
       }
-      // Check to see if we need to match an annotation type.
-      if (keep_rule.class_spec.annotationType != "") {
-        if (!has_annotation(cls, keep_rule.class_spec.annotationType)) {
-          continue;
-        }
+      DexClass* concrete_cls = type_class(typ);
+      if (concrete_cls == nullptr) {
+        continue;
       }
-      auto cname = cls->get_type()->get_name()->c_str();
+      process_class(keep_rule, concrete_cls);
+      continue;
+    }
+    // For classnames with a wildcard suffer a linear search through all the
+    // classes looking for matches.
+    auto desc_regex = proguard_parser::form_type_regex(descriptor);
+    matcher.set_expression(desc_regex);
+    // Iterate over each class and process the ones that match this rule.
+    for (const auto& cls : classes) {
       auto deob_name = cls->get_deobfuscated_name();
       TRACE(PGR,
             8,
-            "==> Examining class %s deobfu: %s\n",
-            cname,
+            "==> Examining class: %s\n",
             deob_name.c_str());
       if (boost::regex_match(deob_name, matcher)) {
-        TRACE(PGR, 8, "==> Got name match for class %s\n", deob_name.c_str());
-        if (access_matches(keep_rule.class_spec.setAccessFlags,
-                           keep_rule.class_spec.unsetAccessFlags,
-                           cls->get_access())) {
-          TRACE(PGR, 8, "==> Also got access match\n");
-          TRACE(PGR,
-                8,
-                "====> Setting keep for class %s\n",
-                cls->get_deobfuscated_name().c_str());
-          cls->rstate.set_keep();
-          // Apply the keep option modifiers.
-          apply_keep_modifiers(keep_rule, cls);
-          // Apply any field-level keep specifications.
-          apply_field_keeps(cls, keep_rule);
-          // Apply any method-level keep specifications.
-          apply_method_keeps(cls, keep_rule);
-
-        } else {
-          TRACE(PGR, 8, "==> Failed access match.\n");
-        }
+        process_class(keep_rule, cls);
       }
     }
   }

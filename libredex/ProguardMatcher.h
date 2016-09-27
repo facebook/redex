@@ -11,12 +11,14 @@
 
 #include "DexClass.h"
 #include "ProguardConfiguration.h"
+#include "ProguardMap.h"
 
 namespace redex {
 
 using Scope = std::vector<DexClass*>;
 
-void process_proguard_rules(const ProguardConfiguration& pg_config,
+void process_proguard_rules(const ProguardMap& pg_map,
+                            const ProguardConfiguration& pg_config,
                             Scope& classes);
 }
 
