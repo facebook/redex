@@ -17,6 +17,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "ConfigFiles.h"
+#include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
@@ -74,6 +75,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   {
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), m_pg_config, scope);
+  }
+  if (!cfg.get_printseeds().empty()) {
+     Timer t("Writing seeds file");
+     std::ofstream seeds_file(cfg.get_printseeds());
+     redex::print_seeds(seeds_file, scope);
   }
   {
     Timer t("Initializing reachable classes");

@@ -61,6 +61,10 @@ struct ConfigFiles {
     return m_proguard_map;
   }
 
+  std::string get_printseeds() {
+    return m_printseeds;  
+  }
+
  public:
   bool using_seeds{false};
 
@@ -76,6 +80,7 @@ struct ConfigFiles {
   std::string m_coldstart_method_filename;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
+  std::string m_printseeds; // Filename to dump computed seeds.
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;

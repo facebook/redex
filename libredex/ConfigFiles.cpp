@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config) :
     m_coldstart_class_filename(
       config.get("coldstart_classes", "").asString()),
     m_coldstart_method_filename(
-      config.get("coldstart_methods", "").asString())
+      config.get("coldstart_methods", "").asString()),
+    m_printseeds(config.get("printseeds", "").asString())
 {
   auto no_optimizations_anno = config["no_optimizations_annotations"];
   if (no_optimizations_anno != Json::nullValue) {

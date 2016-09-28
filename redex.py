@@ -88,6 +88,8 @@ def run_pass(
         args += ['-Sproguard_map=' + script_args.proguard_map]
 
     args += ['--jarpath=' + x for x in script_args.jarpaths]
+    if script_args.printseeds:
+        args += ['--printseeds=' + script_args.printseeds]
     args += ['-S' + x for x in script_args.passthru]
     args += ['-J' + x for x in script_args.passthru_json]
 
@@ -330,6 +332,9 @@ Given an APK, produce a better APK!
 
     parser.add_argument('-m', '--proguard-map', nargs='?',
             help='Path to proguard mapping.txt for deobfuscating names')
+
+    parser.add_argument('-q', '--printseeds', nargs='?',
+            help='File to print seeds to')
 
     parser.add_argument('-P', '--proguard-config', nargs='?',
             help='Path to proguard config')

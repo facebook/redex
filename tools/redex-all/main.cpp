@@ -50,6 +50,7 @@ static void usage() {
       "  -j --jarpath Classpath jar\n"
       "  -p --proguard-config proguard config file\n"
       "  -s --seeds seeds file specifiying roots of classes to kept\n"
+      "  -q --printseeds file to report seeds computed by redex\n"
       "  -w --warn    warning level:\n"
       "                   0: no warnings\n"
       "                   1: count of warnings\n"
@@ -86,6 +87,7 @@ struct Arguments {
   std::string proguard_config;
   std::string seeds_filename;
   std::string out_dir;
+  std::string printseeds;
 };
 
 bool parse_config(const char* config_file, Arguments& args) {
@@ -168,6 +170,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       {"seeds", required_argument, 0, 's'},
       {"outdir", required_argument, 0, 'o'},
       {"warn", required_argument, 0, 'w'},
+      {"printseeds", required_argument, 0, 'q'},
       {nullptr, 0, nullptr, 0},
   };
   args.out_dir = ".";
@@ -180,7 +183,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
   const char* apk_dir = nullptr;
 
   while ((c = getopt_long(
-              argc, argv, ":a:c:j:p:s:o:w:S::J::", &options[0], nullptr)) != -1) {
+              argc, argv, ":a:c:j:p:q:s:o:w:S::J::", &options[0], nullptr)) != -1) {
     switch (c) {
     case 'a':
       apk_dir = optarg;
@@ -196,6 +199,9 @@ int parse_args(int argc, char* argv[], Arguments& args) {
     case 'j':
       args.jar_paths.emplace(optarg);
       TRACE(MAIN, 2, "Command line -j option: %s\n", optarg);
+      break;
+    case 'q':
+      args.config["printseeds"] = optarg;
       break;
     case 'p':
       args.proguard_config = optarg;
