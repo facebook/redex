@@ -33,7 +33,7 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
   if (k.allowshrinking) {
     member->rstate.set_allowshrinking();
   }
-  if (k.allowobfuscation and
+  if (k.allowobfuscation &&
       std::string(member->get_name()->c_str()) != "<init>") {
     member->rstate.set_allowobfuscation();
   }
