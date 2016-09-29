@@ -43,10 +43,12 @@ static const char ddump_usage_string[] =
     "-A, --anno: print items in the annotation section\n"
     "-d, --debug: print debug info items in the data section\n"
     "-D, --ddebug=<addr>: disassemble debug info item at <addr>\n"
-    "\nprinting options:\n"
-    "--clean: does not print indexes or offsets making the output "
-    "--raw: print all bytes, even control characters "
-    "usable for a diff\n";
+    "\n"
+    "printing options:\n"
+    "--clean: suppress indices and offsets\n"
+    "--no-headers: suppress headers\n"
+    "--raw: print all bytes, even control characters\n"
+  ;
 
 int main(int argc, char* argv[]) {
 
