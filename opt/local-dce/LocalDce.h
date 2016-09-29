@@ -16,5 +16,7 @@ class LocalDcePass : public Pass {
   LocalDcePass()
     : Pass("LocalDcePass", DoesNotSync{}) {}
 
+  static void run(DexMethod* method);
+
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

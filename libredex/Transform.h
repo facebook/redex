@@ -330,6 +330,8 @@ class MethodTransform {
   /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(DexInstruction* insn);
 
+  FatMethod* get_fatmethod_for_test() { return m_fmethod; }
+
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }
   FatMethod::iterator erase(FatMethod::iterator it) {
@@ -354,6 +356,7 @@ class MethodTransformer {
 
   ~MethodTransformer() { m_transform->sync(); }
 
+  MethodTransform* operator*() { return m_transform; }
   MethodTransform* operator->() { return m_transform; }
 };
 

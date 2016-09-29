@@ -124,8 +124,6 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
 ////////////////////////////////////////////////////////////////////////////////
 
 class LocalDce {
- private:
-  const Scope& m_scope;
   size_t m_instructions_eliminated{0};
   size_t m_total_instructions{0};
 
@@ -154,9 +152,10 @@ class LocalDce {
    *   the `try` region.  (This is actually conservative, since only
    *   potentially-excepting instructions can jump to a catch.)
    */
+ public:
   void dce(DexMethod* method) {
     auto transform =
-        MethodTransform::get_method_transform(method, true /* want_cfg */);
+        MethodTransformer(method, true /* want_cfg */);
     auto& cfg = transform->cfg();
     auto blocks = PostOrderSort(cfg).get();
     auto regs = method->get_code()->get_registers_size();
@@ -165,8 +164,8 @@ class LocalDce {
     bool changed;
     std::vector<DexInstruction*> dead_instructions;
 
-    TRACE(DCE, 5, "%s\n", show(method).c_str());
-    TRACE(DCE, 5, "%s", show(cfg).c_str());
+    TRACE(DCE, 5, "%s\n", SHOW(method));
+    TRACE(DCE, 5, "%s", SHOW(cfg));
 
     // Iterate liveness analysis to a fixed point.
     do {
@@ -224,9 +223,13 @@ class LocalDce {
       m_instructions_eliminated++;
     }
 
-    remove_unreachable_blocks(method, transform, cfg);
+    remove_unreachable_blocks(method, *transform, cfg);
+
+    TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
+    TRACE(DCE, 5, "%s", SHOW(cfg));
   }
 
+ private:
   void remove_edge(Block* p, Block* s) {
     p->succs().erase(std::remove_if(p->succs().begin(),
                                     p->succs().end(),
@@ -241,12 +244,6 @@ class LocalDce {
   bool can_delete(Block* b) {
     auto first = b->begin();
     if (first == b->end()) {
-      return false;
-    }
-    if (first->type == MFLOW_TRY && first->tentry->type == TRY_END) {
-      return false;
-    }
-    if (first->type == MFLOW_FALLTHROUGH) {
       return false;
     }
     for (auto last = b->rbegin(); last != b->rend(); ++last) {
@@ -405,11 +402,9 @@ class LocalDce {
   }
 
  public:
-  LocalDce(const Scope& scope) : m_scope(scope) {}
-
-  void run() {
+  void run(const Scope& scope) {
 	  TRACE(DCE, 1, "Running LocalDCE pass\n");
-    walk_methods(m_scope,
+    walk_methods(scope,
                  [&](DexMethod* m) {
                    if (!m->get_code()) {
                      return;
@@ -429,9 +424,13 @@ class LocalDce {
 };
 }
 
+void LocalDcePass::run(DexMethod* m) {
+  LocalDce().dce(m);
+}
+
 void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  LocalDce(scope).run();
+  LocalDce().run(scope);
 }
 
 static LocalDcePass s_pass;
