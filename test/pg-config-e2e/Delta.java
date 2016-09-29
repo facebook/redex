@@ -157,4 +157,12 @@ public class Delta {
   public interface S5 extends S4 {}
   public class S6 implements S4, S5 {}
 
+  public class T1 implements S3 {
+    public int alpha;
+    public int beta;
+    public int gamma;
+  }
+
+  public class T2 extends T1 {}
+
 }

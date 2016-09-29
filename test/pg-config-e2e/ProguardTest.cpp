@@ -653,5 +653,107 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(theta_b));
   }
 
+  { // keepclassmembers tests
+    auto iota =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota;");
+    ASSERT_NE(nullptr, iota);
+
+    auto iota_alpha =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Alpha;");
+    ASSERT_NE(nullptr, iota_alpha);
+    ASSERT_TRUE(keep(iota_alpha));
+    auto alpha_encode = find_vmethod_named(iota_alpha,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.encode(I)I");
+    ASSERT_NE(nullptr, alpha_encode);
+    ASSERT_FALSE(keep(alpha_encode));
+
+    auto alpha_decode = find_vmethod_named(iota_alpha,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.decode(I)I");
+    ASSERT_NE(nullptr, alpha_decode);
+    ASSERT_FALSE(keep(alpha_decode));
+
+    auto alpha_wombat = find_vmethod_named(iota_alpha,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.wombat(I)I");
+    ASSERT_EQ(nullptr, alpha_wombat);
+
+    auto iota_beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Beta;");
+    ASSERT_EQ(nullptr, iota_beta);
+
+    auto iota_MySerializable =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$MySerializable;");
+    ASSERT_NE(nullptr, iota_MySerializable);
+
+    auto iota_someother =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$SomeOther;");
+    ASSERT_NE(nullptr, iota_someother);
+    ASSERT_TRUE(keep(iota_someother));
+
+    auto iota_gamma =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Gamma;");
+    ASSERT_NE(nullptr, iota_gamma);
+    ASSERT_FALSE(keep(iota_gamma));
+
+    auto gamma_encode = find_vmethod_named(iota_gamma,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.encode(I)I");
+    ASSERT_NE(nullptr, gamma_encode);
+    ASSERT_FALSE(keep(gamma_encode));
+
+    auto gamma_decode = find_vmethod_named(iota_gamma,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.decode(I)I");
+    ASSERT_NE(nullptr, gamma_decode);
+    ASSERT_FALSE(keep(gamma_decode));
+
+    auto gamma_numbat = find_vmethod_named(iota_gamma,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.numbat(I)I");
+    ASSERT_EQ(nullptr, gamma_numbat);
+
+
+   { // keepclasseswithmembers tests
+    auto omega =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega;");
+    ASSERT_NE(nullptr, omega);
+
+    auto omega_alpha =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Alpha;");
+    ASSERT_NE(nullptr, omega_alpha);
+    ASSERT_TRUE(keep(omega_alpha));
+    auto omega_alpha_red =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.red()V");
+    ASSERT_NE(nullptr, omega_alpha_red);
+    ASSERT_TRUE(keep(omega_alpha_red));
+    auto omega_alpha_green0 =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green0()V");
+    ASSERT_NE(nullptr, omega_alpha_green0);
+    ASSERT_TRUE(keep(omega_alpha_green0));
+    auto omega_alpha_green1 =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green1()V");
+    ASSERT_NE(nullptr, omega_alpha_green1);
+    ASSERT_TRUE(keep(omega_alpha_green1));
+    auto omega_alpha_blue =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue()V");
+    ASSERT_EQ(nullptr, omega_alpha_blue);
+
+    auto omega_beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
+    ASSERT_EQ(nullptr, omega_beta);
+
+    auto omega_gamma =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
+    ASSERT_EQ(nullptr, omega_gamma);
+ }
+
+  }
+
   delete g_redex;
 }

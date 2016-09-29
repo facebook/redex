@@ -6,44 +6,36 @@
 
 -keep class com.facebook.redex.test.proguard.Delta$B
 
--keep class com.facebook.redex.test.proguard.Delta$C
 -keep class com.facebook.redex.test.proguard.Delta$C {
   *;
 }
 
--keep class com.facebook.redex.test.proguard.Delta
 -keep class com.facebook.redex.test.proguard.Delta {
   public <init>();
   public <init>(java.lang.String);
   !public static <fields>;
 }
 
--keep class com.facebook.redex.test.proguard.Delta$D
 -keep class com.facebook.redex.test.proguard.Delta$D {
   <fields>;
 }
 
--keep class com.facebook.redex.test.proguard.Delta$E
 -keep class com.facebook.redex.test.proguard.Delta$E {
   <methods>;
 }
 
--keep class com.facebook.redex.test.proguard.Delta$F
 -keep class com.facebook.redex.test.proguard.Delta$F {
   final <fields>;
 }
 
--keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$G
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$G {
   *;
 }
 
--keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$H
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$H {
   int wombat;
 }
 
--keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$I
 -keep,allowobfuscation class com.facebook.redex.test.proguard.Delta$I {
   int wombat*;
 }
@@ -69,7 +61,6 @@
   @com.facebook.redex.test.proguard.DoNotStrip *;
 }
 
--keep class com.facebook.redex.test.proguard.Delta$L
 -keep class com.facebook.redex.test.proguard.Delta$L {
   public protected void alpha?();
   private void alpha0();
@@ -82,7 +73,6 @@
 
 -keep public !final class ** extends com.facebook.redex.test.proguard.Epsilon
 -keep class ** extends com.facebook.redex.test.proguard.Delta$G
--keep class ** extends android.widget.TextView
 -keep class ** extends @com.facebook.redex.test.proguard.DontKillMe com.facebook.redex.test.proguard.Delta$R?
 
 -keep class ** extends android.graphics.Color
@@ -93,3 +83,26 @@
 -keep class com.facebook.redex.test.proguard.Theta
 
 -keep class com.facebook.redex.test.proguard.Eta$T?
+
+-keep interface com.facebook.redex.test.proguard.Iota$MySerializable
+-keepclassmembers public class ** implements com.facebook.redex.test.proguard.Iota$MySerializable {
+   public int encode(int);
+   public int decode(int);
+}
+-keep class com.facebook.redex.test.proguard.Iota$Alpha
+-keep class com.facebook.redex.test.proguard.Iota$SomeOther
+-keep class com.facebook.redex.test.proguard.Iota$SomeOther {
+  *;
+}
+
+-keepclasseswithmembers class ** {
+  void red();
+  void green?();
+}
+
+-keepnames class ** implements com.facebook.redex.test.proguard.Delta$S3 {
+   public int alpha;
+   public int beta;
+}
+
+-keep class com.facebook.redex.test.proguard.Delta$T2
