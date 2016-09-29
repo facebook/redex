@@ -15,14 +15,17 @@
 
 namespace std {
 
+
+#if __cplusplus<201402L
 // simple implementation of make_unique since C++11 doesn't have it available
 // note that it doesn't work properly if T is an array type
 template <typename T, typename... Args>
 std::unique_ptr<T> make_unique(Args... args) {
   return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
-
+#endif
 }
+
 
 /**
  * Insert into the proper location in a sorted container.
