@@ -166,10 +166,10 @@ int main(int argc, char* argv[]) {
       redump(format_map(&rd).c_str());
     }
     if (string || all) {
-      dump_strings(&rd);
+      dump_strings(&rd, !no_headers);
     }
     if (stringdata || all) {
-      dump_stringdata(&rd);
+      dump_stringdata(&rd, !no_headers);
     }
     if (type || all) {
       dump_types(&rd);

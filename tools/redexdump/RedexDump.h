@@ -11,8 +11,8 @@
 
 #include "DexCommon.h"
 
-void dump_strings(ddump_data* rd);
-void dump_stringdata(ddump_data* rd);
+void dump_strings(ddump_data* rd, bool print_headers);
+void dump_stringdata(ddump_data* rd, bool print_headers);
 void dump_types(ddump_data* rd);
 void dump_protos(ddump_data* rd, bool print_headers);
 void dump_fields(ddump_data* rd, bool print_headers);
