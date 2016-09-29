@@ -86,6 +86,7 @@ int main(int argc, char* argv[]) {
     { "ddebug", required_argument, nullptr, 'D' },
     { "clean", no_argument, (int*)&clean, 1 },
     { "raw", no_argument, (int*)&raw, 1 },
+    { "escape", no_argument, (int*)&escape, 1 },
     { "no-headers", no_argument, &no_headers, 1 },
     { "help", no_argument, nullptr, 'h' },
     { nullptr, 0, nullptr, 0 },

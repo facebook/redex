@@ -13,6 +13,7 @@
 
 bool clean = false;
 bool raw = false;
+bool escape = false;
 
 void redump(const char* format, ...) {
   va_list va;

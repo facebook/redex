@@ -447,6 +447,18 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
   const char* string_to_print;
   if (raw) { // Output whatever bytes we have
     string_to_print = (char*) pos;
+  } else if (escape) { // Escape non-printable characters.
+    cleansed_data.reserve(utf8_length);  // Avoid some reallocation.
+    for (size_t i = 0; i < utf8_length; i++) {
+      if (isprint(pos[i])) {
+        cleansed_data.push_back(pos[i]);
+      } else {
+        char buf[5];
+        sprintf(buf, "\\x%02x", pos[i]);
+        cleansed_data.append(buf);
+      }
+    }
+    string_to_print = cleansed_data.c_str();
   } else { // Translate to UTF-8; strip control characters
     std::vector<char32_t> code_points;
     const char* enc_pos = (char*) pos;
