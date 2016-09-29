@@ -556,14 +556,15 @@ void MethodTransform::remove_opcode(DexInstruction* insn) {
              ++rev) {
           if (rev->type == MFLOW_FALLTHROUGH && rev->throwing_mie) {
             assert(rev->throwing_mie == &mei);
-            m_fmethod->erase(++rev.base());
+            rev->throwing_mie = nullptr;
             break;
           } else if (rev->type == MFLOW_OPCODE) {
             break;
           }
         }
       }
-      m_fmethod->erase(it);
+      mei.type = MFLOW_FALLTHROUGH;
+      mei.insn = nullptr;
       delete insn;
       return;
     }
