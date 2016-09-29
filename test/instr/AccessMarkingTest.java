@@ -10,12 +10,16 @@
 import static org.fest.assertions.api.Assertions.*;
 
 import java.lang.reflect.Modifier;
-
+import java.lang.reflect.Method;
 import org.junit.Test;
 
 public class AccessMarkingTest {
   private static boolean isFinal(Class<?> cls) {
     return (cls.getModifiers() & Modifier.FINAL) != 0;
+  }
+
+  private static boolean isFinal(Method m) {
+    return (m.getModifiers() & Modifier.FINAL) != 0;
   }
 
   @Test
@@ -36,6 +40,13 @@ public class AccessMarkingTest {
   @Test
   public void testClassAbstract() {
     assertThat(isFinal(Abstract.class)).isFalse();
+  }
+
+  public void testMethodFinal() throws NoSuchMethodException {
+    assertThat(isFinal(Super.class.getDeclaredMethod("foo"))).isFalse();
+    assertThat(isFinal(Super.class.getDeclaredMethod("bar"))).isTrue();
+    assertThat(isFinal(Sub.class.getDeclaredMethod("foo"))).isTrue();
+    assertThat(isFinal(Sub.class.getDeclaredMethod("baz"))).isTrue();
   }
 }
 

@@ -68,6 +68,13 @@ DexType* get_enum_type();
  */
 bool is_primitive(DexType* type);
 
+/**
+ * Return true if method signatures (name and proto) match.
+ */
+inline bool signatures_match(const DexMethod* a, const DexMethod* b) {
+  return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
+}
+
 /*
  * Return the shorty char for this type.
  * int -> I

@@ -10,6 +10,7 @@
 #pragma once
 
 #define TMS                                     \
+  TM(ACCESS)                                    \
   TM(ANNO)                                      \
   TM(BIND)                                      \
   TM(BRIDGE)                                    \

@@ -23,10 +23,6 @@ bool is_canary(const DexClass* cls) {
   return strstr(cls->get_name()->c_str(), "Canary");
 }
 
-bool signatures_match(const DexMethod* a, const DexMethod* b) {
-  return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
-}
-
 bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
   if (!cls) return false;
   if (cls->is_external()) {
