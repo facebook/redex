@@ -26,6 +26,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
+	-I$(top_srcdir)/opt/access-marking \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/peephole \
@@ -122,6 +123,7 @@ redex_all_SOURCES = \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
+	opt/access-marking/AccessMarking.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/peephole/Peephole.cpp \

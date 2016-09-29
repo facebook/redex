@@ -47,6 +47,11 @@ public:
     m_current_store(stores.begin()),
     m_current_classes(m_current_store->get_dexen().begin()) { }
 
+  DexStoreClassesIterator(const std::vector<DexStore>& stores) :
+    m_stores(const_cast<std::vector<DexStore>&>(stores)),
+    m_current_store(m_stores.begin()),
+    m_current_classes(m_current_store->get_dexen().begin()) { }
+
   DexStoreClassesIterator(std::vector<DexStore>& stores, store_iterator current_store, classes_iterator current_classes) :
     m_stores(stores),
     m_current_store(current_store),
