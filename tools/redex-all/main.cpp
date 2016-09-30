@@ -471,7 +471,9 @@ int main(int argc, char* argv[]) {
   ConfigFiles cfg(args.config);
   {
     Timer t("Deobfuscating dex elements");
-    apply_deobfuscated_names(stores[0].get_dexen(), cfg.get_proguard_map());
+    for (auto& store : stores) {
+      apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
+    }
   }
   cfg.using_seeds = false;
   if (!args.seeds_filename.empty()) {
