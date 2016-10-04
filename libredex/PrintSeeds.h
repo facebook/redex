@@ -17,6 +17,7 @@
 namespace redex {
 
 void print_seeds(std::ostream& output,
+                 const ProguardMap& pg_map,
                  const Scope& classes);
 
 }

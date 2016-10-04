@@ -80,12 +80,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   if (seeds_output_file) {
      Timer t("Writing seeds file " + std::string(seeds_output_file));
      std::ofstream seeds_file((std::string(seeds_output_file)));
-     redex::print_seeds(seeds_file, scope);
+     redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
   }
   if (!cfg.get_printseeds().empty()) {
      Timer t("Writing seeds to file " + cfg.get_printseeds());
      std::ofstream seeds_file(cfg.get_printseeds());
-     redex::print_seeds(seeds_file, scope);
+     redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
   }
   {
     Timer t("Initializing reachable classes");
