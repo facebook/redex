@@ -42,9 +42,9 @@ int ren_strings_size = 0;
 
 static char getident(int num) {
   if (num < 26) {
-    return 'a' + num;
+    return 'A' + num;
   } else {
-    return 'A' + num - 26;
+    return 'a' + num - 26;
   }
 }
 
