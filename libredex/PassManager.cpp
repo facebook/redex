@@ -76,8 +76,14 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), m_pg_config, scope);
   }
+  char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
+  if (seeds_output_file) {
+     Timer t("Writing seeds file " + std::string(seeds_output_file));
+     std::ofstream seeds_file((std::string(seeds_output_file)));
+     redex::print_seeds(seeds_file, scope);
+  }
   if (!cfg.get_printseeds().empty()) {
-     Timer t("Writing seeds file");
+     Timer t("Writing seeds to file " + cfg.get_printseeds());
      std::ofstream seeds_file(cfg.get_printseeds());
      redex::print_seeds(seeds_file, scope);
   }

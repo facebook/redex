@@ -102,9 +102,15 @@ void print_fields(std::ostream& output,
                   const std::list<DexField*>& fields) {
   for (const auto& field : fields) {
     if (keep(field)) {
+      auto field_name = field->get_deobfuscated_name();
+      if (field_name.empty()) {
+        std::cerr << "Got empty fieldname when deobfuscating " <<
+                     field->c_str() << std::endl;
+        continue;
+      }
       output << class_name << ": "
              << type_descriptor_to_java(field->get_type()->get_name()->c_str())
-             << " " << extract_field_name(field->get_deobfuscated_name())
+             << " " << extract_field_name(field_name)
              << std::endl;
     }
   }
@@ -131,6 +137,11 @@ void print_methods(std::ostream& output,
         method_name = extract_suffix(class_name);
         is_constructor = true;
       }
+      auto deobu = method->get_deobfuscated_name();
+      if (deobu.empty()) {
+        std::cerr << "WARNING: method has no deobfu: " << method_name << std::endl;
+         deobu = method_name;
+      }
       auto proto = method->get_proto();
       auto args = proto->get_args()->get_type_list();
       auto return_type = proto->get_rtype();
@@ -147,7 +158,12 @@ void print_methods(std::ostream& output,
 void redex::print_seeds(std::ostream& output, const Scope& classes) {
   for (const auto& cls : classes) {
     if (keep(cls)) {
-      auto name = dexdump_name_to_dot_name(cls->get_deobfuscated_name());
+        auto deob = cls->get_deobfuscated_name();
+        if (deob.empty()) {
+          std::cerr << "WARNING: this class has no deobu name: " << cls->get_name()->c_str() << std::endl;
+          deob = cls->get_name()->c_str();
+        }
+        std::string name = dexdump_name_to_dot_name(deob);
       output << name << std::endl;
       print_fields(output, name, cls->get_ifields());
       print_fields(output, name, cls->get_sfields());
