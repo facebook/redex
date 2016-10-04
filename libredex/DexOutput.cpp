@@ -1188,10 +1188,10 @@ void write_method_mapping(
       return proguard_name(resolved_method);
     }();
 
-    // Format is <cls>.<name>(<args>)<ret>
+    // Format is <cls>.<name>:(<args>)<ret>
     // We only want the name here.
     auto begin = deobf_method.find('.') + 1;
-    auto end = deobf_method.rfind('(');
+    auto end = deobf_method.rfind(':');
     auto deobf_method_name = deobf_method.substr(begin, end-begin);
 
     fprintf(fd,

@@ -44,6 +44,9 @@ std::string form_member_regex(std::string proguard_regex) {
 // Example: "Lalpha/*/beta;" -> "Lalpha\\/([^\\/]+)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/([^\\/]+(?:\\/[^\\/]+)*)\\/beta;"
 std::string form_type_regex(std::string proguard_regex) {
+  if (proguard_regex == "") {
+    return ".*";
+  }
   std::string r;
   for (size_t i = 0; i < proguard_regex.size(); i++) {
     const char ch = proguard_regex[i];

@@ -76,7 +76,7 @@ std::string extract_field_name(std::string qualified) {
 
 std::string extract_method_name(std::string qualified) {
   auto dot = qualified.find(".");
-  auto open = qualified.find("(");
+  auto open = qualified.find(":");
   return qualified.substr(dot + 1, open - dot - 1);
 }
 

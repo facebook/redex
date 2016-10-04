@@ -20,6 +20,7 @@ public class Delta {
   public static int alpha;
   private static int beta;
   private int gamma;
+  private int gamma1;
 
   public static boolean sigma = true;
 

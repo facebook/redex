@@ -56,7 +56,7 @@ std::string convert_method(
   std::string methodname,
   std::string args
 ) {
-  return cls + "." + methodname + "(" + args + ")" + rtype;
+  return cls + "." + methodname + ":(" + args + ")" + rtype;
 }
 
 std::string translate_type(std::string type, const ProguardMap& pm) {
@@ -250,7 +250,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   literal(p, " -> ");
 
   if (!id(p, newname)) return false;
-  
+
   auto old_rtype = convert_type(type);
   auto new_rtype = translate_type(old_rtype, *this);
   auto pgold = convert_method(m_currClass, old_rtype, methodname, old_args);
@@ -308,8 +308,8 @@ std::string proguard_name(DexClass* cls) {
 }
 
 std::string proguard_name(DexMethod* method) {
-  // Format is <class descriptor>.<method name>(<arg descriptors>)<return descriptor>
-  auto str = proguard_name(method->get_class()) + "." + method->get_name()->c_str();
+  // Format is <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
+  auto str = proguard_name(method->get_class()) + "." + method->get_name()->c_str() + ":";
 
   auto proto = method->get_proto();
   auto args_str = std::string("(");

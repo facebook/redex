@@ -354,11 +354,11 @@ void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
     auto desc_regex = proguard_parser::form_type_regex(descriptor);
     auto qualified_method_name =
         desc_regex + "\\." +
-        proguard_parser::form_member_regex(method_spec.name) +
+        proguard_parser::form_member_regex(method_spec.name) + "\\:" +
         proguard_parser::form_type_regex(method_spec.descriptor);
     TRACE(PGR,
           8,
-          "====> Method match against regex method: %s.%s%s\n",
+          "====> Method match against regex method: %s.%s:%s\n",
           classname.c_str(),
           method_spec.name.c_str(),
           method_spec.descriptor.c_str());
@@ -380,13 +380,6 @@ bool type_and_annotation_match(const DexClass* cls,
   if (cls->get_type() == get_object_type()) {
     return false;
   }
-  TRACE(PGR,
-        8,
-        "====> type_and_annotation_match %s [%s] against @%s %s\n",
-        cls->get_name()->c_str(),
-        cls->get_deobfuscated_name().c_str(),
-        annotation.c_str(),
-        extends_class_name.c_str());
   // First check to see if an annotation type needs to be matched.
   if (annotation != "") {
     if (!has_annotation(cls, annotation)) {
@@ -411,25 +404,11 @@ bool search_interfaces(std::set<const DexClass*>* visited,
                        const DexClass* cls,
                        const std::string& name,
                        const std::string& annotation) {
-  TRACE(PGR,
-        8,
-        "      Searching the interfaces of %s\n",
-        cls->get_deobfuscated_name().c_str());
   auto interfaces = cls->get_interfaces();
   if (interfaces) {
-    TRACE(PGR,
-          8,
-          "Class %s implements %d interfaces\n",
-          cls->get_deobfuscated_name().c_str(),
-          interfaces->get_type_list().size());
     for (const auto& impl : interfaces->get_type_list()) {
-      TRACE(PGR, 8, "Interface search from type %s\n", impl->c_str());
       auto impl_class = type_class(impl);
       if (impl_class) {
-        TRACE(PGR,
-              8,
-              "Searching from interface %s\n",
-              impl_class->get_deobfuscated_name().c_str());
         if (search_extends_and_interfaces(
                 visited, impl_class, name, annotation)) {
           return true;
@@ -458,10 +437,6 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
   // Do any of the classes and interface above match?
   auto super_type = cls->get_super_class();
   if (super_type && super_type != get_object_type()) {
-    TRACE(PGR,
-          8,
-          "      Searching super-type %s\n",
-          super_type->get_name()->c_str());
     auto super_class = type_class(super_type);
     if (super_class) {
       if (search_extends_and_interfaces(
@@ -488,12 +463,6 @@ bool extends(const DexClass* cls,
     return true;
   }
   auto deob_name = cls->get_deobfuscated_name();
-  TRACE(PGR,
-        8,
-        "Checking if class %s extends or implements <@%s> %s\n",
-        deob_name.c_str(),
-        annotation.c_str(),
-        extends_class_name.c_str());
   std::set<const DexClass*> visited;
   return search_extends_and_interfaces(
       &visited, cls, extends_class_name, annotation);
@@ -585,7 +554,7 @@ bool all_methods_match(const std::string& classname,
     auto desc_regex = proguard_parser::form_type_regex(descriptor);
     auto qualified_method_name =
         desc_regex + "\\." +
-        proguard_parser::form_member_regex(method_keep.name) +
+        proguard_parser::form_member_regex(method_keep.name) + ":" +
         proguard_parser::form_type_regex(method_keep.descriptor);
     boost::regex method_regex(qualified_method_name);
     if (!method_matches(method_keep, methods, method_regex)) {
