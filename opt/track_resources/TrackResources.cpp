@@ -35,15 +35,18 @@ std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cl
   return cls_set;
 }
 
-void write_found_fields(std::string path, std::unordered_set<DexField*>& recorded_fields) {
+void write_found_fields(std::string path, std::set<DexField*>& recorded_fields) {
   if (!path.empty()) {
-    TRACE(FINALINLINE, 1, "Writing tracked fields to %s\n", path.c_str());
+    TRACE(TRACKRESOURCES, 1, "Writing tracked fields to %s\n", path.c_str());
     FILE* fd = fopen(path.c_str(), "w");
     if (fd == nullptr) {
       perror("Error writing tracked fields file");
       return;
     }
     for (const auto &it : recorded_fields) {
+      TRACE(TRACKRESOURCES, 4, "recording %s -> %s\n",
+          SHOW(it->get_class()->get_name()),
+          SHOW(it->get_name()));
       fprintf(fd, "%s -> %s\n",
           SHOW(it->get_class()->get_name()),
           SHOW(it->get_name()));
@@ -58,13 +61,13 @@ void check_if_tracked_sget(DexMethod* src_method,
     std::unordered_set<DexClass*>& classes_to_track,
     size_t& num_field_references,
     std::map<DexClass*, int>& per_cls_refs,
-    std::unordered_set<DexField*>& recorded_fields) {
+    std::set<DexField*>& recorded_fields) {
   auto src_cls_name = src_method->get_class()->get_name()->c_str();
   auto target_cls = type_class(target_field->get_class());
   if (src_set.count(src_cls_name) && classes_to_track.count(target_cls) && !recorded_fields.count(target_field)) {
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
     auto value = target_field->get_static_value();
-    TRACE(FINALINLINE, 3, "value %d, sget to %s from %s\n", value, SHOW(target_field), SHOW(src_method));
+    TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s\n", value, SHOW(target_field), SHOW(src_method));
     num_field_references++;
     recorded_fields.emplace(target_field);
     if ( per_cls_refs.count(target_cls)) {
@@ -103,11 +106,11 @@ void get_sput_in_clinit(DexClass* clazz,
   }
 }
 
-void inline_field_values(Scope& fullscope,
+void find_accessed_fields(Scope& fullscope,
     ConfigFiles& cfg,
     std::unordered_set<DexClass*> classes_to_track,
-    std::unordered_set<DexField*> recorded_fields) {
-  std::unordered_set<DexField*> inline_field;
+    std::set<DexField*>& recorded_fields) {
+  std::set<DexField*> inline_field;
   std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
 
@@ -152,10 +155,10 @@ void inline_field_values(Scope& fullscope,
             recorded_fields);
         }
       });
-  TRACE(FINALINLINE, 1,
+  TRACE(TRACKRESOURCES, 1,
       "found %d total sgets to tracked classes\n", num_field_references);
   for (auto& it : per_cls_refs) {
-    TRACE(FINALINLINE, 1,
+    TRACE(TRACKRESOURCES, 1,
         "%d sgets to %s \n", it.second, SHOW(it.first->get_name()));
   }
   MethodTransform::sync_all();
@@ -175,11 +178,11 @@ std::unordered_set<DexClass*> build_tracked_cls_set(
 }
 
 void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  std::unordered_set<DexField*> recorded_fields;
+  std::set<DexField*> recorded_fields;
   const auto& pg_map = cfg.get_proguard_map();
   auto tracked_classes = build_tracked_cls_set(m_classes_to_track, pg_map);
   auto scope = build_class_scope(stores);
-  inline_field_values(scope, cfg, tracked_classes, recorded_fields);
+  find_accessed_fields(scope, cfg, tracked_classes, recorded_fields);
   write_found_fields(m_tracked_fields_output, recorded_fields);
 }
 

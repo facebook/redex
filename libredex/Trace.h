@@ -47,6 +47,7 @@
   TM(SUPER)                                     \
   TM(SYNT)                                      \
   TM(TIME)                                      \
+  TM(TRACKRESOURCES)                            \
   TM(UNTF)
 
 enum TraceModule {
