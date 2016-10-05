@@ -23,8 +23,7 @@ Install dependences using homebrew:
 
 ```
 brew install autoconf automake libtool python3
-brew install boost double-conversion gflags glog libevent openssl jsoncpp
-brew link openssl --force
+brew install boost double-conversion gflags glog libevent jsoncpp
 ```
 
 #### Ubuntu 14.04 LTS (64-bit)
@@ -47,7 +46,6 @@ sudo apt-get install \
     zlib1g-dev \
     binutils-dev \
     libjemalloc-dev \
-    libssl-dev \
     libiberty-dev \
     libjsoncpp-dev
 ```
