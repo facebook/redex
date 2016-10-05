@@ -198,9 +198,6 @@ class Api21DexMode(BaseDexMode):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
-        if not os.path.exists(metadata_dir):
-            return
-        jar_meta_path = join(metadata_dir, 'metadata.txt')
         metadata = DexMetadata(is_root_relative=self._is_root_relative,
                                have_locators=have_locators,
                                store=self._store_id,
@@ -214,7 +211,8 @@ class Api21DexMode(BaseDexMode):
                 shutil.move(dex_path, extracted_apk_dir)
             else:
                 shutil.move(dex_path, metadata_dir)
-        metadata.write(jar_meta_path)
+        if os.path.exists(metadata_dir):
+            metadata.write(join(metadata_dir, 'metadata.txt'))
 
 class Api21ModuleDexMode(Api21DexMode):
     """
