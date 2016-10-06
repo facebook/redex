@@ -95,7 +95,6 @@ std::unordered_set<DexMethod*> find_static_methods(
     if (uses_this(method) || is_seed(method) || is_abstract(method)) {
       continue;
     }
-    TRACE(ACCESS, 2, "Staticized method: %s\n", SHOW(method));
     staticized.emplace(method);
   }
   return staticized;
@@ -128,7 +127,74 @@ void fix_call_sites(
 
 void mark_methods_static(const std::unordered_set<DexMethod*>& statics) {
   for (auto method : statics) {
+    TRACE(ACCESS, 2, "Staticized method: %s\n", SHOW(method));
     mutators::make_static(method);
+  }
+}
+
+std::unordered_set<DexMethod*> find_private_methods(
+  const std::vector<DexClass*>& scope,
+  const std::vector<DexMethod*>& cv
+) {
+  std::unordered_set<DexMethod*> candidates;
+  for (auto m : cv) {
+    if (!is_static(m) && !is_seed(m) && !is_abstract(m)) {
+      candidates.emplace(m);
+    }
+  }
+  walk_opcodes(
+    scope,
+    [](DexMethod*) { return true; },
+    [&](DexMethod* caller, DexInstruction* inst) {
+      if (!inst->has_methods()) return;
+      auto mi = static_cast<DexOpcodeMethod*>(inst);
+      auto callee = mi->get_method();
+      if (!callee->is_concrete()) {
+        callee = resolve_method(callee, MethodSearch::Any);
+        if (!callee) return;
+      }
+      if (callee->get_class() == caller->get_class()) {
+        return;
+      }
+      candidates.erase(callee);
+    }
+  );
+  return candidates;
+}
+
+void fix_call_sites_private(
+  const std::vector<DexClass*>& scope,
+  const std::unordered_set<DexMethod*>& privates
+) {
+  walk_opcodes(
+    scope,
+    [](DexMethod*) { return true; },
+    [&](DexMethod*, DexInstruction* inst) {
+      if (!inst->has_methods()) return;
+      auto mi = static_cast<DexOpcodeMethod*>(inst);
+      auto callee = mi->get_method();
+      if (!callee->is_concrete()) {
+        callee = resolve_method(callee, MethodSearch::Any);
+      }
+      if (privates.count(callee)) {
+        mi->rewrite_method(callee);
+        mi->set_opcode(
+          is_invoke_range(mi->opcode())
+          ? OPCODE_INVOKE_DIRECT_RANGE
+          : OPCODE_INVOKE_DIRECT);
+      }
+    }
+  );
+}
+
+void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
+  for (auto method : privates) {
+    TRACE(ACCESS, 2, "Privatized method: %s\n", SHOW(method));
+    auto cls = type_class(method->get_class());
+    cls->remove_method(method);
+    method->set_virtual(false);
+    set_private(method);
+    cls->add_method(method);
   }
 }
 }
@@ -156,6 +222,12 @@ void AccessMarkingPass::run_pass(
   mark_methods_static(static_methods);
   pm.incr_metric("staticized_methods", static_methods.size());
   TRACE(ACCESS, 1, "Staticized %lu methods\n", static_methods.size());
+
+  auto privates = find_private_methods(scope, candidates);
+  fix_call_sites_private(scope, privates);
+  mark_methods_private(privates);
+  pm.incr_metric("privatized_methods", privates.size());
+  TRACE(ACCESS, 1, "Privatized %lu methods\n", privates.size());
 }
 
 static AccessMarkingPass s_pass;

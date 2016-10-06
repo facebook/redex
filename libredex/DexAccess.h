@@ -95,6 +95,11 @@ void set_public(DexMember* m) {
 }
 
 template<class DexMember>
+void set_private(DexMember* m) {
+  m->set_access((m->get_access() & ~VISIBILITY_MASK) | ACC_PRIVATE);
+}
+
+template<class DexMember>
 void set_final(DexMember* m) {
   m->set_access(m->get_access() | ACC_FINAL);
 }

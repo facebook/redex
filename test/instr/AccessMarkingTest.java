@@ -26,6 +26,10 @@ public class AccessMarkingTest {
     return (m.getModifiers() & Modifier.STATIC) != 0;
   }
 
+  private static boolean isPrivate(Method m) {
+    return (m.getModifiers() & Modifier.PRIVATE) != 0;
+  }
+
   @Test
   public void test() {
     Super f = null;
@@ -73,6 +77,13 @@ public class AccessMarkingTest {
   public void testCallStaticThroughSub() {
     assertThat(new Sub().bar()).isEqualTo(3);
   }
+
+  @Test
+  public void testPrivate() throws NoSuchMethodException {
+    assertThat(new Doubler(4).get()).isEqualTo(8);
+    Method doubleit = Doubler.class.getDeclaredMethod("doubleit");
+    assertThat(isPrivate(doubleit)).isTrue();
+  }
 }
 
 class Super {
@@ -83,6 +94,13 @@ class Super {
 class Sub extends Super {
   public int foo() { return 2; }
   public int baz() { return 4; }
+}
+
+class Doubler {
+  private int mX;
+  Doubler(int x) { mX = x; }
+  public void doubleit() { mX *= 2; }
+  public int get() { doubleit(); return mX; }
 }
 
 abstract class Abstract {
