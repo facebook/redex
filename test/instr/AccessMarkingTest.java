@@ -60,8 +60,8 @@ public class AccessMarkingTest {
 
   @Test
   public void testMethodStatic() throws NoSuchMethodException {
-    Method bar = Super.class.getDeclaredMethod("bar", Super.class);
-    Method baz = Sub.class.getDeclaredMethod("baz", Sub.class);
+    Method bar = Super.class.getDeclaredMethod("bar");
+    Method baz = Sub.class.getDeclaredMethod("baz");
     assertThat(isStatic(bar)).isTrue();
     assertThat(isFinal(bar)).isTrue();
     assertThat(isStatic(baz)).isTrue();

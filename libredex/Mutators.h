@@ -11,6 +11,11 @@
 
 namespace mutators {
 
-void make_static(DexMethod* method);
+enum class KeepThis {
+  No,
+  Yes,
+};
+
+void make_static(DexMethod* method, KeepThis = KeepThis::Yes);
 
 }

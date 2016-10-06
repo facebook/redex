@@ -129,10 +129,18 @@ void fix_call_sites(
       }
       if (statics.count(method)) {
         mi->rewrite_method(method);
-        mi->set_opcode(
-          is_invoke_range(inst->opcode())
-          ? OPCODE_INVOKE_STATIC_RANGE
-          : OPCODE_INVOKE_STATIC);
+        if (is_invoke_range(inst->opcode())) {
+          mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
+          mi->set_range_base(mi->range_base() + 1);
+          mi->set_range_size(mi->range_size() - 1);
+        } else {
+          mi->set_opcode(OPCODE_INVOKE_STATIC);
+          auto nargs = mi->arg_word_count();
+          mi->set_arg_word_count(nargs - 1);
+          for (uint16_t i = 0; i < nargs - 1; i++) {
+            mi->set_src(i, mi->src(i + 1));
+          }
+        }
       }
     }
   );
@@ -141,7 +149,7 @@ void fix_call_sites(
 void mark_methods_static(const std::unordered_set<DexMethod*>& statics) {
   for (auto method : statics) {
     TRACE(ACCESS, 2, "Staticized method: %s\n", SHOW(method));
-    mutators::make_static(method);
+    mutators::make_static(method, mutators::KeepThis::No);
   }
 }
 
