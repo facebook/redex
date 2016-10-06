@@ -15,8 +15,7 @@
 
 namespace std {
 
-
-#if __cplusplus<201402L
+#if __cplusplus<201300L
 // simple implementation of make_unique since C++11 doesn't have it available
 // note that it doesn't work properly if T is an array type
 template <typename T, typename... Args>
