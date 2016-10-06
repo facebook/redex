@@ -207,27 +207,32 @@ void AccessMarkingPass::run_pass(
   if (!cfg.using_seeds) {
     return;
   }
-  auto n_classes_final = mark_classes_final(stores);
-  pm.incr_metric("finalized_classes", n_classes_final);
-  TRACE(ACCESS, 1, "Finalized %lu classes\n", n_classes_final);
-
-  auto n_methods_final = mark_methods_final(stores);
-  pm.incr_metric("finalized_methods", n_methods_final);
-  TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
-
+  if (m_finalize_classes) {
+    auto n_classes_final = mark_classes_final(stores);
+    pm.incr_metric("finalized_classes", n_classes_final);
+    TRACE(ACCESS, 1, "Finalized %lu classes\n", n_classes_final);
+  }
+  if (m_finalize_methods) {
+    auto n_methods_final = mark_methods_final(stores);
+    pm.incr_metric("finalized_methods", n_methods_final);
+    TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
+  }
   auto scope = build_class_scope(stores);
   auto const& candidates = devirtualize(scope);
-  auto static_methods = find_static_methods(candidates);
-  fix_call_sites(scope, static_methods);
-  mark_methods_static(static_methods);
-  pm.incr_metric("staticized_methods", static_methods.size());
-  TRACE(ACCESS, 1, "Staticized %lu methods\n", static_methods.size());
-
-  auto privates = find_private_methods(scope, candidates);
-  fix_call_sites_private(scope, privates);
-  mark_methods_private(privates);
-  pm.incr_metric("privatized_methods", privates.size());
-  TRACE(ACCESS, 1, "Privatized %lu methods\n", privates.size());
+  if (m_staticize_methods) {
+    auto static_methods = find_static_methods(candidates);
+    fix_call_sites(scope, static_methods);
+    mark_methods_static(static_methods);
+    pm.incr_metric("staticized_methods", static_methods.size());
+    TRACE(ACCESS, 1, "Staticized %lu methods\n", static_methods.size());
+  }
+  if (m_privatize_methods) {
+    auto privates = find_private_methods(scope, candidates);
+    fix_call_sites_private(scope, privates);
+    mark_methods_private(privates);
+    pm.incr_metric("privatized_methods", privates.size());
+    TRACE(ACCESS, 1, "Privatized %lu methods\n", privates.size());
+  }
 }
 
 static AccessMarkingPass s_pass;
