@@ -500,10 +500,31 @@ FatMethod* MethodTransform::balloon(DexMethod* method) {
   return fm;
 }
 
+void MethodTransform::remove_branch_target(DexInstruction *branch_inst) {
+  always_assert_log(is_branch(branch_inst->opcode()),
+                    "Instruction is not a branch instruction.");
+  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
+    MethodItemEntry* mentry = &*miter;
+    if (mentry->type == MFLOW_TARGET) {
+      BranchTarget* bt = mentry->target;
+      auto btmei = bt->src;
+      if(btmei->insn == branch_inst) {
+        mentry->type = MFLOW_FALLTHROUGH;
+        delete mentry->target;
+        mentry->throwing_mie = nullptr;
+        break;
+      }
+    }
+  }
+}
+
 void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
+      if (is_branch(from->opcode())) {
+        remove_branch_target(from);
+      }
       mentry->insn = to;
       delete from;
       return;
@@ -562,6 +583,9 @@ void MethodTransform::remove_opcode(DexInstruction* insn) {
             break;
           }
         }
+      }
+      if (is_branch(insn->opcode())) {
+        remove_branch_target(insn);
       }
       mei.type = MFLOW_FALLTHROUGH;
       mei.insn = nullptr;

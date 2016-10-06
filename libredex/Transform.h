@@ -253,6 +253,12 @@ class MethodTransform {
    */
   void build_cfg(bool end_block_before_throw = true);
 
+  /*
+   * This method fixes the goto branches when the instruction is removed or
+   * replaced by another instruction.
+   */
+  void remove_branch_target(DexInstruction *branch_inst);
+
   static FatMethodCache s_cache;
   static std::mutex s_lock;
 
