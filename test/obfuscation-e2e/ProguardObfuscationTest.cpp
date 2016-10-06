@@ -13,7 +13,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <array>
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -83,26 +82,18 @@ TEST(ProguardTest, obfuscation) {
   process_proguard_rules(proguard_map, pg_config, scope);
 
   // Make sure the fields class Alpha are renamed.
-  const std::string alphaName = "Lcom/facebook/redex/test/proguard/Alpha;";
-  const std::array<std::string, 4> fieldNames = {
-    ".wombat:I",
-    ".numbat:I",
-    ".omega:Ljava/lang/String;",
-    ".theta:Ljava/util/List;"};
   auto alpha = find_class_named(
-      proguard_map, classes, alphaName);
-  ASSERT_NE(nullptr, alpha);
-  for (const std::string fieldName : fieldNames) {
-    ASSERT_TRUE(field_is_renamed(
-        proguard_map,
-        alpha->get_ifields(),
-        alphaName + fieldName)) << alphaName + fieldName << " not obfuscated";
-  }
+      proguard_map, classes, "Lcom/facebook/redex/test/proguard/Alpha;");
+  ASSERT_NE(alpha, nullptr);
+  ASSERT_TRUE(field_is_renamed(
+      proguard_map,
+      alpha->get_ifields(),
+      "Lcom/facebook/redex/test/proguard/Alpha;.wombat:I"));
 
   // Make sure the fields in the class Beta are not renamed.
   auto beta = find_class_named(
       proguard_map, classes, "Lcom/facebook/redex/test/proguard/Beta;");
-  ASSERT_NE(nullptr, beta);
+  ASSERT_NE(beta, nullptr);
   ASSERT_FALSE(field_is_renamed(
       proguard_map,
       beta->get_ifields(),
