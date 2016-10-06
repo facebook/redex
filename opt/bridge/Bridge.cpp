@@ -200,7 +200,7 @@ class BridgeRemover {
          super = type_class(super->get_super_class())) {
       maybe_refs.emplace_back(
           MethodRef(super->get_type(), name, proto), bridge);
-      for (auto vmethod : super->get_vmethods()) {
+      for (auto vmethod : const_cast<const DexClass*>(super)->get_vmethods()) {
         if (signature_matches(bridgee, vmethod)) {
           for (auto DEBUG_ONLY refp : maybe_refs) {
             TRACE(BRIDGE,

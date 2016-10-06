@@ -22,6 +22,10 @@ public class AccessMarkingTest {
     return (m.getModifiers() & Modifier.FINAL) != 0;
   }
 
+  private static boolean isStatic(Method m) {
+    return (m.getModifiers() & Modifier.STATIC) != 0;
+  }
+
   @Test
   public void test() {
     Super f = null;
@@ -42,11 +46,32 @@ public class AccessMarkingTest {
     assertThat(isFinal(Abstract.class)).isFalse();
   }
 
+  @Test
   public void testMethodFinal() throws NoSuchMethodException {
     assertThat(isFinal(Super.class.getDeclaredMethod("foo"))).isFalse();
-    assertThat(isFinal(Super.class.getDeclaredMethod("bar"))).isTrue();
     assertThat(isFinal(Sub.class.getDeclaredMethod("foo"))).isTrue();
-    assertThat(isFinal(Sub.class.getDeclaredMethod("baz"))).isTrue();
+  }
+
+  @Test
+  public void testMethodStatic() throws NoSuchMethodException {
+    Method bar = Super.class.getDeclaredMethod("bar", Super.class);
+    Method baz = Sub.class.getDeclaredMethod("baz", Sub.class);
+    assertThat(isStatic(bar)).isTrue();
+    assertThat(isFinal(bar)).isTrue();
+    assertThat(isStatic(baz)).isTrue();
+    assertThat(isFinal(baz)).isTrue();
+  }
+
+  @Test
+  public void testMethodAbstract() throws NoSuchMethodException {
+    Method nope = Abstract.class.getDeclaredMethod("nope");
+    assertThat(isStatic(nope)).isFalse();
+    assertThat(isFinal(nope)).isFalse();
+  }
+
+  @Test
+  public void testCallStaticThroughSub() {
+    assertThat(new Sub().bar()).isEqualTo(3);
   }
 }
 
@@ -61,4 +86,5 @@ class Sub extends Super {
 }
 
 abstract class Abstract {
+  abstract int nope();
 }

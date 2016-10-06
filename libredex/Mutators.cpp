@@ -29,6 +29,7 @@ void make_static(DexMethod* method) {
   // dmethod list
   auto cls = type_class(clstype);
   cls->remove_method(method);
+  method->set_virtual(false);
   cls->add_method(method);
 }
 
