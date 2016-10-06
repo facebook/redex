@@ -7,27 +7,32 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <cstdint>
-#include <cstdlib>
-#include <gtest/gtest.h>
-#include <iostream>
-#include <memory>
-#include <string>
+#include "ProguardObfuscationTest.h"
 
-#include "DexClass.h"
-#include "DexInstruction.h"
-#include "DexLoader.h"
-#include "Match.h"
-#include "ProguardConfiguration.h"
-#include "ProguardMap.h"
-#include "ProguardMatcher.h"
-#include "ProguardParser.h"
-#include "ReachableClasses.h"
-#include "RedexContext.h"
+ProguardObfuscationTest::ProguardObfuscationTest(
+    const char* dexfile,
+    const char* mapping_file) :
+  proguard_map(std::string(mapping_file)) {
+  dexen.emplace_back(load_classes_from_dex(dexfile));
+}
 
-DexClass* find_class_named(const ProguardMap& proguard_map,
-                           const DexClasses& classes,
-                           const std::string name) {
+bool ProguardObfuscationTest::configure_proguard(
+    const char* configuration_file) {
+  redex::ProguardConfiguration pg_config;
+  redex::proguard_parser::parse_file(configuration_file, &pg_config);
+
+  if (!pg_config.ok) {
+    return false;
+  }
+  Scope scope = build_class_scope(dexen);
+  apply_deobfuscated_names(dexen, proguard_map);
+  process_proguard_rules(proguard_map, pg_config, scope);
+  return true;
+}
+
+DexClass* ProguardObfuscationTest::find_class_named(
+    const std::string& name) {
+  DexClasses& classes = dexen.front();
   auto mapped_search_name = std::string(proguard_map.translate_class(name));
   auto it = std::find_if(
       classes.begin(), classes.end(), [&mapped_search_name](DexClass* cls) {
@@ -40,10 +45,9 @@ DexClass* find_class_named(const ProguardMap& proguard_map,
   }
 }
 
-// Returns true if the specified field is renamed.
-bool field_is_renamed(const ProguardMap& proguard_map,
-                      const std::list<DexField*> fields,
-                      const std::string name) {
+bool ProguardObfuscationTest::field_is_renamed(
+    const std::list<DexField*>& fields,
+    const std::string& name) {
   for (const auto& field : fields) {
     auto deobfuscated_name = proguard_map.deobfuscate_field(proguard_name(field));
     if (name == std::string(field->c_str()) || (name == deobfuscated_name)) {
@@ -53,51 +57,21 @@ bool field_is_renamed(const ProguardMap& proguard_map,
   return false;
 }
 
-/**
- * Check renaming has been properly applied.
- */
-TEST(ProguardTest, obfuscation) {
-  g_redex = new RedexContext();
+bool ProguardObfuscationTest::method_is_renamed_helper(
+    const std::list<DexMethod*>& methods,
+    const std::string& name) {
+  for (const auto& method : methods) {
+    auto deobfuscated_name = method->get_deobfuscated_name();
+    if (name == std::string(method->c_str()) ||
+      name == deobfuscated_name) {
+      return deobfuscated_name != proguard_name(method);
+    }
+  }
+  return false;
+}
 
-  const char* dexfile = std::getenv("pg_config_e2e_dexfile");
-  ASSERT_NE(nullptr, dexfile);
-
-  std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
-  DexClasses& classes = dexen.back();
-
-  // Load the Proguard map
-  const char* mapping_file = std::getenv("pg_config_e2e_mapping");
-  ASSERT_NE(nullptr, mapping_file);
-  ProguardMap proguard_map((std::string(mapping_file)));
-
-  const char* configuraiton_file = std::getenv("pg_config_e2e_pgconfig");
-  ASSERT_NE(nullptr, configuraiton_file);
-  redex::ProguardConfiguration pg_config;
-  redex::proguard_parser::parse_file(configuraiton_file, &pg_config);
-  ASSERT_TRUE(pg_config.ok);
-
-  Scope scope = build_class_scope(dexen);
-  apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(proguard_map, pg_config, scope);
-
-  // Make sure the fields class Alpha are renamed.
-  auto alpha = find_class_named(
-      proguard_map, classes, "Lcom/facebook/redex/test/proguard/Alpha;");
-  ASSERT_NE(alpha, nullptr);
-  ASSERT_TRUE(field_is_renamed(
-      proguard_map,
-      alpha->get_ifields(),
-      "Lcom/facebook/redex/test/proguard/Alpha;.wombat:I"));
-
-  // Make sure the fields in the class Beta are not renamed.
-  auto beta = find_class_named(
-      proguard_map, classes, "Lcom/facebook/redex/test/proguard/Beta;");
-  ASSERT_NE(beta, nullptr);
-  ASSERT_FALSE(field_is_renamed(
-      proguard_map,
-      beta->get_ifields(),
-      "Lcom/facebook/redex/test/proguard/Beta;.wombatBeta:I"));
-
-  delete g_redex;
+bool ProguardObfuscationTest::method_is_renamed(
+    const DexClass* cls, const std::string& name) {
+  return method_is_renamed_helper(cls->get_vmethods(), name) ||
+    method_is_renamed_helper(cls->get_dmethods(), name);
 }
