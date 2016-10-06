@@ -22,6 +22,10 @@
   @org.junit.Before <methods>;
 }
 
+-keepclassmembers class * {
+  <init>(...);
+}
+
 # Don't muck with test infra
 
 -keep class org.fest.** { *; }

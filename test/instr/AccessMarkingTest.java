@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+package redex;
+
 import static org.fest.assertions.api.Assertions.*;
 
 import java.lang.reflect.Modifier;

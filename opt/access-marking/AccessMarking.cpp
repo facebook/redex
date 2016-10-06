@@ -69,6 +69,16 @@ size_t mark_methods_final(const DexStoresVector& stores) {
   return n_methods_finalized;
 }
 
+std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
+  std::vector<DexMethod*> ret;
+  for (auto cls : scope) {
+    for (auto m : cls->get_dmethods()) {
+      ret.push_back(m);
+    }
+  }
+  return ret;
+}
+
 bool uses_this(const DexMethod* method) {
   auto const& code = method->get_code();
   if (!code) return false;
@@ -92,7 +102,10 @@ std::unordered_set<DexMethod*> find_static_methods(
 ) {
   std::unordered_set<DexMethod*> staticized;
   for (auto const& method : candidates) {
-    if (uses_this(method) || is_seed(method) || is_abstract(method)) {
+    if (is_static(method) ||
+        uses_this(method) ||
+        is_seed(method) ||
+        is_abstract(method)) {
       continue;
     }
     staticized.emplace(method);
@@ -138,7 +151,8 @@ std::unordered_set<DexMethod*> find_private_methods(
 ) {
   std::unordered_set<DexMethod*> candidates;
   for (auto m : cv) {
-    if (!is_static(m) && !is_seed(m) && !is_abstract(m)) {
+    TRACE(ACCESS, 3, "Considering for privatization: %s\n", SHOW(m));
+    if (!is_clinit(m) && !is_seed(m) && !is_abstract(m) && !is_private(m)) {
       candidates.emplace(m);
     }
   }
@@ -178,10 +192,12 @@ void fix_call_sites_private(
       }
       if (privates.count(callee)) {
         mi->rewrite_method(callee);
-        mi->set_opcode(
-          is_invoke_range(mi->opcode())
-          ? OPCODE_INVOKE_DIRECT_RANGE
-          : OPCODE_INVOKE_DIRECT);
+        if (!is_static(callee)) {
+          mi->set_opcode(
+            is_invoke_range(mi->opcode())
+            ? OPCODE_INVOKE_DIRECT_RANGE
+            : OPCODE_INVOKE_DIRECT);
+        }
       }
     }
   );
@@ -218,7 +234,9 @@ void AccessMarkingPass::run_pass(
     TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
   }
   auto scope = build_class_scope(stores);
-  auto const& candidates = devirtualize(scope);
+  auto candidates = devirtualize(scope);
+  auto dmethods = direct_methods(scope);
+  candidates.insert(candidates.end(), dmethods.begin(), dmethods.end());
   if (m_staticize_methods) {
     auto static_methods = find_static_methods(candidates);
     fix_call_sites(scope, static_methods);
