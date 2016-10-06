@@ -289,16 +289,18 @@ bool encode_offset(FatMethod* fm,
     if (bytecount(offset) > 2) {
       auto insn = branch_op_mie->insn;
       branch_op_mie->insn = new DexInstruction(OPCODE_GOTO_32);
-      delete insn;
 
       DexOpcode inverted = invert_conditional_branch(bop);
       MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
+      mei->insn->set_src(0, insn->src(0));
       insert_mentry_before(fm, mei, branch_op_mie);
 
       // this iterator should always be valid -- an if-* instruction cannot
       // be the last opcode in a well-formed method
       auto next_insn_it = std::next(fm->iterator_to(*branch_op_mie));
       insert_branch_target(fm, &*next_insn_it, mei);
+
+      delete insn;
       return false;
     }
   }

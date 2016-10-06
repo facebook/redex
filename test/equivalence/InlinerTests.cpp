@@ -82,6 +82,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 REGISTER_TEST(InlinerTestAliasedInputs);
 
 class InlinerTestLargeIfOffset : public EquivalenceTest {
+  const size_t NOP_COUNT = 1 << 15;
  protected:
   DexMethod* m_callee;
  public:
@@ -100,11 +101,14 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
       MethodTransformer mt(m_callee);
       // if-* opcodes store their jump offset as a 16-bit signed int. Let's
       // insert enough opcodes such that the offset overflows that width.
-      for (size_t i = 0; i < 1 << 15; ++i) {
-        mt->push_back(dasm(OPCODE_NOP));
+      // These are essentially NOPs, but we don't use actual NOPs because
+      // Transform filters them out.
+      mt->push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
+      for (size_t i = 0; i < NOP_COUNT; ++i) {
+        mt->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
       }
       mt->push_back(dasm(OPCODE_RETURN_VOID));
-      m_callee->get_code()->set_registers_size(0);
+      m_callee->get_code()->set_registers_size(1);
       m_callee->get_code()->set_ins_size(0);
     }
     cls->add_method(m_callee);
@@ -114,20 +118,28 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual void build_method(DexMethod* m) {
     using namespace dex_asm;
-    MethodCreator mc(m);
-    MethodBlock* main_block = mc.get_main_block();
-    auto loc = mc.make_local(DexType::make_type("I"));
-    auto addend = mc.make_local(DexType::make_type("I"));
-    main_block->load_const(loc, 1);
-    main_block->load_const(addend, 2);
-
-    MethodBlock* false_block = main_block->if_testz(if_op(), loc);
-    false_block->invoke(m_callee, {});
-    false_block->binop_2addr(OPCODE_ADD_INT_2ADDR, loc, addend);
-
-    main_block->binop_2addr(OPCODE_SUB_INT_2ADDR, loc, addend);
-    main_block->ret(loc);
-    mc.create();
+    MethodTransformer mt(m);
+    mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
+    mt->push_back(dasm(OPCODE_CONST_4, {2_v, 1_L}));
+    auto fm = mt->get_fatmethod_for_test();
+    // if block
+    auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
+    fm->push_back(*branch);
+    auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_callee, 0);
+    invoke->set_arg_word_count(0);
+    fm->push_back(*(new MethodItemEntry(invoke)));
+    fm->push_back(
+        *(new MethodItemEntry(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 2_v}))));
+    // fallthrough to main block
+    auto target = new BranchTarget();
+    target->type = BRANCH_SIMPLE;
+    target->src = branch;
+    fm->push_back(*(new MethodItemEntry(target)));
+    fm->push_back(
+        *(new MethodItemEntry(dasm(OPCODE_SUB_INT_2ADDR, {1_v, 2_v}))));
+    fm->push_back(*(new MethodItemEntry(dasm(OPCODE_RETURN, {1_v}))));
+    m->get_code()->set_registers_size(3);
+    m->get_code()->set_ins_size(0);
   }
 
   virtual void transform_method(DexMethod* m) {
@@ -139,8 +151,13 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         break;
       }
     }
-    InlineContext context(m, true /* use_liveness */);
-    MethodTransform::inline_16regs(context, m_callee, mop);
+    assert(mop != nullptr);
+    {
+      InlineContext context(m, true /* use_liveness */);
+      MethodTransform::inline_16regs(context, m_callee, mop);
+    }
+    // make sure we actually bloated the method
+    always_assert(m->get_code()->get_instructions().size() > NOP_COUNT);
   }
 };
 
