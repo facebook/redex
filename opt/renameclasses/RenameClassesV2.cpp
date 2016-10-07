@@ -25,6 +25,9 @@
 #include "RedexResources.h"
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
+#define MAX_IDENT_CHAR (62)
+#define BASE MAX_IDENT_CHAR
+#define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
 
 #define METRIC_CLASSES_IN_SCOPE "num_classes_in_scope"
 #define METRIC_RENAMED_CLASSES "**num_renamed**"
@@ -72,6 +75,36 @@ void unpackage_private(Scope &scope) {
       }
     }
   });
+}
+
+static char getident(int num) {
+  assert(num >= 0 && num < BASE);
+  if (num < 10) {
+    return '0' + num;
+  } else if (num >= 10 && num < 36){
+    return 'A' + num - 10;
+  } else {
+    return 'a' + num - 26 - 10;
+  }
+}
+
+void get_next_ident(char *out, int num) {
+  int low = num;
+  int mid = (num / BASE);
+  int top = (mid / BASE);
+  always_assert_log(num <= MAX_IDENT,
+                    "Bailing, Ident %d, greater than maximum\n", num);
+  if (top) {
+    *out++ = getident(top);
+    low -= (top * BASE * BASE);
+  }
+  if (mid) {
+    mid -= (top * BASE);
+    *out++ = getident(mid);
+    low -= (mid * BASE);
+  }
+  *out++ = getident(low);
+  *out++ = '\0';
 }
 
 static int s_base_strings_size = 0;
@@ -372,12 +405,19 @@ void RenameClassesPassV2::rename_classes(
     auto oldname = dtype->get_name();
     auto oldname_cstr = oldname->c_str();
 
+    char clzname[4];
+    const char* padding = "0000000000000";
+    get_next_ident(clzname, s_sequence);
     // The X helps our hacked Dalvik classloader recognize that a
     // class name is the output of the redex renamer and thus will
     // never be found in the Android platform.
     char descriptor[MAX_DESCRIPTOR_LENGTH];
     always_assert((s_padding + strlen("LX/;") + 1) < MAX_DESCRIPTOR_LENGTH);
-    sprintf(descriptor, "LX/%0*d;", s_padding, s_sequence++);
+    sprintf(descriptor, "LX/%.*s%s;",
+        (s_padding < (int)strlen(clzname)) ? 0 : s_padding - (int)strlen(clzname),
+        padding,
+        clzname);
+    s_sequence++;
 
     auto exists  = DexString::get_string(descriptor);
     always_assert_log(!exists, "Collision on class %s (%s)", oldname_cstr, descriptor);
@@ -484,7 +524,8 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pa
   s_base_strings_size = 0;
   s_ren_strings_size = 0;
   s_sequence = 0;
-  s_padding = std::ceil(std::log10(total_classes));
+  // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
+  s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
 
   rename_classes(scope, m_path, m_rename_annotations, mgr);
 
