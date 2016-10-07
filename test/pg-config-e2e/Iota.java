@@ -30,11 +30,11 @@ public class Iota {
     public int numbat() { return 1066; }
   }
 
-  // Indirect use of Gamma via SomeOther, so kept.
+  // Indirect use of Gamma via SomeOther, so not deleted.
   public class Gamma implements MySerializable {
     public int encode(int originalVal) { return originalVal + 3; };
     public int decode(int encodedVal) { return encodedVal - 3; };
-    public int numbat() { return 1066; }
+    public int numbat1() { return 1066; }
   }
 
   public class SomeOther {

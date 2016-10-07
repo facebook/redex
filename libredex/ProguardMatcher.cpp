@@ -302,23 +302,26 @@ bool field_level_match(const redex::MemberSpecification& fieldSpecification,
 }
 
 void keep_fields(std::list<DexField*> fields,
-                 const redex::KeepSpec& keep_rule) {
+                 const redex::KeepSpec& keep_rule,
+                 std::function<void(DexField*)> keeper) {
   auto fieldSpecifications = keep_rule.class_spec.fieldSpecifications;
   for (auto field : fields) {
     for (const auto& fieldSpecification : fieldSpecifications) {
       boost::regex fieldname_regex(
           proguard_parser::form_member_regex(fieldSpecification.name));
       if (field_level_match(fieldSpecification, field, fieldname_regex)) {
-        field->rstate.set_keep();
+        keeper(field);
         apply_keep_modifiers(keep_rule, field);
       }
     }
   }
 }
 
-void apply_field_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
-  keep_fields(cls->get_ifields(), keep_rule);
-  keep_fields(cls->get_sfields(), keep_rule);
+void apply_field_keeps(DexClass* cls,
+                       const redex::KeepSpec& keep_rule,
+                       std::function<void(DexField*)> keeper) {
+  keep_fields(cls->get_ifields(), keep_rule, keeper);
+  keep_fields(cls->get_sfields(), keep_rule, keeper);
 }
 
 bool method_level_match(const redex::MemberSpecification& methodSpecification,
@@ -337,16 +340,18 @@ bool method_level_match(const redex::MemberSpecification& methodSpecification,
 void keep_methods(const redex::KeepSpec& keep_rule,
                   const redex::MemberSpecification& methodSpecification,
                   std::list<DexMethod*> methods,
-                  const boost::regex& method_regex) {
+                  const boost::regex& method_regex,
+                  std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
     if (method_level_match(methodSpecification, method, method_regex)) {
-      method->rstate.set_keep();
+      keeper(method);
       apply_keep_modifiers(keep_rule, method);
     }
   }
 }
 
-void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
+void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule,
+                        std::function<void(DexMethod*)> keeper) {
   auto classname = keep_rule.class_spec.className;
   auto methodSpecifications = keep_rule.class_spec.methodSpecifications;
   for (const auto& method_spec : methodSpecifications) {
@@ -364,8 +369,10 @@ void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule) {
           method_spec.descriptor.c_str());
     TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_name.c_str());
     boost::regex method_regex(qualified_method_name);
-    keep_methods(keep_rule, method_spec, cls->get_vmethods(), method_regex);
-    keep_methods(keep_rule, method_spec, cls->get_dmethods(), method_regex);
+    keep_methods(keep_rule, method_spec, cls->get_vmethods(), method_regex,
+                 keeper);
+    keep_methods(keep_rule, method_spec, cls->get_dmethods(), method_regex,
+                 keeper);
   }
 }
 
@@ -507,7 +514,8 @@ bool class_level_match(const KeepSpec& keep_rule,
   return class_level_match(keep_rule, cls);
 }
 
-void mark_class_and_members_for_keep(const KeepSpec& keep_rule, DexClass* cls) {
+void mark_class_and_members_for_keep(const KeepSpec& keep_rule,
+                                     DexClass* cls) {
   if (cls->is_external()) {
     return;
   }
@@ -515,9 +523,11 @@ void mark_class_and_members_for_keep(const KeepSpec& keep_rule, DexClass* cls) {
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   // Apply any field-level keep specifications.
-  apply_field_keeps(cls, keep_rule);
+  apply_field_keeps(cls, keep_rule,
+                    [](DexField* f) -> void { f->rstate.set_keep(); });
   // Apply any method-level keep specifications.
-  apply_method_keeps(cls, keep_rule);
+  apply_method_keeps(cls, keep_rule,
+                    [](DexMethod* m) -> void { m->rstate.set_keep(); });
 }
 
 DexClass* find_single_class(const ProguardMap& pg_map,
@@ -604,6 +614,36 @@ void process_keepclasseswithmembers(const KeepSpec& keep_rule, DexClass* cls) {
   }
 }
 
+void process_keepclassmembers(const KeepSpec& keep_rule, DexClass* cls) {
+  if (cls->is_external()) {
+    return;
+  }
+  cls->rstate.set_keepclassmembers();
+  // Apply the keep option modifiers.
+  apply_keep_modifiers(keep_rule, cls);
+  // Apply any field-level keep specifications.
+  apply_field_keeps(cls, keep_rule,
+                    [](DexField* f) -> void { f->rstate.set_keepclassmembers(); });
+  // Apply any method-level keep specifications.
+  apply_method_keeps(cls, keep_rule,
+                    [](DexMethod* m) -> void { m->rstate.set_keepclassmembers(); });
+}
+
+void process_assumenosideeffects(const KeepSpec& keep_rule, DexClass* cls) {
+  if (cls->is_external()) {
+    return;
+  }
+  cls->rstate.set_assumenosideeffects();
+  // Apply the keep option modifiers.
+  apply_keep_modifiers(keep_rule, cls);
+  // Apply any field-level keep specifications.
+  apply_field_keeps(cls, keep_rule,
+                    [](DexField* f) -> void { f->rstate.set_assumenosideeffects(); });
+  // Apply any method-level keep specifications.
+  apply_method_keeps(cls, keep_rule,
+                    [](DexMethod* m) -> void { m->rstate.set_assumenosideeffects(); });
+}
+
 void process_keep(const ProguardMap& pg_map,
                   const std::vector<KeepSpec>& keep_rules,
                   Scope& classes,
@@ -631,12 +671,22 @@ void process_keep(const ProguardMap& pg_map,
 void process_proguard_rules(const ProguardMap& pg_map,
                             const ProguardConfiguration& pg_config,
                             Scope& classes) {
-  process_keep(
-      pg_map, pg_config.keep_rules, classes, mark_class_and_members_for_keep);
+  process_keep(pg_map,
+               pg_config.keep_rules,
+               classes,
+               mark_class_and_members_for_keep);
   process_keep(pg_map,
                pg_config.keepclasseswithmembers_rules,
                classes,
                process_keepclasseswithmembers);
+  process_keep(pg_map,
+               pg_config.keepclassmembers_rules,
+               classes,
+               process_keepclassmembers);
+  process_keep(pg_map,
+               pg_config.assumesideeffects_rules,
+               classes,
+               process_assumenosideeffects);
 }
 
 } // namespace redex

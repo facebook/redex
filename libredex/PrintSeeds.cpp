@@ -135,7 +135,7 @@ void print_fields(std::ostream& output,
                   const std::string& class_name,
                   const std::list<DexField*>& fields) {
   for (const auto& field : fields) {
-    if (keep(field)) {
+    if (keep(field) || keepclassmembers(field)) {
       auto field_name = field->get_deobfuscated_name();
       auto field_type = field->get_type()->get_name()->c_str();
       std::string deobfu_field_type = field_type;
@@ -151,7 +151,10 @@ void print_fields(std::ostream& output,
 
 std::string extract_suffix(std::string class_name) {
   auto i = class_name.find_last_of(".");
-  assert(i != std::string::npos);
+  if (i == std::string::npos) {
+    // This is a class name with no package prefix.
+    return class_name;
+  }
   return class_name.substr(i + 1);
 }
 
@@ -160,24 +163,24 @@ void print_methods(std::ostream& output,
                    const std::string& class_name,
                    const std::list<DexMethod*>& methods) {
   for (const auto& method : methods) {
-    if (keep(method)) {
+    if (keep(method) || keepclassmembers(method)) {
       std::string method_name =
           extract_method_name(method->get_name()->c_str());
-      if (method_name == "<clinit>") {
-        continue;
-      }
       // Record if this is a constriuctor to supress return value printing
       // beforer the method name.
       bool is_constructor{false};
       if (method_name == "<init>") {
         method_name = extract_suffix(class_name);
         is_constructor = true;
-      }
-      auto deobu = method->get_deobfuscated_name();
-      if (deobu.empty()) {
-        std::cerr << "WARNING: method has no deobfu: " << method_name
-                  << std::endl;
-        deobu = method_name;
+      } else {
+        auto deob = method->get_deobfuscated_name();
+        if (deob.empty()) {
+          std::cerr << "WARNING: method has no deobfu: " << method_name
+                    << std::endl;
+          method_name = extract_method_name(method->get_name()->c_str());
+        } else {
+          method_name = extract_method_name(deob);
+        }
       }
       auto proto = method->get_proto();
       auto args = proto->get_args()->get_type_list();
@@ -200,7 +203,7 @@ void redex::print_seeds(std::ostream& output,
                         const ProguardMap& pg_map,
                         const Scope& classes) {
   for (const auto& cls : classes) {
-    if (keep(cls)) {
+    if (keep(cls) || keepclassmembers(cls)) {
       auto deob = cls->get_deobfuscated_name();
       if (deob.empty()) {
         std::cerr << "WARNING: this class has no deobu name: "
@@ -208,7 +211,9 @@ void redex::print_seeds(std::ostream& output,
         deob = cls->get_name()->c_str();
       }
       std::string name = dexdump_name_to_dot_name(deob);
-      output << name << std::endl;
+      if (keep(cls)) {
+        output << name << std::endl;
+      }
       print_fields(output, pg_map, name, cls->get_ifields());
       print_fields(output, pg_map, name, cls->get_sfields());
       print_methods(output, pg_map, name, cls->get_dmethods());

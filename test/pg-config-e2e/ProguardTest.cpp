@@ -630,6 +630,20 @@ TEST(ProguardTest, assortment) {
     auto delta_s1 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S1;");
     ASSERT_EQ(nullptr, delta_s1);
+
+   // Check assumenosideeffects
+   auto delta_u = find_class_named(
+          classes, "Lcom/facebook/redex/test/proguard/Delta$U;");
+   ASSERT_NE(nullptr, delta_u);
+   ASSERT_TRUE(keep(delta_u));
+   auto logger = find_vmethod_named(delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.logger:()V");
+   ASSERT_NE(nullptr, logger);
+   ASSERT_FALSE(keep(logger));
+   ASSERT_TRUE(assumenosideeffects(logger));
+   auto mutator = find_vmethod_named(delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.mutator:()V");
+   ASSERT_NE(nullptr, mutator);
+   ASSERT_TRUE(keep(mutator));
+   ASSERT_FALSE(assumenosideeffects(mutator));
   }
 
   { // Check extends
@@ -691,7 +705,13 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$SomeOther;");
     ASSERT_NE(nullptr, iota_someother);
     ASSERT_TRUE(keep(iota_someother));
+    auto iota_someother_init =
+        find_dmethod_named(iota_someother,
+                           "Lcom/facebook/redex/test/proguard/Iota$SomeOther;.<init>:(Lcom/facebook/redex/test/proguard/Iota;)V");
+    ASSERT_NE(nullptr, iota_someother_init);
 
+    // Iota.Gamma does not have a keep directive, but it is indirectly used
+    // in the constructor for SomeOther.
     auto iota_gamma =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Gamma;");
     ASSERT_NE(nullptr, iota_gamma);

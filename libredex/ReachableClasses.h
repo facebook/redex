@@ -73,6 +73,11 @@ inline bool allowobfuscation(DexMember* member) {
 }
 
 template<class DexMember>
+inline bool assumenosideeffects(DexMember* member) {
+  return member->rstate.assumenosideeffects();
+}
+
+template<class DexMember>
 inline bool keepnames(DexMember* member) {
   return keep(member) && allowshrinking(member);
 }

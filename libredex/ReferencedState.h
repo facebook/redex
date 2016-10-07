@@ -40,6 +40,8 @@ class ReferencedState {
   bool m_allowoptimization{false};
   // Not used by the Redex ProGuard rule matcher.
   bool m_allowobfuscation{false};
+  // assumenosideeffects allows certain methods to be removed.
+  bool m_assumenosideeffects{false};
 
  public:
   ReferencedState() = default;
@@ -67,6 +69,7 @@ class ReferencedState {
   bool allowshrinking() const { return m_allowshrinking; }
   bool allowoptimization() const { return m_allowoptimization; }
   bool allowobfuscation() const { return m_allowobfuscation; }
+  bool assumenosideeffects() const { return m_assumenosideeffects; }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
@@ -108,4 +111,6 @@ class ReferencedState {
   void set_allowoptimization() { m_allowoptimization = true; }
 
   void set_allowobfuscation() { m_allowobfuscation = true; }
+
+  void set_assumenosideeffects() { m_assumenosideeffects = true; }
 };

@@ -166,4 +166,11 @@ public class Delta {
 
   public class T2 extends T1 {}
 
+  public class U {
+     int i = 0;
+
+     void logger() {}
+     void mutator() { i = i +1; logger(); }
+  }
+
 }

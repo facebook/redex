@@ -90,7 +90,6 @@
    public int decode(int);
 }
 -keep class com.facebook.redex.test.proguard.Iota$Alpha
--keep class com.facebook.redex.test.proguard.Iota$SomeOther
 -keep class com.facebook.redex.test.proguard.Iota$SomeOther {
   *;
 }
@@ -106,3 +105,10 @@
 }
 
 -keep class com.facebook.redex.test.proguard.Delta$T2
+
+-keep class com.facebook.redex.test.proguard.Delta$U {
+  void mutator();
+}
+-assumenosideeffects class com.facebook.redex.test.proguard.Delta$U {
+  void logger();
+}
