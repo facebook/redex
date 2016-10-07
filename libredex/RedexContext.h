@@ -25,6 +25,7 @@ class DexTypeList;
 class DexProto;
 class DexMethod;
 class DexClass;
+struct DexFieldRef;
 struct DexMethodRef;
 struct DexDebugEntry;
 struct DexPosition;
@@ -59,6 +60,8 @@ struct RedexContext {
   DexField* get_field(DexType* container,
                       DexString* name,
                       DexType* type);
+  void mutate_field(DexField* field,
+                    const DexFieldRef& ref);
 
   DexTypeList* make_type_list(std::list<DexType*>&& p);
   DexTypeList* get_type_list(std::list<DexType*>&& p);

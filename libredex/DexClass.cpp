@@ -965,12 +965,12 @@ void DexField::gather_methods(std::vector<DexMethod*>& lmethod) {
 }
 
 void DexField::gather_types_shallow(std::vector<DexType*>& ltype) {
-  ltype.push_back(m_class);
-  ltype.push_back(m_type);
+  ltype.push_back(m_ref.cls);
+  ltype.push_back(m_ref.type);
 }
 
 void DexField::gather_strings_shallow(std::vector<DexString*>& lstring) {
-  lstring.push_back(m_name);
+  lstring.push_back(m_ref.name);
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) {

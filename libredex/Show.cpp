@@ -632,8 +632,8 @@ std::string show(const DexType* p) {
 std::string show(const DexField* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->m_access) << humanize(show(p->m_type)) << " "
-     << humanize(show(p->m_class)) << "." << show(p->m_name);
+  ss << accessibility(p->m_access) << humanize(show(p->m_ref.type)) << " "
+     << humanize(show(p->m_ref.cls)) << "." << show(p->m_ref.name);
   if (p->m_anno) {
     ss << "\n  annotations:" << show(p->m_anno);
   }

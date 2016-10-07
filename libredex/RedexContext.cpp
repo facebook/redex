@@ -161,6 +161,20 @@ DexField* RedexContext::get_field(DexType* container,
   return rv;
 }
 
+void RedexContext::mutate_field(DexField* field,
+                                const DexFieldRef& ref) {
+  pthread_mutex_lock(&s_field_lock);
+  s_field_map[field->m_ref.cls][field->m_ref.name].erase(
+      field->m_ref.type);
+  DexFieldRef r;
+  r.cls = ref.cls != nullptr ? ref.cls : field->m_ref.cls;
+  r.name = ref.name != nullptr ? ref.name : field->m_ref.name;
+  r.type = ref.type != nullptr ? ref.type : field->m_ref.type;
+  field->m_ref = r;
+  s_field_map[r.cls][r.name][r.type] = field;
+  pthread_mutex_unlock(&s_field_lock);
+}
+
 DexTypeList* RedexContext::make_type_list(std::list<DexType*>&& p) {
   DexTypeList* rv;
   pthread_mutex_lock(&s_typelist_lock);
