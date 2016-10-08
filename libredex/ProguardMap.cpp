@@ -299,15 +299,15 @@ void apply_deobfuscated_names(
   }
 }
 
-std::string proguard_name(DexType* type) {
+std::string proguard_name(const DexType* type) {
   return type->get_name()->c_str();
 }
 
-std::string proguard_name(DexClass* cls) {
+std::string proguard_name(const DexClass* cls) {
   return cls->get_name()->c_str();
 }
 
-std::string proguard_name(DexMethod* method) {
+std::string proguard_name(const DexMethod* method) {
   // Format is <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
   auto str = proguard_name(method->get_class()) + "." + method->get_name()->c_str() + ":";
 
@@ -323,7 +323,7 @@ std::string proguard_name(DexMethod* method) {
   return str + args_str + ret_str;
 }
 
-std::string proguard_name(DexField* field) {
+std::string proguard_name(const DexField* field) {
   auto str = proguard_name(field->get_class()) + "."
     + field->get_name()->c_str() + ":"
     + proguard_name(field->get_type());

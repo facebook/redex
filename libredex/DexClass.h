@@ -18,18 +18,18 @@
 #include <sstream>
 #include <string>
 
-#include "DexIdx.h"
-#include "DexDefs.h"
 #include "DexAccess.h"
-#include "DexDebugInstruction.h"
-#include "DexInstruction.h"
 #include "DexAnnotation.h"
+#include "DexDebugInstruction.h"
+#include "DexDefs.h"
+#include "DexIdx.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
+#include "RedexContext.h"
+#include "ReferencedState.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Util.h"
-#include "RedexContext.h"
-#include "ReferencedState.h"
 
 /*
  * The structures defined here are literal representations
@@ -55,6 +55,12 @@ class DexDebugInstruction;
 class DexOutputIdx;
 class DexString;
 class DexType;
+
+// Forward decls to break cycle with ProguardMap.h
+std::string proguard_name(const DexType* cls);
+std::string proguard_name(const DexClass* cls);
+std::string proguard_name(const DexMethod* method);
+std::string proguard_name(const DexField* field);
 
 class DexString {
   friend struct RedexContext;
@@ -300,7 +306,7 @@ class DexField {
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {
-    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+    return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
@@ -716,7 +722,7 @@ class DexMethod {
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {
-    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+    return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
   void set_access(DexAccessFlags access) {
@@ -870,7 +876,7 @@ class DexClass {
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {
-    return is_external() ? get_name()->c_str() : m_deobfuscated_name;
+    return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
   void set_access(DexAccessFlags access) {
