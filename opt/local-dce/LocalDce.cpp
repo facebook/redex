@@ -111,6 +111,9 @@ std::unordered_set<DexMethod*> init_pure_methods() {
 
 bool is_pure(DexMethod* method) {
   static std::unordered_set<DexMethod*> pure_methods = init_pure_methods();
+  if (assumenosideeffects(method)) {
+    return true;
+  }
   return pure_methods.find(method) != pure_methods.end();
 }
 
