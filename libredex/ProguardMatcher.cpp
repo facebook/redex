@@ -301,7 +301,7 @@ bool field_level_match(const redex::MemberSpecification& fieldSpecification,
   return boost::regex_match(field_name, fieldname_regex);
 }
 
-void keep_fields(std::list<DexField*> fields,
+void keep_fields(const std::list<DexField*>& fields,
                  const redex::KeepSpec& keep_rule,
                  std::function<void(DexField*)> keeper) {
   auto fieldSpecifications = keep_rule.class_spec.fieldSpecifications;
@@ -317,7 +317,7 @@ void keep_fields(std::list<DexField*> fields,
   }
 }
 
-void apply_field_keeps(DexClass* cls,
+void apply_field_keeps(const DexClass* cls,
                        const redex::KeepSpec& keep_rule,
                        std::function<void(DexField*)> keeper) {
   keep_fields(cls->get_ifields(), keep_rule, keeper);
@@ -339,7 +339,7 @@ bool method_level_match(const redex::MemberSpecification& methodSpecification,
 
 void keep_methods(const redex::KeepSpec& keep_rule,
                   const redex::MemberSpecification& methodSpecification,
-                  std::list<DexMethod*> methods,
+                  const std::list<DexMethod*>& methods,
                   const boost::regex& method_regex,
                   std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
@@ -350,7 +350,8 @@ void keep_methods(const redex::KeepSpec& keep_rule,
   }
 }
 
-void apply_method_keeps(DexClass* cls, const redex::KeepSpec& keep_rule,
+void apply_method_keeps(const DexClass* cls,
+                        const redex::KeepSpec& keep_rule,
                         std::function<void(DexMethod*)> keeper) {
   auto classname = keep_rule.class_spec.className;
   auto methodSpecifications = keep_rule.class_spec.methodSpecifications;
@@ -630,9 +631,6 @@ void process_keepclassmembers(const KeepSpec& keep_rule, DexClass* cls) {
 }
 
 void process_assumenosideeffects(const KeepSpec& keep_rule, DexClass* cls) {
-  if (cls->is_external()) {
-    return;
-  }
   cls->rstate.set_assumenosideeffects();
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
