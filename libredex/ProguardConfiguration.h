@@ -65,7 +65,7 @@ namespace redex {
   struct ProguardConfiguration {
     bool ok;
     std::vector<std::string> includes;
-		std::string basedirectory;
+    std::string basedirectory;
     std::vector<std::string> injars;
     std::vector<std::string> outjars;
     std::vector<std::string> libraryjars;
@@ -85,7 +85,7 @@ namespace redex {
     std::vector<KeepSpec> keep_rules;
     std::vector<KeepSpec> keepclassmembers_rules;
     std::vector<KeepSpec> keepclasseswithmembers_rules;
-		std::vector<KeepSpec> assumesideeffects_rules;
+    std::vector<KeepSpec> assumesideeffects_rules;
     std::vector<std::string> optimization_filters;
     std::vector<std::string> keepattributes;
     std::vector<std::string> dontwarn;
