@@ -427,6 +427,16 @@ def run_redex(args):
             config_dict = json.load(config_file)
             passes_list = config_dict['redex']['passes']
 
+    for key_value_str in args.passthru_json:
+        key_value = key_value_str.split('=', 1)
+        if len(key_value) != 2:
+            log("Json Pass through %s is not valid. Split len: %s" % (key_value_str, len(key_value)))
+            continue   
+        key = key_value[0]
+        value = key_value[1] 
+        log("Got Override %s = %s from %s. Previous %s" % (key, value, key_value_str, config_dict[key]))
+        config_dict[key] = value
+
     newtmp = tempfile.mkdtemp()
     log('Replacing /tmp in config with {}'.format(newtmp))
 
@@ -457,6 +467,8 @@ def run_redex(args):
 
     log('Repacking dex files')
     have_locators = config_dict.get("emit_locator_strings")
+    log("Emit Locator Strings: %s" % have_locators)
+    
     dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
 
     for module in application_modules:
