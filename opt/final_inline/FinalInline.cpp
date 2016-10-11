@@ -56,8 +56,23 @@ std::unordered_set<DexField*> get_field_target(
   return ftarget;
 }
 
-void remove_unused_fields(Scope& scope,
-    const std::vector<std::string>& remove_members) {
+bool keep_member(
+  const std::vector<std::string>& keep_members,
+  const DexField* field
+) {
+  for (auto const& keep : keep_members) {
+    if (!strcmp(keep.c_str(), field->get_name()->c_str())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void remove_unused_fields(
+  Scope& scope,
+  const std::vector<std::string>& remove_members,
+  const std::vector<std::string>& keep_members
+) {
   std::vector<DexField*> moveable_fields;
   std::vector<DexClass*> smallscope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
@@ -78,6 +93,7 @@ void remove_unused_fields(Scope& scope,
     }
     auto sfields = clazz->get_sfields();
     for (auto sfield : sfields) {
+      if (keep_member(keep_members, sfield)) continue;
       if ((sfield->get_access() & aflags) != aflags) continue;
       auto value = sfield->get_static_value();
       if (value == nullptr && !is_primitive(sfield->get_type())) continue;
@@ -275,7 +291,7 @@ void inline_field_values(Scope& fullscope) {
 void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
   inline_field_values(scope);
-  remove_unused_fields(scope, m_remove_class_members);
+  remove_unused_fields(scope, m_remove_class_members, m_keep_class_members);
 }
 
 static FinalInlinePass s_pass;
