@@ -113,6 +113,9 @@ def run_pass(
                     time.sleep(5)
                     continue
             raise err
+        except subprocess.CalledProcessError as err:
+            err.cmd = ' '.join(args)
+            raise err
         break
     log('Dex processing finished in {:.2f} seconds'.format(timer() - start))
 
