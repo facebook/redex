@@ -533,7 +533,7 @@ struct SeedsParser {
     return
       convert_type(cls)
       + "." + name
-      + "(" + convert_args(args) + ")"
+      + ":(" + convert_args(args) + ")"
       + convert_type(type);
   }
 
