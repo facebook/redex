@@ -34,6 +34,7 @@
   TM(MAIN)                                      \
   TM(MMINL)                                     \
   TM(MTRANS)                                    \
+  TM(OBFUSCATE)                                 \
   TM(PEEPHOLE)                                  \
   TM(PGR)                                       \
   TM(PM)                                        \

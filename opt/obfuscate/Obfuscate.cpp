@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "ProguardMap.h"
 #include "ReachableClasses.h"
+#include "Trace.h"
 
 void rename_field(DexField* field) {
   // To be done. This is a dummy definition.
@@ -23,6 +24,8 @@ void rename_field(DexField* field) {
   DexFieldRef ref;
   std::string old_name = field->get_name()->c_str();
   ref.name = DexString::make_string(old_name + "_renamed");
+  TRACE(OBFUSCATE, 1, "Renaming the field %s to %s\n", old_name.c_str(),
+                      ref.name->c_str());
   field->change(ref);
 }
 
