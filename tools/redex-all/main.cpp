@@ -406,6 +406,16 @@ int main(int argc, char* argv[]) {
           "because no file was specified\n");
   }
 
+  // New ProGuard parser
+  redex::ProguardConfiguration pg_config;
+  if (!args.proguard_config.empty()) {
+    Timer t("New proguard parser");
+    redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
+  }
+
+  auto const& pg_libs = pg_config.libraryjars;
+  args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
+
   for (const auto jar_path : args.jar_paths) {
     std::stringstream jar_stream(jar_path);
     std::string dependent_jar_path;
@@ -416,13 +426,6 @@ int main(int argc, char* argv[]) {
             dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
     }
-  }
-
-  // New ProGuard parser
-  redex::ProguardConfiguration pg_config;
-  if (!args.proguard_config.empty()) {
-    Timer t("New proguard parser");
-    redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
   }
 
   if (start == 0 || start == argc) {
