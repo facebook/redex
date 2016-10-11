@@ -447,8 +447,8 @@ std::vector<std::string> split_args(std::string args) {
 DexMethod* DexMethod::get_method(std::string canon) {
   auto cls_end = canon.find('.');
   auto name_start = cls_end + 1;
-  auto name_end = canon.find('(', name_start);
-  auto args_start = name_end + 1;
+  auto name_end = canon.find(':', name_start);
+  auto args_start = name_end + 2;
   auto args_end = canon.find(')', args_start);
   auto rtype_start = args_end + 1;
   auto cls_str = canon.substr(0, cls_end);
