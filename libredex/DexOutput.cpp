@@ -1299,8 +1299,10 @@ write_classes_to_dex(
   const Json::Value& json_cfg,
   PositionMapper* pos_mapper)
 {
-  auto method_mapping_filename = json_cfg.get("method_mapping", "").asString();
-  auto class_mapping_filename = json_cfg.get("class_mapping", "").asString();
+  auto method_mapping_filename = cfg.metafile(
+    json_cfg.get("method_mapping", "").asString());
+  auto class_mapping_filename = cfg.metafile(
+    json_cfg.get("class_mapping", "").asString());
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   auto sort_bytecode = json_cfg.get("bytecode_sort_mode", "").asString();
   SortMode string_sort_mode = DEFAULT;

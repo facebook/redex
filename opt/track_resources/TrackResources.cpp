@@ -183,6 +183,7 @@ void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pas
   auto tracked_classes = build_tracked_cls_set(m_classes_to_track, pg_map);
   auto scope = build_class_scope(stores);
   find_accessed_fields(scope, cfg, tracked_classes, recorded_fields);
+  m_tracked_fields_output = cfg.metafile(m_tracked_fields_output);
   write_found_fields(m_tracked_fields_output, recorded_fields);
 }
 

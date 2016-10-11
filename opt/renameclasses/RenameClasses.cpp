@@ -280,6 +280,7 @@ void RenameClassesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pass
       untouchables.insert(children.begin(), children.end());
     }
   }
+  m_path = cfg.metafile(m_path);
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
   rename_classes(
       scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,

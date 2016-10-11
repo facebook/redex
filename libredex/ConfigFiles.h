@@ -57,16 +57,22 @@ struct ConfigFiles {
     m_moved_methods_map[mt] = cls;
   }
 
+  std::string metafile(std::string basename) {
+    if (basename.empty()) return std::string();
+    return outdir + '/' + basename;
+  }
+
   ProguardMap& get_proguard_map() {
     return m_proguard_map;
   }
 
   std::string get_printseeds() {
-    return m_printseeds;  
+    return m_printseeds;
   }
 
  public:
   bool using_seeds{false};
+  std::string outdir;
 
  private:
   std::vector<std::string> load_coldstart_classes();

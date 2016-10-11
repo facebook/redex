@@ -231,6 +231,7 @@ def merge_proguard_map_with_rename_output(
         passes_list,
         input_apk_path,
         apk_output_path,
+        dex_dir,
         config_dict,
         pg_file):
     log('running merge proguard step')
@@ -240,6 +241,7 @@ def merge_proguard_map_with_rename_output(
         redex_rename_map_path = config_dict['RenameClassesPassV2']['class_rename']
     else:
         raise ValueError("merge_proguard_map_with_rename_output called with a rename classes pass")
+    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
     log('redex map is at ' + str(redex_rename_map_path))
     if os.path.isfile(redex_rename_map_path):
         redex_pg_file = "redex-class-rename-map.txt"
@@ -352,19 +354,6 @@ Given an APK, produce a better APK!
 
     return parser
 
-def relocate_tmp(d, newtmp):
-    """
-    Walks through the config dict and changes and string value that begins with
-    "/tmp/" to our tmp dir for this run. This is to avoid collisions of
-    simultaneously running redexes.
-    """
-    for k, v in d.items():
-        if isinstance(v, dict):
-            relocate_tmp(v, newtmp)
-        else:
-            if (isinstance(v, str) or isinstance(v, unicode)) and v.startswith("/tmp/"):
-                d[k] = newtmp + "/" + v[5:]
-                log("Replaced {0} in config with {1}".format(v, d[k]))
 
 def run_redex(args):
     debug_mode = args.unpack_only or args.debug
@@ -434,23 +423,11 @@ def run_redex(args):
         key_value = key_value_str.split('=', 1)
         if len(key_value) != 2:
             log("Json Pass through %s is not valid. Split len: %s" % (key_value_str, len(key_value)))
-            continue   
+            continue
         key = key_value[0]
-        value = key_value[1] 
+        value = key_value[1]
         log("Got Override %s = %s from %s. Previous %s" % (key, value, key_value_str, config_dict[key]))
         config_dict[key] = value
-
-    newtmp = tempfile.mkdtemp()
-    log('Replacing /tmp in config with {}'.format(newtmp))
-
-    # Fix up the config dict to relocate all /tmp references
-    relocate_tmp(config_dict, newtmp)
-
-    # Rewrite the relocated config file to our tmp, for use by redex binary
-    if config is not None:
-        config = newtmp + "/rewritten.config"
-        with open(config, 'w') as fp:
-            json.dump(config_dict, fp)
 
     log('Running redex-all on {} dex files '.format(len(dexen)))
     run_pass(binary,
@@ -471,7 +448,7 @@ def run_redex(args):
     log('Repacking dex files')
     have_locators = config_dict.get("emit_locator_strings")
     log("Emit Locator Strings: %s" % have_locators)
-    
+
     dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
 
     for module in application_modules:
@@ -483,23 +460,23 @@ def run_redex(args):
             args.keyalias, args.keypass)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
-    copy_file_to_out_dir(newtmp, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
-    copy_file_to_out_dir(newtmp, args.out, 'stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(newtmp, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
-    copy_file_to_out_dir(newtmp, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
-    copy_file_to_out_dir(newtmp, args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
+    copy_file_to_out_dir(dex_dir, args.out, 'stats.txt', 'stats', 'redex-stats.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
 
     if 'RenameClassesPass' in passes_list or 'RenameClassesPassV2' in passes_list:
         merge_proguard_map_with_rename_output(
             passes_list,
             args.input_apk,
             args.out,
+            dex_dir,
             config_dict,
             args.proguard_map)
     else:
         log('Skipping rename map merging, because we didn\'t run the rename pass')
 
-    shutil.rmtree(newtmp)
     remove_temp_dirs()
 
 

@@ -125,6 +125,7 @@ static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
 
 void ShortenSrcStringsPass::run_pass(
     DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  m_filename_mappings = cfg.metafile(m_filename_mappings);
   return strip_src_strings(stores, m_filename_mappings.c_str());
 }
 

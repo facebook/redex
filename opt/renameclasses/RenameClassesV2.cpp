@@ -527,6 +527,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pa
   // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
   s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
 
+  m_path = cfg.metafile(m_path);
   rename_classes(scope, m_path, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);

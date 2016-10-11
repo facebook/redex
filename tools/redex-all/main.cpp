@@ -475,6 +475,7 @@ int main(int argc, char* argv[]) {
     }
   }
   cfg.using_seeds = false;
+  cfg.outdir = args.out_dir;
   if (!args.seeds_filename.empty()) {
     Timer t("Init seed classes");
     auto nseeds = init_seed_classes(
@@ -503,7 +504,8 @@ int main(int argc, char* argv[]) {
   dex_output_stats_t totals;
   std::vector<dex_output_stats_t> dexes_stats;
 
-  auto pos_output = args.config.get("line_number_map", "").asString();
+  auto pos_output = cfg.metafile(
+    args.config.get("line_number_map", "").asString());
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
   for (auto& store : stores) {
     Timer t("Writing optimized dexes");
@@ -537,9 +539,10 @@ int main(int argc, char* argv[]) {
 
   {
     Timer t("Writing stats");
-    auto stats_output = args.config.get("stats_output", "").asString();
-    auto method_move_map = args.config.get("method_move_map", "").asString();
-
+    auto stats_output = cfg.metafile(
+      args.config.get("stats_output", "").asString());
+    auto method_move_map = cfg.metafile(
+      args.config.get("method_move_map", "").asString());
     pos_mapper->write_map();
     output_stats(stats_output.c_str(), totals, dexes_stats, manager);
     output_moved_methods_map(method_move_map.c_str(), cfg);
