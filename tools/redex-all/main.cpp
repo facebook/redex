@@ -368,7 +368,6 @@ int main(int argc, char* argv[]) {
   g_redex = new RedexContext();
 
   Arguments args;
-  std::vector<KeepRule> rules;
   // Currently there are two sources that specify the library jars:
   // 1. The jar_path argument, which may specify one library jar.
   // 2. The library_jars vector, which lists the library jars specified in
@@ -388,29 +387,26 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  // Old ProGuard parser
-  if (!args.proguard_config.empty()) {
-    Timer t("Load proguard config");
-    if (!load_proguard_config_file(
-            args.proguard_config.c_str(), &rules, &library_jars)) {
-      fprintf(stderr,
-              "ERROR: Unable to open proguard config %s\n",
-              args.proguard_config.c_str());
-      // For now tolerate missing or unparseable ProGuard configuration files.
-      // start = 0;
-    }
-  } else {
-    TRACE(MAIN,
-          1,
-          "Skipping parsing the proguard config file "
-          "because no file was specified\n");
-  }
-
   // New ProGuard parser
   redex::ProguardConfiguration pg_config;
   if (!args.proguard_config.empty()) {
     Timer t("New proguard parser");
     redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
+  }
+
+  std::vector<KeepRule> rules;
+  {
+    auto transform_rules = [&rules](const std::vector<redex::KeepSpec>& ks) {
+      for (auto const& r : ks) {
+        KeepRule kr;
+        kr.class_type = keeprules::ClassType::CLASS;
+        kr.classname = r.class_spec.className.c_str();
+        rules.emplace_back(std::move(kr));
+      }
+    };
+    transform_rules(pg_config.keep_rules);
+    transform_rules(pg_config.keepclassmembers_rules);
+    transform_rules(pg_config.keepclasseswithmembers_rules);
   }
 
   auto const& pg_libs = pg_config.libraryjars;
