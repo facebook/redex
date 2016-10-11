@@ -489,6 +489,7 @@ int main(int argc, char* argv[]) {
     Timer t("Running optimization passes");
     manager.run_passes(stores, cfg);
   }
+
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
 
   LocatorIndex* locator_index = nullptr;

@@ -45,13 +45,14 @@ DexClass* ProguardObfuscationTest::find_class_named(
   }
 }
 
-bool ProguardObfuscationTest::field_is_renamed(
+bool ProguardObfuscationTest::field_found(
     const std::list<DexField*>& fields,
     const std::string& name) {
   for (const auto& field : fields) {
     auto deobfuscated_name = proguard_map.deobfuscate_field(proguard_name(field));
-    if (name == std::string(field->c_str()) || (name == deobfuscated_name)) {
-      return deobfuscated_name != proguard_name(field);
+    if (name == std::string(field->c_str()) || (name == deobfuscated_name) ||
+        name == proguard_name(field)) {
+      return deobfuscated_name == proguard_name(field);
     }
   }
   return false;

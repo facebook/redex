@@ -126,6 +126,7 @@ redex_all_SOURCES = \
 	opt/access-marking/AccessMarking.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
+	opt/obfuscate/Obfuscate.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \

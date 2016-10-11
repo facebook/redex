@@ -81,6 +81,9 @@ struct ProguardMap {
    */
   std::string deobfuscate_method(const std::string& method) const;
 
+  bool empty() const { return m_classMap.empty() && m_fieldMap.empty() &&
+                              m_methodMap.empty() ; }
+
  private:
   void parse_proguard_map(std::istream& fp);
 

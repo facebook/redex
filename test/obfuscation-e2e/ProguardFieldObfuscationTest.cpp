@@ -37,7 +37,6 @@ TEST(ProguardTest, obfuscation) {
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
   const char* configuration_file = std::getenv("pg_config_e2e_pgconfig");
   ASSERT_NE(nullptr, dexfile);
-  ASSERT_NE(nullptr, mapping_file);
   ASSERT_NE(nullptr, configuration_file);
 
   ProguardObfuscationTest tester(dexfile, mapping_file);
@@ -55,7 +54,7 @@ TEST(ProguardTest, obfuscation) {
   ASSERT_NE(nullptr, alpha);
 
   for (const std::string &fieldName : fieldNames) {
-    ASSERT_TRUE(tester.field_is_renamed(
+    ASSERT_FALSE(tester.field_found(
         alpha->get_ifields(),
         alphaName + fieldName)) << alphaName + fieldName << " not obfuscated";
   }
@@ -64,7 +63,7 @@ TEST(ProguardTest, obfuscation) {
   auto beta = tester.find_class_named(
     "Lcom/facebook/redex/test/proguard/Beta;");
   ASSERT_NE(nullptr, beta);
-  ASSERT_FALSE(tester.field_is_renamed(
+  ASSERT_TRUE(tester.field_found(
       beta->get_ifields(),
       "Lcom/facebook/redex/test/proguard/Beta;.wombatBeta:I"));
 
