@@ -103,13 +103,13 @@ struct InheritanceGraph {
     if (!ancestor_cls) return;
     auto const& super_type = ancestor_cls->get_super_class();
     if (super_type) {
-      TRACE(RMU, 3, "Child %s of %s\n", SHOW(child), SHOW(super_type));
+      TRACE(RMU, 4, "Child %s of %s\n", SHOW(child), SHOW(super_type));
       m_inheritors[super_type].insert(child);
       add_child(child, super_type);
     }
     auto const& interfaces = ancestor_cls->get_interfaces()->get_type_list();
     for (auto const& interface : interfaces) {
-      TRACE(RMU, 3, "Child %s of %s\n", SHOW(child), SHOW(interface));
+      TRACE(RMU, 4, "Child %s of %s\n", SHOW(child), SHOW(interface));
       m_inheritors[interface].insert(child);
       add_child(child, interface);
     }
@@ -158,6 +158,13 @@ struct UnreachableCodeRemover {
     return m_marked_methods.count(method);
   }
 
+  void push(const DexType* type) {
+    if (is_array(type)) {
+      type = get_array_type(type);
+    }
+    push(type_class(type));
+  }
+
   void push(const DexClass* cls) {
     if (!cls || marked(cls)) return;
     mark(cls);
@@ -185,7 +192,7 @@ struct UnreachableCodeRemover {
     t->gather_fields(fields);
     t->gather_methods(methods);
     for (auto const& t : types) {
-      push(type_class(t));
+      push(t);
     }
     for (auto const& f : fields) {
       push(f);
@@ -196,7 +203,7 @@ struct UnreachableCodeRemover {
   }
 
   void visit(const DexClass* cls) {
-    TRACE(RMU, 3, "Visiting class: %s\n", SHOW(cls));
+    TRACE(RMU, 4, "Visiting class: %s\n", SHOW(cls));
     for (auto& m : cls->get_dmethods()) {
       if (is_init(m)) push(m);
       if (is_clinit(m)) push(m);
@@ -212,25 +219,25 @@ struct UnreachableCodeRemover {
   }
 
   void visit(DexField* field) {
-    TRACE(RMU, 3, "Visiting field: %s\n", SHOW(field));
+    TRACE(RMU, 4, "Visiting field: %s\n", SHOW(field));
     if (!field->is_concrete()) {
       auto const& realfield = resolve_field(
         field->get_class(), field->get_name(), field->get_type());
       push(realfield);
     }
     gather_and_push(field);
-    push(type_class(field->get_class()));
-    push(type_class(field->get_type()));
+    push(field->get_class());
+    push(field->get_type());
   }
 
   void visit(DexMethod* method) {
-    TRACE(RMU, 3, "Visiting method: %s\n", SHOW(method));
+    TRACE(RMU, 4, "Visiting method: %s\n", SHOW(method));
     push(resolve(method, type_class(method->get_class())));
     gather_and_push(method);
-    push(type_class(method->get_class()));
-    push(type_class(method->get_proto()->get_rtype()));
+    push(method->get_class());
+    push(method->get_proto()->get_rtype());
     for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
-      push(type_class(t));
+      push(t);
     }
     if (method->is_virtual() || !method->is_concrete()) {
       // If we're keeping an interface method, we have to keep its
@@ -259,30 +266,30 @@ struct UnreachableCodeRemover {
     for (auto const& dex : DexStoreClassesIterator(m_stores)) {
       for (auto const& cls : dex) {
         if (is_seed(cls) || is_canary(cls)) {
-          TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(cls));
+          TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(cls));
           push(cls);
         }
         for (auto const& f : cls->get_ifields()) {
           if (is_seed(f) || is_volatile(f)) {
-            TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(f));
+            TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
             push(f);
           }
         }
         for (auto const& f : cls->get_sfields()) {
           if (is_seed(f)) {
-            TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(f));
+            TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
             push(f);
           }
         }
         for (auto const& m : cls->get_dmethods()) {
           if (is_seed(m)) {
-            TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(m));
+            TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
             push(m);
           }
         }
         for (auto const& m : cls->get_vmethods()) {
           if (is_seed(m) || implements_library_method(m, cls)) {
-            TRACE(RMU, 2, "Visiting seed: %s\n", SHOW(m));
+            TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
             push(m);
           }
         }

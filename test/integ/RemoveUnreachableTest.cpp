@@ -186,5 +186,9 @@ TEST(RemoveUnreachableTest, synthetic) {
   // Override of nonreachable elements.
   ASSERT_FALSE(find_vmethod(classes, "LD;", "V", "bor", {}));
 
+  // Class kept alive via array refrences
+  ASSERT_TRUE(find_class(classes, "LOnlyInArray;"));
+  ASSERT_TRUE(find_ifield(classes, "LA;", "[LOnlyInArray;", "arr"));
+
   delete g_redex;
 }

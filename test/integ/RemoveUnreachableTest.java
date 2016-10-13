@@ -9,6 +9,12 @@
 
 class A {
   public int foo;
+  public OnlyInArray[] arr;
+
+  public A() {
+    foo = 0;
+    arr = new OnlyInArray[10];
+  }
 
   public int bar() {
     return baz();
@@ -113,3 +119,5 @@ class UseHasher {
     use(h);
   }
 }
+
+class OnlyInArray {}
