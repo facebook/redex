@@ -622,6 +622,11 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, delta_q2);
     ASSERT_TRUE(keep(delta_q2));
 
+   // Check DontKillMe
+    auto delta_r = find_class_named(
+        classes, "Lcom/facebook/redex/test/proguard/Delta$R;");
+    ASSERT_NE(nullptr, delta_r);
+
     // Check handling of extends for classes with annotation filters.
     auto delta_s0 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S0;");
@@ -644,6 +649,27 @@ TEST(ProguardTest, assortment) {
    ASSERT_NE(nullptr, mutator);
    ASSERT_TRUE(keep(mutator));
    ASSERT_FALSE(assumenosideeffects(mutator));
+
+   // Check keepnames
+
+  }
+
+  { // keepclasseswithmembers test
+   auto delta_v = find_class_named(
+              classes, "Lcom/facebook/redex/test/proguard/Delta$V;");
+   ASSERT_NE(nullptr, delta_v);
+   ASSERT_TRUE(keep(delta_v));
+   auto alpha = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.alpha:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, alpha);
+   ASSERT_TRUE(keep(alpha));
+   auto beta = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.beta:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, beta);
+   ASSERT_TRUE(keep(beta));
+   auto gamma = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.gamma:I");
+   ASSERT_EQ(nullptr, gamma);
   }
 
   { // Check extends

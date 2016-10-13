@@ -145,7 +145,10 @@ public class Delta {
   public class Q1 extends android.graphics.Color {}
   public class Q2 extends SpannableStringBuilder {}
 
-  @DontKillMe
+  @DoNotStrip
+  public class R {}
+
+  @DoNotStrip
   public class R0 {}
 
   public class R1 {}
@@ -173,4 +176,16 @@ public class Delta {
      void mutator() { i = i +1; logger(); }
   }
 
+  public class VT {}
+
+  public class V {
+    VT alpha;
+    VT beta;
+    int gamma;
+  }
+
+  public class W {
+   int haskell;
+   boolean scala;
+  }
 }

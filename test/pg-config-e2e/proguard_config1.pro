@@ -73,7 +73,7 @@
 
 -keep public !final class ** extends com.facebook.redex.test.proguard.Epsilon
 -keep class ** extends com.facebook.redex.test.proguard.Delta$G
--keep class ** extends @com.facebook.redex.test.proguard.DontKillMe com.facebook.redex.test.proguard.Delta$R?
+-keep class ** extends @com.facebook.redex.test.proguard.DoNotStrip com.facebook.redex.test.proguard.Delta$R?
 
 -keep class ** extends android.graphics.Color
 -keep class ** implements android.text.Editable
@@ -94,9 +94,17 @@
   *;
 }
 
--keepclasseswithmembers class ** {
+-keepclasseswithmembers class * {
   void red();
   void green?();
+}
+
+-keepclasseswithmembers class * {
+  com.facebook.redex.test.proguard.Delta$VT *;
+}
+
+-keepnames class com.facebook.redex.test.proguard.Delta$W {
+  *;
 }
 
 -keepnames class ** implements com.facebook.redex.test.proguard.Delta$S3 {

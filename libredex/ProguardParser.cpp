@@ -631,6 +631,9 @@ ClassSpecification parse_class_specification(
     return class_spec;
   }
   class_spec.className = static_cast<Identifier*>((*it)->get())->ident;
+  if (class_spec.className == "*") {
+    class_spec.className = "**";
+  }
   (*it)++;
   // Parse extends/implements if present, treating implements like extends.
   if (((**it)->type == token::extends) || ((**it)->type == token::implements)) {

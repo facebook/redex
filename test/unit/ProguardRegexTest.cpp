@@ -233,4 +233,21 @@ TEST(ProguardRegexTest, types) {
     boost::regex matcher(r);
     ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta$B;", matcher));
   }
+
+  // Check convert_wildcard_type
+  {
+    auto proguard_regex = "**";
+    auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
+    ASSERT_EQ("L**;", descriptor);
+  }
+  {
+    auto proguard_regex = "alpha.**.beta";
+    auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
+    ASSERT_EQ("Lalpha/**/beta;", descriptor);
+  }
+  {
+    auto proguard_regex = "alpha.**.beta";
+    auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
+    ASSERT_EQ("Lalpha/**/beta;", descriptor);
+  }
 }

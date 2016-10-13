@@ -384,7 +384,7 @@ TEST(ProguardParserTest, annotationclass) {
   proguard_parser::parse(ss, &config);
   ASSERT_TRUE(config.ok);
   ASSERT_EQ(config.keep_rules.size(), 1);
-  ASSERT_EQ(config.keep_rules[0].class_spec.className, "*");
+  ASSERT_EQ(config.keep_rules[0].class_spec.className, "**");
 }
 
 // Member specifications
