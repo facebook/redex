@@ -1144,7 +1144,8 @@ void write_method_mapping(
   std::string filename,
   const DexOutputIdx* dodx,
   const ProguardMap& proguard_map,
-  size_t dex_number
+  size_t dex_number,
+  uint32_t dex_checksum
 ) {
   if (filename.empty()) return;
   FILE* fd = fopen(filename.c_str(), "a");
@@ -1200,6 +1201,13 @@ void write_method_mapping(
             dex_number,
             deobf_method_name.c_str(),
             deobf_class.c_str());
+
+    fprintf(fd,
+            "%u %u %s %s\n",
+            idx,
+            dex_checksum,
+            deobf_method_name.c_str(),
+            deobf_class.c_str());
   }
   fclose(fd);
 }
@@ -1209,7 +1217,8 @@ void write_class_mapping(
   DexClasses* classes,
   const size_t class_defs_size,
   const ProguardMap& proguard_map,
-  const size_t dex_number
+  const size_t dex_number,
+  uint32_t dex_checksum
 ) {
   if (filename.empty()) return;
   FILE* fd = fopen(filename.c_str(), "a");
@@ -1230,6 +1239,12 @@ void write_class_mapping(
             idx,
             dex_number,
             deobf_class.c_str());
+
+    fprintf(fd,
+            "%u %u %s\n",
+            idx,
+            dex_checksum,
+            deobf_class.c_str());
   }
 
   fclose(fd);
@@ -1242,14 +1257,16 @@ void DexOutput::write_symbol_files() {
     m_method_mapping_filename,
     dodx,
     m_config_files.get_proguard_map(),
-    m_dex_number
+    m_dex_number,
+    hdr.checksum
   );
   write_class_mapping(
     m_class_mapping_filename,
     m_classes,
     hdr.class_defs_size,
     m_config_files.get_proguard_map(),
-    m_dex_number
+    m_dex_number,
+    hdr.checksum
   );
 }
 
