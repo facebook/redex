@@ -120,3 +120,21 @@
 -assumenosideeffects class com.facebook.redex.test.proguard.Delta$U {
   void logger();
 }
+
+-keepclasseswithmembers class * {
+    public <init>(com.facebook.redex.test.proguard.Delta$X);
+}
+
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# view AndroidManifest.xml #generated:6
+-keep class android.support.test.runner.AndroidJUnitRunner {
+    <init>(...);
+}
+
+# view AndroidManifest.xml #generated:13
+-keep class com.facebook.redex.test.proguard.ProguardTest {
+    <init>(...);
+}

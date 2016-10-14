@@ -188,4 +188,13 @@ public class Delta {
    int haskell;
    boolean scala;
   }
+
+ public class X {
+
+    public class X1 {}
+    public class X2 {
+      private int x;
+      public X2(int i) { x = i; }
+   }
+  }
 }

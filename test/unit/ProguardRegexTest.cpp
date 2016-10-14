@@ -217,7 +217,7 @@ TEST(ProguardRegexTest, types) {
     auto proguard_regex = "...";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))+", r);
+    ASSERT_EQ("(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*", r);
     boost::regex matcher(r);
     ASSERT_TRUE(boost::regex_match("Ljava/lang/String;", matcher));
     ASSERT_TRUE(boost::regex_match("I", matcher));

@@ -146,6 +146,17 @@ TEST(ProguardTest, assortment) {
   apply_deobfuscated_names(dexen, proguard_map);
   process_proguard_rules(proguard_map, pg_config, scope);
 
+  // Check the top level Android activity class
+  {
+    auto proguard_test = find_class_named(classes, "Lcom/facebook/redex/test/proguard/ProguardTest;");
+    ASSERT_NE(nullptr, proguard_test);
+    ASSERT_TRUE(keep(proguard_test));
+    auto init = find_dmethod_named(proguard_test,
+        "Lcom/facebook/redex/test/proguard/ProguardTest;.<init>:()V");
+    ASSERT_NE(nullptr, init);
+    ASSERT_TRUE(keep(init));
+  }
+
   { // Alpha is explicitly used and should not be deleted.
     auto alpha =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Alpha;");
@@ -650,7 +661,22 @@ TEST(ProguardTest, assortment) {
    ASSERT_TRUE(keep(mutator));
    ASSERT_FALSE(assumenosideeffects(mutator));
 
-   // Check keepnames
+   // Check keepclasseswithmembers on Delta.X class
+  auto delta_x = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X;");
+  ASSERT_NE(nullptr, delta_x);
+
+  auto delta_x_x1 = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X$X1;");
+  ASSERT_NE(nullptr, delta_x_x1);
+  ASSERT_TRUE(keep(delta_x_x1));
+  auto delta_x_x1_init = find_dmethod_named(delta_x_x1, "Lcom/facebook/redex/test/proguard/Delta$X$X1;.<init>:(Lcom/facebook/redex/test/proguard/Delta$X;)V");
+  ASSERT_NE(nullptr, delta_x_x1_init);
+  ASSERT_TRUE(keep(delta_x_x1_init));
+
+  auto delta_x_x2 = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X$X2;");
+  ASSERT_EQ(nullptr, delta_x_x2);
 
   }
 

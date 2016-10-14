@@ -104,7 +104,7 @@ std::string form_type_regex(std::string proguard_regex) {
       if ((i != proguard_regex.size()-1) && (proguard_regex[i+1] == '.')) {
         if ((i != proguard_regex.size()-2) && (proguard_regex[i+2] == '.')) {
           // Match any sequence of types.
-          r += "(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))+";
+          r += "(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*";
           i = i + 2;
           continue;
         }
