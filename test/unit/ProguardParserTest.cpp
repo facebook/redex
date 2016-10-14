@@ -581,5 +581,17 @@ TEST(ProguardParserTest, method_member_specification) {
     auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
     ASSERT_EQ("(...)V", keep.descriptor);
   }
+}
+
+TEST(ProguardParserTest, keepclasseswithmembernames) {
+  {
+     ProguardConfiguration config;
+     std::istringstream ss(
+         "-keepclasseswithmembernames class * {"
+         "  native <methods>;"
+         "}");
+     proguard_parser::parse(ss, &config);
+     ASSERT_TRUE(config.ok);
+  }
 
 }

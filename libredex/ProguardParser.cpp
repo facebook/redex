@@ -256,6 +256,16 @@ bool parse_filter_list_command(std::vector<unique_ptr<Token>>::iterator* it,
   return true;
 }
 
+bool parse_optimizationpasses_command(std::vector<unique_ptr<Token>>::iterator* it) {
+    if ((**it)->type != token::optimizationpasses) {
+      return false;
+    }
+    (*it)++;
+    // Comsume the next token.
+    (*it)++;
+    return true;
+}
+
 bool is_modifier(token tok) {
   return tok == token::includedescriptorclasses_token ||
          tok == token::allowshrinking_token ||
@@ -721,7 +731,7 @@ bool parse_keepclasseswithmembernames(
   if ((**it)->type != token::keepclasseswithmembernames) {
     return false;
   }
-  if (!parse_keep(it, token::keepclasseswithmembers, keep_rules, ok)) {
+  if (!parse_keep(it, token::keepclasseswithmembernames, keep_rules, ok)) {
     cerr << "Failed to parse -keepclasseswithmembernames rule\n";
     return true;
   }
@@ -832,7 +842,9 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_filter_list_command(
             &it, token::optimizations, &pg_config->optimization_filters))
       continue;
-    // -optimizationpasses not supported
+    if (parse_optimizationpasses_command(&it)) {
+      continue;
+    }
     if (parse_keep(&it,
                    token::assumenosideeffects,
                    &pg_config->assumesideeffects_rules,
@@ -879,8 +891,8 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     } else {
       cerr << "Unexpected token " << (*it)->show() << " at line " << (*it)->line
            << endl;
+      (*parse_errors)++;
     }
-    (*parse_errors)++;
     it++;
     skip_to_next_command(&it);
   }
