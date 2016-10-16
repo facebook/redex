@@ -309,7 +309,8 @@ void RenameClassesPassV2::build_dont_rename_native_bindings(
   }
 }
 
-void RenameClassesPassV2::build_dont_rename_annotated(std::set<DexType*>& dont_rename_annotated) {
+void RenameClassesPassV2::build_dont_rename_annotated(
+    std::set<DexType*>& dont_rename_annotated) {
   for (const auto& annotation : m_dont_rename_annotated) {
     DexType *anno = DexType::get_type(annotation.c_str());
     if (anno) {
@@ -317,6 +318,31 @@ void RenameClassesPassV2::build_dont_rename_annotated(std::set<DexType*>& dont_r
     }
   }
 }
+
+class AliasMap {
+  std::map<DexString*, DexString*> m_class_name_map;
+  std::map<DexString*, DexString*> m_extras_map;
+ public:
+  void add_class_alias(DexClass* cls, DexString* alias) {
+    m_class_name_map.emplace(cls->get_name(), alias);
+  }
+  void add_alias(DexString* original, DexString* alias) {
+    m_extras_map.emplace(original, alias);
+  }
+  bool has(DexString* key) {
+    return m_class_name_map.count(key) || m_extras_map.count(key);
+  }
+  DexString* at(DexString* key) {
+    auto it = m_class_name_map.find(key);
+    if (it != m_class_name_map.end()) {
+      return it->first;
+    }
+    return m_extras_map.at(key);
+  }
+  const std::map<DexString*, DexString*>& get_class_map() const {
+    return m_class_name_map;
+  }
+};
 
 void RenameClassesPassV2::rename_classes(
     Scope& scope,
@@ -340,7 +366,7 @@ void RenameClassesPassV2::rename_classes(
   build_dont_rename_native_bindings(scope, dont_rename_native_bindings);
   build_dont_rename_annotated(dont_rename_annotated);
 
-  std::map<DexString*, DexString*> aliases;
+  AliasMap aliases;
   for(auto clazz: scope) {
     // Don't rename annotations
     if (!rename_annotations && is_annotation(clazz)) {
@@ -403,7 +429,6 @@ void RenameClassesPassV2::rename_classes(
 
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
-    auto oldname_cstr = oldname->c_str();
 
     char clzname[4];
     const char* padding = "0000000000000";
@@ -419,11 +444,12 @@ void RenameClassesPassV2::rename_classes(
         clzname);
     s_sequence++;
 
-    auto exists  = DexString::get_string(descriptor);
-    always_assert_log(!exists, "Collision on class %s (%s)", oldname_cstr, descriptor);
+    auto exists = DexString::get_string(descriptor);
+    always_assert_log(
+        !exists, "Collision on class %s (%s)", oldname->c_str(), descriptor);
 
     auto dstring = DexString::make_string(descriptor);
-    aliases[oldname] = dstring;
+    aliases.add_class_alias(clazz, dstring);
     dtype->assign_name_alias(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
@@ -447,7 +473,7 @@ void RenameClassesPassV2::rename_classes(
       newarraytype += dstring->c_str();
       dstring = DexString::make_string(newarraytype.c_str());
 
-      aliases[oldname] = dstring;
+      aliases.add_alias(oldname, dstring);
       arraytype->assign_name_alias(dstring);
     }
   }
@@ -457,11 +483,15 @@ void RenameClassesPassV2::rename_classes(
    * handled.
    */
 
-  /* Generics of the form Type<> turn into the Type string
-   * sans the ';'.  So, we have to alias those if they
-   * exist.  Signature annotations suck.
+  /* In Signature annotations, parameterized types of the form Foo<Bar> get
+   * represented as the strings
+   *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
+   *
+   * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
+   * So, we have to alias those strings if they exist. Signature annotations
+   * suck.
    */
-  for (auto apair : aliases) {
+  for (const auto& apair : aliases.get_class_map()) {
     char buf[MAX_DESCRIPTOR_LENGTH];
     const char *sourcestr = apair.first->c_str();
     size_t sourcelen = strlen(sourcestr);
@@ -473,7 +503,7 @@ void RenameClassesPassV2::rename_classes(
     strcpy(buf, apair.second->c_str());
     buf[strlen(apair.second->c_str()) - 1] = '\0';
     auto target = DexString::make_string(buf);
-    aliases[dstring] = target;
+    aliases.add_alias(dstring, target);
   }
   static DexType *dalviksig =
     DexType::get_type("Ldalvik/annotation/Signature;");
@@ -488,11 +518,11 @@ void RenameClassesPassV2::rename_classes(
       for (auto strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
         auto stringev = static_cast<DexEncodedValueString*>(strev);
-        if (aliases.count(stringev->string())) {
+        if (aliases.has(stringev->string())) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
               stringev->string()->c_str(),
-              aliases[stringev->string()]->c_str());
-          stringev->string(aliases[stringev->string()]);
+              aliases.at(stringev->string())->c_str());
+          stringev->string(aliases.at(stringev->string()));
         }
       }
     }
@@ -501,10 +531,12 @@ void RenameClassesPassV2::rename_classes(
   if (!path.empty()) {
     FILE* fd = fopen(path.c_str(), "w");
     always_assert_log(fd, "Error writing rename file");
-    for (const auto &it : aliases) {
-      // record for later processing and back map generation
-      fprintf(fd, "%s -> %s\n",it.first->c_str(),
-      it.second->c_str());
+    // record for later processing and back map generation
+    for (const auto& it : aliases.get_class_map()) {
+      auto cls = type_class(DexType::get_type(it.first));
+      fprintf(fd, "%s -> %s\n",
+              cls->get_deobfuscated_name().c_str(),
+              it.second->c_str());
     }
     fclose(fd);
   }
