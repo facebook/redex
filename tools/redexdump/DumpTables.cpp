@@ -515,8 +515,17 @@ void dump_strings(ddump_data* rd, bool print_headers) {
   auto offset = rd->dexh->string_ids_off;
   const uint8_t* str_id_ptr = (uint8_t*)(rd->dexmmap) + offset;
   auto size = rd->dexh->string_ids_size;
+  auto length = 0;
+  auto tmp_str_id_ptr = 0;
+  for (uint32_t i = 0; i < size; ++i) {
+    auto str_data_off = *(uint32_t*)tmp_str_id_ptr;
+    tmp_str_id_ptr += 4;
+    const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + str_data_off;
+    length += strlen((char*) str_data_ptr);
+  }  
+
   if (print_headers) {
-    redump("\nSTRING IDS TABLE: %d\n", size);
+    redump("\nSTRING IDS TABLE: %d %d\n", size, length);
     redump("%s\n", string_data_header);
   }
   for (uint32_t i = 0; i < size; ++i) {
