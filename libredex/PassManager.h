@@ -48,5 +48,5 @@ class PassManager {
   std::map<std::string, std::map<std::string, int> > m_pass_metrics;
   std::map<std::string, int>* m_current_pass_metrics;
 
-  const redex::ProguardConfiguration m_pg_config;
+  redex::ProguardConfiguration m_pg_config;
 };

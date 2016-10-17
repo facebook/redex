@@ -18,6 +18,7 @@
 #include "DexUtil.h"
 #include "ConfigFiles.h"
 #include "PrintSeeds.h"
+#include "ProguardPrintConfiguration.h"
 #include "ProguardMatcher.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
@@ -74,7 +75,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   Scope scope = build_class_scope(it);
   {
     Timer t("Processing proguard rules");
-    process_proguard_rules(cfg.get_proguard_map(), m_pg_config, scope);
+    process_proguard_rules(cfg.get_proguard_map(), &m_pg_config, scope);
   }
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {
@@ -86,6 +87,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
      Timer t("Writing seeds to file " + cfg.get_printseeds());
      std::ofstream seeds_file(cfg.get_printseeds());
      redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
+     std::ofstream config_file(cfg.get_printseeds() + ".pro");
+     redex::show_configuration(config_file, scope, m_pg_config);
   }
   {
     Timer t("Initializing reachable classes");

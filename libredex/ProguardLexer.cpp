@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "Debug.h"
 #include "ProguardLexer.h"
 
 namespace redex {

@@ -256,14 +256,15 @@ bool parse_filter_list_command(std::vector<unique_ptr<Token>>::iterator* it,
   return true;
 }
 
-bool parse_optimizationpasses_command(std::vector<unique_ptr<Token>>::iterator* it) {
-    if ((**it)->type != token::optimizationpasses) {
-      return false;
-    }
-    (*it)++;
-    // Comsume the next token.
-    (*it)++;
-    return true;
+bool parse_optimizationpasses_command(
+    std::vector<unique_ptr<Token>>::iterator* it) {
+  if ((**it)->type != token::optimizationpasses) {
+    return false;
+  }
+  (*it)++;
+  // Comsume the next token.
+  (*it)++;
+  return true;
 }
 
 bool is_modifier(token tok) {
@@ -348,6 +349,7 @@ bool is_negation_or_class_access_modifier(token type) {
   case token::native:
   case token::staticToken:
   case token::transient:
+  case token::annotation:
     return true;
   default:
     return false;
@@ -608,7 +610,7 @@ ClassSpecification parse_class_specification(
           it, &class_spec.setAccessFlags, &class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
-    cerr << "Problem parsing access flags for class specification.\n";
+    std::cerr << "Problem parsing access flags for class specification.\n";
     *ok = false;
     return class_spec;
   }
@@ -622,17 +624,30 @@ ClassSpecification parse_class_specification(
     *ok = false;
     return class_spec;
   }
-  // Make sure the next keyword is interface, class, enum or @interface.
-  if (!(((**it)->type == token::interface) ||
-        ((**it)->type == token::classToken) ||
-        ((**it)->type == token::enumToken ||
-         ((**it)->type == token::annotation)))) {
-    cerr << "Expected interface, @interface, class or enum but got "
-         << (**it)->show() << " at line number " << (**it)->line << endl;
-    *ok = false;
-    return class_spec;
+  bool match_annotation_class =
+      class_spec.setAccessFlags.find(AccessFlag::ANNOTATION) !=
+      class_spec.setAccessFlags.end();
+  if (!match_annotation_class) {
+    // Make sure the next keyword is interface, class, enum.
+    if (!(((**it)->type == token::interface) ||
+          ((**it)->type == token::classToken) ||
+          ((**it)->type == token::enumToken ||
+           ((**it)->type == token::annotation)))) {
+      cerr << "Expected interface, class or enum but got " << (**it)->show()
+           << " at line number " << (**it)->line << endl;
+      *ok = false;
+      return class_spec;
+    }
+    // Restrict matches to interface classes
+    if ((**it)->type == token::interface) {
+      class_spec.setAccessFlags.emplace(AccessFlag::INTERFACE);
+    }
+    // Restrict matches to enum classes
+    if ((**it)->type == token::enumToken) {
+      class_spec.setAccessFlags.emplace(AccessFlag::ENUM);
+    }
+    (*it)++;
   }
-  (*it)++;
   // Parse the class name.
   if ((**it)->type != token::identifier) {
     cerr << "Expected class name but got " << (**it)->show() << " at line "
@@ -641,9 +656,6 @@ ClassSpecification parse_class_specification(
     return class_spec;
   }
   class_spec.className = static_cast<Identifier*>((*it)->get())->ident;
-  if (class_spec.className == "*") {
-    class_spec.className = "**";
-  }
   (*it)++;
   // Parse extends/implements if present, treating implements like extends.
   if (((**it)->type == token::extends) || ((**it)->type == token::implements)) {
@@ -847,7 +859,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
     if (parse_keep(&it,
                    token::assumenosideeffects,
-                   &pg_config->assumesideeffects_rules,
+                   &pg_config->assumenosideeffects_rules,
                    &ok))
       continue;
 

@@ -9,17 +9,14 @@
 
 #pragma once
 
-#include "DexClass.h"
+#include "DexUtil.h"
 #include "ProguardConfiguration.h"
-#include "ProguardMap.h"
 
 namespace redex {
 
-using Scope = std::vector<DexClass*>;
-
-void process_proguard_rules(const ProguardMap& pg_map,
-                            ProguardConfiguration* pg_config,
-                            Scope& classes);
+void show_configuration(std::ostream& output,
+                        const Scope& classes,
+                        const ProguardConfiguration& config);
 }
 
 // namespace redex

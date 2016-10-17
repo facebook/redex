@@ -224,7 +224,8 @@ TEST(ProguardParserTest, keep) {
   k = config4.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags.size(), 1);
+  ASSERT_NE(cs.setAccessFlags.end(), cs.setAccessFlags.find(AccessFlag::ENUM));
   ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
@@ -239,7 +240,9 @@ TEST(ProguardParserTest, keep) {
   k = config5.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags.size(), 1);
+  ASSERT_NE(cs.setAccessFlags.end(),
+            cs.setAccessFlags.find(AccessFlag::INTERFACE));
   ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
@@ -384,7 +387,10 @@ TEST(ProguardParserTest, annotationclass) {
   proguard_parser::parse(ss, &config);
   ASSERT_TRUE(config.ok);
   ASSERT_EQ(config.keep_rules.size(), 1);
-  ASSERT_EQ(config.keep_rules[0].class_spec.className, "**");
+  ASSERT_EQ(config.keep_rules[0].class_spec.className, "*");
+  ASSERT_NE(config.keep_rules[0].class_spec.setAccessFlags.end(),
+            config.keep_rules[0].class_spec.setAccessFlags.find(
+                AccessFlag::ANNOTATION));
 }
 
 // Member specifications
@@ -585,13 +591,12 @@ TEST(ProguardParserTest, method_member_specification) {
 
 TEST(ProguardParserTest, keepclasseswithmembernames) {
   {
-     ProguardConfiguration config;
-     std::istringstream ss(
-         "-keepclasseswithmembernames class * {"
-         "  native <methods>;"
-         "}");
-     proguard_parser::parse(ss, &config);
-     ASSERT_TRUE(config.ok);
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keepclasseswithmembernames class * {"
+        "  native <methods>;"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
   }
-
 }

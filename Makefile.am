@@ -80,6 +80,7 @@ libredex_la_SOURCES = \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
 	libredex/ProguardParser.cpp \
+	libredex/ProguardPrintConfiguration.cpp \
 	libredex/ProguardRegex.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \

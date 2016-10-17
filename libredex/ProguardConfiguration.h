@@ -36,6 +36,7 @@ namespace redex {
   };
 
   struct MemberSpecification {
+    unsigned long count{0};
     std::set<AccessFlag> requiredSetAccessFlags;
     std::set<AccessFlag> requiredUnsetAccessFlags;
     std::string annotationType;
@@ -55,6 +56,7 @@ namespace redex {
   };
 
   struct KeepSpec {
+    unsigned long count{0};
     bool includedescriptorclasses = false;
     bool allowshrinking = false;
     bool allowoptimization = false;
@@ -85,7 +87,7 @@ namespace redex {
     std::vector<KeepSpec> keep_rules;
     std::vector<KeepSpec> keepclassmembers_rules;
     std::vector<KeepSpec> keepclasseswithmembers_rules;
-    std::vector<KeepSpec> assumesideeffects_rules;
+    std::vector<KeepSpec> assumenosideeffects_rules;
     std::vector<std::string> optimization_filters;
     std::vector<std::string> keepattributes;
     std::vector<std::string> dontwarn;

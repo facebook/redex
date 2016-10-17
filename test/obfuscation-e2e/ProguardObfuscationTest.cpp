@@ -26,7 +26,7 @@ bool ProguardObfuscationTest::configure_proguard(
   }
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(proguard_map, pg_config, scope);
+  process_proguard_rules(proguard_map, &pg_config, scope);
   return true;
 }
 

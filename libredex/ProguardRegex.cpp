@@ -47,6 +47,9 @@ std::string form_type_regex(std::string proguard_regex) {
   if (proguard_regex == "") {
     return ".*";
   }
+  if (proguard_regex == "L*;") {
+    proguard_regex = "L**;";
+  }
   std::string r;
   for (size_t i = 0; i < proguard_regex.size(); i++) {
     const char ch = proguard_regex[i];
