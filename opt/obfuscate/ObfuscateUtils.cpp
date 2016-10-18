@@ -10,7 +10,29 @@
 #include "ObfuscateUtils.h"
 #include "Trace.h"
 
-std::string IdFactory::next_name()  {
+void rename_field(DexField* field,
+      const std::string& new_name) {
+  // Just to make sure we're not renaming something we shouldn't
+  always_assert(should_rename_field(field));
+  DexFieldRef ref;
+  std::string old_name = field->get_name()->c_str();
+  ref.name = DexString::make_string(new_name);
+  TRACE(OBFUSCATE, 2, "\tRenaming the field %s to %s\n", old_name.c_str(),
+      SHOW(ref.name));
+  field->change(ref);
+}
+
+void rename_method(DexMethod* method,
+      const std::string& new_name) {
+  // To be done. This is a dummy definition.
+  always_assert(should_rename_method(method));
+  DexMethodRef ref;
+  std::string old_name = method->get_name()->c_str();
+  ref.name = DexString::make_string(new_name);
+  method->change(ref);
+}
+
+std::string NameGenerator::next_name()  {
   std::string res = "";
   do {
     int ctr_cpy = ctr;
@@ -20,44 +42,56 @@ std::string IdFactory::next_name()  {
       ctr_cpy /= kMaxIdentChar;
     }
     ctr += 1;
-    TRACE(OBFUSCATE, 2, "IdFactory looking for a name, trying: %s\n",
-      res.c_str());
+    TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s\n",
+        res.c_str());
   } while(ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
   return res;
 }
 
-void FieldVisitor::visit(DexClass* cls) {
-  for (auto field : cls->get_ifields())
-    if (should_rename_field(field))
-      visit_field(field);
-  for (auto field : cls->get_sfields())
-    if (should_rename_field(field))
-      visit_field(field);
+void ClassVisitor::visit(DexClass* cls) {
+  TRACE(OBFUSCATE, 3, "Visiting %s\n", cls->c_str());
+  for (auto& field : cls->get_ifields())
+    if ((should_visit_private() && is_private(field)) ||
+        (should_visit_public() && !is_private(field)))
+      member_visitor.visit_field(field);
+  for (auto& field : cls->get_sfields())
+    if ((should_visit_private() && is_private(field)) ||
+        (should_visit_public() && !is_private(field)))
+      member_visitor.visit_field(field);
+  for (auto& method : cls->get_dmethods())
+    if ((should_visit_private() && is_private(method)) ||
+        (should_visit_public() && !is_private(method)))
+      member_visitor.visit_method(method);
+  for (auto& method : cls->get_vmethods())
+    if ((should_visit_private() && is_private(method)) ||
+        (should_visit_public() && !is_private(method)))
+      member_visitor.visit_method(method);
 }
 
-void walk_hierarchy(DexClass* cls,
+// Walks the class hierarchy starting at this class and including
+// superclasses (including external ones) and/or subclasses based on
+// the specified HierarchyDirection.
+void walk_hierarchy(
+    DexClass* cls,
     ClassVisitor* visitor,
     HierarchyDirection h_dir) {
   if (!cls) return;
   visitor->visit(cls);
 
+  // TODO: revisit for methods to be careful around Object
   if (h_dir & HierarchyDirection::VisitSuperClasses) {
     auto clazz = cls;
     while (clazz) {
-      TRACE(OBFUSCATE, 2, "Visiting %s\n", clazz->c_str());
       visitor->visit(clazz);
-      if (clazz->get_super_class()) {
-        clazz = type_class(clazz->get_super_class());
-      } else {
-        break;
-      }
+      if (clazz->get_super_class() == nullptr) break;
+      clazz = type_class(clazz->get_super_class());
     }
   }
 
   if (h_dir & HierarchyDirection::VisitSubClasses) {
-    for(auto subcls_type : get_children(cls->get_type())) {
+    for (auto subcls_type : get_children(cls->get_type())) {
       walk_hierarchy(type_class(subcls_type), visitor,
-        HierarchyDirection::VisitSubClasses);
+          HierarchyDirection::VisitSubClasses);
     }
   }
 }
