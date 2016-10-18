@@ -335,7 +335,7 @@ class AliasMap {
   DexString* at(DexString* key) {
     auto it = m_class_name_map.find(key);
     if (it != m_class_name_map.end()) {
-      return it->first;
+      return it->second;
     }
     return m_extras_map.at(key);
   }
