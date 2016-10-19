@@ -149,12 +149,14 @@ std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
  * @param scope all classes we're processing
  * @param dmethod_refs [out] all refs to dmethods in the application
  * @param class_refs [out] all refs to classes in the application
+ * @param referenced_types [out] all refs not coming from instructions (e.g. catch blocks)
  *
  */
 void build_refs(
-  const Scope& scope,
-  refs_t<DexMethod>& dmethod_refs,
-  refs_t<DexClass>& class_refs) {
+    const Scope& scope,
+    refs_t<DexMethod>& dmethod_refs,
+    refs_t<DexClass>& class_refs,
+    std::unordered_set<DexClass*>& referenced_types) {
   // Looking for direct/static invokes or class refs
   auto match =
     m::invoke_static()
@@ -171,6 +173,19 @@ void build_refs(
       dmethod_refs[mref].push_back(std::make_pair(meth, insn));
     }
   });
+  // collect all exceptions and add to the set of references for the app
+  walk_methods(scope,
+      [&](DexMethod* method) {
+        auto& code = method->get_code();
+        if (code == nullptr) return;
+        std::vector<DexType*> exceptions;
+        code->gather_catch_types(exceptions);
+        for (const auto& exception : exceptions) {
+          auto cls = type_class(exception);
+          if (cls == nullptr || cls->is_external()) continue;
+          referenced_types.insert(cls);
+        }
+      });
 }
 
 /**
@@ -179,6 +194,7 @@ void build_refs(
  *
  * @param scope all classes we're processing
  * @param class_refs class refs for the application
+ * @param referenced_types all refs not coming from instructions (e.g. catch blocks)
  * @param dont_optimize_annos set of anno types which, if present on a method,
  *                            should prevent use from relocating that method.
  * @return an unordered set of DexClass which are static relocation candidates
@@ -186,6 +202,7 @@ void build_refs(
 candidates_t build_candidates(
   const Scope& scope,
   const refs_t<DexClass>& class_refs,
+  const std::unordered_set<DexClass*>& referenced_types,
   const std::unordered_set<DexType*>& dont_optimize_annos) {
   candidates_t candidates;
 
@@ -212,6 +229,7 @@ candidates_t build_candidates(
       || m::is_default_constructor())
     // Our class must not be referenced anywhere
     && !m::in<DexClass>(class_refs)
+    && !m::in<DexClass>(referenced_types)
     // Make sure this class is not prohibited from being deleted. Granted,
     // we could still move methods and not delete the class, but let's
     // simplify things for now.
@@ -664,11 +682,13 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     // actual rebinding
     refs_t<DexMethod> dmethod_refs;
     refs_t<DexClass> class_refs;
-    build_refs(scope, dmethod_refs, class_refs);
+    std::unordered_set<DexClass*> referenced_types;
+
+    build_refs(scope, dmethod_refs, class_refs, referenced_types);
 
     // Find candidates
     candidates_t candidates = build_candidates(
-        scope, class_refs, dont_optimize_annos);
+        scope, class_refs, referenced_types, dont_optimize_annos);
 
     // Find the relocation target for each dex
     auto dex_to_target = build_dex_to_target_map(
