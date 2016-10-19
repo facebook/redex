@@ -8,6 +8,8 @@
  */
 
 #include "ProguardPrintConfiguration.h"
+#include "ProguardReporting.h"
+
 #include <iostream>
 #include <sstream>
 
@@ -87,6 +89,8 @@ std::string show_access(const redex::AccessFlag& access) {
     return "@interface";
   case redex::AccessFlag::ENUM:
     return "enum";
+  case redex::AccessFlag::CONSTRUCTOR:
+    return "";
   }
 }
 
@@ -139,8 +143,8 @@ std::string show_methods(
   return text;
 }
 
-std::string show_keep(const std::string& keep_style,
-                      const redex::KeepSpec& keep_rule) {
+std::string redex::show_keep(const std::string& keep_style,
+                             const KeepSpec& keep_rule) {
   std::stringstream text;
   auto field_count = 0;
   for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
@@ -202,12 +206,12 @@ void redex::show_configuration(std::ostream& output,
   output << "-1\t"
          << "classes: " << classes.size() << " total: " << total << std::endl;
   for (const auto& keep : config.keep_rules) {
-    output << show_keep("keep", keep) << std::endl;
+    output << redex::show_keep("keep", keep) << std::endl;
   }
   for (const auto& keep : config.keepclasseswithmembers_rules) {
-    output << show_keep("keepclasseswithmembers", keep) << std::endl;
+    output << redex::show_keep("keepclasseswithmembers", keep) << std::endl;
   }
   for (const auto& keep : config.keepclassmembers_rules) {
-    output << show_keep("keepclassmembers", keep) << std::endl;
+    output << redex::show_keep("keepclassmembers", keep) << std::endl;
   }
 }

@@ -732,13 +732,13 @@ TEST(ProguardTest, assortment) {
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Iota$Alpha;.encode:(I)I");
     ASSERT_NE(nullptr, alpha_encode);
-    ASSERT_FALSE(keep(alpha_encode));
+    ASSERT_TRUE(keep(alpha_encode));
 
     auto alpha_decode = find_vmethod_named(iota_alpha,
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Iota$Alpha;.decode:(I)I");
     ASSERT_NE(nullptr, alpha_decode);
-    ASSERT_FALSE(keep(alpha_decode));
+    ASSERT_TRUE(keep(alpha_decode));
 
     auto alpha_wombat = find_vmethod_named(iota_alpha,
                                       "Lcom/facebook/redex/test/proguard/"
@@ -773,13 +773,13 @@ TEST(ProguardTest, assortment) {
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Iota$Gamma;.encode:(I)I");
     ASSERT_NE(nullptr, gamma_encode);
-    ASSERT_FALSE(keep(gamma_encode));
+    ASSERT_TRUE(keep(gamma_encode));
 
     auto gamma_decode = find_vmethod_named(iota_gamma,
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Iota$Gamma;.decode:(I)I");
     ASSERT_NE(nullptr, gamma_decode);
-    ASSERT_FALSE(keep(gamma_decode));
+    ASSERT_TRUE(keep(gamma_decode));
 
     auto gamma_numbat = find_vmethod_named(iota_gamma,
                                       "Lcom/facebook/redex/test/proguard/"

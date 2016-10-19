@@ -20,6 +20,7 @@
 #include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardMatcher.h"
+#include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
 #include "Transform.h"
@@ -89,6 +90,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
      redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
      std::ofstream config_file(cfg.get_printseeds() + ".pro");
      redex::show_configuration(config_file, scope, m_pg_config);
+     std::ofstream incoming(cfg.get_printseeds() + ".incoming");
+     redex::print_classes(incoming, cfg.get_proguard_map(), scope);
+     redex::alert_seeds(std::cerr, scope);
   }
   {
     Timer t("Initializing reachable classes");

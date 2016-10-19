@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
+#include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
 #include "keeprules.h"
 
@@ -156,6 +157,11 @@ bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
         return false;
       }
       break;
+    case AccessFlag::CONSTRUCTOR:
+      if (!(access_flags & ACC_CONSTRUCTOR)) {
+        return false;
+      }
+      break;
     }
   }
   return true;
@@ -248,6 +254,11 @@ bool check_required_unset_access_flags(
       break;
     case AccessFlag::ENUM:
       if ((access_flags & ACC_ENUM)) {
+        return false;
+      }
+      break;
+    case AccessFlag::CONSTRUCTOR:
+      if ((access_flags & ACC_CONSTRUCTOR)) {
         return false;
       }
       break;
@@ -667,13 +678,11 @@ void process_keepclassmembers(KeepSpec* keep_rule, DexClass* cls) {
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   // Apply any field-level keep specifications.
-  apply_field_keeps(cls, keep_rule, [](DexField* f) -> void {
-    f->rstate.set_keepclassmembers();
-  });
+  apply_field_keeps(
+      cls, keep_rule, [](DexField* f) -> void { f->rstate.set_keep(); });
   // Apply any method-level keep specifications.
-  apply_method_keeps(cls, keep_rule, [](DexMethod* m) -> void {
-    m->rstate.set_keepclassmembers();
-  });
+  apply_method_keeps(
+      cls, keep_rule, [](DexMethod* m) -> void { m->rstate.set_keep(); });
 }
 
 void process_assumenosideeffects(KeepSpec* keep_rule, DexClass* cls) {

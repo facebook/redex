@@ -503,6 +503,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<init>") {
     member_specification.name = "<init>";
     member_specification.descriptor = "V";
+    member_specification.requiredSetAccessFlags.emplace(AccessFlag::CONSTRUCTOR);
     (*it)++;
   } else {
     // This token is the type for the member specification.

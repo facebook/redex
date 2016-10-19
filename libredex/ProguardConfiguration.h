@@ -32,7 +32,8 @@ namespace redex {
     STRICT,
     SYNTHETIC,
     ANNOTATION,
-    ENUM
+    ENUM,
+    CONSTRUCTOR
   };
 
   struct MemberSpecification {

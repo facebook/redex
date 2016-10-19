@@ -17,6 +17,9 @@ namespace redex {
 void show_configuration(std::ostream& output,
                         const Scope& classes,
                         const ProguardConfiguration& config);
+
+std::string show_keep(const std::string& keep_style,
+                      const KeepSpec& keep_rule);
 }
 
 // namespace redex
