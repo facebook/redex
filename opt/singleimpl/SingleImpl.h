@@ -16,6 +16,9 @@ struct SingleImplConfig {
   std::vector<std::string> package_white_list;
   std::vector<std::string> black_list;
   std::vector<std::string> package_black_list;
+  bool intf_anno;
+  bool meth_anno;
+  bool field_anno;
 };
 
 class SingleImplPass : public Pass {
@@ -27,6 +30,9 @@ class SingleImplPass : public Pass {
     pc.get("package_white_list", {}, m_pass_config.package_white_list);
     pc.get("black_list", {}, m_pass_config.black_list);
     pc.get("package_black_list", {}, m_pass_config.package_black_list);
+    pc.get("type_annotations", true, m_pass_config.intf_anno);
+    pc.get("method_annotations", true, m_pass_config.meth_anno);
+    pc.get("field_annotations", true, m_pass_config.field_anno);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

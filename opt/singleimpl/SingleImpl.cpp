@@ -56,7 +56,7 @@ void map_interfaces(const std::list<DexType*>& intf_list,
       map_interfaces(intfs->get_type_list(), cls, intfs_to_classes);
     }
   }
-};
+}
 
 /**
  * Collect all interfaces.
@@ -90,6 +90,7 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
     single_impl[intf] = impl;
   }
 }
+
 }
 
 const int MAX_PASSES = 8;
@@ -108,7 +109,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(
             scope, stores[0].get_dexen()[0], single_impl, intfs, m_pass_config);
-    auto optimized = optimize(std::move(single_impls), scope);
+    auto optimized = optimize(std::move(single_impls), scope, m_pass_config);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
     removed_count += optimized;
     assert(scope_size > scope.size());

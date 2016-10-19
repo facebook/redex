@@ -178,4 +178,5 @@ struct SingleImplAnalysis {
 /**
  * Run an optimization pass over a SingleImplAnalysis.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope);
+size_t optimize(
+    std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope, const SingleImplConfig& config);

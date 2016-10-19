@@ -128,13 +128,22 @@ void remove_interface(DexType* intf, SingleImplData& data) {
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   TRACE(INTF, 3, "(REMI)\t=> %s\n", SHOW(cls));
 }
+
+bool must_rewrite_annotations(const SingleImplConfig& config) {
+  return config.field_anno || config.intf_anno || config.meth_anno;
+}
+
+bool must_rewrite_method_annotations(const SingleImplConfig& config) {
+  return config.meth_anno;
+}
+
 }
 
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis)
       : single_impls(std::move(analysis)) {}
 
-  size_t optimize(Scope& scope);
+  size_t optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
   EscapeReason can_optimize(DexType* intf, SingleImplData& data);
@@ -149,6 +158,7 @@ struct OptimizationImpl {
   void rewrite_method_defs(DexType* intf, SingleImplData& data);
   void rewrite_method_refs(DexType* intf, SingleImplData& data);
   void rewrite_interface_methods(DexType* intf, SingleImplData& data);
+  void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -366,6 +376,37 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
 }
 
 /**
+ * Rewrite annotations that are referring to update methods or deleted interfaces.
+ */
+void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig& config) {
+  // TODO: this is a hack to fix a problem with enclosing methods only.
+  //       There are more dalvik annotations to review.
+  //       The infrastructure is here but the code for all cases not yet
+  auto enclosingMethod = DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
+  if (enclosingMethod == nullptr) return; // nothing to do
+  if (!must_rewrite_method_annotations(config)) return;
+  for (const auto& cls : scope) {
+    auto anno_set = cls->get_anno_set();
+    if (anno_set == nullptr) continue;
+    for (auto& anno : anno_set->get_annotations()) {
+      if (anno->type() != enclosingMethod) continue;
+      const auto& elems = anno->anno_elems();
+      for (auto& elem : elems) {
+        auto value = elem.encoded_value;
+        if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
+          auto method_value = static_cast<DexEncodedValueMethod*>(value);
+          const auto& meth_it = new_methods.find(method_value->method());
+          if (meth_it == new_methods.end()) continue;
+          TRACE(INTF, 4, "REWRITE: %s\n", SHOW(anno));
+          method_value->rewrite_method(meth_it->second);
+          TRACE(INTF, 4, "TO: %s\n", SHOW(anno));
+        }
+      }
+    }
+  }
+}
+
+/**
  * Check collisions in field definition.
  */
 EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
@@ -462,7 +503,7 @@ void OptimizationImpl::do_optimize(DexType* intf, SingleImplData& data) {
 /**
  * Run an optimization step.
  */
-size_t OptimizationImpl::optimize(Scope& scope) {
+size_t OptimizationImpl::optimize(Scope& scope, const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   for (auto intf : to_optimize) {
@@ -477,6 +518,7 @@ size_t OptimizationImpl::optimize(Scope& scope) {
     do_optimize(intf, intf_data);
     optimized.insert(intf);
   }
+
   // make a new scope deleting all single impl interfaces
   Scope new_scope;
   for (auto cls : scope) {
@@ -484,13 +526,19 @@ size_t OptimizationImpl::optimize(Scope& scope) {
     new_scope.push_back(cls);
   }
   scope.swap(new_scope);
+
+  if (must_rewrite_annotations(config)) {
+    rewrite_annotations(scope, config);
+  }
+
   return optimized.size();
 }
 
 /**
  * Entry point for an optimization pass.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope) {
+size_t optimize(
+    std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope, const SingleImplConfig& config) {
   OptimizationImpl optimizer(std::move(analysis));
-  return optimizer.optimize(scope);
+  return optimizer.optimize(scope, config);
 }
