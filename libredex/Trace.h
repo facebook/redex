@@ -15,6 +15,7 @@
   TM(BIND)                                      \
   TM(BRIDGE)                                    \
   TM(CFG)                                       \
+  TM(CFP)                                       \
   TM(CLASSKILL)                                 \
   TM(CONSTP)                                    \
   TM(CUSTOMSORT)                                \
