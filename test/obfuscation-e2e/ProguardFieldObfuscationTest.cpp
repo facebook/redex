@@ -27,6 +27,21 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
+template<std::size_t SIZE>
+void testClass(
+    ProguardObfuscationTest* tester,
+    const std::string& class_name,
+    const std::array<std::string, SIZE>& fields) {
+  auto clazz = tester->find_class_named(class_name);
+  ASSERT_NE(nullptr, clazz) << class_name << " not found.";
+
+  for (const std::string &fieldName : fields) {
+    ASSERT_FALSE(tester->field_found(
+        clazz->get_ifields(),
+        class_name + fieldName)) << class_name + fieldName << " not obfuscated";
+  }
+}
+
 /**
  * Check renaming has been properly applied.
  */
@@ -44,20 +59,32 @@ TEST(ProguardTest, obfuscation) {
     << "Proguard configuration failed";
 
   // Make sure the fields class Alpha are renamed.
-  const std::string alphaName = "Lcom/facebook/redex/test/proguard/Alpha;";
-  const std::array<std::string, 4> fieldNames = {
+  const std::array<std::string, 4> alphaNames = {
     ".wombat:I",
     ".numbat:I",
     ".omega:Ljava/lang/String;",
     ".theta:Ljava/util/List;"};
-  auto alpha = tester.find_class_named(alphaName);
-  ASSERT_NE(nullptr, alpha);
+  const std::array<std::string, 1> helloNames = {
+    ".hello:Ljava/lang/String;" };
+  const std::array<std::string, 1> worldNames = {
+    ".world:Ljava/lang/String;" };
+  testClass(&tester,
+    "Lcom/facebook/redex/test/proguard/Alpha;",
+    alphaNames);
+  testClass(&tester,
+    "Lcom/facebook/redex/test/proguard/Hello;",
+    helloNames);
+  testClass(&tester,
+    "Lcom/facebook/redex/test/proguard/World;",
+    worldNames);
 
-  for (const std::string &fieldName : fieldNames) {
-    ASSERT_FALSE(tester.field_found(
-        alpha->get_ifields(),
-        alphaName + fieldName)) << alphaName + fieldName << " not obfuscated";
-  }
+  // Because of the all() call in Beta, there should be refs created in the
+  // bytecode of all() to All.hello and All.world which should be updated
+  // to Hello.[renamed] and World.[renamed]
+  ASSERT_FALSE(tester.refs_to_field_found(helloNames[0]))
+    << "Refs to " << helloNames[0] << " not properly modified";
+  ASSERT_FALSE(tester.refs_to_field_found(worldNames[0]))
+    << "Refs to " << worldNames[0] << " not properly modified";
 
   // Make sure the fields in the class Beta are not renamed.
   auto beta = tester.find_class_named(

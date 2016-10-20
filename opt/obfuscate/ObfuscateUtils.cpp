@@ -10,18 +10,6 @@
 #include "ObfuscateUtils.h"
 #include "Trace.h"
 
-void rename_field(DexField* field,
-      const std::string& new_name) {
-  // Just to make sure we're not renaming something we shouldn't
-  always_assert(should_rename_field(field));
-  DexFieldRef ref;
-  std::string old_name = field->get_name()->c_str();
-  ref.name = DexString::make_string(new_name);
-  TRACE(OBFUSCATE, 2, "\tRenaming the field %s to %s\n", old_name.c_str(),
-      SHOW(ref.name));
-  field->change(ref);
-}
-
 void rename_method(DexMethod* method,
       const std::string& new_name) {
   // To be done. This is a dummy definition.
@@ -48,24 +36,87 @@ std::string NameGenerator::next_name()  {
   return res;
 }
 
+void DexFieldManager::commit_renamings_to_dex() {
+  for (const auto& class_itr : elements) {
+    for (const auto& type_itr : class_itr.second) {
+      for (const auto& name_wrap : type_itr.second) {
+        const FieldNameWrapper& wrap(name_wrap.second);
+        if (!wrap.name_has_changed()) continue;
+        DexField* field = wrap.get();
+        always_assert_log(should_rename_field(field),
+          "Trying to rename (%s) %s:%s to %s, but we shouldn't\n",
+          SHOW(field->get_type()), SHOW(field->get_class()), SHOW(field),
+          wrap.get_name());
+        TRACE(OBFUSCATE, 2, "\tRenaming the field 0x%x (%s) %s:%s to %s\n",
+          field, SHOW(field->get_type()), SHOW(field->get_class()),
+          SHOW(field->get_name()), wrap.get_name());
+
+        DexFieldRef ref;
+        ref.name = DexString::make_string(wrap.get_name());
+        TRACE(OBFUSCATE, 4, "\tPre-renaming %s\n", SHOW(field));
+        field->change(ref);
+        TRACE(OBFUSCATE, 4, "\tPost-renaming %s\n", SHOW(field));
+      }
+    }
+  }
+}
+
+DexField* DexFieldManager::def_of_ref(DexField* ref) {
+  DexType* cls = ref->get_class();
+  while (type_class(cls)) {
+    if (contains_field(cls, ref->get_type(), ref->get_name())) {
+      FieldNameWrapper& wrap(elements[cls][ref->get_type()][ref->get_name()]);
+      if (wrap.name_has_changed())
+        return wrap.get();
+    }
+    cls = type_class(cls)->get_super_class();
+  }
+  return nullptr;
+}
+
+void DexFieldManager::print_elements() {
+  TRACE(OBFUSCATE, 4, "Field Ptr: class old name -> new name\n");
+  for (const auto& class_itr : elements) {
+    for (const auto& type_itr : class_itr.second) {
+      for (const auto& name_wrap : type_itr.second) {
+        DexField* field = name_wrap.second.get();
+        TRACE(OBFUSCATE, 4, " 0x%x: %s%s -> %s\n",
+            field,
+            SHOW(field->get_class()),
+            SHOW(field),
+            name_wrap.second.get_name());
+      }
+    }
+  }
+}
+
 void ClassVisitor::visit(DexClass* cls) {
   TRACE(OBFUSCATE, 3, "Visiting %s\n", cls->c_str());
   for (auto& field : cls->get_ifields())
     if ((should_visit_private() && is_private(field)) ||
         (should_visit_public() && !is_private(field)))
-      member_visitor.visit_field(field);
+      member_visitor->visit_field(field);
   for (auto& field : cls->get_sfields())
     if ((should_visit_private() && is_private(field)) ||
         (should_visit_public() && !is_private(field)))
-      member_visitor.visit_field(field);
+      member_visitor->visit_field(field);
   for (auto& method : cls->get_dmethods())
     if ((should_visit_private() && is_private(method)) ||
         (should_visit_public() && !is_private(method)))
-      member_visitor.visit_method(method);
+      member_visitor->visit_method(method);
   for (auto& method : cls->get_vmethods())
     if ((should_visit_private() && is_private(method)) ||
         (should_visit_public() && !is_private(method)))
-      member_visitor.visit_method(method);
+      member_visitor->visit_method(method);
+}
+
+DexField* ObfuscationState::get_def_if_renamed(DexField* field_ref) {
+  auto itr = ref_def_cache.find(field_ref);
+  if (itr != ref_def_cache.end())
+    return itr->second;
+  DexField* def = name_mapping.def_of_ref(field_ref);
+  ref_def_cache[field_ref] = def;
+  return def;
 }
 
 // Walks the class hierarchy starting at this class and including

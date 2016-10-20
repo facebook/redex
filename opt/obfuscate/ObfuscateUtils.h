@@ -78,8 +78,8 @@ public:
   DexElemWrapper& operator=(DexElemWrapper const& other) = default;
   DexElemWrapper& operator=(DexElemWrapper&& other) = default;
 
-  inline T get() { assert(dex_elem != nullptr); return dex_elem; }
-  inline const T get() const { assert(dex_elem != nullptr); return dex_elem; }
+  inline T get() { always_assert(dex_elem != nullptr); return dex_elem; }
+  inline const T get() const { always_assert(dex_elem != nullptr); return dex_elem; }
 };
 
 typedef DexElemWrapper<DexField*> DexFieldWrapper;
@@ -89,13 +89,13 @@ class FieldNameWrapper : public DexFieldWrapper {
 private:
   // the new name that we're trying to give this element
   bool has_new_name{false};
-  std::string name;
+  std::string name{"INVALID_DEFAULT_NAME"};
 
 public:
   FieldNameWrapper() = default;
-  explicit FieldNameWrapper(DexField* dex_elem) : DexFieldWrapper(dex_elem) {
-    has_new_name = true;
-  }
+  explicit FieldNameWrapper(DexField* dex_elem) : DexFieldWrapper(dex_elem) { }
+
+  inline bool name_has_changed() const { return has_new_name; }
 
   const char* get_name() const {
     return has_new_name ? this->name.c_str() : this->get()->get_name()->c_str();
@@ -107,36 +107,57 @@ public:
   }
 };
 
+
 class DexFieldManager {
 private:
-  std::unordered_map<DexField*, FieldNameWrapper> elements;
+  // Map from class_name -> type -> old_name ->
+  //   DexField wrapper (contains new name)
+  std::unordered_map<DexType*,
+    std::unordered_map<DexType*,
+      std::unordered_map<DexString*, FieldNameWrapper>>> elements;
 
 public:
-  inline bool contains_field(DexField*& elem) {
-    return elements.count(elem) > 0;
+  inline bool contains_field(
+      DexType* cls, DexType* type, DexString* name) {
+    return elements.count(cls) > 0 &&
+      elements[cls].count(type) > 0 &&
+      elements[cls][type].count(name) > 0;
   }
 
-  // Mirrors the map get operator
-  FieldNameWrapper& operator[](DexField*& elem) {
-    return contains_field(elem) ? elements[elem] :
-        elements.emplace(elem, FieldNameWrapper(elem)).first->second;
+  inline bool contains_field(DexField*& elem) {
+    return contains_field(elem->get_class(),
+      elem->get_type(), elem->get_name());
   }
+
+  // Mirrors the map get operator, but ensures we create correct wrappers
+  // if they don't exist
+  FieldNameWrapper& operator[](DexField*& elem) {
+    return contains_field(elem) ?
+      elements[elem->get_class()]
+        [elem->get_type()][elem->get_name()] :
+      elements[elem->get_class()][elem->get_type()].emplace(
+        elem->get_name(), FieldNameWrapper(elem)).first->second;
+  }
+
+  // Commits all the renamings in elements to the dex by modifying the
+  // underlying DexFields. Does in-place modification.
+  void commit_renamings_to_dex();
+
+  // Does a lookup over the fields we renamed in the dex to see what the
+  // reference should be reset with. Returns kSouldNotReset if there is no
+  // mapping.
+  // Note: we also have to look in superclasses in the case that this is a ref
+  DexField* def_of_ref(DexField* ref);
 
   // Debug print of the mapping
-  void print() {
-    TRACE(OBFUSCATE, 4, "Field Ptr: old name -> new name\n");
-    for (auto& ptr_nwrap : elements)
-      TRACE(OBFUSCATE, 4, "0x%x: %s -> %s\n",
-          ptr_nwrap.first,
-          SHOW(ptr_nwrap.second.get()),
-          ptr_nwrap.second.get_name());
-  }
+  void print_elements();
 };
 
 class MemberVisitor {
 public:
-  inline void visit_field(DexField* /* unused */) {}
-  inline void visit_method(DexMethod* /* unused */) {}
+  virtual ~MemberVisitor() = default;
+  virtual void visit_field(DexField* /* unused */) { }
+  virtual void visit_method(DexMethod* /* unused */) { }
 };
 
 // We need to be able to walk the class hierarchy to figure out conflicts
@@ -148,9 +169,9 @@ public:
     All              = PrivateOnly | NonPrivateOnly };
 protected:
   const VisitFilter visit_filter;
-  MemberVisitor member_visitor;
+  MemberVisitor* member_visitor;
 public:
-  ClassVisitor(VisitFilter vf, MemberVisitor mv) :
+  ClassVisitor(VisitFilter vf, MemberVisitor* mv) :
       visit_filter(vf), member_visitor(mv) { }
   void visit(DexClass*);
 
@@ -183,8 +204,9 @@ public:
       DexFieldManager* field_name_mapping,
       std::unordered_set<std::string>* names) :
         names(names), field_name_mapping(field_name_mapping) { }
+  virtual ~FieldNameCollector() = default;
 
-  void visit_field(DexField* f) {
+  virtual void visit_field(DexField* f) override {
     TRACE(OBFUSCATE, 3, "Visiting field %s\n", SHOW(f));
     names->insert((*field_name_mapping)[f].get_name());
   }
@@ -202,14 +224,26 @@ void walk_hierarchy(DexClass* cls,
 
 // State of the renaming that we need to modify as we rename more fields
 class ObfuscationState {
+  // Cache of ref -> def mapping in case we have many instructions that
+  // use the same ref.
+  std::unordered_map<DexField*, DexField*> ref_def_cache;
 public:
   DexFieldManager name_mapping;
   std::unordered_set<std::string> used_ids;
+
 
   void set_name_mapping(DexField* field, const std::string& name) {
     name_mapping[field].set_name(name);
     used_ids.insert(name);
   }
+
+  void commit_renamings_to_dex() {
+    name_mapping.commit_renamings_to_dex();
+  }
+
+  // Cached lookup on the def of a ref (like resolve_field) except that if
+  // the field is not renamed in the name_mapping, we return nullptr
+  DexField* get_def_if_renamed(DexField* field_ref);
 };
 
 // Static state of the renamer

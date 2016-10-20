@@ -14,6 +14,9 @@
 #include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "Trace.h"
+#include "Transform.h"
+#include "Walkers.h"
+#include "Resolver.h"
 
 using std::unordered_set;
 
@@ -55,12 +58,15 @@ void obfuscate_methods(const std::list<DexMethod*>& methods,
 void obfuscate(Scope& classes, ProguardMap* pg_map) {
   ObfuscationState ob_state;
   unordered_set<std::string> ids_to_avoid;
+  FieldNameCollector name_collector(&(ob_state.name_mapping), &ids_to_avoid);
   ClassVisitor publicVisitor(ClassVisitor::VisitFilter::NonPrivateOnly,
-      FieldNameCollector(&ob_state.name_mapping, &ids_to_avoid));
+      &name_collector);
   ClassVisitor allVisitor(ClassVisitor::VisitFilter::All,
-      FieldNameCollector(&ob_state.name_mapping, &ids_to_avoid));
+      &name_collector);
   ClassVisitor privateVisitor(ClassVisitor::VisitFilter::PrivateOnly,
-      FieldNameCollector(&ob_state.name_mapping, &ids_to_avoid));
+      &name_collector);
+
+  TRACE(OBFUSCATE, 2, "Starting obfuscation of fields and methods\n");
 
   for (DexClass* cls : classes) {
     always_assert_log(!cls->is_external(),
@@ -73,9 +79,9 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
     ob_state.used_ids.clear();
 
     walk_hierarchy(cls, &publicVisitor, HierarchyDirection::VisitSuperClasses);
-    TRACE(OBFUSCATE, 3, "Finished walking hierarchies 1.1\n");
+    TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
     walk_hierarchy(cls, &allVisitor, HierarchyDirection::VisitSubClasses);
-    TRACE(OBFUSCATE, 3, "Finished walking hierarchies 1.2\n");
+    TRACE(OBFUSCATE, 3, "Finished walking all subclasses\n");
     // Keep this for all public ids in the class (they shouldn't conflict)
     obfuscate_fields(RenamingContext(cls->get_ifields(), ids_to_avoid, false),
         &ob_state);
@@ -86,9 +92,9 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
     // Obfu private fields
     ids_to_avoid.clear();
     walk_hierarchy(cls, &publicVisitor, HierarchyDirection::VisitSuperClasses);
-    TRACE(OBFUSCATE, 3, "Finished walking hierarchies 2.1\n");
+    TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
     walk_hierarchy(cls, &allVisitor, HierarchyDirection::VisitNeither);
-    TRACE(OBFUSCATE, 3, "Finished walking hierarchies 2.2\n");
+    TRACE(OBFUSCATE, 3, "Finished walking everything in this class\n");
     TRACE(OBFUSCATE, 3, "Avoiding");
     for (auto& id : ids_to_avoid) {
       TRACE(OBFUSCATE, 3, " %s\t", id.c_str());
@@ -118,21 +124,52 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
 
     //obfuscate_methods(cls->get_vmethods(), pg_map);
     //obfuscate_methods(cls->get_dmethods(), pg_map);
-    ob_state.name_mapping.print();
+    ob_state.name_mapping.print_elements();
   }
 
-  // TODO: figure out if we need to verify if name conflicts exist for fields
+  TRACE(OBFUSCATE, 2, "Finished picking new names\n");
 
-  // Apply new names
+  // TODO: figure out if we need to verify if name conflicts exist for fields
+  // ProGuard verifies the mapping at the end, but that seems to be only so
+  // that they can support loading mappings and respecting ProGuard configs
+  // for multi-stage obfuscation. We don't need to do that so I don't think we
+  // need to check that there are no conflicts (assuming implementation is
+  // correct)
+
+  TRACE(OBFUSCATE, 2, "Transforming affected refs into defs\n");
+
+  // Update any instructions with a field that is a ref to the corresponding
+  // def for any field that we are going to rename. This allows us to in-place
+  // rename the field def and have that change seen everywhere.
+  walk_opcodes(classes,
+    [](DexMethod*) { return true; },
+    [&](DexMethod*, DexInstruction* instr) {
+      // Only want field operations
+      if (!is_ifield_op(instr->opcode()) &&
+          !is_sfield_op(instr->opcode())) return;
+      DexOpcodeField* field_instr = static_cast<DexOpcodeField*>(instr);
+
+      DexField* field_ref = field_instr->field();
+      if (field_ref->is_def()) return;
+      TRACE(OBFUSCATE, 3, "Found a ref opcode\n");
+
+      // Here we could use resolve_field to lookup the def, but this is
+      // expensive, so we do resolution through ob_state which caches
+      // and combines the lookup with the check for if we're changing the
+      // field.
+      DexField* field_def = ob_state.get_def_if_renamed(field_ref);
+      if (field_def != nullptr) {
+        TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
+        field_instr->rewrite_field(field_def);
+      }
+    });
+
+  TRACE(OBFUSCATE, 2, "Finished transforming refs\n");
+
+  // Apply new names, recording what we're changing
+  ob_state.commit_renamings_to_dex();
+  // Sort the result because dexes have to be sorted
   for (DexClass* cls : classes) {
-    for (DexField* field : cls->get_ifields()) {
-      if (ob_state.name_mapping.contains_field(field))
-        rename_field(field, ob_state.name_mapping[field].get_name());
-    }
-    for (DexField* field : cls->get_sfields()) {
-      if (ob_state.name_mapping.contains_field(field))
-        rename_field(field, ob_state.name_mapping[field].get_name());
-    }
     cls->get_ifields().sort(compare_dexfields);
     cls->get_sfields().sort(compare_dexfields);
     // Debug logging
@@ -145,6 +182,9 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
       TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
     TRACE(OBFUSCATE, 4, "\n");
   }
+
+  TRACE(OBFUSCATE, 2, "Finished applying new names to defs\n");
+
 }
 
 void redex::ObfuscatePass::run_pass(DexStoresVector& stores,

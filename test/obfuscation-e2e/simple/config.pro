@@ -8,3 +8,18 @@
 -keep class com.facebook.redex.test.proguard.Beta {
   *;
 }
+
+-keep class com.facebook.redex.test.proguard.Hello
+-keep,allowobfuscation class com.facebook.redex.test.proguard.Hello {
+  *;
+}
+
+-keep class com.facebook.redex.test.proguard.World
+-keep,allowobfuscation class com.facebook.redex.test.proguard.World {
+  *;
+}
+
+-keep class com.facebook.redex.test.proguard.All
+-keep,allowobfuscation class com.facebook.redex.test.proguard.All {
+  *;
+}

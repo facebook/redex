@@ -47,4 +47,6 @@ class ProguardObfuscationTest {
                     const std::string& name);
 
    bool method_is_renamed(const DexClass* cls, const std::string& name);
+
+   bool refs_to_field_found(const std::string& name);
  };

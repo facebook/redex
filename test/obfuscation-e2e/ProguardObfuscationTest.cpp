@@ -8,6 +8,7 @@
  */
 
 #include "ProguardObfuscationTest.h"
+#include "Walkers.h"
 
 ProguardObfuscationTest::ProguardObfuscationTest(
     const char* dexfile,
@@ -75,4 +76,22 @@ bool ProguardObfuscationTest::method_is_renamed(
     const DexClass* cls, const std::string& name) {
   return method_is_renamed_helper(cls->get_vmethods(), name) ||
     method_is_renamed_helper(cls->get_dmethods(), name);
+}
+
+bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
+  bool res = false;
+  DexClasses& classes(dexen.front());
+  walk_opcodes(classes,
+    [](DexMethod*){return true;},
+    [&](DexMethod* method, DexInstruction* instr) {
+      if (!is_ifield_op(instr->opcode())) return;
+      DexOpcodeField* field_instr = static_cast<DexOpcodeField*>(instr);
+
+      // Is an opcode corresponding to a field
+      DexField* field_ref = field_instr->field();
+      if (field_ref->is_def()) return;
+
+      res |= proguard_name(field_ref) == name;
+    });
+  return res;
 }
