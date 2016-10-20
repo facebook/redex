@@ -500,19 +500,7 @@ bool extends(const DexClass* cls,
   }
   auto deob_name = cls->get_deobfuscated_name();
   std::set<const DexClass*> visited;
-  // Check the super-type
-  auto super_type = cls->get_super_class();
-  if (super_type && super_type != get_object_type()) {
-    auto super_class = type_class(super_type);
-    if (super_class) {
-      if (search_extends_and_interfaces(
-              &visited, super_class, extends_class_name, annotation)) {
-        return true;
-      }
-    }
-  }
-  // The super type did not match so search the interfaces.
-  return search_interfaces(&visited, cls, extends_class_name, annotation);
+  return search_extends_and_interfaces(&visited, cls, extends_class_name, annotation);
 }
 
 bool classname_contains_wildcard(const std::string& classname) {

@@ -111,6 +111,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   }
 
   MethodTransform::sync_all();
+  if (!cfg.get_printseeds().empty()) {
+     Timer t("Writing outgoing classes to file " + cfg.get_printseeds() + ".outgoing");
+     std::ofstream outgoig(cfg.get_printseeds() + ".outgoig");
+     redex::print_classes(outgoig, cfg.get_proguard_map(), scope);
+     redex::alert_seeds(std::cerr, scope);
+  }
 }
 
 void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
