@@ -602,6 +602,10 @@ inline bool is_iget(DexOpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IGET_SHORT;
 }
 
+inline bool is_iput(DexOpcode op) {
+  return op >= OPCODE_IPUT && op <= OPCODE_IPUT_SHORT;
+}
+
 inline bool is_ifield_op(DexOpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IPUT_SHORT;
 }
