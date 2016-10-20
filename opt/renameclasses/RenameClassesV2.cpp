@@ -40,6 +40,7 @@
 #define METRIC_DONT_RENAME_CANARIES "num_dont_rename_canaries"
 #define METRIC_DONT_RENAME_ANNOTATIONED "num_dont_rename_annotationed"
 #define METRIC_DONT_RENAME_NATIVE_BINDINGS "num_dont_rename_native_bindings"
+#define METRIC_DONT_RENAME_CLASS_FOR_TYPES_WITH_REFLECTION "num_dont_rename_class_for_types_with_reflection"
 
 static RenameClassesPassV2 s_pass;
 
@@ -235,6 +236,45 @@ void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
   });
 }
 
+void RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
+    Scope& scope,
+    const ProguardMap& pg_map,
+    std::set<std::string>& dont_rename_class_for_types_with_reflection) {
+
+    std::set<DexType*> refl_map;
+    for (auto const& refl_type_str : m_dont_rename_types_with_reflection) {
+      auto deobf_cls_string = pg_map.translate_class(refl_type_str);
+      TRACE(RENAME, 4, "%s got translated to %s\n",
+          refl_type_str.c_str(),
+          deobf_cls_string.c_str());
+      if (deobf_cls_string == "") {
+        deobf_cls_string = refl_type_str;
+      }
+      DexType* type_with_refl = DexType::get_type(deobf_cls_string.c_str());
+      if (type_with_refl != nullptr) {
+        TRACE(RENAME, 4, "got DexType %s\n", SHOW(type_with_refl));
+        refl_map.insert(type_with_refl);
+      }
+    }
+
+  walk_opcodes(scope,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* m, DexInstruction* insn) {
+        if (insn->has_methods()) {
+          auto methodop = static_cast<DexOpcodeMethod*>(insn);
+          auto callee = methodop->get_method();
+          if (callee == nullptr || !callee->is_concrete()) return;
+          auto callee_method_cls = callee->get_class();
+          if (refl_map.count(callee_method_cls) == 0) return;
+          std::string classname(m->get_class()->get_name()->c_str());
+          TRACE(RENAME, 4,
+            "Found %s with known reflection usage. marking reachable\n",
+            classname.c_str());
+          dont_rename_class_for_types_with_reflection.insert(classname);
+        }
+  });
+}
+
 void RenameClassesPassV2::build_dont_rename_canaries(Scope& scope,std::set<std::string>& dont_rename_canaries) {
   // Gather canaries
   for(auto clazz: scope) {
@@ -346,6 +386,7 @@ class AliasMap {
 
 void RenameClassesPassV2::rename_classes(
     Scope& scope,
+    ConfigFiles& cfg,
     const std::string& path,
     bool rename_annotations,
     PassManager& mgr) {
@@ -353,6 +394,7 @@ void RenameClassesPassV2::rename_classes(
   unpackage_private(scope);
 
   std::set<std::string> dont_rename_class_for_name_literals;
+  std::set<std::string> dont_rename_class_for_types_with_reflection;
   std::set<std::string> dont_rename_canaries;
   std::set<std::string> dont_rename_resources;
   std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
@@ -361,6 +403,7 @@ void RenameClassesPassV2::rename_classes(
 
   build_dont_rename_resources(mgr, dont_rename_resources);
   build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
+  build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(), dont_rename_class_for_types_with_reflection);
   build_dont_rename_canaries(scope, dont_rename_canaries);
   build_dont_rename_hierarchies(scope, dont_rename_hierarchies);
   build_dont_rename_native_bindings(scope, dont_rename_native_bindings);
@@ -404,6 +447,11 @@ void RenameClassesPassV2::rename_classes(
 
     if (dont_rename_class_for_name_literals.count(clsname) > 0) {
       mgr.incr_metric(METRIC_DONT_RENAME_CLASS_FOR_NAME_LITERALS, 1);
+      continue;
+    }
+
+    if (dont_rename_class_for_types_with_reflection.count(clsname) > 0) {
+      mgr.incr_metric(METRIC_DONT_RENAME_CLASS_FOR_TYPES_WITH_REFLECTION, 1);
       continue;
     }
 
@@ -560,7 +608,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pa
   s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
 
   m_path = cfg.metafile(m_path);
-  rename_classes(scope, m_path, m_rename_annotations, mgr);
+  rename_classes(scope, cfg, m_path, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
