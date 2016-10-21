@@ -511,6 +511,7 @@ class DexDebugItem {
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
   void set_entries(std::vector<DexDebugEntry> dbg_entries) { m_dbg_entries.swap(dbg_entries); }
   uint32_t get_line_start() const { return m_line_start; }
+  std::vector<DexString*>& get_param_names() { return m_param_names; }
   void remove_parameter_names() { m_param_names.clear(); };
 
   /* Returns number of bytes encoded, *output has no alignment requirements */

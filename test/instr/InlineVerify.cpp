@@ -301,10 +301,13 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto noninlinable_invoke_direct =
       find_invoke(m, OPCODE_INVOKE_STATIC, "noninlinable$redex0");
-  ASSERT_NE(nullptr, noninlinable_invoke_direct);
+  EXPECT_NE(nullptr, noninlinable_invoke_direct);
   auto noninlinable = noninlinable_invoke_direct->get_method();
-  ASSERT_EQ(show(noninlinable->get_proto()),
+  EXPECT_EQ(show(noninlinable->get_proto()),
             "(Lcom/facebook/redexinline/InlineTest;)V");
+  EXPECT_EQ(
+      noninlinable->get_proto()->get_args()->get_type_list().size(),
+      noninlinable->get_code()->get_debug_item()->get_param_names().size());
 
   auto dmethods = cls->get_dmethods();
   // verify that we've replaced the instance noninlinable() method with
