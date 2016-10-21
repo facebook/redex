@@ -75,6 +75,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
+    Timer t("Initializing reachable classes");
+    init_reachable_classes(
+      scope, m_config, m_proguard_rules, m_pg_config, cfg.get_no_optimizations_annos());
+  }
+  {
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), &m_pg_config, scope);
   }
@@ -92,12 +97,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
      redex::show_configuration(config_file, scope, m_pg_config);
      std::ofstream incoming(cfg.get_printseeds() + ".incoming");
      redex::print_classes(incoming, cfg.get_proguard_map(), scope);
-     redex::alert_seeds(std::cerr, scope);
-  }
-  {
-    Timer t("Initializing reachable classes");
-    init_reachable_classes(
-      scope, m_config, m_proguard_rules, m_pg_config, cfg.get_no_optimizations_annos());
   }
   for (auto pass : m_activated_passes) {
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
@@ -113,7 +112,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   MethodTransform::sync_all();
   if (!cfg.get_printseeds().empty()) {
      Timer t("Writing outgoing classes to file " + cfg.get_printseeds() + ".outgoing");
-     std::ofstream outgoig(cfg.get_printseeds() + ".outgoig");
+     std::ofstream outgoig(cfg.get_printseeds() + ".outgoing");
      redex::print_classes(outgoig, cfg.get_proguard_map(), scope);
      redex::alert_seeds(std::cerr, scope);
   }

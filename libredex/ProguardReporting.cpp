@@ -227,7 +227,9 @@ void redex::print_classes(std::ostream& output,
                           const ProguardMap& pg_map,
                           const Scope& classes) {
   for (const auto& cls : classes) {
-    redex::print_class(output, pg_map, cls);
+    if (!cls->is_external()) {
+      redex::print_class(output, pg_map, cls);
+    }
   }
 }
 
@@ -237,6 +239,9 @@ void alert_seeds_in_fields(std::ostream& output,
   for (const auto& field : fields) {
     if (is_seed(field) && !keep(field)) {
       output << "SEEDS ERROR: " << field->get_deobfuscated_name() << std::endl;
+    }
+    if (!is_seed(field) && keep(field)) {
+      output << "FALSE SEED: " << field->get_deobfuscated_name() << std::endl;
     }
   }
 }
@@ -248,12 +253,24 @@ void alert_seeds_in_methods(std::ostream& output,
     if (is_seed(method) && !keep(method)) {
       output << "SEEDS ERROR: " << method->get_deobfuscated_name() << std::endl;
     }
+    if (!is_seed(method) && keep(method)) {
+      output << "FALSE SEED: " << method->get_deobfuscated_name() << std::endl;
+    }
   }
 }
 
 void alert_seeds(std::ostream& output, const DexClass* cls) {
   if (is_seed(cls) && !keep(cls)) {
     output << "SEEDS ERROR: " << cls->get_deobfuscated_name() << std::endl;
+  }
+  if (!is_seed(cls) && keep(cls)) {
+    output << "FALSE SEED: " << cls->get_deobfuscated_name() << std::endl;
+  }
+  if ((cls->c_str() != cls->get_deobfuscated_name())  && !allowshrinking(cls)) {
+    output << "RENAMED DESPITE KEEP: " << cls->get_deobfuscated_name() << std::endl;
+  if (is_seed(cls)) {
+    output << "SEED: " << cls->get_deobfuscated_name() << std::endl;
+  }
   }
   alert_seeds_in_fields(output, cls->get_ifields());
   alert_seeds_in_fields(output, cls->get_sfields());

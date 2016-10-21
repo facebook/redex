@@ -477,7 +477,8 @@ int main(int argc, char* argv[]) {
   cfg.using_seeds = false;
   cfg.outdir = args.out_dir;
   if (!args.seeds_filename.empty()) {
-    Timer t("Init seed classes");
+    Timer t("Initialized seed classes from incoming seeds file " +
+             args.seeds_filename);
     auto nseeds = init_seed_classes(
       args.seeds_filename,
       cfg.get_proguard_map());
