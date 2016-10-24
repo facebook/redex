@@ -715,6 +715,8 @@ bool parse_keepnames(std::vector<unique_ptr<Token>>::iterator* it,
   }
   if (!parse_keep(it, token::keepnames, keep_rules, ok)) {
     cerr << "Failed to parse -keepnames rule at line " << (**it)->line << endl;
+    it++;
+    skip_to_next_command(it);
     return true;
   }
   // Set allowshrinking.
@@ -729,7 +731,10 @@ bool parse_keepclasssmembernames(std::vector<unique_ptr<Token>>::iterator* it,
     return false;
   }
   if (!parse_keep(it, token::keepclassmembernames, keep_rules, ok)) {
-    cerr << "Failed to parse -keepclasssmembernames rule\n";
+    cerr << "Failed to parse -keepclasssmembernames rule at line "
+         << (**it)->line << endl;
+    it++;
+    skip_to_next_command(it);
     return true;
   }
   // Set allowshrinking.
@@ -745,7 +750,10 @@ bool parse_keepclasseswithmembernames(
     return false;
   }
   if (!parse_keep(it, token::keepclasseswithmembernames, keep_rules, ok)) {
-    cerr << "Failed to parse -keepclasseswithmembernames rule\n";
+    cerr << "Failed to parse -keepclasseswithmembernames rule at line "
+         << (**it)->line << endl;
+    it++;
+    skip_to_next_command(it);
     return true;
   }
   // Set allowshrinking.
