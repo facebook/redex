@@ -28,13 +28,13 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "JarLoader.h"
 #include "DexOutput.h"
+#include "JarLoader.h"
 #include "PassManager.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
-#include "ProguardParser.h" // New ProGuard Parser
 #include "ProguardLoader.h" // Old ProGuard Parser
+#include "ProguardParser.h" // New ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Timer.h"
@@ -84,7 +84,7 @@ struct Arguments {
 
   Json::Value config;
   std::set<std::string> jar_paths;
-  std::string proguard_config;
+  std::vector<std::string> proguard_config_paths;
   std::string seeds_filename;
   std::string out_dir;
   std::string printseeds;
@@ -183,7 +183,8 @@ int parse_args(int argc, char* argv[], Arguments& args) {
   const char* apk_dir = nullptr;
 
   while ((c = getopt_long(
-              argc, argv, ":a:c:j:p:q:s:o:w:S::J::", &options[0], nullptr)) != -1) {
+              argc, argv, ":a:c:j:p:q:s:o:w:S::J::", &options[0], nullptr)) !=
+         -1) {
     switch (c) {
     case 'a':
       apk_dir = optarg;
@@ -204,7 +205,7 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       args.config["printseeds"] = optarg;
       break;
     case 'p':
-      args.proguard_config = optarg;
+      args.proguard_config_paths.push_back(optarg);
       break;
     case 'w':
       g_warning_level = OptWarningLevel(strtol(optarg, nullptr, 10));
@@ -298,20 +299,20 @@ Json::Value get_pass_stats(const PassManager& mgr) {
   return all;
 }
 
-Json::Value get_detailed_stats(const std::vector<dex_output_stats_t> &dexes_stats) {
+Json::Value get_detailed_stats(
+    const std::vector<dex_output_stats_t>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
-  for (const dex_output_stats_t &stats : dexes_stats) {
+  for (const dex_output_stats_t& stats : dexes_stats) {
     dexes[i++] = get_stats(stats);
   }
   return dexes;
 }
 
-void output_stats(
-  const char* path,
-  const dex_output_stats_t& stats,
-  const std::vector<dex_output_stats_t> &dexes_stats,
-  PassManager& mgr) {
+void output_stats(const char* path,
+                  const dex_output_stats_t& stats,
+                  const std::vector<dex_output_stats_t>& dexes_stats,
+                  PassManager& mgr) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
@@ -322,8 +323,7 @@ void output_stats(
   out.close();
 }
 
-void output_moved_methods_map(const char* path,
-                              ConfigFiles& cfg) {
+void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
   // print out moved methods map
   if (cfg.save_move_map() && strcmp(path, "")) {
     FILE* fd = fopen(path, "w");
@@ -389,9 +389,9 @@ int main(int argc, char* argv[]) {
 
   // New ProGuard parser
   redex::ProguardConfiguration pg_config;
-  if (!args.proguard_config.empty()) {
-    Timer t("New proguard parser");
-    redex::proguard_parser::parse_file(args.proguard_config, &pg_config);
+  for (const auto pg_config_path : args.proguard_config_paths) {
+    Timer time_pg_parsing("Parsed ProGuard config file " + pg_config_path);
+    redex::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
 
   std::vector<KeepRule> rules;
@@ -459,10 +459,10 @@ int main(int argc, char* argv[]) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str())) {
         fprintf(
-          stderr,
-          "WARNING: Error in jar %s - continue. This may lead to unexpected "
-          "behavior, please check your jars\n",
-          library_jar.c_str());
+            stderr,
+            "WARNING: Error in jar %s - continue. This may lead to unexpected "
+            "behavior, please check your jars\n",
+            library_jar.c_str());
       }
     }
   }
@@ -478,10 +478,9 @@ int main(int argc, char* argv[]) {
   cfg.outdir = args.out_dir;
   if (!args.seeds_filename.empty()) {
     Timer t("Initialized seed classes from incoming seeds file " +
-             args.seeds_filename);
-    auto nseeds = init_seed_classes(
-      args.seeds_filename,
-      cfg.get_proguard_map());
+            args.seeds_filename);
+    auto nseeds =
+        init_seed_classes(args.seeds_filename, cfg.get_proguard_map());
     cfg.using_seeds = nseeds > 0;
   }
 
@@ -505,8 +504,8 @@ int main(int argc, char* argv[]) {
   dex_output_stats_t totals;
   std::vector<dex_output_stats_t> dexes_stats;
 
-  auto pos_output = cfg.metafile(
-    args.config.get("line_number_map", "").asString());
+  auto pos_output =
+      cfg.metafile(args.config.get("line_number_map", "").asString());
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
   for (auto& store : stores) {
     Timer t("Writing optimized dexes");
@@ -525,14 +524,13 @@ int main(int argc, char* argv[]) {
         ss << (i + 2);
       }
       ss << ".dex";
-      auto stats = write_classes_to_dex(
-        ss.str(),
-        &store.get_dexen()[i],
-        locator_index,
-        i,
-        cfg,
-        args.config,
-        pos_mapper.get());
+      auto stats = write_classes_to_dex(ss.str(),
+                                        &store.get_dexen()[i],
+                                        locator_index,
+                                        i,
+                                        cfg,
+                                        args.config,
+                                        pos_mapper.get());
       totals += stats;
       dexes_stats.push_back(stats);
     }
@@ -540,10 +538,10 @@ int main(int argc, char* argv[]) {
 
   {
     Timer t("Writing stats");
-    auto stats_output = cfg.metafile(
-      args.config.get("stats_output", "").asString());
-    auto method_move_map = cfg.metafile(
-      args.config.get("method_move_map", "").asString());
+    auto stats_output =
+        cfg.metafile(args.config.get("stats_output", "").asString());
+    auto method_move_map =
+        cfg.metafile(args.config.get("method_move_map", "").asString());
     pos_mapper->write_map();
     output_stats(stats_output.c_str(), totals, dexes_stats, manager);
     output_moved_methods_map(method_move_map.c_str(), cfg);

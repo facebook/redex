@@ -80,8 +80,7 @@ def run_pass(
         args += ['--config', config_path]
     if script_args.warn:
         args += ['--warn', script_args.warn]
-    if script_args.proguard_config:
-        args += ['--proguard-config', script_args.proguard_config]
+    args += ['--proguard-config=' + x for x in script_args.proguard_configs]
     if script_args.keep:
         args += ['--seeds', script_args.keep]
     if script_args.proguard_map:
@@ -347,8 +346,8 @@ Given an APK, produce a better APK!
     parser.add_argument('-q', '--printseeds', nargs='?',
             help='File to print seeds to')
 
-    parser.add_argument('-P', '--proguard-config', nargs='?',
-            help='Path to proguard config')
+    parser.add_argument('-P', '--proguard-config', dest='proguard_configs',
+            action='append', default=[], help='Path to proguard config')
 
     parser.add_argument('-k', '--keep', nargs='?',
             help='Path to file containing classes to keep')
