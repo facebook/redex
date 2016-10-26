@@ -370,10 +370,10 @@ class AliasMap {
   void add_alias(DexString* original, DexString* alias) {
     m_extras_map.emplace(original, alias);
   }
-  bool has(DexString* key) {
+  bool has(DexString* key) const {
     return m_class_name_map.count(key) || m_extras_map.count(key);
   }
-  DexString* at(DexString* key) {
+  DexString* at(DexString* key) const {
     auto it = m_class_name_map.find(key);
     if (it != m_class_name_map.end()) {
       return it->second;
@@ -384,6 +384,37 @@ class AliasMap {
     return m_class_name_map;
   }
 };
+
+static void sanity_check(const Scope& scope, const AliasMap& aliases) {
+  std::unordered_set<std::string> external_names;
+  // Class.forName() expects strings of the form "foo.bar.Baz". We should be
+  // very suspicious if we see these strings in the string pool that
+  // correspond to the old name of a class that we have renamed...
+  for (const auto& it : aliases.get_class_map()) {
+    std::string original_name(it.first->c_str());
+    auto external_name = original_name.substr(1, original_name.size() - 2);
+    std::replace(external_name.begin(), external_name.end(), '/', '.');
+    external_names.emplace(external_name);
+  }
+  std::vector<DexString*> all_strings;
+  for (auto clazz : scope) {
+    clazz->gather_strings(all_strings);
+  }
+  sort_unique(all_strings);
+  int sketchy_strings = 0;
+  for (auto s : all_strings) {
+    if (external_names.find(s->c_str()) != external_names.end() ||
+        aliases.has(s)) {
+      TRACE(RENAME, 2, "Found %s in string pool after renaming\n", s->c_str());
+      sketchy_strings++;
+    }
+  }
+  if (sketchy_strings > 0) {
+    fprintf(stderr,
+            "WARNING: Found a number of sketchy class-like strings after class "
+            "renaming. Re-run with TRACE=RENAME:2 for more details.");
+  }
+}
 
 void RenameClassesPassV2::rename_classes(
     Scope& scope,
@@ -596,6 +627,8 @@ void RenameClassesPassV2::rename_classes(
     clazz->get_sfields().sort(compare_dexfields);
     clazz->get_ifields().sort(compare_dexfields);
   }
+
+  sanity_check(scope, aliases);
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
