@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include "Warning.h"
 #include "Walkers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -598,6 +599,18 @@ void RenameClassesPassV2::rename_classes(
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  // check if the pass can be run. If the config contains class hierarchy not to rename and
+  // we don't have those classes do not rename at all
+  for (const auto& base : m_dont_rename_hierarchies) {
+    if (base[0] == '#') continue;
+    auto base_type = DexType::get_type(base.c_str());
+    if (base_type == nullptr || type_class(base_type) == nullptr) {
+      fprintf(stderr,
+          "Cannot run RenamePassV2. Bad config: missing class or type %s\n", base.c_str());
+      return;
+    }
+  }
+
   auto scope = build_class_scope(stores);
   int total_classes = scope.size();
 
@@ -612,7 +625,8 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pa
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
-  TRACE(RENAME, 1, "Total classes in scope for renaming: %d chosen padding: %d\n", total_classes, s_padding);
+  TRACE(RENAME, 1, "Total classes in scope for renaming: %d chosen padding: %d\n",
+      total_classes, s_padding);
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes \n",
       s_base_strings_size, s_ren_strings_size, s_base_strings_size - s_ren_strings_size);
 }

@@ -14,7 +14,8 @@
   OPT_WARN(PURE_ABSTRACT_CLASS, "Pure abstract class passed to encode")  \
   OPT_WARN(UNSHORTENED_SRC_STRING, "Could not find replacement for src " \
                                    "string") \
-  OPT_WARN(COLDSTART_STATIC, "Unknown method in coldstart list")
+  OPT_WARN(COLDSTART_STATIC, "Unknown method in coldstart list") \
+  OPT_WARN(CANT_RUN_PASS, "Cannot run pass ")
 
 enum OptWarning {
 #define OPT_WARN(warn, str) warn,
