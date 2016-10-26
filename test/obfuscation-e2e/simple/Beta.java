@@ -16,7 +16,6 @@ import android.widget.TextView;
 public class Beta extends Activity {
 
     private int wombatBeta;
-
     /*public Beta () {
         wombatBeta = 72;
     }*/
@@ -40,6 +39,9 @@ public class Beta extends Activity {
 
 class Hello {
   public String hello = "hello";
+
+  public Hello() {}
+  public Hello(int x) {}
 
   public String get() {
     return hello;

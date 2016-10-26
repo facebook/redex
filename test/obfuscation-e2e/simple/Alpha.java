@@ -11,12 +11,18 @@ package com.facebook.redex.test.proguard;
 
 import java.util.List;
 
+class Rand {}
+
 public class Alpha {
 
     private int wombat;
     public int numbat;
     public String omega;
     public List<String> theta;
+
+    // static final nulls have to be at the end of static fields we write out
+    private static final int anum = 5;
+    public static final Object brand = new Object();
 
     public Alpha () {
         wombat = 18;
@@ -35,6 +41,6 @@ public class Alpha {
    }
 
    public int tripleWombat() {
-       return 3 * wombat;
+       return 3 * wombat + anum;
    }
 }

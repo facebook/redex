@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "DexAccess.h"
 #include "ReachableClasses.h"
+#include <list>
 
 constexpr int kMaxIdentChar (52);
 
@@ -20,40 +21,6 @@ constexpr int kMaxIdentChar (52);
 // This map is used for reverse lookup to find naming collisions
 typedef std::unordered_map<std::string,
     std::unordered_map<std::string, std::string>> NameMapping;
-
-/*
- * Factory for new obfuscated names.
- */
-class NameGenerator {
-private:
-  int ctr{1};
-  inline char get_ident(int num) {
-    return num > 26 ? 'A' + num : 'a' + num;
-  }
-  // Set of ids to avoid (these ids were marked as do not rename and we cannot
-  // conflict with)
-  const std::unordered_set<std::string>& ids_to_avoid;
-  // Set of ids we used while assigning names
-  const std::unordered_set<std::string>& used_ids;
-
-public:
-  NameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      const std::unordered_set<std::string>& used_ids) :
-      ids_to_avoid(ids_to_avoid), used_ids(used_ids) {
-    TRACE(OBFUSCATE, 2, "Created new NameGenerator\n");
-  }
-
-  // Gets the next name that is not in the used_ids set
-  std::string next_name();
-
-  // If we didn't use a name, we can roll back the counter
-  inline void rollback() { ctr -= 1; }
-
-  inline void reset() {
-    TRACE(OBFUSCATE, 2, "Resetting generator\n");
-    ctr = 1;
-  }
-};
 
 // Renames a field in the Dex
 void rename_field(DexField* field, const std::string& new_name);
@@ -107,6 +74,131 @@ public:
   }
 };
 
+/*
+ * Interface for factories for new obfuscated names.
+ */
+class NameGenerator {
+protected:
+  int ctr{1};
+  inline char get_ident(int num) {
+    return num >= 26 ? 'a' + num - 26 : 'A' + num;
+  }
+  // Set of ids to avoid (these ids were marked as do not rename and we cannot
+  // conflict with)
+  const std::unordered_set<std::string>& ids_to_avoid;
+  // Set of ids we used while assigning names
+  std::unordered_set<std::string>* used_ids;
+  // Gets the next name that is not in the used_ids set
+  std::string next_name();
+
+public:
+  NameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
+      std::unordered_set<std::string>* used_ids) :
+      ids_to_avoid(ids_to_avoid), used_ids(used_ids) {}
+  virtual ~NameGenerator() = default;
+
+  // Notes that we want to rename the DexField pointed to by this wrapper.
+  // our new name will be recorded in the wrapper
+  virtual void find_new_name(FieldNameWrapper* wrap) = 0;
+
+  // Function for saying when we're done figuring out which things we want
+  // renamed and we can start actually renaming things
+  virtual void bind_names() {}
+
+  virtual void reset() {
+    TRACE(OBFUSCATE, 3, "Resetting generator\n");
+    ctr = 1;
+  }
+};
+
+// Simple name generators just immediately bind the next name to the element
+// provided.
+class SimpleNameGenerator : public NameGenerator {
+public:
+  SimpleNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
+      std::unordered_set<std::string>* used_ids) :
+    NameGenerator(ids_to_avoid, used_ids) {}
+
+  void find_new_name(FieldNameWrapper* wrap) override {
+    std::string new_name(next_name());
+    wrap->set_name(new_name);
+    used_ids->insert(new_name);
+    DexField* field = wrap->get();
+    TRACE(OBFUSCATE, 2, "\tIntending to rename field (%s) %s:%s to %s\n",
+        SHOW(field->get_type()), SHOW(field->get_class()),
+        SHOW(field->get_name()), new_name.c_str());
+  }
+};
+
+// Will collect all the wrappers of fields to rename then rename them all at
+// once making sure to put static final fields with a nullptr value at the end
+// (for proper writing of dexes)
+class StaticNameGenerator : public NameGenerator {
+private:
+  std::unordered_set<FieldNameWrapper*> fields;
+  std::unordered_set<FieldNameWrapper*> static_final_null_fields;
+public:
+  StaticNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
+      std::unordered_set<std::string>* used_ids) :
+    NameGenerator(ids_to_avoid, used_ids) {}
+
+  void find_new_name (FieldNameWrapper* wrap) override {
+    DexField* field = wrap->get();
+    if (field->get_static_value() == nullptr) {
+      static_final_null_fields.insert(wrap);
+    } else {
+      fields.insert(wrap);
+    }
+  }
+
+  void bind_names() override {
+    // Do simple renaming if possible
+    if (static_final_null_fields.size() == 0) {
+      for (auto wrap : fields) {
+        std::string new_name(next_name());
+        wrap->set_name(new_name);
+        used_ids->insert(new_name);
+      }
+      return;
+    }
+    // Otherwise we have to make sure that all the names are assigned in order
+    // such that the static final null fields are at the end
+    std::vector<std::string> names;
+    for (unsigned int i = 0;
+        i < fields.size() + static_final_null_fields.size(); ++i)
+      names.emplace_back(next_name());
+    // if we have more than 52 names, next_name won't be in alphabetical order
+    // because it'll return "AA" after "z"
+    std::sort(names.begin(), names.end());
+    TRACE(OBFUSCATE, 3, "Static Generator\n");
+    unsigned int i = 0;
+    for (FieldNameWrapper* wrap : fields) {
+      std::string new_name(names[i++]);
+      wrap->set_name(new_name);
+      used_ids->insert(new_name);
+      DexField* field = wrap->get();
+      TRACE(OBFUSCATE, 3, "\tIntending to rename field (%s) %s:%s to %s\n",
+          SHOW(field->get_type()), SHOW(field->get_class()),
+          SHOW(field->get_name()), new_name.c_str());
+    }
+    for (FieldNameWrapper* wrap : static_final_null_fields) {
+      std::string new_name(names[i++]);
+      wrap->set_name(new_name);
+      used_ids->insert(new_name);
+      DexField* field = wrap->get();
+      TRACE(OBFUSCATE, 3,
+          "\tIntending to rename static null field (%s) %s:%s to %s\n",
+          SHOW(field->get_type()), SHOW(field->get_class()),
+          SHOW(field->get_name()), new_name.c_str());
+    }
+  }
+
+  void reset() override {
+    NameGenerator::reset();
+    fields.clear();
+    static_final_null_fields.clear();
+  }
+};
 
 class DexFieldManager {
 private:
@@ -186,12 +278,15 @@ public:
 
 // Whether or not the configs allow for us to obfuscate the field
 inline bool should_rename_field(const DexField* member) {
-  return !keep(member) || allowobfuscation(member);
+  return !is_seed(member) && (!keep(member) || allowobfuscation(member));
 }
 
 inline bool should_rename_method(const DexMethod* member) {
-  return !keep(member) || allowobfuscation(member);
+  return !is_seed(member) && (!keep(member) || allowobfuscation(member));
 }
+
+// Look at a list of fields and check if there is a renamable field in the list
+bool contains_renamable_field(const std::list<DexField*>& fields);
 
 // Used to collect all conflicting names
 class FieldNameCollector : public MemberVisitor {
@@ -207,7 +302,7 @@ public:
   virtual ~FieldNameCollector() = default;
 
   virtual void visit_field(DexField* f) override {
-    TRACE(OBFUSCATE, 3, "Visiting field %s\n", SHOW(f));
+    TRACE(OBFUSCATE, 4, "Visiting field %s\n", SHOW(f));
     names->insert((*field_name_mapping)[f].get_name());
   }
 };
@@ -231,12 +326,6 @@ public:
   DexFieldManager name_mapping;
   std::unordered_set<std::string> used_ids;
 
-
-  void set_name_mapping(DexField* field, const std::string& name) {
-    name_mapping[field].set_name(name);
-    used_ids.insert(name);
-  }
-
   void commit_renamings_to_dex() {
     name_mapping.commit_renamings_to_dex();
   }
@@ -252,12 +341,14 @@ public:
   const std::list<DexField*>& fields;
   const std::unordered_set<std::string>& ids_to_avoid;
   const bool operateOnPrivates;
+  NameGenerator* name_gen;
 
   RenamingContext(std::list<DexField*>& fields,
       std::unordered_set<std::string>& ids_to_avoid,
+      NameGenerator* name_gen,
       bool operateOnPrivates) :
       fields(fields), ids_to_avoid(ids_to_avoid),
-      operateOnPrivates(operateOnPrivates) { }
+      operateOnPrivates(operateOnPrivates), name_gen(name_gen) { }
 
   // Whether or not on this pass we should rename the field
   bool can_rename_field(DexField* field) const {

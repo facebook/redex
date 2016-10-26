@@ -9,8 +9,17 @@
 
 package com.facebook.redex.test.proguard;
 
+class Hello {
+
+}
+
 public class Sub extends TheSuper {
   public int pubSubField;
+  //public static int pubStaticSub;
+
+  //private static final int aprivStaticSub = 5;
+  //public static final Hello bpubStaticSub = new Hello();
+
   private int privSubField;
 
   public void pubSubMethod() { }

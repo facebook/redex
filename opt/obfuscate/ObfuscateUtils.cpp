@@ -9,6 +9,7 @@
 
 #include "ObfuscateUtils.h"
 #include "Trace.h"
+#include <algorithm>
 
 void rename_method(DexMethod* method,
       const std::string& new_name) {
@@ -20,7 +21,7 @@ void rename_method(DexMethod* method,
   method->change(ref);
 }
 
-std::string NameGenerator::next_name()  {
+std::string NameGenerator::next_name() {
   std::string res = "";
   do {
     int ctr_cpy = ctr;
@@ -32,7 +33,7 @@ std::string NameGenerator::next_name()  {
     ctr += 1;
     TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s\n",
         res.c_str());
-  } while(ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
+  } while(ids_to_avoid.count(res) > 0 || used_ids->count(res) > 0);
   return res;
 }
 
@@ -47,15 +48,14 @@ void DexFieldManager::commit_renamings_to_dex() {
           "Trying to rename (%s) %s:%s to %s, but we shouldn't\n",
           SHOW(field->get_type()), SHOW(field->get_class()), SHOW(field),
           wrap.get_name());
-        TRACE(OBFUSCATE, 2, "\tRenaming the field 0x%x (%s) %s:%s to %s\n",
+        TRACE(OBFUSCATE, 2,
+          "\tRenaming the field 0x%x (%s) %s:%s to %s static value: 0x%x\n",
           field, SHOW(field->get_type()), SHOW(field->get_class()),
-          SHOW(field->get_name()), wrap.get_name());
+          SHOW(field->get_name()), wrap.get_name(), field->get_static_value());
 
         DexFieldRef ref;
         ref.name = DexString::make_string(wrap.get_name());
-        TRACE(OBFUSCATE, 4, "\tPre-renaming %s\n", SHOW(field));
         field->change(ref);
-        TRACE(OBFUSCATE, 4, "\tPost-renaming %s\n", SHOW(field));
       }
     }
   }
@@ -117,6 +117,14 @@ DexField* ObfuscationState::get_def_if_renamed(DexField* field_ref) {
   DexField* def = name_mapping.def_of_ref(field_ref);
   ref_def_cache[field_ref] = def;
   return def;
+}
+
+bool contains_renamable_field(const std::list<DexField*>& fields) {
+  if (fields.size() == 0) return false;
+  for (DexField* f : fields) {
+    if (should_rename_field(f)) return true;
+  }
+  return false;
 }
 
 // Walks the class hierarchy starting at this class and including

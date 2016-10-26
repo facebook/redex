@@ -62,11 +62,14 @@ TEST(ProguardTest, obfuscation) {
     ".pubImplOneInt:I",
     ".pubImplOneString:Ljava/lang/String;",
     ".pubImplOneStringList:Ljava/util/List;"};
-  const std::array<std::string, 2> theSuperFields = {
+  const std::array<std::string, 4> theSuperFields = {
     ".pubSuperField:I",
+    ".pubStaticSuper:I",
+    ".pubStaticSuper2:I",
     ".privSuperField:I" };
-  const std::array<std::string, 2> subFields = {
+  const std::array<std::string, 3> subFields = {
     ".pubSubField:I",
+    ".pubStaticSub:I",
     ".privSubField:I" };
   const std::array<std::string, 2> subImplFields = {
     ".pubSubImplField:I",
