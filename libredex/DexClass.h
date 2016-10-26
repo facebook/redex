@@ -578,6 +578,9 @@ class DexCode {
     assert(m_insns);
     return *m_insns;
   }
+  void set_instructions(std::vector<DexInstruction*>* insns) {
+    m_insns.reset(insns);
+  }
   std::vector<std::unique_ptr<DexTryItem>>& get_tries() { return m_tries; }
   const std::vector<std::unique_ptr<DexTryItem>>& get_tries() const {
     return m_tries;
