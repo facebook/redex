@@ -333,15 +333,13 @@ void keep_fields(redex::KeepSpec* keep_rule,
 }
 
 std::string member_regex(const std::string& classname,
-                         MemberSpecification* method_spec) {
+                         MemberSpecification* spec) {
   auto class_descriptor = proguard_parser::convert_wildcard_type(classname);
   auto class_regex = proguard_parser::form_type_regex(class_descriptor);
-  auto descriptor_regex =
-      proguard_parser::form_type_regex(method_spec->descriptor);
-  auto qualified_method_regex =
-      class_regex + "\\." +
-      proguard_parser::form_member_regex(method_spec->name) + "\\:" +
-      descriptor_regex;
+  auto descriptor_regex = proguard_parser::form_type_regex(spec->descriptor);
+  auto qualified_method_regex = class_regex + "\\." +
+                                proguard_parser::form_member_regex(spec->name) +
+                                "\\:" + descriptor_regex;
   return qualified_method_regex;
 }
 
@@ -381,6 +379,11 @@ void keep_methods(KeepSpec* keep_rule,
                   const boost::regex& method_regex,
                   std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
+    // Always mark <clinit>
+    if (is_clinit(method)) {
+      keeper(method);
+      continue;
+    }
     if (method_level_match(methodSpecification, method, method_regex)) {
       keeper(method);
       methodSpecification->count++;
@@ -427,8 +430,7 @@ bool type_and_annotation_match(const DexClass* cls,
   auto descriptor = proguard_parser::convert_wildcard_type(extends_class_name);
   auto desc_regex = proguard_parser::form_type_regex(descriptor);
   boost::regex matcher(desc_regex);
-  bool matched = boost::regex_match(deob_name, matcher);
-  return matched;
+  return boost::regex_match(deob_name, matcher);
 }
 
 bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
@@ -500,7 +502,8 @@ bool extends(const DexClass* cls,
   }
   auto deob_name = cls->get_deobfuscated_name();
   std::set<const DexClass*> visited;
-  return search_extends_and_interfaces(&visited, cls, extends_class_name, annotation);
+  return search_extends_and_interfaces(
+      &visited, cls, extends_class_name, annotation);
 }
 
 bool classname_contains_wildcard(const std::string& classname) {
@@ -543,9 +546,6 @@ bool class_level_match(const KeepSpec& keep_rule,
 }
 
 void mark_class_and_members_for_keep(KeepSpec* keep_rule, DexClass* cls) {
-  if (cls->is_external()) {
-    return;
-  }
   cls->rstate.set_keep();
   keep_rule->count++;
   // Apply the keep option modifiers.
@@ -658,9 +658,6 @@ void process_keepclasseswithmembers(KeepSpec* keep_rule, DexClass* cls) {
 }
 
 void process_keepclassmembers(KeepSpec* keep_rule, DexClass* cls) {
-  if (cls->is_external()) {
-    return;
-  }
   cls->rstate.set_keepclassmembers();
   keep_rule->count++;
   // Apply the keep option modifiers.
