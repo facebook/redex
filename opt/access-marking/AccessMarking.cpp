@@ -130,9 +130,14 @@ void fix_call_sites(
       if (statics.count(method)) {
         mi->rewrite_method(method);
         if (is_invoke_range(inst->opcode())) {
-          mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
-          mi->set_range_base(mi->range_base() + 1);
-          mi->set_range_size(mi->range_size() - 1);
+          if (mi->range_size() == 1) {
+            mi->set_opcode(OPCODE_INVOKE_STATIC);
+            mi->set_arg_word_count(0);
+          } else {
+            mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
+            mi->set_range_base(mi->range_base() + 1);
+            mi->set_range_size(mi->range_size() - 1);
+          }
         } else {
           mi->set_opcode(OPCODE_INVOKE_STATIC);
           auto nargs = mi->arg_word_count();
