@@ -37,7 +37,10 @@ class RenameClassesPassV2 : public Pass {
         const ProguardMap& pg_map,
         std::set<std::string>& build_dont_rename_for_specific_methods);
     void build_dont_rename_canaries(Scope& scope,std::set<std::string>& dont_rename_canaries);
-    void build_dont_rename_hierarchies(Scope& scope, std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies);
+    void build_dont_rename_hierarchies(
+        PassManager& mgr,
+        Scope& scope,
+        std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies);
     void build_dont_rename_native_bindings(Scope& scope, std::set<DexType*>& dont_rename_native_bindings);
     void build_dont_rename_annotated(std::set<DexType*>& dont_rename_annotated);
     void rename_classes(Scope& scope, ConfigFiles& cfg, const std::string& path, bool rename_annotations, PassManager& mgr);

@@ -42,6 +42,8 @@
 #define METRIC_DONT_RENAME_ANNOTATIONED "num_dont_rename_annotationed"
 #define METRIC_DONT_RENAME_NATIVE_BINDINGS "num_dont_rename_native_bindings"
 #define METRIC_DONT_RENAME_CLASS_FOR_TYPES_WITH_REFLECTION "num_dont_rename_class_for_types_with_reflection"
+#define METRIC_MISSING_HIERARCHY_TYPES "num_missing_hierarchy_types"
+#define METRIC_MISSING_HIERARCHY_CLASSES "num_missing_hierarchy_classes"
 
 static RenameClassesPassV2 s_pass;
 
@@ -286,14 +288,19 @@ void RenameClassesPassV2::build_dont_rename_canaries(Scope& scope,std::set<std::
 }
 
 void RenameClassesPassV2::build_dont_rename_hierarchies(
-    Scope& scope, std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies) {
+    PassManager& mgr,
+    Scope& scope,
+    std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies) {
   for (const auto& base : m_dont_rename_hierarchies) {
+    // skip comments
+    if (base.c_str()[0] == '#') continue;
     auto base_type = DexType::get_type(base.c_str());
     if (base_type != nullptr) {
       dont_rename_hierarchies[base_type] = base;
-      always_assert_log(type_class(base_type), "%s has no class\n", SHOW(base_type));
-
-      if (type_class(base_type)->get_access() & ACC_INTERFACE) {
+      if (!type_class(base_type)) {
+        TRACE(RENAME, 1, "Can't find class for dont_rename_hierachy rule %s\n", base.c_str());
+        mgr.incr_metric(METRIC_MISSING_HIERARCHY_CLASSES, 1);
+      } else if (type_class(base_type)->get_access() & ACC_INTERFACE) {
         std::unordered_set<const DexType*> impls;
         get_all_implementors(scope, base_type, impls);
         for (auto impl = impls.begin() ; impl != impls.end() ; ++impl) {
@@ -306,6 +313,9 @@ void RenameClassesPassV2::build_dont_rename_hierarchies(
           dont_rename_hierarchies[*child] = base;
         }
       }
+    } else {
+      TRACE(RENAME, 1, "Can't find type for dont_rename_hierachy rule %s\n", base.c_str());
+      mgr.incr_metric(METRIC_MISSING_HIERARCHY_TYPES, 1);
     }
   }
 }
@@ -437,7 +447,7 @@ void RenameClassesPassV2::rename_classes(
   build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
   build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(), dont_rename_class_for_types_with_reflection);
   build_dont_rename_canaries(scope, dont_rename_canaries);
-  build_dont_rename_hierarchies(scope, dont_rename_hierarchies);
+  build_dont_rename_hierarchies(mgr, scope, dont_rename_hierarchies);
   build_dont_rename_native_bindings(scope, dont_rename_native_bindings);
   build_dont_rename_annotated(dont_rename_annotated);
 
@@ -632,18 +642,6 @@ void RenameClassesPassV2::rename_classes(
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  // check if the pass can be run. If the config contains class hierarchy not to rename and
-  // we don't have those classes do not rename at all
-  for (const auto& base : m_dont_rename_hierarchies) {
-    if (base[0] == '#') continue;
-    auto base_type = DexType::get_type(base.c_str());
-    if (base_type == nullptr || type_class(base_type) == nullptr) {
-      fprintf(stderr,
-          "Cannot run RenamePassV2. Bad config: missing class or type %s\n", base.c_str());
-      return;
-    }
-  }
-
   auto scope = build_class_scope(stores);
   int total_classes = scope.size();
 
