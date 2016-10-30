@@ -503,7 +503,8 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<init>") {
     member_specification.name = "<init>";
     member_specification.descriptor = "V";
-    member_specification.requiredSetAccessFlags.emplace(AccessFlag::CONSTRUCTOR);
+    member_specification.requiredSetAccessFlags.emplace(
+        AccessFlag::CONSTRUCTOR);
     (*it)++;
   } else {
     // This token is the type for the member specification.
@@ -696,13 +697,13 @@ bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
   return false;
 }
 
-bool parse_class_specification_command(
+bool ignore_class_specification_command(
     std::vector<unique_ptr<Token>>::iterator* it, token classspec_command) {
   if ((**it)->type != classspec_command) {
     return false;
   }
   (*it)++;
-  // At the moment just ignore the class specification.
+  // Ignore the rest of the unsupported comamnd.
   skip_to_next_command(it);
   return true;
 }
@@ -853,7 +854,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_optional_filepath_command(
             &it, token::printusage, &pg_config->printusage))
       continue;
-    if (parse_class_specification_command(&it, token::whyareyoukeeping))
+    if (ignore_class_specification_command(&it, token::whyareyoukeeping))
       continue;
 
     // Optimization Options
@@ -901,8 +902,6 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
       continue;
     if (parse_filter_list_command(
             &it, token::keepattributes, &pg_config->keepattributes))
-      continue;
-    if (parse_class_specification_command(&it, token::assumenosideeffects))
       continue;
 
     // Skip unknown token.

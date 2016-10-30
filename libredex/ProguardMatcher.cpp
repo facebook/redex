@@ -9,6 +9,7 @@
 
 #include <boost/regex.hpp>
 #include <iostream>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -267,14 +268,29 @@ bool check_required_unset_access_flags(
   return true;
 }
 
+boost::regex* register_matcher(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const std::string& regex) {
+  auto where = regex_map.find(regex);
+  if (where == regex_map.end()) {
+    boost::regex* matcher = new boost::regex(regex);
+    regex_map.emplace(regex, matcher);
+    return matcher;
+  }
+  return where->second;
+}
+
 template <class DexMember>
-bool has_annotation(const DexMember* member, const std::string& annotation) {
+bool has_annotation(std::unordered_map<std::string, boost::regex*>& regex_map,
+                    const DexMember* member,
+                    const std::string& annotation) {
   auto annos = member->get_anno_set();
   if (annos != nullptr) {
     auto annotation_regex = proguard_parser::convert_wildcard_type(annotation);
-    boost::regex annotation_matcher(annotation_regex);
+    boost::regex* annotation_matcher =
+        register_matcher(regex_map, annotation_regex);
     for (const auto& anno : annos->get_annotations()) {
-      if (boost::regex_match(anno->type()->c_str(), annotation_matcher)) {
+      if (boost::regex_match(anno->type()->c_str(), *annotation_matcher)) {
         return true;
       }
     }
@@ -291,18 +307,27 @@ bool access_matches(const std::set<AccessFlag>& requiredSet,
 
 // From a fully qualified descriptor for a field, exract just the
 // name of the field which occurs between the ;. and : characters.
-std::string extract_fieldname(std::string qualified_fieldname) {
+std::string extract_field_name(std::string qualified_fieldname) {
   auto p = qualified_fieldname.find(";.");
-  auto e = qualified_fieldname.find(":");
-  return qualified_fieldname.substr(p + 2, e - p - 2);
+  if (p == std::string::npos) {
+    return qualified_fieldname;
+  }
+  return qualified_fieldname.substr(p + 2);
 }
 
-bool field_level_match(redex::MemberSpecification* fieldSpecification,
-                       DexField* field,
-                       const boost::regex& fieldname_regex) {
+std::string extract_method_name_and_type(std::string qualified_fieldname) {
+  auto p = qualified_fieldname.find(";.");
+  return qualified_fieldname.substr(p + 2);
+}
+
+bool field_level_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    redex::MemberSpecification* fieldSpecification,
+    DexField* field,
+    const boost::regex* fieldname_regex) {
   // Check for annotation guards.
   if (fieldSpecification->annotationType != "") {
-    if (!has_annotation(field, fieldSpecification->annotationType)) {
+    if (!has_annotation(regex_map, field, fieldSpecification->annotationType)) {
       return false;
     }
   }
@@ -313,18 +338,19 @@ bool field_level_match(redex::MemberSpecification* fieldSpecification,
     return false;
   }
   // Match field name against regex.
-  auto pg_name = proguard_name(field);
-  auto qualified_name = field->get_deobfuscated_name();
-  return boost::regex_match(qualified_name, fieldname_regex);
+  auto dequalified_name = extract_field_name(field->get_deobfuscated_name());
+  return boost::regex_match(dequalified_name, *fieldname_regex);
 }
 
-void keep_fields(redex::KeepSpec* keep_rule,
+void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
+                 redex::KeepSpec* keep_rule,
                  const std::list<DexField*>& fields,
                  redex::MemberSpecification* fieldSpecification,
-                 const boost::regex& fieldname_regex,
+                 const boost::regex* fieldname_regex,
                  std::function<void(DexField*)> keeper) {
   for (auto field : fields) {
-    if (field_level_match(fieldSpecification, field, fieldname_regex)) {
+    if (field_level_match(
+            regex_map, fieldSpecification, field, fieldname_regex)) {
       keeper(field);
       fieldSpecification->count++;
       apply_keep_modifiers(keep_rule, field);
@@ -332,35 +358,37 @@ void keep_fields(redex::KeepSpec* keep_rule,
   }
 }
 
-std::string member_regex(const std::string& classname,
-                         MemberSpecification* spec) {
-  auto class_descriptor = proguard_parser::convert_wildcard_type(classname);
-  auto class_regex = proguard_parser::form_type_regex(class_descriptor);
-  auto descriptor_regex = proguard_parser::form_type_regex(spec->descriptor);
-  auto qualified_method_regex = class_regex + "\\." +
-                                proguard_parser::form_member_regex(spec->name) +
-                                "\\:" + descriptor_regex;
-  return qualified_method_regex;
+std::string field_regex(const MemberSpecification& field_spec) {
+  auto fieldname_regex = proguard_parser::form_member_regex(field_spec.name);
+  fieldname_regex += "\\:";
+  fieldname_regex += proguard_parser::form_type_regex(field_spec.descriptor);
+  return fieldname_regex;
 }
 
-void apply_field_keeps(const DexClass* cls,
-                       redex::KeepSpec* keep_rule,
-                       std::function<void(DexField*)> keeper) {
+void apply_field_keeps(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const DexClass* cls,
+    redex::KeepSpec* keep_rule,
+    std::function<void(DexField*)> keeper) {
   for (auto& field_spec : keep_rule->class_spec.fieldSpecifications) {
-    auto fieldname_regex =
-        member_regex(keep_rule->class_spec.className, &field_spec);
-    boost::regex matcher(fieldname_regex);
-    keep_fields(keep_rule, cls->get_ifields(), &field_spec, matcher, keeper);
-    keep_fields(keep_rule, cls->get_sfields(), &field_spec, matcher, keeper);
+    auto fieldname_regex = field_regex(field_spec);
+    boost::regex* matcher = register_matcher(regex_map, fieldname_regex);
+    keep_fields(
+        regex_map, keep_rule, cls->get_ifields(), &field_spec, matcher, keeper);
+    keep_fields(
+        regex_map, keep_rule, cls->get_sfields(), &field_spec, matcher, keeper);
   }
 }
 
-bool method_level_match(redex::MemberSpecification* methodSpecification,
-                        DexMethod* method,
-                        const boost::regex& method_regex) {
+bool method_level_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    redex::MemberSpecification* methodSpecification,
+    DexMethod* method,
+    const boost::regex* method_regex) {
   // Check to see if the method match is guarded by an annotaiton match.
   if (methodSpecification->annotationType != "") {
-    if (!has_annotation(method, methodSpecification->annotationType)) {
+    if (!has_annotation(
+            regex_map, method, methodSpecification->annotationType)) {
       return false;
     }
   }
@@ -369,14 +397,16 @@ bool method_level_match(redex::MemberSpecification* methodSpecification,
                       method->get_access())) {
     return false;
   }
-  auto qualified_name = method->get_deobfuscated_name();
-  return boost::regex_match(qualified_name.c_str(), method_regex);
+  auto dequalified_name =
+      extract_method_name_and_type(method->get_deobfuscated_name());
+  return boost::regex_match(dequalified_name.c_str(), *method_regex);
 }
 
-void keep_methods(KeepSpec* keep_rule,
+void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
+                  KeepSpec* keep_rule,
                   redex::MemberSpecification* methodSpecification,
                   const std::list<DexMethod*>& methods,
-                  const boost::regex& method_regex,
+                  const boost::regex* method_regex,
                   std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
     // Always mark <clinit>
@@ -384,7 +414,8 @@ void keep_methods(KeepSpec* keep_rule,
       keeper(method);
       continue;
     }
-    if (method_level_match(methodSpecification, method, method_regex)) {
+    if (method_level_match(
+            regex_map, methodSpecification, method, method_regex)) {
       keeper(method);
       methodSpecification->count++;
       apply_keep_modifiers(keep_rule, method);
@@ -392,27 +423,47 @@ void keep_methods(KeepSpec* keep_rule,
   }
 }
 
-void apply_method_keeps(const DexClass* cls,
-                        redex::KeepSpec* keep_rule,
-                        std::function<void(DexMethod*)> keeper) {
+std::string method_regex(const MemberSpecification& method_spec) {
+  auto qualified_method_regex =
+      proguard_parser::form_member_regex(method_spec.name);
+  qualified_method_regex += "\\:";
+  qualified_method_regex +=
+      proguard_parser::form_type_regex(method_spec.descriptor);
+  return qualified_method_regex;
+}
+
+void apply_method_keeps(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const DexClass* cls,
+    redex::KeepSpec* keep_rule,
+    std::function<void(DexMethod*)> keeper) {
   auto methodSpecifications = keep_rule->class_spec.methodSpecifications;
   for (auto& method_spec : methodSpecifications) {
-    auto qualified_method_regex =
-        member_regex(keep_rule->class_spec.className, &method_spec);
-    TRACE(PGR, 8, "====> Using regex %s\n", qualified_method_regex.c_str());
-    boost::regex method_regex(qualified_method_regex);
-    keep_methods(
-        keep_rule, &method_spec, cls->get_vmethods(), method_regex, keeper);
-    keep_methods(
-        keep_rule, &method_spec, cls->get_dmethods(), method_regex, keeper);
+    auto qualified_method_regex = method_regex(method_spec);
+    boost::regex* method_regex =
+        register_matcher(regex_map, qualified_method_regex);
+    keep_methods(regex_map,
+                 keep_rule,
+                 &method_spec,
+                 cls->get_vmethods(),
+                 method_regex,
+                 keeper);
+    keep_methods(regex_map,
+                 keep_rule,
+                 &method_spec,
+                 cls->get_dmethods(),
+                 method_regex,
+                 keeper);
   }
 }
 
 // This function checks to see of a class satisfies a match
 // against an annotation type and a class wildcard.
-bool type_and_annotation_match(const DexClass* cls,
-                               const std::string& extends_class_name,
-                               const std::string& annotation) {
+bool type_and_annotation_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const DexClass* cls,
+    const std::string& extends_class_name,
+    const std::string& annotation) {
   if (cls == nullptr) {
     return false;
   }
@@ -421,7 +472,7 @@ bool type_and_annotation_match(const DexClass* cls,
   }
   // First check to see if an annotation type needs to be matched.
   if (annotation != "") {
-    if (!has_annotation(cls, annotation)) {
+    if (!has_annotation(regex_map, cls, annotation)) {
       return false;
     }
   }
@@ -429,26 +480,30 @@ bool type_and_annotation_match(const DexClass* cls,
   auto deob_name = cls->get_deobfuscated_name();
   auto descriptor = proguard_parser::convert_wildcard_type(extends_class_name);
   auto desc_regex = proguard_parser::form_type_regex(descriptor);
-  boost::regex matcher(desc_regex);
-  return boost::regex_match(deob_name, matcher);
+  boost::regex* matcher = register_matcher(regex_map, desc_regex);
+  return boost::regex_match(deob_name, *matcher);
 }
 
-bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
-                                   const DexClass* cls,
-                                   const std::string& extends_class_name,
-                                   const std::string& annotation);
+bool search_extends_and_interfaces(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    std::set<const DexClass*>* visited,
+    const DexClass* cls,
+    const std::string& extends_class_name,
+    const std::string& annotation);
 
-bool search_interfaces(std::set<const DexClass*>* visited,
-                       const DexClass* cls,
-                       const std::string& name,
-                       const std::string& annotation) {
+bool search_interfaces(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    std::set<const DexClass*>* visited,
+    const DexClass* cls,
+    const std::string& name,
+    const std::string& annotation) {
   auto interfaces = cls->get_interfaces();
   if (interfaces) {
     for (const auto& impl : interfaces->get_type_list()) {
       auto impl_class = type_class(impl);
       if (impl_class) {
         if (search_extends_and_interfaces(
-                visited, impl_class, name, annotation)) {
+                regex_map, visited, impl_class, name, annotation)) {
           return true;
         }
       } else {
@@ -459,17 +514,20 @@ bool search_interfaces(std::set<const DexClass*>* visited,
   return false;
 }
 
-bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
-                                   const DexClass* cls,
-                                   const std::string& extends_class_name,
-                                   const std::string& annotation) {
+bool search_extends_and_interfaces(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    std::set<const DexClass*>* visited,
+    const DexClass* cls,
+    const std::string& extends_class_name,
+    const std::string& annotation) {
   assert(cls != nullptr);
   // Have we already visited this class? If yes, then the result is false.
   if (visited->find(cls) != visited->end()) {
     return false;
   }
   // Does this class match the annotation and type wildcard?
-  if (type_and_annotation_match(cls, extends_class_name, annotation)) {
+  if (type_and_annotation_match(
+          regex_map, cls, extends_class_name, annotation)) {
     return true;
   }
   // Do any of the classes and interface above match?
@@ -477,8 +535,11 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
   if (super_type && super_type != get_object_type()) {
     auto super_class = type_class(super_type);
     if (super_class) {
-      if (search_extends_and_interfaces(
-              visited, super_class, extends_class_name, annotation)) {
+      if (search_extends_and_interfaces(regex_map,
+                                        visited,
+                                        super_class,
+                                        extends_class_name,
+                                        annotation)) {
         return true;
       }
     } else {
@@ -489,12 +550,14 @@ bool search_extends_and_interfaces(std::set<const DexClass*>* visited,
     }
   }
   // Do any of the interfaces from here and up match?
-  bool found = search_interfaces(visited, cls, extends_class_name, annotation);
+  bool found = search_interfaces(
+      regex_map, visited, cls, extends_class_name, annotation);
   visited->emplace(cls);
   return found;
 }
 
-bool extends(const DexClass* cls,
+bool extends(std::unordered_map<std::string, boost::regex*>& regex_map,
+             const DexClass* cls,
              const std::string& extends_class_name,
              const std::string& annotation) {
   if (extends_class_name == "") {
@@ -503,7 +566,7 @@ bool extends(const DexClass* cls,
   auto deob_name = cls->get_deobfuscated_name();
   std::set<const DexClass*> visited;
   return search_extends_and_interfaces(
-      &visited, cls, extends_class_name, annotation);
+      regex_map, &visited, cls, extends_class_name, annotation);
 }
 
 bool classname_contains_wildcard(const std::string& classname) {
@@ -515,7 +578,10 @@ bool classname_contains_wildcard(const std::string& classname) {
   return false;
 }
 
-bool class_level_match(const KeepSpec& keep_rule, const DexClass* cls) {
+bool class_level_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const KeepSpec& keep_rule,
+    const DexClass* cls) {
   // Check for access match
   if (!access_matches(keep_rule.class_spec.setAccessFlags,
                       keep_rule.class_spec.unsetAccessFlags,
@@ -524,38 +590,46 @@ bool class_level_match(const KeepSpec& keep_rule, const DexClass* cls) {
   }
   // Check to see if an annotation guard needs to be matched.
   if (keep_rule.class_spec.annotationType != "") {
-    if (!has_annotation(cls, keep_rule.class_spec.annotationType)) {
+    if (!has_annotation(regex_map, cls, keep_rule.class_spec.annotationType)) {
       return false;
     }
   }
   // Check to see if an extends clause needs to be matched.
-  return extends(cls,
+  return extends(regex_map,
+                 cls,
                  keep_rule.class_spec.extendsClassName,
                  keep_rule.class_spec.extendsAnnotationType);
 }
 
-bool class_level_match(const KeepSpec& keep_rule,
-                       const DexClass* cls,
-                       const boost::regex& matcher) {
+bool class_level_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    const KeepSpec& keep_rule,
+    const DexClass* cls,
+    const boost::regex* matcher) {
   // Check for a class name match.
   auto deob_name = cls->get_deobfuscated_name();
-  if (!boost::regex_match(deob_name, matcher)) {
+  if (!boost::regex_match(deob_name, *matcher)) {
     return false;
   }
-  return class_level_match(keep_rule, cls);
+  return class_level_match(regex_map, keep_rule, cls);
 }
 
-void mark_class_and_members_for_keep(KeepSpec* keep_rule, DexClass* cls) {
+void mark_class_and_members_for_keep(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec* keep_rule,
+    DexClass* cls) {
   cls->rstate.set_keep();
   keep_rule->count++;
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   // Apply any field-level keep specifications.
-  apply_field_keeps(
-      cls, keep_rule, [](DexField* f) -> void { f->rstate.set_keep(); });
+  apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
+    f->rstate.set_keep();
+  });
   // Apply any method-level keep specifications.
-  apply_method_keeps(
-      cls, keep_rule, [](DexMethod* m) -> void { m->rstate.set_keep(); });
+  apply_method_keeps(regex_map, cls, keep_rule, [](DexMethod* m) -> void {
+    m->rstate.set_keep();
+  });
 }
 
 DexClass* find_single_class(const ProguardMap& pg_map,
@@ -570,60 +644,63 @@ DexClass* find_single_class(const ProguardMap& pg_map,
   return type_class(typ);
 }
 
-bool method_matches(MemberSpecification* method_keep,
+bool method_matches(std::unordered_map<std::string, boost::regex*>& regex_map,
+                    MemberSpecification* method_keep,
                     const std::list<DexMethod*>& vmethods,
                     const std::list<DexMethod*>& dmethods,
-                    const boost::regex& method_regex) {
+                    const boost::regex* method_regex) {
   for (const auto& method : vmethods) {
-    if (method_level_match(method_keep, method, method_regex)) {
+    if (method_level_match(regex_map, method_keep, method, method_regex)) {
       return true;
     }
   }
   for (const auto& method : dmethods) {
-    if (method_level_match(method_keep, method, method_regex)) {
+    if (method_level_match(regex_map, method_keep, method, method_regex)) {
       return true;
     }
   }
   return false;
 }
 
-bool all_methods_match(const std::string& classname,
-                       std::vector<MemberSpecification>& method_keeps,
-                       const std::list<DexMethod*>& vmethods,
-                       const std::list<DexMethod*>& dmethods) {
+bool all_methods_match(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    std::vector<MemberSpecification>& method_keeps,
+    const std::list<DexMethod*>& vmethods,
+    const std::list<DexMethod*>& dmethods) {
   if (method_keeps.empty()) {
     return true;
   }
   for (auto& method_keep : method_keeps) {
-    auto qualified_method_regex = member_regex(classname, &method_keep);
-    boost::regex method_regex(qualified_method_regex);
-    if (!method_matches(&method_keep, vmethods, dmethods, method_regex)) {
+    auto qualified_method_regex = method_regex(method_keep);
+    boost::regex* matcher = register_matcher(regex_map, qualified_method_regex);
+    if (!method_matches(
+            regex_map, &method_keep, vmethods, dmethods, matcher)) {
       return false;
     }
   }
   return true;
 }
 
-bool field_matches(const std::string& classname,
+bool field_matches(std::unordered_map<std::string, boost::regex*>& regex_map,
                    MemberSpecification* field_keep,
                    const std::list<DexField*>& ifields,
                    const std::list<DexField*>& sfields) {
-  auto fieldtype_regex = member_regex(classname, field_keep);
-  boost::regex matcher(fieldtype_regex);
+  auto fieldtype_regex = field_regex(*field_keep);
+  boost::regex* matcher = register_matcher(regex_map, fieldtype_regex);
   for (const auto& field : ifields) {
-    if (field_level_match(field_keep, field, matcher)) {
+    if (field_level_match(regex_map, field_keep, field, matcher)) {
       return true;
     }
   }
   for (const auto& field : sfields) {
-    if (field_level_match(field_keep, field, matcher)) {
+    if (field_level_match(regex_map, field_keep, field, matcher)) {
       return true;
     }
   }
   return false;
 }
 
-bool all_fields_match(const std::string& classname,
+bool all_fields_match(std::unordered_map<std::string, boost::regex*>& regex_map,
                       std::vector<MemberSpecification>& field_keeps,
                       const std::list<DexField*>& ifields,
                       const std::list<DexField*>& sfields) {
@@ -631,78 +708,94 @@ bool all_fields_match(const std::string& classname,
     return true;
   }
   for (auto& field_keep : field_keeps) {
-    if (!field_matches(classname, &field_keep, ifields, sfields)) {
+    if (!field_matches(regex_map, &field_keep, ifields, sfields)) {
       return false;
     }
   }
   return true;
 }
 
-void process_keepclasseswithmembers(KeepSpec* keep_rule, DexClass* cls) {
+void process_keepclasseswithmembers(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec* keep_rule,
+    DexClass* cls) {
   if (keep_rule->class_spec.fieldSpecifications.size() == 0 &&
       keep_rule->class_spec.methodSpecifications.size() == 0) {
     std::cerr << "WARNING: A keepclasseswithmembers rule for class "
               << keep_rule->class_spec.className
               << " has no field or member specifications.\n";
   }
-  if (all_fields_match(keep_rule->class_spec.className,
+  if (all_fields_match(regex_map,
                        keep_rule->class_spec.fieldSpecifications,
                        cls->get_ifields(),
                        cls->get_sfields()) &&
-      all_methods_match(keep_rule->class_spec.className,
+      all_methods_match(regex_map,
                         keep_rule->class_spec.methodSpecifications,
                         cls->get_vmethods(),
                         cls->get_dmethods())) {
-    mark_class_and_members_for_keep(keep_rule, cls);
+    mark_class_and_members_for_keep(regex_map, keep_rule, cls);
   }
 }
 
-void process_keepclassmembers(KeepSpec* keep_rule, DexClass* cls) {
+void process_keepclassmembers(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec* keep_rule,
+    DexClass* cls) {
   cls->rstate.set_keepclassmembers();
   keep_rule->count++;
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   // Apply any field-level keep specifications.
-  apply_field_keeps(
-      cls, keep_rule, [](DexField* f) -> void { f->rstate.set_keep(); });
+  apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
+    f->rstate.set_keep();
+  });
   // Apply any method-level keep specifications.
-  apply_method_keeps(
-      cls, keep_rule, [](DexMethod* m) -> void { m->rstate.set_keep(); });
+  apply_method_keeps(regex_map, cls, keep_rule, [](DexMethod* m) -> void {
+    m->rstate.set_keep();
+  });
 }
 
-void process_assumenosideeffects(KeepSpec* keep_rule, DexClass* cls) {
+void process_assumenosideeffects(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec* keep_rule,
+    DexClass* cls) {
   cls->rstate.set_assumenosideeffects();
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   // Apply any field-level keep specifications.
-  apply_field_keeps(cls, keep_rule, [](DexField* f) -> void {
+  apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
     f->rstate.set_assumenosideeffects();
   });
   // Apply any method-level keep specifications.
-  apply_method_keeps(cls, keep_rule, [](DexMethod* m) -> void {
+  apply_method_keeps(regex_map, cls, keep_rule, [](DexMethod* m) -> void {
     m->rstate.set_assumenosideeffects();
   });
 }
 
 void process_keep(const ProguardMap& pg_map,
                   std::vector<KeepSpec>& keep_rules,
+                  std::unordered_map<std::string, boost::regex*>& regex_map,
                   Scope& classes,
-                  std::function<void(KeepSpec*, DexClass*)> keep_processor) {
+                  std::function<void(
+                      std::unordered_map<std::string, boost::regex*>& regex_map,
+                      KeepSpec*,
+                      DexClass*)> keep_processor) {
+  boost::regex* matcher;
   for (auto& keep_rule : keep_rules) {
     auto descriptor =
         proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
     DexClass* cls = find_single_class(pg_map, descriptor);
     if (cls != nullptr) {
-      if (class_level_match(keep_rule, cls)) {
-        keep_processor(&keep_rule, cls);
+      if (class_level_match(regex_map, keep_rule, cls)) {
+        keep_processor(regex_map, &keep_rule, cls);
       }
       continue;
     }
     auto desc_regex = proguard_parser::form_type_regex(descriptor);
-    boost::regex matcher(desc_regex);
+    matcher = register_matcher(regex_map, desc_regex);
     for (const auto& cls : classes) {
-      if (class_level_match(keep_rule, cls, matcher)) {
-        keep_processor(&keep_rule, cls);
+      if (class_level_match(regex_map, keep_rule, cls, matcher)) {
+        keep_processor(regex_map, &keep_rule, cls);
       }
     }
   }
@@ -717,20 +810,30 @@ void process_proguard_rules(const ProguardMap& pg_map,
     field_count += cls->get_ifields().size() + cls->get_sfields().size();
     method_count += cls->get_vmethods().size() + cls->get_dmethods().size();
   }
-  process_keep(
-      pg_map, pg_config->keep_rules, classes, mark_class_and_members_for_keep);
+  std::unordered_map<std::string, boost::regex*> regex_map;
+  process_keep(pg_map,
+               pg_config->keep_rules,
+               regex_map,
+               classes,
+               mark_class_and_members_for_keep);
   process_keep(pg_map,
                pg_config->keepclasseswithmembers_rules,
+               regex_map,
                classes,
                process_keepclasseswithmembers);
   process_keep(pg_map,
                pg_config->keepclassmembers_rules,
+               regex_map,
                classes,
                process_keepclassmembers);
   process_keep(pg_map,
                pg_config->assumenosideeffects_rules,
+               regex_map,
                classes,
                process_assumenosideeffects);
+  for (auto& e : regex_map) {
+    delete (e.second);
+  }
 }
 
 } // namespace redex

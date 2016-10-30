@@ -83,6 +83,16 @@ inline bool keepnames(DexMember* member) {
 }
 
 template<class DexMember>
+inline bool keepclassmembernames(DexMember* member) {
+  return keepclassmembers(member) && allowshrinking(member);
+}
+
+template<class DexMember>
+inline bool keepclasseswithmembernames(DexMember* member) {
+  return keepclasseswithmembers(member) && allowshrinking(member);
+}
+
+template<class DexMember>
 inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
 
 // Check to see if a class can be removed. At a later stage when we
