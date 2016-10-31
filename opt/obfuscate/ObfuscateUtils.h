@@ -42,6 +42,7 @@ public:
   // Default constructor is only ever used for map template to work correctly
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
+  virtual ~DexNameWrapper() { }
   DexNameWrapper(DexNameWrapper&& other) = default;
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
@@ -219,39 +220,78 @@ public:
   }
 };
 
+// Interface for thing that will store DexNameWrappers. When this is destroyed,
+// so are all the DexNameWrappers contained within.
 template <class T>
+class DexElemStore {
+public:
+  virtual ~DexElemStore() = default;
+  virtual DexNameWrapper<T>* create_elem(T dex_ptr) = 0;
+};
+
+class DexFieldStore : public DexElemStore<DexField*> {
+private:
+  std::vector<std::unique_ptr<FieldNameWrapper>> values;
+public:
+  ~DexFieldStore() = default;
+
+  DexNameWrapper<DexField*>* create_elem(DexField* dex_ptr) override {
+    values.emplace_back(new FieldNameWrapper(dex_ptr));
+    return values.back().get();
+  }
+};
+
+class DexMethodStore : public DexElemStore<DexMethod*> {
+private:
+  std::vector<std::unique_ptr<MethodNameWrapper>> values;
+public:
+  ~DexMethodStore() = default;
+
+  DexNameWrapper<DexMethod*>* create_elem(DexMethod* dex_ptr) override {
+    values.emplace_back(new MethodNameWrapper(dex_ptr));
+    return values.back().get();
+  }
+};
+
+template <class T, class K>
 class DexElemManager {
 protected:
+  std::unique_ptr<DexElemStore<T>> elem_factory;
   // Map from class_name -> type -> old_name ->
   //   DexNameWrapper (contains new name)
-  // TODO: modify so that we can create MethodNameWrappers correctly without
-  //       object slicing
   std::unordered_map<DexType*,
-    std::unordered_map<DexType*,
-      std::unordered_map<DexString*, DexNameWrapper<T>>>> elements;
+    std::unordered_map<K,
+      std::unordered_map<DexString*, DexNameWrapper<T>*>>> elements;
 
 public:
+  DexElemManager(DexElemStore<T>* elem_factory) : elem_factory(elem_factory) { }
   virtual ~DexElemManager() {}
-  inline bool contains_field(
-      DexType* cls, DexType* type, DexString* name) {
+
+  virtual K sig_getter_fn(T& elem) = 0;
+
+  virtual bool contains_elem(
+      DexType* cls, K sig, DexString* name) {
     return elements.count(cls) > 0 &&
-      elements[cls].count(type) > 0 &&
-      elements[cls][type].count(name) > 0;
+      elements[cls].count(sig) > 0 &&
+      elements[cls][sig].count(name) > 0;
   }
 
-  inline bool contains_field(T& elem) {
-    return contains_field(elem->get_class(),
-      elem->get_type(), elem->get_name());
+  bool contains_elem(T& elem) {
+    return contains_elem(elem->get_class(), sig_getter_fn(elem), elem->get_name());
+  }
+
+  DexNameWrapper<T>* emplace(T& elem) {
+    elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()] =
+      elem_factory->create_elem(elem);
+    return elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()];
   }
 
   // Mirrors the map get operator, but ensures we create correct wrappers
   // if they don't exist
-  DexNameWrapper<T>& operator[](T& elem) {
-    return contains_field(elem) ?
+  DexNameWrapper<T>* operator[](T& elem) {
+    return contains_elem(elem) ?
       elements[elem->get_class()]
-        [elem->get_type()][elem->get_name()] :
-      elements[elem->get_class()][elem->get_type()].emplace(
-        elem->get_name(), FieldNameWrapper(elem)).first->second;
+        [sig_getter_fn(elem)][elem->get_name()] : emplace(elem);
   }
 
   virtual void commit_renamings_to_dex() = 0;
@@ -259,7 +299,15 @@ public:
   virtual void print_elements() = 0;
 };
 
-class DexFieldManager : public DexElemManager<DexField*> {
+class DexFieldManager : public DexElemManager<DexField*, DexType*> {
+public:
+  DexFieldManager() : DexElemManager<DexField*, DexType*>(
+      new DexFieldStore()) { }
+
+  virtual DexType* sig_getter_fn(DexField*& f) override {
+    return f->get_type();
+  }
+
   // Commits all the renamings in elements to the dex by modifying the
   // underlying DexFields. Does in-place modification.
   void commit_renamings_to_dex() override;
@@ -274,7 +322,21 @@ class DexFieldManager : public DexElemManager<DexField*> {
   void print_elements() override;
 };
 
-class DexMethodManager {};
+class DexMethodManager : public DexElemManager<DexMethod*, DexProto*> {
+public:
+  DexMethodManager() : DexElemManager<DexMethod*, DexProto*>(
+      new DexMethodStore()) { }
+
+  virtual DexProto* sig_getter_fn(DexMethod*& m) override {
+    return m->get_proto();
+  }
+
+  void commit_renamings_to_dex() override;
+
+  DexMethod* def_of_ref(DexMethod* ref) override;
+
+  void print_elements() override;
+};
 
 class MemberVisitor {
 public:
@@ -329,18 +391,18 @@ bool contains_renamable_elem(const std::list<T>& elems) {
 class FieldNameCollector : public MemberVisitor {
 private:
   std::unordered_set<std::string>* names;
-  DexElemManager<DexField*>* field_name_mapping;
+  DexElemManager<DexField*, DexType*>* field_name_mapping;
 
 public:
   FieldNameCollector(
-      DexElemManager<DexField*>* field_name_mapping,
+      DexElemManager<DexField*, DexType*>* field_name_mapping,
       std::unordered_set<std::string>* names) :
         names(names), field_name_mapping(field_name_mapping) { }
   virtual ~FieldNameCollector() = default;
 
   virtual void visit_field(DexField* f) override {
     TRACE(OBFUSCATE, 4, "Visiting field %s\n", SHOW(f));
-    names->insert((*field_name_mapping)[f].get_name());
+    names->insert((*field_name_mapping)[f]->get_name());
   }
 };
 
@@ -375,20 +437,21 @@ void walk_hierarchy(DexClass* cls,
     ClassVisitor* visitor,
     HierarchyDirection h_dir);
 
-// State of the renaming that we need to modify as we rename more members
-template <class T>
+// State of the renaming that we need to modify as we rename more fields
+template <class T, class K>
 class ObfuscationState {
   // Cache of ref -> def mapping in case we have many instructions that
   // use the same ref.
   std::unordered_map<T, T> ref_def_cache;
 public:
-  DexElemManager<T>& name_mapping;
+  std::unique_ptr<DexElemManager<T, K>> name_mapping;
   std::unordered_set<std::string> used_ids;
 
-  ObfuscationState(DexElemManager<T>& name_mapping) : name_mapping(name_mapping) { }
+  /* implicit */ ObfuscationState(DexElemManager<T, K>* name_mapping) :
+    name_mapping(name_mapping) { }
 
   void commit_renamings_to_dex() {
-    name_mapping.commit_renamings_to_dex();
+    name_mapping->commit_renamings_to_dex();
   }
 
   // Cached lookup on the def of a ref (like resolve_member) except that if
@@ -397,11 +460,17 @@ public:
     auto itr = ref_def_cache.find(member_ref);
     if (itr != ref_def_cache.end())
       return itr->second;
-    T def = name_mapping.def_of_ref(member_ref);
+    T def = name_mapping->def_of_ref(member_ref);
     ref_def_cache[member_ref] = def;
     return def;
   }
 };
+
+typedef ObfuscationState<DexField*, DexType*> FieldObfuscationState;
+typedef ObfuscationState<DexMethod*, DexProto*> MethodObfuscationState;
+
+void rewrite_if_field_instr(FieldObfuscationState& f_ob_state,
+    DexInstruction* instr);
 
 // Static state of the renamer
 template <class T>

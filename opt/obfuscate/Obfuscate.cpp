@@ -30,30 +30,31 @@ using std::unordered_set;
  *   contains a set of all used names in this class because that needs to be
  *   updated every time we choose a name.
  */
-template <class T>
-void obfuscate_elems(const RenamingContext<T>& context, ObfuscationState<T>* state) {
+template <class T, class K>
+void obfuscate_elems(const RenamingContext<T>& context, ObfuscationState<T, K>* state) {
   for (T elem : context.elems) {
     if (!context.can_rename_elem(elem)) {
       TRACE(OBFUSCATE, 4, "Ignoring member %s because we shouldn't rename it\n",
           SHOW(elem->get_name()));
       continue;
     }
-    context.name_gen->find_new_name(&state->name_mapping[elem]);
+    context.name_gen->find_new_name((*state->name_mapping)[elem]);
   }
 }
 
 // Obfuscate methods and fields, updating the ProGuard
 // map approriately to reflect renamings.
 void obfuscate(Scope& classes, ProguardMap* pg_map) {
-  DexFieldManager fmgr;
-  DexElemManager<DexField*>& field_manager(fmgr);
-  ObfuscationState<DexField*> f_ob_state(field_manager);
+  // Create Field Obfuscation State
+  FieldObfuscationState f_ob_state(new DexFieldManager());
   // Field things
   unordered_set<std::string> used_field_names;
   SimpleNameGenerator<DexField*> simple_field_name_gen(
-    used_field_names, &f_ob_state.used_ids);
-  StaticFieldNameGenerator static_field_name_gen(used_field_names, &f_ob_state.used_ids);
-  FieldNameCollector field_name_collector(&(f_ob_state.name_mapping), &used_field_names);
+      used_field_names, &f_ob_state.used_ids);
+  StaticFieldNameGenerator static_field_name_gen(
+      used_field_names, &f_ob_state.used_ids);
+  FieldNameCollector field_name_collector(
+      f_ob_state.name_mapping.get(), &used_field_names);
   ClassVisitor publicFieldVisitor(ClassVisitor::VisitFilter::NonPrivateOnly,
       &field_name_collector);
   ClassVisitor allFieldVisitor(ClassVisitor::VisitFilter::All,
@@ -62,7 +63,8 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
       &field_name_collector);
 
   // Method things
-  /*unordered_set<std::string> used_method_names;
+  /*ObfuscationState<DexMethod*> m_ob_state(new DexMethodManager());
+  unordered_set<std::string> used_method_names;
   SimpleNameGenerator simple_method_name_gen(used_method_names, &f_ob_state.method_ids);
   StaticNameGenerator static_method_name_gen(used_method_names, &f_ob_state.method_ids);
   MethodNameCollector method_name_collector(&(f_ob_state.method_mapping), &used_method_names);
@@ -75,6 +77,8 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
 
   TRACE(OBFUSCATE, 2, "Starting obfuscation of fields and methods\n");
   for (DexClass* cls : classes) {
+    always_assert_log(!cls->is_external(),
+        "Shouldn't rename members of external classes.");
     // First check if we will do anything on this class
     bool operate_on_ifields = contains_renamable_elem(cls->get_ifields());
     bool operate_on_sfields = contains_renamable_elem(cls->get_sfields());
@@ -83,8 +87,6 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
     // TODO: is there a simpler check for this?
     if (!operate_on_ifields && !operate_on_sfields &&
         !operate_on_dmethods && !operate_on_vmethods) continue;
-    always_assert_log(!cls->is_external(),
-        "Shouldn't rename members of external classes.");
     TRACE(OBFUSCATE, 2, "Renaming the members of class %s\n",
         SHOW(cls->get_name()));
 
@@ -187,7 +189,7 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
     //obfuscate_methods(cls->get_vmethods(), pg_map);
     //obfuscate_methods(cls->get_dmethods(), pg_map);
   }
-  f_ob_state.name_mapping.print_elements();
+  f_ob_state.name_mapping->print_elements();
 
   TRACE(OBFUSCATE, 2, "Finished picking new names\n");
 
@@ -206,24 +208,7 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
   walk_opcodes(classes,
     [](DexMethod*) { return true; },
     [&](DexMethod*, DexInstruction* instr) {
-      // Only want field operations
-      if (!is_ifield_op(instr->opcode()) &&
-          !is_sfield_op(instr->opcode())) return;
-      DexOpcodeField* field_instr = static_cast<DexOpcodeField*>(instr);
-
-      DexField* field_ref = field_instr->field();
-      if (field_ref->is_def()) return;
-      TRACE(OBFUSCATE, 3, "Found a ref opcode\n");
-
-      // Here we could use resolve_field to lookup the def, but this is
-      // expensive, so we do resolution through ob_state which caches
-      // and combines the lookup with the check for if we're changing the
-      // field.
-      DexField* field_def = f_ob_state.get_def_if_renamed(field_ref);
-      if (field_def != nullptr) {
-        TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
-        field_instr->rewrite_field(field_def);
-      }
+      rewrite_if_field_instr(f_ob_state, instr);
     });
 
   TRACE(OBFUSCATE, 2, "Finished transforming refs\n");
