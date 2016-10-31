@@ -46,7 +46,9 @@ class ReferencedState {
  public:
   ReferencedState() = default;
   bool can_delete() const { return !m_bytype; }
-  bool can_rename() const { return !m_bystring; }
+  bool can_rename() const {
+    return !(m_bystring || m_keep) || m_allowobfuscation;
+  }
 
   /**
    * Is this item a "seed" according to ProGuard's analysis?
@@ -82,7 +84,9 @@ class ReferencedState {
   }
 
   // A direct reference from code (not reflection)
-  void ref_by_type() { m_bytype = true; }
+  void ref_by_type() {
+    m_bytype = true;
+  }
 
   /* Called before recompute */
   void clear_if_compute() {
