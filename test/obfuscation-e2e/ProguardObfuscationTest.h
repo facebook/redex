@@ -31,7 +31,7 @@ class ProguardObfuscationTest {
    ProguardMap proguard_map;
    // Classes we're looking at will always be at dexen.front()
    std::vector<DexClasses> dexen;
-   bool method_is_renamed_helper(
+   int method_is_renamed_helper(
      const std::list<DexMethod*>& methods,
      const std::string& name);
 

@@ -144,9 +144,11 @@ public:
     wrap->set_name(new_name);
     this->used_ids->insert(new_name);
     T elem = wrap->get();
-    TRACE(OBFUSCATE, 2, "\tIntending to rename elem (%s) %s:%s to %s\n",
+    /*TRACE(OBFUSCATE, 2, "\tIntending to rename elem (%s) %s:%s to %s\n",
         SHOW(elem->get_type()), SHOW(elem->get_class()),
-        SHOW(elem->get_name()), new_name.c_str());
+        SHOW(elem->get_name()), new_name.c_str());*/
+    TRACE(OBFUSCATE, 2, "\tIntending to rename elem %s (%s) to %s\n",
+        SHOW(elem), SHOW(elem->get_name()), new_name.c_str());
   }
 };
 
@@ -411,11 +413,11 @@ class MethodNameCollector : public MemberVisitor {
 private:
   // May want to do map from DexProto* if we want to do overloading aggressively
   std::unordered_set<std::string>* names;
-  DexMethodManager* method_name_mapping;
+  DexElemManager<DexMethod*, DexProto*>* method_name_mapping;
 
 public:
   MethodNameCollector(
-      DexMethodManager* method_name_mapping,
+      DexElemManager<DexMethod*, DexProto*>* method_name_mapping,
       std::unordered_set<std::string>* names) :
         names(names), method_name_mapping(method_name_mapping) { }
   virtual ~MethodNameCollector() = default;
@@ -423,7 +425,12 @@ public:
   virtual void visit_method(DexMethod* m) override {
     // TODO: implement after implementing DexMethodManager
     TRACE(OBFUSCATE, 4, "Visiting Method %s\n", SHOW(m));
-    //names->insert((*method_name_mapping)[m].get_name());
+    auto wrap = (*method_name_mapping)[m];
+    names->insert(wrap->get_name());
+    // If it has been renamed, also insert the old name so that we don't
+    // rename to a name that already exists that we intend to rename and
+    // have to deal with writing those to dex in the correct order.
+    if (wrap->name_has_changed()) names->insert(SHOW(wrap->get()->get_name()));
   }
 };
 
@@ -471,6 +478,8 @@ typedef ObfuscationState<DexMethod*, DexProto*> MethodObfuscationState;
 
 void rewrite_if_field_instr(FieldObfuscationState& f_ob_state,
     DexInstruction* instr);
+void rewrite_if_method_instr(MethodObfuscationState& m_ob_state,
+    DexInstruction* instr);
 
 // Static state of the renamer
 template <class T>
@@ -487,9 +496,29 @@ public:
       bool operateOnPrivates) :
       elems(elems), ids_to_avoid(ids_to_avoid),
       operateOnPrivates(operateOnPrivates), name_gen(name_gen) { }
+  virtual ~RenamingContext() {}
 
   // Whether or not on this pass we should rename the member
-  bool can_rename_elem(T elem) const {
+  virtual bool can_rename_elem(T elem) const {
     return should_rename_elem(elem) && operateOnPrivates == is_private(elem);
+  }
+};
+
+typedef RenamingContext<DexField*> FieldRenamingContext;
+
+class MethodRenamingContext : public RenamingContext<DexMethod*> {
+  DexString* initstr = DexString::get_string("<init>");
+  DexString* clinitstr = DexString::get_string("<clinit>");
+public:
+  MethodRenamingContext(std::list<DexMethod*>& elems,
+      std::unordered_set<std::string>& ids_to_avoid,
+      NameGenerator<DexMethod*>* name_gen,
+      bool operateOnPrivates) : RenamingContext<DexMethod*>(
+          elems, ids_to_avoid, name_gen, operateOnPrivates) { }
+
+  // For methods we have to make sure we don't rename <init> or <clinit> ever
+  virtual bool can_rename_elem(DexMethod* elem) const override {
+    return should_rename_elem(elem) && operateOnPrivates == is_private(elem) &&
+      elem->get_name() != initstr && elem->get_name() != clinitstr;
   }
 };

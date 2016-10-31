@@ -32,7 +32,10 @@ public class Beta extends Activity {
       setContentView(text);
     }
 
+    private int privateDmethod() { return 10; }
+
     public int doubleWombatBeta() {
+        privateDmethod();
         return 2 * wombatBeta;
     }
 }

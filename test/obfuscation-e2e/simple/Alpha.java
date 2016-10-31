@@ -32,7 +32,14 @@ public class Alpha {
         wombat = v;
     }
 
+    public static int someDmethod() { return 5; }
+
+    public static void anotherDmethod(int x) { }
+
+    private int privateDmethod() { return 8; }
+
     public int doubleWombat() {
+        privateDmethod();
         return 2 * wombat;
     }
 

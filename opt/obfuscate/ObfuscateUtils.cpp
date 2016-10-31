@@ -66,7 +66,27 @@ void DexFieldManager::print_elements() {
 }
 
 void DexMethodManager::commit_renamings_to_dex() {
+  for (const auto& class_itr : this->elements) {
+    for (const auto& proto_itr : class_itr.second) {
+      for (const auto& name_wrap : proto_itr.second) {
+        const DexNameWrapper<DexMethod*>* wrap = name_wrap.second;
+        if (!wrap->name_has_changed()) continue;
+        DexMethod* method = wrap->get();
+        always_assert_log(should_rename_elem(method),
+          "Trying to rename (%s) %s:%s to %s, but we shouldn't\n",
+          SHOW(method->get_proto()), SHOW(method->get_class()), SHOW(method),
+          wrap->get_name());
+        TRACE(OBFUSCATE, 2,
+          "\tRenaming the method 0x%x (%s) %s:%s to %s\n",
+          method, SHOW(method->get_proto()), SHOW(method->get_class()),
+          SHOW(method->get_name()), wrap->get_name());
 
+        DexMethodRef ref;
+        ref.name = DexString::make_string(wrap->get_name());
+        method->change(ref);
+      }
+    }
+  }
 }
 
 DexMethod* DexMethodManager::def_of_ref(DexMethod* ref) {
@@ -144,5 +164,26 @@ void rewrite_if_field_instr(FieldObfuscationState& f_ob_state,
   if (field_def != nullptr) {
     TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
     field_instr->rewrite_field(field_def);
+  }
+}
+
+void rewrite_if_method_instr(MethodObfuscationState& f_ob_state,
+    DexInstruction* instr) {
+  // Only want method operations
+  if (!instr->has_methods()) return;
+  DexOpcodeMethod* method_instr = static_cast<DexOpcodeMethod*>(instr);
+
+  DexMethod* method_ref = method_instr->get_method();
+  if (method_ref->is_def()) return;
+  TRACE(OBFUSCATE, 3, "Found a ref opcode\n");
+
+  // Here we could use resolve_method to lookup the def, but this is
+  // expensive, so we do resolution through ob_state which caches
+  // and combines the lookup with the check for if we're changing the
+  // method.
+  DexMethod* method_def = f_ob_state.get_def_if_renamed(method_ref);
+  if (method_def != nullptr) {
+    TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
+    method_instr->rewrite_method(method_def);
   }
 }

@@ -59,23 +59,27 @@ bool ProguardObfuscationTest::field_found(
   return false;
 }
 
-bool ProguardObfuscationTest::method_is_renamed_helper(
+int ProguardObfuscationTest::method_is_renamed_helper(
     const std::list<DexMethod*>& methods,
     const std::string& name) {
   for (const auto& method : methods) {
-    auto deobfuscated_name = method->get_deobfuscated_name();
+    auto deobfuscated_name = proguard_map.deobfuscate_method(proguard_name(method));
     if (name == std::string(method->c_str()) ||
       name == deobfuscated_name) {
       return deobfuscated_name != proguard_name(method);
     }
   }
-  return false;
+  return -1;
 }
 
 bool ProguardObfuscationTest::method_is_renamed(
     const DexClass* cls, const std::string& name) {
-  return method_is_renamed_helper(cls->get_vmethods(), name) ||
-    method_is_renamed_helper(cls->get_dmethods(), name);
+  auto is_renamed_vmeth = method_is_renamed_helper(cls->get_vmethods(), name);
+  auto is_renamed_dmeth = method_is_renamed_helper(cls->get_dmethods(), name);
+  // If either of them found the method to be renamed, return that, otherwise
+  // if neither found the method, assume it's renamed
+  return is_renamed_dmeth == 1 || is_renamed_vmeth == 1 ||
+      (is_renamed_dmeth == -1 && is_renamed_vmeth == -1);
 }
 
 bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
