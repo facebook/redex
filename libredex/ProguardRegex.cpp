@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <cstring>
+
 #include "ProguardRegex.h"
 #include "ProguardMap.h"
 
@@ -17,7 +19,7 @@ namespace proguard_parser {
 // Example: "alpha*beta?gamma" -> "alpha.*beta.gamma"
 std::string form_member_regex(std::string proguard_regex) {
   // An empty string matches against any member name.
-  if (proguard_regex == "") {
+  if (proguard_regex.empty())  {
     return ".*";
   }
   std::string r;
@@ -44,7 +46,7 @@ std::string form_member_regex(std::string proguard_regex) {
 // Example: "Lalpha/*/beta;" -> "Lalpha\\/([^\\/]+)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/([^\\/]+(?:\\/[^\\/]+)*)\\/beta;"
 std::string form_type_regex(std::string proguard_regex) {
-  if (proguard_regex == "") {
+  if (proguard_regex.empty()) {
     return ".*";
   }
   if (proguard_regex == "L*;") {

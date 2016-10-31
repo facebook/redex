@@ -12,6 +12,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <cstring>
 
 #include "DexAccess.h"
 #include "DexUtil.h"
@@ -36,7 +37,7 @@ void apply_keep_modifiers(KeepSpec* k, DexMember* member) {
     member->rstate.set_allowshrinking();
   }
   if (k->allowobfuscation &&
-      std::string(member->get_name()->c_str()) != "<init>") {
+      strcmp(member->get_name()->c_str(), "<init>") != 0) {
     member->rstate.set_allowobfuscation();
   }
 }
@@ -326,7 +327,7 @@ bool field_level_match(
     DexField* field,
     const boost::regex* fieldname_regex) {
   // Check for annotation guards.
-  if (fieldSpecification->annotationType != "") {
+  if (!(fieldSpecification->annotationType.empty())) {
     if (!has_annotation(regex_map, field, fieldSpecification->annotationType)) {
       return false;
     }
@@ -359,10 +360,11 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
 }
 
 std::string field_regex(const MemberSpecification& field_spec) {
-  auto fieldname_regex = proguard_parser::form_member_regex(field_spec.name);
-  fieldname_regex += "\\:";
-  fieldname_regex += proguard_parser::form_type_regex(field_spec.descriptor);
-  return fieldname_regex;
+  std::stringstream ss;
+  ss << proguard_parser::form_member_regex(field_spec.name);
+  ss << "\\:";
+  ss << proguard_parser::form_type_regex(field_spec.descriptor);
+  return ss.str();
 }
 
 void apply_field_keeps(
@@ -386,7 +388,7 @@ bool method_level_match(
     DexMethod* method,
     const boost::regex* method_regex) {
   // Check to see if the method match is guarded by an annotaiton match.
-  if (methodSpecification->annotationType != "") {
+  if (!(methodSpecification->annotationType.empty())) {
     if (!has_annotation(
             regex_map, method, methodSpecification->annotationType)) {
       return false;
@@ -471,7 +473,7 @@ bool type_and_annotation_match(
     return false;
   }
   // First check to see if an annotation type needs to be matched.
-  if (annotation != "") {
+  if (!(annotation.empty())) {
     if (!has_annotation(regex_map, cls, annotation)) {
       return false;
     }
@@ -560,7 +562,7 @@ bool extends(std::unordered_map<std::string, boost::regex*>& regex_map,
              const DexClass* cls,
              const std::string& extends_class_name,
              const std::string& annotation) {
-  if (extends_class_name == "") {
+  if (extends_class_name.empty()) {
     return true;
   }
   auto deob_name = cls->get_deobfuscated_name();
@@ -589,7 +591,7 @@ bool class_level_match(
     return false;
   }
   // Check to see if an annotation guard needs to be matched.
-  if (keep_rule.class_spec.annotationType != "") {
+  if (!(keep_rule.class_spec.annotationType.empty())) {
     if (!has_annotation(regex_map, cls, keep_rule.class_spec.annotationType)) {
       return false;
     }

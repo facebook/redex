@@ -46,24 +46,31 @@ std::string convert_scalar_type(std::string type) {
   return std::string("L") + ret + ";";
 }
 
-std::string convert_field(std::string cls, std::string type, std::string name) {
-  return cls + "." + name + ":" + type;
+std::string convert_field(const std::string &cls,
+    const std::string &type,
+    const std::string &name) {
+  std::stringstream ss;
+  ss << cls << "." << name << ":" << type;
+  return ss.str();
 }
 
 std::string convert_method(
-  std::string cls,
-  std::string rtype,
-  std::string methodname,
-  std::string args
+  const std::string &cls,
+  const std::string &rtype,
+  const std::string &methodname,
+  const std::string &args
 ) {
-  return cls + "." + methodname + ":(" + args + ")" + rtype;
+  std::stringstream ss;
+  ss << cls << "." << methodname << ":(" << args << ")" << rtype;
+  return ss.str();
 }
 
-std::string translate_type(std::string type, const ProguardMap& pm) {
+std::string translate_type(const std::string& type, const ProguardMap& pm) {
   auto base_start = type.find_first_not_of("[");
   auto array_prefix = type.substr(0, base_start);
   auto base_type = type.substr(base_start);
-  return array_prefix + pm.translate_class(base_type);
+  array_prefix += pm.translate_class(base_type);
+  return array_prefix;
 }
 
 void whitespace(const char*& p) {
@@ -205,8 +212,8 @@ bool ProguardMap::parse_field(const std::string& line) {
 
   auto ctype = convert_type(type);
   auto xtype = translate_type(ctype, *this);
-  auto pgnew = convert_field(m_currNewClass, xtype.c_str(), newname);
-  auto pgold = convert_field(m_currClass, ctype.c_str(), fieldname);
+  auto pgnew = convert_field(m_currNewClass, xtype, newname);
+  auto pgold = convert_field(m_currClass, ctype, fieldname);
   m_fieldMap[pgold] = pgnew;
   m_obfFieldMap[pgnew] = pgold;
   return true;
@@ -309,26 +316,27 @@ std::string proguard_name(const DexClass* cls) {
 
 std::string proguard_name(const DexMethod* method) {
   // Format is <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
-  auto str = proguard_name(method->get_class()) + "." + method->get_name()->c_str() + ":";
+  std::stringstream ss;
+  ss << proguard_name(method->get_class()) << "." << method->get_name()->c_str()
+      << ":" << "(";
 
   auto proto = method->get_proto();
-  auto args_str = std::string("(");
 
   for (auto& arg_type: proto->get_args()->get_type_list()) {
-    args_str += proguard_name(arg_type);
+    ss << proguard_name(arg_type);
   }
-  args_str += ")";
+  ss << ")";
 
-  auto ret_str = proguard_name(proto->get_rtype());
-  return str + args_str + ret_str;
+  ss << proguard_name(proto->get_rtype());
+  return ss.str();
 }
 
 std::string proguard_name(const DexField* field) {
-  auto str = proguard_name(field->get_class()) + "."
-    + field->get_name()->c_str() + ":"
-    + proguard_name(field->get_type());
+  std::stringstream ss;
+  ss << proguard_name(field->get_class()) << "." << field->get_name()->c_str()
+      << ":" << proguard_name(field->get_type());
 
-  return str;
+  return ss.str();
 }
 
 std::string convert_type(std::string type) {

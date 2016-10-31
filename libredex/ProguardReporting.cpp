@@ -72,7 +72,7 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
     return redex::dexdump_name_to_dot_name(descriptor);
   }
   std::cerr
-      << "type_descriptor_to_java: unexpected type descriptor " + descriptor
+      << "type_descriptor_to_java: unexpected type descriptor " << descriptor
       << std::endl;
   exit(2);
 }
@@ -136,7 +136,10 @@ std::string form_java_args(const ProguardMap& pg_map,
 }
 
 std::string java_args(const ProguardMap& pg_map, std::list<DexType*>& args) {
-  return "(" + form_java_args(pg_map, args) + ")";
+  std::string str = "(";
+  str += form_java_args(pg_map, args);
+  str += ")";
+  return str;
 }
 
 void redex::print_method(std::ostream& output,
@@ -155,7 +158,6 @@ void redex::print_method(std::ostream& output,
     if (deob.empty()) {
       std::cerr << "WARNING: method has no deobfu: " << method_name
                 << std::endl;
-      method_name = extract_method_name(method->get_name()->c_str());
     } else {
       method_name = extract_method_name(deob);
     }

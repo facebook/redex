@@ -15,21 +15,22 @@
 
 std::string show_keep_style(const std::string& keep_style,
                             const redex::KeepSpec& keep_rule) {
-  if (keep_style == "keep") {
+  const char* ks = keep_style.c_str();
+  if (strcmp(ks, "keep") == 0) {
     if (keep_rule.allowshrinking) {
       return "-keepnames";
     }
     return "-keep";
   }
 
-  if (keep_style == "keepclassmember") {
+  if (strcmp(ks, "keepclassmember") == 0) {
     if (keep_rule.allowshrinking) {
       return "-keepclassmembernames";
     }
     return "-keepclassmember";
   }
 
-  if (keep_style == "keepclasseswithmembers") {
+  if (strcmp(ks, "keepclasseswithmembers") == 0) {
     if (keep_rule.allowshrinking) {
       return "-keepclasseswithmembernames";
     }
@@ -97,50 +98,50 @@ std::string show_access(const redex::AccessFlag& access) {
 std::string show_access_flags(
     const std::set<redex::AccessFlag>& flags,
     const std::set<redex::AccessFlag>& negated_flags) {
-  std::string text;
+  std::stringstream ss;
   for (const auto& access : flags) {
     if (access == redex::AccessFlag::INTERFACE) {
-      text += "@";
+      ss << "@";
     }
-    text += show_access(access) + " ";
+    ss << show_access(access) << " ";
   }
   for (const auto& access : negated_flags) {
-    text += "!";
+    ss << "!";
     if (access == redex::AccessFlag::INTERFACE) {
-      text += "@";
+      ss << "@";
     }
-    text += show_access(access) + " ";
+    ss << show_access(access) << " ";
   }
-  return text;
+  return ss.str();
 }
 
 std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
-  std::string text;
+  std::stringstream ss;
   for (const auto& field : fields) {
-    if (field.annotationType != "") {
-      text += "@" + field.annotationType + " ";
+    if (!(field.annotationType.empty())) {
+      ss << "@" << field.annotationType << " ";
     }
-    text += show_access_flags(field.requiredSetAccessFlags,
+    ss << show_access_flags(field.requiredSetAccessFlags,
                               field.requiredUnsetAccessFlags);
     auto name = field.name.empty() ? "*" : field.name;
-    text += field.descriptor + " " + name + "; ";
+    ss << field.descriptor << " " << name << "; ";
   }
-  return text;
+  return ss.str();
 }
 
 std::string show_methods(
     const std::vector<redex::MemberSpecification>& methods) {
-  std::string text;
+  std::stringstream ss;
   for (const auto& method : methods) {
-    if (method.annotationType != "") {
-      text += "@" + method.annotationType + " ";
+    if (!(method.annotationType.empty())) {
+      ss << "@" << method.annotationType << " ";
     }
-    text += show_access_flags(method.requiredSetAccessFlags,
+    ss << show_access_flags(method.requiredSetAccessFlags,
                               method.requiredUnsetAccessFlags);
     auto name = method.name.empty() ? "*" : method.name;
-    text += method.descriptor + " " + name + "(); ";
+    ss << method.descriptor << " " << name << "(); ";
   }
-  return text;
+  return ss.str();
 }
 
 std::string redex::show_keep(const std::string& keep_style,
@@ -160,7 +161,7 @@ std::string redex::show_keep(const std::string& keep_style,
   text << show_keep_style(keep_style, keep_rule)
        << show_keep_modifiers(keep_rule) << " ";
   const auto class_spec = keep_rule.class_spec;
-  if (class_spec.annotationType != "") {
+  if (!(class_spec.annotationType.empty())) {
     text << "@" << class_spec.annotationType << " ";
   }
   text << show_access_flags(class_spec.setAccessFlags,
@@ -180,7 +181,7 @@ std::string redex::show_keep(const std::string& keep_style,
   text << class_spec.className << " ";
   if (!class_spec.extendsClassName.empty()) {
     text << "extends ";
-    if (class_spec.extendsAnnotationType != "") {
+    if (!(class_spec.extendsAnnotationType.empty())) {
       text << "@" << class_spec.extendsAnnotationType << " ";
     }
     text << class_spec.extendsClassName << " ";

@@ -568,7 +568,8 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
       }
     }
     arg += ")";
-    member_specification.descriptor = arg + member_specification.descriptor;
+    arg += member_specification.descriptor;
+    member_specification.descriptor = arg;
   }
   // Make sure member specification ends with a semicolon.
   gobble_semicolon(it, ok);
