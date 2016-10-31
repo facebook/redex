@@ -21,101 +21,115 @@
 
 using std::unordered_set;
 
-/* Obfuscates a list of fields
+/* Obfuscates a list of members
  * RenamingContext - the context that we need to be able to do renaming for this
- *   field. Will not be modified and will be shared between all fields in a
+ *   member. Will not be modified and will be shared between all members in a
  *   class.
  * ObfuscationState - keeps track of the new names we're trying to assign to
- *   fields, we update this to show what name we chose for a field. Also
+ *   members, we update this to show what name we chose for a member. Also
  *   contains a set of all used names in this class because that needs to be
  *   updated every time we choose a name.
  */
-void obfuscate_fields(const RenamingContext& context, ObfuscationState* state) {
-  for (DexField* field : context.fields) {
-    if (!context.can_rename_field(field)) {
-      TRACE(OBFUSCATE, 4, "Ignoring field %s because we shouldn't rename it\n",
-          SHOW(field->get_name()));
+template <class T>
+void obfuscate_elems(const RenamingContext<T>& context, ObfuscationState<T>* state) {
+  for (T elem : context.elems) {
+    if (!context.can_rename_elem(elem)) {
+      TRACE(OBFUSCATE, 4, "Ignoring member %s because we shouldn't rename it\n",
+          SHOW(elem->get_name()));
       continue;
     }
-    context.name_gen->find_new_name(&state->name_mapping[field]);
-  }
-}
-
-void obfuscate_methods(const std::list<DexMethod*>& methods,
-                       ProguardMap* pg_map) {
-  for (DexMethod* method : methods) {
-    if (should_rename_method(method))
-      rename_method(method, "");
+    context.name_gen->find_new_name(&state->name_mapping[elem]);
   }
 }
 
 // Obfuscate methods and fields, updating the ProGuard
 // map approriately to reflect renamings.
 void obfuscate(Scope& classes, ProguardMap* pg_map) {
-  ObfuscationState ob_state;
-  unordered_set<std::string> ids_to_avoid;
-  SimpleNameGenerator simple_name_gen(ids_to_avoid, &ob_state.used_ids);
-  StaticNameGenerator static_name_gen(ids_to_avoid, &ob_state.used_ids);
-  FieldNameCollector name_collector(&(ob_state.name_mapping), &ids_to_avoid);
-  ClassVisitor publicVisitor(ClassVisitor::VisitFilter::NonPrivateOnly,
-      &name_collector);
-  ClassVisitor allVisitor(ClassVisitor::VisitFilter::All,
-      &name_collector);
-  ClassVisitor privateVisitor(ClassVisitor::VisitFilter::PrivateOnly,
-      &name_collector);
+  DexFieldManager fmgr;
+  DexElemManager<DexField*>& field_manager(fmgr);
+  ObfuscationState<DexField*> f_ob_state(field_manager);
+  // Field things
+  unordered_set<std::string> used_field_names;
+  SimpleNameGenerator<DexField*> simple_field_name_gen(
+    used_field_names, &f_ob_state.used_ids);
+  StaticFieldNameGenerator static_field_name_gen(used_field_names, &f_ob_state.used_ids);
+  FieldNameCollector field_name_collector(&(f_ob_state.name_mapping), &used_field_names);
+  ClassVisitor publicFieldVisitor(ClassVisitor::VisitFilter::NonPrivateOnly,
+      &field_name_collector);
+  ClassVisitor allFieldVisitor(ClassVisitor::VisitFilter::All,
+      &field_name_collector);
+  ClassVisitor privateFieldVisitor(ClassVisitor::VisitFilter::PrivateOnly,
+      &field_name_collector);
+
+  // Method things
+  /*unordered_set<std::string> used_method_names;
+  SimpleNameGenerator simple_method_name_gen(used_method_names, &f_ob_state.method_ids);
+  StaticNameGenerator static_method_name_gen(used_method_names, &f_ob_state.method_ids);
+  MethodNameCollector method_name_collector(&(f_ob_state.method_mapping), &used_method_names);
+  ClassVisitor publicMethodVisitor(ClassVisitor::VisitFilter::NonPrivateOnly,
+      &method_name_collector);
+  ClassVisitor allMethodVisitor(ClassVisitor::VisitFilter::All,
+      &method_name_collector);
+  ClassVisitor privateMethodVisitor(ClassVisitor::VisitFilter::PrivateOnly,
+      &method_name_collector);*/
 
   TRACE(OBFUSCATE, 2, "Starting obfuscation of fields and methods\n");
   for (DexClass* cls : classes) {
     // First check if we will do anything on this class
-    bool operate_on_ifields = contains_renamable_field(cls->get_ifields());
-    bool operate_on_sfields = contains_renamable_field(cls->get_sfields());
-    if (!operate_on_ifields && !operate_on_sfields) continue;
+    bool operate_on_ifields = contains_renamable_elem(cls->get_ifields());
+    bool operate_on_sfields = contains_renamable_elem(cls->get_sfields());
+    bool operate_on_dmethods = contains_renamable_elem(cls->get_dmethods());
+    bool operate_on_vmethods = contains_renamable_elem(cls->get_vmethods());
+    // TODO: is there a simpler check for this?
+    if (!operate_on_ifields && !operate_on_sfields &&
+        !operate_on_dmethods && !operate_on_vmethods) continue;
     always_assert_log(!cls->is_external(),
         "Shouldn't rename members of external classes.");
     TRACE(OBFUSCATE, 2, "Renaming the members of class %s\n",
         SHOW(cls->get_name()));
 
     // Reset class-specific state
-    ids_to_avoid.clear();
-    ob_state.used_ids.clear();
-    static_name_gen.reset();
-    simple_name_gen.reset();
-    walk_hierarchy(cls, &publicVisitor, HierarchyDirection::VisitSuperClasses);
+    used_field_names.clear();
+    f_ob_state.used_ids.clear();
+    static_field_name_gen.reset();
+    simple_field_name_gen.reset();
+
+    walk_hierarchy(cls, &publicFieldVisitor, HierarchyDirection::VisitSuperClasses);
     TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
-    walk_hierarchy(cls, &allVisitor, HierarchyDirection::VisitSubClasses);
+    walk_hierarchy(cls, &allFieldVisitor, HierarchyDirection::VisitSubClasses);
     TRACE(OBFUSCATE, 3, "Finished walking all subclasses\n");
     // Keep this for all public ids in the class (they shouldn't conflict)
     if (operate_on_ifields)
-      obfuscate_fields(RenamingContext(cls->get_ifields(), ids_to_avoid,
-          &simple_name_gen, false),
-        &ob_state);
+      obfuscate_elems(RenamingContext<DexField*>(cls->get_ifields(), used_field_names,
+          &simple_field_name_gen, false),
+        &f_ob_state);
     if (operate_on_sfields)
-      obfuscate_fields(RenamingContext(cls->get_sfields(), ids_to_avoid,
-          &static_name_gen, false),
-        &ob_state);
+      obfuscate_elems(RenamingContext<DexField*>(cls->get_sfields(), used_field_names,
+          &static_field_name_gen, false),
+        &f_ob_state);
     TRACE(OBFUSCATE, 2, "Finished obfuscating publics\n");
 
     // Obfu private fields
-    ids_to_avoid.clear();
-    walk_hierarchy(cls, &publicVisitor, HierarchyDirection::VisitSuperClasses);
+    used_field_names.clear();
+    walk_hierarchy(cls, &publicFieldVisitor, HierarchyDirection::VisitSuperClasses);
     TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
-    walk_hierarchy(cls, &allVisitor, HierarchyDirection::VisitNeither);
+    walk_hierarchy(cls, &allFieldVisitor, HierarchyDirection::VisitNeither);
 
     // Keep this for all public ids in the class (they shouldn't conflict)
     if (operate_on_ifields)
-      obfuscate_fields(RenamingContext(cls->get_ifields(), ids_to_avoid,
-          &static_name_gen, true),
-        &ob_state);
+      obfuscate_elems(RenamingContext<DexField*>(cls->get_ifields(), used_field_names,
+          &static_field_name_gen, true),
+        &f_ob_state);
     if (operate_on_sfields)
-      obfuscate_fields(RenamingContext(cls->get_sfields(), ids_to_avoid,
-          &static_name_gen, true),
-        &ob_state);
+      obfuscate_elems(RenamingContext<DexField*>(cls->get_sfields(), used_field_names,
+          &static_field_name_gen, true),
+        &f_ob_state);
 
     // Make sure to bind the new names otherwise not all generators will assign
     // names to the members
-    simple_name_gen.bind_names();
-    static_name_gen.bind_names();
-    // Dex entries need to be sorted and we may have disrupted that.
+    simple_field_name_gen.bind_names();
+    static_field_name_gen.bind_names();
+    TRACE(OBFUSCATE, 2, "Finished obfuscating privates\n");
 
     /* Rename methods here in a similar manner, but be careful of more things
        - Interface implementors
@@ -123,15 +137,57 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
        - overrides (same method name in same hierarchy)
     */
 
+    // TODO: extend implementation for vmethods
+    // Class-specific method state
+    /*used_method_names.clear();
+    ob_state.method_ids.clear();
+    static_method_name_gen.reset();
+    simple_method_name_gen.reset();
+
+    // need to change hierarchy walks
+    walk_hierarchy(cls, &publicFieldVisitor, HierarchyDirection::VisitSuperClasses);
+    TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
+    walk_hierarchy(cls, &allFieldVisitor, HierarchyDirection::VisitSubClasses);
+    TRACE(OBFUSCATE, 3, "Finished walking all subclasses\n");
+    // Keep this for all public ids in the class (they shouldn't conflict)
+    if (operate_on_dmethods)
+      obfuscate_methods(RenamingContext(cls->get_dmethods(), used_method_names,
+          &simple_method_name_gen, false),
+        &ob_state);
+    if (operate_on_vmethods)
+      obfuscate_methods(RenamingContext(cls->get_vmethods(), used_method_names,
+          &static_method_name_gen, false),
+        &ob_state);*/
+    TRACE(OBFUSCATE, 2, "Finished obfuscating publics\n");
+
+    // Obfu private methods
+    /*used_method_names.clear();
+    walk_hierarchy(cls, &publicFieldVisitor, HierarchyDirection::VisitSuperClasses);
+    TRACE(OBFUSCATE, 3, "Finished walking public supers\n");
+    walk_hierarchy(cls, &allFieldVisitor, HierarchyDirection::VisitNeither);
+
+    if (operate_on_dmethods)
+      obfuscate_methods(RenamingContext(cls->get_dmethods(), used_method_names,
+          &simple_method_name_gen, true),
+        &ob_state);
+    if (operate_on_vmethods)
+      obfuscate_methods(RenamingContext(cls->get_vmethods(), used_method_names,
+          &static_method_name_gen, true),
+        &ob_state);*/
+
+    // Make sure to bind the new names otherwise not all generators will assign
+    // names to the members
+    /*simple_method_name_gen.bind_names();
+    static_method_name_gen.bind_names();*/
     // Make sure our renaming worked correctly (check each name in name_mapping
     // and name_cache for conflict)
     // Find all names that could conflict (anything public in hierarchy +
     // anything private in a subclass)
-    TRACE(OBFUSCATE, 2, "Finished obfuscating privates\n");
+
     //obfuscate_methods(cls->get_vmethods(), pg_map);
     //obfuscate_methods(cls->get_dmethods(), pg_map);
   }
-  ob_state.name_mapping.print_elements();
+  f_ob_state.name_mapping.print_elements();
 
   TRACE(OBFUSCATE, 2, "Finished picking new names\n");
 
@@ -163,7 +219,7 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
       // expensive, so we do resolution through ob_state which caches
       // and combines the lookup with the check for if we're changing the
       // field.
-      DexField* field_def = ob_state.get_def_if_renamed(field_ref);
+      DexField* field_def = f_ob_state.get_def_if_renamed(field_ref);
       if (field_def != nullptr) {
         TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
         field_instr->rewrite_field(field_def);
@@ -173,7 +229,7 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
   TRACE(OBFUSCATE, 2, "Finished transforming refs\n");
 
   // Apply new names, recording what we're changing
-  ob_state.commit_renamings_to_dex();
+  f_ob_state.commit_renamings_to_dex();
   // Sort the result because dexes have to be sorted
   for (DexClass* cls : classes) {
     cls->get_ifields().sort(compare_dexfields);
