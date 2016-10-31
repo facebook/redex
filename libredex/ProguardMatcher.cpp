@@ -411,8 +411,8 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
                   const boost::regex* method_regex,
                   std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
-    // Always mark <clinit>
-    if (is_clinit(method)) {
+    // Always mark non-empty <clinit> methods.
+    if (is_clinit(method) && (method->get_code()->get_ins_size() > 1)) {
       keeper(method);
       continue;
     }
