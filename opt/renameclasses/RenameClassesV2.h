@@ -22,6 +22,7 @@ class RenameClassesPassV2 : public Pass {
     pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
     std::vector<std::string> dont_rename_specific;
     pc.get("dont_rename_specific", {}, dont_rename_specific);
+    pc.get("dont_rename_packages", {}, m_dont_rename_packages);
     pc.get("dont_rename_types_with_reflection", {}, m_dont_rename_types_with_reflection);
     m_dont_rename_specific.insert(dont_rename_specific.begin(), dont_rename_specific.end());
   }
@@ -50,5 +51,6 @@ class RenameClassesPassV2 : public Pass {
   std::vector<std::string> m_dont_rename_hierarchies;
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
+  std::vector<std::string> m_dont_rename_packages;
   std::unordered_set<std::string> m_dont_rename_specific;
 };

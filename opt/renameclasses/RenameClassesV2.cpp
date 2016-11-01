@@ -35,6 +35,7 @@
 #define METRIC_DONT_RENAME_ANNOTATED "num_dont_rename_annotated"
 #define METRIC_DONT_RENAME_ANNOTATIONS "num_dont_rename_annotations"
 #define METRIC_DONT_RENAME_SPECIFIC "num_dont_rename_specific"
+#define METRIC_DONT_RENAME_PACKAGES "num_dont_rename_packages"
 #define METRIC_DONT_RENAME_HIERARCHY "num_dont_rename_hierarchy"
 #define METRIC_DONT_RENAME_RESOURCES "num_dont_rename_resources"
 #define METRIC_DONT_RENAME_CLASS_FOR_NAME_LITERALS "num_dont_rename_class_for_name_literals"
@@ -474,6 +475,7 @@ void RenameClassesPassV2::rename_classes(
     if (annotated) continue;
 
     const char* clsname = clazz->get_name()->c_str();
+    std::string strname = std::string(clsname);
 
     // Don't rename anything mentioned in resources
     if (dont_rename_resources.count(clsname) > 0) {
@@ -486,6 +488,19 @@ void RenameClassesPassV2::rename_classes(
       mgr.incr_metric(METRIC_DONT_RENAME_SPECIFIC, 1);
       continue;
     }
+
+    // Don't rename anything if it falls in a blacklisted package
+    bool package_blacklisted = false;
+    for (const auto& pkg : m_dont_rename_packages) {
+      if (strname.rfind("L"+pkg) == 0) {
+        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname, pkg.c_str());
+        mgr.incr_metric(METRIC_DONT_RENAME_PACKAGES, 1);
+        mgr.incr_metric(std::string(METRIC_DONT_RENAME_PACKAGES)+"::"+pkg, 1);
+        package_blacklisted = true;
+        break;
+      }
+    }
+    if (package_blacklisted) continue;
 
     if (dont_rename_class_for_name_literals.count(clsname) > 0) {
       mgr.incr_metric(METRIC_DONT_RENAME_CLASS_FOR_NAME_LITERALS, 1);
