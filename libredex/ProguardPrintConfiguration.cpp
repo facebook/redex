@@ -90,7 +90,7 @@ std::string show_access(const redex::AccessFlag& access) {
     return "@interface";
   case redex::AccessFlag::ENUM:
     return "enum";
-  case redex::AccessFlag::CONSTRUCTOR:
+  default:
     return "";
   }
 }
