@@ -344,6 +344,8 @@ bool is_negation_or_class_access_modifier(token type) {
   case token::privateToken:
   case token::protectedToken:
   case token::final:
+  case token::interface:
+  case token::enumToken:
   case token::abstract:
   case token::synthetic:
   case token::native:

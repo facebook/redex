@@ -838,6 +838,12 @@ void process_proguard_rules(const ProguardMap& pg_map,
   for (auto& e : regex_map) {
     delete (e.second);
   }
+  // By default, keep all annotation classes.
+  for (auto cls : classes) {
+    if (is_annotation(cls)) {
+       cls->rstate.set_keep();
+    }
+  }
 }
 
 } // namespace redex

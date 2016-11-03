@@ -228,8 +228,8 @@ void redex::print_classes(std::ostream& output,
 
 void alert_seeds(std::ostream& output, const DexClass* cls) {
   if (is_seed(cls) && !keep(cls)) {
-    output << "SEEDS CLASS ERROR: " << cls->get_deobfuscated_name()
-           << std::endl;
+    auto name = cls->get_deobfuscated_name();
+    output << "SEEDS CLASS ERROR: " << name << std::endl;
   }
 }
 
