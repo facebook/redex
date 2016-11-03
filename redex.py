@@ -239,10 +239,10 @@ def merge_proguard_map_with_rename_output(
     elif 'RenameClassesPassV2' in passes_list:
         redex_rename_map_path = config_dict['RenameClassesPassV2']['class_rename']
     else:
-        raise ValueError("merge_proguard_map_with_rename_output called with a rename classes pass")
+        raise ValueError("merge_proguard_map_with_rename_output called without a rename classes pass")
     redex_rename_map_path = join(dex_dir, redex_rename_map_path)
     log('redex map is at ' + str(redex_rename_map_path))
-    log('pg map is at ' + pg_file)
+    log('pg map is at ' + str(pg_file))
     if os.path.isfile(redex_rename_map_path):
         redex_pg_file = "redex-class-rename-map.txt"
         # If -dontobfuscate is set, proguard won't produce a mapping file, but
