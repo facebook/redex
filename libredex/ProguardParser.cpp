@@ -88,6 +88,7 @@ std::vector<std::string> parse_filepaths(
 
 bool parse_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
                             token filepath_command_token,
+                            const std::string& basedir,
                             std::vector<std::string>* filepaths) {
   if ((**it)->type == filepath_command_token) {
     unsigned int line_number = (**it)->line;
@@ -112,7 +113,11 @@ bool parse_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
       return true;
     }
     for (const auto& filepath : parse_filepaths(it)) {
-      filepaths->push_back(filepath);
+      if (filepath[0] != '/') {
+        filepaths->push_back(basedir + "/" + filepath);
+      } else {
+        filepaths->push_back(filepath);
+      }
     }
     return true;
   }
@@ -137,6 +142,7 @@ bool parse_optional_filepath_command(
 
 bool parse_jars(std::vector<unique_ptr<Token>>::iterator* it,
                 token jar_token,
+                const std::string& basedir,
                 std::vector<std::string>* jars) {
   if ((**it)->type == jar_token) {
     unsigned int line_number = (**it)->line;
@@ -150,7 +156,11 @@ bool parse_jars(std::vector<unique_ptr<Token>>::iterator* it,
     }
     // Parse the list of filenames.
     for (const auto& filepath : parse_filepaths(it)) {
-      jars->push_back(filepath);
+      if (filepath[0] != '/') {
+        jars->push_back(basedir + "/" + filepath);
+      } else {
+        jars->push_back(filepath);
+      }
     }
     return true;
   }
@@ -344,8 +354,6 @@ bool is_negation_or_class_access_modifier(token type) {
   case token::privateToken:
   case token::protectedToken:
   case token::final:
-  case token::interface:
-  case token::enumToken:
   case token::abstract:
   case token::synthetic:
   case token::native:
@@ -785,19 +793,19 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
 
     // Input/Output Options
-    if (parse_filepath_command(&it, token::include, &pg_config->includes))
+    if (parse_filepath_command(&it, token::include, pg_config->basedirectory, &pg_config->includes))
       continue;
     if (parse_single_filepath_command(
             &it, token::basedirectory, &pg_config->basedirectory))
       continue;
-    if (parse_jars(&it, token::injars, &pg_config->injars)) continue;
-    if (parse_jars(&it, token::outjars, &pg_config->outjars)) continue;
-    if (parse_jars(&it, token::libraryjars, &pg_config->libraryjars)) continue;
+    if (parse_jars(&it, token::injars, pg_config->basedirectory, &pg_config->injars)) continue;
+    if (parse_jars(&it, token::outjars, pg_config->basedirectory, &pg_config->outjars)) continue;
+    if (parse_jars(&it, token::libraryjars, pg_config->basedirectory, &pg_config->libraryjars)) continue;
     // -skipnonpubliclibraryclasses not supported
     // -dontskipnonpubliclibraryclasses not supported
     // -dontskipnonpubliclibraryclassmembers not supported
     if (parse_filepath_command(
-            &it, token::keepdirectories, &pg_config->keepdirectories))
+            &it, token::keepdirectories, pg_config->basedirectory, &pg_config->keepdirectories))
       continue;
     if (parse_target(&it, &pg_config->target_version)) continue;
     // -forceprocessing not supported
@@ -955,9 +963,16 @@ void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
     pg_config->ok = false;
   }
 
-  cout << "Reading ProGuard configuration from " << filename << endl;
   parse(config, pg_config);
-  cout << "Done [" << filename << "]\n";
+  // Parse the included files.
+  for (const auto& included_filename : pg_config->includes) {
+    if (pg_config->already_included.find(included_filename) !=
+        pg_config->already_included.end()) {
+      continue;
+    }
+    pg_config->already_included.emplace(included_filename);
+    parse_file(included_filename, pg_config);
+  }
 }
 
 std::string show_bool(bool b) {

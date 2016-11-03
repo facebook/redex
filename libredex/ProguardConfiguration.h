@@ -68,6 +68,7 @@ namespace redex {
   struct ProguardConfiguration {
     bool ok;
     std::vector<std::string> includes;
+    std::set<std::string> already_included;
     std::string basedirectory;
     std::vector<std::string> injars;
     std::vector<std::string> outjars;

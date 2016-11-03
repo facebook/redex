@@ -51,14 +51,14 @@ TEST(ProguardParserTest, bad2) {
 TEST(ProguardParserTest, include) {
   ProguardConfiguration config;
   std::istringstream ss(
-      "-include alpha.txt \n"
-      "-include alpha/beta.txt \n"
+      "-include /alpha.txt \n"
+      "-include /alpha/beta.txt \n"
       "-include \"gamma.txt\" \n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.includes.size(), 3);
-  ASSERT_EQ(config.includes[0], "alpha.txt");
-  ASSERT_EQ(config.includes[1], "alpha/beta.txt");
-  ASSERT_EQ(config.includes[2], "gamma.txt");
+  ASSERT_EQ(config.includes[0], "/alpha.txt");
+  ASSERT_EQ(config.includes[1], "/alpha/beta.txt");
+  ASSERT_EQ(config.includes[2], "/gamma.txt");
 }
 
 // Parse basedirectory
@@ -79,11 +79,11 @@ TEST(ProguardParserTest, keepdirectories) {
       "-keepdirectories /alpha/beta2:gamma/delta:/iota/a/b/c/deer\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.keepdirectories.size(), 6);
-  ASSERT_EQ(config.keepdirectories[0], "alpha");
+  ASSERT_EQ(config.keepdirectories[0], "/alpha");
   ASSERT_EQ(config.keepdirectories[1], "/alpha/beta");
-  ASSERT_EQ(config.keepdirectories[2], "gamma");
+  ASSERT_EQ(config.keepdirectories[2], "/gamma");
   ASSERT_EQ(config.keepdirectories[3], "/alpha/beta2");
-  ASSERT_EQ(config.keepdirectories[4], "gamma/delta");
+  ASSERT_EQ(config.keepdirectories[4], "/gamma/delta");
   ASSERT_EQ(config.keepdirectories[5], "/iota/a/b/c/deer");
 }
 
@@ -121,11 +121,11 @@ TEST(ProguardParserTest, injars) {
       "-injars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.injars.size(), 6);
-  ASSERT_EQ(config.injars[0], "alpha.txt");
-  ASSERT_EQ(config.injars[1], "alpha/beta.txt");
-  ASSERT_EQ(config.injars[2], "gamma.txt");
+  ASSERT_EQ(config.injars[0], "/alpha.txt");
+  ASSERT_EQ(config.injars[1], "/alpha/beta.txt");
+  ASSERT_EQ(config.injars[2], "/gamma.txt");
   ASSERT_EQ(config.injars[3], "/alpha/beta2.txt");
-  ASSERT_EQ(config.injars[4], "gamma/delta.txt");
+  ASSERT_EQ(config.injars[4], "/gamma/delta.txt");
   ASSERT_EQ(config.injars[5], "/iota/a/b/c/deer.txt");
 }
 
@@ -139,11 +139,11 @@ TEST(ProguardParserTest, outjars) {
       "-outjars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.outjars.size(), 6);
-  ASSERT_EQ(config.outjars[0], "alpha.txt");
-  ASSERT_EQ(config.outjars[1], "alpha/beta.txt");
-  ASSERT_EQ(config.outjars[2], "gamma.txt");
+  ASSERT_EQ(config.outjars[0], "/alpha.txt");
+  ASSERT_EQ(config.outjars[1], "/alpha/beta.txt");
+  ASSERT_EQ(config.outjars[2], "/gamma.txt");
   ASSERT_EQ(config.outjars[3], "/alpha/beta2.txt");
-  ASSERT_EQ(config.outjars[4], "gamma/delta.txt");
+  ASSERT_EQ(config.outjars[4], "/gamma/delta.txt");
   ASSERT_EQ(config.outjars[5], "/iota/a/b/c/deer.txt");
 }
 
@@ -157,11 +157,11 @@ TEST(ProguardParserTest, libraryjars) {
       "-libraryjars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.libraryjars.size(), 6);
-  ASSERT_EQ(config.libraryjars[0], "alpha.txt");
-  ASSERT_EQ(config.libraryjars[1], "alpha/beta.txt");
-  ASSERT_EQ(config.libraryjars[2], "gamma.txt");
+  ASSERT_EQ(config.libraryjars[0], "/alpha.txt");
+  ASSERT_EQ(config.libraryjars[1], "/alpha/beta.txt");
+  ASSERT_EQ(config.libraryjars[2], "/gamma.txt");
   ASSERT_EQ(config.libraryjars[3], "/alpha/beta2.txt");
-  ASSERT_EQ(config.libraryjars[4], "gamma/delta.txt");
+  ASSERT_EQ(config.libraryjars[4], "/gamma/delta.txt");
   ASSERT_EQ(config.libraryjars[5], "/iota/a/b/c/deer.txt");
 }
 
