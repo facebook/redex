@@ -10,6 +10,7 @@
 #pragma once
 
 #define TMS                                     \
+  TM(ADD_REDEX_TXT)                             \
   TM(ACCESS)                                    \
   TM(ANNO)                                      \
   TM(BIND)                                      \
