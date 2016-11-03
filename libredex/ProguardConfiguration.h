@@ -58,10 +58,10 @@ namespace redex {
 
   struct KeepSpec {
     unsigned long count{0};
-    bool includedescriptorclasses = false;
-    bool allowshrinking = false;
-    bool allowoptimization = false;
-    bool allowobfuscation = false;
+    bool includedescriptorclasses{false};
+    bool allowshrinking{false};
+    bool allowoptimization{false};
+    bool allowobfuscation{false};
     ClassSpecification class_spec;
   };
 
@@ -77,13 +77,13 @@ namespace redex {
     std::vector<std::string> printseeds;
     std::vector<std::string> printusage;
     std::vector<std::string> keepdirectories;
-    bool shrink = true;
-    bool optimize = true;
-    bool allowaccessmodification = false;
-    bool dontobfuscate = false;
-    bool dontusemixedcaseclassnames = false;
-    bool dontpreverify = false;
-    bool verbose = false;
+    bool shrink{true};
+    bool optimize{true};
+    bool allowaccessmodification{false};
+    bool dontobfuscate{false};
+    bool dontusemixedcaseclassnames{false};
+    bool dontpreverify{false};
+    bool verbose{false};
     std::string target_version;
     std::vector<KeepSpec> keep_rules;
     std::vector<KeepSpec> keepclassmembers_rules;

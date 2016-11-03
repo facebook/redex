@@ -571,6 +571,7 @@ TEST(ProguardParserTest, method_member_specification) {
     ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
     auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
     ASSERT_EQ("(***)V", keep.descriptor);
+    ASSERT_FALSE(config.keep_rules[0].allowshrinking);
   }
 
   {
@@ -589,14 +590,45 @@ TEST(ProguardParserTest, method_member_specification) {
   }
 }
 
+TEST(ProguardParserTest, keepnames) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keepnames class * {"
+        "  int wombat();"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
+  }
+}
+
+
+TEST(ProguardParserTest, keepclassmembernames) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keepclassmembernames class * {"
+        "  int wombat();"
+        "}");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keepclassmembers_rules.size(), 1);
+    ASSERT_TRUE(config.keepclassmembers_rules[0].allowshrinking);
+  }
+}
+
 TEST(ProguardParserTest, keepclasseswithmembernames) {
   {
     ProguardConfiguration config;
     std::istringstream ss(
         "-keepclasseswithmembernames class * {"
-        "  native <methods>;"
+        "  int wombat();"
         "}");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keepclasseswithmembers_rules.size(), 1);
+    ASSERT_TRUE(config.keepclasseswithmembers_rules[0].allowshrinking);
   }
 }

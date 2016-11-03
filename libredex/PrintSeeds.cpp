@@ -15,9 +15,17 @@
 void print_method_seeds(std::ostream& output,
                         const ProguardMap& pg_map,
                         const std::string& class_name,
-                        const std::list<DexMethod*>& methods) {
+                        const std::list<DexMethod*>& methods,
+                        const bool allowshrinking_filter,
+                        const bool allowobfuscation_filter) {
   for (const auto& method : methods) {
     if (keep(method)) {
+      if (allowshrinking_filter && !allowshrinking(method)) {
+        continue;
+      }
+      if (allowobfuscation_filter && !allowobfuscation(method)) {
+        continue;
+      }
       redex::print_method(output, pg_map, class_name, method);
     }
   }
@@ -26,19 +34,49 @@ void print_method_seeds(std::ostream& output,
 void print_field_seeds(std::ostream& output,
                        const ProguardMap& pg_map,
                        const std::string& class_name,
-                       const std::list<DexField*>& fields) {
+                       const std::list<DexField*>& fields,
+                       const bool allowshrinking_filter,
+                       const bool allowobfuscation_filter) {
   for (const auto& field : fields) {
     if (keep(field)) {
+      if (allowshrinking_filter && !allowshrinking(field)) {
+        continue;
+      }
+      if (allowobfuscation_filter && !allowobfuscation(field)) {
+        continue;
+      }
       redex::print_field(output, pg_map, class_name, field);
     }
   }
+}
+
+void show_class(std::ostream& output,
+                const DexClass* cls,
+                const std::string& name,
+                const bool allowshrinking_filter,
+                const bool allowobfuscation_filter) {
+  if (allowshrinking_filter) {
+    if (allowshrinking(cls)) {
+      output << name << std::endl;
+    }
+    return;
+  }
+  if (allowobfuscation_filter) {
+    if (allowobfuscation(cls)) {
+      output << name << std::endl;
+    }
+    return;
+  }
+  output << name << std::endl;
 }
 
 // Print out the seeds computed in classes by Redex to the specified ostream.
 // The ProGuard map is used to help deobfuscate type descriptors.
 void redex::print_seeds(std::ostream& output,
                         const ProguardMap& pg_map,
-                        const Scope& classes) {
+                        const Scope& classes,
+                        const bool allowshrinking_filter,
+                        const bool allowobfuscation_filter) {
   for (const auto& cls : classes) {
     if (keep(cls) || keepclassmembers(cls)) {
       auto deob = cls->get_deobfuscated_name();
@@ -49,12 +87,33 @@ void redex::print_seeds(std::ostream& output,
       }
       std::string name = redex::dexdump_name_to_dot_name(deob);
       if (keep(cls)) {
-        output << name << std::endl;
+        show_class(
+            output, cls, name, allowshrinking_filter, allowobfuscation_filter);
       }
-      print_field_seeds(output, pg_map, name, cls->get_ifields());
-      print_field_seeds(output, pg_map, name, cls->get_sfields());
-      print_method_seeds(output, pg_map, name, cls->get_dmethods());
-      print_method_seeds(output, pg_map, name, cls->get_vmethods());
+      print_field_seeds(output,
+                        pg_map,
+                        name,
+                        cls->get_ifields(),
+                        allowshrinking_filter,
+                        allowobfuscation_filter);
+      print_field_seeds(output,
+                        pg_map,
+                        name,
+                        cls->get_sfields(),
+                        allowshrinking_filter,
+                        allowobfuscation_filter);
+      print_method_seeds(output,
+                         pg_map,
+                         name,
+                         cls->get_dmethods(),
+                         allowshrinking_filter,
+                         allowobfuscation_filter);
+      print_method_seeds(output,
+                         pg_map,
+                         name,
+                         cls->get_vmethods(),
+                         allowshrinking_filter,
+                         allowobfuscation_filter);
     }
   }
 }

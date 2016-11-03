@@ -18,6 +18,7 @@ namespace redex {
 
 void print_seeds(std::ostream& output,
                  const ProguardMap& pg_map,
-                 const Scope& classes);
-
+                 const Scope& classes,
+                 const bool allowshrinking_filter = false,
+                 const bool allowobfuscation_filter = false);
 }
