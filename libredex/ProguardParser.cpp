@@ -28,14 +28,14 @@ bool parse_boolean_command(std::vector<unique_ptr<Token>>::iterator* it,
   if ((**it)->type != boolean_option) {
     return false;
   }
-  (*it)++;
+  ++(*it);
   *option = value;
   return true;
 }
 
 void skip_to_next_command(std::vector<unique_ptr<Token>>::iterator* it) {
   while (((**it)->type != token::eof_token) && (!(**it)->is_command())) {
-    (*it)++;
+    ++(*it);
   }
 }
 
@@ -44,7 +44,7 @@ bool parse_single_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
                                    std::string* filepath) {
   if ((**it)->type == filepath_command_token) {
     unsigned int line_number = (**it)->line;
-    (*it)++; // Consume the command token.
+    ++(*it); // Consume the command token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
       cerr << "Expecting at least one file as an argument but found end of "
@@ -65,7 +65,7 @@ bool parse_single_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
       return true;
     }
     *filepath = static_cast<Filepath*>((*it)->get())->path;
-    (*it)++; // Consume the filepath token
+    ++(*it); // Consume the filepath token
     return true;
   }
   return false;
@@ -81,7 +81,7 @@ std::vector<std::string> parse_filepaths(
   }
   while ((**it)->type == token::filepath) {
     filepaths.push_back(static_cast<Filepath*>((*it)->get())->path);
-    (*it)++;
+    ++(*it);
   }
   return filepaths;
 }
@@ -92,7 +92,7 @@ bool parse_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
                             std::vector<std::string>* filepaths) {
   if ((**it)->type == filepath_command_token) {
     unsigned int line_number = (**it)->line;
-    (*it)++; // Consume the command token.
+    ++(*it); // Consume the command token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
       cerr << "Expecting at least one file as an argument but found end of "
@@ -131,11 +131,11 @@ bool parse_optional_filepath_command(
   if ((**it)->type != filepath_command_token) {
     return false;
   }
-  (*it)++; // Consume the command token.
+  ++(*it); // Consume the command token.
   // Parse an optional filepath argument.
   if ((**it)->type == token::filepath) {
     filepaths->push_back(static_cast<Filepath*>((*it)->get())->path);
-    (*it)++;
+    ++(*it);
   }
   return true;
 }
@@ -146,7 +146,7 @@ bool parse_jars(std::vector<unique_ptr<Token>>::iterator* it,
                 std::vector<std::string>* jars) {
   if ((**it)->type == jar_token) {
     unsigned int line_number = (**it)->line;
-    (*it)++; // Consume the jar token.
+    ++(*it); // Consume the jar token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
       cerr << "Expecting at least one file as an argument but found end of "
@@ -174,7 +174,7 @@ bool parse_dontusemixedcaseclassnames(
     return false;
   }
   *dontusemixedcaseclassnames = true;
-  (*it)++;
+  ++(*it);
   return true;
 }
 
@@ -184,7 +184,7 @@ bool parse_dontpreverify(std::vector<unique_ptr<Token>>::iterator* it,
     return false;
   }
   *dontpreverify = true;
-  (*it)++;
+  ++(*it);
   return true;
 }
 
@@ -194,7 +194,7 @@ bool parse_verbose(std::vector<unique_ptr<Token>>::iterator* it,
     return false;
   }
   *verbose = true;
-  (*it)++;
+  ++(*it);
   return true;
 }
 
@@ -203,7 +203,7 @@ bool parse_bool_command(std::vector<unique_ptr<Token>>::iterator* it,
                         bool new_value,
                         bool* bool_value) {
   if ((**it)->type == bool_command_token) {
-    (*it)++; // Consume the boolean command token.
+    ++(*it); // Consume the boolean command token.
     *bool_value = new_value;
     return true;
   }
@@ -215,11 +215,11 @@ bool parse_repackageclasses(std::vector<unique_ptr<Token>>::iterator* it) {
     return false;
   }
   // Ignore repackageclasses.
-  (*it)++;
+  ++(*it);
   if ((**it)->type == token::identifier) {
     cerr << "Ignoring -repackageclasses "
          << static_cast<Identifier*>((*it)->get())->ident << endl;
-    (*it)++;
+    ++(*it);
   }
   return true;
 }
@@ -227,7 +227,7 @@ bool parse_repackageclasses(std::vector<unique_ptr<Token>>::iterator* it) {
 bool parse_target(std::vector<unique_ptr<Token>>::iterator* it,
                   std::string* target_version) {
   if ((**it)->type == token::target) {
-    (*it)++; // Consume the target command token.
+    ++(*it); // Consume the target command token.
     // Check to make sure the next token is a version token.
     if ((**it)->type != token::target_version_token) {
       cerr << "Expected a target version but got " << (**it)->show()
@@ -236,7 +236,7 @@ bool parse_target(std::vector<unique_ptr<Token>>::iterator* it,
     }
     *target_version = static_cast<TargetVersion*>((*it)->get())->target_version;
     // Consume the target version token.
-    (*it)++;
+    ++(*it);
     return true;
   }
   return false;
@@ -247,7 +247,7 @@ bool parse_allowaccessmodification(std::vector<unique_ptr<Token>>::iterator* it,
   if ((**it)->type != token::allowaccessmodification_token) {
     return false;
   }
-  (*it)++;
+  ++(*it);
   *allowaccessmodification = true;
   return true;
 }
@@ -258,10 +258,10 @@ bool parse_filter_list_command(std::vector<unique_ptr<Token>>::iterator* it,
   if ((**it)->type != filter_command_token) {
     return false;
   }
-  (*it)++;
+  ++(*it);
   while ((**it)->type == token::filter_pattern) {
     filters->push_back(static_cast<Filter*>((*it)->get())->filter);
-    (*it)++;
+    ++(*it);
   }
   return true;
 }
@@ -271,9 +271,9 @@ bool parse_optimizationpasses_command(
   if ((**it)->type != token::optimizationpasses) {
     return false;
   }
-  (*it)++;
+  ++(*it);
   // Comsume the next token.
-  (*it)++;
+  ++(*it);
   return true;
 }
 
@@ -287,7 +287,7 @@ bool is_modifier(token tok) {
 bool parse_modifiers(std::vector<unique_ptr<Token>>::iterator* it,
                      KeepSpec* keep) {
   while ((**it)->type == token::comma) {
-    (*it)++;
+    ++(*it);
     if (!is_modifier((**it)->type)) {
       cerr << "Expected keep option modifier but found : " << (**it)->show()
            << " at line number " << (**it)->line << endl;
@@ -309,7 +309,7 @@ bool parse_modifiers(std::vector<unique_ptr<Token>>::iterator* it,
     default:
       break;
     }
-    (*it)++;
+    ++(*it);
   }
   return true;
 }
@@ -371,15 +371,15 @@ std::string parse_annotation_type(
   if ((**it)->type != token::annotation_application) {
     return "";
   }
-  (*it)++;
+  ++(*it);
   if ((**it)->type != token::identifier) {
     cerr << "Expecting a class identifier after @ but got " << (**it)->show()
          << " at line " << (**it)->line << endl;
     return "";
   }
   auto typ = static_cast<Identifier*>((*it)->get())->ident;
-  (*it)++;
-  return typ;
+  ++(*it);
+  return convert_wildcard_type(typ);
 }
 
 bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
@@ -390,13 +390,13 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
     // Consume the negation token if present.
     if ((**it)->type == token::notToken) {
       negated = true;
-      (*it)++;
+      ++(*it);
       continue;
     }
     bool ok;
     AccessFlag access_flag = process_access_modifier((**it)->type, &ok);
     if (ok) {
-      (*it)++;
+      ++(*it);
       if (negated) {
         if (setFlags->find(access_flag) != setFlags->end()) {
           cerr << "Access flag " << (**it)->show()
@@ -432,7 +432,7 @@ bool consume_token(std::vector<unique_ptr<Token>>::iterator* it,
     cerr << "Unexpected token " << (**it)->show() << std::endl;
     return false;
   }
-  (*it)++;
+  ++(*it);
   return true;
 }
 
@@ -449,10 +449,10 @@ void gobble_semicolon(std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
 void skip_to_semicolon(std::vector<unique_ptr<Token>>::iterator* it) {
   while (((**it)->type != token::semiColon) &&
          ((**it)->type != token::eof_token)) {
-    (*it)++;
+    ++(*it);
   }
   if ((**it)->type == token::semiColon) {
-    (*it)++;
+    ++(*it);
   }
 }
 
@@ -485,7 +485,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "*") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    (*it)++;
+    ++(*it);
     gobble_semicolon(it, ok);
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
@@ -495,7 +495,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<methods>") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    (*it)++;
+    ++(*it);
     gobble_semicolon(it, ok);
     class_spec->methodSpecifications.push_back(member_specification);
     return;
@@ -504,7 +504,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<fields>") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    (*it)++;
+    ++(*it);
     gobble_semicolon(it, ok);
     class_spec->fieldSpecifications.push_back(member_specification);
     return;
@@ -515,7 +515,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
     member_specification.descriptor = "V";
     member_specification.requiredSetAccessFlags.emplace(
         AccessFlag::CONSTRUCTOR);
-    (*it)++;
+    ++(*it);
   } else {
     // This token is the type for the member specification.
     if ((**it)->type != token::identifier) {
@@ -526,7 +526,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
       return;
     }
     std::string typ = static_cast<Identifier*>((*it)->get())->ident;
-    (*it)++;
+    ++(*it);
     member_specification.descriptor = convert_wildcard_type(typ);
     if ((**it)->type != token::identifier) {
       cerr << "Expecting identifier name for class member but got "
@@ -536,7 +536,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
       return;
     }
     member_specification.name = static_cast<Identifier*>((*it)->get())->ident;
-    (*it)++;
+    ++(*it);
   }
   // Check to see if this is a method specification.
   if ((**it)->type == token::openBracket) {
@@ -598,7 +598,7 @@ void parse_member_specifications(std::vector<unique_ptr<Token>>::iterator* it,
                                  ClassSpecification* class_spec,
                                  bool* ok) {
   if ((**it)->type == token::openCurlyBracket) {
-    (*it)++;
+    ++(*it);
     while (((**it)->type != token::closeCurlyBracket) &&
            ((**it)->type != token::eof_token)) {
       parse_member_specification(it, class_spec, ok);
@@ -609,7 +609,7 @@ void parse_member_specifications(std::vector<unique_ptr<Token>>::iterator* it,
       }
     }
     if ((**it)->type == token::closeCurlyBracket) {
-      (*it)++;
+      ++(*it);
     }
   }
 }
@@ -659,7 +659,7 @@ ClassSpecification parse_class_specification(
     if ((**it)->type == token::enumToken) {
       class_spec.setAccessFlags.emplace(AccessFlag::ENUM);
     }
-    (*it)++;
+    ++(*it);
   }
   // Parse the class name.
   if ((**it)->type != token::identifier) {
@@ -669,10 +669,10 @@ ClassSpecification parse_class_specification(
     return class_spec;
   }
   class_spec.className = static_cast<Identifier*>((*it)->get())->ident;
-  (*it)++;
+  ++(*it);
   // Parse extends/implements if present, treating implements like extends.
   if (((**it)->type == token::extends) || ((**it)->type == token::implements)) {
-    (*it)++;
+    ++(*it);
     class_spec.extendsAnnotationType = parse_annotation_type(it);
     if ((**it)->type != token::identifier) {
       cerr << "Expecting a class name after extends/implements but got "
@@ -683,7 +683,7 @@ ClassSpecification parse_class_specification(
       class_spec.extendsClassName =
           static_cast<Identifier*>((*it)->get())->ident;
     }
-    (*it)++;
+    ++(*it);
   }
   // Parse the member specifications, if there are any
   parse_member_specifications(it, &class_spec, ok);
@@ -695,7 +695,7 @@ bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 std::vector<KeepSpec>* spec,
                 bool* ok) {
   if ((**it)->type == keep_kind) {
-    (*it)++; // Consume the keep token
+    ++(*it); // Consume the keep token
     KeepSpec keep;
     if (!parse_modifiers(it, &keep)) {
       skip_to_next_command(it);
@@ -713,7 +713,7 @@ bool ignore_class_specification_command(
   if ((**it)->type != classspec_command) {
     return false;
   }
-  (*it)++;
+  ++(*it);
   // Ignore the rest of the unsupported comamnd.
   skip_to_next_command(it);
   return true;
@@ -727,7 +727,7 @@ bool parse_keepnames(std::vector<unique_ptr<Token>>::iterator* it,
   }
   if (!parse_keep(it, token::keepnames, keep_rules, ok)) {
     cerr << "Failed to parse -keepnames rule at line " << (**it)->line << endl;
-    it++;
+    ++it;
     skip_to_next_command(it);
     return true;
   }
@@ -745,7 +745,7 @@ bool parse_keepclasssmembernames(std::vector<unique_ptr<Token>>::iterator* it,
   if (!parse_keep(it, token::keepclassmembernames, keep_rules, ok)) {
     cerr << "Failed to parse -keepclasssmembernames rule at line "
          << (**it)->line << endl;
-    it++;
+    ++it;
     skip_to_next_command(it);
     return true;
   }
@@ -764,7 +764,7 @@ bool parse_keepclasseswithmembernames(
   if (!parse_keep(it, token::keepclasseswithmembernames, keep_rules, ok)) {
     cerr << "Failed to parse -keepclasseswithmembernames rule at line "
          << (**it)->line << endl;
-    it++;
+    ++it;
     skip_to_next_command(it);
     return true;
   }
@@ -787,7 +787,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (!(*it)->is_command()) {
       cerr << "Expecting command but found " << (*it)->show() << " at line "
            << (*it)->line << endl;
-      it++;
+      ++it;
       skip_to_next_command(&it);
       continue;
     }
@@ -887,7 +887,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     // Obfuscation Options
     if ((*it)->type == token::dontobfuscate) {
       pg_config->dontobfuscate = true;
-      it++;
+      ++it;
       continue;
     }
     if (parse_optional_filepath_command(
@@ -924,7 +924,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
            << endl;
       (*parse_errors)++;
     }
-    it++;
+    ++it;
     skip_to_next_command(&it);
   }
 }

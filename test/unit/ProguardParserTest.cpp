@@ -213,7 +213,7 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType,
-            "com.facebook.crypto.proguard.annotations.DoNotStrip");
+            "Lcom/facebook/crypto/proguard/annotations/DoNotStrip;");
   ASSERT_EQ(cs.fieldSpecifications.size(), 0);
   ASSERT_EQ(cs.methodSpecifications.size(), 0);
 
@@ -630,5 +630,19 @@ TEST(ProguardParserTest, keepclasseswithmembernames) {
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keepclasseswithmembers_rules.size(), 1);
     ASSERT_TRUE(config.keepclasseswithmembers_rules[0].allowshrinking);
+  }
+}
+
+TEST(ProguardParserTest, keep_annotation_classes) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(
+        "-keep @interface *");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_FALSE(config.keep_rules[0].allowshrinking);
+    ASSERT_NE(config.keep_rules[0].class_spec.setAccessFlags.find(AccessFlag::ANNOTATION),
+              config.keep_rules[0].class_spec.setAccessFlags.end());
   }
 }

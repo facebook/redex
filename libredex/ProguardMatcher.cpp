@@ -20,6 +20,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
+#include "ReachableClasses.h"
 #include "keeprules.h"
 
 namespace redex {
@@ -33,8 +34,8 @@ void apply_keep_modifiers(KeepSpec* k, DexMember* member) {
   if (k->allowoptimization) {
     member->rstate.set_allowoptimization();
   }
-  if (k->allowshrinking) {
-    member->rstate.set_allowshrinking();
+  if (k->allowshrinking && !keep(member)) {
+      member->rstate.set_allowshrinking();
   }
   if (k->allowobfuscation &&
       strcmp(member->get_name()->c_str(), "<init>") != 0) {
@@ -287,7 +288,7 @@ bool has_annotation(std::unordered_map<std::string, boost::regex*>& regex_map,
                     const std::string& annotation) {
   auto annos = member->get_anno_set();
   if (annos != nullptr) {
-    auto annotation_regex = proguard_parser::convert_wildcard_type(annotation);
+    auto annotation_regex = proguard_parser::form_type_regex(annotation);
     boost::regex* annotation_matcher =
         register_matcher(regex_map, annotation_regex);
     for (const auto& anno : annos->get_annotations()) {
@@ -622,10 +623,10 @@ void mark_class_and_members_for_keep(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     KeepSpec* keep_rule,
     DexClass* cls) {
-  cls->rstate.set_keep();
-  keep_rule->count++;
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
+  cls->rstate.set_keep();
+  keep_rule->count++;
   // Apply any field-level keep specifications.
   apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
     f->rstate.set_keep();
@@ -745,10 +746,10 @@ void process_keepclassmembers(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     KeepSpec* keep_rule,
     DexClass* cls) {
-  cls->rstate.set_keepclassmembers();
-  keep_rule->count++;
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
+  cls->rstate.set_keepclassmembers();
+  keep_rule->count++;
   // Apply any field-level keep specifications.
   apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
     f->rstate.set_keep();
@@ -763,9 +764,9 @@ void process_assumenosideeffects(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     KeepSpec* keep_rule,
     DexClass* cls) {
-  cls->rstate.set_assumenosideeffects();
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
+  cls->rstate.set_assumenosideeffects();
   // Apply any field-level keep specifications.
   apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
     f->rstate.set_assumenosideeffects();
