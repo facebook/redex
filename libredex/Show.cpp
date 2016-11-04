@@ -951,6 +951,15 @@ std::string show(const MethodItemEntry& mei) {
   not_reached();
 }
 
+std::string show(const FatMethod* fm) {
+  std::string ret;
+  for (auto const& mei : *fm) {
+    ret += show(mei);
+    ret += "\n";
+  }
+  return ret;
+}
+
 std::string show(const std::vector<Block*>& blocks) {
   std::stringstream ss;
   ss << "CFG:\n";
