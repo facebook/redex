@@ -8,11 +8,11 @@
  */
 
 #include <boost/regex.hpp>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <set>
 #include <string>
-#include <cstring>
 
 #include "DexAccess.h"
 #include "DexUtil.h"
@@ -35,7 +35,7 @@ void apply_keep_modifiers(KeepSpec* k, DexMember* member) {
     member->rstate.set_allowoptimization();
   }
   if (k->allowshrinking && !keep(member)) {
-      member->rstate.set_allowshrinking();
+    member->rstate.set_allowshrinking();
   }
   if (k->allowobfuscation &&
       strcmp(member->get_name()->c_str(), "<init>") != 0) {
@@ -405,6 +405,18 @@ bool method_level_match(
   return boost::regex_match(dequalified_name.c_str(), *method_regex);
 }
 
+void keep_clinits(DexClass* cls) {
+  for (auto method : cls->get_dmethods()) {
+    if (is_clinit(method)) {
+      if (((method->get_code() != nullptr) &&
+           method->get_code()->get_instructions().size() > 1)) {
+        method->rstate.set_keep();
+        break;
+      }
+    }
+  }
+}
+
 void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
                   KeepSpec* keep_rule,
                   redex::MemberSpecification* methodSpecification,
@@ -412,13 +424,6 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
                   const boost::regex* method_regex,
                   std::function<void(DexMethod*)> keeper) {
   for (const auto& method : methods) {
-    // Always mark non-empty <clinit> methods.
-    if (is_clinit(method)) {
-      if ((method->get_code() && (method->get_code()->get_ins_size() > 1))) {
-        keeper(method);
-        continue;
-      }
-    }
     if (method_level_match(
             regex_map, methodSpecification, method, method_regex)) {
       keeper(method);
@@ -626,6 +631,7 @@ void mark_class_and_members_for_keep(
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   cls->rstate.set_keep();
+  keep_clinits(cls);
   keep_rule->count++;
   // Apply any field-level keep specifications.
   apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
@@ -678,8 +684,7 @@ bool all_methods_match(
   for (auto& method_keep : method_keeps) {
     auto qualified_method_regex = method_regex(method_keep);
     boost::regex* matcher = register_matcher(regex_map, qualified_method_regex);
-    if (!method_matches(
-            regex_map, &method_keep, vmethods, dmethods, matcher)) {
+    if (!method_matches(regex_map, &method_keep, vmethods, dmethods, matcher)) {
       return false;
     }
   }
@@ -749,6 +754,7 @@ void process_keepclassmembers(
   // Apply the keep option modifiers.
   apply_keep_modifiers(keep_rule, cls);
   cls->rstate.set_keepclassmembers();
+  keep_clinits(cls);
   keep_rule->count++;
   // Apply any field-level keep specifications.
   apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
@@ -842,7 +848,7 @@ void process_proguard_rules(const ProguardMap& pg_map,
   // By default, keep all annotation classes.
   for (auto cls : classes) {
     if (is_annotation(cls)) {
-       cls->rstate.set_keep();
+      cls->rstate.set_keep();
     }
   }
 }
