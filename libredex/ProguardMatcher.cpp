@@ -798,13 +798,19 @@ void process_keep(const ProguardMap& pg_map,
     DexClass* cls = find_single_class(pg_map, descriptor);
     if (cls != nullptr) {
       if (class_level_match(regex_map, keep_rule, cls)) {
-        keep_processor(regex_map, &keep_rule, cls);
+        if (!cls->is_external()) {
+          keep_processor(regex_map, &keep_rule, cls);
+        }
       }
       continue;
     }
     auto desc_regex = proguard_parser::form_type_regex(descriptor);
     matcher = register_matcher(regex_map, desc_regex);
     for (const auto& cls : classes) {
+      // Skip external classes.
+      if (cls->is_external()) {
+        continue;
+      }
       if (class_level_match(regex_map, keep_rule, cls, matcher)) {
         keep_processor(regex_map, &keep_rule, cls);
       }
