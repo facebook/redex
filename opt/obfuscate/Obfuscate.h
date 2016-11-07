@@ -11,13 +11,9 @@
 
 #include "PassManager.h"
 
-namespace redex {
-
 class ObfuscatePass : public Pass {
  public:
   ObfuscatePass() : Pass("ObfuscatePass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
-
-} // namespace redex
