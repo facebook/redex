@@ -230,9 +230,8 @@ void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
     DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
     // Make sure that the registers agree
     if (const_string->dest() == invoke_static->src(0)) {
-      std::string classname(const_string->get_string()->c_str());
-      classname = "L" + classname + ";";
-      std::replace(classname.begin(), classname.end(), '.', '/');
+      auto classname = JavaNameUtil::external_to_internal(
+          const_string->get_string()->c_str());
       TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
         const_string->get_string()->c_str(), classname.c_str());
       dont_rename_class_for_name_literals.insert(classname);
@@ -402,10 +401,8 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
   for (const auto& it : aliases.get_class_map()) {
-    std::string original_name(it.first->c_str());
-    auto external_name = original_name.substr(1, original_name.size() - 2);
-    std::replace(external_name.begin(), external_name.end(), '/', '.');
-    external_names.emplace(external_name);
+    external_names.emplace(
+        JavaNameUtil::internal_to_external(it.first->c_str()));
   }
   std::vector<DexString*> all_strings;
   for (auto clazz : scope) {

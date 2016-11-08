@@ -269,3 +269,19 @@ void post_dexen_changes(const Scope& v, T& dexen) {
   }
 };
 void post_dexen_changes(const Scope& v, DexStoresVector& stores);
+
+namespace JavaNameUtil {
+
+inline std::string internal_to_external(const std::string& internal_name) {
+  auto external_name = internal_name.substr(1, internal_name.size() - 2);
+  std::replace(external_name.begin(), external_name.end(), '/', '.');
+  return external_name;
+}
+
+inline std::string external_to_internal(const std::string& external_name) {
+  auto internal_name = "L" + external_name + ";";
+  std::replace(internal_name.begin(), internal_name.end(), '.', '/');
+  return internal_name;
+}
+
+}
