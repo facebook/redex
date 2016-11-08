@@ -323,9 +323,10 @@ class DexAnnotation : public Gatherable {
   DexType* m_type;
   DexAnnotationVisibility m_viz;
 
-  DexAnnotation() : Gatherable() {}
-
  public:
+  DexAnnotation(DexType* type, DexAnnotationVisibility viz)
+      : Gatherable(), m_type(type), m_viz(viz) {}
+
   static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
   virtual void gather_types(std::vector<DexType*>& ltype) const;
   virtual void gather_fields(std::vector<DexField*>& lfield) const;
@@ -350,6 +351,7 @@ class DexAnnotation : public Gatherable {
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
   DexType* type() const { return m_type; }
   void rewrite_type(DexType* type) { m_type = type; }
+  void add_element(const char* key, DexEncodedValue* value);
   const EncodedAnnotations& anno_elems() { return m_anno_elems; }
 
   friend std::string show(const DexAnnotation*);
@@ -358,9 +360,8 @@ class DexAnnotation : public Gatherable {
 class DexAnnotationSet : public Gatherable {
   std::list<DexAnnotation*> m_annotations;
 
-  DexAnnotationSet() : Gatherable() {}
-
  public:
+  DexAnnotationSet() : Gatherable() {}
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
       m_annotations.push_back(new DexAnnotation(*anno));
@@ -384,6 +385,9 @@ class DexAnnotationSet : public Gatherable {
     return m_annotations;
   }
   std::list<DexAnnotation*>& get_annotations() { return m_annotations; }
+  void add_annotation(DexAnnotation* anno) {
+    return m_annotations.emplace_back(anno);
+  }
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& asetout,
                std::map<DexAnnotation*, uint32_t>& annoout);

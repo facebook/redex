@@ -174,6 +174,19 @@ DexType* get_array_type(const DexType*);
 void get_all_children(const DexType*, TypeVector&);
 
 /**
+ * Retrieves all the implementors of an interface and pushes them in the
+ * provided vector.
+ */
+void get_all_implementors(const Scope& scope,
+                          const DexType* intf,
+                          std::unordered_set<const DexType*>& impls);
+
+void get_all_children_and_implementors(
+    const Scope& scope,
+    const DexClass* base_class,
+    std::unordered_set<const DexType*>* result);
+
+/**
  * True if the method is a constructor (matches the "<init>" name)
  */
 bool is_init(const DexMethod* method);

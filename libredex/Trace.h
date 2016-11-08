@@ -38,6 +38,7 @@
   TM(MMINL)                                     \
   TM(MTRANS)                                    \
   TM(OBFUSCATE)                                 \
+  TM(ORIGINALNAME)                              \
   TM(PEEPHOLE)                                  \
   TM(PGR)                                       \
   TM(PM)                                        \

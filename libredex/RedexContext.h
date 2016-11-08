@@ -54,12 +54,12 @@ struct RedexContext {
   void alias_type_name(DexType* type, DexString* new_name);
   template <typename V> void visit_all_dextype(V v);
 
-  DexField* make_field(DexType* container,
-                       DexString* name,
-                       DexType* type);
-  DexField* get_field(DexType* container,
-                      DexString* name,
-                      DexType* type);
+  DexField* make_field(const DexType* container,
+                       const DexString* name,
+                       const DexType* type);
+  DexField* get_field(const DexType* container,
+                      const DexString* name,
+                      const DexType* type);
   void mutate_field(DexField* field,
                     const DexFieldRef& ref);
 
@@ -105,8 +105,9 @@ struct RedexContext {
   pthread_mutex_t s_type_lock;
 
   // DexField
-  std::map<DexType*, std::map<DexString*, std::map<DexType*, DexField*>>>
-    s_field_map;
+  std::map<const DexType*,
+           std::map<const DexString*, std::map<const DexType*, DexField*>>>
+      s_field_map;
   pthread_mutex_t s_field_lock;
 
   // DexTypeList

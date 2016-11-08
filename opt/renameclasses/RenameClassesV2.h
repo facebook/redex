@@ -44,6 +44,7 @@ class RenameClassesPassV2 : public Pass {
         std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies);
     void build_dont_rename_native_bindings(Scope& scope, std::set<DexType*>& dont_rename_native_bindings);
     void build_dont_rename_annotated(std::set<DexType*>& dont_rename_annotated);
+
     void rename_classes(Scope& scope, ConfigFiles& cfg, const std::string& path, bool rename_annotations, PassManager& mgr);
 
   std::string m_path;

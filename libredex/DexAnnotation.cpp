@@ -425,21 +425,23 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
 
 DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return nullptr;
-  DexAnnotation* anno = new DexAnnotation();
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
   uint8_t viz = *encdata++;
   always_assert_log(viz <= DAV_SYSTEM, "Invalid annotation visibility %d", viz);
-  anno->m_viz = (DexAnnotationVisibility)viz;
   uint32_t tidx = read_uleb128(&encdata);
   uint32_t count = read_uleb128(&encdata);
   DexType* type = idx->get_typeidx(tidx);
   always_assert_log(type != nullptr, "Invalid annotation type");
-  anno->m_type = type;
+  DexAnnotation* anno = new DexAnnotation(type, (DexAnnotationVisibility)viz);
   for (uint32_t i = 0; i < count; i++) {
     DexAnnotationElement dae = get_annotation_element(idx, encdata);
     anno->m_anno_elems.push_back(dae);
   }
   return anno;
+}
+
+void DexAnnotation::add_element(const char* key, DexEncodedValue* value) {
+  m_anno_elems.emplace_back(DexString::make_string(key), value);
 }
 
 DexAnnotationSet* DexAnnotationSet::get_annotation_set(DexIdx* idx,

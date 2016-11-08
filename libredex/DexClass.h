@@ -264,16 +264,16 @@ class DexField {
 
   // If the DexField exists, return it, otherwise create it and return it.
   // See also get_field()
-  static DexField* make_field(DexType* container,
-                              DexString* name,
-                              DexType* type) {
+  static DexField* make_field(const DexType* container,
+                              const DexString* name,
+                              const DexType* type) {
     return g_redex->make_field(container, name, type);
   }
 
   // Return an existing DexField or nullptr if one does not exist.
-  static DexField* get_field(DexType* container,
-                             DexString* name,
-                             DexType* type) {
+  static DexField* get_field(const DexType* container,
+                             const DexString* name,
+                             const DexType* type) {
     return g_redex->get_field(container, name, type);
   }
 
@@ -882,6 +882,7 @@ class DexClass {
   DexEncodedValueArray* get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
+  void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {

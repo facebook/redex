@@ -136,53 +136,6 @@ bool has_anno(const T* t, const DexType* anno_type) {
   return false;
 }
 
-// Find all the interfaces that extend 'intf'
-bool gather_intf_extenders(const DexType* extender, const DexType* intf, std::unordered_set<const DexType*>& intf_extenders) {
-  bool extends = false;
-  const DexClass* extender_cls = type_class(extender);
-  if (!extender_cls) return extends;
-  if (extender_cls->get_access() & ACC_INTERFACE) {
-    for (const auto& extends_intf : extender_cls->get_interfaces()->get_type_list()) {
-      if (extends_intf == intf || gather_intf_extenders(extends_intf, intf, intf_extenders)) {
-        intf_extenders.insert(extender);
-        extends = true;
-      }
-    }
-  }
-  return extends;
-}
-
-void gather_intf_extenders(const Scope& scope, const DexType* intf, std::unordered_set<const DexType*>& intf_extenders) {
-  for (const auto& cls : scope) {
-    gather_intf_extenders(cls->get_type(), intf, intf_extenders);
-  }
-}
-
-void get_all_implementors(const Scope& scope, const DexType* intf, std::unordered_set<const DexType*>& impls) {
-
-  std::unordered_set<const DexType*> intf_extenders;
-  gather_intf_extenders(scope, intf, intf_extenders);
-
-  std::unordered_set<const DexType*> intfs;
-  intfs.insert(intf);
-  intfs.insert(intf_extenders.begin(), intf_extenders.end());
-
-  for (auto cls : scope) {
-    auto cur = cls;
-    bool found = false;
-    while (!found && cur != nullptr) {
-      for (auto impl : cur->get_interfaces()->get_type_list()) {
-        if (intfs.count(impl) > 0) {
-          impls.insert(cls->get_type());
-          found = true;
-          break;
-        }
-      }
-      cur = type_class(cur->get_super_class());
-    }
-  }
-}
-
 }
 
 void RenameClassesPassV2::build_dont_rename_resources(PassManager& mgr, std::set<std::string>& dont_rename_resources) {
@@ -291,31 +244,34 @@ void RenameClassesPassV2::build_dont_rename_hierarchies(
     PassManager& mgr,
     Scope& scope,
     std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies) {
+  std::vector<DexClass*> base_classes;
   for (const auto& base : m_dont_rename_hierarchies) {
     // skip comments
     if (base.c_str()[0] == '#') continue;
     auto base_type = DexType::get_type(base.c_str());
     if (base_type != nullptr) {
-      dont_rename_hierarchies[base_type] = base;
-      if (!type_class(base_type)) {
-        TRACE(RENAME, 1, "Can't find class for dont_rename_hierachy rule %s\n", base.c_str());
+      DexClass* base_class = type_class(base_type);
+      if (!base_class) {
+        TRACE(RENAME, 2, "Can't find class for dont_rename_hierachy rule %s\n",
+              base.c_str());
         mgr.incr_metric(METRIC_MISSING_HIERARCHY_CLASSES, 1);
-      } else if (type_class(base_type)->get_access() & ACC_INTERFACE) {
-        std::unordered_set<const DexType*> impls;
-        get_all_implementors(scope, base_type, impls);
-        for (auto impl = impls.begin() ; impl != impls.end() ; ++impl) {
-          dont_rename_hierarchies[*impl] = base;
-        }
       } else {
-        TypeVector children;
-        get_all_children(base_type, children);
-        for ( auto child = children.begin() ; child != children.end() ; ++child ) {
-          dont_rename_hierarchies[*child] = base;
-        }
+        base_classes.emplace_back(base_class);
       }
     } else {
-      TRACE(RENAME, 1, "Can't find type for dont_rename_hierachy rule %s\n", base.c_str());
+      TRACE(RENAME, 2, "Can't find type for dont_rename_hierachy rule %s\n",
+            base.c_str());
       mgr.incr_metric(METRIC_MISSING_HIERARCHY_TYPES, 1);
+    }
+  }
+  for (const auto& base_class : base_classes) {
+    auto base_name = base_class->get_name()->c_str();
+    dont_rename_hierarchies[base_class->get_type()] = base_name;
+    std::unordered_set<const DexType*> children_and_implementors;
+    get_all_children_and_implementors(
+        scope, base_class, &children_and_implementors);
+    for (const auto& cls : children_and_implementors) {
+      dont_rename_hierarchies[cls] = base_name;
     }
   }
 }

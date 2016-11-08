@@ -126,14 +126,16 @@ void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
   pthread_mutex_unlock(&s_type_lock);
 }
 
-DexField* RedexContext::make_field(DexType* container,
-                                   DexString* name,
-                                   DexType* type) {
+DexField* RedexContext::make_field(const DexType* container,
+                                   const DexString* name,
+                                   const DexType* type) {
   always_assert(container != nullptr && name != nullptr && type != nullptr);
   DexField* rv;
   pthread_mutex_lock(&s_field_lock);
   if (s_field_map[container][name].count(type) == 0) {
-    rv = new DexField(container, name, type);
+    rv = new DexField(const_cast<DexType*>(container),
+                      const_cast<DexString*>(name),
+                      const_cast<DexType*>(type));
     s_field_map[container][name][type] = rv;
     pthread_mutex_unlock(&s_field_lock);
     return rv;
@@ -143,9 +145,9 @@ DexField* RedexContext::make_field(DexType* container,
   return rv;
 }
 
-DexField* RedexContext::get_field(DexType* container,
-                                  DexString* name,
-                                  DexType* type) {
+DexField* RedexContext::get_field(const DexType* container,
+                                  const DexString* name,
+                                  const DexType* type) {
   if (container == nullptr || name == nullptr || type == nullptr) {
     return nullptr;
   }

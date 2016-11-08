@@ -14,6 +14,10 @@ import java.lang.reflect.*;
 
 import org.junit.Test;
 
+@interface OriginalNameAnnotation {
+  String value();
+};
+
 class Parameterized<T> {}
 
 class ExtendsParameterized extends Parameterized<RenameClassesTest> {}
@@ -32,4 +36,11 @@ public class RenameClassesTest {
     assertThat(ptype.getActualTypeArguments()[0]).isEqualTo(this.getClass());
   }
 
+  @Test
+  public void testOriginalNameAnnotation() throws Exception {
+    assertThat((String) this.getClass()
+                   .getDeclaredField("__redex_internal_original_name")
+                   .get(this))
+        .isEqualTo("redex.RenameClassesTest");
+  }
 }
