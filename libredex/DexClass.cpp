@@ -253,13 +253,13 @@ int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
   return (int) (encdata - output);
 }
 
-void DexDebugItem::gather_types(std::vector<DexType*>& ltype) {
+void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
   for (auto& entry : m_dbg_entries) {
     entry.gather_types(ltype);
   }
 }
 
-void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) {
+void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) const {
   for (auto p : m_param_names) {
     if (p) lstring.push_back(p);
   }
@@ -836,7 +836,7 @@ DexClass::DexClass(DexIdx* idx, dex_class_def* cdef) {
   delete (deva);
 }
 
-void DexTypeList::gather_types(std::vector<DexType*>& ltype) {
+void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& type : m_list) {
     ltype.push_back(type);
   }
@@ -859,7 +859,7 @@ DexProto* DexProto::make_proto(DexType* rtype, DexTypeList* args) {
   return DexProto::make_proto(rtype, args, shorty);
 }
 
-void DexProto::gather_types(std::vector<DexType*>& ltype) {
+void DexProto::gather_types(std::vector<DexType*>& ltype) const {
   if (m_args) {
     m_args->gather_types(ltype);
   }
@@ -868,13 +868,13 @@ void DexProto::gather_types(std::vector<DexType*>& ltype) {
   }
 }
 
-void DexProto::gather_strings(std::vector<DexString*>& lstring) {
+void DexProto::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_shorty) {
     lstring.push_back(m_shorty);
   }
 }
 
-void DexClass::gather_types(std::vector<DexType*>& ltype) {
+void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
     m->gather_types(ltype);
   }
@@ -893,7 +893,7 @@ void DexClass::gather_types(std::vector<DexType*>& ltype) {
   if (m_anno) m_anno->gather_types(ltype);
 }
 
-void DexClass::gather_strings(std::vector<DexString*>& lstring) {
+void DexClass::gather_strings(std::vector<DexString*>& lstring) const {
   for (auto const& m : m_dmethods) {
     m->gather_strings(lstring);
   }
@@ -910,7 +910,7 @@ void DexClass::gather_strings(std::vector<DexString*>& lstring) {
   if (m_anno) m_anno->gather_strings(lstring);
 }
 
-void DexClass::gather_fields(std::vector<DexField*>& lfield) {
+void DexClass::gather_fields(std::vector<DexField*>& lfield) const {
   for (auto const& m : m_dmethods) {
     m->gather_fields(lfield);
   }
@@ -928,7 +928,7 @@ void DexClass::gather_fields(std::vector<DexField*>& lfield) {
   if (m_anno) m_anno->gather_fields(lfield);
 }
 
-void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) const {
   for (auto const& m : m_dmethods) {
     lmethod.push_back(m);
     m->gather_methods(lmethod);
@@ -946,22 +946,22 @@ void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) {
   if (m_anno) m_anno->gather_methods(lmethod);
 }
 
-void DexField::gather_types(std::vector<DexType*>& ltype) {
+void DexField::gather_types(std::vector<DexType*>& ltype) const {
   if (m_value) m_value->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
 }
 
-void DexField::gather_strings(std::vector<DexString*>& lstring) {
+void DexField::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_value) m_value->gather_strings(lstring);
   if (m_anno) m_anno->gather_strings(lstring);
 }
 
-void DexField::gather_fields(std::vector<DexField*>& lfield) {
+void DexField::gather_fields(std::vector<DexField*>& lfield) const {
   if (m_value) m_value->gather_fields(lfield);
   if (m_anno) m_anno->gather_fields(lfield);
 }
 
-void DexField::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexField::gather_methods(std::vector<DexMethod*>& lmethod) const {
   if (m_value) m_value->gather_methods(lmethod);
   if (m_anno) m_anno->gather_methods(lmethod);
 }
@@ -975,7 +975,7 @@ void DexField::gather_strings_shallow(std::vector<DexString*>& lstring) {
   lstring.push_back(m_ref.name);
 }
 
-void DexMethod::gather_types(std::vector<DexType*>& ltype) {
+void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
   // We handle m_ref.cls and proto in the first-layer gather.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
@@ -988,7 +988,7 @@ void DexMethod::gather_types(std::vector<DexType*>& ltype) {
   }
 }
 
-void DexMethod::gather_strings(std::vector<DexString*>& lstring) {
+void DexMethod::gather_strings(std::vector<DexString*>& lstring) const {
   // We handle m_name and proto in the first-layer gather.
   if (m_code) m_code->gather_strings(lstring);
   if (m_anno) m_anno->gather_strings(lstring);
@@ -1001,7 +1001,7 @@ void DexMethod::gather_strings(std::vector<DexString*>& lstring) {
   }
 }
 
-void DexMethod::gather_fields(std::vector<DexField*>& lfield) {
+void DexMethod::gather_fields(std::vector<DexField*>& lfield) const {
   if (m_code) m_code->gather_fields(lfield);
   if (m_anno) m_anno->gather_fields(lfield);
   auto param_anno = get_param_anno();
@@ -1013,7 +1013,7 @@ void DexMethod::gather_fields(std::vector<DexField*>& lfield) {
   }
 }
 
-void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) const {
   if (m_code) m_code->gather_methods(lmethod);
   if (m_anno) m_anno->gather_methods(lmethod);
   auto param_anno = get_param_anno();
@@ -1025,17 +1025,17 @@ void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) {
   }
 }
 
-void DexMethod::gather_types_shallow(std::vector<DexType*>& ltype) {
+void DexMethod::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_ref.cls);
   m_ref.proto->gather_types(ltype);
 }
 
-void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) {
+void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) const {
   lstring.push_back(m_ref.name);
   m_ref.proto->gather_strings(lstring);
 }
 
-void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {
+void DexCode::gather_catch_types(std::vector<DexType*>& ltype) const {
   for (auto& tryit : m_tries) {
     for (auto const& it : tryit->m_catches) {
       if (it.first) {
@@ -1045,7 +1045,7 @@ void DexCode::gather_catch_types(std::vector<DexType*>& ltype) {
   }
 }
 
-void DexCode::gather_types(std::vector<DexType*>& ltype) {
+void DexCode::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& opc : get_instructions()) {
     opc->gather_types(ltype);
   }
@@ -1053,20 +1053,20 @@ void DexCode::gather_types(std::vector<DexType*>& ltype) {
   if (m_dbg) m_dbg->gather_types(ltype);
 }
 
-void DexCode::gather_strings(std::vector<DexString*>& lstring) {
+void DexCode::gather_strings(std::vector<DexString*>& lstring) const {
   for (auto const& opc : get_instructions()) {
     opc->gather_strings(lstring);
   }
   if (m_dbg) m_dbg->gather_strings(lstring);
 }
 
-void DexCode::gather_fields(std::vector<DexField*>& lfield) {
+void DexCode::gather_fields(std::vector<DexField*>& lfield) const {
   for (auto const& opc : get_instructions()) {
     opc->gather_fields(lfield);
   }
 }
 
-void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
   for (auto const& opc : get_instructions()) {
     opc->gather_methods(lmethod);
   }

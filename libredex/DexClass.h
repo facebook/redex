@@ -332,10 +332,10 @@ class DexField {
   void gather_types_shallow(std::vector<DexType*>& ltype);
   void gather_strings_shallow(std::vector<DexString*>& lstring);
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_strings(std::vector<DexString*>& lstring);
-  void gather_fields(std::vector<DexField*>& lfield);
-  void gather_methods(std::vector<DexMethod*>& lmethod);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
   friend std::string show(const DexField*);
 };
@@ -398,7 +398,7 @@ class DexTypeList {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype);
+  void gather_types(std::vector<DexType*>& ltype) const;
 
   friend std::string show(const DexTypeList*);
 };
@@ -444,8 +444,8 @@ class DexProto {
   DexTypeList* get_args() const { return m_args; }
   DexString* get_shorty() const { return m_shorty; }
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_strings(std::vector<DexString*>& lstring);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
 
   friend std::string show(const DexProto*);
 };
@@ -483,12 +483,12 @@ struct DexDebugEntry final {
   DexDebugEntry(const DexDebugEntry&) = delete;
   DexDebugEntry(DexDebugEntry&& other);
   ~DexDebugEntry();
-  void gather_strings(std::vector<DexString*>& lstring) {
+  void gather_strings(std::vector<DexString*>& lstring) const {
     if (type == DexDebugEntryType::Instruction) {
       insn->gather_strings(lstring);
     }
   }
-  void gather_types(std::vector<DexType*>& ltype) {
+  void gather_types(std::vector<DexType*>& ltype) const {
     if (type == DexDebugEntryType::Instruction) {
       insn->gather_types(ltype);
     }
@@ -517,8 +517,8 @@ class DexDebugItem {
   /* Returns number of bytes encoded, *output has no alignment requirements */
   int encode(DexOutputIdx* dodx, PositionMapper* pos_mapper, uint8_t* output);
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_strings(std::vector<DexString*>& lstring);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
 };
 
 typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
@@ -600,11 +600,11 @@ class DexCode {
    */
   int encode(DexOutputIdx* dodx, uint32_t* output);
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_catch_types(std::vector<DexType*>& ltype);
-  void gather_strings(std::vector<DexString*>& lstring);
-  void gather_fields(std::vector<DexField*>& lfield);
-  void gather_methods(std::vector<DexMethod*>& lmethod);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_catch_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
   friend std::string show(const DexCode*);
 };
@@ -719,6 +719,10 @@ class DexMethod {
     always_assert(is_def());
     return m_access;
   }
+  const ParamAnnotations* get_param_anno() const {
+    if (m_param_anno.size() == 0) return nullptr;
+    return &m_param_anno;
+  }
   ParamAnnotations* get_param_anno() {
     if (m_param_anno.size() == 0) return nullptr;
     return &m_param_anno;
@@ -777,13 +781,13 @@ class DexMethod {
                       paramno, show_short(this).c_str());
   }
 
-  void gather_types_shallow(std::vector<DexType*>& ltype);
-  void gather_strings_shallow(std::vector<DexString*>& lstring);
+  void gather_types_shallow(std::vector<DexType*>& ltype) const;
+  void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_fields(std::vector<DexField*>& lfield);
-  void gather_methods(std::vector<DexMethod*>& lmethod);
-  void gather_strings(std::vector<DexString*>& lstring);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
 
   friend std::string show(const DexMethod*);
   friend std::string show_short(const DexMethod*);
@@ -876,7 +880,8 @@ class DexClass {
   bool has_class_data() const { return m_has_class_data; }
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();
-  DexAnnotationSet* get_anno_set() const { return m_anno; }
+  const DexAnnotationSet* get_anno_set() const { return m_anno; }
+  DexAnnotationSet* get_anno_set() { return m_anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {
@@ -904,10 +909,10 @@ class DexClass {
    */
   int encode(DexOutputIdx* dodx, dexcode_to_offset& dco, uint8_t* output);
 
-  void gather_types(std::vector<DexType*>& ltype);
-  void gather_strings(std::vector<DexString*>& lstring);
-  void gather_fields(std::vector<DexField*>& lfield);
-  void gather_methods(std::vector<DexMethod*>& lmethod);
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
   friend std::string show(const DexClass*);
 };

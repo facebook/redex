@@ -212,7 +212,7 @@ struct UnreachableCodeRemover {
     for (auto const& t : cls->get_interfaces()->get_type_list()) {
       push(type_class(t));
     }
-    auto const& annoset = cls->get_anno_set();
+    const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
       gather_and_push(annoset);
     }

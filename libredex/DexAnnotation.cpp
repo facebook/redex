@@ -14,51 +14,51 @@
 #include "DexOutput.h"
 
 void DexEncodedValueString::gather_strings(
-    std::vector<DexString*>& lstring) {
+    std::vector<DexString*>& lstring) const {
   lstring.push_back(m_string);
 }
 
-void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) {
+void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
 }
 
-void DexEncodedValueField::gather_fields(std::vector<DexField*>& lfield) {
+void DexEncodedValueField::gather_fields(std::vector<DexField*>& lfield) const {
   lfield.push_back(m_field);
 }
 
 void DexEncodedValueMethod::gather_methods(
-    std::vector<DexMethod*>& lmethod) {
+    std::vector<DexMethod*>& lmethod) const {
   lmethod.push_back(m_method);
 }
 
 void DexEncodedValueArray::gather_strings(
-    std::vector<DexString*>& lstring) {
+    std::vector<DexString*>& lstring) const {
   for (auto ev : *m_evalues) {
     ev->gather_strings(lstring);
   }
 }
 
-void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) {
+void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
   for (auto ev : *m_evalues) {
     ev->gather_types(ltype);
   }
 }
 
-void DexEncodedValueArray::gather_fields(std::vector<DexField*>& lfield) {
+void DexEncodedValueArray::gather_fields(std::vector<DexField*>& lfield) const {
   for (auto ev : *m_evalues) {
     ev->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueArray::gather_methods(
-    std::vector<DexMethod*>& lmethod) {
+    std::vector<DexMethod*>& lmethod) const {
   for (auto ev : *m_evalues) {
     ev->gather_methods(lmethod);
   }
 }
 
 void DexEncodedValueAnnotation::gather_strings(
-    std::vector<DexString*>& lstring) {
+    std::vector<DexString*>& lstring) const {
   for (auto const& elem : *m_annotations) {
     lstring.push_back(elem.string);
     elem.encoded_value->gather_strings(lstring);
@@ -66,7 +66,7 @@ void DexEncodedValueAnnotation::gather_strings(
 }
 
 void DexEncodedValueAnnotation::gather_types(
-    std::vector<DexType*>& ltype) {
+    std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : *m_annotations) {
     anno.encoded_value->gather_types(ltype);
@@ -74,64 +74,64 @@ void DexEncodedValueAnnotation::gather_types(
 }
 
 void DexEncodedValueAnnotation::gather_fields(
-    std::vector<DexField*>& lfield) {
+    std::vector<DexField*>& lfield) const {
   for (auto const& anno : *m_annotations) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueAnnotation::gather_methods(
-    std::vector<DexMethod*>& lmethod) {
+    std::vector<DexMethod*>& lmethod) const {
   for (auto const& anno : *m_annotations) {
     anno.encoded_value->gather_methods(lmethod);
   }
 }
 
-void DexAnnotation::gather_strings(std::vector<DexString*>& lstring) {
+void DexAnnotation::gather_strings(std::vector<DexString*>& lstring) const {
   for (auto const& anno : m_anno_elems) {
     lstring.push_back(anno.string);
     anno.encoded_value->gather_strings(lstring);
   }
 }
 
-void DexAnnotation::gather_types(std::vector<DexType*>& ltype) {
+void DexAnnotation::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_types(ltype);
   }
 }
 
-void DexAnnotation::gather_fields(std::vector<DexField*>& lfield) {
+void DexAnnotation::gather_fields(std::vector<DexField*>& lfield) const {
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
-void DexAnnotation::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexAnnotation::gather_methods(std::vector<DexMethod*>& lmethod) const {
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_methods(lmethod);
   }
 }
 
-void DexAnnotationSet::gather_strings(std::vector<DexString*>& lstring) {
+void DexAnnotationSet::gather_strings(std::vector<DexString*>& lstring) const {
   for (auto const& anno : m_annotations) {
     anno->gather_strings(lstring);
   }
 }
 
-void DexAnnotationSet::gather_types(std::vector<DexType*>& ltype) {
+void DexAnnotationSet::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& anno : m_annotations) {
     anno->gather_types(ltype);
   }
 }
 
-void DexAnnotationSet::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexAnnotationSet::gather_methods(std::vector<DexMethod*>& lmethod) const {
   for (auto const& anno : m_annotations) {
     anno->gather_methods(lmethod);
   }
 }
 
-void DexAnnotationSet::gather_fields(std::vector<DexField*>& lfield) {
+void DexAnnotationSet::gather_fields(std::vector<DexField*>& lfield) const {
   for (auto const& anno : m_annotations) {
     anno->gather_fields(lfield);
   }

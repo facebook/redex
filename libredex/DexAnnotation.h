@@ -110,7 +110,7 @@ class DexEncodedValueString : public DexEncodedValue {
 
   DexString* string() const { return m_string; }
   void string(DexString *string) { m_string = string; }
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   virtual std::string show() const { return ::show(m_string); }
@@ -136,7 +136,7 @@ class DexEncodedValueType : public DexEncodedValue {
     m_type = type;
   }
 
-  virtual void gather_types(std::vector<DexType*>& ltype);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexType* type() const { return m_type; }
@@ -164,7 +164,7 @@ class DexEncodedValueField : public DexEncodedValue {
     m_field = field;
   }
 
-  virtual void gather_fields(std::vector<DexField*>& lfield);
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexField* field() const { return m_field; }
@@ -191,7 +191,7 @@ class DexEncodedValueMethod : public DexEncodedValue {
     m_method = method;
   }
 
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexMethod* method() const { return m_method; }
@@ -235,10 +235,10 @@ class DexEncodedValueArray : public DexEncodedValue {
     return rv;
   }
 
-  virtual void gather_types(std::vector<DexType*>& ltype);
-  virtual void gather_fields(std::vector<DexField*>& lfield);
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   virtual std::string show() const;
@@ -309,10 +309,10 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
   void rewrite_type(DexType* type) { m_type = type; }
   const EncodedAnnotations* annotations() { return m_annotations; }
 
-  virtual void gather_types(std::vector<DexType*>& ltype);
-  virtual void gather_fields(std::vector<DexField*>& lfield);
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   virtual std::string show() const;
@@ -327,10 +327,10 @@ class DexAnnotation : public Gatherable {
 
  public:
   static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
-  virtual void gather_types(std::vector<DexType*>& ltype);
-  virtual void gather_fields(std::vector<DexField*>& lfield);
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
 
   bool runtime_visible() const {
     if (m_viz == DAV_RUNTIME) return true;
@@ -366,10 +366,10 @@ class DexAnnotationSet : public Gatherable {
       m_annotations.push_back(new DexAnnotation(*anno));
     }
   }
-  virtual void gather_types(std::vector<DexType*>& ltype);
-  virtual void gather_fields(std::vector<DexField*>& lfield);
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
   static DexAnnotationSet* get_annotation_set(DexIdx* idx, uint32_t aset_off);
   unsigned long size() { return m_annotations.size(); }
   void viz_counts(unsigned long& cntanno, unsigned long& cntviz) {

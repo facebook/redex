@@ -16,7 +16,7 @@
 #include "DexOutput.h"
 
 void DexDebugOpcodeSetFile::gather_strings(
-    std::vector<DexString*>& lstring) {
+    std::vector<DexString*>& lstring) const {
   if (m_str) lstring.push_back(m_str);
 }
 
@@ -30,12 +30,13 @@ void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 }
 
 void DexDebugOpcodeStartLocal::gather_strings(
-    std::vector<DexString*>& lstring) {
+    std::vector<DexString*>& lstring) const {
   if (m_name) lstring.push_back(m_name);
   if (m_sig) lstring.push_back(m_sig);
 }
 
-void DexDebugOpcodeStartLocal::gather_types(std::vector<DexType*>& ltype) {
+void DexDebugOpcodeStartLocal::gather_types(
+    std::vector<DexType*>& ltype) const {
   if (m_type) ltype.push_back(m_type);
 }
 

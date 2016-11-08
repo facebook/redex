@@ -475,7 +475,7 @@ class DexOpcodeString : public DexInstruction {
  public:
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
-  virtual void gather_strings(std::vector<DexString*>& lstring);
+  virtual void gather_strings(std::vector<DexString*>& lstring) const;
   virtual DexOpcodeString* clone() const { return new DexOpcodeString(*this); }
 
   DexOpcodeString(uint16_t opcode, DexString* str) : DexInstruction(opcode) {
@@ -495,7 +495,7 @@ class DexOpcodeType : public DexInstruction {
  public:
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
-  virtual void gather_types(std::vector<DexType*>& ltype);
+  virtual void gather_types(std::vector<DexType*>& ltype) const;
   virtual DexOpcodeType* clone() const { return new DexOpcodeType(*this); }
 
   DexOpcodeType(uint16_t opcode, DexType* type) : DexInstruction(opcode) {
@@ -521,7 +521,7 @@ class DexOpcodeField : public DexInstruction {
  public:
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
-  virtual void gather_fields(std::vector<DexField*>& lfield);
+  virtual void gather_fields(std::vector<DexField*>& lfield) const;
   virtual DexOpcodeField* clone() const { return new DexOpcodeField(*this); }
 
   DexOpcodeField(uint16_t opcode, DexField* field) : DexInstruction(opcode) {
@@ -540,7 +540,7 @@ class DexOpcodeMethod : public DexInstruction {
  public:
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod);
+  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
   virtual DexOpcodeMethod* clone() const { return new DexOpcodeMethod(*this); }
 
   DexOpcodeMethod(uint16_t opcode, DexMethod* meth, uint16_t arg)

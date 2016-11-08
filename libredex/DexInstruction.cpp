@@ -1018,7 +1018,7 @@ void DexInstruction::verify_encoding() const {
   delete test;
 }
 
-void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) {
+void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
   lstring.push_back(m_string);
 }
 
@@ -1045,7 +1045,7 @@ void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) {
 
 uint16_t DexOpcodeType::size() const { return m_count + 2; }
 
-void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) {
+void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
 }
 
@@ -1056,7 +1056,7 @@ void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) {
   encode_args(insns);
 }
 
-void DexOpcodeField::gather_fields(std::vector<DexField*>& lfield) {
+void DexOpcodeField::gather_fields(std::vector<DexField*>& lfield) const {
   lfield.push_back(m_field);
 }
 
@@ -1068,7 +1068,7 @@ void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) {
   *insns++ = idx;
 }
 
-void DexOpcodeMethod::gather_methods(std::vector<DexMethod*>& lmethod) {
+void DexOpcodeMethod::gather_methods(std::vector<DexMethod*>& lmethod) const {
   lmethod.push_back(m_method);
 }
 
