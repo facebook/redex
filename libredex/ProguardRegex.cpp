@@ -95,7 +95,7 @@ std::string form_type_regex(std::string proguard_regex) {
         if ((i != proguard_regex.size() - 2) &&
             (proguard_regex[i + 2] == '*')) {
           // ***: Math any single type i.e. a primitive type or a class type.
-          r += "\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;)";
+          r += "\\[*(?:(?:B|S|I|J|Z|F|D|C|V)|L.*;)";
           i = i + 2;
           continue;
         }
@@ -104,7 +104,7 @@ std::string form_type_regex(std::string proguard_regex) {
         i++;
         continue;
       }
-      r += "([^\\/]+)";
+      r += "([^\\/]*)";
       continue;
     }
     if (ch == '.') {
