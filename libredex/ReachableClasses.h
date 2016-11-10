@@ -32,9 +32,28 @@ unsigned int init_seed_classes(
  * nullptr check.  Which is evil because it sprinkles
  * nullptr checks everywhere.
  */
+
+// This function will return true if a class or member
+// is allowed to be deleted according to the ProGuard
+// configuration. The application logic should still
+// be certain that the item being deleted can safely
+// be removed e.g. it is not reachable from any seeds
+// or analysis or optimizations have made this item
+// into dead code.
+template<class DexMember>
+inline bool can_delete_if_unused(DexMember* member) {
+  return !keep(member) || allowshrinking(member);
+}
+
+// can_delete is the to be deprecated function for
+// determining if something can be deleted. We should
+// find each and every use of can_delete and replace it
+// with can_delete_if_unused with appropriate logic to
+// ensure the class or member being deleted can be safely
+// removed.
 template<class DexMember>
 inline bool can_delete(DexMember* member) {
-  return member->rstate.can_delete();
+  return !keep(member);
 }
 
 template<class DexMember>

@@ -143,6 +143,7 @@ class Extender extends EmptyButLaterExtended {
 // it is an interface.
 interface NotUsedHere {}
 
-// This class should not be stripped.
+// This class will be stripped because the integraton test does
+// not use a ProGuard config file to express the intent of @DoNotStrip
 @DoNotStrip
 class DontKillMeNow {}

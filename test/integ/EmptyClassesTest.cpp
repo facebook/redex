@@ -99,7 +99,7 @@ TEST(EmptyClassesTest1, emptyclasses) {
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/EmptyButLaterExtended;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/Extender;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NotUsedHere;"));
-  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/DontKillMeNow;"));
+  ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/DontKillMeNow;"));
 
   delete g_redex;
 }
