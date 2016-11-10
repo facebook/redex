@@ -79,7 +79,7 @@ class MultiMethodInliner {
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraint for inlining.
    */
-  bool is_inlinable(DexMethod* callee, DexMethod* caller);
+  bool is_inlinable(InlineContext& ctx, DexMethod* callee, DexMethod* caller);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -156,6 +156,16 @@ class MultiMethodInliner {
   bool refs_not_in_primary(DexMethod* context);
 
   /**
+   * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
+   * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
+   *
+   * Right now we only check for the number of instructions, but there are
+   * other constraints that might be worth looking into, e.g. the number of
+   * registers.
+   */
+  bool caller_too_large(InlineContext& ctx, DexMethod* caller);
+
+  /**
    * Change the visibility of members accessed in a callee as they are moved
    * to the caller context.
    */
@@ -213,6 +223,7 @@ class MultiMethodInliner {
     size_t non_pub_field{0};
     size_t non_pub_ctor{0};
     size_t not_in_primary{0};
+    size_t caller_too_large{0};
   };
   InliningInfo info;
 

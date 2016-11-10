@@ -1072,6 +1072,14 @@ void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
   }
 }
 
+uint32_t DexCode::size() const {
+  uint32_t size = 0;
+  for (auto const& opc : get_instructions()) {
+    size += opc->size();
+  }
+  return size;
+}
+
 std::string show_short(const DexMethod* p) {
   if (!p) return "";
   std::stringstream ss;

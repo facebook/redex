@@ -31,6 +31,8 @@ const char* safe_types_on_refs[] = {
     "Ljava/nio/ByteBuffer;"
 };
 
+constexpr int MAX_INSTRUCTION_SIZE = 1 << 16;
+
 /**
  * Use this cache once the optimization is invoked to make sure
  * all caches are filled and usable.
@@ -226,7 +228,7 @@ void MultiMethodInliner::inline_callees(
     auto callee = inlinable.first;
     auto mop = inlinable.second;
 
-    if (!is_inlinable(callee, caller)) continue;
+    if (!is_inlinable(inline_context, callee, caller)) continue;
 
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n",
         SHOW(callee), caller->get_code()->get_registers_size(),
@@ -237,6 +239,7 @@ void MultiMethodInliner::inline_callees(
       info.more_than_16regs++;
       continue;
     }
+    inline_context.estimated_insn_size += callee->get_code()->size();
     change_visibility(callee);
     info.calls_inlined++;
     inlined.insert(callee);
@@ -246,7 +249,9 @@ void MultiMethodInliner::inline_callees(
 /**
  * Defines the set of rules that determine whether a function is inlinable.
  */
-bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
+bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
+                                      DexMethod* callee,
+                                      DexMethod* caller) {
   // don't bring anything into primary that is not in primary
   if (primary.count(caller->get_class()) != 0 && refs_not_in_primary(callee)) {
     return false;
@@ -255,6 +260,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* callee, DexMethod* caller) {
   if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
   if (m_config.try_catch_inline && has_external_catch(callee)) return false;
   if (cannot_inline_opcodes(callee, caller)) return false;
+  if (caller_too_large(ctx, callee)) return false;
 
   return true;
 }
@@ -276,6 +282,20 @@ bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
       return true;
     }
     cls = type_class(cls->get_super_class());
+  }
+  return false;
+}
+
+bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
+                                          DexMethod* callee) {
+  // this is not very precise. from my reading of the ART code, the verifier
+  // only cares if the last "info point" is beyond a certain size. This excludes
+  // e.g. fopcodes, but we aren't making that distinction here. Still, this
+  // should suffice as a conservative heuristic.
+  if (ctx.estimated_insn_size + callee->get_code()->size() >
+      MAX_INSTRUCTION_SIZE) {
+    info.caller_too_large++;
+    return true;
   }
   return false;
 }

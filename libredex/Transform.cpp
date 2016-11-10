@@ -107,9 +107,9 @@ MethodItemEntry::~MethodItemEntry() {
 ////////////////////////////////////////////////////////////////////////////////
 
 InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
-    : mtcaller(caller, use_liveness, /* end_block_before_throw */ false) {
-  auto& code = caller->get_code();
-  original_regs = code->get_registers_size();
+    : estimated_insn_size(caller->get_code()->size()),
+      original_regs(caller->get_code()->get_registers_size()),
+      mtcaller(caller, use_liveness, /* end_block_before_throw */ false) {
   if (use_liveness) {
     m_liveness = Liveness::analyze(mtcaller->cfg(), original_regs);
   }

@@ -374,8 +374,9 @@ class MethodTransformer {
 class InlineContext {
   std::unique_ptr<LivenessMap> m_liveness;
  public:
-  MethodTransformer mtcaller;
+  uint64_t estimated_insn_size;
   uint16_t original_regs;
+  MethodTransformer mtcaller;
   InlineContext(DexMethod* caller, bool use_liveness);
   Liveness live_out(DexInstruction*);
 };

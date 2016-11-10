@@ -606,6 +606,12 @@ class DexCode {
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
+  /*
+   * Returns the number of 2-byte code units needed to encode all the
+   * instructions.
+   */
+  uint32_t size() const;
+
   friend std::string show(const DexCode*);
 };
 

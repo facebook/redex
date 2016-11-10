@@ -138,6 +138,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   TRACE(SINL, 3, "reference outside of primary %ld\n",
       inliner.get_info().not_in_primary);
   TRACE(SINL, 3, "not found %ld\n", inliner.get_info().not_found);
+  TRACE(SINL, 3, "caller too large %ld\n", inliner.get_info().caller_too_large);
   TRACE(SINL, 1,
       "%ld inlined calls over %ld methods and %ld methods removed\n",
       inliner.get_info().calls_inlined, inlined_count, deleted);
