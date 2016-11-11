@@ -250,7 +250,11 @@ def merge_proguard_map_with_rename_output(
         if pg_file and os.path.getsize(pg_file) > 0:
             output_dir = os.path.dirname(apk_output_path)
             output_file = output_file = join(output_dir, redex_pg_file)
-            update_proguard_mapping_file(pg_file, redex_rename_map_path, output_file)
+            update_proguard_mapping_file(
+                    pg_file,
+                    redex_rename_map_path,
+                    output_file,
+                    should_verify='RenameClassesPassV2' in passes_list)
             log('merging proguard map with redex class rename map')
             log('pg mapping file input is ' + str(pg_file))
             log('wrote redex pg format mapping file to ' + str(output_file))
@@ -260,7 +264,7 @@ def merge_proguard_map_with_rename_output(
         log('Skipping merging of rename maps, since redex rename map file not found')
 
 
-def update_proguard_mapping_file(pg_map, redex_map, output_file):
+def update_proguard_mapping_file(pg_map, redex_map, output_file, should_verify):
     with open(pg_map, 'r') as pg_map, open(redex_map, 'r') as redex_map, open(output_file, 'w') as output:
         redex_dict = {}
         for line in redex_map:
@@ -282,7 +286,7 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                     print(line.rstrip(), file=output)
             else:
                 print(line.rstrip(), file=output)
-        if len(redex_dict) != 0:
+        if should_verify and len(redex_dict) != 0:
             for unmangled in redex_dict.iterkeys():
                 log('Could not find %s in proguard map' % unmangled)
             raise Exception('Error when updating proguard map')
