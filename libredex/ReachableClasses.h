@@ -58,7 +58,8 @@ inline bool can_delete(DexMember* member) {
 
 template<class DexMember>
 inline bool can_rename(DexMember* member) {
-  return member->rstate.can_rename();
+  return !(keep(member) || member->rstate.is_referenced_by_string()) ||
+         allowobfuscation(member);
 }
 
 template<class DexMember>

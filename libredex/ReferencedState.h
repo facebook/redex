@@ -83,6 +83,10 @@ class ReferencedState {
     m_computed = m_computed && from_code;
   }
 
+  bool is_referenced_by_string() {
+    return m_bystring;
+  }
+
   // A direct reference from code (not reflection)
   void ref_by_type() {
     m_bytype = true;
