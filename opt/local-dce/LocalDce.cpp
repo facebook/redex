@@ -320,17 +320,22 @@ class LocalDce {
     for (auto& e : remove_edges) {
       remove_edge(e.first, e.second);
     }
-    // Iteratively remove blocks with no incoming edges.  Skip the first block
-    // since it's the method entry point.
-    std::vector<Block*> unreachables;
-    for (size_t i = 1; i < blocks.size(); ++i) {
-      if (blocks[i]->preds().size() == 0) {
-        unreachables.push_back(blocks[i]);
+    std::unordered_set<Block*> visited;
+    std::function<void (Block*)> visit = [&visit, &visited](Block* b) {
+      if (visited.find(b) != visited.end()) {
+        return;
       }
-    }
-    while (unreachables.size() > 0) {
-      remove_edges.clear();
-      auto& b = unreachables.back();
+      visited.emplace(b);
+      for (auto& s : b->succs()) {
+        visit(s);
+      }
+    };
+    visit(blocks.at(0));
+    for (size_t i = 1; i < blocks.size(); ++i) {
+      auto& b = blocks.at(i);
+      if (visited.find(b) != visited.end()) {
+        continue;
+      }
       auto succs = b->succs(); // copy
       for (auto& s : succs) {
         remove_edges.emplace_back(b, s);
@@ -339,12 +344,6 @@ class LocalDce {
         remove_edge(p.first, p.second);
       }
       remove_block(transform, b);
-      unreachables.pop_back();
-      for (auto& s : succs) {
-        if (s->preds().size() == 0) {
-          unreachables.push_back(s);
-        }
-      }
     }
   }
 
