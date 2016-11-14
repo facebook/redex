@@ -348,6 +348,8 @@ class DexAnnotation : public Gatherable {
     return false;
   }
 
+  DexAnnotationVisibility get_viz() const { return m_viz; }
+
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
   DexType* type() const { return m_type; }
   void rewrite_type(DexType* type) { m_type = type; }
