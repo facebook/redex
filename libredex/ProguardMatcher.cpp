@@ -827,20 +827,6 @@ void process_keep(const ProguardMap& pg_map,
                       DexClass*, bool)> keep_processor) {
   boost::regex* matcher;
   for (auto& keep_rule : keep_rules) {
-    // Refuse to process blanket keep,allowshrinking rules
-    if (keep_rule.allowshrinking) {
-      const auto& spec = keep_rule.class_spec;
-      if (spec.className == "*" &&
-          spec.annotationType == "" &&
-          spec.fieldSpecifications.empty() &&
-          spec.methodSpecifications.empty() &&
-          spec.extendsAnnotationType == "" && spec.extendsClassName == "" &&
-          spec.setAccessFlags.size() == 0 &&
-          spec.unsetAccessFlags.size() == 0) {
-        std::cerr << "Refusing to honour a blanket -keepnames class * rule\n";
-        continue;
-      }
-    }
     auto descriptor =
         proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
     DexClass* cls = find_single_class(pg_map, descriptor);
