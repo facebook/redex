@@ -34,6 +34,12 @@ class PassManager {
     const redex::ProguardConfiguration& pg_config,
     const Json::Value& config = Json::Value(Json::objectValue));
 
+  redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
+  bool no_proguard_rules() {
+    return m_pg_config.keep_rules.empty() &&
+           m_pg_config.keepclasseswithmembers_rules.empty() ;
+  }
+
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 

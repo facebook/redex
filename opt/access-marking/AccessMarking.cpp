@@ -23,7 +23,7 @@ size_t mark_classes_final(const DexStoresVector& stores) {
   size_t n_classes_finalized = 0;
   for (auto const& dex : DexStoreClassesIterator(stores)) {
     for (auto const& cls : dex) {
-      if (is_seed(cls) || is_abstract(cls) || is_final(cls)) continue;
+      if (keep(cls) || is_abstract(cls) || is_final(cls)) continue;
       auto const& children = get_children(cls->get_type());
       if (children.empty()) {
         TRACE(ACCESS, 2, "Finalizing class: %s\n", SHOW(cls));
@@ -55,7 +55,7 @@ size_t mark_methods_final(const DexStoresVector& stores) {
   for (auto const& dex : DexStoreClassesIterator(stores)) {
     for (auto const& cls : dex) {
       for (auto const& method : cls->get_vmethods()) {
-        if (is_seed(method) || is_abstract(method) || is_final(method)) {
+        if (keep(method) || is_abstract(method) || is_final(method)) {
           continue;
         }
         if (!find_override(method, cls)) {
@@ -104,7 +104,8 @@ std::unordered_set<DexMethod*> find_static_methods(
   for (auto const& method : candidates) {
     if (is_static(method) ||
         uses_this(method) ||
-        is_seed(method) ||
+        keep(method) ||
+        method->is_external() ||
         is_abstract(method)) {
       continue;
     }
@@ -165,7 +166,7 @@ std::unordered_set<DexMethod*> find_private_methods(
   std::unordered_set<DexMethod*> candidates;
   for (auto m : cv) {
     TRACE(ACCESS, 3, "Considering for privatization: %s\n", SHOW(m));
-    if (!is_clinit(m) && !is_seed(m) && !is_abstract(m) && !is_private(m)) {
+    if (!is_clinit(m) && !keep(m) && !is_abstract(m) && !is_private(m)) {
       candidates.emplace(m);
     }
   }
@@ -233,9 +234,6 @@ void AccessMarkingPass::run_pass(
   ConfigFiles& cfg,
   PassManager& pm
 ) {
-  if (!cfg.using_seeds) {
-    return;
-  }
   if (m_finalize_classes) {
     auto n_classes_final = mark_classes_final(stores);
     pm.incr_metric("finalized_classes", n_classes_final);

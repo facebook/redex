@@ -366,10 +366,6 @@ void RemoveUnreachablePass::run_pass(
   ConfigFiles& cfg,
   PassManager& pm
 ) {
-  if (!cfg.using_seeds) {
-    TRACE(RMU, 1, "No seeds information.  Not running RemoveUnreachable.\n");
-    return;
-  }
   UnreachableCodeRemover ucr(stores);
   trace_stats("before", stores);
   ucr.mark_sweep();
