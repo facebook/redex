@@ -286,7 +286,7 @@ public:
           const auto& wrap = name_wrap.second;
           if (!wrap.name_has_changed()) continue;
           auto elem = wrap.get();
-          always_assert_log(should_rename_elem(elem),
+          always_assert_log(can_rename(elem),
               "Trying to rename (%s) %s:%s to %s, but we shouldn't\n",
               SHOW(sig_getter_fn(elem)), SHOW(elem->get_class()), SHOW(elem),
               wrap.get_name());
@@ -343,20 +343,11 @@ DexFieldManager new_dex_field_manager();
 typedef DexElemManager<DexMethod*, DexMethodRef, DexProto*> DexMethodManager;
 DexMethodManager new_dex_method_manager();
 
-// Whether or not the configs allow for us to obfuscate the member
-// We don't want to obfuscate seeds. Keep members shouldn't be obfuscated
-// unless we are explicitly told to do so with the allowobfuscation flag
-// an element being a seed trumps allowobfuscation.
-template <class T>
-bool should_rename_elem(const T member) {
-  return !is_seed(member) && (!keep(member) || allowobfuscation(member));
-}
-
 // Look at a list of members and check if there is a renamable member in the list
 template <class T>
 bool contains_renamable_elem(const std::list<T>& elems) {
   for (T e : elems)
-    if (should_rename_elem(e))
+    if (can_rename(e))
       return true;
   return false;
 }
@@ -424,7 +415,7 @@ public:
 
   // Whether or not on this pass we should rename the member
   virtual bool can_rename_elem(T elem) const {
-    return should_rename_elem(elem) && operateOnPrivates == is_private(elem);
+    return can_rename(elem) && operateOnPrivates == is_private(elem);
   }
 
 };
@@ -445,7 +436,7 @@ public:
 
   // For methods we have to make sure we don't rename <init> or <clinit> ever
   virtual bool can_rename_elem(DexMethod* elem) const override {
-    return should_rename_elem(elem) && operateOnPrivates == is_private(elem) &&
+    return can_rename(elem) && operateOnPrivates == is_private(elem) &&
       elem->get_name() != initstr && elem->get_name() != clinitstr;
   }
 };
