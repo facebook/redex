@@ -878,6 +878,49 @@ void process_keep(const ProguardMap& pg_map,
   }
 }
 
+// TODO(satnamsingh@fb.com): Replace with a user defined hash function.
+inline bool operator==(const MemberSpecification& lhs,
+                       const MemberSpecification& rhs) {
+  return lhs.requiredSetAccessFlags == rhs.requiredSetAccessFlags &&
+         lhs.requiredUnsetAccessFlags == rhs.requiredUnsetAccessFlags &&
+         lhs.annotationType == rhs.annotationType && lhs.name == rhs.name &&
+         lhs.descriptor == rhs.descriptor;
+}
+
+inline bool operator==(const ClassSpecification& lhs,
+                       const ClassSpecification& rhs) {
+  return lhs.className == rhs.className &&
+         lhs.annotationType == rhs.annotationType &&
+         lhs.extendsClassName == rhs.extendsClassName &&
+         lhs.extendsAnnotationType == rhs.extendsAnnotationType &&
+         lhs.setAccessFlags == rhs.setAccessFlags &&
+         lhs.unsetAccessFlags == rhs.unsetAccessFlags &&
+         lhs.fieldSpecifications == rhs.fieldSpecifications &&
+         lhs.methodSpecifications == rhs.methodSpecifications;
+}
+
+inline bool operator==(const KeepSpec& lhs, const KeepSpec& rhs) {
+  return lhs.includedescriptorclasses == rhs.includedescriptorclasses &&
+         lhs.allowshrinking == rhs.allowshrinking &&
+         lhs.allowoptimization == rhs.allowoptimization &&
+         lhs.allowobfuscation == rhs.allowobfuscation &&
+         lhs.class_spec == rhs.class_spec;
+}
+
+void filter_duplicate_rules(std::vector<KeepSpec>* keep_rules) {
+  std::vector<KeepSpec> unique;
+  for (const auto& rule : *keep_rules) {
+    auto it = std::find(unique.begin(), unique.end(), rule);
+    if (it == unique.end()) {
+      unique.push_back(rule);
+    }
+  }
+  keep_rules->clear();
+  for (const auto& rule : unique) {
+    keep_rules->push_back(rule);
+  }
+}
+
 void process_proguard_rules(const ProguardMap& pg_map,
                             ProguardConfiguration* pg_config,
                             Scope& classes) {
@@ -888,6 +931,13 @@ void process_proguard_rules(const ProguardMap& pg_map,
     method_count += cls->get_vmethods().size() + cls->get_dmethods().size();
   }
   std::unordered_map<std::string, boost::regex*> regex_map;
+  // Filter out duplicate rules to speed up processing.
+  filter_duplicate_rules(&pg_config->keep_rules);
+  filter_duplicate_rules(&pg_config->keepclasseswithmembers_rules);
+  filter_duplicate_rules(&pg_config->keepclassmembers_rules);
+  filter_duplicate_rules(&pg_config->assumenosideeffects_rules);
+  // Now process each of the different kinds of rules as well
+  // as assumenosideeffects.
   process_keep(pg_map,
                pg_config->keep_rules,
                regex_map,

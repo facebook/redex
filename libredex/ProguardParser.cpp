@@ -606,6 +606,11 @@ void parse_member_specifications(std::vector<unique_ptr<Token>>::iterator* it,
   }
 }
 
+bool member_comparison(const MemberSpecification& m1,
+                       const MemberSpecification& m2) {
+  return m1.name < m2.name;
+}
+
 ClassSpecification parse_class_specification(
     std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
   ClassSpecification class_spec;
@@ -679,6 +684,12 @@ ClassSpecification parse_class_specification(
   }
   // Parse the member specifications, if there are any
   parse_member_specifications(it, &class_spec, ok);
+  std::sort(class_spec.fieldSpecifications.begin(),
+            class_spec.fieldSpecifications.end(),
+            member_comparison);
+  std::sort(class_spec.methodSpecifications.begin(),
+            class_spec.methodSpecifications.end(),
+            member_comparison);
   return class_spec;
 }
 
