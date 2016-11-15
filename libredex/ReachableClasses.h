@@ -62,6 +62,15 @@ inline bool can_rename(DexMember* member) {
          allowobfuscation(member);
 }
 
+// A temporary measure to allow the RenamerV2 pass to rename classes
+// that would other not be renamable due to any top level blanket
+// keep rules.
+template<class DexMember>
+inline bool can_rename_if_ignoring_blanket_keep(DexMember* member) {
+  return (!(keep(member) || member->rstate.is_referenced_by_string()) ||
+         allowobfuscation(member)) || member->rstate.is_blanket_kept();
+}
+
 template<class DexMember>
 inline bool keep(DexMember* member) {
   return member->rstate.keep();

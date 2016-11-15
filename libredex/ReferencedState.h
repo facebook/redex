@@ -42,6 +42,10 @@ class ReferencedState {
   bool m_allowobfuscation{false};
   // assumenosideeffects allows certain methods to be removed.
   bool m_assumenosideeffects{false};
+  // Does this class have a blanket keep,allowshrinking applied to it?
+  bool m_blanket_keep{false};
+  // The number of keep rules that touch this class.
+  unsigned int m_keep_count{0};
 
  public:
   ReferencedState() = default;
@@ -72,6 +76,8 @@ class ReferencedState {
   bool allowoptimization() const { return m_allowoptimization; }
   bool allowobfuscation() const { return m_allowobfuscation; }
   bool assumenosideeffects() const { return m_assumenosideeffects; }
+
+  bool is_blanket_kept() const { return m_blanket_keep && m_keep_count == 1; }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
@@ -121,4 +127,8 @@ class ReferencedState {
   void set_allowobfuscation() { m_allowobfuscation = true; }
 
   void set_assumenosideeffects() { m_assumenosideeffects = true; }
+
+  void set_blanket_keep() { m_blanket_keep = true; }
+
+  void increment_keep_count() { m_keep_count++; }
 };

@@ -43,6 +43,21 @@ void apply_keep_modifiers(KeepSpec* k, DexMember* member) {
   }
 }
 
+// Is this keep_rule an application of a blanket top-level keep
+// -keep,allowshrinking class * rule?
+inline bool is_blanket_keep_rule(const KeepSpec& keep_rule) {
+  if (keep_rule.allowshrinking) {
+    const auto& spec = keep_rule.class_spec;
+    if (spec.className == "*" && spec.annotationType == "" &&
+        spec.fieldSpecifications.empty() && spec.methodSpecifications.empty() &&
+        spec.extendsAnnotationType == "" && spec.extendsClassName == "" &&
+        spec.setAccessFlags.size() == 0 && spec.unsetAccessFlags.size() == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
                                  const DexAccessFlags& access_flags) {
   auto require_public = requiredSet.count(AccessFlag::PUBLIC);
@@ -344,12 +359,13 @@ bool field_level_match(
   return boost::regex_match(dequalified_name, *fieldname_regex);
 }
 
-unsigned int keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
-                 redex::KeepSpec* keep_rule,
-                 const std::list<DexField*>& fields,
-                 redex::MemberSpecification* fieldSpecification,
-                 const boost::regex* fieldname_regex,
-                 std::function<void(DexField*)> keeper) {
+unsigned int keep_fields(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    redex::KeepSpec* keep_rule,
+    const std::list<DexField*>& fields,
+    redex::MemberSpecification* fieldSpecification,
+    const boost::regex* fieldname_regex,
+    std::function<void(DexField*)> keeper) {
   unsigned int count = 0;
   for (auto field : fields) {
     if (field_level_match(
@@ -422,12 +438,13 @@ void keep_clinits(DexClass* cls) {
   }
 }
 
-unsigned int keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
-                  KeepSpec* keep_rule,
-                  redex::MemberSpecification* methodSpecification,
-                  const std::list<DexMethod*>& methods,
-                  const boost::regex* method_regex,
-                  std::function<void(DexMethod*)> keeper) {
+unsigned int keep_methods(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec* keep_rule,
+    redex::MemberSpecification* methodSpecification,
+    const std::list<DexMethod*>& methods,
+    const boost::regex* method_regex,
+    std::function<void(DexMethod*)> keeper) {
   unsigned int count = 0;
   for (const auto& method : methods) {
     if (method_level_match(
@@ -462,17 +479,17 @@ unsigned int apply_method_keeps(
     boost::regex* method_regex =
         register_matcher(regex_map, qualified_method_regex);
     count += keep_methods(regex_map,
-                 keep_rule,
-                 &method_spec,
-                 cls->get_vmethods(),
-                 method_regex,
-                 keeper);
+                          keep_rule,
+                          &method_spec,
+                          cls->get_vmethods(),
+                          method_regex,
+                          keeper);
     count += keep_methods(regex_map,
-                 keep_rule,
-                 &method_spec,
-                 cls->get_dmethods(),
-                 method_regex,
-                 keeper);
+                          keep_rule,
+                          &method_spec,
+                          cls->get_dmethods(),
+                          method_regex,
+                          keeper);
   }
   return count;
 }
@@ -643,17 +660,23 @@ void mark_class_and_members_for_keep(
   keep_rule->count++;
   unsigned int count = 0;
   // Apply any field-level keep specifications.
-  count += apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
-    f->rstate.set_keep();
-  });
+  count +=
+      apply_field_keeps(regex_map, cls, keep_rule, [](DexField* f) -> void {
+        f->rstate.set_keep();
+      });
   // Apply any method-level keep specifications.
-  count += apply_method_keeps(regex_map, cls, keep_rule, [](DexMethod* m) -> void {
-    m->rstate.set_keep();
-  });
+  count +=
+      apply_method_keeps(regex_map, cls, keep_rule, [](DexMethod* m) -> void {
+        m->rstate.set_keep();
+      });
   if (!conditionally_mark_class || count > 0) {
     // Apply the keep option modifiers.
     apply_keep_modifiers(keep_rule, cls);
     cls->rstate.set_keep();
+    cls->rstate.increment_keep_count();
+    if (is_blanket_keep_rule(*keep_rule)) {
+      cls->rstate.set_blanket_keep();
+    }
   }
   // Mark superclasses.
   if (cls->get_super_class()) {
@@ -748,7 +771,8 @@ bool all_fields_match(std::unordered_map<std::string, boost::regex*>& regex_map,
 void process_keepclasseswithmembers(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     KeepSpec* keep_rule,
-    DexClass* cls, bool mark_classes_conditionally) {
+    DexClass* cls,
+    bool mark_classes_conditionally) {
   if (keep_rule->class_spec.fieldSpecifications.size() == 0 &&
       keep_rule->class_spec.methodSpecifications.size() == 0) {
     std::cerr << "WARNING: A keepclasseswithmembers rule for class "
@@ -763,7 +787,8 @@ void process_keepclasseswithmembers(
                         keep_rule->class_spec.methodSpecifications,
                         cls->get_vmethods(),
                         cls->get_dmethods())) {
-    mark_class_and_members_for_keep(regex_map, keep_rule, cls, mark_classes_conditionally);
+    mark_class_and_members_for_keep(
+        regex_map, keep_rule, cls, mark_classes_conditionally);
   }
   // Mark superclasses
   if (cls->get_super_class()) {
@@ -824,7 +849,8 @@ void process_keep(const ProguardMap& pg_map,
                   std::function<void(
                       std::unordered_map<std::string, boost::regex*>& regex_map,
                       KeepSpec*,
-                      DexClass*, bool)> keep_processor) {
+                      DexClass*,
+                      bool)> keep_processor) {
   boost::regex* matcher;
   for (auto& keep_rule : keep_rules) {
     auto descriptor =
@@ -889,6 +915,7 @@ void process_proguard_rules(const ProguardMap& pg_map,
   for (auto cls : classes) {
     if (is_annotation(cls)) {
       cls->rstate.set_keep();
+      cls->rstate.increment_keep_count();
     }
   }
 }
