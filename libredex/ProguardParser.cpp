@@ -113,11 +113,7 @@ bool parse_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
       return true;
     }
     for (const auto& filepath : parse_filepaths(it)) {
-      if (filepath[0] != '/') {
-        filepaths->push_back(basedir + "/" + filepath);
-      } else {
-        filepaths->push_back(filepath);
-      }
+      filepaths->push_back(filepath);
     }
     return true;
   }
@@ -156,11 +152,7 @@ bool parse_jars(std::vector<unique_ptr<Token>>::iterator* it,
     }
     // Parse the list of filenames.
     for (const auto& filepath : parse_filepaths(it)) {
-      if (filepath[0] != '/') {
-        jars->push_back(basedir + "/" + filepath);
-      } else {
-        jars->push_back(filepath);
-      }
+      jars->push_back(filepath);
     }
     return true;
   }
@@ -793,19 +785,32 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
 
     // Input/Output Options
-    if (parse_filepath_command(&it, token::include, pg_config->basedirectory, &pg_config->includes))
+    if (parse_filepath_command(&it,
+                               token::include,
+                               pg_config->basedirectory,
+                               &pg_config->includes))
       continue;
     if (parse_single_filepath_command(
             &it, token::basedirectory, &pg_config->basedirectory))
       continue;
-    if (parse_jars(&it, token::injars, pg_config->basedirectory, &pg_config->injars)) continue;
-    if (parse_jars(&it, token::outjars, pg_config->basedirectory, &pg_config->outjars)) continue;
-    if (parse_jars(&it, token::libraryjars, pg_config->basedirectory, &pg_config->libraryjars)) continue;
+    if (parse_jars(
+            &it, token::injars, pg_config->basedirectory, &pg_config->injars))
+      continue;
+    if (parse_jars(
+            &it, token::outjars, pg_config->basedirectory, &pg_config->outjars))
+      continue;
+    if (parse_jars(&it,
+                   token::libraryjars,
+                   pg_config->basedirectory,
+                   &pg_config->libraryjars))
+      continue;
     // -skipnonpubliclibraryclasses not supported
     // -dontskipnonpubliclibraryclasses not supported
     // -dontskipnonpubliclibraryclassmembers not supported
-    if (parse_filepath_command(
-            &it, token::keepdirectories, pg_config->basedirectory, &pg_config->keepdirectories))
+    if (parse_filepath_command(&it,
+                               token::keepdirectories,
+                               pg_config->basedirectory,
+                               &pg_config->keepdirectories))
       continue;
     if (parse_target(&it, &pg_config->target_version)) continue;
     // -forceprocessing not supported
@@ -958,9 +963,14 @@ void parse(istream& config, ProguardConfiguration* pg_config) {
 void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
 
   ifstream config(filename);
+  // First try relative path.
   if (!config.is_open()) {
-    cerr << "Failed to open ProGuard configuration file " << filename << endl;
-    pg_config->ok = false;
+    // Try with -basedirectory
+    config.open(pg_config->basedirectory + "/" + filename);
+    if (!config.is_open()) {
+      cerr << "Failed to open ProGuard configuration file " << filename << endl;
+      pg_config->ok = false;
+    }
   }
 
   parse(config, pg_config);

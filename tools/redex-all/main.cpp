@@ -458,11 +458,16 @@ int main(int argc, char* argv[]) {
     for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str())) {
-        fprintf(
-            stderr,
-            "WARNING: Error in jar %s - continue. This may lead to unexpected "
-            "behavior, please check your jars\n",
-            library_jar.c_str());
+        // Try again with the basedir
+        std::string basedir_path =
+            pg_config.basedirectory + "/" + library_jar.c_str();
+        if (!load_jar_file(basedir_path.c_str())) {
+          fprintf(stderr,
+                  "WARNING: Error in jar %s - continue. This may lead to "
+                  "unexpected "
+                  "behavior, please check your jars\n",
+                  library_jar.c_str());
+        }
       }
     }
   }
