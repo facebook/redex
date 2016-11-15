@@ -2,6 +2,10 @@
 
 set -o pipefail
 
+# This script takes either two dexes, two APKs, or two text files which have
+# the output of dexdump, and returns a diff of the two with extraneous info
+# (like addresses) filtered out .
+
 INPUT=$1
 REDEXOUT=$2
 TEMPDIR=`mktemp -d 2>/dev/null || mktemp -d -t 'extractdexdump'`
@@ -22,34 +26,31 @@ elif [[ "$INPUT" =~ apk$ ]]; then
         DEXDUMP="$ROOT/scripts/ordering/extractdexdump"
     fi
 else
-    echo "You must specify a dex or apk file as input\"$INPUT\"."
-    exit 2;
+    DEXDUMP=cat
 fi
+
 export LC_ALL=C
-$DEXDUMP $INPUT | \
-    sed 's/^Processing .*dex//' | \
-    sed 's/^Opened .*dex//' | \
-    sed 's/^  source_file_idx   : [0-9]* /  source_file_idx   : /' | \
-    sed 's/^.*|/|/' | \
-    sed 's/|\[[0-9a-f]*\]/|\[\]/' | \
-    sed 's/type@[0-9a-f]*/type@/' | \
-    sed 's/string@[0-9a-f]*/string@/' | \
-    sed 's/method@[0-9a-f]*/method@/' | \
-    sed 's/field@[0-9a-f]*/field@/' | \
-    sed 's/^|[0-9a-f]*:/|:/' \
-    > $OUTA
-$DEXDUMP $REDEXOUT | \
-    sed 's/^Processing .*dex//' | \
-    sed 's/^Opened .*dex//' | \
-    sed 's/^  source_file_idx   : [0-9]* /  source_file_idx   : /' | \
-    sed 's/^.*|/|/' | \
-    sed 's/|\[[0-9a-f]*\]/|\[\]/' | \
-    sed 's/type@[0-9a-f]*/type@/' | \
-    sed 's/string@[0-9a-f]*/string@/' | \
-    sed 's/method@[0-9a-f]*/method@/' | \
-    sed 's/field@[0-9a-f]*/field@/' | \
-    sed 's/^|[0-9a-f]*:/|:/' \
-    > $OUTB
+
+function strip_cruft() {
+    local GET_DUMP_CMD="$1"
+    local OUT="$2"
+    $GET_DUMP_CMD | \
+        sed 's/^Processing .*dex//' | \
+        sed 's/^Opened .*dex//' | \
+        sed 's/^  source_file_idx   : [0-9]* /  source_file_idx   : /' | \
+        sed 's/^.*|/|/' | \
+        sed 's/|\[[0-9a-f]*\]/|\[\]/' | \
+        sed 's/type@[0-9a-f]*/type@/' | \
+        sed 's/string@[0-9a-f]*/string@/' | \
+        sed 's/method@[0-9a-f]*/method@/' | \
+        sed 's/field@[0-9a-f]*/field@/' | \
+        sed 's/0x[0-9a-f]* line=[0-9]*//' | \
+        sed 's/^|[0-9a-f]*:/|:/' \
+        > "$OUT"
+}
+
+strip_cruft "$DEXDUMP $INPUT" "$OUTA"
+strip_cruft "$DEXDUMP $REDEXOUT" "$OUTB"
 
 diff --speed-large-files -u $OUTA $OUTB | tee $OUTDIFF
 if [ $? == 0 ]; then
