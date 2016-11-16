@@ -49,9 +49,13 @@ class ReferencedState {
 
  public:
   ReferencedState() = default;
-  bool can_delete() const { return !m_bytype; }
+  bool can_delete() const {
+    return !m_bytype && (!m_keep || m_allowshrinking) && !m_seed;
+  }
   bool can_rename() const {
-    return !(m_bystring || m_keep) || m_allowobfuscation;
+    return !m_bystring &&
+           ((!m_keep || m_allowobfuscation) && !m_allowshrinking) &&
+           !m_seed;
   }
 
   /**
@@ -89,14 +93,10 @@ class ReferencedState {
     m_computed = m_computed && from_code;
   }
 
-  bool is_referenced_by_string() {
-    return m_bystring;
-  }
+  bool is_referenced_by_string() { return m_bystring; }
 
   // A direct reference from code (not reflection)
-  void ref_by_type() {
-    m_bytype = true;
-  }
+  void ref_by_type() { m_bytype = true; }
 
   /* Called before recompute */
   void clear_if_compute() {

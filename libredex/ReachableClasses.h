@@ -33,18 +33,6 @@ unsigned int init_seed_classes(
  * nullptr checks everywhere.
  */
 
-// This function will return true if a class or member
-// is allowed to be deleted according to the ProGuard
-// configuration. The application logic should still
-// be certain that the item being deleted can safely
-// be removed e.g. it is not reachable from any seeds
-// or analysis or optimizations have made this item
-// into dead code.
-template<class DexMember>
-inline bool can_delete_if_unused(DexMember* member) {
-  return !keep(member) || allowshrinking(member);
-}
-
 // can_delete is the to be deprecated function for
 // determining if something can be deleted. We should
 // find each and every use of can_delete and replace it
@@ -53,13 +41,12 @@ inline bool can_delete_if_unused(DexMember* member) {
 // removed.
 template<class DexMember>
 inline bool can_delete(DexMember* member) {
-  return !keep(member);
+  return member->rstate.can_delete();
 }
 
 template<class DexMember>
 inline bool can_rename(DexMember* member) {
-  return !(keep(member) || member->rstate.is_referenced_by_string()) ||
-         allowobfuscation(member);
+  return member->rstate.can_rename();
 }
 
 // A temporary measure to allow the RenamerV2 pass to rename classes
@@ -67,8 +54,7 @@ inline bool can_rename(DexMember* member) {
 // keep rules.
 template<class DexMember>
 inline bool can_rename_if_ignoring_blanket_keep(DexMember* member) {
-  return (!(keep(member) || member->rstate.is_referenced_by_string()) ||
-         allowobfuscation(member)) || member->rstate.is_blanket_kept();
+  return can_rename(member) || member->rstate.is_blanket_kept();
 }
 
 template<class DexMember>
