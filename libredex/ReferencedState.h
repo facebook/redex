@@ -98,6 +98,10 @@ class ReferencedState {
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
 
+  bool is_referenced_by_type() {
+    return m_bytype;
+  }
+
   /* Called before recompute */
   void clear_if_compute() {
     if (m_computed) {

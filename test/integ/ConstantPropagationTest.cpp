@@ -138,8 +138,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
     new RemoveEmptyClassesPass()
   };
 
-  std::vector<KeepRule> null_rules;
-  PassManager manager(passes, null_rules);
+  PassManager manager(passes);
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);

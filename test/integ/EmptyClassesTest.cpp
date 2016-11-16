@@ -49,21 +49,10 @@ TEST(EmptyClassesTest1, emptyclasses) {
     new RemoveEmptyClassesPass(),
   };
 
-  std::vector<KeepRule> null_rules;
-  auto const keep = { "Lcom/facebook/redextest/DoNotStrip;" };
-  Json::Value keep_annotations = Json::arrayValue;
-  for (const auto elt : keep) {
-    keep_annotations.append(Json::Value(elt));
-  }
-  Json::Value conf_obj;
-  conf_obj["keep_annotations"] = keep_annotations;
-  PassManager manager(
-    passes,
-    null_rules,
-    conf_obj
-  );
+  PassManager manager(passes);
+
+  Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  dummy_cfg.using_seeds = true;
   manager.run_passes(stores, dummy_cfg);
 
   size_t after = 0;
@@ -99,7 +88,7 @@ TEST(EmptyClassesTest1, emptyclasses) {
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/EmptyButLaterExtended;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/Extender;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NotUsedHere;"));
-  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/DontKillMeNow;"));
+  ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/DontKillMeNow;"));
 
   delete g_redex;
 }

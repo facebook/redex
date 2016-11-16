@@ -33,7 +33,6 @@
 #include "PassManager.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
-#include "ProguardLoader.h" // Old ProGuard Parser
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
@@ -394,21 +393,6 @@ int main(int argc, char* argv[]) {
     redex::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
 
-  std::vector<KeepRule> rules;
-  {
-    auto transform_rules = [&rules](const std::vector<redex::KeepSpec>& ks) {
-      for (auto const& r : ks) {
-        KeepRule kr;
-        kr.class_type = keeprules::ClassType::CLASS;
-        kr.classname = r.class_spec.className.c_str();
-        rules.emplace_back(std::move(kr));
-      }
-    };
-    transform_rules(pg_config.keep_rules);
-    transform_rules(pg_config.keepclassmembers_rules);
-    transform_rules(pg_config.keepclasseswithmembers_rules);
-  }
-
   auto const& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
 
@@ -490,7 +474,7 @@ int main(int argc, char* argv[]) {
   }
 
   auto const& passes = PassRegistry::get().get_passes();
-  PassManager manager(passes, rules, pg_config, args.config);
+  PassManager manager(passes, pg_config, args.config);
   {
     Timer t("Running optimization passes");
     manager.run_passes(stores, cfg);

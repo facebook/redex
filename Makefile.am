@@ -9,7 +9,6 @@ AM_CXXFLAGS = --std=gnu++11 -O3 -Wall -g
 # Include paths
 #
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/configparser \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
@@ -53,9 +52,6 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
-	configparser/keeprules.cc \
-	configparser/generated_files/parser.cc \
-	configparser/generated_files/tokenizer.cc \
 	liblocator/locator.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
@@ -76,7 +72,6 @@ libredex_la_SOURCES = \
 	libredex/PassRegistry.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardLexer.cpp \
-	libredex/ProguardLoader.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
 	libredex/ProguardParser.cpp \

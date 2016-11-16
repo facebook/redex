@@ -23,35 +23,6 @@
 
 namespace {
 
-/**
- * Class is used directly in code (As opposed to used via reflection)
- *
- * For example, it could be used by one of these instructions:
- *   check-cast
- *   new-instance
- *   const-class
- *   instance-of
- */
-void mark_reachable_directly(DexClass* dclass) {
-  if (dclass == nullptr) return;
-  dclass->rstate.ref_by_type();
-  // When we mark a class as reachable, we also mark all fields and methods as
-  // reachable.  Eventually we will be smarter about this, which will allow us
-  // to remove unused methods and fields.
-  for (DexMethod* dmethod : dclass->get_dmethods()) {
-    dmethod->rstate.ref_by_type();
-  }
-  for (DexMethod* vmethod : dclass->get_vmethods()) {
-    vmethod->rstate.ref_by_type();
-  }
-  for (DexField* sfield : dclass->get_sfields()) {
-    sfield->rstate.ref_by_type();
-  }
-  for (DexField* ifield : dclass->get_ifields()) {
-    ifield->rstate.ref_by_type();
-  }
-}
-
 template<typename DexMember>
 void mark_only_reachable_directly(DexMember* m) {
    m->rstate.ref_by_type();
@@ -245,7 +216,6 @@ bool in_reflected_pkg(DexClass* dclass,
 void init_permanently_reachable_classes(
   const Scope& scope,
   const Json::Value& config,
-  const std::vector<KeepRule>& proguard_rules,
   const std::unordered_set<DexType*>& no_optimizations_anno
 ) {
   PassConfig pc(config);
@@ -342,46 +312,6 @@ void init_permanently_reachable_classes(
       mark_reachable_by_classname(clazz, false);
     }
   }
-
-  /* Do only keep class rules for now.
-   * '*' and '**' rules are skipped,
-   * because those are matching on something else,
-   * which we haven't implemented yet.
-   * Rules can be "*" or "**" on classname and match
-   * on some other attribute. We don't match against
-   * all attributes at once, so this prevents us
-   * from matching everything.
-   */
-  std::vector<std::string> cls_patterns;
-  for (auto const& r : proguard_rules) {
-    if (r.classname != nullptr &&
-        (r.class_type == keeprules::ClassType::CLASS ||
-         r.class_type == keeprules::ClassType::INTERFACE) &&
-          strlen(r.classname) > 2) {
-      std::string cls_pattern(r.classname);
-      std::replace(cls_pattern.begin(), cls_pattern.end(), '.', '/');
-      auto prep_pat = 'L' + cls_pattern;
-      TRACE(PGR, 2, "adding pattern %s \n", prep_pat.c_str());
-      cls_patterns.push_back(prep_pat);
-    }
-  }
-  size_t pg_marked_classes = 0;
-  for (auto clazz : scope) {
-    auto cname = clazz->get_type()->get_name()->c_str();
-    auto cls_len = strlen(cname);
-    for (auto const& pat : cls_patterns) {
-        size_t pat_len = pat.size();
-        if (type_matches(pat.c_str(), cname, pat_len, cls_len)) {
-          mark_reachable_directly(clazz);
-          TRACE(PGR, 2, "matched cls %s against pattern %s \n",
-              cname, pat.c_str());
-          pg_marked_classes++;
-          break;
-      }
-    }
-  }
-  TRACE(PGR, 1, "matched on %lu classes with CLASS KEEP proguard rules \n",
-      pg_marked_classes);
 }
 
 }
@@ -408,14 +338,12 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
 void init_reachable_classes(
     const Scope& scope,
     const Json::Value& config,
-    const std::vector<KeepRule>& proguard_rules,
     const redex::ProguardConfiguration& pg_config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex
   // passes will cause them to be no longer reachable.  For example, if a
   // class is referenced from the manifest.
-  init_permanently_reachable_classes(
-      scope, config, proguard_rules, no_optimizations_anno);
+  init_permanently_reachable_classes(scope, config, no_optimizations_anno);
 
   // Classes that are reachable in ways that could change as Redex runs. For
   // example, a class might be instantiated from a method, but if that method

@@ -31,11 +31,9 @@ redex::ProguardConfiguration empty_pg_config() {
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
-                         const std::vector<KeepRule>& rules,
                          const Json::Value& config)
     : m_config(config),
       m_registered_passes(passes),
-      m_proguard_rules(rules),
       m_current_pass_metrics(nullptr),
       m_pg_config(empty_pg_config()) {
   if (config["redex"].isMember("passes")) {
@@ -50,12 +48,10 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
-                         const std::vector<KeepRule>& rules,
                          const redex::ProguardConfiguration& pg_config,
                          const Json::Value& config)
     : m_config(config),
       m_registered_passes(passes),
-      m_proguard_rules(rules),
       m_current_pass_metrics(nullptr),
       m_pg_config(pg_config) {
   if (config["redex"].isMember("passes")) {
@@ -76,7 +72,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     Timer t("Initializing reachable classes");
     init_reachable_classes(scope,
                            m_config,
-                           m_proguard_rules,
                            m_pg_config,
                            cfg.get_no_optimizations_annos());
   }

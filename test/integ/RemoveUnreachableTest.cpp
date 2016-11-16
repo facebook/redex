@@ -131,8 +131,7 @@ TEST(RemoveUnreachableTest, synthetic) {
   // Make sure some unreachable things exist before we start.
   ASSERT_TRUE(find_vmethod(classes, "LA;", "V", "bor", {}));
 
-  std::vector<KeepRule> null_rules;
-  PassManager manager(passes, null_rules);
+  PassManager manager(passes);
   manager.run_passes(stores, dummy_cfg);
 
   // Seed elements

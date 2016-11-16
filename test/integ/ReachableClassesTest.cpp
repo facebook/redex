@@ -47,12 +47,10 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   }
 
   std::vector<Pass*> passes;
-  std::vector<KeepRule> null_rules;
   Json::Value conf_obj;
 
   PassManager manager(
     passes,
-    null_rules,
     conf_obj
   );
 

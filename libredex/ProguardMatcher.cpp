@@ -21,7 +21,6 @@
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
 #include "ReachableClasses.h"
-#include "keeprules.h"
 
 namespace redex {
 

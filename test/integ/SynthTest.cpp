@@ -77,8 +77,7 @@ TEST(SynthTest1, synthetic) {
       new ReBindRefsPass(), new SynthPass(), new LocalDcePass(),
   };
 
-  std::vector<KeepRule> null_rules;
-  PassManager manager(passes, null_rules);
+  PassManager manager(passes);
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
