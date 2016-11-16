@@ -12,16 +12,16 @@
 #include <algorithm>
 #include <map>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
 
+#include "Walkers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
-#include "ReachableClasses.h"
 #include "Resolver.h"
-#include "Walkers.h"
+#include "ReachableClasses.h"
 
 /*
  * This is not a visitor pattern dead-code eliminator with explicit
@@ -50,8 +50,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   return DexType::get_type(buf.c_str());
 }
 
-// Search a class name in a list of package names, return true if there is a
-// match
+// Search a class name in a list of package names, return true if there is a match
 bool find_package(const char* name) {
   // If there's no whitelisted package, optimize every package by default
   if (package_filter.size() == 0) {
@@ -84,66 +83,69 @@ void process_signature_anno(DexString* dstring) {
 
 void find_referenced_classes(const Scope& scope) {
   std::unordered_set<DexString*> maybetypes;
-  walk_annotations(scope, [&](DexAnnotation* anno) {
-    static DexType* dalviksig =
+  walk_annotations(
+    scope,
+    [&](DexAnnotation* anno) {
+      static DexType* dalviksig =
         DexType::get_type("Ldalvik/annotation/Signature;");
-    // Signature annotations contain strings that Jackson uses
-    // to construct the underlying types.
-    if (anno->type() == dalviksig) {
-      auto elems = anno->anno_elems();
-      for (auto const& elem : elems) {
-        auto ev = elem.encoded_value;
-        if (ev->evtype() != DEVT_ARRAY) continue;
-        auto arrayev = static_cast<DexEncodedValueArray*>(ev);
-        auto const& evs = arrayev->evalues();
-        for (auto strev : *evs) {
-          if (strev->evtype() != DEVT_STRING) continue;
-          auto stringev = static_cast<DexEncodedValueString*>(strev);
-          process_signature_anno(stringev->string());
+      // Signature annotations contain strings that Jackson uses
+      // to construct the underlying types.
+      if (anno->type() == dalviksig) {
+        auto elems = anno->anno_elems();
+        for (auto const& elem : elems) {
+          auto ev = elem.encoded_value;
+          if (ev->evtype() != DEVT_ARRAY) continue;
+          auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+          auto const& evs = arrayev->evalues();
+          for (auto strev : *evs) {
+            if (strev->evtype() != DEVT_STRING) continue;
+            auto stringev = static_cast<DexEncodedValueString*>(strev);
+            process_signature_anno(stringev->string());
+          }
         }
+        return;
       }
-      return;
-    }
-    // Class literals in annotations.
-    // Example:
-    //    @JsonDeserialize(using=MyJsonDeserializer.class)
-    if (anno->runtime_visible()) {
-      auto elems = anno->anno_elems();
-      for (auto const& dae : elems) {
-        auto evalue = dae.encoded_value;
-        std::vector<DexType*> ltype;
-        evalue->gather_types(ltype);
-        if (ltype.size()) {
-          for (auto dextype : ltype) {
-            referenced_classes.insert(type_class(dextype));
+      // Class literals in annotations.
+      // Example:
+      //    @JsonDeserialize(using=MyJsonDeserializer.class)
+      if (anno->runtime_visible()) {
+        auto elems = anno->anno_elems();
+        for (auto const& dae : elems) {
+          auto evalue = dae.encoded_value;
+          std::vector<DexType*> ltype;
+          evalue->gather_types(ltype);
+          if (ltype.size()) {
+            for (auto dextype : ltype) {
+              referenced_classes.insert(type_class(dextype));
+            }
           }
         }
       }
-    }
-  });
+    });
 
-  walk_code(scope,
-            [](DexMethod*) { return true; },
-            [&](DexMethod* meth, DexCode& code) {
-              auto opcodes = code.get_instructions();
-              for (const auto& opcode : opcodes) {
-                // Matches any stringref that name-aliases a type.
-                if (opcode->has_strings()) {
-                  auto stringop = static_cast<DexOpcodeString*>(opcode);
-                  DexString* dsclzref = stringop->get_string();
-                  DexType* dtexclude =
-                      get_dextype_from_dotname(dsclzref->c_str());
-                  if (dtexclude == nullptr) continue;
-                  TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
-                  referenced_classes.insert(type_class(dtexclude));
-                }
-                if (opcode->has_types()) {
-                  auto typeop = static_cast<DexOpcodeType*>(opcode);
-                  TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
-                  referenced_classes.insert(type_class(typeop->get_type()));
-                }
-              }
-            });
+  walk_code(
+    scope,
+    [](DexMethod*) { return true; },
+    [&](DexMethod* meth, DexCode& code) {
+      auto opcodes = code.get_instructions();
+      for (const auto& opcode : opcodes) {
+        // Matches any stringref that name-aliases a type.
+        if (opcode->has_strings()) {
+          auto stringop = static_cast<DexOpcodeString*>(opcode);
+          DexString* dsclzref = stringop->get_string();
+          DexType* dtexclude =
+            get_dextype_from_dotname(dsclzref->c_str());
+          if (dtexclude == nullptr) continue;
+          TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
+          referenced_classes.insert(type_class(dtexclude));
+        }
+        if (opcode->has_types()) {
+          auto typeop = static_cast<DexOpcodeType*>(opcode);
+          TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
+          referenced_classes.insert(type_class(typeop->get_type()));
+        }
+      }
+    });
 }
 
 bool can_remove(const DexClass* cls) {
@@ -166,8 +168,7 @@ bool filter_class(DexClass* clazz) {
   if (!find_package(clazz->get_name()->c_str())) {
     return true;
   }
-  return is_interface(clazz) || is_annotation(clazz) ||
-         !can_remove_class(clazz);
+  return is_interface(clazz) || is_annotation(clazz) || !can_remove_class(clazz) ;
 }
 
 using ClassSet = std::unordered_set<DexClass*>;
@@ -259,21 +260,15 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       continue;
     }
     clazz->get_dmethods().remove(init);
-    TRACE(DELINIT,
-          5,
-          "Delete init %s.%s %s\n",
-          SHOW(init->get_class()),
-          SHOW(init->get_name()),
-          SHOW(init->get_proto()));
+    TRACE(DELINIT, 5, "Delete init %s.%s %s\n", SHOW(init->get_class()),
+        SHOW(init->get_name()), SHOW(init->get_proto()));
     init_deleted++;
   }
   TRACE(DELINIT, 2, "Removed %d <init> methods\n", init_deleted);
   TRACE(DELINIT, 3, "%d <init> methods called\n", init_called);
   TRACE(DELINIT, 3, "%d <init> methods do not delete\n", init_cant_delete);
-  TRACE(DELINIT,
-        3,
-        "%d <init> method classes do not delete\n",
-        init_class_cant_delete);
+  TRACE(DELINIT, 3, "%d <init> method classes do not delete\n",
+      init_class_cant_delete);
   find_unreachable(scope);
   del_init_res.deleted_inits += init_deleted;
   return init_deleted;
@@ -301,12 +296,9 @@ void DeadRefs::find_unreachable(Scope& scope) {
 
     find_unreachable_data(clazz);
   }
-  TRACE(DELINIT,
-        2,
-        "Uninstantiable classes %ld: vmethods %ld, ifields %ld\n",
-        classes.size(),
-        vmethods.size(),
-        ifields.size());
+  TRACE(DELINIT, 2,
+      "Uninstantiable classes %ld: vmethods %ld, ifields %ld\n",
+      classes.size(), vmethods.size(), ifields.size());
 }
 
 /**
@@ -350,11 +342,9 @@ void DeadRefs::collect_dmethods(Scope& scope) {
       }
     }
   }
-  TRACE(DELINIT,
-        3,
-        "Found %ld init and %ld dmethods\n",
-        initmethods.size(),
-        dmethods.size());
+  TRACE(DELINIT, 3,
+      "Found %ld init and %ld dmethods\n",
+      initmethods.size(), dmethods.size());
 }
 
 /**
@@ -365,40 +355,37 @@ void DeadRefs::collect_dmethods(Scope& scope) {
 void DeadRefs::track_callers(Scope& scope) {
   called.clear();
   walk_opcodes(scope,
-               [](DexMethod*) { return true; },
-               [&](DexMethod* m, DexInstruction* insn) {
-                 if (insn->has_methods()) {
-                   auto methodop = static_cast<DexOpcodeMethod*>(insn);
-                   auto callee = methodop->get_method();
-                   callee = resolve_method(callee, opcode_to_search(insn));
-                   if (callee == nullptr || !callee->is_concrete()) return;
-                   if (vmethods.count(callee) > 0) {
-                     vmethods.erase(callee);
-                   }
-                   called.insert(callee);
-                   return;
-                 }
-                 if (insn->has_fields()) {
-                   auto fieldop = static_cast<DexOpcodeField*>(insn);
-                   auto field = fieldop->field();
-                   field = resolve_field(field,
-                                         is_ifield_op(insn->opcode())
-                                             ? FieldSearch::Instance
-                                             : is_sfield_op(insn->opcode())
-                                                   ? FieldSearch::Static
-                                                   : FieldSearch::Any);
-                   if (field == nullptr || !field->is_concrete()) return;
-                   if (ifields.count(field) > 0) {
-                     ifields.erase(field);
-                   }
-                   return;
-                 }
-               });
-  TRACE(DELINIT,
-        3,
-        "Unreachable (not called) %ld vmethods and %ld ifields\n",
-        vmethods.size(),
-        ifields.size());
+      [](DexMethod*) { return true; },
+      [&](DexMethod* m, DexInstruction* insn) {
+        if (insn->has_methods()) {
+          auto methodop = static_cast<DexOpcodeMethod*>(insn);
+          auto callee = methodop->get_method();
+          callee = resolve_method(callee, opcode_to_search(insn));
+          if (callee == nullptr || !callee->is_concrete()) return;
+          if (vmethods.count(callee) > 0) {
+            vmethods.erase(callee);
+          }
+          called.insert(callee);
+          return;
+        }
+        if (insn->has_fields()) {
+          auto fieldop = static_cast<DexOpcodeField*>(insn);
+          auto field = fieldop->field();
+          field = resolve_field(field,
+              is_ifield_op(insn->opcode()) ?
+                  FieldSearch::Instance :
+                  is_sfield_op(insn->opcode()) ?
+                      FieldSearch::Static : FieldSearch::Any);
+          if (field == nullptr || !field->is_concrete()) return;
+          if (ifields.count(field) > 0) {
+            ifields.erase(field);
+          }
+          return;
+        }
+      });
+  TRACE(DELINIT, 3,
+      "Unreachable (not called) %ld vmethods and %ld ifields\n",
+      vmethods.size(), ifields.size());
 }
 
 /**
@@ -417,12 +404,9 @@ int DeadRefs::remove_unreachable() {
 
     methods.erase(meth_it);
     vmethodcnt++;
-    TRACE(DELINIT,
-          6,
-          "Delete vmethod: %s.%s %s\n",
-          SHOW(meth->get_class()),
-          SHOW(meth->get_name()),
-          SHOW(meth->get_proto()));
+    TRACE(DELINIT, 6, "Delete vmethod: %s.%s %s\n",
+        SHOW(meth->get_class()), SHOW(meth->get_name()),
+        SHOW(meth->get_proto()));
   }
   del_init_res.deleted_vmeths += vmethodcnt;
   TRACE(DELINIT, 2, "Removed %d vmethods\n", vmethodcnt);
@@ -436,12 +420,9 @@ int DeadRefs::remove_unreachable() {
 
     fields.erase(field_it);
     ifieldcnt++;
-    TRACE(DELINIT,
-          6,
-          "Delete ifield: %s.%s %s\n",
-          SHOW(field->get_class()),
-          SHOW(field->get_name()),
-          SHOW(field->get_type()));
+    TRACE(DELINIT, 6, "Delete ifield: %s.%s %s\n",
+      SHOW(field->get_class()), SHOW(field->get_name()),
+      SHOW(field->get_type()));
   }
   del_init_res.deleted_ifields += ifieldcnt;
   TRACE(DELINIT, 2, "Removed %d ifields\n", ifieldcnt);
@@ -461,12 +442,9 @@ int DeadRefs::remove_unreachable() {
     auto clazz = type_class(meth->get_class());
     clazz->get_dmethods().remove(meth);
     dmethodcnt++;
-    TRACE(DELINIT,
-          6,
-          "Delete dmethod: %s.%s %s\n",
-          SHOW(meth->get_class()),
-          SHOW(meth->get_name()),
-          SHOW(meth->get_proto()));
+    TRACE(DELINIT, 6, "Delete dmethod: %s.%s %s\n",
+        SHOW(meth->get_class()), SHOW(meth->get_name()),
+        SHOW(meth->get_proto()));
   }
   del_init_res.deleted_dmeths += dmethodcnt;
   TRACE(DELINIT, 2, "Removed %d dmethods\n", dmethodcnt);
@@ -475,30 +453,23 @@ int DeadRefs::remove_unreachable() {
 
   return vmethodcnt + ifieldcnt + dmethodcnt;
 }
+
 }
 
-void DelInitPass::run_pass(DexStoresVector& stores,
-                           ConfigFiles& cfg,
-                           PassManager& mgr) {
-  if (!cfg.using_seeds && mgr.no_proguard_rules() &&
-      m_package_filter.size() == 0) {
-    TRACE(DELINIT,
-          1,
-          "No seeds information or ProGuard rules so not running DelInit\n");
-    return;
-  }
+void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   package_filter = m_package_filter;
   auto scope = build_class_scope(stores);
   find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
-  TRACE(DELINIT,
-        1,
-        "Removed %d <init> methods\n",
-        drefs.del_init_res.deleted_inits);
-  TRACE(DELINIT, 1, "Removed %d vmethods\n", drefs.del_init_res.deleted_vmeths);
-  TRACE(DELINIT, 1, "Removed %d ifields\n", drefs.del_init_res.deleted_ifields);
-  TRACE(DELINIT, 1, "Removed %d dmethods\n", drefs.del_init_res.deleted_dmeths);
+  TRACE(DELINIT, 1, "Removed %d <init> methods\n",
+      drefs.del_init_res.deleted_inits);
+  TRACE(DELINIT, 1, "Removed %d vmethods\n",
+      drefs.del_init_res.deleted_vmeths);
+  TRACE(DELINIT, 1, "Removed %d ifields\n",
+      drefs.del_init_res.deleted_ifields);
+  TRACE(DELINIT, 1, "Removed %d dmethods\n",
+      drefs.del_init_res.deleted_dmeths);
   post_dexen_changes(scope, stores);
 }
 
