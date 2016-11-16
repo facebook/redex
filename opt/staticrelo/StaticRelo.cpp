@@ -234,7 +234,6 @@ candidates_t build_candidates(
     // we could still move methods and not delete the class, but let's
     // simplify things for now.
     && m::can_delete<DexClass>()
-    && !m::is_seed<DexClass>()
     && !m::any_annos<DexClass>(
         m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
 
