@@ -22,6 +22,7 @@ enum class DontRenameReasonCode {
   Canaries,
   NativeBindings,
   ClassForTypesWithReflection,
+  ProguardCantRename,
 };
 
 struct DontRenameReason {

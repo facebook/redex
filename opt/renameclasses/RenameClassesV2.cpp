@@ -61,6 +61,8 @@ const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
       return "num_dont_rename_native_bindings";
     case DontRenameReasonCode::ClassForTypesWithReflection:
       return "num_dont_rename_class_for_types_with_reflection";
+    case DontRenameReasonCode::ProguardCantRename:
+      return "num_dont_rename_pg_cant_rename";
     default:
       always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
   }
@@ -502,6 +504,11 @@ void RenameClassesPassV2::eval_classes(
     if (dont_rename_hierarchies.count(clazz->get_type()) > 0) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
       m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Hierarchy, rule };
+      continue;
+    }
+
+    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ProguardCantRename, norule };
       continue;
     }
   }
