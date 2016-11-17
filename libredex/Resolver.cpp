@@ -161,6 +161,12 @@ DexField* resolve_field(
           return sfield;
         }
       }
+      // static final fields may be coming from interfaces so we
+      // have to walk up the interface hierarchy too
+      for (const auto& intf : cls->get_interfaces()->get_type_list()) {
+        auto field = resolve_field(intf, name, type, fs);
+        if (field != nullptr) return field;
+      }
     }
     cls = type_class(cls->get_super_class());
   }

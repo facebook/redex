@@ -45,7 +45,7 @@ DexField* make_field_def(DexType* cls, const char* name, DexType* type,
 }
 
 DexClass* create_class(DexType* type, DexType* super,
-    std::vector<DexField*> fields,
+    std::vector<DexType*>& intfs, std::vector<DexField*>& fields,
     DexAccessFlags access = ACC_PUBLIC, bool external = false) {
   ClassCreator creator(type);
   creator.set_access(access);
@@ -53,30 +53,46 @@ DexClass* create_class(DexType* type, DexType* super,
   if (super != nullptr) {
     creator.set_super(super);
   }
+  for (const auto intf : intfs) {
+    creator.add_interface(intf);
+  }
   for (const auto& field : fields) {
     creator.add_field(field);
   }
   return creator.create();
 }
 
+DexClass* create_class(DexType* type, DexType* super,
+    std::vector<DexField*>& fields,
+    DexAccessFlags access = ACC_PUBLIC, bool external = false) {
+  std::vector<DexType*> intfs{};
+  return create_class(type, super, intfs, fields, access, external);
+}
+
 void create_scope() {
   auto obj_t = DexType::make_type("Ljava/lang/Object;");
   auto int_t = DexType::make_type("I");
   auto string_t = DexType::make_type("Ljava/lang/String;");
+  auto intf = DexType::make_type("Intf");
   auto a = DexType::make_type("A");
   auto b = DexType::make_type("B");
   auto c = DexType::make_type("C");
   auto d = DexType::make_type("D");
   auto u = DexType::make_type("U");
   auto e = DexType::make_type("E");
-  auto cls_A = create_class(a, obj_t,
-      {make_field_def(a, "f1", int_t, ACC_PUBLIC, true)},
-      ACC_PUBLIC, true);
-  auto cls_B = create_class(b, a,
-      {make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)});
-  auto cls_C = create_class(c, b, {});
-  auto cls_D = create_class(d, obj_t, {make_field_def(d, "f", a)});
-  auto cls_E = create_class(e, obj_t, {});
+  std::vector<DexField*> intf_fields{
+      make_field_def(intf, "fin_f", int_t, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, true)};
+  auto class_Intf = create_class(intf, obj_t, intf_fields, ACC_PUBLIC | ACC_INTERFACE);
+  std::vector<DexField*> a_fields{make_field_def(a, "f1", int_t, ACC_PUBLIC, true)};
+  auto cls_A = create_class(a, obj_t, a_fields, ACC_PUBLIC, true);
+  std::vector<DexField*> b_fields{make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)};
+  std::vector<DexType*> intfs{intf};
+  auto cls_B = create_class(b, a, intfs, b_fields);
+  std::vector<DexField*> no_fields{};
+  auto cls_C = create_class(c, b, no_fields);
+  std::vector<DexField*> d_fields{make_field_def(d, "f", a)};
+  auto cls_D = create_class(d, obj_t, d_fields);
+  auto cls_E = create_class(e, obj_t, no_fields);
 }
 
 TEST(ResolveField, empty) {
@@ -156,6 +172,23 @@ TEST(ResolveField, empty) {
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
   EXPECT_TRUE(resolve_field(fdef) == fdef);
   EXPECT_TRUE(resolve_field(fdef, FieldSearch::Instance) == fdef);
+
+  // interface final field
+  fdef = DexField::get_field(DexType::get_type("Intf"),
+      DexString::get_string("fin_f"), DexType::get_type("I"));
+  EXPECT_TRUE(fdef != nullptr && fdef->is_def());
+  EXPECT_TRUE(resolve_field(fdef) == fdef);
+  EXPECT_TRUE(resolve_field(fdef, FieldSearch::Static) == fdef);
+  fref = make_field_ref(DexType::get_type("B"), "fin_f", DexType::get_type("I"));
+  EXPECT_FALSE(fref->is_def());
+  EXPECT_TRUE(resolve_field(fref) == fdef);
+  EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == fdef);
+  EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
+  fref = make_field_ref(DexType::get_type("C"), "fin_f", DexType::get_type("I"));
+  EXPECT_FALSE(fref->is_def());
+  EXPECT_TRUE(resolve_field(fref) == fdef);
+  EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == fdef);
+  EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
 
   // random non existent field
   fdef = DexField::make_field(DexType::get_type("U"),
