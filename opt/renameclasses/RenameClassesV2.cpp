@@ -30,25 +30,52 @@
 #define BASE MAX_IDENT_CHAR
 #define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
 
-#define METRIC_CLASSES_IN_SCOPE "num_classes_in_scope"
-#define METRIC_RENAMED_CLASSES "**num_renamed**"
-#define METRIC_DONT_RENAME_ANNOTATED "num_dont_rename_annotated"
-#define METRIC_DONT_RENAME_ANNOTATIONS "num_dont_rename_annotations"
-#define METRIC_DONT_RENAME_SPECIFIC "num_dont_rename_specific"
-#define METRIC_DONT_RENAME_PACKAGES "num_dont_rename_packages"
-#define METRIC_DONT_RENAME_HIERARCHY "num_dont_rename_hierarchy"
-#define METRIC_DONT_RENAME_RESOURCES "num_dont_rename_resources"
-#define METRIC_DONT_RENAME_CLASS_FOR_NAME_LITERALS "num_dont_rename_class_for_name_literals"
-#define METRIC_DONT_RENAME_CANARIES "num_dont_rename_canaries"
-#define METRIC_DONT_RENAME_ANNOTATIONED "num_dont_rename_annotationed"
-#define METRIC_DONT_RENAME_NATIVE_BINDINGS "num_dont_rename_native_bindings"
-#define METRIC_DONT_RENAME_CLASS_FOR_TYPES_WITH_REFLECTION "num_dont_rename_class_for_types_with_reflection"
-#define METRIC_MISSING_HIERARCHY_TYPES "num_missing_hierarchy_types"
-#define METRIC_MISSING_HIERARCHY_CLASSES "num_missing_hierarchy_classes"
+static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
+static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
+static const char* METRIC_MISSING_HIERARCHY_TYPES = "num_missing_hierarchy_types";
+static const char* METRIC_MISSING_HIERARCHY_CLASSES = "num_missing_hierarchy_classes";
 
 static RenameClassesPassV2 s_pass;
 
 namespace {
+
+const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
+  switch (reason) {
+    case DontRenameReasonCode::Annotated:
+      return "num_dont_rename_annotated";
+    case DontRenameReasonCode::Annotations:
+      return "num_dont_rename_annotations";
+    case DontRenameReasonCode::Specific:
+      return "num_dont_rename_specific";
+    case DontRenameReasonCode::Packages:
+      return "num_dont_rename_packages";
+    case DontRenameReasonCode::Hierarchy:
+      return "num_dont_rename_hierarchy";
+    case DontRenameReasonCode::Resources:
+      return "num_dont_rename_resources";
+    case DontRenameReasonCode::ClassForNameLiterals:
+      return "num_dont_rename_class_for_name_literals";
+    case DontRenameReasonCode::Canaries:
+      return "num_dont_rename_canaries";
+    case DontRenameReasonCode::NativeBindings:
+      return "num_dont_rename_native_bindings";
+    case DontRenameReasonCode::ClassForTypesWithReflection:
+      return "num_dont_rename_class_for_types_with_reflection";
+    default:
+      always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
+  }
+}
+
+bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
+  switch (reason) {
+    case DontRenameReasonCode::Annotated:
+    case DontRenameReasonCode::Packages:
+    case DontRenameReasonCode::Hierarchy:
+      return true;
+    default:
+      return false;
+  }
+}
 
 void unpackage_private(Scope &scope) {
   walk_methods(scope,
@@ -380,15 +407,13 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   }
 }
 
-void RenameClassesPassV2::rename_classes(
+
+void RenameClassesPassV2::eval_classes(
     Scope& scope,
     ConfigFiles& cfg,
     const std::string& path,
     bool rename_annotations,
     PassManager& mgr) {
-  // Make everything public
-  unpackage_private(scope);
-
   std::set<std::string> dont_rename_class_for_name_literals;
   std::set<std::string> dont_rename_class_for_types_with_reflection;
   std::set<std::string> dont_rename_canaries;
@@ -399,17 +424,19 @@ void RenameClassesPassV2::rename_classes(
 
   build_dont_rename_resources(mgr, dont_rename_resources);
   build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
-  build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(), dont_rename_class_for_types_with_reflection);
+  build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(),
+    dont_rename_class_for_types_with_reflection);
   build_dont_rename_canaries(scope, dont_rename_canaries);
   build_dont_rename_hierarchies(mgr, scope, dont_rename_hierarchies);
   build_dont_rename_native_bindings(scope, dont_rename_native_bindings);
   build_dont_rename_annotated(dont_rename_annotated);
 
-  AliasMap aliases;
+  std::string norule = "";
+
   for(auto clazz: scope) {
     // Don't rename annotations
     if (!rename_annotations && is_annotation(clazz)) {
-      mgr.incr_metric(METRIC_DONT_RENAME_ANNOTATIONS, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Annotations, norule };
       continue;
     }
 
@@ -417,10 +444,7 @@ void RenameClassesPassV2::rename_classes(
     bool annotated = false;
     for (const auto& anno : dont_rename_annotated) {
       if (has_anno(clazz, anno)) {
-        mgr.incr_metric(std::string(METRIC_DONT_RENAME_ANNOTATED), 1);
-        mgr.incr_metric(
-          std::string(METRIC_DONT_RENAME_ANNOTATED)+"::"+std::string(anno->get_name()->c_str()),
-          1);
+        m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Annotated, std::string(anno->c_str()) };
         annotated = true;
         break;
       }
@@ -432,13 +456,13 @@ void RenameClassesPassV2::rename_classes(
 
     // Don't rename anything mentioned in resources
     if (dont_rename_resources.count(clsname) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_RESOURCES, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Resources, norule };
       continue;
     }
 
     // Don't rename anythings in the direct name blacklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_SPECIFIC, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Specific, strname };
       continue;
     }
 
@@ -447,8 +471,7 @@ void RenameClassesPassV2::rename_classes(
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L"+pkg) == 0) {
         TRACE(RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname, pkg.c_str());
-        mgr.incr_metric(METRIC_DONT_RENAME_PACKAGES, 1);
-        mgr.incr_metric(std::string(METRIC_DONT_RENAME_PACKAGES)+"::"+pkg, 1);
+        m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Packages, pkg };
         package_blacklisted = true;
         break;
       }
@@ -456,30 +479,57 @@ void RenameClassesPassV2::rename_classes(
     if (package_blacklisted) continue;
 
     if (dont_rename_class_for_name_literals.count(clsname) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_CLASS_FOR_NAME_LITERALS, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ClassForNameLiterals, norule };
       continue;
     }
 
     if (dont_rename_class_for_types_with_reflection.count(clsname) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_CLASS_FOR_TYPES_WITH_REFLECTION, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ClassForTypesWithReflection, norule };
       continue;
     }
 
     if (dont_rename_canaries.count(clsname) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_CANARIES, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Canaries, norule };
       continue;
     }
 
     // Don't rename things with native bindings
     if (dont_rename_native_bindings.count(clazz->get_type()) > 0) {
-      mgr.incr_metric(METRIC_DONT_RENAME_NATIVE_BINDINGS, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::NativeBindings, norule };
       continue;
     }
 
     if (dont_rename_hierarchies.count(clazz->get_type()) > 0) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
-      mgr.incr_metric(METRIC_DONT_RENAME_HIERARCHY, 1);
-      mgr.incr_metric(std::string(METRIC_DONT_RENAME_HIERARCHY)+"::"+rule, 1);
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Hierarchy, rule };
+      continue;
+    }
+  }
+}
+
+void RenameClassesPassV2::eval_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  auto scope = build_class_scope(stores);
+  eval_classes(scope, cfg, m_path, m_rename_annotations, mgr);
+}
+
+void RenameClassesPassV2::rename_classes(
+    Scope& scope,
+    ConfigFiles& cfg,
+    const std::string& path,
+    bool rename_annotations,
+    PassManager& mgr) {
+  // Make everything public
+  unpackage_private(scope);
+
+  AliasMap aliases;
+  for(auto clazz: scope) {
+    if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
+      auto reason = m_dont_rename_reasons[clazz];
+      std::string metric = dont_rename_reason_to_metric(reason.code);
+      mgr.incr_metric(metric, 1);
+      if (dont_rename_reason_to_metric_per_rule(reason.code)) {
+        mgr.incr_metric(metric + "::" + std::string(reason.rule), 1);
+      }
       continue;
     }
 

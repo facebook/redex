@@ -114,6 +114,15 @@ class Pass {
   std::string name() const { return m_name; }
 
   virtual void configure_pass(const PassConfig&) {}
+
+  /**
+   * All passes' eval_pass are run, and then all passes' run_pass are run. This allows each
+   * pass to evaluate its rules in terms of the original input, without other passes changing
+   * the identity of classes. You should NOT change anything in the dex stores in eval_pass.
+   * There is no protection against doing so, this is merely a convention.
+   */
+
+  virtual void eval_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {};
   virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) = 0;
 
  private:
