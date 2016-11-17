@@ -54,8 +54,7 @@ class ReferencedState {
   }
   bool can_rename() const {
     return !m_bystring &&
-           ((!m_keep || m_allowobfuscation) && !m_allowshrinking) &&
-           !m_seed;
+           ((!m_keep || m_allowobfuscation) && !m_allowshrinking);
   }
 
   /**
