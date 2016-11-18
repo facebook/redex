@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "Debug.h"
+#include "DexUtil.h"
 #include "Timer.h"
 
 namespace {
@@ -41,9 +42,7 @@ std::string convert_scalar_type(std::string type) {
   if (it != prim_map.end()) {
     return it->second;
   }
-  std::string ret(type);
-  std::replace(ret.begin(), ret.end(), '.', '/');
-  return std::string("L") + ret + ";";
+  return JavaNameUtil::external_to_internal(type);
 }
 
 std::string convert_field(const std::string &cls,

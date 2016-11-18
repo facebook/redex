@@ -46,11 +46,9 @@ std::string humanize(std::string const& type) {
     ss << humanize(type.substr(1)) << "[]";
     return ss.str();
   } else if (type[0] == 'L') {
-    auto cls = type.substr(1, type.size() - 2);
-    std::replace(cls.begin(), cls.end(), '/', '.');
-    return cls;
+    return JavaNameUtil::internal_to_external(type);
   }
-  return "unknonw";
+  return "unknown";
 }
 
 // TODO: make sure names reported handles collisions correctly.

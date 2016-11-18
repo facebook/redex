@@ -223,9 +223,8 @@ void init_permanently_reachable_classes(
     DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
     // Make sure that the registers agree
     if (const_string->dest() == invoke_static->src(0)) {
-      std::string classname(const_string->get_string()->c_str());
-      classname = "L" + classname + ";";
-      std::replace(classname.begin(), classname.end(), '.', '/');
+      auto classname = JavaNameUtil::external_to_internal(
+          const_string->get_string()->c_str());
       TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
         const_string->get_string()->c_str(), classname.c_str());
       mark_reachable_by_classname(classname, true);
