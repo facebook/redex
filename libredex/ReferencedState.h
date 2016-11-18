@@ -23,7 +23,6 @@ class ReferencedState {
    */
   bool m_computed{true};
   bool m_seed{false};
-  bool m_renamed_seed{false};
 
   // ProGuard keep settings
   // Specify classes and class members that are entry-points.
@@ -61,13 +60,6 @@ class ReferencedState {
    * Is this item a "seed" according to ProGuard's analysis?
    */
   bool is_seed() const { return m_seed; }
-
-  /**
-   * Is this item a "seed" when we take into account renaming done by ProGuard?
-   * We don't always want to consider renamed seeds; using this flag will give
-   * more conservative results than `is_seed()`
-   */
-  bool is_renamed_seed() const { return m_renamed_seed; }
 
   // ProGuard keep options
   bool keep() const { return m_keep; }
@@ -110,9 +102,6 @@ class ReferencedState {
 
   // A class marked to be kept from the list of seeds from ProGuard
   void ref_by_seed() { m_seed = true; }
-
-  // Mark item to be kept, even if it's been renamed by ProGuard
-  void ref_by_renamed_seed() { m_renamed_seed = true; }
 
   // ProGuaurd keep information.
   void set_keep() { m_keep = true; }

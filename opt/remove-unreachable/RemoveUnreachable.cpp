@@ -7,17 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ReachableClasses.h"
 #include "RemoveUnreachable.h"
 
 #include "DexUtil.h"
 #include "Resolver.h"
 
 namespace {
-
-template<class T>
-bool is_seed(const T& t) {
-  return t->rstate.is_seed() || t->rstate.is_renamed_seed();
-}
 
 bool is_canary(const DexClass* cls) {
   return strstr(cls->get_name()->c_str(), "Canary");

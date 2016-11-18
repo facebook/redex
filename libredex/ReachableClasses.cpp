@@ -81,18 +81,9 @@ void mark_reachable_by_seed(T dclass) {
   dclass->rstate.ref_by_seed();
 }
 
-template<typename T>
-void mark_reachable_by_renamed_seed(T t) {
-  if (t) t->rstate.ref_by_renamed_seed();
-}
-
 void mark_reachable_by_seed(DexType* dtype) {
   if (dtype == nullptr) return;
   mark_reachable_by_seed(type_class_internal(dtype));
-}
-
-void mark_reachable_by_renamed_seed(DexType* dtype) {
-  mark_reachable_by_renamed_seed(type_class_internal(dtype));
 }
 
 template <typename DexMember>
@@ -384,7 +375,7 @@ struct SeedsParser {
       return false;
     }
     if (dex_type) {
-      mark_reachable_by_renamed_seed(dex_type);
+      mark_reachable_by_seed(dex_type);
     }
     if (line.find('$') == std::string::npos) {
       if (nonrenamed_type) {
