@@ -15,5 +15,16 @@ class RemoveUnreachablePass : public Pass {
  public:
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("classes_removed", true, m_classes_removed);
+    pc.get("fields_removed", true, m_fields_removed);
+    pc.get("methods_removed", true, m_methods_removed);
+  }
+
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  private:
+    bool m_classes_removed;
+    bool m_fields_removed;
+    bool m_methods_removed;
 };

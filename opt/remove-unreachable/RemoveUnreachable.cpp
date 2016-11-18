@@ -63,21 +63,26 @@ DexMethod* resolve(const DexMethod* method, const DexClass* cls) {
   return nullptr;
 }
 
-void trace_stats(const char* label, DexStoresVector& stores) {
-  size_t nclasses = 0;
-  size_t nfields = 0;
-  size_t nmethods = 0;
+struct deleted_stats {
+  size_t nclasses{0};
+  size_t nfields{0};
+  size_t nmethods{0};
+};
+
+deleted_stats trace_stats(const char* label, DexStoresVector& stores) {
+  deleted_stats stats;
   for (auto const& dex : DexStoreClassesIterator(stores)) {
-    nclasses += dex.size();
+    stats.nclasses += dex.size();
     for (auto const& cls : dex) {
-      nfields += cls->get_ifields().size();
-      nfields += cls->get_sfields().size();
-      nmethods += cls->get_dmethods().size();
-      nmethods += cls->get_vmethods().size();
+      stats.nfields += cls->get_ifields().size();
+      stats.nfields += cls->get_sfields().size();
+      stats.nmethods += cls->get_dmethods().size();
+      stats.nmethods += cls->get_vmethods().size();
     }
   }
   TRACE(RMU, 1, "%s: %lu classes, %lu fields, %lu methods\n",
-        label, nclasses, nfields, nmethods);
+        label, stats.nclasses, stats.nfields, stats.nmethods);
+  return stats;
 }
 
 struct InheritanceGraph {
@@ -363,9 +368,12 @@ void RemoveUnreachablePass::run_pass(
   PassManager& pm
 ) {
   UnreachableCodeRemover ucr(stores);
-  trace_stats("before", stores);
+  deleted_stats before = trace_stats("before", stores);
   ucr.mark_sweep();
-  trace_stats("after", stores);
+  deleted_stats after = trace_stats("after", stores);
+  pm.incr_metric("classes_removed", before.nclasses - after.nclasses);
+  pm.incr_metric("fields_removed", before.nfields - after.nfields);
+  pm.incr_metric("methods_removed", before.nmethods - after.nmethods);
 }
 
 static RemoveUnreachablePass s_pass;
