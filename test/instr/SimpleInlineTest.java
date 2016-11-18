@@ -13,7 +13,7 @@ import static org.fest.assertions.api.Assertions.*;
 
 import org.junit.Test;
 
-public class InlineTest {
+public class SimpleInlineTest {
   String mHello = null;
 
   /**
@@ -217,7 +217,7 @@ public class InlineTest {
    * noninlinable() above when we change it to a static method. (Otherwise
    * we would have a clash in method signatures.)
    */
-  public static void noninlinable(InlineTest foo) {
+  public static void noninlinable(SimpleInlineTest foo) {
     if (foo != null && foo.getHello() != null) {
       noninlinable(foo);
     }
