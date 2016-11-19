@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Pass.h"
+#include <vector>
 
 class AnnoKillPass : public Pass {
  public:
@@ -17,19 +18,12 @@ class AnnoKillPass : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("remove_all_build_annos", false, m_remove_build);
-    pc.get("remove_all_system_annos", false, m_remove_system);
-    pc.get("remove_annos", {}, m_remove_annos);
-    pc.get("blacklist", {}, m_blacklist);
-    pc.get("blacklist_classes_containing_class_annotations", {},
-         m_blacklist_classes_containing_class_annotations);
+    pc.get("keep_annos", {}, m_keep_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_remove_build;
-  bool m_remove_system;
-  std::vector<std::string> m_remove_annos;
-  std::vector<std::string> m_blacklist;
-  std::vector<std::string> m_blacklist_classes_containing_class_annotations;
+  std::vector<std::string> m_keep_annos;
 };

@@ -12,24 +12,17 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Resolver.h"
 #include "Walkers.h"
 
 namespace {
-/*
- * Within FB current consensus is that annotations are degenerate and there
- * is discussion about eliminating them entirely.  For that reason we don't
- * make any attempts here to dynamically find uses of SYSTEM annotations,
- * we just black-list known paths.
- *
- * TODO(opensource): Consider re-working this for common annotation driven
- * cases, or a proper dynamic search for such cases.
- */
 
 struct kill_counters {
   int annotations;
@@ -45,46 +38,11 @@ struct kill_counters {
 };
 
 kill_counters s_kcount;
-/*
- * AnnotationDefaults are used by RUNTIME visible annotations.
- * Future optimization: We could build a dependency graph to
- * eliminate some cases.
- */
-const char* kAnnoDefault = "Ldalvik/annotation/AnnotationDefault;";
-
-std::unordered_set<DexType*> get_blacklist(
-  const std::vector<std::string>& config
-) {
-  std::unordered_set<DexType*> blacklist;
-  for (auto const& config_blacklist : config) {
-    DexType* entry = DexType::get_type(config_blacklist.c_str());
-    if (entry) {
-      TRACE(ANNO, 2, "blacklist class: %s\n", SHOW(entry));
-      blacklist.insert(entry);
-    }
-  }
-  return blacklist;
-}
-
-std::unordered_set<DexType*> get_annos(const std::vector<std::string>& remove) {
-  std::unordered_set<DexType*> annos;
-  for (auto const& config_anno : remove) {
-    DexType* anno = DexType::get_type(config_anno.c_str());
-    if (anno) {
-      TRACE(ANNO, 2, "removable anno: %s\n", SHOW(anno));
-      annos.insert(anno);
-    }
-  }
-  return annos;
-}
 
 void cleanup_aset(DexAnnotationSet* aset,
-    const std::unordered_set<DexType*>& removable_annos,
+    const std::unordered_set<DexType*>& keep_annos,
     const std::unordered_set<DexType*>& anno_refs_in_code,
-    bool remove_all_build_visible_annos,
-    bool remove_all_system_visible_annos) {
-  static DexType* annodefault = DexType::get_type(kAnnoDefault);
-
+    bool remove_all_build_visible_annos) {
   s_kcount.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto iter = annos.begin();
@@ -93,13 +51,18 @@ void cleanup_aset(DexAnnotationSet* aset,
     DexAnnotation* da = *iter++;
     auto anno_type = da->type();
     if (anno_refs_in_code.count(anno_type) > 0) {
-      TRACE(ANNO, 3, "Annotation %s with type referenced in code, skipping...\n", SHOW(da));
+      TRACE(ANNO, 3,
+          "Annotation type %s with type referenced in code, skipping...\n\tannotation: %s\n",
+          SHOW(anno_type), SHOW(da));
+      continue;
     }
-    auto match_whitelist = removable_annos.count(anno_type);
-    auto match_build = remove_all_build_visible_annos && da->build_visible();
-    auto match_system = remove_all_system_visible_annos && da->system_visible();
-    if (!da->runtime_visible() && anno_type != annodefault
-        && (match_build || match_system || match_whitelist)) {
+    if (keep_annos.count(anno_type) > 0) {
+      TRACE(ANNO, 3,
+          "Blacklisted annotation type %s, skipping...\n\tannotation: %s\n",
+          SHOW(anno_type), SHOW(da));
+      continue;
+    }
+    if (remove_all_build_visible_annos && da->build_visible()) {
       TRACE(ANNO, 3, "Killing annotation %s\n", SHOW(da));
       annos.erase(tokill);
       s_kcount.annotations_killed++;
@@ -108,83 +71,30 @@ void cleanup_aset(DexAnnotationSet* aset,
   }
 }
 
-/*
- * Return a subset of classes where each class does not contain
- * any class annotations which exist in blacklist_container_classes.
- */
-std::vector<DexClass*> get_classes_not_containing_blacklisted_contained_annotations(
-      const std::vector<DexClass*>& classes,
-      std::unordered_set<DexType*>& blacklist_container_classes) {
-  std::vector<DexClass*> non_container_classes;
-  for (auto clazz : classes) {
-    DexAnnotationSet* aset = clazz->get_anno_set();
-    if (aset == nullptr) {
-      non_container_classes.push_back(clazz);
-    } else {
-      s_kcount.class_asets++;
-      bool isContained = false;
-      auto& annos = aset->get_annotations();
-      for (auto container_class:blacklist_container_classes) {
-        for (auto anno:annos) {
-          if (anno->type() == container_class) {
-            TRACE(ANNO, 2,
-                  "class %s has class annotation %s which is blacklisted\n",
-                  SHOW(clazz->get_type()), SHOW(container_class));
-            isContained = true;
-            break;
-          }
-        }
-        if (isContained) {
-          break;
-        }
-      }
-      if (!isContained) {
-        non_container_classes.push_back(clazz);
-      }
-    }
-  }
-  TRACE(ANNO, 2, "non_container_classes.size() %d\n", non_container_classes.size());
-  TRACE(ANNO, 2, "classes.size() %d\n", classes.size());
-  return non_container_classes;
-}
-
-
-/*
- * Subclasses of TypeReference; use the system visible annotations
- * in order to imply the "type", rather than doing so explicitly.
- * This could be fixed by re-writing the constructor pattern and
- * explicitly feeding it.  However, the number of cases is very
- * small, so it's not worth doing.
- */
 void kill_annotations(const std::vector<DexClass*>& classes,
-    const std::unordered_set<DexType*>& removable_annos,
+    const std::unordered_set<DexType*>& keep_annos,
     const std::unordered_set<DexType*>& anno_refs_in_code,
-    const std::unordered_set<DexType*>& blacklist_classes,
-    bool remove_build,
-    bool remove_system) {
+    bool remove_build) {
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
-    if (blacklist_classes.count(clazz->get_super_class()) > 0) {
-      TRACE(ANNO, 3, "Skipping %s\n", show(clazz->get_type()).c_str());
-      continue;
-    }
-    cleanup_aset(aset, removable_annos, anno_refs_in_code, remove_build, remove_system);
+    s_kcount.class_asets++;
+    cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
     if (aset->size() == 0) {
-      TRACE(ANNO, 3, "Clearing annotation for class %s\n", SHOW(clazz));
+      TRACE(ANNO, 3, "Clearing annotation for class %s\n", SHOW(clazz->get_type()));
       clazz->clear_annotations();
       s_kcount.class_asets_cleared++;
     }
   }
-  walk_methods(
-      classes,
+  walk_methods(classes,
       [&](DexMethod* method) {
         DexAnnotationSet* aset = method->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.method_asets++;
-        cleanup_aset(aset, removable_annos, anno_refs_in_code, remove_build, remove_system);
+        cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
         if (aset->size() == 0) {
-          TRACE(ANNO, 3, "Clearing annotations for method %s\n", SHOW(method));
+          TRACE(ANNO, 3, "Clearing annotations for method %s.%s:%s\n",
+              SHOW(method->get_class()), SHOW(method->get_name()), SHOW(method->get_proto()));
           method->clear_annotations();
           s_kcount.method_asets_cleared++;
         }
@@ -199,13 +109,13 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         for (auto pa : *pas) {
           DexAnnotationSet* aset = pa.second;
           if (aset->size() == 0) continue;
-          cleanup_aset(aset, removable_annos, anno_refs_in_code, remove_build, remove_system);
+          cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
           if (aset->size() == 0) continue;
           clear_pas = false;
         }
         if (clear_pas) {
-          TRACE(ANNO, 3, "Clearing parameter annotations for method parameters %s\n",
-              SHOW(method));
+          TRACE(ANNO, 3, "Clearing parameter annotations for method parameters %s.%s:%s\n",
+              SHOW(method->get_class()), SHOW(method->get_name()), SHOW(method->get_proto()));
           s_kcount.method_param_asets_cleared += pas->size();
           for (auto pa : *pas) {
             delete pa.second;
@@ -213,15 +123,15 @@ void kill_annotations(const std::vector<DexClass*>& classes,
           pas->clear();
         }
       });
-  walk_fields(
-      classes,
+  walk_fields(classes,
       [&](DexField* field) {
         DexAnnotationSet* aset = field->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.field_asets++;
-        cleanup_aset(aset, removable_annos, anno_refs_in_code, remove_build, remove_system);
+        cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
         if (aset->size() == 0) {
-          TRACE(ANNO, 3, "Clearing annotations for field %s\n", SHOW(field));
+          TRACE(ANNO, 3, "Clearing annotations for field %s.%s:%s\n",
+              SHOW(field->get_class()), SHOW(field->get_name()), SHOW(field->get_type()));
           field->clear_annotations();
           s_kcount.field_asets_cleared++;
         }
@@ -231,28 +141,136 @@ void kill_annotations(const std::vector<DexClass*>& classes,
 void referenced_annos(const Scope& scope,
     const std::unordered_set<DexType*>& annotations,
     std::unordered_set<DexType*>& referenced_annos) {
+
+  // mark an annotation as "unremovable" if a field is typed with that annotation
+  walk_fields(scope,
+      [&](DexField* field) {
+        // don't look at fields defined on the annotation itself
+        const auto field_cls_type = field->get_class();
+        if (annotations.count(field_cls_type) > 0) return;
+        const auto field_cls = type_class(field_cls_type);
+        if (field_cls != nullptr && is_annotation(field_cls)) return;
+
+        auto ftype = field->get_type();
+        if (annotations.count(ftype) > 0) {
+          TRACE(ANNO, 3, "Field typed with an annotation type %s.%s:%s\n",
+              SHOW(field->get_class()), SHOW(field->get_name()), SHOW(ftype));
+          referenced_annos.insert(ftype);
+        }
+      });
+
+  // mark an annotation as "unremovable" if a method signature contains a type with that annotation
+  walk_methods(scope,
+      [&](DexMethod* meth) {
+        // don't look at methods defined on the annotation itself
+        const auto meth_cls_type = meth->get_class();
+        if (annotations.count(meth_cls_type) > 0) return;
+        const auto meth_cls = type_class(meth_cls_type);
+        if (meth_cls != nullptr && is_annotation(meth_cls)) return;
+
+        const auto has_anno = [&](DexType* type) {
+          if (annotations.count(type) > 0) {
+            TRACE(ANNO, 3, "Method contains annotation type in signature %s.%s:%s\n",
+                SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()));
+            referenced_annos.insert(type);
+          }
+        };
+
+        const auto proto = meth->get_proto();
+        has_anno(proto->get_rtype());
+        for (const auto& arg : proto->get_args()->get_type_list()) {
+          has_anno(arg);
+        }
+      });
+
+  // mark an annotation as "unremovable" if any opecode refrences the annotation type
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* meth, DexInstruction* insn) {
+        // don't look at methods defined on the annotation itself
+        const auto meth_cls_type = meth->get_class();
+        if (annotations.count(meth_cls_type) > 0) return;
+        const auto meth_cls = type_class(meth_cls_type);
+        if (meth_cls != nullptr && is_annotation(meth_cls)) return;
+
         if (insn->has_types()) {
           auto type = static_cast<DexOpcodeType*>(insn)->get_type();
-          if (annotations.count(type) > 0) referenced_annos.insert(type);
+          if (annotations.count(type) > 0) {
+            referenced_annos.insert(type);
+            TRACE(ANNO, 3, "Annotation referenced in type opcode\n\t%s.%s:%s - %s\n",
+                SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()),
+                SHOW(insn));
+          }
         } else if (insn->has_fields()) {
           auto field = static_cast<DexOpcodeField*>(insn)->field();
+          auto fdef = resolve_field(field,
+              is_sfield_op(insn->opcode()) ? FieldSearch::Static : FieldSearch::Instance);
+          if (fdef != nullptr) field = fdef;
+
+          bool referenced = false;
           auto owner = field->get_class();
-          if (annotations.count(owner) > 0) referenced_annos.insert(owner);
+          if (annotations.count(owner) > 0) {
+            referenced = true;
+            referenced_annos.insert(owner);
+          }
           auto type = field->get_type();
-          if (annotations.count(type) > 0) referenced_annos.insert(type);
+          if (annotations.count(type) > 0) {
+            referenced = true;
+            referenced_annos.insert(type);
+          }
+          if (referenced) {
+            TRACE(ANNO, 3, "Annotation referenced in field opcode\n\t%s.%s:%s - %s\n",
+                SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()),
+                SHOW(insn));
+          }
         } else if (insn->has_methods()) {
           auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+          DexMethod* methdef;
+          switch (insn->opcode()) {
+            case OPCODE_INVOKE_INTERFACE:
+            case OPCODE_INVOKE_INTERFACE_RANGE:
+              methdef = resolve_intf_methodref(method);
+              break;
+            case OPCODE_INVOKE_VIRTUAL:
+            case OPCODE_INVOKE_VIRTUAL_RANGE:
+              methdef = resolve_method(method, MethodSearch::Virtual);
+              break;
+            case OPCODE_INVOKE_STATIC:
+            case OPCODE_INVOKE_STATIC_RANGE:
+              methdef = resolve_method(method, MethodSearch::Static);
+              break;
+            case OPCODE_INVOKE_DIRECT:
+            case OPCODE_INVOKE_DIRECT_RANGE:
+              methdef = resolve_method(method, MethodSearch::Direct);
+              break;
+            default:
+              methdef = resolve_method(method, MethodSearch::Any);
+          }
+          if (methdef != nullptr) method = methdef;
+
+          bool referenced = false;
           auto owner = method->get_class();
-          if (annotations.count(owner) > 0) referenced_annos.insert(owner);
+          if (annotations.count(owner) > 0) {
+            referenced = true;
+            referenced_annos.insert(owner);
+          }
           auto proto = method->get_proto();
           auto rtype = proto->get_rtype();
-          if (annotations.count(rtype) > 0) referenced_annos.insert(rtype);
+          if (annotations.count(rtype) > 0) {
+            referenced = true;
+            referenced_annos.insert(rtype);
+          }
           auto arg_list = proto->get_args();
           for (const auto& arg : arg_list->get_type_list()) {
-            if (annotations.count(arg) > 0) referenced_annos.insert(arg);
+            if (annotations.count(arg) > 0) {
+              referenced = true;
+              referenced_annos.insert(arg);
+            }
+          }
+          if (referenced) {
+            TRACE(ANNO, 3, "Annotation referenced in method opcode\n\t%s.%s:%s - %s\n",
+                SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()),
+                SHOW(insn));
           }
         }
       });
@@ -265,6 +283,7 @@ void gather_annos(const Scope& scope, std::unordered_set<DexType*>& annotations)
     annotations.insert(cls->get_type());
   }
 
+  // all used annotations
   auto annos_in_aset = [&](DexAnnotationSet* aset) {
     if (aset == nullptr) return;
     for (const auto& anno : aset->get_annotations()) {
@@ -297,6 +316,20 @@ void gather_annos(const Scope& scope, std::unordered_set<DexType*>& annotations)
 }
 
 void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  // load annotations that should not be deleted
+  std::unordered_set<DexType*> keep_annos;
+  TRACE(ANNO, 2, "Keep annotations count %d\n", m_keep_annos.size());
+  for (const auto& anno_name : m_keep_annos) {
+    auto anno_type = DexType::get_type(anno_name.c_str());
+    TRACE(ANNO, 2, "Keep annotation type string %s\n", anno_name.c_str());
+    if (anno_type != nullptr) {
+      TRACE(ANNO, 2, "Keep annotation type %s\n", SHOW(anno_type));
+      keep_annos.insert(anno_type);
+    } else {
+      TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+    }
+  }
+
   auto scope = build_class_scope(stores);
 
   // find all annotations classes in scope and all annotations used in scope
@@ -306,32 +339,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   std::unordered_set<DexType*> anno_refs_in_code;
   referenced_annos(scope, annotations, anno_refs_in_code);
 
-  auto removable_annos = get_annos(m_remove_annos);
-  auto blacklist_classes = get_blacklist(m_blacklist);
-  auto blacklist_classes_containing_class_annotations =
-    get_blacklist(m_blacklist_classes_containing_class_annotations);
-
-  /*
-   * Pass one
-   * Get the list of classes which do not contain any of the class annotations
-   * in blacklist_of_contained_annotations
-   */
-  auto classes_not_containing_blacklisted_contained_annotations =
-    get_classes_not_containing_blacklisted_contained_annotations(scope,
-      blacklist_classes_containing_class_annotations);
-
-  /*
-   * Pass two
-   * Kill the annotations in the list of
-   * classes_not_containing_blacklisted_contained_annotations
-   */
-  kill_annotations(
-    classes_not_containing_blacklisted_contained_annotations,
-    removable_annos,
-    anno_refs_in_code,
-    blacklist_classes,
-    m_remove_build,
-    m_remove_system);
+  kill_annotations(scope, keep_annos, anno_refs_in_code, m_remove_build);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
       "Annotations: %d/%d\n",
