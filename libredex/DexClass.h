@@ -226,6 +226,12 @@ inline bool compare_dextypes(const DexType* a, const DexType* b) {
   return compare_dexstrings(a->get_name(), b->get_name());
 }
 
+struct dextypes_comparator {
+  bool operator()(const DexType* a, const DexType* b) const {
+    return compare_dextypes(a, b);
+  }
+};
+
 struct DexFieldRef {
   /* Field Ref related members */
   DexType* cls = nullptr;

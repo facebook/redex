@@ -346,7 +346,7 @@ void RenameClassesPassV2::build_dont_rename_native_bindings(
 }
 
 void RenameClassesPassV2::build_dont_rename_annotated(
-    std::set<DexType*>& dont_rename_annotated) {
+    std::set<DexType*, dextypes_comparator>& dont_rename_annotated) {
   for (const auto& annotation : m_dont_rename_annotated) {
     DexType *anno = DexType::get_type(annotation.c_str());
     if (anno) {
@@ -422,7 +422,7 @@ void RenameClassesPassV2::eval_classes(
   std::set<std::string> dont_rename_resources;
   std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
   std::set<DexType*> dont_rename_native_bindings;
-  std::set<DexType*> dont_rename_annotated;
+  std::set<DexType*, dextypes_comparator> dont_rename_annotated;
 
   build_dont_rename_resources(mgr, dont_rename_resources);
   build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
