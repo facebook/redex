@@ -10,6 +10,7 @@
 package com.facebook.redexinline;
 
 import static org.fest.assertions.api.Assertions.*;
+import com.facebook.redexinline.otherpackage.SimpleInlineOtherPackage;
 
 import org.junit.Test;
 
@@ -291,5 +292,10 @@ public class SimpleInlineTest {
   @Test
   public void testForceInlineTwo() {
     multipleCallers();
+  }
+
+  @Test
+  public void testCalleeRefsPrivateClass() {
+    (new SimpleInlineOtherPackage()).inlineMe();
   }
 }

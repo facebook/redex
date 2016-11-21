@@ -362,3 +362,26 @@ TEST_F(PostVerify, testForceInline) {
   m = find_vmethod_named(*cls, "testForceInlineTwo");
   EXPECT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_DIRECT, "multipleCallers"));
 }
+
+TEST_F(PreVerify, testCalleeRefsPrivateClass) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeRefsPrivateClass");
+  EXPECT_NE(nullptr, find_invoke(m, OPCODE_INVOKE_VIRTUAL, "inlineMe"));
+
+  auto other_pkg_cls = find_class_named(
+      classes,
+      "Lcom/facebook/redexinline/otherpackage/SimpleInlineOtherPackage$Bar;");
+  EXPECT_FALSE(is_public(other_pkg_cls));
+}
+
+TEST_F(PostVerify, testCalleeRefsPrivateClass) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_vmethod_named(*cls, "testCalleeRefsPrivateClass");
+  EXPECT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_VIRTUAL, "inlineMe"));
+  auto other_pkg_cls = find_class_named(
+      classes,
+      "Lcom/facebook/redexinline/otherpackage/SimpleInlineOtherPackage$Bar;");
+  EXPECT_TRUE(is_public(other_pkg_cls));
+}
