@@ -262,6 +262,35 @@ DexType* get_array_type(const DexType* type) {
   return DexType::make_type(name);
 }
 
+void create_runtime_exception_block(
+    DexString* except_str, std::list<DexInstruction*>& block) {
+  // new-instance v0, Ljava/lang/RuntimeException; // type@3852
+  // const-string v1, "Exception String e.g. Too many args" // string@7a6d
+  // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
+  // throw v0
+  auto new_inst = new DexOpcodeType(OPCODE_NEW_INSTANCE,
+    DexType::make_type("Ljava/lang/RuntimeException;"));
+  new_inst->set_dest(0);
+  DexInstruction* const_inst = new DexOpcodeString(OPCODE_CONST_STRING,
+    except_str);
+  const_inst->set_dest(1);
+  auto ret = DexType::make_type("V");
+  auto arg = DexType::make_type("Ljava/lang/String;");
+  auto args = DexTypeList::make_type_list({arg});
+  auto proto = DexProto::make_proto(ret, args);
+  auto meth = DexMethod::make_method(
+    DexType::make_type("Ljava/lang/RuntimeException;"),
+    DexString::make_string("<init>"), proto);
+  auto invk = new DexOpcodeMethod(OPCODE_INVOKE_DIRECT, meth, 0);
+  invk->set_arg_word_count(2);
+  invk->set_src(0, 0); invk->set_src(1, 1);
+  DexInstruction* throwinst = new DexInstruction(OPCODE_THROW);
+  block.emplace_back(new_inst);
+  block.emplace_back(const_inst);
+  block.emplace_back(invk);
+  block.emplace_back(throwinst);
+}
+
 bool passes_args_through(DexOpcodeMethod* insn,
                          const DexCode& code,
                          int ignore /* = 0 */

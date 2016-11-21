@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <memory>
 #include <unordered_set>
+#include <list>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -567,6 +568,88 @@ void MethodTransform::insert_after(DexInstruction* position,
     }
   }
   always_assert_log(false, "No match found");
+}
+
+void MethodTransform::remove_switch_case(DexInstruction* insn) {
+
+  TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(m_fmethod));
+  // Check if we are inside switch method.
+  for (auto& mei : *m_fmethod) {
+    if (mei.type != MFLOW_OPCODE) continue;
+    assert_log(is_multi_branch(mei.insn->opcode()), " Method is not a switch");
+    break;
+  }
+
+  int target_count = 0;
+  for (auto& mei : *m_fmethod) {
+    if (mei.type == MFLOW_TARGET && mei.target->type == BRANCH_MULTI) {
+      target_count++;
+    }
+  }
+  assert_log(target_count != 0, " There should be atleast one target");
+  if (target_count == 1) {
+    auto excpt_str = DexString::make_string("Redex switch Exception");
+    std::list<DexInstruction*> excpt_block;
+    create_runtime_exception_block(excpt_str, excpt_block);
+    insert_after(insn, excpt_block);
+    remove_opcode(insn);
+    return;
+  }
+
+  // Store list of mei to be removed.
+  std::vector<MethodItemEntry*> remove_list;
+  // Find the starting MULTI Target point to delete.
+  MethodItemEntry* target_mei = nullptr;
+  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
+    MethodItemEntry* mentry = &*miter;
+    if (mentry->type == MFLOW_TARGET) {
+      target_mei = mentry;
+    }
+    // Check if insn belongs to the current block.
+    if (mentry->type == MFLOW_OPCODE && mentry->insn == insn) {
+      assert(target_mei!=nullptr);
+      auto it = m_fmethod->iterator_to(*target_mei);
+      for(auto cur = FatMethod::iterator(it); cur != m_fmethod->end(); ++cur) {
+        // Stop if we reach target simple, which is case 0.
+        if(cur->type == MFLOW_TARGET && cur->target->type == BRANCH_SIMPLE) {
+          break;
+        }
+        remove_list.emplace_back(&*cur);
+        // Stop if we reach a goto.
+        if(cur->type == MFLOW_OPCODE && is_goto(cur->insn->opcode())) {
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  for (auto mei : remove_list) {
+    if (mei->type == MFLOW_OPCODE) {
+      remove_opcode(mei->insn);
+      continue;
+    }
+    if (mei->type == MFLOW_TARGET) {
+      mei->type = MFLOW_FALLTHROUGH;
+      delete mei->target;
+      mei->throwing_mie = nullptr;
+      // Adjust the index of the rest of the targets.
+      auto it = m_fmethod->iterator_to(*mei); it++;
+      for(auto cur = FatMethod::iterator(it); cur != m_fmethod->end(); ++cur) {
+        // Stop if we reach target simple, which is case 0.
+        if(cur->type == MFLOW_TARGET) {
+          BranchTarget* bt = cur->target;
+          bt->index -= 1;
+        }
+      }
+      continue;
+    }
+    if (mei->type == MFLOW_POSITION) {
+      mei->pos->parent = nullptr;
+      continue;
+    }
+    delete mei;
+  }
 }
 
 void MethodTransform::remove_opcode(DexInstruction* insn) {

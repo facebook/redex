@@ -336,6 +336,9 @@ class MethodTransform {
   /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(DexInstruction* insn);
 
+  /* This method will delete the switch case where insn resides. */
+  void remove_switch_case(DexInstruction* insn);
+
   FatMethod* get_fatmethod_for_test() { return m_fmethod; }
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
