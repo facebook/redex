@@ -530,20 +530,24 @@ void RenameClassesPassV2::rename_classes(
 
   AliasMap aliases;
   for(auto clazz: scope) {
+    auto dtype = clazz->get_type();
+    auto oldname = dtype->get_name();
+
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       auto reason = m_dont_rename_reasons[clazz];
       std::string metric = dont_rename_reason_to_metric(reason.code);
       mgr.incr_metric(metric, 1);
       if (dont_rename_reason_to_metric_per_rule(reason.code)) {
-        mgr.incr_metric(metric + "::" + std::string(reason.rule), 1);
+        std::string str = metric + "::" + std::string(reason.rule);
+        mgr.incr_metric(str, 1);
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n", oldname->c_str(), str.c_str());
+      } else {
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n", oldname->c_str(), metric.c_str());
       }
       continue;
     }
 
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
-
-    auto dtype = clazz->get_type();
-    auto oldname = dtype->get_name();
 
     char clzname[4];
     const char* padding = "0000000000000";

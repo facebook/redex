@@ -99,15 +99,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
     redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false, true);
   }
-  // NOTE: After D4196499 lands, this will be enabled
-  //
-  // for (auto pass : m_activated_passes) {
-  //   TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
-  //   Timer t(pass->name() + " (eval)");
-  //   m_current_pass_metrics = &m_pass_metrics[pass->name()];
-  //   pass->eval_pass(stores, cfg, *this);
-  //   m_current_pass_metrics = nullptr;
-  // }
+  for (auto pass : m_activated_passes) {
+    TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
+    Timer t(pass->name() + " (eval)");
+    m_current_pass_metrics = &m_pass_metrics[pass->name()];
+    pass->eval_pass(stores, cfg, *this);
+    m_current_pass_metrics = nullptr;
+  }
   for (auto pass : m_activated_passes) {
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
@@ -115,8 +113,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
-    // NOTE: After D4196499, the following line (eval_pass) will be deleted
-    pass->eval_pass(stores, cfg, *this);
     pass->run_pass(stores, cfg, *this);
     m_current_pass_metrics = nullptr;
   }
