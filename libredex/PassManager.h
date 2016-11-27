@@ -33,8 +33,7 @@ class PassManager {
 
   redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
   bool no_proguard_rules() {
-    return m_pg_config.keep_rules.empty() &&
-           m_pg_config.keepclasseswithmembers_rules.empty() ;
+    return m_pg_config.keep_rules.empty();
   }
 
  private:

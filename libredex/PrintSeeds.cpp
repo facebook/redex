@@ -78,42 +78,40 @@ void redex::print_seeds(std::ostream& output,
                         const bool allowshrinking_filter,
                         const bool allowobfuscation_filter) {
   for (const auto& cls : classes) {
-    if (keep(cls) || keepclassmembers(cls)) {
-      auto deob = cls->get_deobfuscated_name();
-      if (deob.empty()) {
-        std::cerr << "WARNING: this class has no deobu name: "
-                  << cls->get_name()->c_str() << std::endl;
-        deob = cls->get_name()->c_str();
-      }
-      std::string name = redex::dexdump_name_to_dot_name(deob);
-      if (keep(cls)) {
-        show_class(
-            output, cls, name, allowshrinking_filter, allowobfuscation_filter);
-      }
-      print_field_seeds(output,
-                        pg_map,
-                        name,
-                        cls->get_ifields(),
-                        allowshrinking_filter,
-                        allowobfuscation_filter);
-      print_field_seeds(output,
-                        pg_map,
-                        name,
-                        cls->get_sfields(),
-                        allowshrinking_filter,
-                        allowobfuscation_filter);
-      print_method_seeds(output,
-                         pg_map,
-                         name,
-                         cls->get_dmethods(),
-                         allowshrinking_filter,
-                         allowobfuscation_filter);
-      print_method_seeds(output,
-                         pg_map,
-                         name,
-                         cls->get_vmethods(),
-                         allowshrinking_filter,
-                         allowobfuscation_filter);
+    auto deob = cls->get_deobfuscated_name();
+    if (deob.empty()) {
+      std::cerr << "WARNING: this class has no deobu name: "
+                << cls->get_name()->c_str() << std::endl;
+      deob = cls->get_name()->c_str();
     }
+    std::string name = redex::dexdump_name_to_dot_name(deob);
+    if (keep(cls)) {
+      show_class(
+          output, cls, name, allowshrinking_filter, allowobfuscation_filter);
+    }
+    print_field_seeds(output,
+                      pg_map,
+                      name,
+                      cls->get_ifields(),
+                      allowshrinking_filter,
+                      allowobfuscation_filter);
+    print_field_seeds(output,
+                      pg_map,
+                      name,
+                      cls->get_sfields(),
+                      allowshrinking_filter,
+                      allowobfuscation_filter);
+    print_method_seeds(output,
+                       pg_map,
+                       name,
+                       cls->get_dmethods(),
+                       allowshrinking_filter,
+                       allowobfuscation_filter);
+    print_method_seeds(output,
+                       pg_map,
+                       name,
+                       cls->get_vmethods(),
+                       allowshrinking_filter,
+                       allowobfuscation_filter);
   }
 }

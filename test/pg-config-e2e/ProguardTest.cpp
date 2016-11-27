@@ -109,10 +109,6 @@ DexField* find_static_field_named(const DexClass* cls, const char* name) {
   return find_field_named(cls->get_sfields(), name);
 }
 
-bool class_has_been_renamed(const DexClass* cls) {
-  return std::string(cls->c_str()) != cls->get_deobfuscated_name();
-}
-
 /**
  * Ensure the ProGuard test rules are properly applied.
  */
@@ -162,23 +158,19 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Alpha;");
     ASSERT_NE(alpha, nullptr);
     ASSERT_FALSE(keep(alpha));
-    ASSERT_FALSE(keepclassmembers(alpha));
-    ASSERT_FALSE(keepclasseswithmembers(alpha));
     ASSERT_FALSE(allowobfuscation(alpha));
   }
 
-  // Beta is not used and should not occur in the input.
-  ASSERT_EQ(
-      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;"),
-      nullptr);
+  // Beta is not used so should not have a keep marker.
+  auto beta = find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
+  ASSERT_NE(nullptr, beta);
+  ASSERT_FALSE(keep(beta));
 
   { // Gamma is not used anywhere but the class only is kept by the config.
     auto gamma =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Gamma;");
     ASSERT_NE(gamma, nullptr);
     ASSERT_TRUE(keep(gamma));
-    ASSERT_FALSE(keepclassmembers(gamma));
-    ASSERT_FALSE(keepclasseswithmembers(gamma));
     auto wombat = find_instance_field_named(
         gamma, "Lcom/facebook/redex/test/proguard/Gamma;.wombat:I");
     ASSERT_NE(nullptr, wombat);
@@ -196,7 +188,8 @@ TEST(ProguardTest, assortment) {
     // public.
     auto alpha = find_static_field_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.alpha:I");
-    ASSERT_EQ(nullptr, alpha);
+    ASSERT_NE(nullptr, alpha);
+    ASSERT_FALSE(keep(alpha));
     // The field "private static int beta" should match because it is
     // private (i.e. not public) and static.
     auto beta = find_static_field_named(
@@ -208,7 +201,8 @@ TEST(ProguardTest, assortment) {
     // it is an instance field.
     auto gamma = find_instance_field_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.gamma:I");
-    ASSERT_EQ(nullptr, gamma);
+    ASSERT_NE(nullptr, gamma);
+    ASSERT_FALSE(keep(gamma));
     // Check constructors.
     auto init_V = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>:()V");
@@ -217,7 +211,8 @@ TEST(ProguardTest, assortment) {
     ASSERT_FALSE(allowobfuscation(init_V));
     auto init_I = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>:(I)V");
-    ASSERT_EQ(nullptr, init_I);
+    ASSERT_NE(nullptr, init_I);
+    ASSERT_FALSE(keep(init_I));
     auto init_S = find_dmethod_named(
         delta,
         "Lcom/facebook/redex/test/proguard/Delta;.<init>:(Ljava/lang/String;)V");
@@ -231,10 +226,11 @@ TEST(ProguardTest, assortment) {
     ASSERT_FALSE(allowobfuscation(clinit));
   }
 
-  { // Inner class Delta.A should be removed.
+  { // Inner class Delta.A should be marked for keep.
     auto delta_a =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$A;");
-    ASSERT_EQ(delta_a, nullptr);
+    ASSERT_NE(nullptr, delta_a);
+    ASSERT_FALSE(keep(delta_a));
   }
 
   { // Inner class Delta.B is preserved by a keep directive.
@@ -282,7 +278,8 @@ TEST(ProguardTest, assortment) {
     // Make sure its methods are kept by "<methods>" but not its fields.
     auto iField = find_instance_field_named(
         delta_e, "Lcom/facebook/redex/test/proguard/Delta$E;.i:I");
-    ASSERT_EQ(nullptr, iField);
+    ASSERT_NE(nullptr, iField);
+    ASSERT_FALSE(keep(iField));
     auto iValue = find_vmethod_named(
         delta_e, "Lcom/facebook/redex/test/proguard/Delta$E;.iValue:()I");
     ASSERT_NE(nullptr, iValue);
@@ -297,7 +294,8 @@ TEST(ProguardTest, assortment) {
     // wombat is not a final field, so it should not be kept.
     auto wombatField = find_instance_field_named(
         delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.wombat:I");
-    ASSERT_EQ(wombatField, nullptr);
+    ASSERT_NE(nullptr, wombatField);
+    ASSERT_FALSE(keep(wombatField));
     // numbat is a final field so it should be kept
     auto numbatField = find_instance_field_named(
         delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.numbat:I");
@@ -306,7 +304,8 @@ TEST(ProguardTest, assortment) {
     // The numbatValue method should not be kept.
     auto numbatValue = find_vmethod_named(
         delta_f, "Lcom/facebook/redex/test/proguard/Delta$F;.numbatValue:()I");
-    ASSERT_EQ(numbatValue, nullptr);
+    ASSERT_NE(nullptr, numbatValue);
+    ASSERT_FALSE(keep(numbatValue));
   }
 
   { // Inner class Delta.G is kept, make sure constructor is not renamed.
@@ -315,16 +314,15 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, delta_g);
     ASSERT_TRUE(keep(delta_g));
     ASSERT_TRUE(allowobfuscation(delta_g));
-    ASSERT_TRUE(class_has_been_renamed(delta_g));
     // Make sure its fields and methods have been kept by the "*;" directive.
-    auto wombatField = find_instance_field_named(
-        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombat:I");
-    ASSERT_NE(nullptr, wombatField);
-    auto wombatValue = find_vmethod_named(
-        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.wombatValue:()I");
-    ASSERT_NE(nullptr, wombatValue);
-    ASSERT_TRUE(keep(wombatValue));
-    ASSERT_TRUE(allowobfuscation(wombatValue));
+    auto fuzzyWombat = find_instance_field_named(
+        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombat:I");
+    ASSERT_NE(nullptr, fuzzyWombat);
+    auto fuzzyWombatValue = find_vmethod_named(
+        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombatValue:()I");
+    ASSERT_NE(nullptr, fuzzyWombatValue);
+    ASSERT_TRUE(keep(fuzzyWombatValue));
+    ASSERT_TRUE(allowobfuscation(fuzzyWombatValue));
     // Check that the constructor is not renamed.
     auto init_V = find_dmethod_named(delta_g,
                                      "Lcom/facebook/redex/test/proguard/"
@@ -342,20 +340,22 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(delta_h, nullptr);
     ASSERT_TRUE(keep(delta_h));
     ASSERT_TRUE(allowobfuscation(delta_h));
-    ASSERT_TRUE(class_has_been_renamed(delta_h));
     auto wombatField = find_instance_field_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.wombat:I");
     ASSERT_NE(wombatField, nullptr);
     ASSERT_TRUE(keep(wombatField));
     auto numbatField = find_instance_field_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.numbat:Z");
-    ASSERT_EQ(numbatField, nullptr);
+    ASSERT_NE(nullptr, numbatField);
+    ASSERT_FALSE(keep(numbatField));
     auto myIntValue = find_vmethod_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.myIntValue:()I");
-    ASSERT_EQ(myIntValue, nullptr);
+    ASSERT_NE(nullptr, myIntValue);
+    ASSERT_FALSE(keep(myIntValue));
     auto myBoolValue = find_vmethod_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.myBoolValue:()Z");
-    ASSERT_EQ(myBoolValue, nullptr);
+    ASSERT_NE(nullptr, myBoolValue);
+    ASSERT_FALSE(keep(myBoolValue));
   }
 
   { // Tests for field * regex matching.
@@ -380,7 +380,8 @@ TEST(ProguardTest, assortment) {
     // numbat does not match wombat.* from "wombat*"
     auto numbat = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
-    ASSERT_EQ(numbat, nullptr);
+    ASSERT_NE(nullptr, numbat);
+    ASSERT_FALSE(keep(numbat));
   }
 
   { // Test handling of $$ to make sure it does not match against
@@ -434,7 +435,8 @@ TEST(ProguardTest, assortment) {
     // beta0 is a primitive type, so not kept.
     auto beta0 = find_instance_field_named(
         delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.beta0:I");
-    ASSERT_EQ(nullptr, beta0);
+    ASSERT_NE(nullptr, beta0);
+    ASSERT_FALSE(keep(beta0));
     // beta is a class type, so kept
     auto beta = find_instance_field_named(
         delta_j,
@@ -445,12 +447,14 @@ TEST(ProguardTest, assortment) {
     auto beta1 = find_instance_field_named(
         delta_j,
         "Lcom/facebook/redex/test/proguard/Delta$J;.beta1:[Ljava/util/List;");
-    ASSERT_EQ(nullptr, beta1);
+    ASSERT_NE(nullptr, beta1);
+    ASSERT_FALSE(keep(beta1));
     // Check for matches against public **[] gamma*
     // gamma1 is not kept because int does not match **
     auto gamma1 = find_instance_field_named(
         delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.gamma1:[I");
-    ASSERT_EQ(nullptr, gamma1);
+    ASSERT_NE(nullptr, gamma1);
+    ASSERT_FALSE(keep(gamma1));
     // gamma2 is kept because String matches **
     auto gamma2 =
         find_instance_field_named(delta_j,
@@ -472,7 +476,8 @@ TEST(ProguardTest, assortment) {
     auto omega_3 = find_vmethod_named(delta_j,
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Delta$J;.omega:(Ljava/lang/String;)I");
-    ASSERT_EQ(nullptr, omega_3);
+    ASSERT_NE(nullptr, omega_3);
+    ASSERT_FALSE(keep(omega_3));
     auto omega_4 = find_vmethod_named(delta_j,
                                       "Lcom/facebook/redex/test/proguard/"
                                       "Delta$J;.omega:(I)I");
@@ -520,14 +525,16 @@ TEST(ProguardTest, assortment) {
     auto iota_1 = find_vmethod_named(delta_j,
                                      "Lcom/facebook/redex/test/proguard/"
                                      "Delta$J;.iota:(IZLjava/lang/String;C)I");
-    ASSERT_EQ(nullptr, iota_1);
+    ASSERT_NE(nullptr, iota_1);
+    ASSERT_FALSE(keep(iota_1));
     auto iota_2 = find_vmethod_named(
         delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.iota(S)I");
     ASSERT_EQ(nullptr, iota_2);
     auto iota_3 = find_vmethod_named(delta_j,
                                      "Lcom/facebook/redex/test/proguard/"
                                      "Delta$J;.iota:(Ljava/lang/String;)I");
-    ASSERT_EQ(nullptr, iota_3);
+    ASSERT_NE(nullptr, iota_3);
+    ASSERT_FALSE(keep(iota_3));
 
     // Checking handling of % matches against void
     auto zeta0 = find_vmethod_named(
@@ -537,7 +544,8 @@ TEST(ProguardTest, assortment) {
     auto zeta1 = find_vmethod_named(
         delta_j,
         "Lcom/facebook/redex/test/proguard/Delta$J;.zeta1:()Ljava/lang/String;");
-    ASSERT_EQ(nullptr, zeta1);
+    ASSERT_NE(nullptr, zeta1);
+    ASSERT_FALSE(keep(zeta1));
   }
 
   { // Check handling of annotations.
@@ -547,14 +555,16 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(delta_k));
     auto alpha = find_instance_field_named(
         delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.alpha:I");
-    ASSERT_EQ(nullptr, alpha);
+    ASSERT_NE(nullptr, alpha);
+    ASSERT_FALSE(keep(alpha));
     auto beta = find_instance_field_named(
         delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.beta:I");
     ASSERT_NE(nullptr, beta);
     ASSERT_TRUE(keep(beta));
     auto gamma = find_vmethod_named(
         delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.gamma:()V");
-    ASSERT_EQ(nullptr, gamma);
+    ASSERT_NE(nullptr, gamma);
+    ASSERT_FALSE(keep(gamma));
     auto omega = find_vmethod_named(
         delta_k, "Lcom/facebook/redex/test/proguard/Delta$K;.omega:()V");
     ASSERT_NE(nullptr, omega);
@@ -615,7 +625,8 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(delta_n));
     auto delta_o =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$O;");
-    ASSERT_EQ(nullptr, delta_o);
+    ASSERT_NE(nullptr, delta_o);
+    ASSERT_FALSE(keep(delta_o));
 
     auto delta_p =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$P;");
@@ -645,7 +656,8 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(delta_s0));
     auto delta_s1 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S1;");
-    ASSERT_EQ(nullptr, delta_s1);
+    ASSERT_NE(nullptr, delta_s1);
+    ASSERT_FALSE(keep(delta_s1));
 
    // Check assumenosideeffects
    auto delta_u = find_class_named(
@@ -676,7 +688,8 @@ TEST(ProguardTest, assortment) {
 
   auto delta_x_x2 = find_class_named(
          classes, "Lcom/facebook/redex/test/proguard/Delta$X$X2;");
-  ASSERT_EQ(nullptr, delta_x_x2);
+  ASSERT_NE(nullptr, delta_x_x2);
+  ASSERT_FALSE(keep(delta_x_x2));
 
   }
 
@@ -685,17 +698,46 @@ TEST(ProguardTest, assortment) {
               classes, "Lcom/facebook/redex/test/proguard/Delta$V;");
    ASSERT_NE(nullptr, delta_v);
    ASSERT_TRUE(keep(delta_v));
-   auto alpha = find_instance_field_named(delta_v,
-             "Lcom/facebook/redex/test/proguard/Delta$V;.alpha:Lcom/facebook/redex/test/proguard/Delta$VT;");
-   ASSERT_NE(nullptr, alpha);
-   ASSERT_TRUE(keep(alpha));
-   auto beta = find_instance_field_named(delta_v,
-             "Lcom/facebook/redex/test/proguard/Delta$V;.beta:Lcom/facebook/redex/test/proguard/Delta$VT;");
-   ASSERT_NE(nullptr, beta);
-   ASSERT_TRUE(keep(beta));
-   auto gamma = find_instance_field_named(delta_v,
-             "Lcom/facebook/redex/test/proguard/Delta$V;.gamma:I");
-   ASSERT_EQ(nullptr, gamma);
+   auto goat = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.goat:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, goat);
+   ASSERT_TRUE(keep(goat));
+   auto sheep = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.sheep:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, sheep);
+   ASSERT_TRUE(keep(sheep));
+   auto lama = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.lama:I");
+   ASSERT_NE(nullptr, lama);
+   ASSERT_FALSE(keep(lama));
+  }
+
+  { // More keepclasseswithmembers for the E0, E1, .. E7 classes
+    auto delta_e7 = find_class_named(
+                  classes, "Lcom/facebook/redex/test/proguard/Delta$E7;");
+    ASSERT_NE(nullptr, delta_e7);
+    ASSERT_TRUE(keep(delta_e7));
+    auto e7_crab = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.crab:I");
+    ASSERT_NE(nullptr, e7_crab);
+    ASSERT_TRUE(keep(e7_crab));
+    auto e7_seahorse = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.seahorse:I");
+    ASSERT_NE(nullptr, e7_seahorse);
+    ASSERT_TRUE(keep(e7_seahorse));
+    auto e7_octopus = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.octopus:I");
+    ASSERT_NE(nullptr, e7_octopus);
+    ASSERT_FALSE(keep(e7_octopus));
+    auto e7_shark = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.shark:()I");
+    ASSERT_NE(nullptr, e7_shark);
+    ASSERT_TRUE(keep(e7_shark));
+    auto e7_tuna1 = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna1:()I");
+    ASSERT_NE(nullptr, e7_tuna1);
+    ASSERT_TRUE(keep(e7_tuna1));
+    auto e7_tuna2 = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna2:()I");
+    ASSERT_NE(nullptr, e7_tuna2);
+    ASSERT_TRUE(keep(e7_tuna2));
   }
 
   { // Check extends
@@ -747,7 +789,8 @@ TEST(ProguardTest, assortment) {
 
     auto iota_beta =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Beta;");
-    ASSERT_EQ(nullptr, iota_beta);
+    ASSERT_NE(nullptr, iota_beta);
+    ASSERT_FALSE(keep(iota_beta));
 
     auto iota_MySerializable =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$MySerializable;");
@@ -814,15 +857,18 @@ TEST(ProguardTest, assortment) {
     auto omega_alpha_blue =
         find_vmethod_named(
             omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue:()V");
-    ASSERT_EQ(nullptr, omega_alpha_blue);
+    ASSERT_NE(nullptr, omega_alpha_blue);
+    ASSERT_FALSE(keep(omega_alpha_blue));
 
     auto omega_beta =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
-    ASSERT_EQ(nullptr, omega_beta);
+    ASSERT_NE(nullptr, omega_beta);
+    ASSERT_FALSE(keep(omega_beta));
 
     auto omega_gamma =
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
-    ASSERT_EQ(nullptr, omega_gamma);
+    ASSERT_NE(nullptr, omega_gamma);
+    ASSERT_FALSE(keep(omega_gamma));
  }
 
   }

@@ -71,7 +71,7 @@
 -keep @interface com.facebook.redex.test.proguard.DontKillMe
 
 -keep public !final class ** extends com.facebook.redex.test.proguard.Epsilon
--keep class ** extends com.facebook.redex.test.proguard.Delta$G
+-keep,allowobfuscation class ** extends com.facebook.redex.test.proguard.Delta$G
 -keep class ** extends @com.facebook.redex.test.proguard.DoNotStrip com.facebook.redex.test.proguard.Delta$R?
 
 -keep class ** extends android.graphics.Color
@@ -126,6 +126,13 @@
 
 -keepclasseswithmembernames class * {
     native <methods>;
+}
+
+-keepclasseswithmembers class com.facebook.redex.test.proguard.Delta$E7 {
+  int crab;
+  int seahorse;
+  int shark();
+  int tuna?();
 }
 
 # view AndroidManifest.xml #generated:6

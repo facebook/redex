@@ -614,8 +614,8 @@ TEST(ProguardParserTest, keepclassmembernames) {
         "}");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
-    ASSERT_EQ(config.keepclassmembers_rules.size(), 1);
-    ASSERT_TRUE(config.keepclassmembers_rules[0].allowshrinking);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
   }
 }
 
@@ -628,8 +628,8 @@ TEST(ProguardParserTest, keepclasseswithmembernames) {
         "}");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
-    ASSERT_EQ(config.keepclasseswithmembers_rules.size(), 1);
-    ASSERT_TRUE(config.keepclasseswithmembers_rules[0].allowshrinking);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
   }
 }
 

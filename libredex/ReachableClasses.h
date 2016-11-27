@@ -61,16 +61,6 @@ inline bool keep(DexMember* member) {
 }
 
 template<class DexMember>
-inline bool keepclassmembers(DexMember* member) {
-  return member->rstate.keepclassmembers();
-}
-
-template<class DexMember>
-inline bool keepclasseswithmembers(DexMember* member) {
-  return member->rstate.keepclasseswithmembers();
-}
-
-template<class DexMember>
 inline bool allowshrinking(DexMember* member) {
   return member->rstate.allowshrinking();
 }

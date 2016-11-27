@@ -27,10 +27,6 @@ class ReferencedState {
   // ProGuard keep settings
   // Specify classes and class members that are entry-points.
   bool m_keep{false};
-  // Speicfy member to be preserved if the class is preserved.
-  bool m_keepclassmembers{false};
-  // Specify that all classes with the given members should be specified.
-  bool m_keepclasseswithmembers{false};
   // Useful for keeping native methods.
   bool m_includedescriptorclasses{false};
   // Specify items that can be deleted.
@@ -49,7 +45,7 @@ class ReferencedState {
  public:
   ReferencedState() = default;
   bool can_delete() const {
-    return !m_bytype && (!m_keep || m_allowshrinking) && !m_seed;
+    return !m_bytype && (!m_keep || m_allowshrinking);
   }
   bool can_rename() const {
     return !m_bystring &&
@@ -63,8 +59,6 @@ class ReferencedState {
 
   // ProGuard keep options
   bool keep() const { return m_keep; }
-  bool keepclassmembers() const { return m_keepclassmembers; }
-  bool keepclasseswithmembers() const { return m_keepclasseswithmembers; }
   // ProGaurd keep option modifiers
   bool includedescriptorclasses() const { return m_includedescriptorclasses; }
   bool allowshrinking() const { return m_allowshrinking; }
@@ -106,17 +100,15 @@ class ReferencedState {
   // ProGuaurd keep information.
   void set_keep() { m_keep = true; }
 
-  void set_keepclassmembers() { m_keepclassmembers = true; }
-
-  void set_keepclasseswithmembers() { m_keepclasseswithmembers = true; }
-
   void set_includedescriptorclasses() { m_includedescriptorclasses = true; }
 
   void set_allowshrinking() { m_allowshrinking = true; }
+  void unset_allowshrinking() { m_allowshrinking = false; }
 
   void set_allowoptimization() { m_allowoptimization = true; }
 
   void set_allowobfuscation() { m_allowobfuscation = true; }
+  void unset_allowobfuscation() { m_allowobfuscation = false; }
 
   void set_assumenosideeffects() { m_assumenosideeffects = true; }
 

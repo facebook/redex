@@ -43,6 +43,7 @@ namespace redex {
     std::string annotationType;
     std::string name;
     std::string descriptor;
+    bool mark_conditionally{false};
   };
 
   struct ClassSpecification {
@@ -62,6 +63,8 @@ namespace redex {
     bool allowshrinking{false};
     bool allowoptimization{false};
     bool allowobfuscation{false};
+    bool mark_classes{true};
+    bool mark_conditionally{false};
     ClassSpecification class_spec;
   };
 
@@ -87,8 +90,6 @@ namespace redex {
     bool verbose{false};
     std::string target_version;
     std::vector<KeepSpec> keep_rules;
-    std::vector<KeepSpec> keepclassmembers_rules;
-    std::vector<KeepSpec> keepclasseswithmembers_rules;
     std::vector<KeepSpec> assumenosideeffects_rules;
     std::vector<std::string> optimization_filters;
     std::vector<std::string> keepattributes;

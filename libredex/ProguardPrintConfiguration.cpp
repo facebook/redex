@@ -13,31 +13,26 @@
 #include <iostream>
 #include <sstream>
 
-std::string show_keep_style(const std::string& keep_style,
-                            const redex::KeepSpec& keep_rule) {
-  const char* ks = keep_style.c_str();
-  if (strcmp(ks, "keep") == 0) {
-    if (keep_rule.allowshrinking) {
-      return "-keepnames";
-    }
+std::string show_keep_style(const redex::KeepSpec& keep_rule) {
+  if (keep_rule.mark_classes && !keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
     return "-keep";
   }
-
-  if (strcmp(ks, "keepclassmember") == 0) {
-    if (keep_rule.allowshrinking) {
-      return "-keepclassmembernames";
-    }
-    return "-keepclassmember";
+  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
+    return "-keepclassmembers";
   }
-
-  if (strcmp(ks, "keepclasseswithmembers") == 0) {
-    if (keep_rule.allowshrinking) {
-      return "-keepclasseswithmembernames";
-    }
+  if (!keep_rule.mark_classes && keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
     return "-keepclasseswithmembers";
   }
-
-  return "-" + keep_style;
+  if (keep_rule.mark_classes && !keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+    return "-keepnames";
+  }
+  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+    return "-keepclassmembernames";
+  }
+  if (!keep_rule.mark_classes && keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+    return "-keepclasseswithmembernames";
+  }
+  return "-invalidkeep";
 }
 
 std::string show_keep_modifiers(const redex::KeepSpec& keep_rule) {
@@ -144,8 +139,7 @@ std::string show_methods(
   return ss.str();
 }
 
-std::string redex::show_keep(const std::string& keep_style,
-                             const KeepSpec& keep_rule) {
+std::string redex::show_keep(const KeepSpec& keep_rule) {
   std::stringstream text;
   auto field_count = 0;
   for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
@@ -158,7 +152,7 @@ std::string redex::show_keep(const std::string& keep_style,
   auto total = keep_rule.count + field_count + method_count;
   text << total << "\t" << keep_rule.count << "\t" << field_count << "\t"
        << method_count << "\t";
-  text << show_keep_style(keep_style, keep_rule)
+  text << show_keep_style(keep_rule)
        << show_keep_modifiers(keep_rule) << " ";
   const auto class_spec = keep_rule.class_spec;
   if (!(class_spec.annotationType.empty())) {
@@ -207,12 +201,6 @@ void redex::show_configuration(std::ostream& output,
   output << "-1\t"
          << "classes: " << classes.size() << " total: " << total << std::endl;
   for (const auto& keep : config.keep_rules) {
-    output << redex::show_keep("keep", keep) << std::endl;
-  }
-  for (const auto& keep : config.keepclasseswithmembers_rules) {
-    output << redex::show_keep("keepclasseswithmembers", keep) << std::endl;
-  }
-  for (const auto& keep : config.keepclassmembers_rules) {
-    output << redex::show_keep("keepclassmembers", keep) << std::endl;
+    output << redex::show_keep(keep) << std::endl;
   }
 }

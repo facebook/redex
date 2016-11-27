@@ -696,10 +696,16 @@ ClassSpecification parse_class_specification(
 bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 token keep_kind,
                 std::vector<KeepSpec>* spec,
+                const bool& mark_classes,
+                const bool& mark_conditionally,
+                const bool& allowshrinking,
                 bool* ok) {
   if ((**it)->type == keep_kind) {
     ++(*it); // Consume the keep token
     KeepSpec keep;
+    keep.mark_classes = mark_classes;
+    keep.mark_conditionally = mark_conditionally;
+    keep.allowshrinking = allowshrinking;
     if (!parse_modifiers(it, &keep)) {
       skip_to_next_command(it);
       return true;
@@ -719,60 +725,6 @@ bool ignore_class_specification_command(
   ++(*it);
   // Ignore the rest of the unsupported comamnd.
   skip_to_next_command(it);
-  return true;
-}
-
-bool parse_keepnames(std::vector<unique_ptr<Token>>::iterator* it,
-                     std::vector<KeepSpec>* keep_rules,
-                     bool* ok) {
-  if ((**it)->type != token::keepnames) {
-    return false;
-  }
-  if (!parse_keep(it, token::keepnames, keep_rules, ok)) {
-    cerr << "Failed to parse -keepnames rule at line " << (**it)->line << endl;
-    ++it;
-    skip_to_next_command(it);
-    return true;
-  }
-  // Set allowshrinking.
-  keep_rules->back().allowshrinking = true;
-  return true;
-}
-
-bool parse_keepclasssmembernames(std::vector<unique_ptr<Token>>::iterator* it,
-                                 std::vector<KeepSpec>* keep_rules,
-                                 bool* ok) {
-  if ((**it)->type != token::keepclassmembernames) {
-    return false;
-  }
-  if (!parse_keep(it, token::keepclassmembernames, keep_rules, ok)) {
-    cerr << "Failed to parse -keepclasssmembernames rule at line "
-         << (**it)->line << endl;
-    ++it;
-    skip_to_next_command(it);
-    return true;
-  }
-  // Set allowshrinking.
-  keep_rules->back().allowshrinking = true;
-  return true;
-}
-
-bool parse_keepclasseswithmembernames(
-    std::vector<unique_ptr<Token>>::iterator* it,
-    std::vector<KeepSpec>* keep_rules,
-    bool* ok) {
-  if ((**it)->type != token::keepclasseswithmembernames) {
-    return false;
-  }
-  if (!parse_keep(it, token::keepclasseswithmembernames, keep_rules, ok)) {
-    cerr << "Failed to parse -keepclasseswithmembernames rule at line "
-         << (**it)->line << endl;
-    ++it;
-    skip_to_next_command(it);
-    return true;
-  }
-  // Set allowshrinking.
-  keep_rules->back().allowshrinking = true;
   return true;
 }
 
@@ -827,7 +779,12 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     // -forceprocessing not supported
 
     // Keep Options
-    if (parse_keep(&it, token::keep, &pg_config->keep_rules, &ok)) {
+    if (parse_keep(&it, token::keep,
+                   &pg_config->keep_rules,
+                   true,
+                   false,
+                   false,
+                   &ok)) {
       if (!ok) {
         (*parse_errors)++;
       }
@@ -835,7 +792,10 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
     if (parse_keep(&it,
                    token::keepclassmembers,
-                   &pg_config->keepclassmembers_rules,
+                   &pg_config->keep_rules,
+                   false,
+                   false,
+                   false,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -844,28 +804,47 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
     if (parse_keep(&it,
                    token::keepclasseswithmembers,
-                   &pg_config->keepclasseswithmembers_rules,
+                   &pg_config->keep_rules,
+                   false,
+                   true,
+                   false,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
       }
       continue;
     }
-    if (parse_keepnames(&it, &pg_config->keep_rules, &ok)) {
+    if (parse_keep(&it,
+                   token::keepnames,
+                   &pg_config->keep_rules,
+                   true,
+                   false,
+                   true,
+                   &ok)) {
       if (!ok) {
         (*parse_errors)++;
       }
       continue;
     }
-    if (parse_keepclasssmembernames(
-            &it, &pg_config->keepclassmembers_rules, &ok)) {
+    if (parse_keep(&it,
+                   token::keepclassmembernames,
+                   &pg_config->keep_rules,
+                   false,
+                   false,
+                   true,
+                   &ok)) {
       if (!ok) {
         (*parse_errors)++;
       }
       continue;
     }
-    if (parse_keepclasseswithmembernames(
-            &it, &pg_config->keepclasseswithmembers_rules, &ok)) {
+    if (parse_keep(&it,
+                   token::keepclasseswithmembernames,
+                   &pg_config->keep_rules,
+                   false,
+                   true,
+                   true,
+                   &ok)) {
       if (!ok) {
         (*parse_errors)++;
       }
@@ -897,6 +876,9 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::assumenosideeffects,
                    &pg_config->assumenosideeffects_rules,
+                   false,
+                   false,
+                   false,
                    &ok))
       continue;
 
