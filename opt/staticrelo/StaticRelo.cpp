@@ -34,12 +34,10 @@ namespace {
 #define METRIC_NUM_CANDIDATE_CLASSES "num_candidate_classes"
 #define METRIC_NUM_DELETED_CLASSES "**num_deleted_classes**"
 #define METRIC_NUM_MOVED_METHODS "num_moved_methods"
+#define METRIC_NUM_DELETED_METHODS "num_deleted_methods"
 
 
 // Counters for this optimization
-static size_t s_cls_delete_count;
-static size_t s_meth_delete_count;
-static int s_meth_move_count;
 static int s_meth_could_not_move_count;
 static float s_avg_relocation_load;
 static size_t s_max_relocation_load;
@@ -534,7 +532,7 @@ void make_references_public(const DexMethod* from_meth) {
           continue;
         }
         always_assert_log(relocation_target->has_class_data(),
-            "Relocatoin target %s has no class data\n",
+            "Relocation target %s has no class data\n",
             SHOW(relocation_target->get_type()));
         target_methods[relocation_target].push_back(meth);
         meth_moves[meth] = relocation_target;
@@ -584,16 +582,14 @@ void record_move_data(DexMethod* from_meth,
   cfg.add_moved_methods(from_tuple, to_cls);
 }
 
-void do_mutations(
-  Scope& scope,
-  DexClassesVector& dexen,
-  std::unordered_map<DexMethod*, DexClass*>& meth_moves,
-  std::unordered_set<DexMethod*>& meth_deletes,
-  std::unordered_set<DexClass*>& cls_deletes,
-  ConfigFiles& cfg) {
+void do_mutations(PassManager& mgr,
+                  Scope& scope,
+                  DexClassesVector& dexen,
+                  std::unordered_map<DexMethod*, DexClass*>& meth_moves,
+                  const std::unordered_set<DexMethod*>& meth_deletes,
+                  const std::unordered_set<DexClass*>& cls_deletes,
+                  ConfigFiles& cfg) {
 
-  // Do method deletes
-  s_meth_delete_count = meth_deletes.size();
   for (auto& meth : meth_deletes) {
     type_class(meth->get_class())->get_dmethods().remove(meth);
   }
@@ -629,12 +625,11 @@ void do_mutations(
       set_public(from_meth);
       make_references_public(from_meth);
       set_public(to_cls);
-      s_meth_move_count++;
+      mgr.incr_metric(METRIC_NUM_MOVED_METHODS, 1);
     }
   }
 
   // Do class deletes
-  s_cls_delete_count = cls_deletes.size();
   delete_classes(scope, dexen, cls_deletes);
 }
 
@@ -661,12 +656,9 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     return;
   }
   // Clear out counter
-  s_cls_delete_count = 0;
-  s_meth_delete_count = 0;
-  s_meth_move_count = 0;
   s_meth_could_not_move_count = 0;
-  s_avg_relocation_load = 0.0f;
-  s_max_relocation_load = 0;
+  s_avg_relocation_load = 0.0f; // FIXME: does not work with DexStores
+  s_max_relocation_load = 0; // FIXME: does not work with DexStores
   s_single_ref_total_count = 0;
   s_single_ref_moved_count = 0;
   s_line_conflict_but_sig_fine_count = 0;
@@ -692,6 +684,7 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     // Find candidates
     candidates_t candidates = build_candidates(
         scope, class_refs, referenced_types, dont_optimize_annos);
+    mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
 
     // Find the relocation target for each dex
     auto dex_to_target = build_dex_to_target_map(
@@ -710,13 +703,11 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
       meth_moves,
       meth_deletes,
       cls_deletes);
+    mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, cls_deletes.size());
+    mgr.incr_metric(METRIC_NUM_DELETED_METHODS, meth_deletes.size());
 
     // Perform all relocation mutations
-    do_mutations(scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
-
-    mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
-    mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, s_cls_delete_count);
-    mgr.incr_metric(METRIC_NUM_MOVED_METHODS, s_meth_move_count);
+    do_mutations(mgr, scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
   }
 
   // Final report
@@ -732,9 +723,9 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     "RELO :( Could not move %d methods\n"
     "RELO :( Could not move %d methods due to conservative "
     "aliasing criteria\n",
-    s_meth_delete_count,
-    s_meth_move_count,
-    s_cls_delete_count,
+    mgr.get_metric(METRIC_NUM_DELETED_METHODS),
+    mgr.get_metric(METRIC_NUM_MOVED_METHODS),
+    mgr.get_metric(METRIC_NUM_DELETED_CLASSES),
     s_single_ref_moved_count,
     s_single_ref_total_count,
     s_avg_relocation_load,

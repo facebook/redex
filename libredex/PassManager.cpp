@@ -145,6 +145,10 @@ void PassManager::incr_metric(const std::string& key, int value) {
   (*m_current_pass_metrics)[key] += value;
 }
 
+int PassManager::get_metric(const std::string& key) {
+  return (*m_current_pass_metrics)[key];
+}
+
 std::map<std::string, std::map<std::string, int>> PassManager::get_metrics()
     const {
   return m_pass_metrics;
