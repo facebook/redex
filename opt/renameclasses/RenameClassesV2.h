@@ -21,6 +21,7 @@ enum class DontRenameReasonCode {
   ClassForNameLiterals,
   Canaries,
   NativeBindings,
+  SerdeRelationships,
   ClassForTypesWithReflection,
   ProguardCantRename,
 };
@@ -63,6 +64,7 @@ class RenameClassesPassV2 : public Pass {
       Scope& scope,
       std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies);
   void build_dont_rename_native_bindings(Scope& scope, std::set<DexType*>& dont_rename_native_bindings);
+  void build_dont_rename_serde_relationships(Scope& scope, std::set<DexType*>& dont_rename_serde_relationships);
   void build_dont_rename_annotated(std::set<DexType*, dextypes_comparator>& dont_rename_annotated);
 
   void eval_classes(Scope& scope, ConfigFiles& cfg, const std::string& path, bool rename_annotations, PassManager& mgr);

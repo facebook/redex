@@ -63,6 +63,8 @@ const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
       return "num_dont_rename_class_for_types_with_reflection";
     case DontRenameReasonCode::ProguardCantRename:
       return "num_dont_rename_pg_cant_rename";
+    case DontRenameReasonCode::SerdeRelationships:
+      return "num_dont_rename_serde_relationships";
     default:
       always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
   }
@@ -305,6 +307,64 @@ void RenameClassesPassV2::build_dont_rename_hierarchies(
   }
 }
 
+void RenameClassesPassV2::build_dont_rename_serde_relationships(
+  Scope& scope,
+  std::set<DexType*>& dont_rename_serde_relationships) {
+  for (const auto& cls : scope) {
+    const char* rawname = cls->get_name()->c_str();
+    std::string name = std::string(rawname);
+    name.pop_back();
+
+    // Look for a class that matches one of the two deserializer patterns
+    std::string desername = name + "$Deserializer;";
+    std::replace(name.begin(), name.end(), '$', '_');
+    std::string flatbuf_desername = name + "Deserializer;";
+
+    DexType* deser = DexType::get_type(desername.c_str());
+    DexType* flatbuf_deser = DexType::get_type(flatbuf_desername.c_str());
+    bool has_deser_finder = false;
+
+    if (deser || flatbuf_deser) {
+      for (const auto& method : cls->get_dmethods()) {
+        if (!strcmp("$$getDeserializerClass", method->get_name()->c_str())) {
+          has_deser_finder = true;
+          break;
+        }
+      }
+    }
+
+    // Look for a class that matches one of the two serializer patterns
+    std::string sername = name + "$Serializer;";
+    std::replace(name.begin(), name.end(), '$', '_');
+    std::string flatbuf_sername = name + "Serializer;";
+
+    DexType* ser = DexType::get_type(sername.c_str());
+    DexType* flatbuf_ser = DexType::get_type(flatbuf_sername.c_str());
+    bool has_ser_finder = false;
+
+    if (ser || flatbuf_ser) {
+      for (const auto& method : cls->get_dmethods()) {
+        if (!strcmp("$$getSerializerClass", method->get_name()->c_str())) {
+          has_ser_finder = true;
+          break;
+        }
+      }
+    }
+
+    bool dont_rename =
+      ((deser || flatbuf_deser) && !has_deser_finder) ||
+      ((ser || flatbuf_ser) && !has_ser_finder);
+
+    if (dont_rename) {
+      dont_rename_serde_relationships.insert(cls->get_type());
+      if (deser) dont_rename_serde_relationships.insert(deser);
+      if (flatbuf_deser) dont_rename_serde_relationships.insert(flatbuf_deser);
+      if (ser) dont_rename_serde_relationships.insert(ser);
+      if (flatbuf_ser) dont_rename_serde_relationships.insert(flatbuf_ser);
+    }
+  }
+}
+
 void RenameClassesPassV2::build_dont_rename_native_bindings(
   Scope& scope,
   std::set<DexType*>& dont_rename_native_bindings) {
@@ -422,8 +482,10 @@ void RenameClassesPassV2::eval_classes(
   std::set<std::string> dont_rename_resources;
   std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
   std::set<DexType*> dont_rename_native_bindings;
+  std::set<DexType*> dont_rename_serde_relationships;
   std::set<DexType*, dextypes_comparator> dont_rename_annotated;
 
+  build_dont_rename_serde_relationships(scope, dont_rename_serde_relationships);
   build_dont_rename_resources(mgr, dont_rename_resources);
   build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
   build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(),
@@ -495,7 +557,6 @@ void RenameClassesPassV2::eval_classes(
       continue;
     }
 
-    // Don't rename things with native bindings
     if (dont_rename_native_bindings.count(clazz->get_type()) > 0) {
       m_dont_rename_reasons[clazz] = { DontRenameReasonCode::NativeBindings, norule };
       continue;
@@ -504,6 +565,11 @@ void RenameClassesPassV2::eval_classes(
     if (dont_rename_hierarchies.count(clazz->get_type()) > 0) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
       m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Hierarchy, rule };
+      continue;
+    }
+
+    if (dont_rename_serde_relationships.count(clazz->get_type()) > 0) {
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::SerdeRelationships, norule };
       continue;
     }
 
