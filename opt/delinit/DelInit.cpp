@@ -168,7 +168,7 @@ bool filter_class(DexClass* clazz) {
   if (!find_package(clazz->get_name()->c_str())) {
     return true;
   }
-  return is_interface(clazz) || is_annotation(clazz) || !can_remove_class(clazz) ;
+  return is_interface(clazz) || is_annotation(clazz) || !can_remove(clazz) ;
 }
 
 using ClassSet = std::unordered_set<DexClass*>;
@@ -255,7 +255,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       continue;
     }
     auto clazz = type_class(init->get_class());
-    if (!can_remove_class(clazz)) {
+    if (!can_remove(clazz)) {
       init_class_cant_delete++;
       continue;
     }
@@ -457,6 +457,10 @@ int DeadRefs::remove_unreachable() {
 }
 
 void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(DELINIT, 1, "DelInitPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   package_filter = m_package_filter;
   auto scope = build_class_scope(stores);
   find_referenced_classes(scope);

@@ -431,6 +431,10 @@ void LocalDcePass::run(DexMethod* m) {
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(DCE, 1, "LocalDcePass not run because no ProGuard configuration was provided.");
+    return;
+  }
   auto scope = build_class_scope(stores);
   LocalDce().run(scope);
 }

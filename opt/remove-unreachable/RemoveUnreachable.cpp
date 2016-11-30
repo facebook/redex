@@ -266,30 +266,30 @@ struct UnreachableCodeRemover {
   void mark() {
     for (auto const& dex : DexStoreClassesIterator(m_stores)) {
       for (auto const& cls : dex) {
-        if (is_seed(cls) || is_canary(cls)) {
+        if (keep(cls) || is_canary(cls)) {
           TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(cls));
           push(cls);
         }
         for (auto const& f : cls->get_ifields()) {
-          if (is_seed(f) || is_volatile(f)) {
+          if (keep(f) || is_volatile(f)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
             push(f);
           }
         }
         for (auto const& f : cls->get_sfields()) {
-          if (is_seed(f)) {
+          if (keep(f)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
             push(f);
           }
         }
         for (auto const& m : cls->get_dmethods()) {
-          if (is_seed(m)) {
+          if (keep(m)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
             push(m);
           }
         }
         for (auto const& m : cls->get_vmethods()) {
-          if (is_seed(m) || implements_library_method(m, cls)) {
+          if (keep(m) || implements_library_method(m, cls)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
             push(m);
           }
@@ -367,6 +367,10 @@ void RemoveUnreachablePass::run_pass(
   ConfigFiles& cfg,
   PassManager& pm
 ) {
+  if (pm.no_proguard_rules()) {
+    TRACE(RMU, 1, "RemoveUnreachablePass not run because no ProGuard configuration was provided.");
+    return;
+  }
   UnreachableCodeRemover ucr(stores);
   deleted_stats before = trace_stats("before", stores);
   ucr.mark_sweep();

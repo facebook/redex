@@ -542,6 +542,10 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManag
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(IDEX, 1, "InterDexPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   for (auto& store : stores) {
     if (store.get_name() == "classes") {
       run_pass(store.get_dexen(), cfg, mgr);

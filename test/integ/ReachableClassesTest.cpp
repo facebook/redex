@@ -53,6 +53,7 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
     passes,
     conf_obj
   );
+  manager.set_testing_mode();
 
   ConfigFiles dummy_cfg(conf_obj);
 

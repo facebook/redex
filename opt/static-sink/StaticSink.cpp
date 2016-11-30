@@ -368,6 +368,10 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
 }
 
 void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(SINK, 1, "StaticSinkPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   DexClassesVector& root_store = stores[0].get_dexen();
   auto method_list = cfg.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);

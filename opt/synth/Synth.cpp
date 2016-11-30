@@ -853,6 +853,10 @@ bool optimize(const std::vector<DexClass*>& classes,
 }
 
 void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(SYNT, 1, "SynthPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   Scope scope = build_class_scope(stores);
   int passes = 0;
   do {

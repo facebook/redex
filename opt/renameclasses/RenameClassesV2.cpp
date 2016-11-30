@@ -671,6 +671,10 @@ void RenameClassesPassV2::rename_classes(
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(RENAME, 1, "RenameCalssesV2Pass not run because no ProGuard configuration was provided.");
+    return;
+  }
   auto scope = build_class_scope(stores);
   int total_classes = scope.size();
 

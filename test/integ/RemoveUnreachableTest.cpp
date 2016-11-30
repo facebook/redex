@@ -7,10 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <cstdint>
-#include <cstdlib>
 #include <gtest/gtest.h>
-#include <iostream>
+#include <istream>
 #include <memory>
 #include <string>
 #include <unistd.h>
@@ -21,41 +19,12 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "PassManager.h"
+#include "ProguardConfiguration.h"
+#include "ProguardParser.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
 #include "RemoveUnreachable.h"
-
-void write_seeds_file(
-  std::string filename,
-  const std::vector<std::string>& seeds
-) {
-  std::ofstream out(filename);
-  for (auto const& seed : seeds) {
-    out << seed << "\n";
-  }
-}
-
-void init_test_seeds(const ProguardMap& pm) {
-  std::vector<std::string> seeds = {
-    "A",
-    "A: int foo",
-    "A: A()",
-    "A: int bar()",
-    "I: void wat()",
-    "BadgerTester: boolean testBadger(Badger)",
-    "HogBadger",
-    "UseIt: void go(IChild)",
-    "UseHasher: void test()",
-  };
-  char tmpfilename[] = "/tmp/seeds.XXXXXX";
-  int fd = mkstemp(tmpfilename);
-  write_seeds_file(tmpfilename, seeds);
-  auto nseeds = init_seed_classes(tmpfilename, pm);
-  unlink(tmpfilename);
-  close(fd);
-  ASSERT_EQ(seeds.size(), nseeds);
-}
 
 template<typename C>
 DexClass* find_class(const C& classes, const char* name) {
@@ -104,13 +73,8 @@ DexMethod* find_vmethod(
 TEST(RemoveUnreachableTest, synthetic) {
   g_redex = new RedexContext();
 
-  // Hardcoded path is for OSS automake test harness, environment variable is
-  // for Buck
-  const char* dexfile = "remove-unreachable-test.dex";
-  if (access(dexfile, R_OK) != 0) {
-    dexfile = std::getenv("dexfile");
-    ASSERT_NE(nullptr, dexfile);
-  }
+  auto dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexStore> stores;
   DexStore root_store("classes");
@@ -118,20 +82,46 @@ TEST(RemoveUnreachableTest, synthetic) {
   DexClasses& classes = root_store.get_dexen().back();
   stores.emplace_back(std::move(root_store));
 
+  Json::Value conf_obj = Json::nullValue;
+  ConfigFiles dummy_cfg(conf_obj);
+  dummy_cfg.using_seeds = false;
+
+  redex::ProguardConfiguration pg_config;
+  std::string ss =
+  R"(-keep class A {
+       int foo;
+       <init>();
+       int bar();
+    }
+    -keepclassmembers class I {
+      void wat();
+    }
+    -keepclassmembers class BadgerTester {
+      boolean testBadger(Badger);
+    }
+    -keep class HogBadger
+    -keepclassmembers class UseIt {
+      void go(IChild);
+    }
+    -keepclassmembers class UseHasher {
+      void test();
+    }
+  )";
+  std::istringstream pg_config_text(ss);
+  redex::proguard_parser::parse(pg_config_text, &pg_config);
+  ASSERT_TRUE(pg_config.ok);
+  ASSERT_FALSE(pg_config.keep_rules.empty());
+
+  apply_deobfuscated_names(root_store.get_dexen(), dummy_cfg.get_proguard_map());
+
   std::vector<Pass*> passes = {
     new RemoveUnreachablePass(),
   };
 
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_cfg(conf_obj);
-  dummy_cfg.using_seeds = true;
-
-  init_test_seeds(dummy_cfg.get_proguard_map());
-
   // Make sure some unreachable things exist before we start.
   ASSERT_TRUE(find_vmethod(classes, "LA;", "V", "bor", {}));
 
-  PassManager manager(passes);
+  PassManager manager(passes, pg_config);
   manager.run_passes(stores, dummy_cfg);
 
   // Seed elements

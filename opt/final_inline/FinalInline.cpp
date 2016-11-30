@@ -289,6 +289,10 @@ void inline_field_values(Scope& fullscope) {
 }
 
 void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(FINALINLINE, 1, "FinalInlinePass not run because no ProGuard configuration was provided.");
+    return;
+  }
   auto scope = build_class_scope(stores);
   inline_field_values(scope);
   remove_unused_fields(scope, m_remove_class_members, m_keep_class_members);

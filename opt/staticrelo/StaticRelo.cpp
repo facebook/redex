@@ -656,6 +656,10 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 } // namespace
 
 void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(RELO, 1, "StaticReloPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   // Clear out counter
   s_cls_delete_count = 0;
   s_meth_delete_count = 0;

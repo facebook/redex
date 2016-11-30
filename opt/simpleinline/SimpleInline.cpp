@@ -93,6 +93,10 @@ bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
 }
 
 void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(SINL, 1, "SimpleInlinePass not run because no ProGuard configuration was provided.");
+    return;
+  }
   const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
   const auto force_inline = force_inline_annos(m_force_inline_annos);
 

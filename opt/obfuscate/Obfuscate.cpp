@@ -230,7 +230,11 @@ void obfuscate(Scope& classes, ProguardMap* pg_map) {
 
 void ObfuscatePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& cfg,
-                            PassManager& /*unused*/) {
+                            PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(OBFUSCATE, 1, "ObfuscatePass not run because no ProGuard configuration was provided.");
+    return;
+  }
   auto scope = build_class_scope(stores);
   obfuscate(scope, &cfg.get_proguard_map());
 }

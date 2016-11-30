@@ -33,8 +33,11 @@ class PassManager {
 
   redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
   bool no_proguard_rules() {
-    return m_pg_config.keep_rules.empty();
+    return m_pg_config.keep_rules.empty() && !m_testing_mode;;
   }
+  // Cal set_testing_mode() in tests that need passes to run which
+  // do not use ProGuard configuratoion keep rules.
+  void set_testing_mode() { m_testing_mode = true; }
 
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
@@ -48,4 +51,5 @@ class PassManager {
   std::map<std::string, int>* m_current_pass_metrics;
 
   redex::ProguardConfiguration m_pg_config;
+  bool m_testing_mode{false};
 };

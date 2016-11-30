@@ -72,7 +72,7 @@ void process_proto(std::unordered_set<const DexType*>* class_references,
   for (auto const& ptype : proto->get_args()->get_type_list()) {
     class_references->insert(array_base_type(ptype));
   }
-}  
+}
 
 void process_code(std::unordered_set<const DexType*>* class_references,
                   DexMethod* meth,
@@ -139,6 +139,10 @@ void remove_empty_classes(Scope& classes) {
 
 void RemoveEmptyClassesPass::run_pass(
     DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(EMPTY, 1, "RemoveEmptyClassesPass not run because no ProGuard configuration was provided.");
+    return;
+  }
   auto scope = build_class_scope(stores);
   remove_empty_classes(scope);
   post_dexen_changes(scope, stores);

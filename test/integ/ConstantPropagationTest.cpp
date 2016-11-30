@@ -139,6 +139,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   };
 
   PassManager manager(passes);
+  manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);

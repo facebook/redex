@@ -97,20 +97,3 @@ inline bool keepclasseswithmembernames(DexMember* member) {
 
 template<class DexMember>
 inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
-
-// Check to see if a class can be removed. At a later stage when we
-// are sure is_seed has 100% coverage of kept classes we can drop the
-// can_delete check.
-inline bool can_remove_class(DexClass* clazz) {
-  if (is_seed(clazz) && can_delete(clazz)) {
-      TRACE(PGR, 8, "Catch by seed class: %s\n",
-          clazz->get_type()->get_name()->c_str());
-  }
-  if (!is_seed(clazz) && !can_delete(clazz)) {
-    std::string name = clazz->get_type()->get_name()->c_str();
-    if (name.find("$") == std::string::npos)
-      TRACE(PGR, 8, "Catch by RF: %s\n",
-          clazz->get_type()->get_name()->c_str());
-  }
-  return can_delete(clazz) && !is_seed(clazz);
-}
