@@ -677,6 +677,26 @@ match_t<T, std::tuple<> > can_delete() {
   };
 }
 
+/** Match which checks can_rename helper for DexMembers */
+template<typename T>
+match_t<T, std::tuple<> > can_rename() {
+  return {
+    [](const T* t) {
+      return can_rename(t);
+    }
+  };
+}
+
+/** Match which checks keep helper for DexMembers */
+template<typename T>
+match_t<T, std::tuple<> > keep() {
+  return {
+    [](const T* t) {
+      return keep(t);
+    }
+  };
+}
+
 /** Match which checks is_seed helper for DexMembers */
 template<typename T>
 match_t<T, std::tuple<> > is_seed() {
