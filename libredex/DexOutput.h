@@ -27,7 +27,7 @@ typedef std::unordered_map<DexField*, uint32_t> dexfield_to_idx;
 typedef std::unordered_map<DexMethod*, uint32_t> dexmethod_to_idx;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
-LocatorIndex make_locator_index(const DexClassesVector& dexen);
+LocatorIndex make_locator_index(DexStoresVector& stores);
 
 enum SortMode {
   CLASS_ORDER = 1,

@@ -487,7 +487,7 @@ int main(int argc, char* argv[]) {
     TRACE(LOC,
           1,
           "Will emit class-locator strings for classloader optimization\n");
-    locator_index = new LocatorIndex(make_locator_index(stores[0].get_dexen()));
+    locator_index = new LocatorIndex(make_locator_index(stores));
   }
 
   dex_output_stats_t totals;

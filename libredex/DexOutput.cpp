@@ -551,7 +551,7 @@ DexOutput::locator_for_descriptor(
       // We have the name of a type, but it's not a type we define.
       // Emit the special locator that indicates we should look in the
       // system classloader.
-      return std::unique_ptr<Locator>(new Locator(Locator::make(0, 0)));
+      return std::unique_ptr<Locator>(new Locator(Locator::make(0, 0, 0)));
     }
   }
 
@@ -1347,25 +1347,31 @@ write_classes_to_dex(
 }
 
 LocatorIndex
-make_locator_index(const DexClassesVector& dexen)
+make_locator_index(DexStoresVector& stores)
 {
   LocatorIndex index;
 
-  uint32_t dexnr = 1; // Zero is reserved for Android classes
-  for (auto dexit = dexen.begin(); dexit != dexen.end(); ++dexit, ++dexnr) {
-    const DexClasses& classes = *dexit;
-    uint32_t clsnr = 0;
-    for (auto clsit = classes.begin();
-         clsit != classes.end();
-         ++clsit, ++clsnr)
-    {
-      DexString* clsname = (*clsit)->get_type()->get_name();
-      bool inserted = index.insert(
-        std::make_pair(clsname, Locator::make(dexnr, clsnr)))
-        .second;
-      // We shouldn't see the same class defined in two dexen
-      assert(inserted);
-      (void) inserted; // Shut up compiler when defined(NDEBUG)
+  for (uint32_t strnr = 0; strnr < stores.size(); strnr++) {
+    DexClassesVector& dexen = stores[strnr].get_dexen();
+    uint32_t dexnr = 1; // Zero is reserved for Android classes
+    for (auto dexit = dexen.begin(); dexit != dexen.end(); ++dexit, ++dexnr) {
+      const DexClasses& classes = *dexit;
+      uint32_t clsnr = 0;
+      for (auto clsit = classes.begin();
+           clsit != classes.end();
+           ++clsit, ++clsnr)
+      {
+        DexString* clsname = (*clsit)->get_type()->get_name();
+        bool inserted = index.insert(
+          std::make_pair(clsname, Locator::make(
+            strnr,
+            dexnr,
+            clsnr)))
+          .second;
+        // We shouldn't see the same class defined in two dexen
+        assert(inserted);
+        (void) inserted; // Shut up compiler when defined(NDEBUG)
+      }
     }
   }
 

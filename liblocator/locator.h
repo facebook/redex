@@ -13,7 +13,7 @@
 namespace facebook {
 
 //
-// A dex locator is a (dexnr, clsnr) tuple that provides a
+// A dex locator is a (strnr, dexnr, clsnr) tuple that provides a
 // class-location hint to the native Dalvik classloader; this
 // information helps the native classloader find classes without
 // consulting the odex class-location hash tables.
@@ -48,6 +48,12 @@ namespace facebook {
 // DexStore's limit of 64 dex files), we're left with support for 2^20
 // classes per dex file, which is enough for anyone.
 //
+// The dex store identifier (used for modules loaded after the secondary
+// dexes are loaded) is used by taking an additional 16 bits, bringing
+// the total bits to encode to 2^42. Using the 6 encoded bits per byte,
+// this brings the maximum locator size to 7 bytes, but the common case
+// of strnr == 0 will result in a 3-4 byte locator
+//
 // An alternate scheme is using base-64, with six bits per byte.
 // This scheme would have the advantage of substituting a
 // multiplication with a shift during decoding, but multiply on modern
@@ -55,11 +61,14 @@ namespace facebook {
 // case encoding from three to four bytes of payload.
 //
 // We bias all dex numbers by one so that we can reserve tuples of the
-// form (0, X) as special values.  (0, 0) means to search the system
+// form (0, 0, X) as special values.  (0, 0, 0) means to search the system
 // class loader.
 //
 
 class Locator {
+  // Number of bits in the locator we reserve for store number
+  constexpr static const uint32_t strnr_bits = 16;
+
   // Number of bits in the locator we reserve for dex number
   constexpr static const uint32_t dexnr_bits = 6;
 
@@ -67,17 +76,23 @@ class Locator {
   constexpr static const uint32_t clsnr_bits = 20;
 
   // Size (in bits) of a locator
-  constexpr static const uint32_t bits = dexnr_bits + clsnr_bits;
+  constexpr static const uint64_t bits = strnr_bits + dexnr_bits + clsnr_bits;
+
+  constexpr static const uint64_t strmask = (1L << strnr_bits) - 1;
+  constexpr static const uint64_t dexmask = ((1L << (strnr_bits + dexnr_bits)) - 1) & ~strmask;
+  constexpr static const uint64_t clsmask = ((1LL << (strnr_bits + dexnr_bits + clsnr_bits)) - 1)
+                                            & ~(strmask | dexmask);
 
   constexpr static const unsigned base = 94;
   constexpr static const unsigned bias = '!';
 
  public:
 
+  const unsigned strnr;
   const unsigned dexnr; // 0 == special
   const unsigned clsnr;
 
-  static Locator make(uint32_t dexnr, uint32_t clsnr);
+  static Locator make(uint32_t strnr, uint32_t dexnr, uint32_t clsnr);
 
   // Maximum length (including NUL) of a locator string.
   // Estimating six bits per byte is conservative enough.
@@ -88,7 +103,7 @@ class Locator {
   static inline Locator decodeBackward(const char* endpos) noexcept;
 
  private:
-  Locator(uint32_t dexnr, uint32_t clsnr) : dexnr(dexnr), clsnr(clsnr) {}
+  Locator(uint32_t strnr, uint32_t dexnr, uint32_t clsnr) : strnr(strnr), dexnr(dexnr), clsnr(clsnr) {}
 };
 
 Locator
@@ -97,16 +112,16 @@ Locator::decodeBackward(const char* endpos) noexcept
   // N.B. Because we _encode_ little-endian, when we _decode_
   // backward, we decode big-endian.
 
-  uint32_t value = 0;
+  uint64_t value = 0;
   const uint8_t* pos = (uint8_t*) (endpos - 1);
   while (*pos >= bias) {
     value = value * base + (*pos-- - bias);
   }
 
-  uint32_t dexnr = value & ((1 << dexnr_bits) - 1);
-  uint32_t clsnr = value >> dexnr_bits;
-  return Locator(dexnr, clsnr);
+  uint32_t strnr = value & strmask;
+  uint32_t dexnr = (value & dexmask) >> strnr_bits;
+  uint32_t clsnr = (value & clsmask) >> (strnr_bits + dexnr_bits);
+  return Locator(strnr, dexnr, clsnr);
 }
 
 }
-
