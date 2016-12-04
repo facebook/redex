@@ -183,4 +183,4 @@ redex: redex.py Makefile
 	chmod +x redex
 
 install-exec-hook:
-	cp -r $(srcdir)/pyredex $(bindir)
+	cp -r $(srcdir)/pyredex $(DESTDIR)$(bindir)
