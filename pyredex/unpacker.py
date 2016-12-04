@@ -95,21 +95,23 @@ class ApplicationModule(object):
                 log('module ' + self.name + ' is Api21ModuleDexMode')
                 self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
-        self.dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id):
+        self.dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators, locator_store_id)
 
 class DexMetadata(object):
     def __init__(self,
                  store=None,
                  dependencies=None,
                  have_locators=False,
-                 is_root_relative=False):
+                 is_root_relative=False,
+                 locator_store_id=0):
         self._have_locators = False
         self._store = store
         self._dependencies = dependencies
         self._have_locators = have_locators
         self._is_root_relative = is_root_relative
         self._dexen = []
+        self._locator_store_id = locator_store_id
 
     def add_dex(self, dex_path, canary_class, hash=None):
         if hash is None:
@@ -131,6 +133,8 @@ class DexMetadata(object):
                 meta.write('.root_relative\n')
             if self._have_locators:
                 meta.write('.locators\n')
+            if self._locator_store_id > 0:
+                meta.write('.locator_id ' + str(self._locator_store_id) + '\n')
             for dex in self._dexen:
                 meta.write(' '.join(dex) + '\n')
 
@@ -194,14 +198,15 @@ class Api21DexMode(BaseDexMode):
         for path in abs_glob(extracted_dex_dir, '*.dex'):
             shutil.move(path, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
         metadata = DexMetadata(is_root_relative=self._is_root_relative,
                                have_locators=have_locators,
                                store=self._store_id,
-                               dependencies=self._dependencies)
+                               dependencies=self._dependencies,
+                               locator_store_id=locator_store_id)
         for i in range(2, 100):
             dex_path = join(dex_dir, self._dex_prefix + '%d.dex' % i)
             if not isfile(dex_path):
@@ -272,12 +277,13 @@ class SubdirDexMode(BaseDexMode):
         os.remove(join(extracted_apk_dir, self._secondary_dir, 'metadata.txt'))
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
         metadata = DexMetadata(have_locators=have_locators,
                                store=self._store_id,
-                               dependencies=self._dependencies)
+                               dependencies=self._dependencies,
+                               locator_store_id=locator_store_id)
         for i in range(1, 100):
             oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
             dexpath = join(dex_dir, self._store_name + '-%d.dex' % i)
@@ -392,7 +398,7 @@ class XZSDexMode(BaseDexMode):
             os.remove(jarpath)
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
         BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
 
         dex_sizes = {}
@@ -402,7 +408,8 @@ class XZSDexMode(BaseDexMode):
         concat_jar_meta = join(dex_dir, 'metadata.txt')
         dex_metadata = DexMetadata(have_locators=have_locators,
                                    store=self._store_id,
-                                   dependencies=self._dependencies)
+                                   dependencies=self._dependencies,
+                                   locator_store_id=locator_store_id)
 
         with open(concat_jar_path, 'wb') as concat_jar:
             for i in range(1, 100):

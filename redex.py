@@ -460,9 +460,11 @@ def run_redex(args):
 
     dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
 
+    locator_store_id = 1
     for module in application_modules:
-        log('repacking module: ' + module.get_name())
-        module.repackage(extracted_apk_dir, dex_dir, have_locators)
+        log('repacking module: ' + module.get_name() + ' with id ' + str(locator_store_id))
+        module.repackage(extracted_apk_dir, dex_dir, have_locators, locator_store_id)
+        locator_store_id = locator_store_id + 1
 
     log('Creating output apk')
     create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
