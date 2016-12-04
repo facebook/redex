@@ -78,10 +78,11 @@ class Locator {
   // Size (in bits) of a locator
   constexpr static const uint64_t bits = strnr_bits + dexnr_bits + clsnr_bits;
 
-  constexpr static const uint64_t strmask = (1L << strnr_bits) - 1;
-  constexpr static const uint64_t dexmask = ((1L << (strnr_bits + dexnr_bits)) - 1) & ~strmask;
-  constexpr static const uint64_t clsmask = ((1LL << (strnr_bits + dexnr_bits + clsnr_bits)) - 1)
-                                            & ~(strmask | dexmask);
+  constexpr static const uint64_t dexmask = (1LL << dexnr_bits) - 1;
+  constexpr static const uint64_t clsmask = ((1LL << (dexnr_bits + clsnr_bits)) - 1)
+                                            & ~dexmask;
+  constexpr static const uint64_t strmask = ((1LL << (strnr_bits + clsnr_bits + dexnr_bits)) - 1)
+                                            & ~(dexmask | clsmask);
 
   constexpr static const unsigned base = 94;
   constexpr static const unsigned bias = '!';
@@ -98,12 +99,12 @@ class Locator {
   // Estimating six bits per byte is conservative enough.
   constexpr static const uint32_t encoded_max = (bits + 5) / 6 + 1;
 
-  void encode(char buf[encoded_max]) noexcept;
+  uint32_t encode(char buf[encoded_max]) noexcept;
 
   static inline Locator decodeBackward(const char* endpos) noexcept;
 
  private:
-  Locator(uint32_t strnr, uint32_t dexnr, uint32_t clsnr) : strnr(strnr), dexnr(dexnr), clsnr(clsnr) {}
+  Locator(uint32_t str, uint32_t dexnr, uint32_t clsnr) : strnr(str), dexnr(dexnr), clsnr(clsnr) {}
 };
 
 Locator
@@ -118,9 +119,9 @@ Locator::decodeBackward(const char* endpos) noexcept
     value = value * base + (*pos-- - bias);
   }
 
-  uint32_t strnr = value & strmask;
-  uint32_t dexnr = (value & dexmask) >> strnr_bits;
-  uint32_t clsnr = (value & clsmask) >> (strnr_bits + dexnr_bits);
+  uint32_t dexnr = (value & dexmask);
+  uint32_t clsnr = (value & clsmask) >> dexnr_bits;
+  uint32_t strnr = (value & strmask) >> (clsnr_bits + dexnr_bits);
   return Locator(strnr, dexnr, clsnr);
 }
 

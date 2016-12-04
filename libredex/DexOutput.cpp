@@ -511,8 +511,7 @@ void DexOutput::insert_map_item(uint16_t maptype,
 
 void DexOutput::emit_locator(Locator locator) {
   char buf[Locator::encoded_max];
-  locator.encode(buf);
-  size_t locator_length = strlen(buf); // ASCII-only
+  size_t locator_length = locator.encode(buf);
   write_uleb128(m_output + m_offset, (uint32_t) locator_length);
   m_offset += uleb128_encoding_size((uint32_t) locator_length);
   memcpy(m_output + m_offset, buf, locator_length + 1);

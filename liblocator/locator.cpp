@@ -32,12 +32,12 @@ Locator::make(uint32_t strnr, uint32_t dexnr, uint32_t clsnr)
   return Locator(strnr, dexnr, clsnr);
 }
 
-void
+uint32_t
 Locator::encode(char buf[encoded_max]) noexcept
 {
-  uint64_t value = clsnr << dexnr_bits;
-  value = (value | dexnr) << strnr_bits;
-  value = (value | strnr);
+  uint64_t value = strnr << clsnr_bits;
+  value = (value | clsnr) << dexnr_bits;
+  value = (value | dexnr);
   uint8_t* pos = (uint8_t*) &buf[0];
   while (value != 0) {
     uint8_t enc = (value % base) + bias;
@@ -47,7 +47,9 @@ Locator::encode(char buf[encoded_max]) noexcept
     value /= base;
   }
   *pos = '\0';
-  assert(pos - (uint8_t*) buf <= encoded_max);
+  uint32_t len = (pos - (uint8_t*) buf);
+  assert(len <= encoded_max);
+  return len;
 }
 
 }
