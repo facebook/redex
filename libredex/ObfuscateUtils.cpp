@@ -15,7 +15,7 @@
 
 DexFieldManager new_dex_field_manager() {
   return DexFieldManager(
-      [](DexField*& f) -> FieldNameWrapper { return FieldNameWrapper(f); },
+      [](DexField*& f) -> FieldNameWrapper* { return new FieldNameWrapper(f); },
       [](DexField*& f) -> DexType* { return f->get_type(); },
       [](const std::string& new_name) -> DexFieldRef {
         DexFieldRef ref;
@@ -26,7 +26,7 @@ DexFieldManager new_dex_field_manager() {
 
 DexMethodManager new_dex_method_manager() {
   return DexMethodManager(
-      [](DexMethod*& f) -> MethodNameWrapper { return MethodNameWrapper(f); },
+      [](DexMethod*& f) -> MethodNameWrapper* { return new MethodNameWrapper(f); },
       [](DexMethod*& m) -> DexProto* { return m->get_proto(); },
       [](const std::string& new_name) -> DexMethodRef {
         DexMethodRef ref;

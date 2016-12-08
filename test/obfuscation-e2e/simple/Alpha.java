@@ -11,7 +11,58 @@ package com.facebook.redex.test.proguard;
 
 import java.util.List;
 
-class Rand {}
+interface IntfParent {
+  public double get();
+  public void abstract_impl();
+}
+
+interface IntfSub extends IntfParent {
+  public int concrete_method();
+}
+
+abstract class AbstractClass implements IntfSub {
+  public abstract void abstract_method();
+  public int concrete_method() { return 1; }
+  public void abstract_impl() { }
+}
+
+interface Intf1 {
+  public void intf_meth();
+}
+
+interface Intf2 extends Intf1 {
+  public void intf_meth2();
+}
+
+class Foo extends AbstractClass implements Intf2 {
+  public void not_overridden() {  }
+  private void priv_meth() {}
+  public void intf_meth() { }
+  public void intf_meth2() { }
+  @Override
+  public void abstract_method() { }
+  @Override
+  public double get() { return 5.0; }
+  public static Foo get_foo() { return new Foo(); }
+}
+
+class Bar implements Intf1 {
+  public void random_vmeth() {}
+  public void intf_meth() { }
+}
+
+class Baz {
+  public Baz() {
+    IntfSub foo = Foo.get_foo();
+    foo.abstract_impl();
+    IntfParent abc = new AbstractClass() {
+      @Override
+      public double get() { return 0.0; }
+      @Override
+      public void abstract_method() {} };
+    abc.get();
+  }
+}
 
 public class Alpha {
 

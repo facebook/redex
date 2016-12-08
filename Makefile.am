@@ -28,6 +28,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/access-marking \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
+	-I$(top_srcdir)/opt/obfuscate \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/remove-unreachable \
@@ -68,6 +69,7 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Mutators.cpp \
+	libredex/ObfuscateUtils.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PrintSeeds.cpp \
@@ -124,7 +126,6 @@ redex_all_SOURCES = \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \
-	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \

@@ -10,12 +10,13 @@
 #include "Devirtualizer.h"
 #include "DexUtil.h"
 #include "DexAccess.h"
+#include "Trace.h"
 
 #include <map>
 #include <set>
 
-//#include <iostream>
-//#include <fstream>
+#include <iostream>
+#include <fstream>
 
 namespace {
 
@@ -49,9 +50,21 @@ using MethodsSigMap = std::unordered_map<DexProto*, std::vector<MethAcc>>;
 using MethodsNameMap = std::unordered_map<DexString*, MethodsSigMap>;
 using InterfaceMethods = std::unordered_map<DexString*, ProtoSet>;
 
-/*
-std::ofstream logfile;
 
+
+std::ofstream logfile;
+struct unrenamable_counters {
+  size_t not_subclass_object{0};
+  size_t escaped_cls1{0};
+  size_t escaped_cls2{0};
+  size_t escaped_cls3{0};
+  size_t escaped_cls4{0};
+  size_t external_method{0};
+  size_t object_methods{0};
+};
+
+static unrenamable_counters s_ctr;
+/*
 void log_mark_methods(const DexType* parent, const TypeSet& children) {
   logfile << "mark methods for " << SHOW(parent) << " with children ";
   for (const auto& child : children) {
@@ -177,70 +190,104 @@ std::list<DexMethod*> get_vmethods(DexType* type) {
 
   // create methods and add to the list of object methods
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  DexMethod *method = DexMethod::make_method(type, clone, void_object);
-  method->set_access(ACC_PROTECTED);
-  method->set_virtual(true);
-  method->set_external();
+  DexMethod* method = DexMethod::get_method(type, clone, void_object);
+  if (method == nullptr) {
+    method = DexMethod::make_method(type, clone, void_object);
+    method->set_access(ACC_PROTECTED);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
+
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
-  method = DexMethod::make_method(type, equals, object_bool);
-  method->set_access(ACC_PUBLIC);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, equals, object_bool);
+  if (method == nullptr) {
+    method = DexMethod::make_method(type, equals, object_bool);
+    method->set_access(ACC_PUBLIC);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
+  method = DexMethod::get_method(type, finalize, void_void);
+  if (method == nullptr) {
   // protected java.lang.Object.finalize()V
-  method = DexMethod::make_method(type, finalize, void_void);
-  method->set_access(ACC_PROTECTED);
-  method->set_virtual(true);
-  method->set_external();
+    method = DexMethod::make_method(type, finalize, void_void);
+    method->set_access(ACC_PROTECTED);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final native java.lang.Object.getClass()Ljava/lang/Class;
-  method = DexMethod::make_method(type, getClass, void_class);
-  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, getClass, void_class);
+  if (method == nullptr) {
+    // public final native java.lang.Object.getClass()Ljava/lang/Class;
+    method = DexMethod::make_method(type, getClass, void_class);
+    method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public native java.lang.Object.hashCode()I
-  method = DexMethod::make_method(type, hashCode, void_int);
-  method->set_access(ACC_PUBLIC | ACC_NATIVE);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, hashCode, void_int);
+  if (method == nullptr) {
+    // public native java.lang.Object.hashCode()I
+    method = DexMethod::make_method(type, hashCode, void_int);
+    method->set_access(ACC_PUBLIC | ACC_NATIVE);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final native java.lang.Object.notify()V
-  method = DexMethod::make_method(type, notify, void_void);
-  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, notify, void_void);
+  if (method == nullptr) {
+    // public final native java.lang.Object.notify()V
+    method = DexMethod::make_method(type, notify, void_void);
+    method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final native java.lang.Object.notifyAll()V
-  method = DexMethod::make_method(type, notifyAll, void_void);
-  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, notifyAll, void_void);
+  if (method == nullptr) {
+    // public final native java.lang.Object.notifyAll()V
+    method = DexMethod::make_method(type, notifyAll, void_void);
+    method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public java.lang.Object.toString()Ljava/lang/String;
-  method = DexMethod::make_method(type, toString, void_string);
-  method->set_access(ACC_PUBLIC);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, toString, void_string);
+  if (method == nullptr) {
+    // public java.lang.Object.toString()Ljava/lang/String;
+    method = DexMethod::make_method(type, toString, void_string);
+    method->set_access(ACC_PUBLIC);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final java.lang.Object.wait()V
-  method = DexMethod::make_method(type, wait, void_void);
-  method->set_access(ACC_PUBLIC | ACC_FINAL);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, wait, void_void);
+  if (method == nullptr) {
+    // public final java.lang.Object.wait()V
+    method = DexMethod::make_method(type, wait, void_void);
+    method->set_access(ACC_PUBLIC | ACC_FINAL);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final java.lang.Object.wait(J)V
-  method = DexMethod::make_method(type, wait, long_void);
-  method->set_access(ACC_PUBLIC | ACC_FINAL);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, wait, long_void);
+  if (method == nullptr) {
+    // public final java.lang.Object.wait(J)V
+    method = DexMethod::make_method(type, wait, long_void);
+    method->set_access(ACC_PUBLIC | ACC_FINAL);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
-  // public final native java.lang.Object.wait(JI)V
-  method = DexMethod::make_method(type, wait, long_int_void);
-  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
-  method->set_virtual(true);
-  method->set_external();
+  method = DexMethod::get_method(type, wait, long_int_void);
+  if (method == nullptr) {
+    // public final native java.lang.Object.wait(JI)V
+    method = DexMethod::make_method(type, wait, long_int_void);
+    method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+    method->set_virtual(true);
+    method->set_external();
+  }
   object_methods.push_back(method);
 
   return object_methods;
@@ -414,15 +461,220 @@ void analyze_parent_children_methods(
   }
 }
 
+// ======= Method Linking Code ===========
+
+class MethodLinkManager {
+public:
+  // class -> interfaces implemented in its hierarchy
+  std::unordered_map<const DexType*,
+      std::unordered_set<const DexType*>> class_interfaces;
+  // methods that implement an interface
+  std::unordered_map<DexString*,
+      std::unordered_map<DexProto*,
+          std::unordered_set<DexMethod*>>> interface_methods;
+  // class -> set of all public methods in its hierarchy
+  std::unordered_map<const DexType*,
+      std::unordered_set<DexMethod*>> class_conflict_set;
+  // for recursion - set of all public methods in any superclasses
+  std::unordered_set<DexMethod*> parent_conflict_set;
+  // index with name, proto
+  // reason for the vector: we might have two elements with the same signature
+  // as we merge the maps going up the tree, but we don't necessarily want
+  // to link these elements
+  std::unordered_map<DexString*,
+      std::unordered_map<DexProto*, std::vector<MethodNameWrapper*>>> method_map;
+
+  MethodLinkManager() {}
+};
+
+/**
+ * For anything not method_map, simply concatenates the maps/sets (we want
+ * just one map for each at the end). For method_map, concatenates all the
+ * corresponding vectors of wrappers.
+ */
+void merge(MethodLinkManager& links, MethodLinkManager& child_links) {
+  for (auto& meth_typeset : child_links.class_interfaces)
+    links.class_interfaces[meth_typeset.first].insert(
+      meth_typeset.second.begin(), meth_typeset.second.end());
+  for (auto& name_impls : child_links.interface_methods)
+    for (auto& proto_set : name_impls.second)
+      links.interface_methods[name_impls.first][proto_set.first].insert(
+        proto_set.second.begin(), proto_set.second.end());
+  for (auto& cls_set : child_links.class_conflict_set)
+    links.class_conflict_set[cls_set.first] = cls_set.second;
+  for (auto& name_map : child_links.method_map) {
+    DexString* name = name_map.first;
+    for (auto& proto_methods : name_map.second) {
+      DexProto* proto = proto_methods.first;
+      auto& wrapvec(links.method_map[name][proto]);
+      auto& childwrapvec(child_links.method_map[name][proto]);
+      wrapvec.insert(wrapvec.end(),
+          std::make_move_iterator(childwrapvec.begin()),
+          std::make_move_iterator(childwrapvec.end()));
+    }
+  }
+}
+
+// Marks all methods in the current manager as do not rename
+void mark_all_escaped(MethodLinkManager& links) {
+  for (auto& name_map : links.method_map) {
+    for (auto& proto_methods : name_map.second) {
+      for (MethodNameWrapper* wrap : proto_methods.second) {
+        if (wrap->should_rename()) {
+          s_ctr.escaped_cls1 += static_cast<MethodNameWrapper*>(wrap)->get_num_links();
+          TRACE(OBFUSCATE, 1, "Marking all unrenamable");
+          wrap->mark_unrenamable();
+        }
+      }
+    }
+  }
+}
+
+
+bool load_interfaces_methods_link(const std::list<DexType*>&,
+    MethodLinkManager&, std::unordered_set<const DexType*>&);
+
+/**
+ * Load methods for a given interface and its super interfaces.
+ * Return true if any interface escapes (no DexClass*).
+ */
+bool load_interface_methods_link(
+    const DexClass* intf_cls, MethodLinkManager& links,
+    std::unordered_set<const DexType*>& class_interfaces) {
+  TRACE(OBFUSCATE, 3, "\tIntf: %s\n", SHOW(intf_cls));
+  bool escaped = false;
+  const auto& interfaces = intf_cls->get_interfaces()->get_type_list();
+  if (interfaces.size() > 0) {
+    if (load_interfaces_methods_link(interfaces, links, class_interfaces))
+      escaped = true;
+  }
+  for (const auto& meth : get_vmethods(const_cast<DexType*>(intf_cls->get_type()))) {
+    links.interface_methods[meth->get_name()][meth->get_proto()].insert(meth);
+  }
+  return escaped;
+}
+
+/**
+ * Load methods for a list of interfaces.
+ * If any interface escapes (no DexClass*) return true.
+ * also record all the interfaces we hit in the set of interfaces associated
+ * with the class in links.class_interfaces
+ */
+bool load_interfaces_methods_link(
+    const std::list<DexType*>& interfaces, MethodLinkManager& links,
+    std::unordered_set<const DexType*>& class_interfaces) {
+  bool escaped = false;
+  for (const auto& intf : interfaces) {
+    class_interfaces.insert(intf);
+    auto intf_cls = type_class(intf);
+    if (intf_cls == nullptr) {
+      //TRACE(OBFUSCATE, 1, "Can't load interface %s -- it escaped\n", SHOW(intf_cls));
+      escaped = true;
+      continue;
+    }
+    if (load_interface_methods_link(intf_cls, links, class_interfaces)) escaped = true;
+  }
+  return escaped;
+}
+
+bool get_interface_methods_link(const DexType* type, MethodLinkManager& links) {
+  auto cls = type_class(type);
+  if (cls == nullptr) return false;
+  bool escaped = false;
+  std::unordered_set<const DexType*>& class_interfaces(
+      links.class_interfaces[type]);
+  const auto& interfaces = cls->get_interfaces()->get_type_list();
+  if (interfaces.size() > 0) {
+    if (load_interfaces_methods_link(interfaces, links, class_interfaces)) escaped = true;
+  }
+  return escaped;
+}
+
+void link_parent_children_methods(
+    const DexType* parent, bool escape,
+    MethodLinkManager& links, DexMethodManager& name_manager) {
+  auto vmethods = get_vmethods(const_cast<DexType*>(parent));
+  for (auto& vmeth : vmethods) {
+    MethodNameWrapper* method =
+        static_cast<MethodNameWrapper*>(name_manager[vmeth]);
+    if (escape) {
+      if (method->should_rename()) {
+        s_ctr.escaped_cls2 += static_cast<MethodNameWrapper*>(method)->get_num_links();
+        TRACE(OBFUSCATE, 3, "Parent %s unrenamable\n", SHOW(method->get()));
+        method->mark_unrenamable();
+      }
+    } else {
+      // Deal with interface implementations
+      auto proto_set_by_name =
+          links.interface_methods.find(vmeth->get_name());
+      if (proto_set_by_name != links.interface_methods.end()) {
+        auto meth_set_by_proto =
+            proto_set_by_name->second.find(vmeth->get_proto());
+        if (meth_set_by_proto != proto_set_by_name->second.end()) {
+          for (DexMethod* intf_meth : meth_set_by_proto->second) {
+            auto meth = static_cast<MethodNameWrapper*>(name_manager[intf_meth]);
+            if (meth->should_rename() && !method->should_rename()) {
+              TRACE(OBFUSCATE, 2, "3: %s preventing %s from being renamed\n",
+                  SHOW(method->get()), SHOW(meth->get()));
+              s_ctr.escaped_cls3 += method->get_num_links();
+            }
+            if (!meth->should_rename() && method->should_rename()) {
+              TRACE(OBFUSCATE, 2, "3: %s preventing %s from being renamed\n",
+                  SHOW(meth->get()), SHOW(method->get()));
+              s_ctr.escaped_cls3 += meth->get_num_links();
+            }
+            method->link(meth);
+          }
+        }
+      }
+    }
+    // Here we link overrides
+    auto& meths_by_name = links.method_map[vmeth->get_name()];
+    auto& meths_by_proto = meths_by_name[vmeth->get_proto()];
+    if (meths_by_proto.size() != 0) {
+      // we have seen the method already -- the list is all the overrides for
+      // this method
+      for (auto& meth : meths_by_proto) {
+        if (meth->should_rename() && !method->should_rename()) {
+          TRACE(OBFUSCATE, 2, "4: %s preventing %s from being renamed\n",
+              SHOW(method->get()), SHOW(meth->get()));
+          s_ctr.escaped_cls4 += method->get_num_links();
+        }
+        if (!meth->should_rename() && method->should_rename()) {
+          TRACE(OBFUSCATE, 2, "4: %s preventing %s from being renamed\n",
+              SHOW(meth->get()), SHOW(method->get()));
+          s_ctr.escaped_cls4 += meth->get_num_links();
+        }
+        meth->link(method);
+      }
+      // replace all entries now by this entry since they're all linked already
+      meths_by_proto.clear();
+    }
+    if (static_cast<MethodNameWrapper*>(method)->should_rename()) {
+      if (type_class(parent) != nullptr && type_class(parent)->is_external()) {
+        //TRACE(OBFUSCATE, 1, "External thing multiple thing %s\n", SHOW(parent));
+        s_ctr.external_method += static_cast<MethodNameWrapper*>(method)->get_num_links();
+        TRACE(OBFUSCATE, 2, "Marking element of external class unrenamable %s\n", SHOW(method->get()));
+        method->mark_unrenamable();
+      }
+    }
+    // add current method to list of methods for that name and sig
+    meths_by_proto.push_back(method);
+  }
+}
+
 /**
  * Perform devirtualization by building the type hierarchy and identifying all
  * methods that do not need to be virtual.
  */
 class Devirtualizer {
  public:
-  Devirtualizer(std::vector<DexClass*>& scope) : m_scope(scope) {}
+  Devirtualizer(std::vector<DexClass*>& scope) :
+      name_manager(new_dex_method_manager()), m_scope(scope) {}
 
   std::vector<DexMethod*> devirtualize();
+
+  MethodLinkInfo link_methods();
 
  private:
   void build_class_hierarchy(DexClass* cls);
@@ -430,8 +682,13 @@ class Devirtualizer {
   bool mark_methods(
       const DexType* parent, const TypeSet& children,
       InterfaceMethods& intf_methods, MethodsNameMap& methods);
+  bool link_methods_helper(
+      const DexType* parent, const TypeSet& children,
+      MethodLinkManager& links);
+  void mark_methods_renamable(const DexType* cls);
 
- private:
+private:
+  DexMethodManager name_manager;
   const std::vector<DexClass*>& m_scope;
   ClassHierarchy m_class_hierarchy;
 };
@@ -444,6 +701,197 @@ std::vector<DexMethod*> Devirtualizer::devirtualize() {
   }
   analyze_methods(non_virtual);
   return non_virtual;
+}
+
+bool Devirtualizer::link_methods_helper(
+    const DexType* parent, const TypeSet& children, MethodLinkManager& links) {
+  bool escape = false;
+  // recurse through every child in a BFS style to collect all methods
+  // and interface methods under parent
+  // Update conflict set with methods from parent class
+    // on the way down we should never encounter something unrenamable
+  const auto& meths = get_vmethods(const_cast<DexType*>(parent));
+  for (const auto& m : meths) {
+    if (!is_private(m)) {
+      links.parent_conflict_set.insert(m);
+    }
+  }
+  links.class_conflict_set[parent] = links.parent_conflict_set;
+  MethodLinkManager parent_intf_methods;
+  bool escape_intf = get_interface_methods_link(parent, parent_intf_methods);
+  auto& parent_intfs(parent_intf_methods.class_interfaces[parent]);
+  // Have to pass down interface information otherwise interface implementations
+  // won't correctly be linked
+  for (const auto& child : children) {
+    MethodLinkManager child_links;
+    merge(child_links, parent_intf_methods);
+    child_links.parent_conflict_set = links.parent_conflict_set;
+    child_links.class_interfaces[child].insert(
+      parent_intfs.begin(), parent_intfs.end());
+    TRACE(OBFUSCATE, 2, "%s intfs %d %s child intfs %d\n", SHOW(parent),
+    parent_intfs.size(), SHOW(child), child_links.class_interfaces[child].size());
+    escape = link_methods_helper(child, m_class_hierarchy[child], child_links) ||
+        escape;
+    merge(links, child_links);
+    links.class_conflict_set[parent].insert(
+        child_links.class_conflict_set[child].begin(),
+        child_links.class_conflict_set[child].end());
+  }
+
+  merge(links, parent_intf_methods);
+
+  // get parent interface methods
+  /*TRACE(OBFUSCATE, 2, "Processing class %s %d intfs\n", SHOW(parent),
+      links.class_interfaces[parent].size());
+  DexType* cls = const_cast<DexType*>(parent);
+  while (cls && type_class(cls)) {
+    TRACE(OBFUSCATE, 3, "\t^^ %s\n", SHOW(cls));
+    cls = type_class(cls)->get_super_class();
+  }*/
+
+  escape = escape || escape_intf;
+
+  link_parent_children_methods(
+      parent, escape, links, name_manager);
+  if (escape_intf) {
+    // if any interface in parent escapes, mark all children methods 'impl'
+    mark_all_escaped(links);
+  }
+
+  return escape;
+}
+
+void Devirtualizer::mark_methods_renamable(const DexType* cls) {
+  if (type_class(cls) == nullptr) return;
+  if (!type_class(cls)->is_external()) {
+    for (const auto& meth : get_vmethods(const_cast<DexType*>(cls))) {
+      s_ctr.not_subclass_object--;
+      name_manager[const_cast<DexMethod*>(meth)]->mark_renamable();
+    }
+  }
+  for (auto& child : m_class_hierarchy[cls])
+    mark_methods_renamable(child);
+}
+
+/*std::string find_link(DexMethodManager& name_manager, DexMethod* m) {
+  std::string str = "";
+  auto tgt_wrap = name_manager[m];
+  for (const auto& a : name_manager.elements)
+    for (const auto& b : a.second)
+      for (const auto& _wrap_ptr : b.second)
+        if (static_cast<MethodNameWrapper*>(_wrap_ptr.second.get())->next == tgt_wrap)
+          str = str + "\t" + SHOW(_wrap_ptr.second->get()) + "\n";
+  return str;
+}
+
+void verifier(DexType* cls, ClassHierarchy& hierarchy, DexMethodManager& name_manager) {
+  // on the way down we should never encounter something unrenamable
+  if (type_class(cls) && !type_class(cls)->is_external() && cls != get_object_type())
+    for (auto m : type_class(cls)->get_vmethods())
+      always_assert_log(name_manager[m]->should_rename(),
+          "Found unrenamable method %s \nwrapper %s\nlink?%s\n", SHOW(m),
+          name_manager[m]->get_printable().c_str(), find_link(name_manager, m).c_str());
+  for (auto child : hierarchy[cls])
+    verifier(child, hierarchy, name_manager);
+}
+
+void verify_links(MethodNameWrapper* wrap, DexMethodManager& name_manager) {
+  DexMethod* tgt = wrap->get();
+  DexType* cls = wrap->get()->get_class();
+  auto verify_cls = [&](DexType* cls) {
+    auto meths = get_vmethods(cls);
+    for (auto meth : meths)
+      if (meth->get_proto() == tgt->get_proto() && meth->get_name() == tgt->get_name())
+        always_assert_log(
+          static_cast<MethodNameWrapper*>(name_manager[meth])->find_end_link() == wrap->find_end_link(),
+          "%s %s\n", SHOW(meth), SHOW(tgt));
+        };
+  while (cls && type_class(cls)) {
+    verify_cls(cls);
+    cls = type_class(cls)->get_super_class();
+  }
+}*/
+
+MethodLinkInfo Devirtualizer::link_methods() {
+  for (const auto& cls : m_scope) {
+    if (is_interface(cls) || is_annotation(cls)) continue;
+    build_class_hierarchy(cls);
+  }
+  // Mark every vmethod that isn't a subclass of object unrenamable
+  /*for (auto& cls : m_scope) {
+    for (const auto meth : cls->get_vmethods()) {
+      s_ctr.not_subclass_object++;
+      name_manager[const_cast<DexMethod*>(meth)]->mark_unrenamable();
+    }
+  }
+  mark_methods_renamable(get_object_type());
+  for (auto& cls : m_scope) {
+    if (cls->is_external()) continue;
+    for (const auto meth : cls->get_vmethods()) {
+      if (!name_manager[meth]->should_rename()) {
+        TRACE(OBFUSCATE, 1, "Unrenamable %s: ", SHOW(meth));
+        auto cls = meth->get_class();
+        do {
+          TRACE(OBFUSCATE, 1, "%s > ", SHOW(cls));
+          cls = type_class(cls)->get_super_class();
+        } while(cls != nullptr && type_class(cls) != nullptr);
+        TRACE(OBFUSCATE, 1, "\n");
+      }
+    }
+  }*/
+  //verifier(get_object_type(), m_class_hierarchy, name_manager);
+
+  auto object = get_object_type();
+  auto& children = m_class_hierarchy[object];
+  // unrenamable to anything that is impl
+
+  MethodLinkManager links;
+  link_methods_helper(object, children, links);
+  /*for (auto& a : name_manager.elements) {
+    for (auto& b : a.second) {
+      for (auto& name_elem_ptr : b.second) {
+        verify_links(static_cast<MethodNameWrapper*>(name_elem_ptr.second.get()), name_manager);
+      }
+    }
+  }*/
+  // Make sure anything that is a method of java.lang.Object is not renamable
+  for (auto meth : get_vmethods(get_object_type())) {
+    if (name_manager[meth]->should_rename()) {
+      s_ctr.object_methods++;
+      TRACE(OBFUSCATE, 2, "Marking method of object %s unrenamable\n", SHOW(meth));
+      name_manager[meth]->mark_unrenamable();
+    }
+  }
+
+  // Create the value we're returning
+  MethodLinkInfo res(links.class_interfaces, name_manager);
+  // build reverse of class_interfaces
+  std::unordered_map<const DexType*, std::unordered_set<const DexType*>> interface_classes;
+  for (auto& cls_intfs : res.class_interfaces)
+    for (auto& intf : cls_intfs.second)
+      interface_classes[intf].insert(cls_intfs.first);
+  // build intf_conflict_set
+  for (auto& intf_classes : interface_classes) {
+    for (auto& cls : intf_classes.second) {
+      res.intf_conflict_set[intf_classes.first].insert(
+          links.class_conflict_set[cls].begin(),
+          links.class_conflict_set[cls].end());
+    }
+  }
+
+  TRACE(OBFUSCATE, 3, "Returned conflict sets:\n");
+  for (auto class_confset : res.intf_conflict_set) {
+    TRACE(OBFUSCATE, 3, "\t%s:\n", SHOW(class_confset.first));
+    for (auto intf : class_confset.second)
+      TRACE(OBFUSCATE, 3, "\t\t%s\n", SHOW(intf));
+  }
+  TRACE(OBFUSCATE, 3, " not_subclass_object %d\n object_methods %d\n escaped_cls"
+      " (all mark) %d\n escaped_cls (single mark) %d\n escaped_cls (intf) %d\n "
+      "escaped_cls (override) %d\n external class method %d\n",
+      s_ctr.not_subclass_object, s_ctr.object_methods, s_ctr.escaped_cls1,
+      s_ctr.escaped_cls2, s_ctr.escaped_cls3, s_ctr.escaped_cls4, s_ctr.external_method);
+
+  return res;
 }
 
 /**
@@ -563,6 +1011,7 @@ bool Devirtualizer::mark_methods(
   merge(intf_methods, parent_intf_methods);
   // log_interface_methods("interface methods after merge with parent interface: ",
   //     intf_methods);
+
   escape = escape || escape_intf;
 
   analyze_parent_children_methods(parent, methods, intf_methods, escape);
@@ -586,4 +1035,20 @@ std::vector<DexMethod*> devirtualize(std::vector<DexClass*>& scope) {
   auto meths = devirtualizer.devirtualize();
   // logfile.close();
   return meths;
+}
+
+MethodLinkInfo link_methods(std::vector<DexClass*>& scope) {
+  Devirtualizer devirtualizer(scope);
+  std::unordered_set<DexMethod*> final_meths;
+  auto link_res = devirtualizer.link_methods();
+
+  // Do some quick verification
+  /*for (auto meth : devirt_meths) {
+    MethodNameWrapper* wrap = static_cast<MethodNameWrapper*>(link_res.name_manager[meth]);
+    always_assert_log(wrap->should_rename(),
+        "%s failed test devirt: %s\n%s\n", SHOW(wrap->get()),
+        SHOW(meth), dump_namemap(link_res).c_str());
+    always_assert(!wrap->is_linked());
+  }*/
+  return link_res;
 }
