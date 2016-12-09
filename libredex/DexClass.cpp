@@ -37,7 +37,17 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
 
 void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   // FIXME assert if already concrete
-  m_value = v;
+
+  // The last contiguous block of static fields with null values are not
+  // represented in the encoded value array, so v would be null for them here.
+  // OTOH null-initialized static fields that appear earlier in the static
+  // field list have explicit DEVT_NULL values. Let's standardize things here
+  // and represent all of them with a nullptr regardless of position.
+  if (v != nullptr && v->evtype() == DEVT_NULL) {
+    m_value = nullptr;
+  } else {
+    m_value = v;
+  }
   m_access = access_flags;
   m_concrete = true;
 }
@@ -742,25 +752,21 @@ static DexEncodedValueArray* load_static_values(DexIdx* idx, uint32_t sv_off) {
 
 DexEncodedValueArray* DexClass::get_static_values() {
   bool has_static_values = false;
-  for (auto const& f : m_sfields) {
-    if (f->get_static_value() != nullptr) {
+  auto aev = std::make_unique<std::list<DexEncodedValue*>>();
+  for (auto it = m_sfields.rbegin(); it != m_sfields.rend(); ++it) {
+    auto const& f = *it;
+    DexEncodedValue* ev = f->get_static_value();
+    if (ev == nullptr) {
+      if (has_static_values) {
+        aev->push_front(new DexEncodedValueBit(DEVT_NULL, false));
+      }
+    } else {
       has_static_values = true;
-      break;
+      aev->push_front(ev);
     }
   }
   if (!has_static_values) return nullptr;
-
-  std::list<DexEncodedValue*>* aev = new std::list<DexEncodedValue*>();
-  for (auto const& f : m_sfields) {
-    DexEncodedValue* ev = f->get_static_value();
-    if (ev == nullptr) {
-      has_static_values = false;
-      continue;
-    }
-    always_assert_log(has_static_values, "Hole in static value ordering");
-    aev->push_back(ev);
-  }
-  return new DexEncodedValueArray(aev, true);
+  return new DexEncodedValueArray(aev.release(), true);
 }
 
 DexAnnotationDirectory* DexClass::get_annotation_directory() {
