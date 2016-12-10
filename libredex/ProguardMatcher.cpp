@@ -851,6 +851,8 @@ void mark_class_and_members_for_keep(
     if (is_blanket_keep_rule(keep_rule)) {
       cls->rstate.set_blanket_keep();
     }
+    // Mark non-empty <clinit> methods as seeds.
+    keep_clinits(cls);
   }
   // Walk up the hierarhcy performig seed marking.
   DexClass* class_to_mark = cls;
