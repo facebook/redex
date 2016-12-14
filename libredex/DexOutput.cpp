@@ -1144,7 +1144,8 @@ void write_method_mapping(
   const DexOutputIdx* dodx,
   const ProguardMap& proguard_map,
   size_t dex_number,
-  uint32_t dex_checksum
+  uint32_t dex_checksum,
+  uint8_t* dex_signature
 ) {
   if (filename.empty()) return;
   FILE* fd = fopen(filename.c_str(), "a");
@@ -1201,10 +1202,22 @@ void write_method_mapping(
             deobf_method_name.c_str(),
             deobf_class.c_str());
 
-    fprintf(fd,
-            "%u %u %s %s\n",
+    fprintf(fd, "%u %u %s %s\n",
             idx,
             dex_checksum,
+            deobf_method_name.c_str(),
+            deobf_class.c_str());
+
+    //
+    // Turns out, the checksum can change on-device. (damn you dexopt)
+    // The signature, however, is never recomputed. Let's log the top 4 bytes,
+    // in little-endian (since that's faster to compute on-device).
+    //
+    uint32_t signature = *reinterpret_cast<uint32_t*>(dex_signature);
+
+    fprintf(fd, "%u %u %s %s\n",
+            idx,
+            signature,
             deobf_method_name.c_str(),
             deobf_class.c_str());
   }
@@ -1217,7 +1230,8 @@ void write_class_mapping(
   const size_t class_defs_size,
   const ProguardMap& proguard_map,
   const size_t dex_number,
-  uint32_t dex_checksum
+  uint32_t dex_checksum,
+  uint8_t* dex_signature
 ) {
   if (filename.empty()) return;
   FILE* fd = fopen(filename.c_str(), "a");
@@ -1233,17 +1247,13 @@ void write_class_mapping(
       return proguard_name(cls);
     }();
 
-    fprintf(fd,
-            "%u %lu %s\n",
-            idx,
-            dex_number,
-            deobf_class.c_str());
-
-    fprintf(fd,
-            "%u %u %s\n",
-            idx,
-            dex_checksum,
-            deobf_class.c_str());
+    fprintf(fd, "%u %lu %s\n", idx, dex_number, deobf_class.c_str());
+    fprintf(fd, "%u %u %s\n", idx, dex_checksum, deobf_class.c_str());
+    //
+    // See write_method_mapping above for why checksum is insufficient.
+    //
+    uint32_t signature = *reinterpret_cast<uint32_t*>(dex_signature);
+    fprintf(fd, "%u %u %s\n", idx, signature, deobf_class.c_str());
   }
 
   fclose(fd);
@@ -1257,7 +1267,8 @@ void DexOutput::write_symbol_files() {
     dodx,
     m_config_files.get_proguard_map(),
     m_dex_number,
-    hdr.checksum
+    hdr.checksum,
+    hdr.signature
   );
   write_class_mapping(
     m_class_mapping_filename,
@@ -1265,7 +1276,8 @@ void DexOutput::write_symbol_files() {
     hdr.class_defs_size,
     m_config_files.get_proguard_map(),
     m_dex_number,
-    hdr.checksum
+    hdr.checksum,
+    hdr.signature
   );
 }
 
