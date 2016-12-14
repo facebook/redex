@@ -41,7 +41,10 @@ bool should_rename_elem(const T* member) {
 
 /*
  * Allows us to wrap Dex elements with a new name that we intend to assign them
- * T should be a pointer to a Dex element (e.g. DexField*)
+ * T should be a pointer to a Dex element (e.g. DexField*). We cannot just
+ * assign names as we create them because of collisions and issues around
+ * vmethods (requires some additional information). Additionally, some record
+ * of the old name is necessary to fix up ref opcodes.
  */
 template <class T>
 class DexNameWrapper {
@@ -66,7 +69,10 @@ public:
   DexNameWrapper& operator=(DexNameWrapper&& other) = default;
 
   inline T get() { always_assert(dex_elem != nullptr); return dex_elem; }
-  inline const T get() const { always_assert(dex_elem != nullptr); return dex_elem; }
+  inline const T get() const {
+    always_assert(dex_elem != nullptr);
+    return dex_elem;
+  }
 
   virtual bool name_has_changed() { return has_new_name; }
 
@@ -88,8 +94,8 @@ public:
 
   virtual std::string get_printable() {
     std::ostringstream res;
-    res << "  0x" << this->get() << ": (" << SHOW(dex_elem->get_class())
-        << ") " << SHOW(dex_elem->get_name()) << " -> " << get_name() << std::endl;
+    res << "  0x" << this->get() << ": (" << SHOW(dex_elem->get_class()) << ") "
+        << SHOW(dex_elem->get_name()) << " -> " << get_name() << std::endl;
     return res.str();
   }
 
@@ -97,7 +103,9 @@ public:
     return this->name_has_changed() && this->should_rename();
   }
 
-  virtual bool should_commit() { return !type_class(get()->get_class())->is_external(); }
+  virtual bool should_commit() {
+    return !type_class(get()->get_class())->is_external();
+  }
 };
 
 using DexFieldWrapper = DexNameWrapper<DexField*>;
@@ -115,7 +123,6 @@ public:
   }
 };
 
-// Will add more to this class later to deal with overriding and interfaces
 class MethodNameWrapper : public DexMethodWrapper {
 private:
   int n_links = 1;
@@ -170,8 +177,8 @@ public:
   void link(MethodNameWrapper* other) {
     always_assert(other != nullptr);
     always_assert(other != this);
-    always_assert(strcmp(SHOW(get()->get_name()), SHOW(other->get()->get_name())) == 0);
-    //TRACE(OBFUSCATE, 2, "Linking %s with\n\t%s\n", SHOW(this->get()), SHOW(other->get()));
+    always_assert(
+        strcmp(SHOW(get()->get_name()), SHOW(other->get()->get_name())) == 0);
 
     auto this_end = find_end_link();
     // Make sure they aren't already linked
@@ -217,11 +224,7 @@ public:
     next->mark_unrenamable();
   }
 
-  bool should_commit() override {
-    return true;/*DexMethod::get_method(dex_elem->get_class(),
-        DexString::make_string(this->get_name()),
-        dex_elem->get_proto()) == nullptr;*/
-  }
+  bool should_commit() override { return true; }
 
   std::string get_printable() override {
     std::ostringstream res;
@@ -306,8 +309,13 @@ public:
     wrap->set_name(new_name);
     this->used_ids.insert(new_name);
     T elem = wrap->get();
-    TRACE(OBFUSCATE, 2, "\tIntending to rename elem %s (%s) (renamable %s) to %s\n",
-        SHOW(elem), SHOW(elem->get_name()), should_rename_elem(elem) ? "true" : "false", new_name.c_str());
+    TRACE(OBFUSCATE,
+          2,
+          "\tIntending to rename elem %s (%s) (renamable %s) to %s\n",
+          SHOW(elem),
+          SHOW(elem->get_name()),
+          should_rename_elem(elem) ? "true" : "false",
+          new_name.c_str());
   }
 
   static SimpleNameGenerator<T>* new_name_gen(
@@ -333,9 +341,13 @@ public:
         wrap->get()->get_class(),
         DexString::make_string(wrap->get_name()),
         wrap->get()->get_proto()) != nullptr);
-    TRACE(OBFUSCATE, 2, "\tIntending to rename method %s (%s) to %s ids to avoid %d\n",
-        SHOW(wrap->get()), SHOW(wrap->get()->get_name()),
-        wrap->get_name(), this->ids_to_avoid.size());
+    TRACE(OBFUSCATE,
+          2,
+          "\tIntending to rename method %s (%s) to %s ids to avoid %d\n",
+          SHOW(wrap->get()),
+          SHOW(wrap->get()->get_name()),
+          wrap->get_name(),
+          this->ids_to_avoid.size());
     // Keep spinning on a name until you find one that isn't used at all
   }
 };
@@ -362,15 +374,6 @@ public:
   }
 
   void bind_names() override {
-    // Do simple renaming if possible
-    if (static_final_null_fields.size() == 0) {
-      for (auto wrap : fields) {
-        std::string new_name(this->next_name());
-        wrap->set_name(new_name);
-        this->used_ids.insert(new_name);
-      }
-      return;
-    }
     // Otherwise we have to make sure that all the names are assigned in order
     // such that the static final null fields are at the end
     std::vector<std::string> names;
@@ -460,7 +463,8 @@ public:
     elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()] =
         std::unique_ptr<DexNameWrapper<T>>(elemCtr(elem));
     if (mark_all_unrenamable)
-      elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]->mark_unrenamable();
+      elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
+          ->mark_unrenamable();
     return elements[
         elem->get_class()][sig_getter_fn(elem)][elem->get_name()].get();
   }
@@ -492,10 +496,6 @@ public:
             continue;
           }
           auto elem = wrap->get();
-          /*always_assert_log(should_rename_elem(elem),
-              "Trying to rename (%s) %s:%s to %s, but we shouldn't\n",
-              SHOW(sig_getter_fn(elem)), SHOW(elem->get_class()), SHOW(elem),
-              wrap->get_name());*/
           TRACE(OBFUSCATE, 2,
               "\tRenaming the elem 0x%x (%s) %s%s to %s external: %s can_rename: %s\n",
               elem, SHOW(sig_getter_fn(elem)), SHOW(elem->get_class()),
@@ -541,22 +541,21 @@ private:
 public:
 
   // Does a lookup over the fields we renamed in the dex to see what the
-  // reference should be reset with. Returns kSouldNotReset if there is no
-  // mapping.
-  // Note: we also have to look in superclasses in the case that this is a ref
-  T def_of_ref(T ref) {
-    DexClass* cls = type_class(ref->get_class());
-    if (cls == nullptr) return nullptr;
-    if (is_interface(cls)) {
-      return lookup_intf(ref, cls);
-    } else {
-      while (cls && !cls->is_external()) {
-        auto found = find_def(ref, cls->get_type());
-        if (found != nullptr) return found;
-        cls = type_class(cls->get_super_class());
-      }
-    }
-    return nullptr;
+ // reference should be reset with. Returns nullptr if there is no mapping.
+ // Note: we also have to look in superclasses in the case that this is a ref
+ T def_of_ref(T ref) {
+   DexClass* cls = type_class(ref->get_class());
+   if (cls == nullptr) return nullptr;
+   if (is_interface(cls)) {
+     return lookup_intf(ref, cls);
+   } else {
+     while (cls && !cls->is_external()) {
+       auto found = find_def(ref, cls->get_type());
+       if (found != nullptr) return found;
+       cls = type_class(cls->get_super_class());
+     }
+   }
+   return nullptr;
   }
 
   // Debug print of the mapping
@@ -582,8 +581,7 @@ DexFieldManager new_dex_field_manager();
 typedef DexElemManager<DexMethod*, DexMethodRef, DexProto*> DexMethodManager;
 DexMethodManager new_dex_method_manager();
 
-
-// Look at a list of members and check if there is a renamable member in the list
+// Look at a list of members and check if there is a renamable member
 template <class T, class R, class K>
 bool contains_renamable_elem(const std::list<T>& elems,
     DexElemManager<T, R, K>& name_mapping) {
@@ -601,20 +599,22 @@ class RenamingContext {
 public:
   const std::list<T>& elems;
   const std::unordered_set<std::string>& ids_to_avoid;
-  const bool operateOnPrivates;
+  const bool operate_on_privates;
   NameGenerator<T>& name_gen;
 
   RenamingContext(std::list<T>& elems,
-      std::unordered_set<std::string>& ids_to_avoid,
-      NameGenerator<T>& name_gen,
-      bool operateOnPrivates) :
-      elems(elems), ids_to_avoid(ids_to_avoid),
-      operateOnPrivates(operateOnPrivates), name_gen(name_gen) { }
+                  std::unordered_set<std::string>& ids_to_avoid,
+                  NameGenerator<T>& name_gen,
+                  bool operate_on_privates)
+      : elems(elems),
+        ids_to_avoid(ids_to_avoid),
+        operate_on_privates(operate_on_privates),
+        name_gen(name_gen) {}
   virtual ~RenamingContext() {}
 
   // Whether or not on this pass we should rename the member
   virtual bool can_rename_elem(T elem) const {
-    return can_rename(elem) && operateOnPrivates == is_private(elem);
+    return can_rename(elem) && operate_on_privates == is_private(elem);
   }
 
 };
@@ -626,21 +626,22 @@ typedef RenamingContext<DexField*> FieldRenamingContext;
 class MethodRenamingContext : public RenamingContext<DexMethod*> {
   DexString* initstr = DexString::get_string("<init>");
   DexString* clinitstr = DexString::get_string("<clinit>");
-  DexString* thisstr = DexString::get_string("this");
   DexMethodManager& name_mapping;
 public:
-  MethodRenamingContext(std::list<DexMethod*>& elems,
-      std::unordered_set<std::string>& ids_to_avoid,
-      NameGenerator<DexMethod*>& name_gen,
-      DexMethodManager& name_mapping,
-      bool operateOnPrivates) : RenamingContext<DexMethod*>(
-          elems, ids_to_avoid, name_gen, operateOnPrivates), name_mapping(name_mapping) { }
+ MethodRenamingContext(std::list<DexMethod*>& elems,
+                       std::unordered_set<std::string>& ids_to_avoid,
+                       NameGenerator<DexMethod*>& name_gen,
+                       DexMethodManager& name_mapping,
+                       bool operate_on_privates)
+     : RenamingContext<DexMethod*>(
+           elems, ids_to_avoid, name_gen, operate_on_privates),
+       name_mapping(name_mapping) {}
 
-  // For methods we have to make sure we don't rename <init> or <clinit> ever
-  virtual bool can_rename_elem(DexMethod* elem) const override {
-    return should_rename_elem(elem) && operateOnPrivates == is_private(elem) &&
-        elem->get_name() != initstr && elem->get_name() != clinitstr && elem->get_name() != thisstr &&
-        name_mapping[elem]->should_rename();
+ // For methods we have to make sure we don't rename <init> or <clinit> ever
+ virtual bool can_rename_elem(DexMethod* elem) const override {
+   return should_rename_elem(elem) && operate_on_privates == is_private(elem) &&
+          elem->get_name() != initstr && elem->get_name() != clinitstr &&
+          name_mapping[elem]->should_rename();
   }
 };
 
@@ -737,7 +738,8 @@ public:
           if (wrap->name_has_changed())
             ids_to_avoid.insert(SHOW(wrap->get()->get_name()));
           ids_to_avoid.insert(wrap->get_name()); };
-    walk_hierarchy(base, visit_member, false, HierarchyDirection::VisitSuperClasses);
+    walk_hierarchy(
+        base, visit_member, false, HierarchyDirection::VisitSuperClasses);
     walk_hierarchy(base, visit_member, true,
         visitSubclasses ? HierarchyDirection::VisitSubClasses :
           HierarchyDirection::VisitNeither);

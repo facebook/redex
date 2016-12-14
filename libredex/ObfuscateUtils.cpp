@@ -26,7 +26,9 @@ DexFieldManager new_dex_field_manager() {
 
 DexMethodManager new_dex_method_manager() {
   return DexMethodManager(
-      [](DexMethod*& f) -> MethodNameWrapper* { return new MethodNameWrapper(f); },
+      [](DexMethod*& f) -> MethodNameWrapper* {
+        return new MethodNameWrapper(f);
+      },
       [](DexMethod*& m) -> DexProto* { return m->get_proto(); },
       [](const std::string& new_name) -> DexMethodRef {
         DexMethodRef ref;

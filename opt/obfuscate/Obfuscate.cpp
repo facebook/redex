@@ -131,119 +131,6 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
     });
 }
 
-// Prints out what proguard renames vs what we rename (only relevant if we're)
-// running on a proguarded apk with a correct proguard mapping file.
-/*void trace_proguard_delta(Scope& classes, ProguardMap* pg_map,
-    DexMethodManager& method_name_manager, DexFieldManager& field_name_manager) {
-  int pg_renamed_f = 0;
-  int us_and_pg_f = 0;
-  int us_not_pg_f = 0;
-  int pg_not_us_f = 0;
-  int vol_fields = 0;
-  int pg_renamed_m = 0;
-  int us_and_pg_m = 0;
-  int us_not_pg_m = 0;
-  int pg_not_us_m = 0;
-  int pg_renamed_m1 = 0;
-  int us_and_pg_m1 = 0;
-  int us_not_pg_m1 = 0;
-  int pg_not_us_m1 = 0;
-  int renamable_not_renamed_f = 0;
-  int renamable_not_renamed_m = 0;
-  int renamable_not_renamed_m1 = 0;
-  int renamable_not_renamed_m1_ourfl = 0;
-  for (auto cls : classes) {
-    if (cls->is_external()) continue;
-    for (auto meth : cls->get_dmethods()) {
-      auto deob_name = pg_map->deobfuscate_method(proguard_name(meth));
-      size_t beg = deob_name.find(";") + 2;
-      deob_name = deob_name.substr(beg, deob_name.find(":") - beg);
-      bool pg_renamed_ = strcmp(deob_name.c_str(), SHOW(meth->get_name())) != 0;
-      if (pg_renamed_) {
-        pg_renamed_m++;
-        if (method_name_manager[meth]->is_modified()) {
-          us_and_pg_m++;
-        } else {
-          if (can_rename(meth))
-            renamable_not_renamed_m++;
-          pg_not_us_m++;
-        }
-      } else {
-        if (method_name_manager[meth]->is_modified()) {
-          us_not_pg_m++;
-        }
-      }
-    }
-    for (auto meth : cls->get_vmethods()) {
-      auto deob_name = pg_map->deobfuscate_method(proguard_name(meth));
-      size_t beg = deob_name.find(";") + 2;
-      deob_name = deob_name.substr(beg, deob_name.find(":") - beg);
-      bool pg_renamed_ = strcmp(deob_name.c_str(), SHOW(meth->get_name())) != 0;
-      if (pg_renamed_) {
-        pg_renamed_m1++;
-        if (method_name_manager[meth]->is_modified()) {
-          us_and_pg_m1++;
-        } else {
-          if (can_rename(meth)) {
-            renamable_not_renamed_m1++;
-            if (method_name_manager[meth]->should_rename())
-              renamable_not_renamed_m1_ourfl++;
-          }
-          pg_not_us_m1++;
-        }
-      } else {
-        if (method_name_manager[meth]->is_modified()) us_not_pg_m1++;
-      }
-    }
-    for (auto field : cls->get_ifields()) {
-      auto deob_name = pg_map->deobfuscate_field(proguard_name(field));
-      size_t beg = deob_name.find(";") + 2;
-      deob_name = deob_name.substr(beg, deob_name.find(":") - beg);
-      bool pg_renamed_ = strcmp(deob_name.c_str(), SHOW(field->get_name())) != 0;
-      if (pg_renamed_) {
-        pg_renamed_f++;
-        if (field_name_manager[field]->is_modified()) { us_and_pg_f++; }
-        else {
-          if (can_rename(field))
-            renamable_not_renamed_f++;
-          //if (is_volatile(field)) vol_fields++;
-           pg_not_us_f++; }
-      } else {
-        if (field_name_manager[field]->is_modified()) us_not_pg_f++;
-      }
-    }
-    for (auto field : cls->get_sfields()) {
-      auto deob_name = pg_map->deobfuscate_field(proguard_name(field));
-      size_t beg = deob_name.find(";") + 2;
-      deob_name = deob_name.substr(beg, deob_name.find(":") - beg);
-      bool pg_renamed_ = strcmp(deob_name.c_str(), SHOW(field->get_name())) != 0;
-      if (pg_renamed_) {
-        pg_renamed_f++;
-        if (field_name_manager[field]->is_modified()) { us_and_pg_f++; }
-        else {
-          if (can_rename(field))
-            renamable_not_renamed_f++;
-          //if (is_volatile(field)) vol_fields++;
-           pg_not_us_f++; }
-      } else {
-        if (field_name_manager[field]->is_modified()) us_not_pg_f++;
-      }
-    }
-  }
-  TRACE(OBFUSCATE, 2, "Proguard renamed %d, we renamed %d of those\n We renamed"
-      " %d that PG did not, PG renamed %d that we did not\n %s volatile fields ignored by us\n",
-      pg_renamed_f, us_and_pg_f, us_not_pg_f, pg_not_us_f, vol_fields);
-  TRACE(OBFUSCATE, 2, "DMETHODS: Proguard renamed %d, we renamed %d of those\n"
-      " We renamed %d that PG did not, PG renamed %d that we did not\n",
-      pg_renamed_m, us_and_pg_m, us_not_pg_m, pg_not_us_m);
-  TRACE(OBFUSCATE, 2, "VMETHODS: Proguard renamed %d, we renamed %d of those\n"
-      " We renamed %d that PG did not, PG renamed %d that we did not, our flags %d\n",
-      pg_renamed_m1, us_and_pg_m1, us_not_pg_m1, pg_not_us_m1,
-      renamable_not_renamed_m1_ourfl);
-  TRACE(OBFUSCATE, 2, "Renamable not renamed:\nFields: %d\nDmethods: %d\n Vmethods %d\n",
-      renamable_not_renamed_f, renamable_not_renamed_m, renamable_not_renamed_m1);
-}*/
-
 // Obfuscate methods and fields, updating the ProGuard
 // map approriately to reflect renamings.
 void obfuscate(Scope& classes, ProguardMap* pg_map, PassManager& pass_mgr) {
@@ -261,11 +148,16 @@ void obfuscate(Scope& classes, ProguardMap* pg_map, PassManager& pass_mgr) {
   for (DexClass* cls : classes) {
     always_assert_log(!cls->is_external(),
         "Shouldn't rename members of external classes.");
-    // First check if we will do anything on this class
-    bool operate_on_ifields = contains_renamable_elem(cls->get_ifields(), field_name_manager);
-    bool operate_on_sfields = contains_renamable_elem(cls->get_sfields(), field_name_manager);
-    bool operate_on_dmethods = contains_renamable_elem(cls->get_dmethods(), method_name_manager);
-    bool operate_on_vmethods = contains_renamable_elem(cls->get_vmethods(), method_name_manager);
+    // Checks to short-circuit expensive name-gathering logic (code is still
+    // correct w/o this, but does unnecessary work)
+    bool operate_on_ifields =
+        contains_renamable_elem(cls->get_ifields(), field_name_manager);
+    bool operate_on_sfields =
+        contains_renamable_elem(cls->get_sfields(), field_name_manager);
+    bool operate_on_dmethods =
+        contains_renamable_elem(cls->get_dmethods(), method_name_manager);
+    bool operate_on_vmethods =
+        contains_renamable_elem(cls->get_vmethods(), method_name_manager);
     if (operate_on_ifields || operate_on_sfields) {
       FieldObfuscationState f_ob_state;
       SimpleNameGenerator<DexField*> simple_name_generator(
@@ -314,8 +206,8 @@ void obfuscate(Scope& classes, ProguardMap* pg_map, PassManager& pass_mgr) {
         pass_mgr.incr_metric(METRIC_BEFORE_COMMIT_SFIELD_RENAMES, renamed);
       }
 
-      // Make sure to bind the new names otherwise not all generators will assign
-      // names to the members
+      // Make sure to bind the new names otherwise not all generators will
+      // assign names to the members
       static_name_generator.bind_names();
     }
 
@@ -331,29 +223,34 @@ void obfuscate(Scope& classes, ProguardMap* pg_map, PassManager& pass_mgr) {
 
       // Keep this for all public ids in the class (they shouldn't conflict)
       if (operate_on_dmethods) {
-        int renamed = obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
-            m_ob_state.ids_to_avoid, simple_name_gen, method_name_manager, false),
-          method_name_manager);
+        int renamed =
+            obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
+                                                  m_ob_state.ids_to_avoid,
+                                                  simple_name_gen,
+                                                  method_name_manager,
+                                                  false),
+                            method_name_manager);
         pass_mgr.incr_metric(METRIC_BEFORE_COMMIT_DMETHOD_RENAMES, renamed);
       }
       if (operate_on_vmethods) {
-        // Gather used names from all classes that contain a linked member
-        // (walk hierarchies of all implementations of any interfaces
-        // implemented by members in this class)
-        // Make sure that if we're an interface, we correctly get the conflict set
-
+        // if we're at an interface, vmethod renaming won't work correctly,
+        // just wait until we're renamed from one of the classes that
+        // implements this interface
         if (link_manager.intf_conflict_set.count(cls->get_type()) == 0) {
-          // if we're at an interface, vmethod renaming won't work correctly,
-          // just wait until we're renamed from one of the classes that
-          // implements this interface
+          // Gather used names from all classes that implement the interfaces
+          // this class implements
           for (auto intf : link_manager.class_interfaces[cls->get_type()])
             for (auto meth : link_manager.intf_conflict_set[intf])
               m_ob_state.ids_to_avoid.insert(
                   method_name_manager[meth]->get_name());
 
-          int renamed = obfuscate_elems(MethodRenamingContext(cls->get_vmethods(),
-              m_ob_state.ids_to_avoid, simple_name_gen, method_name_manager, false),
-            method_name_manager);
+          int renamed =
+              obfuscate_elems(MethodRenamingContext(cls->get_vmethods(),
+                                                    m_ob_state.ids_to_avoid,
+                                                    simple_name_gen,
+                                                    method_name_manager,
+                                                    false),
+                              method_name_manager);
           pass_mgr.incr_metric(METRIC_BEFORE_COMMIT_VMETHOD_RENAMES, renamed);
         }
       }
@@ -363,9 +260,13 @@ void obfuscate(Scope& classes, ProguardMap* pg_map, PassManager& pass_mgr) {
       m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false);
 
       if (operate_on_dmethods) {
-        int renamed = obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
-            m_ob_state.ids_to_avoid, simple_name_gen, method_name_manager, true),
-          method_name_manager);
+        int renamed =
+            obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
+                                                  m_ob_state.ids_to_avoid,
+                                                  simple_name_gen,
+                                                  method_name_manager,
+                                                  true),
+                            method_name_manager);
         pass_mgr.incr_metric(METRIC_BEFORE_COMMIT_DMETHOD_RENAMES, renamed);
       }
     }
@@ -402,11 +303,8 @@ void ObfuscatePass::run_pass(DexStoresVector& stores,
     TRACE(OBFUSCATE, 1, "ObfuscatePass not run because no ProGuard configuration was provided.");
     return;
   }
-  clock_t start = std::clock();
   auto scope = build_class_scope(stores);
   obfuscate(scope, &cfg.get_proguard_map(), mgr);
-  clock_t end = std::clock();
-  TRACE(OBFUSCATE, 1, "Time taken %.3fs\n", (1.0 * (end - start)) / CLOCKS_PER_SEC);
 }
 
 static ObfuscatePass s_pass;
