@@ -890,6 +890,7 @@ class DexClass {
   DexTypeList* get_interfaces() const { return m_interfaces; }
   DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const { return m_has_class_data; }
+  void set_class_data(bool has_class_data) { m_has_class_data = has_class_data; }
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
