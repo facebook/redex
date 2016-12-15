@@ -21,6 +21,11 @@
 #include "DexUtil.h"
 #include "Walkers.h"
 
+constexpr const char* METRIC_ANNO_CLASSES_REMOVED =
+  "num_anno_classes_removed";
+constexpr const char* METRIC_METHOD_PARAM_ANNO_REMOVED =
+  "num_method_param_anno_removed";
+
 typedef std::unordered_set<DexClass*> class_set_t;
 
 int clear_annotation_references(Scope& scope, class_set_t& deadclasses) {
@@ -77,7 +82,8 @@ int clear_annotation_references(Scope& scope, class_set_t& deadclasses) {
  */
 void kill_annotation_classes(
   Scope& scope,
-  const std::unordered_set<DexType*>& kill_annos
+  const std::unordered_set<DexType*>& kill_annos,
+  PassManager& mgr
 ) {
   // Determine which annotation classes are removable.
   class_set_t bannotations;
@@ -126,12 +132,16 @@ void kill_annotation_classes(
         [&](DexClass* cls) { return bannotations.count(cls); }),
       scope.end());
   }
+
+  auto classes_removed_count = bannotations.size();
   TRACE(CLASSKILL, 1,
           "Annotation classes removed %lu\n",
-          bannotations.size());
+          classes_removed_count);
   TRACE(CLASSKILL, 1,
           "Method param annotations removed %d\n",
           annotations_removed_count);
+  mgr.incr_metric(METRIC_ANNO_CLASSES_REMOVED, classes_removed_count);
+  mgr.incr_metric(METRIC_METHOD_PARAM_ANNO_REMOVED, annotations_removed_count);
 }
 
 std::unordered_set<DexType*> get_kill_annos(
@@ -155,7 +165,7 @@ std::unordered_set<DexType*> get_kill_annos(
 void AnnoClassKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
   auto kill_annos = get_kill_annos(m_kill_annos);
-  kill_annotation_classes(scope, kill_annos);
+  kill_annotation_classes(scope, kill_annos, mgr);
   post_dexen_changes(scope, stores);
 }
 
