@@ -23,6 +23,17 @@
 
 namespace {
 
+constexpr const char* METRIC_TOTAL_METHODS =
+  "num_total_methods";
+constexpr const char* METRIC_TRIVIAL_METHOD_CANDIDATES =
+  "num_trivial_method_candidates";
+constexpr const char* METRIC_REMOVED_TRIVIAL_METHODS =
+  "num_removed_trivial_methods";
+constexpr const char* METRIC_METHOD_RELAXED_VISIBILITY =
+  "num_methods_relaxed_visibility";
+constexpr const char* METRIC_CLASS_RELAXED_VISIBILITY =
+  "num_class_relaxed_visibility";
+
 static const DexOpcode s_return_invoke_super_void_opcs[2] = {
   OPCODE_INVOKE_SUPER, OPCODE_RETURN_VOID
 };
@@ -275,7 +286,7 @@ public:
       m_num_culled_super_not_def(0) {
   }
 
-  void run(bool do_delete) {
+  void run(bool do_delete, PassManager& mgr) {
     walk_methods(m_scope,
       [&](DexMethod* meth) {
         m_num_methods++;
@@ -314,10 +325,10 @@ public:
           SHOW(meth));
       }
     }
-    print_stats(do_delete);
+    print_stats(do_delete, mgr);
   }
 
-  void print_stats(bool do_delete) {
+  void print_stats(bool do_delete, PassManager& mgr) {
     TRACE(SUPER, 1, "Examined %d total methods\n", m_num_methods);
     TRACE(SUPER, 1, "Found %d candidate trivial methods\n", m_num_trivial);
     TRACE(SUPER, 5, "Culled %d due to super not defined\n",
@@ -354,6 +365,12 @@ public:
       TRACE(SUPER, 1, "Would promote %d classes to public visibility\n",
         m_num_cls_relaxed_vis);
     }
+
+    mgr.incr_metric(METRIC_TOTAL_METHODS, m_num_methods);
+    mgr.incr_metric(METRIC_TRIVIAL_METHOD_CANDIDATES, m_num_trivial);
+    mgr.incr_metric(METRIC_REMOVED_TRIVIAL_METHODS, m_num_passed);
+    mgr.incr_metric(METRIC_METHOD_RELAXED_VISIBILITY, m_num_relaxed_vis);
+    mgr.incr_metric(METRIC_CLASS_RELAXED_VISIBILITY, m_num_cls_relaxed_vis);
   }
 };
 
@@ -361,7 +378,7 @@ public:
 
 void DelSuperPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  DelSuper(scope).run(/* do_delete = */true);
+  DelSuper(scope).run(/* do_delete = */true, mgr);
 }
 
 static DelSuperPass s_pass;

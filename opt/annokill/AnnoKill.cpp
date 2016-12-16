@@ -24,6 +24,17 @@
 
 namespace {
 
+constexpr const char* METRIC_ANNO_KILLED = "num_anno_killed";
+constexpr const char* METRIC_ANNO_TOTAL = "num_anno_total";
+constexpr const char* METRIC_CLASS_ASETS_CLEARED = "num_class_cleared";
+constexpr const char* METRIC_CLASS_ASETS_TOTAL = "num_class_total";
+constexpr const char* METRIC_METHOD_ASETS_CLEARED = "num_method_cleared";
+constexpr const char* METRIC_METHOD_ASETS_TOTAL = "num_method_total";
+constexpr const char* METRIC_METHODPARAM_ASETS_CLEARED = "num_methodparam_cleared";
+constexpr const char* METRIC_METHODPARAM_ASETS_TOTAL = "num_methodparam_total";
+constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
+constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
+
 struct kill_counters {
   int annotations;
   int annotations_killed;
@@ -361,6 +372,27 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
       "Field Asets: %d/%d\n",
       s_kcount.field_asets_cleared,
       s_kcount.field_asets);
+
+  mgr.incr_metric(METRIC_ANNO_KILLED,
+                  s_kcount.annotations_killed);
+  mgr.incr_metric(METRIC_ANNO_TOTAL,
+                  s_kcount.annotations);
+  mgr.incr_metric(METRIC_CLASS_ASETS_CLEARED,
+                  s_kcount.class_asets_cleared);
+  mgr.incr_metric(METRIC_CLASS_ASETS_TOTAL,
+                  s_kcount.class_asets);
+  mgr.incr_metric(METRIC_METHOD_ASETS_CLEARED,
+                  s_kcount.method_asets_cleared);
+  mgr.incr_metric(METRIC_METHOD_ASETS_TOTAL,
+                  s_kcount.method_asets);
+  mgr.incr_metric(METRIC_METHODPARAM_ASETS_CLEARED,
+                  s_kcount.method_param_asets_cleared);
+  mgr.incr_metric(METRIC_METHODPARAM_ASETS_TOTAL,
+                  s_kcount.method_param_asets);
+  mgr.incr_metric(METRIC_FIELD_ASETS_CLEARED,
+                  s_kcount.field_asets_cleared);
+  mgr.incr_metric(METRIC_FIELD_ASETS_TOTAL,
+                  s_kcount.field_asets);
 }
 
 static AnnoKillPass s_pass;

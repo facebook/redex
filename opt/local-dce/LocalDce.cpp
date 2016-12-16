@@ -23,6 +23,10 @@
 #include "Walkers.h"
 
 namespace {
+
+constexpr const char* METRIC_INSTRS_ELIMINATED = "num_instrs_eliminated";
+constexpr const char* METRIC_TOTAL_INSTRS = "num_total_instrs";
+
 /*
  * These instructions have observable side effects so must always be considered
  * live, regardless of whether their output is consumed by another instruction.
@@ -423,6 +427,14 @@ class LocalDce {
             "Percentage of instructions identified as dead code: %f%%\n",
             m_instructions_eliminated * 100 / double(m_total_instructions));
   }
+
+  size_t num_instrs_eliminated() const {
+    return m_instructions_eliminated;
+  }
+
+  size_t num_total_instrs() const {
+    return m_total_instructions;
+  }
 };
 }
 
@@ -436,7 +448,10 @@ void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
     return;
   }
   auto scope = build_class_scope(stores);
-  LocalDce().run(scope);
+  LocalDce ldce;
+  ldce.run(scope);
+  mgr.incr_metric(METRIC_INSTRS_ELIMINATED, ldce.num_instrs_eliminated());
+  mgr.incr_metric(METRIC_TOTAL_INSTRS, ldce.num_total_instrs());
 }
 
 static LocalDcePass s_pass;

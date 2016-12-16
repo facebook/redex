@@ -20,6 +20,11 @@
 
 namespace {
 
+  constexpr const char* METRIC_BRANCH_PROPAGATED =
+    "num_branch_propagated";
+  constexpr const char* METRIC_METHOD_RETURN_PROPAGATED =
+    "num_method_return_propagated";
+
   constexpr int REGSIZE = 256;
 
   // The struct AbstractRegister contains a bool value of whether the value of
@@ -249,6 +254,14 @@ namespace {
         "Static function invocation removed: %lu\n",
         m_method_return_propagated);
     }
+
+    size_t num_branch_propagated() const {
+      return m_branch_propagated;
+    }
+
+    size_t num_method_return_propagated() const {
+      return m_method_return_propagated;
+    }
   };
 }
 
@@ -271,7 +284,14 @@ std::unordered_set<DexType*> get_black_list(
 void ConstantPropagationPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
   auto blacklist_classes = get_black_list(m_blacklist);
-  ConstantPropagation(scope).run(blacklist_classes);
+  ConstantPropagation constant_prop(scope);
+  constant_prop.run(blacklist_classes);
+  mgr.incr_metric(
+    METRIC_BRANCH_PROPAGATED,
+    constant_prop.num_branch_propagated());
+  mgr.incr_metric(
+    METRIC_METHOD_RETURN_PROPAGATED,
+    constant_prop.num_method_return_propagated());
 }
 
 static ConstantPropagationPass s_pass;

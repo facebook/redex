@@ -31,6 +31,15 @@
 
 namespace {
 
+constexpr const char* METRIC_INIT_METHODS_REMOVED =
+  "num_init_methods_removed";
+constexpr const char* METRIC_VMETHODS_REMOVED =
+  "num_vmethods_removed";
+constexpr const char* METRIC_IFIELDS_REMOVED =
+  "num_ifields_removed";
+constexpr const char* METRIC_DMETHODS_REMOVED =
+  "num_dmethods_removed";
+
 static std::unordered_set<const DexClass*> referenced_classes;
 // List of packages on the white list
 static std::vector<std::string> package_filter;
@@ -474,6 +483,16 @@ void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManage
       drefs.del_init_res.deleted_ifields);
   TRACE(DELINIT, 1, "Removed %d dmethods\n",
       drefs.del_init_res.deleted_dmeths);
+
+  mgr.incr_metric(METRIC_INIT_METHODS_REMOVED,
+                  drefs.del_init_res.deleted_inits);
+  mgr.incr_metric(METRIC_VMETHODS_REMOVED,
+                  drefs.del_init_res.deleted_vmeths);
+  mgr.incr_metric(METRIC_IFIELDS_REMOVED,
+                  drefs.del_init_res.deleted_ifields);
+  mgr.incr_metric(METRIC_DMETHODS_REMOVED,
+                  drefs.del_init_res.deleted_dmeths);
+
   post_dexen_changes(scope, stores);
 }
 

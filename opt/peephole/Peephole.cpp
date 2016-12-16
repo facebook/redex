@@ -21,6 +21,14 @@
 #include "Walkers.h"
 
 namespace {
+
+constexpr const char* METRIC_SIMPLE_CLS_NAME_REMOVED =
+  "num_simple_cls_name_removed";
+constexpr const char* METRIC_CHECK_CASTS_REMOVED =
+  "num_redundant_check_cast_removed";
+constexpr const char* METRIC_CHECK_CASTS_SUPER_REMOVED =
+  "num_redundant_check_casts_super_removed";
+
 const DexMethod* method_Class_getSimpleName() {
 
   static auto const ret = DexMethod::make_method("Ljava/lang/Class;",
@@ -54,6 +62,7 @@ class PeepholeOptimizer {
   const ssize_t kInvalid = -1;
 
   const std::vector<DexClass*>& m_scope;
+  PassManager& m_pass_mgr;
   std::unordered_map<DexInstruction*, DexInstruction*> m_replacements;
   ssize_t m_last_call;
   RegWriters m_last_writer;
@@ -202,11 +211,19 @@ class PeepholeOptimizer {
     TRACE(PEEPHOLE, 1,
             "%d redundant check-cast instances from super removed \n",
             m_stats_check_casts_super_removed);
+
+    m_pass_mgr.incr_metric(
+      METRIC_SIMPLE_CLS_NAME_REMOVED, m_stats_simple_name);
+    m_pass_mgr.incr_metric(
+      METRIC_CHECK_CASTS_REMOVED, m_stats_check_casts_removed);
+    m_pass_mgr.incr_metric(
+      METRIC_CHECK_CASTS_SUPER_REMOVED, m_stats_check_casts_super_removed);
   }
 
  public:
-  PeepholeOptimizer(const std::vector<DexClass*>& scope)
+  PeepholeOptimizer(const std::vector<DexClass*>& scope, PassManager& mgr)
       : m_scope(scope),
+        m_pass_mgr(mgr),
         m_stats_check_casts_removed(0),
         m_stats_check_casts_super_removed(0),
         m_stats_simple_name(0) {}
@@ -227,7 +244,7 @@ class PeepholeOptimizer {
 
 void PeepholePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  PeepholeOptimizer(scope).run();
+  PeepholeOptimizer(scope, mgr).run();
 }
 
 static PeepholePass s_pass;

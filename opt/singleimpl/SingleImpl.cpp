@@ -29,6 +29,9 @@ size_t SingleImplPass::s_invoke_intf_count = 0;
 
 namespace {
 
+constexpr const char* METRIC_REMOVED_INTERFACES = "num_removed_interfaces";
+constexpr const char* METRIC_INVOKE_INT_TO_VIRT = "num_invoke_intf_to_virt";
+
 /**
  * Build a map from interface to the type implementing that
  * interface. We also walk up the interface chain and for every interface
@@ -119,6 +122,10 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   TRACE(INTF, 1,
           "Updated invoke-interface to invoke-virtual %ld\n",
           s_invoke_intf_count);
+
+  mgr.incr_metric(METRIC_REMOVED_INTERFACES, removed_count);
+  mgr.incr_metric(METRIC_INVOKE_INT_TO_VIRT, s_invoke_intf_count);
+
   post_dexen_changes(scope, stores);
 }
 

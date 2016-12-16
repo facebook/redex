@@ -16,6 +16,9 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
+constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
+  "num_empty_classes_removed";
+
 bool is_empty_class(DexClass* cls,
                     std::unordered_set<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
@@ -106,7 +109,7 @@ void process_code(std::unordered_set<const DexType*>* class_references,
   }
 }
 
-void remove_empty_classes(Scope& classes) {
+size_t remove_empty_classes(Scope& classes) {
 
   // class_references is a set of type names which represent classes
   // which should not be deleted even if they are deemed to be empty.
@@ -133,8 +136,9 @@ void remove_empty_classes(Scope& classes) {
     [&](DexClass* cls) { return is_empty_class(cls, class_references); }),
     classes.end());
 
-  TRACE(EMPTY, 1, "Empty classes removed: %ld\n",
-    classes_before_size - classes.size());
+  auto num_classes_removed = classes_before_size - classes.size();
+  TRACE(EMPTY, 1, "Empty classes removed: %ld\n", num_classes_removed);
+  return num_classes_removed;
 }
 
 void RemoveEmptyClassesPass::run_pass(
@@ -144,7 +148,10 @@ void RemoveEmptyClassesPass::run_pass(
     return;
   }
   auto scope = build_class_scope(stores);
-  remove_empty_classes(scope);
+  auto num_empty_classes_removed = remove_empty_classes(scope);
+
+  mgr.incr_metric(METRIC_REMOVED_EMPTY_CLASSES, num_empty_classes_removed);
+
   post_dexen_changes(scope, stores);
 }
 

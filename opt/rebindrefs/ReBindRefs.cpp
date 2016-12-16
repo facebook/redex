@@ -10,6 +10,7 @@
 #include "ReBindRefs.h"
 
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "Debug.h"
@@ -117,7 +118,7 @@ DexMethod* bind_to_visible_ancestor(
 }
 
 struct Rebinder {
-  Rebinder(Scope& scope) : m_scope(scope) {}
+  Rebinder(Scope& scope, PassManager& mgr) : m_scope(scope), m_pass_mgr(mgr) {}
 
   void rewrite_refs() {
     walk_opcodes(
@@ -162,12 +163,12 @@ struct Rebinder {
   }
 
   void print_stats() {
-    m_frefs.print("Field refs");
-    m_mrefs.print("Method refs");
-    m_array_clone_refs.print("Array clone");
-    m_equals_refs.print("equals");
-    m_hashCode_refs.print("hashCode");
-    m_getClass_refs.print("getClass");
+    m_frefs.print("field_refs", &m_pass_mgr);
+    m_mrefs.print("method_refs", &m_pass_mgr);
+    m_array_clone_refs.print("array_clone", nullptr);
+    m_equals_refs.print("equals", nullptr);
+    m_hashCode_refs.print("hashCode", nullptr);
+    m_getClass_refs.print("getClass", nullptr);
   }
 
  private:
@@ -193,10 +194,22 @@ struct Rebinder {
       insert(tin, T());
     }
 
-    void print(const char* tag) {
+    void print(const char* tag, PassManager* mgr) {
       TRACE(BIND, 1,
               "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]\n",
               tag, count, in.size(), out.size());
+
+      if (mgr) {
+        using std::string;
+        string tagStr{tag};
+        string count_metric = tagStr + string("_candidates");
+        string rebound_metric = tagStr + string("_rebound");
+        mgr->incr_metric(count_metric, count);
+
+        auto rebound = static_cast<ssize_t>(in.size()) -
+          static_cast<ssize_t>(out.size());
+        mgr->incr_metric(rebound_metric, rebound);
+      }
     }
   };
 
@@ -300,6 +313,7 @@ struct Rebinder {
   }
 
   Scope& m_scope;
+  PassManager& m_pass_mgr;
 
   RefStats<DexField*> m_frefs;
   RefStats<DexMethod*> m_mrefs;
@@ -313,7 +327,7 @@ struct Rebinder {
 
 void ReBindRefsPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  Rebinder rb(scope);
+  Rebinder rb(scope, mgr);
   rb.rewrite_refs();
   rb.print_stats();
 }

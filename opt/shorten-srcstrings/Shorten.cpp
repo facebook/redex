@@ -25,6 +25,9 @@
 #include "Walkers.h"
 #include "Warning.h"
 
+constexpr const char* METRIC_SHORTENED_STRINGS = "num_shortened_strings";
+constexpr const char* METRIC_BYTES_SAVED = "num_shortening_bytes_saved";
+
 static bool maybe_file_name(const char* str, size_t len) {
   if (len < 5) return false;
   return strncmp(str + len - 5, ".java", 5) == 0;
@@ -60,7 +63,8 @@ DexString* get_suitable_string(std::unordered_set<DexString*>& set,
   return nullptr;
 }
 
-static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
+static void strip_src_strings(
+  DexStoresVector& stores, const char* map_path, PassManager& mgr) {
   size_t shortened = 0;
   size_t string_savings = 0;
   std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
@@ -103,6 +107,9 @@ static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
   TRACE(SHORTEN, 1, "src strings shortened %ld, %lu bytes saved\n", shortened,
       string_savings);
 
+  mgr.incr_metric(METRIC_SHORTENED_STRINGS, shortened);
+  mgr.incr_metric(METRIC_BYTES_SAVED, string_savings);
+
   // generate mapping
   FILE* fd = fopen(map_path, "w");
   if (fd == nullptr) {
@@ -126,7 +133,7 @@ static void strip_src_strings(DexStoresVector& stores, const char* map_path) {
 void ShortenSrcStringsPass::run_pass(
     DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   m_filename_mappings = cfg.metafile(m_filename_mappings);
-  return strip_src_strings(stores, m_filename_mappings.c_str());
+  strip_src_strings(stores, m_filename_mappings.c_str(), mgr);
 }
 
 static ShortenSrcStringsPass s_pass;
