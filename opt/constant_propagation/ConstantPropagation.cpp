@@ -25,8 +25,6 @@ namespace {
   constexpr const char* METRIC_METHOD_RETURN_PROPAGATED =
     "num_method_return_propagated";
 
-  constexpr int REGSIZE = 256;
-
   // The struct AbstractRegister contains a bool value of whether the value of
   // register is known and the constant value of this register
   struct AbstractRegister {
@@ -49,6 +47,12 @@ namespace {
     size_t m_method_return_propagated{0};
 
     void propagate(DexMethod* method) {
+      reg_values.clear();
+      for (int i = 0; i < method->get_code()->get_registers_size(); i++) {
+        AbstractRegister r = {.known = false, .val = 0};
+        reg_values.push_back(AbstractRegister(r));
+      }
+
       bool changed = true;
       TRACE(CONSTP, 5, "Class: %s\n", SHOW(method->get_class()));
       TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
@@ -226,10 +230,6 @@ namespace {
 
   public:
     ConstantPropagation(const Scope& scope) : m_scope(scope) {
-      for (int i = 0; i<REGSIZE; i++) {
-        AbstractRegister r = {.known = false, .val = 0};
-        reg_values.push_back(AbstractRegister(r));
-      }
     }
 
     void run(const std::unordered_set<DexType*> &blacklist_classes) {
