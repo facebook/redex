@@ -847,7 +847,9 @@ void mark_class_and_members_for_keep(
   if (keep_rule.mark_classes || keep_rule.mark_conditionally) {
     apply_keep_modifiers(keep_rule, cls);
     cls->rstate.set_keep();
-    cls->rstate.increment_keep_count();
+    if (!keep_rule.allowobfuscation) {
+      cls->rstate.increment_keep_count();
+    }
     if (is_blanket_keep_rule(keep_rule)) {
       cls->rstate.set_blanket_keep();
     }
