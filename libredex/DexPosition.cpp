@@ -14,9 +14,13 @@
 #include "DexClass.h"
 #include "DexPosition.h"
 
-DexPosition::DexPosition(DexString* file, uint32_t line)
-  : file(file), line(line), parent(nullptr) {
+DexPosition::DexPosition(uint32_t line) : line(line), parent(nullptr) {}
+
+void DexPosition::bind(DexMethod* method, DexString* file) {
+  always_assert(method != nullptr);
   always_assert(file != nullptr);
+  this->method = method;
+  this->file = file;
 }
 
 void RealPositionMapper::register_position(DexPosition* pos) {

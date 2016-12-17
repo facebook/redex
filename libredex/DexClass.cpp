@@ -81,9 +81,7 @@ DexDebugEntry::~DexDebugEntry() {
  */
 static std::vector<DexDebugEntry> eval_debug_instructions(
     DexDebugItem* dbg,
-    std::vector<std::unique_ptr<DexDebugInstruction>>& insns,
-    DexString* source_file
-    ) {
+    std::vector<std::unique_ptr<DexDebugInstruction>>& insns) {
   std::vector<DexDebugEntry> entries;
   int32_t absolute_line = int32_t(dbg->get_line_start());
   uint32_t pc = 0;
@@ -113,10 +111,8 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
       uint8_t adjustment = op - DBG_FIRST_SPECIAL;
       absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
       pc += adjustment / DBG_LINE_RANGE;
-      if (source_file != nullptr) {
-        entries.emplace_back(
-            pc, std::make_unique<DexPosition>(source_file, absolute_line));
-      }
+      entries.emplace_back(
+          pc, std::make_unique<DexPosition>(absolute_line));
       break;
     }
     }
@@ -124,8 +120,7 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
   return entries;
 }
 
-DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset,
-    DexString* source_file) {
+DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
   m_line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
@@ -135,10 +130,11 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset,
   }
   std::vector<std::unique_ptr<DexDebugInstruction>> insns;
   DexDebugInstruction* dbgp;
-  while ((dbgp = DexDebugInstruction::make_instruction(idx, encdata)) != nullptr) {
+  while ((dbgp = DexDebugInstruction::make_instruction(idx, encdata)) !=
+         nullptr) {
     insns.emplace_back(dbgp);
   }
-  m_dbg_entries = eval_debug_instructions(this, insns, source_file);
+  m_dbg_entries = eval_debug_instructions(this, insns);
 }
 
 DexDebugItem::DexDebugItem(const DexDebugItem& that)
@@ -160,11 +156,10 @@ DexDebugItem::DexDebugItem(const DexDebugItem& that)
   }
 }
 
-std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(
-    DexIdx* idx, uint32_t offset, DexString* source_file) {
+std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(DexIdx* idx,
+                                                          uint32_t offset) {
   if (offset == 0) return nullptr;
-  return std::unique_ptr<DexDebugItem>(
-      new DexDebugItem(idx, offset, source_file));
+  return std::unique_ptr<DexDebugItem>(new DexDebugItem(idx, offset));
 }
 
 namespace {
@@ -263,6 +258,18 @@ int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
   return (int) (encdata - output);
 }
 
+void DexDebugItem::bind_positions(DexMethod* method, DexString* file) {
+  for (auto& entry : m_dbg_entries) {
+    switch (entry.type) {
+    case DexDebugEntryType::Position:
+      entry.pos->bind(method, file);
+      break;
+    case DexDebugEntryType::Instruction:
+      break;
+    }
+  }
+}
+
 void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
   for (auto& entry : m_dbg_entries) {
     entry.gather_types(ltype);
@@ -294,9 +301,7 @@ DexCode::DexCode(const DexCode& that)
   }
 }
 
-std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx,
-                                               uint32_t offset,
-                                               DexString* source_file) {
+std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (offset == 0) return std::unique_ptr<DexCode>();
   const dex_code_item* code = (const dex_code_item*)idx->get_uint_data(offset);
   std::unique_ptr<DexCode> dc(new DexCode());
@@ -348,8 +353,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx,
       dc->m_tries.emplace_back(dextry);
     }
   }
-  dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off,
-      source_file);
+  dc->m_dbg = DexDebugItem::get_dex_debug(idx, code->debug_info_off);
   return dc;
 }
 
@@ -537,8 +541,10 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    std::unique_ptr<DexCode> dc =
-        DexCode::get_dex_code(idx, code_off, m_source_file);
+    std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
+    if (dc && dc->get_debug_item()) {
+      dc->get_debug_item()->bind_positions(dm, m_source_file);
+    }
     dm->make_concrete(access_flags, std::move(dc), false);
     m_dmethods.push_back(dm);
   }
@@ -548,8 +554,10 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    std::unique_ptr<DexCode> dc =
-        DexCode::get_dex_code(idx, code_off, m_source_file);
+    std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
+    if (dc && dc->get_debug_item()) {
+      dc->get_debug_item()->bind_positions(dm, m_source_file);
+    }
     dm->make_concrete(access_flags, std::move(dc), true);
     m_vmethods.push_back(dm);
   }

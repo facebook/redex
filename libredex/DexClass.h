@@ -505,20 +505,22 @@ class DexDebugItem {
   uint32_t m_line_start;
   std::vector<DexString*> m_param_names;
   std::vector<DexDebugEntry> m_dbg_entries;
-  DexDebugItem(DexIdx* idx, uint32_t offset, DexString* source_file);
+  DexDebugItem(DexIdx* idx, uint32_t offset);
 
  public:
   DexDebugItem(const DexDebugItem&);
   static std::unique_ptr<DexDebugItem> get_dex_debug(DexIdx* idx,
-                                                     uint32_t offset,
-                                                     DexString* source_file);
+                                                     uint32_t offset);
 
  public:
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
-  void set_entries(std::vector<DexDebugEntry> dbg_entries) { m_dbg_entries.swap(dbg_entries); }
+  void set_entries(std::vector<DexDebugEntry> dbg_entries) {
+    m_dbg_entries.swap(dbg_entries);
+  }
   uint32_t get_line_start() const { return m_line_start; }
   std::vector<DexString*>& get_param_names() { return m_param_names; }
   void remove_parameter_names() { m_param_names.clear(); };
+  void bind_positions(DexMethod* method, DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
   int encode(DexOutputIdx* dodx, PositionMapper* pos_mapper, uint8_t* output);
@@ -546,9 +548,7 @@ class DexCode {
   std::unique_ptr<DexDebugItem> m_dbg;
 
  public:
-  static std::unique_ptr<DexCode> get_dex_code(DexIdx* idx,
-                                               uint32_t offset,
-                                               DexString* source_file);
+  static std::unique_ptr<DexCode> get_dex_code(DexIdx* idx, uint32_t offset);
 
   // TODO: make it private and find a better way to allow code creation
   DexCode()
@@ -568,6 +568,7 @@ class DexCode {
 
  public:
   const std::unique_ptr<DexDebugItem>& get_debug_item() const { return m_dbg; }
+  std::unique_ptr<DexDebugItem>& get_debug_item() { return m_dbg; }
   void remove_debug_item() { m_dbg = nullptr; }
   std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
     return std::move(m_insns);

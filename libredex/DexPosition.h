@@ -14,16 +14,20 @@
 #include <unordered_map>
 #include <vector>
 
+class DexClass;
+class DexMethod;
 class DexString;
 class DexDebugItem;
 
 struct DexPosition final {
-  DexString* file;
+  DexMethod* method{nullptr};
+  DexString* file{nullptr};
   uint32_t line;
   // when a function gets inlined for the first time, all its DexPositions will
   // have the DexPosition of the callsite as their parent.
   DexPosition* parent;
-  DexPosition(DexString* file, uint32_t line);
+  DexPosition(uint32_t line);
+  void bind(DexMethod* method, DexString* file);
 };
 
 class PositionMapper {
