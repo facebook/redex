@@ -521,7 +521,27 @@ void MethodTransform::remove_branch_target(DexInstruction *branch_inst) {
   }
 }
 
+void MethodTransform::replace_branch(DexInstruction* from, DexInstruction* to) {
+  always_assert(is_branch(from->opcode()));
+  always_assert(is_branch(to->opcode()));
+  for (auto& mentry : *m_fmethod) {
+    if (mentry.type == MFLOW_OPCODE && mentry.insn == from) {
+      mentry.insn = to;
+      delete from;
+      return;
+    }
+  }
+  always_assert_log(
+      false,
+      "No match found while replacing '%s' with '%s' in method %s",
+      SHOW(from),
+      SHOW(to),
+      show_short(m_method).c_str());
+}
+
 void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
+  always_assert_log(!is_branch(to->opcode()),
+                    "You may want replace_branch instead");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {

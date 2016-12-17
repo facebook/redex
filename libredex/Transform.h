@@ -327,6 +327,10 @@ class MethodTransform {
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(DexInstruction* from, DexInstruction* to);
 
+  /* Like replace_opcode, but both :from and :to must be branch opcodes.
+   * :to will end up jumping to the same destination as :from. */
+  void replace_branch(DexInstruction* from, DexInstruction* to);
+
   /* push_back will take ownership of insn */
   void push_back(DexInstruction* insn);
 

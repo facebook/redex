@@ -42,7 +42,9 @@ namespace {
     // Store dead instructions to be removed
     std::vector<DexInstruction*> dead_instructions;
     // Store pairs of intructions to be replaced
-    std::vector<std::pair<DexInstruction*, DexInstruction*>> replaces;
+    std::vector<std::pair<DexInstruction*, DexInstruction*>> replacements;
+    std::vector<std::pair<DexInstruction*, DexInstruction*>>
+        branch_replacements;
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
 
@@ -102,12 +104,18 @@ namespace {
             remove_constants();
           }
         }
-        for (auto const& p : replaces) {
+        for (auto const& p : replacements) {
           auto const& old_op = p.first;
           auto const& new_op = p.second;
           transform->replace_opcode(old_op, new_op);
         }
-        replaces.clear();
+        replacements.clear();
+        for (auto const& p : branch_replacements) {
+          auto const& old_op = p.first;
+          auto const& new_op = p.second;
+          transform->replace_branch(old_op, new_op);
+        }
+        branch_replacements.clear();
         for (auto dead: dead_instructions) {
           transform->remove_opcode(dead);
         }
@@ -123,8 +131,8 @@ namespace {
         case OPCODE_IF_EQZ:
           if (propagate_branch(inst)) {
             TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
-            auto new_inst = (new DexInstruction(OPCODE_GOTO_16))->set_offset(inst->offset());
-            replaces.emplace_back(inst, new_inst);
+            auto new_inst = new DexInstruction(OPCODE_GOTO_16);
+            branch_replacements.emplace_back(inst, new_inst);
             m_branch_propagated++;
             changed = true;
           }
@@ -146,8 +154,10 @@ namespace {
                 auto return_val = method_returns[referred_method->get_method()];
                 TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
                 m_method_return_propagated++;
-                auto new_inst = (new DexInstruction(OPCODE_CONST_16))->set_dest(inst->dest())->set_literal(return_val);
-                replaces.emplace_back(inst, new_inst);
+                auto new_inst = (new DexInstruction(OPCODE_CONST_16))
+                                    ->set_dest(inst->dest())
+                                    ->set_literal(return_val);
+                replacements.emplace_back(inst, new_inst);
                 dead_instructions.push_back(referred_method);
                 propagate_constant(new_inst);
               }
