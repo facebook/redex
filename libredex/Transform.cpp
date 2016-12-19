@@ -1786,7 +1786,8 @@ bool MethodTransform::try_sync() {
     auto try_start = active_try;
     active_try = nullptr;
 
-    always_assert(try_end->tentry->catch_start == try_start->tentry->catch_start);
+    always_assert(try_end->tentry->catch_start ==
+                  try_start->tentry->catch_start);
     auto insn_count = try_end->addr - try_start->addr;
     if (insn_count == 0) {
       continue;
