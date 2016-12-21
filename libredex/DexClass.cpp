@@ -175,7 +175,9 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     for (; it != entries.end() && it->addr == addr; ++it) {
       switch (it->type) {
         case DexDebugEntryType::Position:
-          positions.push_back(it->pos.get());
+          if (it->pos->file != nullptr) {
+            positions.push_back(it->pos.get());
+          }
           break;
         case DexDebugEntryType::Instruction:
           insns.push_back(it->insn.get());

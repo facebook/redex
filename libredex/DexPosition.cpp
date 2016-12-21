@@ -19,7 +19,6 @@ DexPosition::DexPosition(uint32_t line) : line(line), parent(nullptr) {}
 
 void DexPosition::bind(DexMethod* method, DexString* file) {
   always_assert(method != nullptr);
-  always_assert(file != nullptr);
   this->method = method;
   this->file = file;
 }
