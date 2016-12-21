@@ -753,6 +753,7 @@ void dump_enarr(ddump_data* rd) {
     if (maps[i].type == TYPE_ENCODED_ARRAY_ITEM) {
       auto ptr = (const uint8_t*)(rd->dexmmap + maps[i].offset);
       for (unsigned j = 0; j < maps[i].size; j++) {
+        redump((uint32_t)(ptr - (const uint8_t*)rd->dexmmap), ": ");
         uint32_t earray_size = read_uleb128(&ptr);
         for (uint32_t k = 0; k < earray_size; k++) {
           redump("%s", format_encoded_value(rd, &ptr).c_str());
