@@ -48,7 +48,7 @@ std::unique_ptr<PositionMap> read_map(const char* filename) {
   }
   uint32_t version = *(uint32_t*)mapping;
   mapping += sizeof(uint32_t);
-  if (version != 1) {
+  if (version != 2) {
     std::cerr << "Version mismatch\n";
     return nullptr;
   }
@@ -75,7 +75,10 @@ std::vector<Position> get_stack(const PositionMap& map, int64_t idx) {
   std::vector<Position> stack;
   while (idx >= 0 && (size_t)idx < map.positions_size) {
     auto pi = map.positions[idx];
-    stack.push_back(Position(map.string_pool[pi.file_id], pi.line));
+    stack.push_back(Position(map.string_pool[pi.class_id],
+                             map.string_pool[pi.method_id],
+                             map.string_pool[pi.file_id],
+                             pi.line));
     idx = (int64_t)pi.parent - 1;
   }
   return stack;

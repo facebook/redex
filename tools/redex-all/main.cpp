@@ -495,7 +495,10 @@ int main(int argc, char* argv[]) {
 
   auto pos_output =
       cfg.metafile(args.config.get("line_number_map", "").asString());
-  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(pos_output));
+  auto pos_output_v2 =
+      cfg.metafile(args.config.get("line_number_map_v2", "").asString());
+  std::unique_ptr<PositionMapper> pos_mapper(
+      PositionMapper::make(pos_output, pos_output_v2));
   for (auto& store : stores) {
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {

@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
 
   Json::Value json(Json::objectValue);
   ConfigFiles cfg(json);
-  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
   write_classes_to_dex(dex,
                        &classes,
                        nullptr /* LocatorIndex* */,

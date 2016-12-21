@@ -9,14 +9,15 @@ import zipfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument('apk', help='Input APK file')
-parser.add_argument('asset', help='File to add to assets/')
+parser.add_argument('assets', help='Files to add to assets/', nargs='+')
 parser.add_argument('--keystore')
 parser.add_argument('--keypass')
 parser.add_argument('--keyalias')
 args = parser.parse_args()
 
 with zipfile.ZipFile(args.apk, 'a') as zf:
-    zf.write(args.asset, os.path.join('assets', os.path.basename(args.asset)))
+    for asset in args.assets:
+        zf.write(asset, os.path.join('assets', os.path.basename(asset)))
 
 subprocess.check_call([
     'jarsigner',

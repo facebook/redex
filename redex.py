@@ -472,6 +472,7 @@ def run_redex(args):
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
     copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
+    copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map-v2', 'line number map v2', 'redex-line-number-map-v2')
     copy_file_to_out_dir(dex_dir, args.out, 'stats.txt', 'stats', 'redex-stats.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')

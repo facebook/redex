@@ -19,7 +19,8 @@ int main(int argc, char** argv) {
   auto map = read_map(argv[1]);
   for (size_t i = 0; i < map->positions_size; ++i) {
     auto pi = map->positions[i];
-    std::cout << map->string_pool[pi.file_id] << ":" << pi.line << " => "
-              << pi.parent << std::endl;
+    std::cout << map->string_pool[pi.class_id] << "."
+              << map->string_pool[pi.method_id] << map->string_pool[pi.file_id]
+              << ":" << pi.line << " => " << pi.parent << std::endl;
   }
 }
