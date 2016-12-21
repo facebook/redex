@@ -22,6 +22,18 @@ DexType* get_void_type() {
    return DexType::make_type("V");
 }
 
+DexType* get_byte_type() {
+  return DexType::make_type("B");
+}
+
+DexType* get_char_type() {
+  return DexType::make_type("C");
+}
+
+DexType* get_short_type() {
+  return DexType::make_type("S");
+}
+
 DexType* get_int_type() {
   return DexType::make_type("I");
 }
@@ -32,6 +44,10 @@ DexType* get_long_type() {
 
 DexType* get_boolean_type() {
   return DexType::make_type("Z");
+}
+
+DexType* get_float_type() {
+  return DexType::make_type("F");
 }
 
 DexType* get_double_type() {

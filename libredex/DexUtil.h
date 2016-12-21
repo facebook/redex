@@ -29,6 +29,21 @@ DexType* get_object_type();
 DexType* get_void_type();
 
 /**
+ * Return the DexType for a byte (B) type.
+ */
+DexType* get_byte_type();
+
+/**
+ * Return the DexType for a char (C) type.
+ */
+DexType* get_char_type();
+
+/**
+ * Return the DexType for a short (S) type.
+ */
+DexType* get_short_type();
+
+/**
  * Return the DexType for an int (I) type.
  */
 DexType* get_int_type();
@@ -42,6 +57,11 @@ DexType* get_long_type();
  * Return the DexType for a boolean (Z) type.
  */
 DexType* get_boolean_type();
+
+/**
+ * Return the DexType for a float (F) type.
+ */
+DexType* get_float_type();
 
 /**
  * Return the DexType for a double (D) type.

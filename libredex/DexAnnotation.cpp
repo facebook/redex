@@ -12,6 +12,7 @@
 #include "Debug.h"
 #include "DexIdx.h"
 #include "DexOutput.h"
+#include "DexUtil.h"
 
 void DexEncodedValueString::gather_strings(
     std::vector<DexString*>& lstring) const {
@@ -344,6 +345,47 @@ bool DexEncodedValue::is_evtype_primitive() const {
   default:
     return false;
   };
+}
+
+bool DexEncodedValue::is_zero() const {
+  switch (m_evtype) {
+    case DEVT_BYTE:
+    case DEVT_SHORT:
+    case DEVT_CHAR:
+    case DEVT_INT:
+    case DEVT_LONG:
+    case DEVT_FLOAT:
+    case DEVT_DOUBLE:
+    case DEVT_BOOLEAN:
+      return m_value == 0;
+    case DEVT_NULL:
+      return true;
+    default:
+      return false;
+  }
+}
+
+DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
+  if (type == get_byte_type()) {
+    return new DexEncodedValue(DEVT_BYTE, 0);
+  } else if (type == get_char_type()) {
+    return new DexEncodedValue(DEVT_CHAR, 0);
+  } else if (type == get_short_type()) {
+    return new DexEncodedValue(DEVT_SHORT, 0);
+  } else if (type == get_int_type()) {
+    return new DexEncodedValue(DEVT_INT, 0);
+  } else if (type == get_long_type()) {
+    return new DexEncodedValue(DEVT_LONG, 0);
+  } else if (type == get_float_type()) {
+    return new DexEncodedValue(DEVT_FLOAT, 0);
+  } else if (type == get_double_type()) {
+    return new DexEncodedValue(DEVT_FLOAT, 0);
+  } else if (type == get_boolean_type()) {
+    return new DexEncodedValueBit(DEVT_BOOLEAN, false);
+  } else {
+    // not a primitive
+    return new DexEncodedValueBit(DEVT_NULL, false);
+  }
 }
 
 DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,

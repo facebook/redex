@@ -37,17 +37,7 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
 
 void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   // FIXME assert if already concrete
-
-  // The last contiguous block of static fields with null values are not
-  // represented in the encoded value array, so v would be null for them here.
-  // OTOH null-initialized static fields that appear earlier in the static
-  // field list have explicit DEVT_NULL values. Let's standardize things here
-  // and represent all of them with a nullptr regardless of position.
-  if (v != nullptr && v->evtype() == DEVT_NULL) {
-    m_value = nullptr;
-  } else {
-    m_value = v;
-  }
+  m_value = v;
   m_access = access_flags;
   m_concrete = true;
 }
@@ -524,6 +514,13 @@ void DexClass::load_class_data_item(DexIdx* idx,
     if (svalues != nullptr) {
       ev = svalues->pop_next();
     }
+    // The last contiguous block of static fields with null values are not
+    // represented in the encoded value array, so ev would be null for them.
+    // OTOH null-initialized static fields that appear earlier in the static
+    // field list have explicit values. Let's standardize things here.
+    if (ev == nullptr) {
+      ev = DexEncodedValue::zero_for_type(df->get_type());
+    }
     df->make_concrete(access_flags, ev);
     m_sfields.push_back(df);
   }
@@ -764,11 +761,7 @@ DexEncodedValueArray* DexClass::get_static_values() {
   for (auto it = m_sfields.rbegin(); it != m_sfields.rend(); ++it) {
     auto const& f = *it;
     DexEncodedValue* ev = f->get_static_value();
-    if (ev == nullptr) {
-      if (has_static_values) {
-        aev->push_front(new DexEncodedValueBit(DEVT_NULL, false));
-      }
-    } else {
+    if (!ev->is_zero() || has_static_values) {
       has_static_values = true;
       aev->push_front(ev);
     }

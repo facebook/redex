@@ -86,6 +86,9 @@ class DexEncodedValue : public Gatherable {
     boost::hash_combine(seed, m_value);
     return seed;
   }
+
+  bool is_zero() const;
+  static DexEncodedValue* zero_for_type(DexType* type);
 };
 
 inline size_t hash_value(const DexEncodedValue& v) {
