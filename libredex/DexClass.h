@@ -129,8 +129,6 @@ class DexString {
 
   template <typename V>
   static void visit_all_dexstring(V v);
-
-  friend std::string show(const DexString*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -212,8 +210,6 @@ class DexType {
 
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
-
-  friend std::string show(const DexType*);
 
   template <typename V>
   static void visit_all_dextype(V v) {
@@ -343,7 +339,6 @@ class DexField {
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
-  friend std::string show(const DexField*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -405,8 +400,6 @@ class DexTypeList {
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
-
-  friend std::string show(const DexTypeList*);
 };
 
 inline bool compare_dextypelists(DexTypeList* a, DexTypeList* b) {
@@ -452,8 +445,6 @@ class DexProto {
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
-
-  friend std::string show(const DexProto*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -618,8 +609,6 @@ class DexCode {
    * instructions.
    */
   uint32_t size() const;
-
-  friend std::string show(const DexCode*);
 };
 
 struct DexMethodRef {
@@ -781,8 +770,7 @@ class DexMethod {
       m_anno = aset;
       return;
     }
-    always_assert_log(false, "attach_annotation_set failed for method %s\n",
-                      show_short(this).c_str());
+    always_assert_log(false, "attach_annotation_set failed for method %s\n", SHOW(this));
   }
   void attach_param_annotation_set(int paramno, DexAnnotationSet* aset) {
     if (m_param_anno.count(paramno) == 0 && m_concrete == false) {
@@ -791,7 +779,7 @@ class DexMethod {
     }
     always_assert_log(false, "attach_param_annotation_set failed for param %d "
                       "to method %s\n",
-                      paramno, show_short(this).c_str());
+                      paramno, SHOW(this));
   }
 
   void gather_types_shallow(std::vector<DexType*>& ltype) const;
@@ -801,9 +789,6 @@ class DexMethod {
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
-
-  friend std::string show(const DexMethod*);
-  friend std::string show_short(const DexMethod*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -928,8 +913,6 @@ class DexClass {
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
-
-  friend std::string show(const DexClass*);
 };
 
 class DexClasses {

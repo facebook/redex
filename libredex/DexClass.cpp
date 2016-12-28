@@ -1088,10 +1088,3 @@ uint32_t DexCode::size() const {
   }
   return size;
 }
-
-std::string show_short(const DexMethod* p) {
-  if (!p) return "";
-  std::stringstream ss;
-  ss << p->get_class()->get_name()->c_str() << "." << p->get_name()->c_str();
-  return ss.str();
-}

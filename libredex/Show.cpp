@@ -619,21 +619,28 @@ std::string show_opcode(const DexInstruction* insn) {
 
 std::string show(const DexString* p) {
   if (!p) return "";
-  return std::string(p->m_cstr);
+  return std::string(p->c_str());
 }
 
 std::string show(const DexType* p) {
   if (!p) return "";
-  return show(p->m_name);
+  return show(p->get_name());
 }
 
 std::string show(const DexField* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->m_access) << humanize(show(p->m_ref.type)) << " "
-     << humanize(show(p->m_ref.cls)) << "." << show(p->m_ref.name);
-  if (p->m_anno) {
-    ss << "\n  annotations:" << show(p->m_anno);
+  ss << show(p->get_class()) << "." << show(p->get_name()) << ":" << show(p->get_type());
+  return ss.str();
+}
+
+std::string vshow(const DexField* p) {
+  if (!p) return "";
+  std::stringstream ss;
+  ss << accessibility(p->get_access()) << humanize(show(p->get_type())) << " "
+     << humanize(show(p->get_class())) << "." << show(p->get_name());
+  if (p->get_anno_set()) {
+    ss << "\n  annotations:" << show(p->get_anno_set());
   }
   return ss.str();
 }
@@ -641,7 +648,7 @@ std::string show(const DexField* p) {
 std::string show(const DexTypeList* p) {
   if (!p) return "";
   std::stringstream ss;
-  for (auto const type : p->m_list) {
+  for (auto const type : p->get_type_list()) {
     ss << show(type);
   }
   return ss.str();
@@ -650,15 +657,15 @@ std::string show(const DexTypeList* p) {
 std::string show(const DexProto* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << "(" << show(p->m_args) << ")" << show(p->m_rtype);
+  ss << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
   return ss.str();
 }
 
 std::string show(const DexCode* code) {
   if (!code) return "";
   std::stringstream ss;
-  ss << "regs: " << code->m_registers_size << ", ins: " << code->m_ins_size
-     << ", outs: " << code->m_outs_size << "\n";
+  ss << "regs: " << code->get_registers_size() << ", ins: " << code->get_ins_size()
+     << ", outs: " << code->get_outs_size() << "\n";
   for (auto const& insn : code->get_instructions()) {
     ss << show(insn) << "\n";
   }
@@ -668,32 +675,46 @@ std::string show(const DexCode* code) {
 std::string show(const DexMethod* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->m_access, true) << humanize(show(p->m_ref.cls)) << "."
-     << show(p->m_ref.name) << show(p->m_ref.proto);
-  if (p->m_anno) {
-    ss << "\n  annotations:" << show(p->m_anno);
+  ss << show(p->get_class()) << "." << show(p->get_name()) << ":" << show(p->get_proto());
+  return ss.str();
+}
+
+std::string vshow(const DexMethod* p) {
+  if (!p) return "";
+  std::stringstream ss;
+  ss << accessibility(p->get_access(), true) << humanize(show(p->get_class())) << "."
+     << show(p->get_name()) << show(p->get_proto());
+  if (p->get_anno_set()) {
+    ss << "\n  annotations:" << show(p->get_anno_set());
   }
   bool first = true;
-  for (auto const pair : p->m_param_anno) {
-    if (first) {
-      ss << "\n  param annotations:"
-         << "\n";
-      first = false;
+  if (p->get_param_anno() != nullptr) {
+    for (auto const pair : *p->get_param_anno()) {
+      if (first) {
+        ss << "\n  param annotations:"
+           << "\n";
+        first = false;
+      }
+      ss << "    " << pair.first << ": " << show(pair.second) << "\n";
     }
-    ss << "    " << pair.first << ": " << show(pair.second) << "\n";
   }
   return ss.str();
 }
 
 std::string show(const DexClass* p) {
   if (!p) return "";
+  return show(p->get_type());
+}
+
+std::string vshow(const DexClass* p) {
+  if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->get_access()) << humanize(show(p->m_self))
-     << " extends " << humanize(show(p->m_super_class));
-  if (p->m_interfaces) {
+  ss << accessibility(p->get_access()) << humanize(show(p->get_type()))
+     << " extends " << humanize(show(p->get_super_class()));
+  if (p->get_interfaces()) {
     ss << " implements ";
     bool first = true;
-    for (auto const type : p->m_interfaces->get_type_list()) {
+    for (auto const type : p->get_interfaces()->get_type_list()) {
       if (first)
         first = false;
       else
@@ -701,8 +722,8 @@ std::string show(const DexClass* p) {
       ss << humanize(show(type));
     }
   }
-  if (p->m_anno) {
-    ss << "\n  annotations:" << show(p->m_anno);
+  if (p->get_anno_set()) {
+    ss << "\n  annotations:" << show(p->get_anno_set());
   }
   return ss.str();
 }

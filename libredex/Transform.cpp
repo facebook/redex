@@ -536,7 +536,7 @@ void MethodTransform::replace_branch(DexInstruction* from, DexInstruction* to) {
       "No match found while replacing '%s' with '%s' in method %s",
       SHOW(from),
       SHOW(to),
-      show_short(m_method).c_str());
+      SHOW(m_method));
 }
 
 void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
@@ -558,7 +558,7 @@ void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
       "No match found while replacing '%s' with '%s' in method %s",
       SHOW(from),
       SHOW(to),
-      show_short(m_method).c_str());
+      SHOW(m_method));
 }
 
 void MethodTransform::push_back(DexInstruction* insn) {
@@ -701,7 +701,7 @@ void MethodTransform::remove_opcode(DexInstruction* insn) {
   always_assert_log(false,
                     "No match found while removing '%s' from method %s",
                     SHOW(insn),
-                    show_short(m_method).c_str());
+                    SHOW(m_method));
 }
 
 FatMethod::iterator MethodTransform::main_block() { return m_fmethod->begin(); }

@@ -790,8 +790,7 @@ void DexOutput::generate_code_items(SortMode mode) {
     std::unique_ptr<DexCode>& code = meth->get_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
-        "Undefined method in generate_code_items()\n\t prototype: %s\n",
-        show_short(meth).c_str());
+        "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
     m_code_item_emits.emplace_back(code.get(),
