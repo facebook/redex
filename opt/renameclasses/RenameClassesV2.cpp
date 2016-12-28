@@ -35,6 +35,9 @@ static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
 static const char* METRIC_MISSING_HIERARCHY_TYPES = "num_missing_hierarchy_types";
 static const char* METRIC_MISSING_HIERARCHY_CLASSES = "num_missing_hierarchy_classes";
 
+static const char* JSON_DESERIALIZER = "Lcom/fasterxml/jackson/databind/JsonDeserializer;";
+static const char* JSON_SERIALIZER = "Lcom/fasterxml/jackson/databind/JsonSerializer;";
+
 static RenameClassesPassV2 s_pass;
 
 namespace {
@@ -310,6 +313,16 @@ void RenameClassesPassV2::build_dont_rename_hierarchies(
 void RenameClassesPassV2::build_dont_rename_serde_relationships(
   Scope& scope,
   std::set<DexType*>& dont_rename_serde_relationships) {
+  std::unordered_set<const DexType*> serdes;
+  auto json_deserializer = type_class(DexType::get_type(JSON_DESERIALIZER));
+  auto json_serializer = type_class(DexType::get_type(JSON_SERIALIZER));
+  if (json_deserializer) {
+    get_all_children_and_implementors(scope, json_deserializer, &serdes);
+  }
+  if (json_serializer) {
+    get_all_children_and_implementors(scope, json_serializer, &serdes);
+  }
+
   for (const auto& cls : scope) {
     const char* rawname = cls->get_name()->c_str();
     std::string name = std::string(rawname);
@@ -321,7 +334,9 @@ void RenameClassesPassV2::build_dont_rename_serde_relationships(
     std::string flatbuf_desername = name + "Deserializer;";
 
     DexType* deser = DexType::get_type(desername.c_str());
+    deser = serdes.count(deser) > 0 ? deser : nullptr;
     DexType* flatbuf_deser = DexType::get_type(flatbuf_desername.c_str());
+    flatbuf_deser = serdes.count(flatbuf_deser) > 0 ? flatbuf_deser : nullptr;
     bool has_deser_finder = false;
 
     if (deser || flatbuf_deser) {
@@ -339,7 +354,9 @@ void RenameClassesPassV2::build_dont_rename_serde_relationships(
     std::string flatbuf_sername = name + "Serializer;";
 
     DexType* ser = DexType::get_type(sername.c_str());
+    ser = serdes.count(ser) > 0 ? ser : nullptr;
     DexType* flatbuf_ser = DexType::get_type(flatbuf_sername.c_str());
+    flatbuf_ser = serdes.count(flatbuf_ser) > 0 ? flatbuf_ser : nullptr;
     bool has_ser_finder = false;
 
     if (ser || flatbuf_ser) {
