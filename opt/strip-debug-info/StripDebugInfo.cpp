@@ -12,6 +12,10 @@
 
 namespace {
 
+constexpr const char* METRIC_NUM_MATCHES = "num_method_matches";
+constexpr const char* METRIC_POS_DROPPED = "num_pos_dropped";
+constexpr const char* METRIC_VAR_DROPPED = "num_var_dropped";
+
 static int num_matches = 0;
 static int num_pos_dropped = 0;
 static int num_var_dropped = 0;
@@ -92,10 +96,16 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pas
       m_drop_all_dbg_info,
       m_drop_local_variables,
       m_drop_line_nrs);
+
   TRACE(DBGSTRIP, 1, "matched on %d methods. Removed %d dbg line entries and %d dbg local var entries\n",
       num_matches,
       num_pos_dropped,
       num_var_dropped);
+
+  mgr.incr_metric(METRIC_NUM_MATCHES, num_matches);
+  mgr.incr_metric(METRIC_POS_DROPPED, num_pos_dropped);
+  mgr.incr_metric(METRIC_VAR_DROPPED, num_var_dropped);
+
   strip_src_files(scope, m_drop_src_files);
 }
 

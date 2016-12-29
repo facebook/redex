@@ -33,6 +33,22 @@
 
 #include "SynthConfig.h"
 
+constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
+constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";
+constexpr const char* METRIC_CTORS_REMOVED = "constructors_removed_count";
+constexpr const char* METRIC_TOTAL_PASSES = "synth_opt_pass_count";
+
+struct SynthMetrics {
+  SynthMetrics()
+      : getters_removed_count(0),
+        wrappers_removed_count(0),
+        ctors_removed_count(0) {}
+
+  size_t getters_removed_count;
+  size_t wrappers_removed_count;
+  size_t ctors_removed_count;
+};
+
 bool is_static_synthetic(DexMethod* meth) {
   return is_static(meth) && is_synthetic(meth);
 }
@@ -692,7 +708,8 @@ void replace_wrappers(DexMethod* caller_method,
   }
 }
 
-void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
+void remove_dead_methods(
+  WrapperMethods& ssms, const SynthConfig& synthConfig, SynthMetrics& metrics) {
   bool any_remove = false;
   size_t synth_removed = 0;
   size_t other_removed = 0;
@@ -734,6 +751,9 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
   if (pub_meth) {
     TRACE(SYNT, 1, "Public getters removed %ld\n", pub_meth);
   }
+
+  metrics.getters_removed_count += (synth_removed + other_removed + pub_meth);
+
   synth_removed = 0;
   other_removed = 0;
   pub_meth = 0;
@@ -750,6 +770,9 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
   if (pub_meth) {
     TRACE(SYNT, 1, "Public wrappers removed %ld\n", pub_meth);
   }
+
+  metrics.wrappers_removed_count += (synth_removed + other_removed + pub_meth);
+
   synth_removed = 0;
   other_removed = 0;
   pub_meth = 0;
@@ -763,12 +786,17 @@ void remove_dead_methods(WrapperMethods& ssms, const SynthConfig& synthConfig) {
   if (pub_meth) {
     TRACE(SYNT, 1, "Public constructor removed %ld\n", pub_meth);
   }
+
+  metrics.ctors_removed_count += (synth_removed + pub_meth);
+
   assert(other_removed == 0);
   ssms.next_pass = ssms.next_pass && any_remove;
 }
 
 void transform(const std::vector<DexClass*>& classes,
-               WrapperMethods& ssms, const SynthConfig& synthConfig) {
+               WrapperMethods& ssms,
+               const SynthConfig& synthConfig,
+               SynthMetrics& metrics) {
   // remove wrappers.  build a vector ahead of time to ensure we only visit each
   // method once, even if we mutate the class method lists such that we'd hit
   // something a second time.
@@ -807,7 +835,7 @@ void transform(const std::vector<DexClass*>& classes,
             "Updated invoke on promoted to static %s\n in method %s",
             SHOW(wrappee), SHOW(meth));
       });
-  remove_dead_methods(ssms, synthConfig);
+  remove_dead_methods(ssms, synthConfig, metrics);
 }
 
 bool trace_analysis(WrapperMethods& ssms) {
@@ -845,10 +873,11 @@ bool trace_analysis(WrapperMethods& ssms) {
 }
 
 bool optimize(const std::vector<DexClass*>& classes,
-              const SynthConfig& synthConfig) {
+              const SynthConfig& synthConfig,
+              SynthMetrics& metrics) {
   auto ssms = analyze(classes, synthConfig);
   assert(trace_analysis(ssms));
-  transform(classes, ssms, synthConfig);
+  transform(classes, ssms, synthConfig, metrics);
   return ssms.next_pass;
 }
 
@@ -858,12 +887,22 @@ void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager&
     return;
   }
   Scope scope = build_class_scope(stores);
+  SynthMetrics metrics;
   int passes = 0;
   do {
     TRACE(SYNT, 1, "Synth removal, pass %d\n", passes);
-    bool more_opt_needed = optimize(scope, m_pass_config);
+    bool more_opt_needed = optimize(scope, m_pass_config, metrics);
     if (!more_opt_needed) break;
   } while (++passes < m_pass_config.max_passes);
+
+  mgr.incr_metric(
+    METRIC_GETTERS_REMOVED, metrics.getters_removed_count);
+  mgr.incr_metric(
+    METRIC_WRAPPERS_REMOVED, metrics.wrappers_removed_count);
+  mgr.incr_metric(
+    METRIC_CTORS_REMOVED, metrics.ctors_removed_count);
+  mgr.incr_metric(
+    METRIC_TOTAL_PASSES, passes);
 }
 
 static SynthPass s_pass;

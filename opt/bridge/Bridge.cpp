@@ -32,6 +32,8 @@
 
 namespace {
 
+constexpr const char* METRIC_BRIDGES_REMOVED = "bridges_removed_count";
+
 DexMethod* match_pattern(DexMethod* bridge) {
   auto& code = bridge->get_code();
   if (!code) return nullptr;
@@ -150,6 +152,7 @@ class BridgeRemover {
   };
 
   const std::vector<DexClass*>* m_scope;
+  PassManager& m_mgr;
   std::unordered_map<DexMethod*, DexMethod*> m_bridges_to_bridgees;
   std::unordered_multimap<MethodRef, DexMethod*, MethodRefHash>
       m_potential_bridgee_refs;
@@ -347,7 +350,8 @@ class BridgeRemover {
   }
 
  public:
-  BridgeRemover(const std::vector<DexClass*>& scope) : m_scope(&scope) {}
+  BridgeRemover(const std::vector<DexClass*>& scope, PassManager& mgr)
+      : m_scope(&scope), m_mgr(mgr) {}
 
   void run() {
     find_bridges();
@@ -359,6 +363,7 @@ class BridgeRemover {
     TRACE(BRIDGE, 1,
             "Inlined and removed %lu bridges\n",
             m_bridges_to_bridgees.size());
+    m_mgr.incr_metric(METRIC_BRIDGES_REMOVED, m_bridges_to_bridgees.size());
   }
 };
 
@@ -370,7 +375,7 @@ void BridgePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager
     return;
   }
   Scope scope = build_class_scope(stores);
-  BridgeRemover(scope).run();
+  BridgeRemover(scope, mgr).run();
 }
 
 static BridgePass s_pass;
