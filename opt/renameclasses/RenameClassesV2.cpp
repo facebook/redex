@@ -585,13 +585,13 @@ void RenameClassesPassV2::eval_classes(
       continue;
     }
 
-    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
-      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ProguardCantRename, norule };
+    if (dont_rename_serde_relationships.count(clazz->get_type()) > 0) {
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::SerdeRelationships, norule };
       continue;
     }
 
-    if (dont_rename_serde_relationships.count(clazz->get_type()) > 0) {
-      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::SerdeRelationships, norule };
+    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ProguardCantRename, norule };
       continue;
     }
   }
