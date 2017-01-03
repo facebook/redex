@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 #include <cstring>
 #include <list>
@@ -34,20 +35,15 @@ struct RedexContext;
 extern RedexContext* g_redex;
 
 struct RedexContext {
-  RedexContext()
-      : s_string_lock(PTHREAD_MUTEX_INITIALIZER),
-        s_type_lock(PTHREAD_MUTEX_INITIALIZER),
-        s_field_lock(PTHREAD_MUTEX_INITIALIZER),
-        s_typelist_lock(PTHREAD_MUTEX_INITIALIZER),
-        s_proto_lock(PTHREAD_MUTEX_INITIALIZER),
-        s_method_lock(PTHREAD_MUTEX_INITIALIZER)
-    {}
-
+  RedexContext();
   ~RedexContext();
 
   DexString* make_string(const char* nstr, uint32_t utfsize);
   DexString* get_string(const char* nstr, uint32_t utfsize);
   template <typename V> void visit_all_dexstring(V v);
+
+  static constexpr size_t kMaxPlaceholderString = 16;
+  DexString* get_placeholder_string(size_t index) const;
 
   DexType* make_type(DexString* dstring);
   DexType* get_type(DexString* dstring);
@@ -99,6 +95,8 @@ struct RedexContext {
   // DexString
   std::map<const char*, DexString*, carray_cmp> s_string_map;
   pthread_mutex_t s_string_lock;
+
+  std::array<DexString*, kMaxPlaceholderString> s_placeholder_strings;
 
   // DexType
   std::map<DexString*, DexType*> s_type_map;

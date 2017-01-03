@@ -483,9 +483,11 @@ class DexOpcodeString : public DexInstruction {
     m_has_strings = true;
   }
 
-  DexString* get_string() { return m_string; }
+  DexString* get_string() const { return m_string; }
 
   bool jumbo() const { return opcode() == OPCODE_CONST_STRING_JUMBO; }
+
+  void rewrite_string(DexString* str) { m_string = str; }
 };
 
 class DexOpcodeType : public DexInstruction {

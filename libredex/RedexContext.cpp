@@ -17,10 +17,25 @@
 
 RedexContext* g_redex;
 
+RedexContext::RedexContext()
+    : s_string_lock(PTHREAD_MUTEX_INITIALIZER),
+      s_type_lock(PTHREAD_MUTEX_INITIALIZER),
+      s_field_lock(PTHREAD_MUTEX_INITIALIZER),
+      s_typelist_lock(PTHREAD_MUTEX_INITIALIZER),
+      s_proto_lock(PTHREAD_MUTEX_INITIALIZER),
+      s_method_lock(PTHREAD_MUTEX_INITIALIZER) {
+  for (size_t i = 0; i < kMaxPlaceholderString; ++i) {
+    s_placeholder_strings[i] = DexString::make_placeholder();
+  }
+}
+
 RedexContext::~RedexContext() {
   // Delete DexStrings.
   for (auto const& p : s_string_map) {
     delete p.second;
+  }
+  for (auto const& s : s_placeholder_strings) {
+    delete s;
   }
   // Delete DexTypes.  NB: This table intentionally contains aliases (multiple
   // DexStrings map to the same DexType), so we have to dedup the set of types
@@ -86,6 +101,11 @@ DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   auto result = find != s_string_map.end() ? find->second : nullptr;
   pthread_mutex_unlock(&s_string_lock);
   return result;
+}
+
+DexString* RedexContext::get_placeholder_string(size_t index) const {
+  always_assert(index < kMaxPlaceholderString);
+  return s_placeholder_strings[index];
 }
 
 DexType* RedexContext::make_type(DexString* dstring) {

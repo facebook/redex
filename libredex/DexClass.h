@@ -80,6 +80,9 @@ class DexString {
     free(const_cast<char*>(m_cstr));
   }
 
+  // Only for placeholders
+  DexString() : m_cstr(nullptr), m_utfsize(0), m_strlen(0) {}
+
  public:
   uint32_t size() const { return m_strlen; }
   // DexString retrieval/creation
@@ -105,6 +108,10 @@ class DexString {
 
   static DexString* get_string(const char* nstr) {
     return get_string(nstr, (uint32_t)strlen(nstr));
+  }
+
+  static DexString* make_placeholder() {
+    return new DexString();
   }
 
  public:
