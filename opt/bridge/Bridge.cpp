@@ -33,6 +33,7 @@
 namespace {
 
 constexpr const char* METRIC_BRIDGES_REMOVED = "bridges_removed_count";
+constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 
 DexMethod* match_pattern(DexMethod* bridge) {
   auto& code = bridge->get_code();
@@ -358,6 +359,7 @@ class BridgeRemover {
     find_potential_bridgee_refs();
     exclude_referenced_bridgees();
     TRACE(BRIDGE, 5, "%lu bridges to optimize\n", m_bridges_to_bridgees.size());
+    m_mgr.incr_metric(METRIC_BRIDGES_TO_OPTIMIZE, m_bridges_to_bridgees.size());
     inline_bridges();
     delete_unused_bridgees();
     TRACE(BRIDGE, 1,

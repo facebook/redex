@@ -36,8 +36,8 @@
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
 constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";
 constexpr const char* METRIC_CTORS_REMOVED = "constructors_removed_count";
-constexpr const char* METRIC_TOTAL_PASSES = "synth_opt_pass_count";
 
+namespace {
 struct SynthMetrics {
   SynthMetrics()
       : getters_removed_count(0),
@@ -48,6 +48,7 @@ struct SynthMetrics {
   size_t wrappers_removed_count;
   size_t ctors_removed_count;
 };
+} // anonymous namespace
 
 bool is_static_synthetic(DexMethod* meth) {
   return is_static(meth) && is_synthetic(meth);
@@ -901,8 +902,6 @@ void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager&
     METRIC_WRAPPERS_REMOVED, metrics.wrappers_removed_count);
   mgr.incr_metric(
     METRIC_CTORS_REMOVED, metrics.ctors_removed_count);
-  mgr.incr_metric(
-    METRIC_TOTAL_PASSES, passes);
 }
 
 static SynthPass s_pass;
