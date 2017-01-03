@@ -408,6 +408,7 @@ public:
   PositionMapper* m_pos_mapper;
   std::string m_method_mapping_filename;
   std::string m_class_mapping_filename;
+  std::string m_pg_mapping_filename;
   std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
   std::map<DexClass*, uint32_t> m_cdi_offsets;
@@ -460,8 +461,9 @@ public:
     size_t dex_number,
     ConfigFiles& config_files,
     PositionMapper* pos_mapper,
-    std::string method_mapping_path,
-    std::string class_mapping_path);
+    const std::string& method_mapping_path,
+    const std::string& class_mapping_path,
+    const std::string& pg_mapping_path);
   ~DexOutput();
   void prepare(SortMode string_mode, SortMode code_mode);
   void write();
@@ -474,8 +476,9 @@ DexOutput::DexOutput(
   size_t dex_number,
   ConfigFiles& config_files,
   PositionMapper* pos_mapper,
-  std::string method_mapping_path,
-  std::string class_mapping_path)
+  const std::string& method_mapping_filename,
+  const std::string& class_mapping_filename,
+  const std::string& pg_mapping_filename)
     : m_config_files(config_files)
 {
   m_classes = classes;
@@ -486,8 +489,9 @@ DexOutput::DexOutput(
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
   m_pos_mapper = pos_mapper,
-  m_method_mapping_filename = method_mapping_path;
-  m_class_mapping_filename = class_mapping_path;
+  m_method_mapping_filename = method_mapping_filename;
+  m_class_mapping_filename = class_mapping_filename;
+  m_pg_mapping_filename = pg_mapping_filename;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
 }
@@ -1139,9 +1143,8 @@ void DexOutput::finalize_header() {
 namespace {
 
 void write_method_mapping(
-  std::string filename,
+  const std::string& filename,
   const DexOutputIdx* dodx,
-  const ProguardMap& proguard_map,
   size_t dex_number,
   uint32_t dex_checksum,
   uint8_t* dex_signature
@@ -1224,10 +1227,9 @@ void write_method_mapping(
 }
 
 void write_class_mapping(
-  std::string filename,
+  const std::string& filename,
   DexClasses* classes,
   const size_t class_defs_size,
-  const ProguardMap& proguard_map,
   const size_t dex_number,
   uint32_t dex_checksum,
   uint8_t* dex_signature
@@ -1258,13 +1260,40 @@ void write_class_mapping(
   fclose(fd);
 }
 
+void write_pg_mapping(const std::string& filename, DexClasses* classes) {
+  // TODO: this function only writes out class mappings for now, neglecting
+  // the method and field mappings entirely.
+  if (filename.empty()) return;
+  FILE* fd = fopen(filename.c_str(), "a");
+
+  auto deobf_class = [&](DexClass* cls) {
+    if (cls) {
+      auto deobname = cls->get_deobfuscated_name();
+      if (!deobname.empty()) return deobname;
+    }
+    return proguard_name(cls);
+  };
+
+  std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
+
+  for (auto cls : *classes) {
+    auto deobf = deobf_class(cls);
+    if (deobf != cls->get_type()->c_str()) {
+      ofs << JavaNameUtil::internal_to_external(deobf) << " -> "
+          << JavaNameUtil::internal_to_external(cls->get_type()->c_str())
+          << ":\n";
+    }
+  }
+
+  fclose(fd);
+}
+
 } // namespace
 
 void DexOutput::write_symbol_files() {
   write_method_mapping(
     m_method_mapping_filename,
     dodx,
-    m_config_files.get_proguard_map(),
     m_dex_number,
     hdr.checksum,
     hdr.signature
@@ -1273,10 +1302,13 @@ void DexOutput::write_symbol_files() {
     m_class_mapping_filename,
     m_classes,
     hdr.class_defs_size,
-    m_config_files.get_proguard_map(),
     m_dex_number,
     hdr.checksum,
     hdr.signature
+  );
+  write_pg_mapping(
+    m_pg_mapping_filename,
+    m_classes
   );
 }
 
@@ -1330,6 +1362,8 @@ write_classes_to_dex(
     json_cfg.get("method_mapping", "").asString());
   auto class_mapping_filename = cfg.metafile(
     json_cfg.get("class_mapping", "").asString());
+  auto pg_mapping_filename = cfg.metafile(
+    json_cfg.get("proguard_map_output", "").asString());
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   auto sort_bytecode = json_cfg.get("bytecode_sort_mode", "").asString();
   SortMode string_sort_mode = DEFAULT;
@@ -1350,7 +1384,8 @@ write_classes_to_dex(
     cfg,
     pos_mapper,
     method_mapping_filename,
-    class_mapping_filename);
+    class_mapping_filename,
+    pg_mapping_filename);
   dout.prepare(string_sort_mode, code_sort_mode);
   dout.write();
   return dout.m_stats;

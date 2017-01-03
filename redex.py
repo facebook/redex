@@ -226,54 +226,48 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     zipalign(unaligned_apk_path, output_apk_path)
 
 
-def merge_proguard_map_with_rename_output(
-        passes_list,
+def merge_proguard_maps(
+        redex_rename_map_path,
         input_apk_path,
         apk_output_path,
         dex_dir,
-        config_dict,
         pg_file):
     log('running merge proguard step')
-    if 'RenameClassesPass' in passes_list:
-        redex_rename_map_path = config_dict['RenameClassesPass']['class_rename']
-    elif 'RenameClassesPassV2' in passes_list:
-        redex_rename_map_path = config_dict['RenameClassesPassV2']['class_rename']
-    else:
-        raise ValueError("merge_proguard_map_with_rename_output called without a rename classes pass")
     redex_rename_map_path = join(dex_dir, redex_rename_map_path)
     log('redex map is at ' + str(redex_rename_map_path))
     log('pg map is at ' + str(pg_file))
-    if os.path.isfile(redex_rename_map_path):
-        redex_pg_file = "redex-class-rename-map.txt"
-        # If -dontobfuscate is set, proguard won't produce a mapping file, but
-        # buck will create an empty mapping.txt. Check for this case.
-        if pg_file and os.path.getsize(pg_file) > 0:
-            output_dir = os.path.dirname(apk_output_path)
-            output_file = output_file = join(output_dir, redex_pg_file)
-            update_proguard_mapping_file(
-                    pg_file,
-                    redex_rename_map_path,
-                    output_file,
-                    should_verify='RenameClassesPassV2' in passes_list)
-            log('merging proguard map with redex class rename map')
-            log('pg mapping file input is ' + str(pg_file))
-            log('wrote redex pg format mapping file to ' + str(output_file))
-        else:
-            log('no proguard map file found')
+    assert os.path.isfile(redex_rename_map_path)
+    redex_pg_file = "redex-class-rename-map.txt"
+    output_dir = os.path.dirname(apk_output_path)
+    output_file = join(output_dir, redex_pg_file)
+    # If -dontobfuscate is set, proguard won't produce a mapping file, but
+    # buck will create an empty mapping.txt. Check for this case.
+    if pg_file and os.path.getsize(pg_file) > 0:
+        update_proguard_mapping_file(
+                pg_file,
+                redex_rename_map_path,
+                output_file)
+        log('merging proguard map with redex class rename map')
+        log('pg mapping file input is ' + str(pg_file))
+        log('wrote redex pg format mapping file to ' + str(output_file))
     else:
-        log('Skipping merging of rename maps, since redex rename map file not found')
+        log('no proguard map file found')
+        shutil.move(redex_rename_map_path, output_file)
 
 
-def update_proguard_mapping_file(pg_map, redex_map, output_file, should_verify):
-    with open(pg_map, 'r') as pg_map, open(redex_map, 'r') as redex_map, open(output_file, 'w') as output:
+def update_proguard_mapping_file(pg_map, redex_map, output_file):
+    with open(pg_map, 'r') as pg_map,\
+            open(redex_map, 'r') as redex_map,\
+            open(output_file, 'w') as output:
+        cls_regex = re.compile(r'^(.*) -> (.*):')
         redex_dict = {}
         for line in redex_map:
-            pair = line.split(' -> ')
-            unmangled = pgize(pair[0])
-            mangled = pgize(pair[1])
+            match_obj = cls_regex.match(line)
+            unmangled = match_obj.group(1)
+            mangled = match_obj.group(2)
             redex_dict[unmangled] = mangled
         for line in pg_map:
-            match_obj = re.match(r'^(.*) -> (.*):', line)
+            match_obj = cls_regex.match(line)
             if match_obj:
                 unmangled = match_obj.group(1)
                 mangled = match_obj.group(2)
@@ -286,7 +280,7 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file, should_verify):
                     print(line.rstrip(), file=output)
             else:
                 print(line.rstrip(), file=output)
-        if should_verify and len(redex_dict) != 0:
+        if len(redex_dict) != 0:
             for unmangled in redex_dict.iterkeys():
                 log('Could not find %s in proguard map' % unmangled)
             raise Exception('Error when updating proguard map')
@@ -479,16 +473,16 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
 
-    if 'RenameClassesPass' in passes_list or 'RenameClassesPassV2' in passes_list:
-        merge_proguard_map_with_rename_output(
-            passes_list,
+    if config_dict.get('proguard_map_output', '') != '':
+        merge_proguard_maps(
+            config_dict['proguard_map_output'],
             args.input_apk,
             args.out,
             dex_dir,
-            config_dict,
             args.proguard_map)
     else:
-        log('Skipping rename map merging, because we didn\'t run the rename pass')
+        assert 'RenameClassesPass' not in passes_list and\
+                'RenameClassesPassV2' not in passes_list
 
     remove_temp_dirs()
 

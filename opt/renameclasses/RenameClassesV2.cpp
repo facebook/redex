@@ -473,7 +473,6 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
 void RenameClassesPassV2::eval_classes(
     Scope& scope,
     ConfigFiles& cfg,
-    const std::string& path,
     bool rename_annotations,
     PassManager& mgr) {
   std::set<std::string> dont_rename_class_for_name_literals;
@@ -580,15 +579,16 @@ void RenameClassesPassV2::eval_classes(
   }
 }
 
-void RenameClassesPassV2::eval_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
+                                    ConfigFiles& cfg,
+                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  eval_classes(scope, cfg, m_path, m_rename_annotations, mgr);
+  eval_classes(scope, cfg, m_rename_annotations, mgr);
 }
 
 void RenameClassesPassV2::rename_classes(
     Scope& scope,
     ConfigFiles& cfg,
-    const std::string& path,
     bool rename_annotations,
     PassManager& mgr) {
   // Make everything public
@@ -713,19 +713,6 @@ void RenameClassesPassV2::rename_classes(
     }
   });
 
-  if (!path.empty()) {
-    FILE* fd = fopen(path.c_str(), "w");
-    always_assert_log(fd, "Error writing rename file");
-    // record for later processing and back map generation
-    for (const auto& it : aliases.get_class_map()) {
-      auto cls = type_class(DexType::get_type(it.first));
-      fprintf(fd, "%s -> %s\n",
-              cls->get_deobfuscated_name().c_str(),
-              it.second->c_str());
-    }
-    fclose(fd);
-  }
-
   for (auto clazz : scope) {
     clazz->get_vmethods().sort(compare_dexmethods);
     clazz->get_dmethods().sort(compare_dexmethods);
@@ -736,9 +723,13 @@ void RenameClassesPassV2::rename_classes(
   sanity_check(scope, aliases);
 }
 
-void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RenameClassesPassV2::run_pass(DexStoresVector& stores,
+                                   ConfigFiles& cfg,
+                                   PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(RENAME, 1, "RenameCalssesV2Pass not run because no ProGuard configuration was provided.");
+    TRACE(RENAME, 1,
+          "RenameClassesPassV2 not run because no ProGuard configuration was "
+          "provided.");
     return;
   }
   auto scope = build_class_scope(stores);
@@ -750,8 +741,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pa
   // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
   s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
 
-  m_path = cfg.metafile(m_path);
-  rename_classes(scope, cfg, m_path, m_rename_annotations, mgr);
+  rename_classes(scope, cfg, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 

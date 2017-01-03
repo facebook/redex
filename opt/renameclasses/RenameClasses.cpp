@@ -143,7 +143,6 @@ void rename_classes(
     Scope& scope,
     std::vector<std::string>& pre_whitelist_patterns,
     std::vector<std::string>& post_whitelist_patterns,
-    const std::string& path,
     std::unordered_set<const DexType*>& untouchables,
     ProguardMap& proguard_map,
     bool rename_annotations,
@@ -246,20 +245,6 @@ void rename_classes(
     }
   });
 
-  if (!path.empty()) {
-    FILE* fd = fopen(path.c_str(), "w");
-    if (fd == nullptr) {
-      perror("Error writing rename file");
-      return;
-    }
-    for (const auto &it : aliases) {
-      // record for later processing and back map generation
-      fprintf(fd, "%s -> %s\n",it.first->c_str(),
-      it.second->c_str());
-    }
-    fclose(fd);
-  }
-
   for (auto clazz : scope) {
     clazz->get_vmethods().sort(compare_dexmethods);
     clazz->get_dmethods().sort(compare_dexmethods);
@@ -280,10 +265,9 @@ void RenameClassesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, Pass
       untouchables.insert(children.begin(), children.end());
     }
   }
-  m_path = cfg.metafile(m_path);
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
   rename_classes(
-      scope, m_pre_filter_whitelist, m_post_filter_whitelist, m_path,
+      scope, m_pre_filter_whitelist, m_post_filter_whitelist,
       untouchables, cfg.get_proguard_map(), m_rename_annotations, mgr);
   TRACE(RENAME, 1,
       "renamed classes: %d anon classes, %d from single char patterns, "

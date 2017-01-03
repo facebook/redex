@@ -36,7 +36,6 @@ class RenameClassesPassV2 : public Pass {
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("class_rename", "", m_path);
     pc.get("rename_annotations", false, m_rename_annotations);
     pc.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
     pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
@@ -67,11 +66,16 @@ class RenameClassesPassV2 : public Pass {
   void build_dont_rename_serde_relationships(Scope& scope, std::set<DexType*>& dont_rename_serde_relationships);
   void build_dont_rename_annotated(std::set<DexType*, dextypes_comparator>& dont_rename_annotated);
 
-  void eval_classes(Scope& scope, ConfigFiles& cfg, const std::string& path, bool rename_annotations, PassManager& mgr);
-  void rename_classes(Scope& scope, ConfigFiles& cfg, const std::string& path, bool rename_annotations, PassManager& mgr);
+  void eval_classes(Scope& scope,
+                    ConfigFiles& cfg,
+                    bool rename_annotations,
+                    PassManager& mgr);
+  void rename_classes(Scope& scope,
+                      ConfigFiles& cfg,
+                      bool rename_annotations,
+                      PassManager& mgr);
 
   // Config and rules
-  std::string m_path;
   bool m_rename_annotations;
   std::vector<std::string> m_dont_rename_hierarchies;
   std::vector<std::string> m_dont_rename_annotated;
