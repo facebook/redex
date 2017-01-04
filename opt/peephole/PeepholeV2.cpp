@@ -446,7 +446,7 @@ struct Matcher {
           clone->set_literal((a == b) ? 1L : 0L);
         } else if (literal == kLiteral16_StringLength_A) {
           const auto& a = check_and_get(matched_args, string_A());
-          clone->set_literal(static_cast<const DexString*>(a)->size());
+          clone->set_literal(static_cast<const DexString*>(a)->length());
         } else {
           always_assert_log(false, "Unexpected literal 0x%x", literal);
         }

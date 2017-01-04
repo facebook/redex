@@ -26,6 +26,17 @@
 #include "Util.h"
 #include "Warning.h"
 
+uint32_t DexString::length() const {
+  if (is_simple()) {
+    return size();
+  }
+  uint32_t len = 0;
+  for (auto p = m_cstr; *p != '\0'; ++len) {
+    mutf8_next_code_point(p);
+  }
+  return len;
+}
+
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
   uint16_t* typep = (uint16_t*)(output + 1);
   *output = (uint32_t) m_list.size();
