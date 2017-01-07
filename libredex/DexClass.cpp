@@ -21,6 +21,7 @@
 #include "DexDefs.h"
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
+#include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Util.h"
@@ -415,6 +416,13 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
   return (int) (hemit - ((uint8_t*)output));
+}
+
+size_t hash_value(const DexMethodRef& r) {
+  size_t seed = boost::hash<DexType*>()(r.cls);
+  boost::hash_combine(seed, r.name);
+  boost::hash_combine(seed, r.proto);
+  return seed;
 }
 
 DexMethod* DexMethod::make_method_from(DexMethod* that,

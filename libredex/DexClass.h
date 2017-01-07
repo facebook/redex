@@ -622,13 +622,6 @@ class DexCode {
   uint32_t size() const;
 };
 
-struct DexMethodRef {
-  /* Method Ref related members */
-  DexType* cls = nullptr;
-  DexString* name = nullptr;
-  DexProto* proto = nullptr;
-};
-
 class DexMethod {
   friend struct RedexContext;
 
@@ -644,15 +637,13 @@ class DexMethod {
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexMethod(DexType* type, DexString* name, DexProto* proto) {
+  DexMethod(DexType* type, DexString* name, DexProto* proto)
+      : m_ref(type, name, proto) {
     m_concrete = false;
     m_virtual = false;
     m_external = false;
     m_anno = nullptr;
     m_code = nullptr;
-    m_ref.cls = type;
-    m_ref.name = name;
-    m_ref.proto = proto;
     m_access = static_cast<DexAccessFlags>(0);
   }
 

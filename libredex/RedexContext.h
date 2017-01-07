@@ -18,6 +18,8 @@
 #include <pthread.h>
 #include <unordered_map>
 
+#include "DexMemberRefs.h"
+
 class DexDebugInstruction;
 class DexString;
 class DexType;
@@ -27,7 +29,6 @@ class DexProto;
 class DexMethod;
 class DexClass;
 struct DexFieldRef;
-struct DexMethodRef;
 struct DexDebugEntry;
 struct DexPosition;
 struct RedexContext;
@@ -117,8 +118,7 @@ struct RedexContext {
   pthread_mutex_t s_proto_lock;
 
   // DexMethod
-  std::map<DexType*, std::map<DexString*, std::map<DexProto*, DexMethod*>>>
-      s_method_map;
+  std::unordered_map<DexMethodRef, DexMethod*> s_method_map;
   pthread_mutex_t s_method_lock;
 
   // Type-to-class map and class hierarchy

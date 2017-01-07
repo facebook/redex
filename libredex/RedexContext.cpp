@@ -66,12 +66,8 @@ RedexContext::~RedexContext() {
     }
   }
   // Delete DexMethods.
-  for (auto const& p1 : s_method_map) {
-    for (auto const& p2 : p1.second) {
-      for (auto const& p3 : p2.second) {
-        delete p3.second;
-      }
-    }
+  for (auto const& it : s_method_map) {
+    delete it.second;
   }
 }
 
@@ -258,14 +254,16 @@ DexMethod* RedexContext::make_method(DexType* type,
                                      DexProto* proto) {
   always_assert(type != nullptr && name != nullptr && proto != nullptr);
   DexMethod* rv;
+  DexMethodRef r(type, name, proto);
   pthread_mutex_lock(&s_method_lock);
-  if (s_method_map[type][name].count(proto) == 0) {
+  auto it = s_method_map.find(r);
+  if (it == s_method_map.end()) {
     rv = new DexMethod(type, name, proto);
-    s_method_map[type][name][proto] = rv;
+    s_method_map.emplace(r, rv);
     pthread_mutex_unlock(&s_method_lock);
     return rv;
   }
-  rv = s_method_map[type][name][proto];
+  rv = it->second;
   pthread_mutex_unlock(&s_method_lock);
   return rv;
 }
@@ -276,21 +274,23 @@ DexMethod* RedexContext::get_method(DexType* type,
   if (type == nullptr || name == nullptr || proto == nullptr) {
     return nullptr;
   }
+  DexMethodRef r(type, name, proto);
   // Still need to perform the locking in case a make_method call on another
   // thread is modifying the map.
   pthread_mutex_lock(&s_method_lock);
-  if (s_method_map[type][name].count(proto) == 0) {
+  auto it = s_method_map.find(r);
+  if (it == s_method_map.end()) {
     pthread_mutex_unlock(&s_method_lock);
     return nullptr;
   }
-  DexMethod* rv = s_method_map[type][name][proto];
+  DexMethod* rv = it->second;
   pthread_mutex_unlock(&s_method_lock);
   return rv;
 }
 
-void RedexContext::erase_method(DexMethod* meth) {
+void RedexContext::erase_method(DexMethod* method) {
   pthread_mutex_lock(&s_method_lock);
-  s_method_map[meth->get_class()][meth->get_name()].erase(meth->get_proto());
+  s_method_map.erase(method->m_ref);
   pthread_mutex_unlock(&s_method_lock);
 }
 
@@ -298,27 +298,25 @@ void RedexContext::mutate_method(DexMethod* method,
                                  const DexMethodRef& ref,
                                  bool rename_on_collision /* = false */) {
   pthread_mutex_lock(&s_method_lock);
-  s_method_map[method->m_ref.cls][method->m_ref.name].erase(
-      method->m_ref.proto);
+  DexMethodRef& r = method->m_ref;
+  s_method_map.erase(r);
 
-  DexMethodRef r;
   r.cls = ref.cls != nullptr ? ref.cls : method->m_ref.cls;
   r.name = ref.name != nullptr ? ref.name : method->m_ref.name;
   r.proto = ref.proto != nullptr ? ref.proto : method->m_ref.proto;
-  if (s_method_map[r.cls][r.name][r.proto] && rename_on_collision) {
+  if (s_method_map.find(r) != s_method_map.end() && rename_on_collision) {
     std::string original_name(r.name->c_str());
     for (uint16_t i = 0; i < 1000; ++i) {
       r.name = DexString::make_string(
           (original_name + "$redex" + std::to_string(i)).c_str());
-      if (!s_method_map[r.cls][r.name][r.proto]) {
+      if (s_method_map.find(r) == s_method_map.end()) {
         break;
       }
     }
   }
-  always_assert_log(!s_method_map[r.cls][r.name][r.proto],
+  always_assert_log(s_method_map.find(r) == s_method_map.end(),
                     "Another method of the same signature already exists");
-  method->m_ref = r;
-  s_method_map[r.cls][r.name][r.proto] = method;
+  s_method_map.emplace(r, method);
   pthread_mutex_unlock(&s_method_lock);
 }
 
