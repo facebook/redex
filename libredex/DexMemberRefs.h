@@ -29,6 +29,21 @@ struct DexMethodRef {
   }
 };
 
+struct DexFieldRef {
+  /* Field Ref related members */
+  DexType* cls = nullptr;
+  DexString* name = nullptr;
+  DexType* type = nullptr;
+
+  DexFieldRef() = default;
+  DexFieldRef(DexType* cls, DexString* name, DexType* type)
+      : cls(cls), name(name), type(type) {}
+
+  bool operator==(const DexFieldRef& r) const {
+    return cls == r.cls && name == r.name && type  == r.type;
+  };
+};
+
 namespace std {
 
 template <>
@@ -37,6 +52,16 @@ struct hash<DexMethodRef> {
     size_t seed = boost::hash<DexType*>()(r.cls);
     boost::hash_combine(seed, r.name);
     boost::hash_combine(seed, r.proto);
+    return seed;
+  }
+};
+
+template <>
+struct hash<DexFieldRef> {
+  size_t operator()(const DexFieldRef& r) const {
+    size_t seed = boost::hash<DexType*>()(r.cls);
+    boost::hash_combine(seed, r.name);
+    boost::hash_combine(seed, r.type);
     return seed;
   }
 };

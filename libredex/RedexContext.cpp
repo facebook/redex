@@ -48,12 +48,8 @@ RedexContext::~RedexContext() {
     delete t;
   }
   // Delete DexFields.
-  for (auto const& p1 : s_field_map) {
-    for (auto const& p2 : p1.second) {
-      for (auto const& p3 : p2.second) {
-        delete p3.second;
-      }
-    }
+  for (auto const& it : s_field_map) {
+    delete it.second;
   }
   // Delete DexTypeLists.
   for (auto const& p : s_typelist_map) {
@@ -148,15 +144,19 @@ DexField* RedexContext::make_field(const DexType* container,
   always_assert(container != nullptr && name != nullptr && type != nullptr);
   DexField* rv;
   pthread_mutex_lock(&s_field_lock);
-  if (s_field_map[container][name].count(type) == 0) {
+  DexFieldRef r(const_cast<DexType*>(container),
+                const_cast<DexString*>(name),
+                const_cast<DexType*>(type));
+  auto it = s_field_map.find(r);
+  if (it == s_field_map.end()) {
     rv = new DexField(const_cast<DexType*>(container),
                       const_cast<DexString*>(name),
                       const_cast<DexType*>(type));
-    s_field_map[container][name][type] = rv;
+    s_field_map.emplace(r, rv);
     pthread_mutex_unlock(&s_field_lock);
     return rv;
   }
-  rv = s_field_map[container][name][type];
+  rv = it->second;
   pthread_mutex_unlock(&s_field_lock);
   return rv;
 }
@@ -167,14 +167,17 @@ DexField* RedexContext::get_field(const DexType* container,
   if (container == nullptr || name == nullptr || type == nullptr) {
     return nullptr;
   }
+  DexFieldRef r(const_cast<DexType*>(container),
+                const_cast<DexString*>(name),
+                const_cast<DexType*>(type));
   // Still need to perform the locking in case a make_method call on another
   // thread is modifying the map.
   pthread_mutex_lock(&s_field_lock);
-  if (s_field_map[container][name].count(type) == 0) {
+  if (s_field_map.find(r) == s_field_map.end()) {
     pthread_mutex_unlock(&s_field_lock);
     return nullptr;
   }
-  DexField* rv = s_field_map[container][name][type];
+  DexField* rv = s_field_map.at(r);
   pthread_mutex_unlock(&s_field_lock);
   return rv;
 }
@@ -182,14 +185,13 @@ DexField* RedexContext::get_field(const DexType* container,
 void RedexContext::mutate_field(DexField* field,
                                 const DexFieldRef& ref) {
   pthread_mutex_lock(&s_field_lock);
-  s_field_map[field->m_ref.cls][field->m_ref.name].erase(
-      field->m_ref.type);
-  DexFieldRef r;
+  DexFieldRef& r = field->m_ref;
+  s_field_map.erase(r);
   r.cls = ref.cls != nullptr ? ref.cls : field->m_ref.cls;
   r.name = ref.name != nullptr ? ref.name : field->m_ref.name;
   r.type = ref.type != nullptr ? ref.type : field->m_ref.type;
   field->m_ref = r;
-  s_field_map[r.cls][r.name][r.type] = field;
+  s_field_map.emplace(r, field);
   pthread_mutex_unlock(&s_field_lock);
 }
 

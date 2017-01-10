@@ -104,9 +104,7 @@ struct RedexContext {
   pthread_mutex_t s_type_lock;
 
   // DexField
-  std::map<const DexType*,
-           std::map<const DexString*, std::map<const DexType*, DexField*>>>
-      s_field_map;
+  std::unordered_map<DexFieldRef, DexField*> s_field_map;
   pthread_mutex_t s_field_lock;
 
   // DexTypeList

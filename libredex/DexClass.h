@@ -239,13 +239,6 @@ struct dextypes_comparator {
   }
 };
 
-struct DexFieldRef {
-  /* Field Ref related members */
-  DexType* cls = nullptr;
-  DexString* name = nullptr;
-  DexType* type = nullptr;
-};
-
 class DexField {
   friend struct RedexContext;
 
