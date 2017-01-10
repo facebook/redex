@@ -95,29 +95,29 @@ struct RedexContext {
 
   // DexString
   std::map<const char*, DexString*, carray_cmp> s_string_map;
-  pthread_mutex_t s_string_lock;
+  std::mutex s_string_lock;
 
   std::array<DexString*, kMaxPlaceholderString> s_placeholder_strings;
 
   // DexType
   std::map<DexString*, DexType*> s_type_map;
-  pthread_mutex_t s_type_lock;
+  std::mutex s_type_lock;
 
   // DexField
   std::unordered_map<DexFieldRef, DexField*> s_field_map;
-  pthread_mutex_t s_field_lock;
+  std::mutex s_field_lock;
 
   // DexTypeList
   std::map<std::list<DexType*>, DexTypeList*> s_typelist_map;
-  pthread_mutex_t s_typelist_lock;
+  std::mutex s_typelist_lock;
 
   // DexProto
   std::map<DexType*, std::map<DexTypeList*, DexProto*>> s_proto_map;
-  pthread_mutex_t s_proto_lock;
+  std::mutex s_proto_lock;
 
   // DexMethod
   std::unordered_map<DexMethodRef, DexMethod*> s_method_map;
-  pthread_mutex_t s_method_lock;
+  std::mutex s_method_lock;
 
   // Type-to-class map and class hierarchy
   std::mutex m_type_system_mutex;
@@ -130,18 +130,16 @@ struct RedexContext {
 
 template <typename V>
 void RedexContext::visit_all_dexstring(V v) {
-  pthread_mutex_lock(&s_string_lock);
+  std::lock_guard<std::mutex> lock(s_string_lock);
   for (auto const& p : s_string_map) {
     v(p.second);
   }
-  pthread_mutex_unlock(&s_string_lock);
 }
 
 template <typename V>
 void RedexContext::visit_all_dextype(V v) {
-  pthread_mutex_lock(&s_type_lock);
+  std::lock_guard<std::mutex> lock(s_type_lock);
   for (auto const& p : s_type_map) {
     v(p.second);
   }
-  pthread_mutex_unlock(&s_type_lock);
 }
