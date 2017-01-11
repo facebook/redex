@@ -112,7 +112,8 @@ libredex_la_LIBADD = \
 #
 # redex-all: the main executable
 #
-bin_PROGRAMS = redex-all redexdump
+bin_PROGRAMS = redexdump
+noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
 	opt/annoclasskill/AnnoClassKill.cpp \
@@ -177,11 +178,12 @@ redexdump_LDADD = \
 #
 bin_SCRIPTS = redex apkutil
 CLEANFILES = redex
-EXTRA_DIST = redex.py
 
-redex: redex.py Makefile
-	cp $(srcdir)/redex.py redex
-	chmod +x redex
+PYTHON_SRCS := redex.py \
+	pyredex/__init__.py \
+	pyredex/log.py \
+	pyredex/unpacker.py \
+	pyredex/utils.py
 
-install-exec-hook:
-	cp -r $(srcdir)/pyredex $(DESTDIR)$(bindir)
+redex: redex-all $(PYTHON_SRCS)
+	$(srcdir)/bundle-redex.sh
