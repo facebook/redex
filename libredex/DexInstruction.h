@@ -673,7 +673,6 @@ inline bool is_branch(DexOpcode op) {
   case OPCODE_IF_LEZ:
   case OPCODE_GOTO_16:
   case OPCODE_GOTO:
-  case OPCODE_FILL_ARRAY_DATA:
     return true;
   default:
     return false;

@@ -253,12 +253,6 @@ class LocalDce {
     if (first == b->end()) {
       return false;
     }
-    for (auto last = b->rbegin(); last != b->rend(); ++last) {
-      if (last->type == MFLOW_OPCODE &&
-          last->insn->opcode() == FOPCODE_FILLED_ARRAY) {
-        return false;
-      }
-    }
     // Skip if it contains nothing but debug info.
     for (; first != b->end(); ++first) {
       if (first->type != MFLOW_DEBUG || first->type != MFLOW_POSITION) {

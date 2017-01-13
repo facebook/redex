@@ -148,8 +148,8 @@ MethodTransform* MethodTransform::get_method_transform(
       return mt;
     }
   }
-  FatMethod* fm = balloon(method);
-  MethodTransform* mt = new MethodTransform(method, fm);
+  MethodTransform* mt = new MethodTransform(method);
+  mt->balloon();
   if (want_cfg) {
     mt->build_cfg(end_block_before_throw);
   }
@@ -161,11 +161,10 @@ MethodTransform* MethodTransform::get_method_transform(
 }
 
 MethodTransform* MethodTransform::get_new_method(DexMethod* method) {
-  return new MethodTransform(method, new FatMethod());
+  return new MethodTransform(method);
 }
 
 namespace {
-typedef std::unordered_map<uint32_t, MethodItemEntry*> addr_mei_t;
 
 int bytecount(int32_t v) {
   int bytecount = 4;
@@ -225,7 +224,7 @@ DexOpcode invert_conditional_branch(DexOpcode op) {
 }
 
 static MethodItemEntry* get_target(MethodItemEntry* mei,
-                                   addr_mei_t& addr_to_mei) {
+                                   const addr_mei_t& addr_to_mei) {
   uint32_t base = mei->addr;
   int offset = mei->insn->offset();
   uint32_t target = base + offset;
@@ -237,7 +236,7 @@ static MethodItemEntry* get_target(MethodItemEntry* mei,
       offset,
       target,
       SHOW(mei->insn));
-  return addr_to_mei[target];
+  return addr_to_mei.at(target);
 }
 
 static void insert_mentry_before(FatMethod* fm,
@@ -304,6 +303,8 @@ bool encode_offset(FatMethod* fm,
       delete insn;
       return false;
     }
+  } else {
+    always_assert_log(false, "Unexpected opcode %s", SHOW(*branch_op_mie));
   }
   branch_op_mie->insn->set_offset(offset);
   return true;
@@ -398,6 +399,33 @@ static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
   }
 }
 
+/*
+ * Store the pseudo opcodes representing fill-array-data-payload in a separate
+ * hashtable instead of in-line with the rest of the method body.
+ */
+void gather_array_data(
+    FatMethod* fm,
+    addr_mei_t& addr_to_mei,
+    std::unordered_map<DexInstruction*, DexOpcodeData*>* m_array_data) {
+  std::unordered_set<MethodItemEntry*> to_delete;
+  for (MethodItemEntry& mentry : *fm) {
+    if (mentry.type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto insn = mentry.insn;
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      auto target = get_target(&mentry, addr_to_mei);
+      auto fopcode = static_cast<DexOpcodeData*>(target->insn);
+      m_array_data->emplace(insn, fopcode);
+      to_delete.emplace(target);
+      addr_to_mei.erase(target->addr);
+    }
+  }
+  for (auto mentry : to_delete) {
+    fm->erase(fm->iterator_to(*mentry));
+  }
+}
+
 static void associate_debug_entries(FatMethod* fm,
                                     DexDebugItem& dbg,
                                     addr_mei_t& addr_to_mei) {
@@ -472,35 +500,34 @@ bool has_aliased_arguments(DexInstruction* invoke) {
 
 }
 
-FatMethod* MethodTransform::balloon(DexMethod* method) {
-  auto& code = method->get_code();
+void MethodTransform::balloon() {
+  auto& code = m_method->get_code();
   if (code == nullptr) {
-    return nullptr;
+    return;
   }
-  TRACE(MTRANS, 2, "Ballooning %s\n", SHOW(method));
+  TRACE(MTRANS, 2, "Ballooning %s\n", SHOW(m_method));
   auto instructions = code->release_instructions();
   addr_mei_t addr_to_mei;
 
-  FatMethod* fm = new FatMethod();
   uint32_t addr = 0;
   for (auto insn : *instructions) {
     // NOPs are used for alignment, which FatMethod doesn't care about
     if (insn->opcode() != OPCODE_NOP) {
       MethodItemEntry* mei = new MethodItemEntry(insn);
-      fm->push_back(*mei);
+      m_fmethod->push_back(*mei);
       addr_to_mei[addr] = mei;
       mei->addr = addr;
       TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     }
     addr += insn->size();
   }
-  generate_branch_targets(fm, addr_to_mei);
-  associate_try_items(fm, *code, addr_to_mei);
+  generate_branch_targets(m_fmethod, addr_to_mei);
+  gather_array_data(m_fmethod, addr_to_mei, &m_array_data);
+  associate_try_items(m_fmethod, *code, addr_to_mei);
   auto& debugitem = code->get_debug_item();
   if (debugitem) {
-    associate_debug_entries(fm, *debugitem, addr_to_mei);
+    associate_debug_entries(m_fmethod, *debugitem, addr_to_mei);
   }
-  return fm;
 }
 
 void MethodTransform::remove_branch_target(DexInstruction *branch_inst) {
@@ -1160,18 +1187,6 @@ MethodItemEntry* find_active_catch(FatMethod* method,
     ? pos->tentry->catch_start : nullptr;
 }
 
-/*
- * Returns an iterator that points one past the end of the last real opcode.
- */
-FatMethod::iterator after_last_real_opcode(FatMethod* fm) {
-  auto last =
-      std::find_if(fm->rbegin(), fm->rend(), [](const MethodItemEntry& mei) {
-        return mei.type == MFLOW_TRY ||
-               (mei.type == MFLOW_OPCODE && !is_fopcode(mei.insn->opcode()));
-      });
-  return last.base();
-}
-
 /**
  * Return a RegSet indicating the registers that the callee interferes with
  * either via a check-cast to or by writing to one of the ins.
@@ -1390,7 +1405,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
     splice(fcaller,
-           after_last_real_opcode(fcaller),
+           fcaller->end(),
            std::next(ret_it),
            fcallee->end());
     if (caller_catch != nullptr) {
@@ -1545,8 +1560,7 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     bool fallthrough = true;
     if (lastmei->type == MFLOW_OPCODE) {
       auto lastop = lastmei->insn->opcode();
-      if (is_goto(lastop) || is_conditional_branch(lastop) ||
-          is_multi_branch(lastop)) {
+      if (is_branch(lastop)) {
         fallthrough = !is_goto(lastop);
         auto const& targets = branch_to_targets[&*lastmei];
         for (auto target : targets) {
@@ -1648,10 +1662,6 @@ bool MethodTransform::try_sync() {
     TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
     mentry->addr = addr;
     if (mentry->type == MFLOW_OPCODE) {
-      if ((mentry->insn->opcode() == FOPCODE_FILLED_ARRAY) && (addr & 1)) {
-        opout.push_back(new DexInstruction(OPCODE_NOP));
-        ++addr;
-      }
       addr_to_mei[addr] = mentry;
       TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
       opout.push_back(mentry->insn);
@@ -1682,10 +1692,6 @@ bool MethodTransform::try_sync() {
       } else if (bt->type == BRANCH_SIMPLE) {
         MethodItemEntry* branch_op_mie = bt->src;
         int32_t branchoffset = mentry->addr - branch_op_mie->addr;
-        if ((branch_op_mie->insn->opcode() == OPCODE_FILL_ARRAY_DATA) &&
-            (mentry->addr & 1)) {
-          ++branchoffset; // account for nop spacer
-        }
         needs_resync |= !encode_offset(m_fmethod, branch_op_mie, branchoffset);
       }
     }
@@ -1750,6 +1756,25 @@ bool MethodTransform::try_sync() {
       multiopcode->insn->set_offset(addr - multiopcode->addr);
       multiopcode->insn->set_opcode(OPCODE_PACKED_SWITCH);
       addr += count;
+    }
+  }
+
+  TRACE(MTRANS, 5, "Emitting filled array data\n");
+  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
+    MethodItemEntry* mentry = &*miter;
+    if (mentry->type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto insn = mentry->insn;
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      if (addr & 1) {
+        opout.push_back(new DexInstruction(OPCODE_NOP));
+        ++addr;
+      }
+      insn->set_offset(addr - mentry->addr);
+      auto fopcode = m_array_data.at(insn);
+      opout.push_back(fopcode);
+      addr += fopcode->size();
     }
   }
 

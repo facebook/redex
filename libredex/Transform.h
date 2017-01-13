@@ -223,19 +223,23 @@ class PostOrderSort {
 
 class InlineContext;
 
+namespace {
+  typedef std::unordered_map<uint32_t, MethodItemEntry*> addr_mei_t;
+}
+
 class MethodTransform {
  private:
   using FatMethodCache = std::unordered_map<DexMethod*, MethodTransform*>;
 
-  MethodTransform(DexMethod* method, FatMethod* fm)
-    : m_method(method),
-      m_fmethod(fm)
-  {}
+  explicit MethodTransform(DexMethod* method)
+      : m_method(method), m_fmethod(new FatMethod()) {}
 
   ~MethodTransform();
 
-  /* Create a FatMethod from a DexMethod. */
-  static FatMethod* balloon(DexMethod* method);
+  /* Create a FatMethod from a DexMethod. FatMethods are easier to manipulate.
+   * E.g. they don't require manual updating of address offsets, and they don't
+   * contain pseudo-opcodes. */
+  void balloon();
 
   /* try_sync() is the work-horse of sync.  It's intended such that it can fail
    * in the event that an opcode needs to be resized.  In that instance, it
@@ -264,6 +268,9 @@ class MethodTransform {
 
   DexMethod* m_method;
   FatMethod* m_fmethod;
+  // mapping from fill-array-data opcodes to the pseudo opcodes containing the
+  // array contents
+  std::unordered_map<DexInstruction*, DexOpcodeData*> m_array_data;
   std::vector<Block*> m_blocks;
 
  private:

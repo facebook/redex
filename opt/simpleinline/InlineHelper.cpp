@@ -347,7 +347,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
       info.throws++;
       return true;
     }
-    if (insn->opcode() == FOPCODE_FILLED_ARRAY) {
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
       info.array_data++;
       return true;
     }
