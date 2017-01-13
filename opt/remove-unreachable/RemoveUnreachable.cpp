@@ -192,8 +192,8 @@ struct UnreachableCodeRemover {
     t->gather_types(types);
     t->gather_fields(fields);
     t->gather_methods(methods);
-    for (auto const& t : types) {
-      push(t);
+    for (auto const& type : types) {
+      push(type);
     }
     for (auto const& f : fields) {
       push(f);
