@@ -18,7 +18,7 @@ class ShortenSrcStringsPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get(
       "filename_mappings",
-      "/tmp/filename_mappings.txt",
+      "filename_mappings.txt",
       m_filename_mappings);
   }
 
