@@ -24,7 +24,7 @@ xcode-select --install
 Install dependences using homebrew:
 ```
 brew install autoconf automake libtool python3
-brew install boost double-conversion gflags glog libevent jsoncpp
+brew install boost jsoncpp
 ```
 
 ### Ubuntu 14.04 LTS (64-bit)
@@ -36,13 +36,8 @@ sudo apt-get install \
     autoconf-archive \
     libtool \
     libboost-all-dev \
-    libevent-dev \
-    libdouble-conversion-dev \
-    libgoogle-glog-dev \
-    libgflags-dev \
     liblz4-dev \
     liblzma-dev \
-    libsnappy-dev \
     make \
     zlib1g-dev \
     binutils-dev \
