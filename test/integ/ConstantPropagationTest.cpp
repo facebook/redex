@@ -149,7 +149,8 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   TRACE(CONSTP, 2, "Code after:\n");
   for(const auto& cls : classes) {
     TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
-    ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
+// Disabled due to return prop being disabled
+//    ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
         TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
@@ -163,13 +164,15 @@ TEST(ConstantPropagationTest1, constantpropagation) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
           for (auto const instruction : dm->get_code()->get_instructions()) {
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
-            ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
+// Disabled due to return prop being disabled
+//          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
           }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
           for (auto const instruction : dm->get_code()->get_instructions()) {
-            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
-            ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
+// Disabled due to return prop being disabled
+//            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
+//          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
           }
         }
       }

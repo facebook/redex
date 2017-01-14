@@ -146,7 +146,8 @@ namespace {
         // Check if there is a constant returned. If so, propagate the value
         case OPCODE_MOVE_RESULT:
           reg_values[inst->dest()].known = false;
-          if (last_inst != nullptr &&
+          if (false && // deactivate return propagation for now
+              last_inst != nullptr &&
               last_inst->opcode() == OPCODE_INVOKE_STATIC &&
               last_inst->has_methods()) {
               DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
