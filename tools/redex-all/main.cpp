@@ -358,9 +358,9 @@ void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
 }
 
 int main(int argc, char* argv[]) {
-  signal(SIGSEGV, crash_backtrace);
-  signal(SIGABRT, crash_backtrace);
-  signal(SIGBUS, crash_backtrace);
+  signal(SIGSEGV, crash_backtrace_handler);
+  signal(SIGABRT, crash_backtrace_handler);
+  signal(SIGBUS, crash_backtrace_handler);
 
   Timer t("redex-all main()");
 

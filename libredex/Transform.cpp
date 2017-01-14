@@ -149,7 +149,12 @@ MethodTransform* MethodTransform::get_method_transform(
     }
   }
   MethodTransform* mt = new MethodTransform(method);
-  mt->balloon();
+  try {
+    mt->balloon();
+  } catch (std::exception& e) {
+    fprintf(stderr, "Caught exception while ballooning %s\n", SHOW(method));
+    throw;
+  }
   if (want_cfg) {
     mt->build_cfg(end_block_before_throw);
   }

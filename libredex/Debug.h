@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "Show.h"
+
 constexpr bool debug =
 #ifdef NDEBUG
     false
@@ -52,4 +54,4 @@ void assert_fail(const char* expr,
 #define assert_log(e, msg, ...) always_assert_log(e, msg, ##__VA_ARGS__)
 #endif // NDEBUG
 
-void crash_backtrace(int sig);
+void crash_backtrace_handler(int sig);
