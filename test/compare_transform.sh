@@ -45,14 +45,15 @@ function strip_cruft() {
         sed 's/method@[0-9a-f]*/method@/' | \
         sed 's/field@[0-9a-f]*/field@/' | \
         sed 's/0x[0-9a-f]* line=[0-9]*//' | \
-        sed 's/^|[0-9a-f]*:/|:/' \
+        sed 's/^|[0-9a-f]*:/|:/' | \
+        sed '/^\s*$/d' \
         > "$OUT"
 }
 
 strip_cruft "$DEXDUMP $INPUT" "$OUTA"
 strip_cruft "$DEXDUMP $REDEXOUT" "$OUTB"
 
-diff --speed-large-files -u $OUTA $OUTB | tee $OUTDIFF
+diff --speed-large-files -u $OUTA $OUTB > $OUTDIFF
 if [ $? == 0 ]; then
 	echo "The dexes are equivalent"
 	exit 0;
