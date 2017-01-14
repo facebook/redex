@@ -227,6 +227,8 @@ namespace {
   typedef std::unordered_map<uint32_t, MethodItemEntry*> addr_mei_t;
 }
 
+class MethodSplicer;
+
 class MethodTransform {
  private:
   using FatMethodCache = std::unordered_map<DexMethod*, MethodTransform*>;
@@ -358,6 +360,8 @@ class MethodTransform {
     return m_fmethod->erase(it);
   }
   friend std::string show(const MethodTransform*);
+
+  friend class MethodSplicer;
 };
 
 /*

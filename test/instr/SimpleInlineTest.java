@@ -298,4 +298,16 @@ public class SimpleInlineTest {
   public void testCalleeRefsPrivateClass() {
     (new SimpleInlineOtherPackage()).inlineMe();
   }
+
+  private int[] calleeWithFillArray() {
+    int[] a = {2, 3, 4};
+    return a;
+  }
+
+  @Test
+  public void testFillArrayOpcode() {
+    int[] a = {4, 5, 6};
+    int[] b = calleeWithFillArray();
+    assertThat(a[0]).isEqualTo(b[2]);
+  }
 }

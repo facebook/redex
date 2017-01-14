@@ -212,7 +212,6 @@ class MultiMethodInliner {
     size_t more_than_16regs{0};
     size_t try_catch_block{0};
     size_t throws{0};
-    size_t array_data{0};
     size_t multi_ret{0};
     size_t need_vmethod{0};
     size_t invoke_super{0};

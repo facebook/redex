@@ -137,7 +137,6 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   TRACE(SINL, 3, "unknown field %ld\n", inliner.get_info().escaped_field);
   TRACE(SINL, 3, "non public field %ld\n", inliner.get_info().non_pub_field);
   TRACE(SINL, 3, "throws %ld\n", inliner.get_info().throws);
-  TRACE(SINL, 3, "array data %ld\n", inliner.get_info().array_data);
   TRACE(SINL, 3, "multiple returns %ld\n", inliner.get_info().multi_ret);
   TRACE(SINL, 3, "reference outside of primary %ld\n",
       inliner.get_info().not_in_primary);

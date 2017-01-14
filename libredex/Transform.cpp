@@ -1041,10 +1041,14 @@ void cleanup_callee_debug(FatMethod* fcallee) {
   }
 }
 
+}
+
 /*
  * For splicing a callee's FatMethod into a caller.
  */
 class MethodSplicer {
+  MethodTransform* m_mtcaller;
+  MethodTransform* m_mtcallee;
   // We need a map of MethodItemEntry we have created because a branch
   // points to another MethodItemEntry which may have been created or not
   std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
@@ -1056,10 +1060,14 @@ class MethodSplicer {
   std::unordered_set<uint16_t> m_valid_dbg_regs;
 
  public:
-  MethodSplicer(const RegMap& callee_reg_map,
+  MethodSplicer(MethodTransform* mtcaller,
+                MethodTransform* mtcallee,
+                const RegMap& callee_reg_map,
                 DexPosition* invoke_position,
                 MethodItemEntry* active_catch)
-      : m_callee_reg_map(callee_reg_map),
+      : m_mtcaller(mtcaller),
+        m_mtcallee(mtcallee),
+        m_callee_reg_map(callee_reg_map),
         m_invoke_position(invoke_position),
         m_active_catch(active_catch) {
     m_entry_map[nullptr] = nullptr;
@@ -1085,6 +1093,10 @@ class MethodSplicer {
       return cloned_mei;
     case MFLOW_OPCODE:
       cloned_mei->insn = cloned_mei->insn->clone();
+      if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+        m_mtcaller->m_array_data.emplace(
+            cloned_mei->insn, m_mtcallee->m_array_data.at(mei->insn)->clone());
+      }
       return cloned_mei;
     case MFLOW_TARGET:
       cloned_mei->target = new BranchTarget(*cloned_mei->target);
@@ -1102,10 +1114,10 @@ class MethodSplicer {
     not_reached();
   }
 
-  void operator()(FatMethod* fcaller,
-                  FatMethod::iterator insert_pos,
+  void operator()(FatMethod::iterator insert_pos,
                   FatMethod::iterator fcallee_start,
                   FatMethod::iterator fcallee_end) {
+    auto fcaller = m_mtcaller->m_fmethod;
     for (auto it = fcallee_start; it != fcallee_end; ++it) {
       if (should_skip_debug(&*it)) {
         continue;
@@ -1184,6 +1196,8 @@ class MethodSplicer {
     }
   }
 };
+
+namespace {
 
 MethodItemEntry* find_active_catch(FatMethod* method,
                                    FatMethod::iterator pos) {
@@ -1363,12 +1377,16 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  auto splice = MethodSplicer(callee_reg_map, invoke_position.get(), caller_catch);
+  auto splice = MethodSplicer(*context.mtcaller,
+                              *mtcallee,
+                              callee_reg_map,
+                              invoke_position.get(),
+                              caller_catch);
   auto ret_it = std::find_if(
       fcallee->begin(), fcallee->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
-  splice(fcaller, pos, fcallee->begin(), ret_it);
+  splice(pos, fcallee->begin(), ret_it);
 
   // try items can span across a return opcode
   auto callee_catch = splice.clone(find_active_catch(fcallee, ret_it));
@@ -1409,10 +1427,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     }
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
-    splice(fcaller,
-           fcaller->end(),
-           std::next(ret_it),
-           fcallee->end());
+    splice(fcaller->end(), std::next(ret_it), fcallee->end());
     if (caller_catch != nullptr) {
       fcaller->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }

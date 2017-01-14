@@ -385,3 +385,19 @@ TEST_F(PostVerify, testCalleeRefsPrivateClass) {
       "Lcom/facebook/redexinline/otherpackage/SimpleInlineOtherPackage$Bar;");
   EXPECT_TRUE(is_public(other_pkg_cls));
 }
+
+TEST_F(PreVerify, testFillArrayOpcode) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_vmethod_named(*cls, "testFillArrayOpcode");
+  EXPECT_NE(nullptr,
+            find_invoke(m, OPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
+}
+
+TEST_F(PostVerify, testFillArrayOpcode) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_vmethod_named(*cls, "testFillArrayOpcode");
+  EXPECT_EQ(nullptr,
+            find_invoke(m, OPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
+}

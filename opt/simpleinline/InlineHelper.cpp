@@ -347,10 +347,6 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
       info.throws++;
       return true;
     }
-    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      info.array_data++;
-      return true;
-    }
     if (is_return(insn->opcode())) ret_count++;
   }
   // no callees that have more than a return statement (normally one, the
