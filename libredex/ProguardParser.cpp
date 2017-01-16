@@ -779,7 +779,8 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     // -forceprocessing not supported
 
     // Keep Options
-    if (parse_keep(&it, token::keep,
+    if (parse_keep(&it,
+                   token::keep,
                    &pg_config->keep_rules,
                    true,
                    false,
@@ -885,6 +886,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     // Obfuscation Options
     if ((*it)->type == token::dontobfuscate) {
       pg_config->dontobfuscate = true;
+      ++it;
+      continue;
+    }
+    // Redex ignores -dontskipnonpubliclibraryclasses
+    if ((*it)->type == token::dontskipnonpubliclibraryclasses) {
       ++it;
       continue;
     }

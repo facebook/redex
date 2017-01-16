@@ -77,6 +77,7 @@ enum class token {
   libraryjars,
   keepdirectories,
   target,
+  dontskipnonpubliclibraryclasses,
 
   // Keep Options
   keep,
@@ -499,6 +500,14 @@ class Target : public Token {
  public:
   Target(unsigned int line_number) : Token(token::target, line_number) {}
   string show() const override { return "-target "; }
+  bool is_command() const override { return true; }
+};
+
+class DontSkipNonPublicLibraryClasses : public Token {
+ public:
+  DontSkipNonPublicLibraryClasses(unsigned int line_number)
+      : Token(token::dontskipnonpubliclibraryclasses, line_number) {}
+  string show() const override { return "-dontskipnonpubliclibraryclasses"; }
   bool is_command() const override { return true; }
 };
 
