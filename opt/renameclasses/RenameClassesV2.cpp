@@ -75,7 +75,8 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
     case DontRenameReasonCode::Annotated:
     case DontRenameReasonCode::Packages:
     case DontRenameReasonCode::Hierarchy:
-      return true;
+      // Set to true to add more detailed metrics for renamer if needed
+      return false;
     default:
       return false;
   }
