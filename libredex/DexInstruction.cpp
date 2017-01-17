@@ -165,7 +165,9 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f30t:
   case FMT_f31i:
   case FMT_f31c:
+  case FMT_f3rc:
   case FMT_f51l:
+  case FMT_f5rc:
   case FMT_f41c_d:
   case FMT_fopcode:
     return 0;
@@ -179,10 +181,8 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f22c_d:
   case FMT_f32x:
   case FMT_f31t:
-  case FMT_f3rc:
   case FMT_f41c_s:
   case FMT_f52c_d:
-  case FMT_f5rc:
     return 1;
   case FMT_f12x_2:
   case FMT_f23x_d:
@@ -651,10 +651,6 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     }
     return this;
   case FMT_f22x:
-  case FMT_f3rc:
-    assert(i == 0);
-    m_arg[0] = vreg;
-    return this;
   case FMT_f23x_d:
     assert(i < 2);
     assert((vreg & 0xff) == vreg);
@@ -724,10 +720,6 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
   case FMT_f52c_s:
     assert(i <= 1);
     m_arg[i] = vreg;
-    return this;
-  case FMT_f5rc:
-    assert(i == 0);
-    m_arg[1] = vreg;
     return this;
   case FMT_f57c:
     assert(i <= 6);

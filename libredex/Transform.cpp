@@ -879,6 +879,13 @@ void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
 void remap_registers(DexInstruction* insn, const RegMap& reg_map) {
   remap_dest(insn, reg_map);
   remap_srcs(insn, reg_map);
+
+  if (insn->has_range()) {
+    auto it = reg_map.find(insn->range_base());
+    if (it != reg_map.end()) {
+      insn->set_range_base(it->second);
+    }
+  }
 }
 
 void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {

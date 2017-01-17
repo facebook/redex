@@ -546,6 +546,9 @@ std::unique_ptr<DexCode>& MethodCreator::to_code() {
       for (int i = 0; i < static_cast<int>(insn->srcs_size()); i++) {
         insn->set_src(i, get_real_reg_num(insn->src(i)));
       }
+      if (insn->has_range()) {
+        insn->set_range_base(get_real_reg_num(insn->range_base()));
+      }
     }
   }
   while (!meth_code->try_sync())

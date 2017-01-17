@@ -38,6 +38,9 @@ void drop_this(DexMethod* method) {
         insn->set_src(i, src - 1);
       }
     }
+    if (insn->has_range() && insn->range_base() > this_reg) {
+      insn->set_range_base(insn->range_base() - 1);
+    }
   }
 }
 }
