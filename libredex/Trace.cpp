@@ -21,14 +21,22 @@
 namespace {
 
 struct Tracer {
+
+  bool m_show_timestamps{false};
+
   Tracer() {
     const char* traceenv = getenv("TRACE");
     const char* envfile = getenv("TRACEFILE");
+    const char* show_timestamps = getenv("SHOW_TIMESTAMPS");
     if (!traceenv) {
       return;
     }
     init_trace_modules(traceenv);
     init_trace_file(envfile);
+
+    if (show_timestamps) {
+      m_show_timestamps = true;
+    }
   }
 
   ~Tracer() {
@@ -42,6 +50,13 @@ struct Tracer {
   }
 
   void trace(const char* fmt, va_list ap) {
+    if (m_show_timestamps) {
+      char buf[26];
+      auto t = time(nullptr);
+      ctime_r(&t, buf);
+      buf[strlen(buf) - 1] = '\0';
+      fprintf(m_file, "[%s] ", buf);
+    }
     vfprintf(m_file, fmt, ap);
     fflush(m_file);
   }
