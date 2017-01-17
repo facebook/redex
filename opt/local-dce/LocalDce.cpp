@@ -253,13 +253,7 @@ class LocalDce {
     if (first == b->end()) {
       return false;
     }
-    // Skip if it contains nothing but debug info.
-    for (; first != b->end(); ++first) {
-      if (first->type != MFLOW_DEBUG || first->type != MFLOW_POSITION) {
-        return true;
-      }
-    }
-    return false;
+    return true;
   }
 
   void remove_block(MethodTransform* transform, Block* b) {
