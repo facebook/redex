@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DexClass.h"
@@ -72,27 +73,49 @@
 //
 namespace {
 
-struct Pattern {
-  std::vector<const DexInstruction*> match;
-  std::vector<const DexInstruction*> replace;
+struct DexPattern {
+  const std::unordered_set<uint16_t> opcodes;
+  const std::vector<uint16_t> srcs;
+  const std::vector<uint16_t> dests;
+
+  const enum class Kind {
+    none,
+    method,
+    string,
+    literal,
+  } kind;
+
+  DexMethod* const method;
+  DexString* const string;
+  int8_t const literal;
 };
 
-// We need placeholders for 'match' patterns. For instance, "const/4 kRegA, #B",
-// has two placeholder indexes: (1) kRegA: a placeholder for register; (2) B:
-// a placeholder of literal.
-//
-static constexpr uint16_t kRegA = 0x01;
-static constexpr uint16_t kRegB = 0x02;
-static constexpr uint16_t kRegC = 0x03;
-static constexpr uint16_t kRegD = 0x03;
+struct Pattern {
+  const std::string name;
+  const std::vector<DexPattern> match;
+  const std::vector<DexPattern> replace;
+};
 
-static constexpr int64_t kLiteralA = 0x01;
+// We need placeholders for 'pattern'. For instance, "const/4 kRegA, #B", has
+// two placeholder indexes: (1) kRegA: a placeholder for register;
+// (2) #B: a placeholder of literal.
+//
+// Register placeholders: it reserves even numbers for wide pairs.
+static constexpr uint16_t kRegA = 0x01;
+static constexpr uint16_t kRegB = 0x03;
+static constexpr uint16_t kRegC = 0x05;
+static constexpr uint16_t kRegD = 0x07;
+
+// OPCODE_CONST_4 can only accept a 4-bit literal value while CONST_16/CONST
+// allow larger numbers. Let's keep within 4-bit so that it can be used for all
+// CONST-* family.
+static constexpr int8_t kLiteralA = 0x1;
 
 // String placeholders for 'match' patterns. Returns a unique DexString
-// pointers. They are constant memory leaks. It's ugly.
+// pointers as an identifier.
 DexString* string_A() { return g_redex->get_placeholder_string(0); }
-
 DexString* string_B() { return g_redex->get_placeholder_string(1); }
+DexString* string_empty() { return g_redex->get_placeholder_string(2); }
 
 // We need special markers for 'replace' patterns. For instance, a special
 // literal index to specify the length of 'string_A'.
@@ -107,171 +130,348 @@ DexString* long_int_A_to_string() {
 }
 DexString* float_A_to_string() { return g_redex->get_placeholder_string(12); }
 DexString* double_A_to_string() { return g_redex->get_placeholder_string(13); }
+DexString* concat_A_B_strings() { return g_redex->get_placeholder_string(14); }
+DexString* concat_string_A_int_A() {
+  return g_redex->get_placeholder_string(15);
+}
+DexString* concat_string_A_boolean_A() {
+  return g_redex->get_placeholder_string(16);
+}
+DexString* concat_string_A_long_int_A() {
+  return g_redex->get_placeholder_string(17);
+}
+DexString* concat_string_A_char_A() {
+  return g_redex->get_placeholder_string(18);
+}
 
 // Compare string_A and string_B and write the result as a 4-bit integer.
-static constexpr int64_t kLiteral4_StringCompare_A_B = 0x01;
+static constexpr int8_t kLiteral4_StringCompare_A_B = 0x2;
 // Get the length of string_A and write the result as a 16-bit integer.
-static constexpr int64_t kLiteral16_StringLength_A = 0x02;
+static constexpr int8_t kLiteral16_StringLength_A = 0x3;
+
+// Just a minimal refactor for long string constants.
+static const char* LjavaString = "Ljava/lang/String;";
+static const char* LjavaStringBuilder = "Ljava/lang/StringBuilder;";
+static const char* LjavaObject = "Ljava/lang/Object;";
 
 ////////////////////////////////////////////////////////////////////////////////
 // The patterns
-// - Refer to InstructionSequenceConstants::STRING in ProGuard.
 const std::vector<Pattern>& get_patterns() {
-  // Just an alias
-  DexMethod* (&M)(
-      const char*, const char*, const char*, std::vector<const char*>) =
-      DexMethod::make_method;
-
-  // TODO: We could implement "dpattern" like "dasm".
-  static const std::vector<Pattern> kPatterns = {
-      {{// Pattern 1: this checks to see if two literal strings are identical.
-        // "stringA".equals("stringB") ==> true or false
-        (new DexOpcodeString(OPCODE_CONST_STRING, string_A()))->set_dest(kRegA),
-        (new DexOpcodeString(OPCODE_CONST_STRING, string_B()))->set_dest(kRegB),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_VIRTUAL,
-             M("Ljava/lang/String;", "equals", "Z", {"Ljava/lang/Object;"}),
-             0))
-            ->set_arg_word_count(2)
-            ->set_src(0, kRegA)
-            ->set_src(1, kRegB),
-        (new DexInstruction(OPCODE_MOVE_RESULT))->set_dest(kRegC)},
-       {// Compare string A and B and put the constant.
-        (new DexInstruction(OPCODE_CONST_4))
-            ->set_dest(kRegC)
-            ->set_literal(kLiteral4_StringCompare_A_B)}},
-
-      {{// Pattern 2: this compile time evaluates the length of a literal
-        // string.
-        // "stringA".length() ==> length_of_stringA
-        (new DexOpcodeString(OPCODE_CONST_STRING, string_A()))->set_dest(kRegA),
-        (new DexOpcodeMethod(OPCODE_INVOKE_VIRTUAL,
-                             M("Ljava/lang/String;", "length", "I", {}),
-                             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT))->set_dest(kRegB)},
-       {// length_of_stringA
-        (new DexInstruction(OPCODE_CONST_16))
-            ->set_dest(kRegB)
-            ->set_literal(kLiteral16_StringLength_A)}},
-
-      {{// Pattern 3: this compile time evaluates true/false for valueof calls.
-        // String.valueof(true/false) ==> "true" or "false"
-        (new DexInstruction(OPCODE_CONST_4))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"Z"}),
-             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(boolean)
-        (new DexOpcodeString(OPCODE_CONST_STRING, boolean_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 4: calling valueof on a literal character is the character
-        // itself.
-        // String.valueof(char) ==> "char"
-        (new DexInstruction(OPCODE_CONST_16))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"C"}),
-             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(char)
-        (new DexOpcodeString(OPCODE_CONST_STRING, char_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 5: calling valueof on a literal number destined for a short
-        // container can be replaced by the short literal.
-        // String.valueof(short) ==> "short"
-        (new DexInstruction(OPCODE_CONST_16))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"I"}),
-             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(int)
-        (new DexOpcodeString(OPCODE_CONST_STRING, int_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 6: likewise, but for int values
-        // String.valueof(int) ==> "int"
-        (new DexInstruction(OPCODE_CONST))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"I"}),
-             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(int)
-        (new DexOpcodeString(OPCODE_CONST_STRING, int_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 7: likewise, but for long int values
-        // String.valueof(long int) ==> "long int"
-        (new DexInstruction(OPCODE_CONST_WIDE))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"J"}),
-             0))
-            ->set_arg_word_count(2)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(long int)
-        (new DexOpcodeString(OPCODE_CONST_STRING, long_int_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 8: likewise, but for float values
-        // String.valueof(float) ==> "float"
-        (new DexInstruction(OPCODE_CONST))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"F"}),
-             0))
-            ->set_arg_word_count(1)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(float)
-        (new DexOpcodeString(OPCODE_CONST_STRING, float_A_to_string()))
-            ->set_dest(kRegB)}},
-
-      {{// Pattern 9: likewise, but for double values
-        // String.valueof(double) ==> "double"
-        (new DexInstruction(OPCODE_CONST_WIDE))
-            ->set_dest(kRegA)
-            ->set_literal(kLiteralA),
-        (new DexOpcodeMethod(
-             OPCODE_INVOKE_STATIC,
-             M("Ljava/lang/String;", "valueOf", "Ljava/lang/String;", {"D"}),
-             0))
-            ->set_arg_word_count(2)
-            ->set_src(0, kRegA),
-        (new DexInstruction(OPCODE_MOVE_RESULT_OBJECT))->set_dest(kRegB)},
-       {// to_string(double)
-        (new DexOpcodeString(OPCODE_CONST_STRING, double_A_to_string()))
-            ->set_dest(kRegB)}},
-
+  // Helpers
+  //
+  // invoke-direct {reg_instance}, Ljava/lang/StringBuilder;.<init>:()V
+  auto invoke_StringBuilder_init = [](uint16_t reg_instance) -> DexPattern {
+    return {{OPCODE_INVOKE_DIRECT},
+            {reg_instance},
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(LjavaStringBuilder, "<init>", "V", {}),
+            nullptr,
+            0};
   };
-  return kPatterns;
+
+  // invoke-direct {reg_instance, reg_argument},
+  // Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V
+  auto invoke_StringBuilder_init_String = [](
+      uint16_t reg_instance, uint16_t reg_argument) -> DexPattern {
+    return {{OPCODE_INVOKE_DIRECT},
+            {reg_instance, reg_argument},
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(
+                LjavaStringBuilder, "<init>", "V", {LjavaString}),
+            nullptr,
+            0};
+  };
+
+  // invoke-virtual {reg_instance, reg_argument},
+  // Ljava/lang/StringBuilder;.append:(param_type)Ljava/lang/StringBuilder;
+  auto invoke_StringBuilder_append = [](uint16_t reg_instance,
+                                        uint16_t reg_argument,
+                                        const char* param_type) -> DexPattern {
+    std::vector<uint16_t> srcs;
+    if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
+      srcs = {reg_instance, reg_argument, uint16_t(reg_argument + 1)};
+    } else {
+      srcs = {reg_instance, reg_argument};
+    }
+    return {{OPCODE_INVOKE_VIRTUAL},
+            std::move(srcs),
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(
+                LjavaStringBuilder, "append", LjavaStringBuilder, {param_type}),
+            nullptr,
+            0};
+  };
+
+  auto invoke_String_valueOf = [](uint16_t reg_argument,
+                                  const char* param_type) -> DexPattern {
+    std::vector<uint16_t> srcs;
+    if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
+      srcs = {reg_argument, uint16_t(reg_argument + 1)};
+    } else {
+      srcs = {reg_argument};
+    }
+    return {{OPCODE_INVOKE_STATIC},
+            std::move(srcs),
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(
+                LjavaString, "valueOf", LjavaString, {param_type}),
+            nullptr,
+            0};
+  };
+
+  auto invoke_String_equals = [](uint16_t reg_instance,
+                                 uint16_t reg_argument) -> DexPattern {
+    return {{OPCODE_INVOKE_VIRTUAL},
+            {reg_instance, reg_argument},
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(LjavaString, "equals", "Z", {LjavaObject}),
+            nullptr,
+            0};
+  };
+
+  auto invoke_String_length = [](uint16_t reg_instance) -> DexPattern {
+    return {{OPCODE_INVOKE_VIRTUAL},
+            {reg_instance},
+            {},
+            DexPattern::Kind::method,
+            DexMethod::make_method(LjavaString, "length", "I", {}),
+            nullptr,
+            0};
+  };
+
+  auto const_string = [](uint16_t dest, DexString* string) -> DexPattern {
+    return {{OPCODE_CONST_STRING},
+            {},
+            {dest},
+            DexPattern::Kind::string,
+            nullptr,
+            string,
+            0};
+  };
+
+  auto move_result_object = [](uint16_t dest) -> DexPattern {
+    return {{OPCODE_MOVE_RESULT_OBJECT},
+            {},
+            {dest},
+            DexPattern::Kind::none,
+            nullptr,
+            nullptr,
+            0};
+  };
+
+  auto move_result = [](uint16_t dest) -> DexPattern {
+    return {{OPCODE_MOVE_RESULT},
+            {},
+            {dest},
+            DexPattern::Kind::none,
+            nullptr,
+            nullptr,
+            0};
+  };
+
+  auto const_literal = [](
+      uint16_t opcode, uint16_t dest, int8_t literal) -> DexPattern {
+    return {{opcode},
+            {},
+            {dest},
+            DexPattern::Kind::literal,
+            nullptr,
+            nullptr,
+            literal};
+  };
+
+  auto const_wide = [](uint16_t dest, int8_t literal) -> DexPattern {
+    return {{OPCODE_CONST_WIDE_16, OPCODE_CONST_WIDE_32, OPCODE_CONST_WIDE},
+            {},
+            {dest},
+            DexPattern::Kind::literal,
+            nullptr,
+            nullptr,
+            literal};
+  };
+
+  auto const_integer = [](uint16_t dest, int8_t literal) -> DexPattern {
+    return {{OPCODE_CONST_4, OPCODE_CONST_16, OPCODE_CONST},
+            {},
+            {dest},
+            DexPattern::Kind::literal,
+            nullptr,
+            nullptr,
+            literal};
+  };
+
+  static const std::vector<Pattern> kStringPatterns = {
+      // It coalesces init(void) and append(string) into init(string).
+      // new StringBuilder().append("...") = new StringBuilder("...")
+      {"Coalesce_InitVoid_AppendString",
+       {invoke_StringBuilder_init(kRegA),
+        const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegA)},
+       {// (3 + 2 + 3 + 1) - (2 + 3) = 4 code unit saving
+        const_string(kRegB, string_A()),
+        invoke_StringBuilder_init_String(kRegA, kRegB)}},
+
+      // It coalesces consecutive two append(string) to a single append call.
+      // StringBuilder.append("A").append("B") = StringBuilder.append("AB")
+      {"Coalesce_AppendString_AppendString",
+       {const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegC),
+        const_string(kRegD, string_B()),
+        invoke_StringBuilder_append(kRegC, kRegD, LjavaString)},
+       {// 6 code unit saving
+        const_string(kRegB, concat_A_B_strings()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
+
+      // It evaluates the length of a literal in compile time.
+      // "stringA".length() ==> length_of_stringA
+      {"CompileTime_StringLength",
+       {const_string(kRegA, string_A()),
+        invoke_String_length(kRegA),
+        move_result(kRegB)},
+       {// 4 code unit saving
+        const_literal(OPCODE_CONST_16, kRegB, kLiteral16_StringLength_A)}},
+
+      /* DISABLED: TODO: Found a crash, causing VerifyError
+      // It removes an append call with an empty string.
+      // StringBuilder.append("") = nothing
+      {"Remove_AppendEmptyString",
+       {const_string(kRegB, string_empty()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)},
+       {}}, */
+
+      /* DISABLED
+      // It coalesces init(void) and append(char) into init(string).
+      // StringBuilder().append(C) = new StringBuilder("....")
+      {"Coalesce_Init_AppendChar",
+       {invoke_StringBuilder_init(kRegA),
+        const_literal(OPCODE_CONST_16, kRegB, kLiteralA),
+        invoke_StringBuilder_append(kRegA, kRegB, "C"),
+        move_result_object(kRegA)},
+       {const_string(kRegB, char_A_to_string()),
+        invoke_StringBuilder_init_String(kRegA, kRegB)}}, */
+
+      // It coalesces append(string) and append(integer) into append(string).
+      // StringBuilder.append("...").append(I) = StringBuilder.append("....")
+      {"Coalesce_AppendString_AppendInt",
+       {const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegC),
+        const_integer(kRegD, kLiteralA),
+        invoke_StringBuilder_append(kRegC, kRegD, "I")},
+       {// (2 + 3 + 1 + [1, 3] + 3) - (2 + 3) = [5, 7] code unit saving
+        const_string(kRegB, concat_string_A_int_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
+
+      /* DISABLED
+      // It coalesces append(string) and append(char) into append(string).
+      // StringBuilder.append("...").append(C) = StringBuilder.append("....")
+      {"Coalesce_AppendString_AppendChar",
+       {const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegC),
+        const_literal(OPCODE_CONST_16, kRegD, kLiteralA),
+        invoke_StringBuilder_append(kRegC, kRegD, "C")},
+       {// (2 + 3 + 1 + 2 + 3) - (2 + 3) = 6 code unit saving
+        const_string(kRegB, concat_string_A_char_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}}, */
+
+      // It coalesces append(string) and append(boolean) into append(string).
+      // StringBuilder.append("...").append(Z) = StringBuilder.append("....")
+      {"Coalesce_AppendString_AppendBoolean",
+       {const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegC),
+        const_literal(OPCODE_CONST_4, kRegD, kLiteralA),
+        invoke_StringBuilder_append(kRegC, kRegD, "Z")},
+       {// (2 + 3 + 1 + 1 + 3) - (2 + 3) = 5 code unit saving
+        const_string(kRegB, concat_string_A_boolean_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
+
+      // It coalesces append(string) and append(long int) into append(string).
+      // StringBuilder.append("...").append(J) = StringBuilder.append("....")
+      {"Coalesce_AppendString_AppendLongInt",
+       {const_string(kRegB, string_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
+        move_result_object(kRegC),
+        const_wide(kRegD, kLiteralA),
+        invoke_StringBuilder_append(kRegC, kRegD, "J")},
+       {// (2 + 3 + 1 + [2, 3, 5] + 3) - (2 + 3) = [6, 7, 9] code unit saving
+        const_string(kRegB, concat_string_A_long_int_A()),
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
+
+      // It evaluates the identify of two literal strings in compile time.
+      // "stringA".equals("stringB") ==> true or false
+      {"CompileTime_StringCompare",
+       {const_string(kRegA, string_A()),
+        const_string(kRegB, string_B()),
+        invoke_String_equals(kRegA, kRegB),
+        move_result(kRegC)},
+       {// (2 + 2 + 3 + 1) - 1 = 7 code unit saving
+        const_literal(OPCODE_CONST_4, kRegC, kLiteral4_StringCompare_A_B)}},
+
+      // It replaces valueOf on a boolean value by "true" or "false" directly.
+      // String.valueof(true/false) ==> "true" or "false"
+      {"Replace_ValueOfBoolean",
+       {const_literal(OPCODE_CONST_4, kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "Z"),
+        move_result_object(kRegB)},
+       {// (1 + 3 + 1) - 2 = 3 16-bit code units saving
+        const_string(kRegB, boolean_A_to_string())}},
+
+      /* DISABLED
+      // It replaces valueOf on a literal character by the character itself.
+      // String.valueOf(char) ==> "char"
+      {"Replace_ValueOfChar",
+       {const_literal(OPCODE_CONST_16, kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "C"),
+        move_result_object(kRegB)},
+       {// (2 + 3 + 1) - 2 = 4 units saving
+        const_string(kRegB, char_A_to_string())}}, */
+
+      // It replaces valueOf on an integer literal by the integer itself.
+      // String.valueof(int) ==> "int"
+      {"Replace_ValueOfInt",
+       {const_integer(kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "I"),
+        move_result_object(kRegB)},
+       {// ([1, 2, 3] + 3 + 1) - 2 = [3, 4, 5] units saving
+        const_string(kRegB, int_A_to_string())}},
+
+      // It replaces valueOf on a long integer literal by the number itself.
+      // String.valueof(long int) ==> "long int"
+      {"Replace_ValueOfLongInt",
+       {const_wide(kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "J"),
+        move_result_object(kRegB)},
+       {// ([2, 3, 5] + 3 + 1) - 2 = [4, 5, 7] units saving
+        const_string(kRegB, long_int_A_to_string())}},
+
+      // It replaces valueOf on a float literal by the float itself.
+      // String.valueof(float) ==> "float"
+      {"Replace_ValueOfFloat",
+       {const_literal(OPCODE_CONST, kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "F"),
+        move_result_object(kRegB)},
+       {// (3 + 3 + 1) - 2 = 5 units saving
+        const_string(kRegB, float_A_to_string())}},
+
+      // It replaces valueOf on a double literal by the double itself.
+      // String.valueof(double) ==> "double"
+      {"Replace_ValueOfDouble",
+       {const_wide(kRegA, kLiteralA),
+        invoke_String_valueOf(kRegA, "D"),
+        move_result_object(kRegB)},
+       {// ([2, 3, 5] + 3 + 1) - 2 = [4, 5, 7] units saving
+        const_string(kRegB, double_A_to_string())}},
+  };
+  return kStringPatterns;
 }
 
 template <typename Container, typename Key>
@@ -286,7 +486,7 @@ struct Matcher {
   size_t match_index;
   std::vector<DexInstruction*> matched_instructions;
   std::unordered_map<uint16_t, uint16_t> matched_regs;
-  std::unordered_map<const void*, const void*> matched_args;
+  std::unordered_map<DexString*, DexString*> matched_strings;
   std::unordered_map<int64_t, int64_t> matched_literals;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
@@ -295,20 +495,20 @@ struct Matcher {
     match_index = 0;
     matched_instructions.clear();
     matched_regs.clear();
-    matched_args.clear();
+    matched_strings.clear();
     matched_literals.clear();
   }
 
-  // match updates the matching state for the given instruction. Returns true if
+  // It updates the matching state for the given instruction. Returns true if
   // insn matches to the last 'match' pattern.
-  bool match(DexInstruction* insn) {
+  bool try_match(DexInstruction* insn) {
     auto match_reg = [&](uint16_t pattern_reg, uint16_t insn_reg) {
       // This register has been observed already. Check whether they are same.
       if (matched_regs.find(pattern_reg) != end(matched_regs)) {
         return matched_regs.at(pattern_reg) == insn_reg;
       }
       // Newly observed. Remember it.
-      matched_regs[pattern_reg] = insn_reg;
+      matched_regs.emplace(pattern_reg, insn_reg);
       return true;
     };
 
@@ -316,68 +516,56 @@ struct Matcher {
       if (matched_literals.find(pattern_literal) != end(matched_literals)) {
         return matched_literals.at(pattern_literal) == insn_literal;
       }
-      matched_literals[pattern_literal] = insn_literal;
+      matched_literals.emplace(pattern_literal, insn_literal);
       return true;
     };
 
-    // Check additional arguments like strings and fields.
-    auto match_argument = [&](const void* pattern_arg, const void* insn_arg) {
-      if (matched_args.find(pattern_arg) != end(matched_args)) {
-        return matched_args.at(pattern_arg) == insn_arg;
+    auto match_string = [&](DexString* pattern_str, DexString* insn_str) {
+      if (pattern_str == string_empty()) {
+        return (insn_str->is_simple() && insn_str->size() == 0);
       }
-      matched_args[pattern_arg] = insn_arg;
+      if (matched_strings.find(pattern_str) != end(matched_strings)) {
+        return matched_strings.at(pattern_str) == insn_str;
+      }
+      matched_strings.emplace(pattern_str, insn_str);
       return true;
     };
 
-    // Does 'insn' match to pattern.match[match_index]?
-    // Note: the current implementation returns false for specific cases and
-    // returns true for the rest. More safe algorithm would be the opposite:
-    // return true only for certain cases; otherwise false.
-    auto match_instruction = [&](const DexInstruction* check) {
-      if (check->opcode() != insn->opcode() ||
-          check->dests_size() != insn->dests_size() ||
-          check->srcs_size() != insn->srcs_size()) {
+    // Does 'insn' match to the given DexPattern?
+    auto match_instruction = [&](const DexPattern& pattern) {
+      if (pattern.opcodes.find(insn->opcode()) == end(pattern.opcodes) ||
+          pattern.srcs.size() != insn->srcs_size() ||
+          pattern.dests.size() != insn->dests_size()) {
         return false;
       }
 
-      if (check->dests_size()) {
-        if (!match_reg(check->dest(), insn->dest())) {
+      if (pattern.dests.size() != 0) {
+        assert(pattern.dests.size() == 1);
+        if (!match_reg(pattern.dests[0], insn->dest())) {
           return false;
         }
       }
 
-      for (unsigned i = 0; i < check->srcs_size(); ++i) {
-        if (!match_reg(check->src(i), insn->src(i))) {
+      for (size_t i = 0; i < pattern.srcs.size(); ++i) {
+        if (!match_reg(pattern.srcs[i], insn->src(i))) {
           return false;
         }
       }
 
-      if (check->has_strings()) {
-        if (!match_argument(
-                static_cast<const DexOpcodeString*>(check)->get_string(),
-                static_cast<const DexOpcodeString*>(insn)->get_string())) {
-          return false;
-        }
+      switch (pattern.kind) {
+      case DexPattern::Kind::none:
+        return true;
+      case DexPattern::Kind::string:
+        return match_string(
+            pattern.string,
+            static_cast<const DexOpcodeString*>(insn)->get_string());
+      case DexPattern::Kind::literal:
+        return match_literal(pattern.literal, insn->literal());
+      case DexPattern::Kind::method:
+        return pattern.method ==
+               static_cast<const DexOpcodeMethod*>(insn)->get_method();
       }
-
-      if (check->has_literal()) {
-        if (!match_literal(check->literal(), insn->literal())) {
-          return false;
-        }
-      }
-
-      if (check->has_methods()) {
-        if (static_cast<const DexOpcodeMethod*>(check)->get_method() !=
-            static_cast<const DexOpcodeMethod*>(insn)->get_method()) {
-          return false;
-        };
-      }
-
-      if (check->has_fields() || check->has_offset()) {
-        return false;
-      }
-
-      return true;
+      return false;
     };
 
     assert(match_index < pattern.match.size());
@@ -387,8 +575,9 @@ struct Matcher {
       bool retry = (match_index == 1);
       TRACE(PEEPHOLE,
             8,
-            "Not Matched: %s != %s\n",
-            SHOW(pattern.match[match_index]->opcode()),
+            "Not Matched: %s[%lu] != %s\n",
+            pattern.name.c_str(),
+            match_index,
             SHOW(insn));
       reset();
       if (retry) {
@@ -409,23 +598,63 @@ struct Matcher {
           SHOW(insn));
     matched_instructions.push_back(insn);
     ++match_index;
-    // TODO: just reset match_index here if it returns true to prevent an out of
-    // bound error.
     return match_index == pattern.match.size();
   }
 
-  // After a successful match, get the replacement instructions. We have to
-  // substitute the arguments appropriately, also need to handle special
-  // command placeholders.
+  DexInstruction* generate_replacement(const DexPattern& replace) {
+    if (replace.opcodes.size() != 1) {
+      always_assert_log(false, "Replacement must have unique opcode");
+      return nullptr;
+    }
+
+    const auto opcode = *begin(replace.opcodes);
+    switch (opcode) {
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_VIRTUAL:
+      assert(replace.kind == DexPattern::Kind::method);
+      return (new DexOpcodeMethod(opcode, replace.method))
+          ->set_arg_word_count(replace.srcs.size())
+          ->set_srcs(replace.srcs);
+
+    case OPCODE_MOVE_RESULT:
+    case OPCODE_MOVE_RESULT_OBJECT:
+      assert(replace.kind == DexPattern::Kind::none);
+      assert(replace.dests.size() == 1);
+      return (new DexInstruction(opcode))->set_dest(replace.dests[0]);
+
+    case OPCODE_CONST_STRING:
+      assert(replace.kind == DexPattern::Kind::string);
+      assert(replace.dests.size() == 1);
+      return (new DexOpcodeString(OPCODE_CONST_STRING, replace.string))
+          ->set_dest(replace.dests[0]);
+
+    case OPCODE_CONST_4:
+    case OPCODE_CONST_16:
+    case OPCODE_CONST:
+      assert(replace.kind == DexPattern::Kind::literal);
+      assert(replace.dests.size() == 1);
+      return (new DexInstruction(opcode))
+          ->set_dest(replace.dests[0])
+          ->set_literal(replace.literal);
+    }
+
+    always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
+    return nullptr;
+  }
+
+  // After a successful match, get the replacement instructions. We substitute
+  // the placeholders appropriately including special command placeholders.
   std::list<DexInstruction*> get_replacements() {
     always_assert(pattern.match.size() == match_index);
 
     std::list<DexInstruction*> replace;
     for (const auto& r : pattern.replace) {
-      // Clone first, then patch arguments.
-      auto clone = r->clone();
+      // First, generate the instruction with placeholders.
+      auto clone = generate_replacement(r);
       replace.push_back(clone);
 
+      // Patch the placeholders with actual arguments.
       if (clone->dests_size() > 0) {
         const auto reg = clone->dest();
         always_assert(matched_regs.find(reg) != end(matched_regs));
@@ -441,12 +670,15 @@ struct Matcher {
       if (clone->has_literal()) {
         const auto literal = clone->literal();
         if (literal == kLiteral4_StringCompare_A_B) {
-          const auto& a = check_and_get(matched_args, string_A());
-          const auto& b = check_and_get(matched_args, string_B());
+          auto a = check_and_get(matched_strings, string_A());
+          auto b = check_and_get(matched_strings, string_B());
           clone->set_literal((a == b) ? 1L : 0L);
         } else if (literal == kLiteral16_StringLength_A) {
-          const auto& a = check_and_get(matched_args, string_A());
-          clone->set_literal(static_cast<const DexString*>(a)->length());
+          auto a = check_and_get(matched_strings, string_A());
+          clone->set_literal(a->length());
+        } else if (literal == kLiteralA) {
+          auto a = check_and_get(matched_literals, kLiteralA);
+          clone->set_literal(a);
         } else {
           always_assert_log(false, "Unexpected literal 0x%x", literal);
         }
@@ -459,9 +691,10 @@ struct Matcher {
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
               DexString::make_string(a == true ? "true" : "false"));
         } else if (str == char_A_to_string()) {
-          char a = check_and_get(matched_literals, kLiteralA);
-          static_cast<DexOpcodeString*>(clone)->rewrite_string(
-              DexString::make_string(std::string(1, a)));
+          always_assert_log(false, "better unicode handling needed");
+          // int a = check_and_get(matched_literals, kLiteralA);
+          // static_cast<DexOpcodeString*>(clone)->rewrite_string(
+          //     DexString::make_string(std::string(1, a)));
         } else if (str == int_A_to_string()) {
           int a = check_and_get(matched_literals, kLiteralA);
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
@@ -471,19 +704,55 @@ struct Matcher {
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
               DexString::make_string(std::to_string(a)));
         } else if (str == float_A_to_string()) {
-          auto a = check_and_get(matched_literals, kLiteralA);
+          union {
+            int32_t i;
+            float f;
+          } a = {.i = static_cast<int32_t>(
+                     check_and_get(matched_literals, kLiteralA))};
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
-              DexString::make_string(std::to_string(*((float*)&a))));
+              DexString::make_string(std::to_string(a.f)));
         } else if (str == double_A_to_string()) {
-          auto a = check_and_get(matched_literals, kLiteralA);
+          union {
+            int64_t i;
+            double d;
+          } a = {.i = check_and_get(matched_literals, kLiteralA)};
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
-              DexString::make_string(std::to_string(*((double*)&a))));
+              DexString::make_string(std::to_string(a.d)));
+        } else if (str == string_A()) {
+          auto a = check_and_get(matched_strings, string_A());
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(a);
+        } else if (str == concat_A_B_strings()) {
+          auto a = check_and_get(matched_strings, string_A())->c_str();
+          auto b = check_and_get(matched_strings, string_B())->c_str();
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(a) + std::string(b)));
+        } else if (str == concat_string_A_int_A()) {
+          auto a = check_and_get(matched_strings, string_A())->c_str();
+          int b = check_and_get(matched_literals, kLiteralA);
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(a) + std::to_string(b)));
+        } else if (str == concat_string_A_boolean_A()) {
+          auto a = check_and_get(matched_strings, string_A())->c_str();
+          bool b = check_and_get(matched_literals, kLiteralA);
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(a) +
+                                     (b == true ? "true" : "false")));
+        } else if (str == concat_string_A_long_int_A()) {
+          auto a = check_and_get(matched_strings, string_A())->c_str();
+          int64_t b = check_and_get(matched_literals, kLiteralA);
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(a) + std::to_string(b)));
+        } else if (str == concat_string_A_char_A()) {
+          always_assert_log(false, "better unicode handling needed");
+          // auto a = check_and_get(matched_strings, string_A())->c_str();
+          // int b = check_and_get(matched_literals, kLiteralA);
+          // static_cast<DexOpcodeString*>(clone)->rewrite_string(
+          //     DexString::make_string(std::string(a) + std::string(1, b)));
         } else {
           always_assert_log(false, "Unexpected string");
         }
       }
     }
-
     return replace;
   }
 };
@@ -526,7 +795,7 @@ class PeepholeOptimizerV2 {
 
         for (size_t i = 0; i < m_matchers.size(); ++i) {
           auto& matcher = m_matchers[i];
-          if (!matcher.match(mei.insn)) {
+          if (!matcher.try_match(mei.insn)) {
             continue;
           }
 
@@ -575,9 +844,8 @@ class PeepholeOptimizerV2 {
     for (size_t i = 0; i < m_matchers_stat.size(); ++i) {
       TRACE(PEEPHOLE,
             5,
-            "[%lu/%lu]: %d\n",
-            i + 1,
-            m_matchers_stat.size(),
+            "%s: %d\n",
+            m_matchers[i].pattern.name.c_str(),
             m_matchers_stat[i]);
     }
   }

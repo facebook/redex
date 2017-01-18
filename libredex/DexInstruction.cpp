@@ -754,6 +754,13 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
   not_reached();
 }
 
+DexInstruction* DexInstruction::set_srcs(const std::vector<uint16_t>& vregs) {
+  for (size_t i = 0; i < vregs.size(); ++i) {
+    set_src(i, vregs[i]);
+  }
+  return this;
+}
+
 bool DexInstruction::has_literal() const {
   auto format = opcode_format(opcode());
   switch (format) {

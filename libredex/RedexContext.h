@@ -43,7 +43,7 @@ struct RedexContext {
   DexString* get_string(const char* nstr, uint32_t utfsize);
   template <typename V> void visit_all_dexstring(V v);
 
-  static constexpr size_t kMaxPlaceholderString = 16;
+  static constexpr size_t kMaxPlaceholderString = 32;
   DexString* get_placeholder_string(size_t index) const;
 
   DexType* make_type(DexString* dstring);

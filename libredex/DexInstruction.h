@@ -449,6 +449,7 @@ class DexInstruction : public Gatherable {
   DexInstruction* set_opcode(DexOpcode);
   DexInstruction* set_dest(uint16_t vreg);
   DexInstruction* set_src(int i, uint16_t vreg);
+  DexInstruction* set_srcs(const std::vector<uint16_t>& vregs);
   DexInstruction* set_arg_word_count(uint16_t count);
   DexInstruction* set_range_base(uint16_t base);
   DexInstruction* set_range_size(uint16_t size);
@@ -545,7 +546,7 @@ class DexOpcodeMethod : public DexInstruction {
   virtual void gather_methods(std::vector<DexMethod*>& lmethod) const;
   virtual DexOpcodeMethod* clone() const { return new DexOpcodeMethod(*this); }
 
-  DexOpcodeMethod(uint16_t opcode, DexMethod* meth, uint16_t arg)
+  DexOpcodeMethod(uint16_t opcode, DexMethod* meth, uint16_t arg = 0)
       : DexInstruction(opcode, arg) {
     m_method = meth;
     m_has_methods = true;
