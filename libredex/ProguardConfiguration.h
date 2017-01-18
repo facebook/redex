@@ -13,33 +13,14 @@
 #include <string>
 #include <vector>
 
-namespace redex {
+#include "DexAccess.h"
 
-  enum class AccessFlag {
-    PUBLIC,
-    PRIVATE,
-    PROTECTED,
-    STATIC,
-    FINAL,
-    INTERFACE,
-    SYNCHRONIZED,
-    VOLATILE,
-    TRANSIENT,
-    BRIDGE,
-    VARARGS,
-    NATIVE,
-    ABSTRACT,
-    STRICT,
-    SYNTHETIC,
-    ANNOTATION,
-    ENUM,
-    CONSTRUCTOR
-  };
+namespace redex {
 
   struct MemberSpecification {
     unsigned long count{0};
-    std::set<AccessFlag> requiredSetAccessFlags;
-    std::set<AccessFlag> requiredUnsetAccessFlags;
+    DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
+    DexAccessFlags requiredUnsetAccessFlags = DexAccessFlags(0);
     std::string annotationType;
     std::string name;
     std::string descriptor;
@@ -47,8 +28,8 @@ namespace redex {
   };
 
   struct ClassSpecification {
-    std::set<AccessFlag> setAccessFlags;
-    std::set<AccessFlag>  unsetAccessFlags;
+    DexAccessFlags setAccessFlags = DexAccessFlags(0);
+    DexAccessFlags unsetAccessFlags = DexAccessFlags(0);
     std::string annotationType;
     std::string className;
     std::string extendsAnnotationType; // An optional annotation for the extends/implements type.

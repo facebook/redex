@@ -306,36 +306,36 @@ bool parse_modifiers(std::vector<unique_ptr<Token>>::iterator* it,
   return true;
 }
 
-AccessFlag process_access_modifier(token type, bool* is_access_flag) {
+DexAccessFlags process_access_modifier(token type, bool* is_access_flag) {
   *is_access_flag = true;
   switch (type) {
   case token::publicToken:
-    return AccessFlag::PUBLIC;
+    return ACC_PUBLIC;
   case token::privateToken:
-    return AccessFlag::PRIVATE;
+    return ACC_PRIVATE;
   case token::final:
-    return AccessFlag::FINAL;
+    return ACC_FINAL;
   case token::interface:
-    return AccessFlag::INTERFACE;
+    return ACC_INTERFACE;
   case token::abstract:
-    return AccessFlag::ABSTRACT;
+    return ACC_ABSTRACT;
   case token::synthetic:
-    return AccessFlag::SYNTHETIC;
+    return ACC_SYNTHETIC;
   case token::annotation:
-    return AccessFlag::ANNOTATION;
+    return ACC_ANNOTATION;
   case token::enumToken:
-    return AccessFlag::ENUM;
+    return ACC_ENUM;
   case token::staticToken:
-    return AccessFlag::STATIC;
+    return ACC_STATIC;
   case token::native:
-    return AccessFlag::NATIVE;
+    return ACC_NATIVE;
   case token::protectedToken:
-    return AccessFlag::PROTECTED;
+    return ACC_PROTECTED;
   case token::transient:
-    return AccessFlag::TRANSIENT;
+    return ACC_TRANSIENT;
   default:
     *is_access_flag = false;
-    return AccessFlag::PUBLIC;
+    return ACC_PUBLIC;
   }
 }
 
@@ -374,9 +374,18 @@ std::string parse_annotation_type(
   return convert_wildcard_type(typ);
 }
 
+bool is_access_flag_set(const DexAccessFlags accessFlags, const DexAccessFlags checkingFlag) {
+  return accessFlags & checkingFlag;
+}
+
+void set_access_flag(DexAccessFlags& accessFlags, const DexAccessFlags settingFlag) {
+  accessFlags = accessFlags | settingFlag;
+  return;
+}
+
 bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
-                        set<AccessFlag>* setFlags,
-                        set<AccessFlag>* unsetFlags) {
+                        DexAccessFlags& setFlags_,
+                        DexAccessFlags& unsetFlags_) {
   bool negated = false;
   while (is_negation_or_class_access_modifier((**it)->type)) {
     // Consume the negation token if present.
@@ -386,26 +395,26 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
       continue;
     }
     bool ok;
-    AccessFlag access_flag = process_access_modifier((**it)->type, &ok);
+    DexAccessFlags access_flag = process_access_modifier((**it)->type, &ok);
     if (ok) {
       ++(*it);
       if (negated) {
-        if (setFlags->find(access_flag) != setFlags->end()) {
+        if (is_access_flag_set(setFlags_, access_flag)) {
           cerr << "Access flag " << (**it)->show()
                << " occurs with conflicting settings at line " << (**it)->line
                << endl;
           return false;
         }
-        unsetFlags->emplace(access_flag);
+        set_access_flag(unsetFlags_, access_flag);
         negated = false;
       } else {
-        if (unsetFlags->find(access_flag) != unsetFlags->end()) {
+        if (is_access_flag_set(unsetFlags_, access_flag)) {
           cerr << "Access flag " << (**it)->show()
                << " occurs with conflicting settings at line " << (**it)->line
                << endl;
           return false;
         }
-        setFlags->emplace(access_flag);
+        set_access_flag(setFlags_, access_flag);
         negated = false;
       }
     } else {
@@ -455,8 +464,8 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   *ok = true;
   member_specification.annotationType = parse_annotation_type(it);
   if (!parse_access_flags(it,
-                          &member_specification.requiredSetAccessFlags,
-                          &member_specification.requiredUnsetAccessFlags)) {
+                          member_specification.requiredSetAccessFlags,
+                          member_specification.requiredUnsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     cerr << "Problem parsing access flags for member specification.\n";
@@ -505,8 +514,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<init>") {
     member_specification.name = "<init>";
     member_specification.descriptor = "V";
-    member_specification.requiredSetAccessFlags.emplace(
-        AccessFlag::CONSTRUCTOR);
+    set_access_flag(member_specification.requiredSetAccessFlags, ACC_CONSTRUCTOR);
     ++(*it);
   } else {
     // This token is the type for the member specification.
@@ -617,7 +625,7 @@ ClassSpecification parse_class_specification(
   *ok = true;
   class_spec.annotationType = parse_annotation_type(it);
   if (!parse_access_flags(
-          it, &class_spec.setAccessFlags, &class_spec.unsetAccessFlags)) {
+          it, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for class specification.\n";
@@ -634,9 +642,7 @@ ClassSpecification parse_class_specification(
     *ok = false;
     return class_spec;
   }
-  bool match_annotation_class =
-      class_spec.setAccessFlags.find(AccessFlag::ANNOTATION) !=
-      class_spec.setAccessFlags.end();
+  bool match_annotation_class = is_annotation(class_spec.setAccessFlags);
   if (!match_annotation_class) {
     // Make sure the next keyword is interface, class, enum.
     if (!(((**it)->type == token::interface) ||
@@ -650,11 +656,11 @@ ClassSpecification parse_class_specification(
     }
     // Restrict matches to interface classes
     if ((**it)->type == token::interface) {
-      class_spec.setAccessFlags.emplace(AccessFlag::INTERFACE);
+      set_access_flag(class_spec.setAccessFlags, ACC_INTERFACE);
     }
     // Restrict matches to enum classes
     if ((**it)->type == token::enumToken) {
-      class_spec.setAccessFlags.emplace(AccessFlag::ENUM);
+      set_access_flag(class_spec.setAccessFlags, ACC_ENUM);
     }
     ++(*it);
   }

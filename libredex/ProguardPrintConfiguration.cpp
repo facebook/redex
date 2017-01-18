@@ -49,41 +49,37 @@ std::string show_keep_modifiers(const redex::KeepSpec& keep_rule) {
   return modifiers;
 }
 
-std::string show_access(const redex::AccessFlag& access) {
+std::string show_access(const DexAccessFlags access, bool isMethod) {
   switch (access) {
-  case redex::AccessFlag::PUBLIC:
+  case ACC_PUBLIC:
     return "public";
-  case redex::AccessFlag::PRIVATE:
+  case ACC_PRIVATE:
     return "private";
-  case redex::AccessFlag::PROTECTED:
+  case ACC_PROTECTED:
     return "protected";
-  case redex::AccessFlag::STATIC:
+  case ACC_STATIC:
     return "static";
-  case redex::AccessFlag::FINAL:
+  case ACC_FINAL:
     return "final";
-  case redex::AccessFlag::INTERFACE:
+  case ACC_INTERFACE:
     return "interface";
-  case redex::AccessFlag::SYNCHRONIZED:
+  case ACC_SYNCHRONIZED:
     return "synchronized";
-  case redex::AccessFlag::VOLATILE:
-    return "volatile";
-  case redex::AccessFlag::TRANSIENT:
-    return "transient";
-  case redex::AccessFlag::BRIDGE:
-    return "bridge";
-  case redex::AccessFlag::VARARGS:
-    return "varargs";
-  case redex::AccessFlag::NATIVE:
+  case ACC_VOLATILE: // or ACC_BRIDGE
+    return isMethod ? "bridge" : "volatile";
+  case ACC_TRANSIENT: // or ACC_VARARGS
+    return isMethod ? "varargs" : "transient";
+  case ACC_NATIVE:
     return "native";
-  case redex::AccessFlag::ABSTRACT:
+  case ACC_ABSTRACT:
     return "abstract";
-  case redex::AccessFlag::STRICT:
+  case ACC_STRICT:
     return "strict";
-  case redex::AccessFlag::SYNTHETIC:
+  case ACC_SYNTHETIC:
     return "synthetic";
-  case redex::AccessFlag::ANNOTATION:
+  case ACC_ANNOTATION:
     return "@interface";
-  case redex::AccessFlag::ENUM:
+  case ACC_ENUM:
     return "enum";
   default:
     return "";
@@ -91,21 +87,30 @@ std::string show_access(const redex::AccessFlag& access) {
 }
 
 std::string show_access_flags(
-    const std::set<redex::AccessFlag>& flags,
-    const std::set<redex::AccessFlag>& negated_flags) {
+    const DexAccessFlags flags,
+    const DexAccessFlags negated_flags,
+    bool isMethod) {
   std::stringstream ss;
-  for (const auto& access : flags) {
-    if (access == redex::AccessFlag::INTERFACE) {
+  for (int offset = 0; offset < 32; offset++) {
+    const DexAccessFlags access = static_cast<DexAccessFlags>(1 << offset);
+    if ((flags & access) == 0) {
+      continue;
+    }
+    if (is_interface(access)) {
       ss << "@";
     }
-    ss << show_access(access) << " ";
+    ss << show_access(access, isMethod) << " ";
   }
-  for (const auto& access : negated_flags) {
+  for (int offset = 0; offset < 32; offset++) {
+    const DexAccessFlags access = static_cast<DexAccessFlags>(1 << offset);
+    if ((negated_flags & access) == 0) {
+      continue;
+    }
     ss << "!";
-    if (access == redex::AccessFlag::INTERFACE) {
+    if (is_interface(access)) {
       ss << "@";
     }
-    ss << show_access(access) << " ";
+    ss << show_access(access, isMethod) << " ";
   }
   return ss.str();
 }
@@ -117,7 +122,8 @@ std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
       ss << "@" << field.annotationType << " ";
     }
     ss << show_access_flags(field.requiredSetAccessFlags,
-                              field.requiredUnsetAccessFlags);
+                            field.requiredUnsetAccessFlags,
+                            false);
     auto name = field.name.empty() ? "*" : field.name;
     ss << field.descriptor << " " << name << "; ";
   }
@@ -132,7 +138,8 @@ std::string show_methods(
       ss << "@" << method.annotationType << " ";
     }
     ss << show_access_flags(method.requiredSetAccessFlags,
-                              method.requiredUnsetAccessFlags);
+                            method.requiredUnsetAccessFlags,
+                            true);
     auto name = method.name.empty() ? "*" : method.name;
     ss << method.descriptor << " " << name << "(); ";
   }
@@ -159,13 +166,11 @@ std::string redex::show_keep(const KeepSpec& keep_rule) {
     text << "@" << class_spec.annotationType << " ";
   }
   text << show_access_flags(class_spec.setAccessFlags,
-                            class_spec.unsetAccessFlags);
-  if (class_spec.setAccessFlags.find(redex::AccessFlag::ANNOTATION) ==
-      class_spec.setAccessFlags.end()) {
-    if (class_spec.setAccessFlags.find(redex::AccessFlag::ENUM) ==
-        class_spec.setAccessFlags.end()) {
-      if (class_spec.setAccessFlags.find(redex::AccessFlag::INTERFACE) !=
-          class_spec.setAccessFlags.end()) {
+                            class_spec.unsetAccessFlags,
+                            false);
+  if (is_annotation(class_spec.setAccessFlags)) {
+    if (is_enum(class_spec.setAccessFlags)) {
+      if (is_interface(class_spec.setAccessFlags)) {
         text << "interface ";
       } else {
         text << "class ";

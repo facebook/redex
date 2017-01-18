@@ -64,238 +64,27 @@ inline bool is_blanket_keep_rule(const KeepSpec& keep_rule) {
     if (spec.className == "*" && spec.annotationType == "" &&
         spec.fieldSpecifications.empty() && spec.methodSpecifications.empty() &&
         spec.extendsAnnotationType == "" && spec.extendsClassName == "" &&
-        spec.setAccessFlags.size() == 0 && spec.unsetAccessFlags.size() == 0) {
+        spec.setAccessFlags == 0 && spec.unsetAccessFlags == 0) {
       return true;
     }
   }
   return false;
 }
 
-bool check_required_access_flags(const std::set<AccessFlag>& requiredSet,
-                                 const DexAccessFlags& access_flags) {
-  auto require_public = requiredSet.count(AccessFlag::PUBLIC);
-  auto require_private = requiredSet.count(AccessFlag::PRIVATE);
-  auto require_protectd = requiredSet.count(AccessFlag::PROTECTED);
-  bool match_one = require_public + require_private + require_protectd > 1;
-  for (const AccessFlag& af : requiredSet) {
-    switch (af) {
-    case AccessFlag::PUBLIC:
-      if (!(access_flags & ACC_PUBLIC)) {
-        if (match_one) {
-          if (require_private && (access_flags & ACC_PRIVATE)) {
-            continue;
-          }
-          if (require_protectd && (access_flags & ACC_PROTECTED)) {
-            continue;
-          }
-        }
-        return false;
-      }
-      break;
-    case AccessFlag::PRIVATE:
-      if (!(access_flags & ACC_PRIVATE)) {
-        if (match_one) {
-          if (require_public && (access_flags & ACC_PUBLIC)) {
-            continue;
-          }
-          if (require_protectd && (access_flags & ACC_PROTECTED)) {
-            continue;
-          }
-        }
-        return false;
-      }
-      break;
-    case AccessFlag::PROTECTED:
-      if (!(access_flags & ACC_PROTECTED)) {
-        if (match_one) {
-          if (require_public && (access_flags & ACC_PUBLIC)) {
-            continue;
-          }
-          if (require_private && (access_flags & ACC_PRIVATE)) {
-            continue;
-          }
-        }
-        return false;
-      }
-      break;
-    case AccessFlag::STATIC:
-      if (!(access_flags & ACC_STATIC)) {
-        return false;
-      }
-      break;
-    case AccessFlag::FINAL:
-      if (!(access_flags & ACC_FINAL)) {
-        return false;
-      }
-      break;
-    case AccessFlag::INTERFACE:
-      if (!(access_flags & ACC_INTERFACE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::SYNCHRONIZED:
-      if (!(access_flags & ACC_SYNCHRONIZED)) {
-        return false;
-      }
-      break;
-    case AccessFlag::VOLATILE:
-      if (!(access_flags & ACC_VOLATILE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::TRANSIENT:
-      if (!(access_flags & ACC_TRANSIENT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::BRIDGE:
-      if (!(access_flags & ACC_BRIDGE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::VARARGS:
-      if (!(access_flags & ACC_VARARGS)) {
-        return false;
-      }
-      break;
-    case AccessFlag::NATIVE:
-      if (!(access_flags & ACC_NATIVE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ABSTRACT:
-      if (!(access_flags & ACC_ABSTRACT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::STRICT:
-      if (!(access_flags & ACC_STRICT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::SYNTHETIC:
-      if (!(access_flags & ACC_SYNTHETIC)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ANNOTATION:
-      if (!(access_flags & ACC_ANNOTATION)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ENUM:
-      if (!(access_flags & ACC_ENUM)) {
-        return false;
-      }
-      break;
-    case AccessFlag::CONSTRUCTOR:
-      if (!(access_flags & ACC_CONSTRUCTOR)) {
-        return false;
-      }
-      break;
-    }
-  }
-  return true;
+bool check_required_access_flags(const DexAccessFlags requiredSet,
+                                 const DexAccessFlags access_flags) {
+  const DexAccessFlags access_mask = ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED;
+  const DexAccessFlags required_set_flags = requiredSet & ~access_mask;
+  const DexAccessFlags required_one_set_flags = requiredSet & access_mask;
+  return (required_set_flags & ~access_flags) == 0 &&
+           (required_one_set_flags == 0 ||
+           (required_one_set_flags & access_flags) != 0);
 }
 
 bool check_required_unset_access_flags(
-    const std::set<AccessFlag>& requiredUnset,
-    const DexAccessFlags& access_flags) {
-  for (const AccessFlag& af : requiredUnset) {
-    switch (af) {
-    case AccessFlag::PUBLIC:
-      if ((access_flags & ACC_PUBLIC)) {
-        return false;
-      }
-      break;
-    case AccessFlag::PRIVATE:
-      if ((access_flags & ACC_PRIVATE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::PROTECTED:
-      if ((access_flags & ACC_PROTECTED)) {
-        return false;
-      }
-      break;
-    case AccessFlag::STATIC:
-      if ((access_flags & ACC_STATIC)) {
-        return false;
-      }
-      break;
-    case AccessFlag::FINAL:
-      if ((access_flags & ACC_FINAL)) {
-        return false;
-      }
-      break;
-    case AccessFlag::INTERFACE:
-      if ((access_flags & ACC_INTERFACE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::SYNCHRONIZED:
-      if ((access_flags & ACC_SYNCHRONIZED)) {
-        return false;
-      }
-      break;
-    case AccessFlag::VOLATILE:
-      if ((access_flags & ACC_VOLATILE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::TRANSIENT:
-      if ((access_flags & ACC_TRANSIENT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::BRIDGE:
-      if ((access_flags & ACC_BRIDGE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::VARARGS:
-      if ((access_flags & ACC_VARARGS)) {
-        return false;
-      }
-      break;
-    case AccessFlag::NATIVE:
-      if ((access_flags & ACC_NATIVE)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ABSTRACT:
-      if ((access_flags & ACC_ABSTRACT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::STRICT:
-      if ((access_flags & ACC_STRICT)) {
-        return false;
-      }
-      break;
-    case AccessFlag::SYNTHETIC:
-      if ((access_flags & ACC_SYNTHETIC)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ANNOTATION:
-      if ((access_flags & ACC_ANNOTATION)) {
-        return false;
-      }
-      break;
-    case AccessFlag::ENUM:
-      if ((access_flags & ACC_ENUM)) {
-        return false;
-      }
-      break;
-    case AccessFlag::CONSTRUCTOR:
-      if ((access_flags & ACC_CONSTRUCTOR)) {
-        return false;
-      }
-      break;
-    }
-  }
-  return true;
+    const DexAccessFlags requiredUnset,
+    const DexAccessFlags access_flags) {
+  return (requiredUnset & access_flags) == 0;
 }
 
 boost::regex* register_matcher(
@@ -328,9 +117,9 @@ bool has_annotation(std::unordered_map<std::string, boost::regex*>& regex_map,
   return false;
 }
 
-bool access_matches(const std::set<AccessFlag>& requiredSet,
-                    const std::set<AccessFlag>& requiredUnset,
-                    const DexAccessFlags& access_flags) {
+bool access_matches(const DexAccessFlags requiredSet,
+                    const DexAccessFlags requiredUnset,
+                    const DexAccessFlags access_flags) {
   return check_required_access_flags(requiredSet, access_flags) &&
          check_required_unset_access_flags(requiredUnset, access_flags);
 }

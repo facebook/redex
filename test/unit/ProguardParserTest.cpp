@@ -176,8 +176,8 @@ TEST(ProguardParserTest, keep) {
   KeepSpec k = config1.keep_rules[0];
   ClassSpecification cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, 0);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -191,8 +191,8 @@ TEST(ProguardParserTest, keep) {
   k = config2.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, 0);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -208,8 +208,8 @@ TEST(ProguardParserTest, keep) {
   k = config3.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, 0);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType,
@@ -224,9 +224,8 @@ TEST(ProguardParserTest, keep) {
   k = config4.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 1);
-  ASSERT_NE(cs.setAccessFlags.end(), cs.setAccessFlags.find(AccessFlag::ENUM));
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, ACC_ENUM);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -240,10 +239,8 @@ TEST(ProguardParserTest, keep) {
   k = config5.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 1);
-  ASSERT_NE(cs.setAccessFlags.end(),
-            cs.setAccessFlags.find(AccessFlag::INTERFACE));
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, ACC_INTERFACE);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -257,10 +254,8 @@ TEST(ProguardParserTest, keep) {
   k = config6.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 1);
-  ASSERT_NE(cs.setAccessFlags.find(AccessFlag::PUBLIC),
-            cs.setAccessFlags.end());
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, ACC_PUBLIC);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -274,10 +269,8 @@ TEST(ProguardParserTest, keep) {
   k = config7.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 0);
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 1);
-  ASSERT_NE(cs.unsetAccessFlags.find(AccessFlag::PUBLIC),
-            cs.unsetAccessFlags.end());
+  ASSERT_EQ(cs.setAccessFlags, 0);
+  ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -291,11 +284,8 @@ TEST(ProguardParserTest, keep) {
   k = config8.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 1);
-  ASSERT_NE(cs.setAccessFlags.find(AccessFlag::FINAL), cs.setAccessFlags.end());
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 1);
-  ASSERT_NE(cs.unsetAccessFlags.find(AccessFlag::PUBLIC),
-            cs.unsetAccessFlags.end());
+  ASSERT_EQ(cs.setAccessFlags, ACC_FINAL);
+  ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -309,10 +299,8 @@ TEST(ProguardParserTest, keep) {
   k = config9.keep_rules[0];
   cs = k.class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
-  ASSERT_EQ(cs.setAccessFlags.size(), 1);
-  ASSERT_NE(cs.setAccessFlags.find(AccessFlag::ABSTRACT),
-            cs.setAccessFlags.end());
-  ASSERT_EQ(cs.unsetAccessFlags.size(), 0);
+  ASSERT_EQ(cs.setAccessFlags, ACC_ABSTRACT);
+  ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
   ASSERT_EQ(cs.extendsClassName, "");
   ASSERT_EQ(cs.annotationType, "");
@@ -388,9 +376,7 @@ TEST(ProguardParserTest, annotationclass) {
   ASSERT_TRUE(config.ok);
   ASSERT_EQ(config.keep_rules.size(), 1);
   ASSERT_EQ(config.keep_rules[0].class_spec.className, "*");
-  ASSERT_NE(config.keep_rules[0].class_spec.setAccessFlags.end(),
-            config.keep_rules[0].class_spec.setAccessFlags.find(
-                AccessFlag::ANNOTATION));
+  ASSERT_EQ(config.keep_rules[0].class_spec.setAccessFlags, ACC_ANNOTATION);
 }
 
 // Member specifications
@@ -642,7 +628,6 @@ TEST(ProguardParserTest, keep_annotation_classes) {
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
     ASSERT_FALSE(config.keep_rules[0].allowshrinking);
-    ASSERT_NE(config.keep_rules[0].class_spec.setAccessFlags.find(AccessFlag::ANNOTATION),
-              config.keep_rules[0].class_spec.setAccessFlags.end());
+    ASSERT_EQ(config.keep_rules[0].class_spec.setAccessFlags, ACC_ANNOTATION);
   }
 }
