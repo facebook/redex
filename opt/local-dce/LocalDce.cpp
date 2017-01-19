@@ -248,19 +248,7 @@ class LocalDce {
                      s->preds().end());
   }
 
-  bool can_delete(Block* b) {
-    auto first = b->begin();
-    if (first == b->end()) {
-      return false;
-    }
-    return true;
-  }
-
   void remove_block(MethodTransform* transform, Block* b) {
-    if (!can_delete(b)) {
-      return;
-    }
-    std::unordered_set<DexInstruction*> delete_ops;
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
         transform->remove_opcode(mei.insn);
