@@ -102,6 +102,7 @@ struct dex_output_stats_t {
   int num_annotations = 0;
   int num_type_lists = 0;
   int num_bytes = 0;
+  int num_instructions = 0;
 };
 
 dex_output_stats_t&

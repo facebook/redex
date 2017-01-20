@@ -800,6 +800,7 @@ void DexOutput::generate_code_items(SortMode mode) {
     m_code_item_emits.emplace_back(code.get(),
                                    (dex_code_item*)(m_output + m_offset));
     m_offset += size;
+    m_stats.num_instructions += code->get_instructions().size();
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
 }
@@ -1437,5 +1438,6 @@ dex_output_stats_t&
   lhs.num_annotations += rhs.num_annotations;
   lhs.num_type_lists += rhs.num_type_lists;
   lhs.num_bytes += rhs.num_bytes;
+  lhs.num_instructions += rhs.num_instructions;
   return lhs;
 }
