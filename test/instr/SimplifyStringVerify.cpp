@@ -32,13 +32,13 @@ namespace {
   WORK(test_Coalesce_AppendString_AppendChar, 2 * 6)        \
   WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 5)     \
   WORK(test_Coalesce_AppendString_AppendLongInt, 9 + 6 + 7) \
-  WORK(test_CompileTime_StringCompare, 4 * 7)               \
+  WORK(test_CompileTime_StringCompare, 6 * 7)               \
   WORK(test_Replace_ValueOfBoolean, 2 * 3)                  \
   WORK(test_Replace_ValueOfChar, 1 * 4)                     \
   WORK(test_Replace_ValueOfInt, 3 * 3 + 3 * 4 + 2 * 5)      \
-  WORK(test_Replace_ValueOfLongInt, 7 + 4 + 5)              \
-  WORK(test_Replace_ValueOfFloat, 1 * 5)                    \
-  WORK(test_Replace_ValueOfDouble, 7 + 4)
+  WORK(test_Replace_ValueOfLongInt, 7 * 2 + 4 * 2 + 5 * 1)  \
+  WORK(test_Replace_ValueOfFloat, 2 * 5 + 1 * 3)            \
+  WORK(test_Replace_ValueOfDouble, 2 * 7 + 4)
 
 void loadMethodSizes(DexClasses& classes,
                      std::unordered_map<std::string, int>& map) {

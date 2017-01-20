@@ -161,6 +161,10 @@ public class SimplifyString {
     assertThat(a).isFalse();
     a = "abc".equals("abcd");
     assertThat(a).isFalse();
+    a = "\uAE40\uBBFC\uC7A5".equals("\uAE40\uBBFC\uC7A5");
+    assertThat(a).isTrue();
+    a = "\uAE40\uBBFC\uC7A5".equals("\u91D1\u73C9\u58EF");
+    assertThat(a).isFalse();
   }
 
   @Test
@@ -221,6 +225,12 @@ public class SimplifyString {
     // const-wide
     a = String.valueOf(1234567890123456789L);
     assertThat(a).isEqualTo("1234567890123456789");
+    // const-wide
+    a = String.valueOf(-1234567890123456789L);
+    assertThat(a).isEqualTo("-1234567890123456789");
+    // const-wide/16
+    a = String.valueOf(0L);
+    assertThat(a).isEqualTo("0");
     // const-wide/16
     a = String.valueOf(1L);
     assertThat(a).isEqualTo("1");
@@ -232,21 +242,52 @@ public class SimplifyString {
   @Test
   public void test_Replace_ValueOfFloat() {
     String a;
+    // const v0, #float 3.141593
     a = String.valueOf((float) 3.141593f);
     assertThat(a).isEqualTo("3.141593");
-  }
+    // const/4 v0, #int 0
+    a = String.valueOf((float) 0f);
+    assertThat(a.startsWith("0.0")).isTrue();
+    // const/high16 v0, #int 0x3f80: we don't handle for now.
+    a = String.valueOf((float) 1f);
+    assertThat(a.startsWith("1.0")).isTrue();
+    // const/high16 v0, #int 0x4000: we don't handle.
+    a = String.valueOf((float) 2f);
+    assertThat(a.startsWith("2.0")).isTrue();
+    // const/high16 v0, #int 0x4100: we don't handle.
+    a = String.valueOf((float) 8f);
+    assertThat(a.startsWith("8.0")).isTrue();
+    // const/high16 v0, #int 0x3c80 = 1/64: we don't handle.
+    a = String.valueOf((float) 0.015625f);
+    assertThat(a).isEqualTo("0.015625");
+    // const v0, #float 1024.125000 // #44800400
+    a = String.valueOf((float) 1024.125f);
+    assertThat(a.startsWith("1024.125")).isTrue();
+}
 
   @Test
   public void test_Replace_ValueOfDouble() {
     String a;
-    // const-wide
-    a = String.valueOf((double)3.141592653589793d);
+    // const-wide v0, #double 3.141593 // #400921fb54442d18
+    a = String.valueOf((double) 3.141592653589793d);
     assertThat(a.startsWith("3.14")).isTrue();
-    // const-wide/16
-    a = String.valueOf((double)0d);
+    // const-wide/16 v0, #int 0
+    a = String.valueOf((double) 0d);
     assertThat(a.startsWith("0.0")).isTrue();
-    // const-wide/high16: we don't handle this case for now.
-    a = String.valueOf((double)8d);
-    assertThat(a).isEqualTo("8.0");
+    // const-wide/high16 v0, #long 0x3ff0: we don't handle.
+    a = String.valueOf((double) 1d);
+    assertThat(a.startsWith("1.0")).isTrue();
+    // const-wide/high16 v0, #long 0x400: we don't handle.
+    a = String.valueOf((double) 2d);
+    assertThat(a.startsWith("2.0")).isTrue();
+    // const-wide/high16 v0, #long 0x4020: we dont' handle.
+    a = String.valueOf((double) 8d);
+    assertThat(a.startsWith("8.0")).isTrue();
+    // const-wide/high16 v0, #long 0x3f90: we don't handle.
+    a = String.valueOf((double) 0.015625d);
+    assertThat(a).isEqualTo("0.015625");
+    // const-wide v0, #double 1024.125000 // #4090008000000000
+    a = String.valueOf((double) 1024.125d);
+    assertThat(a.startsWith("1024.125")).isTrue();
   }
 }

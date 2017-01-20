@@ -306,6 +306,16 @@ const std::vector<Pattern>& get_patterns() {
             literal};
   };
 
+  auto const_float = [](uint16_t dest, int8_t literal) -> DexPattern {
+    return {{OPCODE_CONST_4, OPCODE_CONST},
+            {},
+            {dest},
+            DexPattern::Kind::literal,
+            nullptr,
+            nullptr,
+            literal};
+  };
+
   auto const_char = [](uint16_t dest, int8_t literal) -> DexPattern {
     // Modified UTF-8, 1-3 bytes. DX uses const/16 and const to load a char.
     return {{OPCODE_CONST_16, OPCODE_CONST},
@@ -468,10 +478,10 @@ const std::vector<Pattern>& get_patterns() {
       // It replaces valueOf on a float literal by the float itself.
       // String.valueof(float) ==> "float"
       {"Replace_ValueOfFloat",
-       {const_literal(OPCODE_CONST, kRegA, kLiteralA),
+       {const_float(kRegA, kLiteralA),
         invoke_String_valueOf(kRegA, "F"),
         move_result_object(kRegB)},
-       {// (3 + 3 + 1) - 2 = 5 units saving
+       {// ([1, 3] + 3 + 1) - 2 = [3, 5] units saving
         const_string(kRegB, float_A_to_string())}},
 
       // It replaces valueOf on a double literal by the double itself.
