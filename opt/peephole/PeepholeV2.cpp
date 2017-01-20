@@ -110,6 +110,7 @@ static constexpr uint16_t kRegD = 0x07;
 // allow larger numbers. Let's keep within 4-bit so that it can be used for all
 // CONST-* family.
 static constexpr int8_t kLiteralA = 0x1;
+static constexpr int8_t kSingleByteCharA = 0x2;
 
 // String placeholders for 'match' patterns. Returns a unique DexString
 // pointers as an identifier.
@@ -305,6 +306,17 @@ const std::vector<Pattern>& get_patterns() {
             literal};
   };
 
+  auto const_char = [](uint16_t dest, int8_t literal) -> DexPattern {
+    // Modified UTF-8, 1-3 bytes. DX uses const/16 and const to load a char.
+    return {{OPCODE_CONST_16, OPCODE_CONST},
+            {},
+            {dest},
+            DexPattern::Kind::literal,
+            nullptr,
+            nullptr,
+            literal};
+  };
+
   static const std::vector<Pattern> kStringPatterns = {
       // It coalesces init(void) and append(string) into init(string).
       // new StringBuilder().append("...") = new StringBuilder("...")
@@ -338,24 +350,24 @@ const std::vector<Pattern>& get_patterns() {
        {// 4 code unit saving
         const_literal(OPCODE_CONST_16, kRegB, kLiteral16_StringLength_A)}},
 
-      /* DISABLED: TODO: Found a crash, causing VerifyError
+      // DISABLED: TODO: Found a crash, causing VerifyError
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing
-      {"Remove_AppendEmptyString",
-       {const_string(kRegB, string_empty()),
-        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)},
-       {}}, */
+      // {"Remove_AppendEmptyString",
+      //  {const_string(kRegB, string_empty()),
+      //   invoke_StringBuilder_append(kRegA, kRegB, LjavaString)},
+      //  {}},
 
-      /* DISABLED
+      // TODO: It only handles a single-byte char.
       // It coalesces init(void) and append(char) into init(string).
       // StringBuilder().append(C) = new StringBuilder("....")
       {"Coalesce_Init_AppendChar",
        {invoke_StringBuilder_init(kRegA),
-        const_literal(OPCODE_CONST_16, kRegB, kLiteralA),
+        const_char(kRegB, kSingleByteCharA),
         invoke_StringBuilder_append(kRegA, kRegB, "C"),
         move_result_object(kRegA)},
        {const_string(kRegB, char_A_to_string()),
-        invoke_StringBuilder_init_String(kRegA, kRegB)}}, */
+        invoke_StringBuilder_init_String(kRegA, kRegB)}},
 
       // It coalesces append(string) and append(integer) into append(string).
       // StringBuilder.append("...").append(I) = StringBuilder.append("....")
@@ -369,18 +381,18 @@ const std::vector<Pattern>& get_patterns() {
         const_string(kRegB, concat_string_A_int_A()),
         invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
 
-      /* DISABLED
+      // TODO: It only handles a single-byte char.
       // It coalesces append(string) and append(char) into append(string).
       // StringBuilder.append("...").append(C) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendChar",
        {const_string(kRegB, string_A()),
         invoke_StringBuilder_append(kRegA, kRegB, LjavaString),
         move_result_object(kRegC),
-        const_literal(OPCODE_CONST_16, kRegD, kLiteralA),
+        const_char(kRegD, kSingleByteCharA),
         invoke_StringBuilder_append(kRegC, kRegD, "C")},
        {// (2 + 3 + 1 + 2 + 3) - (2 + 3) = 6 code unit saving
         const_string(kRegB, concat_string_A_char_A()),
-        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}}, */
+        invoke_StringBuilder_append(kRegA, kRegB, LjavaString)}},
 
       // It coalesces append(string) and append(boolean) into append(string).
       // StringBuilder.append("...").append(Z) = StringBuilder.append("....")
@@ -425,15 +437,15 @@ const std::vector<Pattern>& get_patterns() {
        {// (1 + 3 + 1) - 2 = 3 16-bit code units saving
         const_string(kRegB, boolean_A_to_string())}},
 
-      /* DISABLED
+      // TODO: It only handles a single-byte char.
       // It replaces valueOf on a literal character by the character itself.
       // String.valueOf(char) ==> "char"
       {"Replace_ValueOfChar",
-       {const_literal(OPCODE_CONST_16, kRegA, kLiteralA),
+       {const_char(kRegA, kSingleByteCharA),
         invoke_String_valueOf(kRegA, "C"),
         move_result_object(kRegB)},
        {// (2 + 3 + 1) - 2 = 4 units saving
-        const_string(kRegB, char_A_to_string())}}, */
+        const_string(kRegB, char_A_to_string())}},
 
       // It replaces valueOf on an integer literal by the integer itself.
       // String.valueof(int) ==> "int"
@@ -487,7 +499,9 @@ struct Matcher {
   std::vector<DexInstruction*> matched_instructions;
   std::unordered_map<uint16_t, uint16_t> matched_regs;
   std::unordered_map<DexString*, DexString*> matched_strings;
-  std::unordered_map<int64_t, int64_t> matched_literals;
+  std::unordered_map<int8_t /*literal identifier*/,
+                     int64_t /*actual literal value*/>
+      matched_literals;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
 
@@ -512,11 +526,18 @@ struct Matcher {
       return true;
     };
 
-    auto match_literal = [&](int64_t pattern_literal, int64_t insn_literal) {
-      if (matched_literals.find(pattern_literal) != end(matched_literals)) {
-        return matched_literals.at(pattern_literal) == insn_literal;
+    auto match_literal = [&](int8_t pattern_literal, int64_t insn_literal_val) {
+      if (pattern_literal == kSingleByteCharA) {
+        // A single-byte modified UTF-8 char is in the range of 0x01 to 0x7F.
+        if (!(0x01 <= insn_literal_val && insn_literal_val <= 0x7F)) {
+          return false;
+        }
+        // It is a single-byte char. Fall through.
       }
-      matched_literals.emplace(pattern_literal, insn_literal);
+      if (matched_literals.find(pattern_literal) != end(matched_literals)) {
+        return matched_literals.at(pattern_literal) == insn_literal_val;
+      }
+      matched_literals.emplace(pattern_literal, insn_literal_val);
       return true;
     };
 
@@ -691,10 +712,13 @@ struct Matcher {
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
               DexString::make_string(a == true ? "true" : "false"));
         } else if (str == char_A_to_string()) {
-          always_assert_log(false, "better unicode handling needed");
-          // int a = check_and_get(matched_literals, kLiteralA);
-          // static_cast<DexOpcodeString*>(clone)->rewrite_string(
-          //     DexString::make_string(std::string(1, a)));
+          // TODO: FIXME: currently it only handles a single-byte char.
+          // A modified UTF-8 character can be 1-3 bytes.
+          int a = check_and_get(matched_literals, kSingleByteCharA);
+          assert(0x01 <= a && a <= 0x7F);
+          // As 'a' is a single-byte character, treat it as an ASCII char.
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(1, a)));
         } else if (str == int_A_to_string()) {
           int a = check_and_get(matched_literals, kLiteralA);
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
@@ -743,11 +767,12 @@ struct Matcher {
           static_cast<DexOpcodeString*>(clone)->rewrite_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
         } else if (str == concat_string_A_char_A()) {
-          always_assert_log(false, "better unicode handling needed");
-          // auto a = check_and_get(matched_strings, string_A())->c_str();
-          // int b = check_and_get(matched_literals, kLiteralA);
-          // static_cast<DexOpcodeString*>(clone)->rewrite_string(
-          //     DexString::make_string(std::string(a) + std::string(1, b)));
+          // TODO: FIXME: currently it only handles a single-byte char.
+          auto a = check_and_get(matched_strings, string_A())->c_str();
+          int b = check_and_get(matched_literals, kSingleByteCharA);
+          assert(0x01 <= b && b <= 0x7F);
+          static_cast<DexOpcodeString*>(clone)->rewrite_string(
+              DexString::make_string(std::string(a) + std::string(1, b)));
         } else {
           always_assert_log(false, "Unexpected string");
         }

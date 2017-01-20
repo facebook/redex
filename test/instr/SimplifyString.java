@@ -40,7 +40,6 @@ public class SimplifyString {
 
   @Test
   public void test_CompileTime_StringLength() {
-    // 4x matches
     int a;
     a = "".length();
     assertThat(a).isEqualTo(0);
@@ -61,17 +60,19 @@ public class SimplifyString {
     a = new StringBuilder("foo");
     a.append("");
     assertThat(a.toString()).isEqualTo("foo");
-
-    b = new StringBuilder("foo");
-    assertThat(b.toString()).isEqualTo("foo");
   }
 
   @Test
   public void test_Coalesce_Init_AppendChar() {
     StringBuilder a;
+    // https://developer.android.com/reference/java/io/DataInput.html#modified-utf-8
+    // Single-byte char [0x0001, 0x007F]: const/16, vA, #int 98 # 0x62
     a = new StringBuilder().append('b');
     assertThat(a.toString()).isEqualTo("b");
-
+    // 2-byte char [0x0080, 0x07FF]: const/16, vA, #int 1632 # 0x660
+    a = new StringBuilder().append('\u0660');
+    assertThat(a.toString()).isEqualTo("\u0660");
+    // 3-byte char [0x08000, 0xFFFF]: const, vA, #int AE40
     a = new StringBuilder().append('\uAE40');
     assertThat(a.toString()).isEqualTo("\uAE40");
   }
@@ -79,44 +80,43 @@ public class SimplifyString {
   @Test
   public void test_Coalesce_AppendString_AppendInt() {
     StringBuilder a;
+    // iconst_2, const/4, append:(I)
     a = new StringBuilder();
-    a.append("foo").append(2); // iconst_2, const/4, append:(I)
+    a.append("foo").append(2);
     assertThat(a.toString()).isEqualTo("foo2");
-
+    // bipush, const/16, append:(I)
     a = new StringBuilder();
-    a.append("foo").append(8); // bipush, const/16, append:(I)
+    a.append("foo").append(8);
     assertThat(a.toString()).isEqualTo("foo8");
-
+    // bipush, const/16, append:(I)
     a = new StringBuilder();
-    a.append("foo").append(42); // bipush, const/16, append:(I)
+    a.append("foo").append(42);
     assertThat(a.toString()).isEqualTo("foo42");
-
+    // sipush, const/16, append:(I)
     a = new StringBuilder();
-    a.append("foo").append(32767); // sipush, const/16, append:(I)
+    a.append("foo").append(32767);
     assertThat(a.toString()).isEqualTo("foo32767");
-
+    // ldc, const, append:(I)
     a = new StringBuilder();
-    a.append("foo").append(1234567890); // ldc, const, append:(I)
+    a.append("foo").append(1234567890);
     assertThat(a.toString()).isEqualTo("foo1234567890");
   }
 
   @Test
   public void test_Coalesce_AppendString_AppendChar() {
     StringBuilder a;
+    // bipush, const/16, append:(C)
     a = new StringBuilder();
-     // bipush, const/16, append:(C)
     a.append("foo").append('0'); // 0x30
     assertThat(a.toString()).isEqualTo("foo0");
-
     a = new StringBuilder();
     a.append("foo").append('Z'); // 0x5A
     assertThat(a.toString()).isEqualTo("fooZ");
-
+    // 2-byte char
     a = new StringBuilder();
     a.append("foo").append('\u0660');
     assertThat(a.toString()).isEqualTo("foo\u0660");
-
-    // Not const16, but it uses const, failing to match.
+    // 3-byte char
     a = new StringBuilder();
     a.append("foo").append('\uAE40');
     assertThat(a.toString()).isEqualTo("foo\uAE40");
@@ -128,7 +128,6 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append(true); // iconst_1, const/4, append:(Z)
     assertThat(a.toString()).isEqualTo("footrue");
-
     a = new StringBuilder();
     a.append("foo").append(false);
     assertThat(a.toString()).isEqualTo("foofalse");
@@ -141,12 +140,10 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append(1234567890123456789L);
     assertThat(a.toString()).isEqualTo("foo1234567890123456789");
-
     // const-wide/16
     a = new StringBuilder();
     a.append("foo").append(1L);
     assertThat(a.toString()).isEqualTo("foo1");
-
     // const-wide/32
     a = new StringBuilder();
     a.append("foo").append(12345678L);
@@ -178,11 +175,14 @@ public class SimplifyString {
   @Test
   public void test_Replace_ValueOfChar() {
     String a;
+    // Single byte, const/16
     a = String.valueOf('X');
     assertThat(a).isEqualTo("X");
+    // Two bytes, const/16
     a = String.valueOf('\u0660');
     assertThat(a).isEqualTo("\u0660");
-    a = String.valueOf('\uAE40');      // Not matched!
+    // Three bytes, const
+    a = String.valueOf('\uAE40');
     assertThat(a).isEqualTo("\uAE40");
   }
 
