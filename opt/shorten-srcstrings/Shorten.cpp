@@ -119,8 +119,7 @@ static void strip_src_strings(
 
   for (auto it : global_src_strings) {
     auto desc_vector = it.second;
-    std::sort(desc_vector.begin(), desc_vector.end());
-    std::unique(desc_vector.begin(), desc_vector.end());
+    sort_unique(desc_vector);
     fprintf(fd, "%s ->", it.first->c_str());
     for (auto str : desc_vector) {
       fprintf(fd, " %s,", str->c_str());
