@@ -114,10 +114,6 @@ class DexString {
     return get_string(nstr, (uint32_t)strlen(nstr));
   }
 
-  static DexString* make_placeholder() {
-    return new DexString();
-  }
-
  public:
   bool is_simple() const {
     if (m_strlen == m_utfsize) return true;

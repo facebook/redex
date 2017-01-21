@@ -17,19 +17,12 @@
 
 RedexContext* g_redex;
 
-RedexContext::RedexContext() {
-  for (size_t i = 0; i < kMaxPlaceholderString; ++i) {
-    s_placeholder_strings[i] = DexString::make_placeholder();
-  }
-}
+RedexContext::RedexContext() {}
 
 RedexContext::~RedexContext() {
   // Delete DexStrings.
   for (auto const& p : s_string_map) {
     delete p.second;
-  }
-  for (auto const& s : s_placeholder_strings) {
-    delete s;
   }
   // Delete DexTypes.  NB: This table intentionally contains aliases (multiple
   // DexStrings map to the same DexType), so we have to dedup the set of types
@@ -84,11 +77,6 @@ DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   auto find = s_string_map.find(nstr);
   auto result = find != s_string_map.end() ? find->second : nullptr;
   return result;
-}
-
-DexString* RedexContext::get_placeholder_string(size_t index) const {
-  always_assert(index < kMaxPlaceholderString);
-  return s_placeholder_strings[index];
 }
 
 DexType* RedexContext::make_type(DexString* dstring) {

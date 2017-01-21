@@ -43,9 +43,6 @@ struct RedexContext {
   DexString* get_string(const char* nstr, uint32_t utfsize);
   template <typename V> void visit_all_dexstring(V v);
 
-  static constexpr size_t kMaxPlaceholderString = 32;
-  DexString* get_placeholder_string(size_t index) const;
-
   DexType* make_type(DexString* dstring);
   DexType* get_type(DexString* dstring);
   void alias_type_name(DexType* type, DexString* new_name);
@@ -96,8 +93,6 @@ struct RedexContext {
   // DexString
   std::map<const char*, DexString*, carray_cmp> s_string_map;
   std::mutex s_string_lock;
-
-  std::array<DexString*, kMaxPlaceholderString> s_placeholder_strings;
 
   // DexType
   std::map<DexString*, DexType*> s_type_map;
