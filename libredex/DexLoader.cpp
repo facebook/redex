@@ -26,7 +26,7 @@ class DexLoader {
   dex_class_def* m_class_defs;
   DexClasses* m_classes;
   uint8_t* m_dexmmap;
-  ssize_t m_dex_size;
+  size_t m_dex_size;
 
  public:
   DexLoader() {}
@@ -40,7 +40,7 @@ class DexLoader {
 
 static int open_dex_file(const char* location,
                          uint8_t*& dmapping,
-                         ssize_t& dsize) {
+                         size_t& dsize) {
   int fd = open(location, O_RDONLY);
   struct stat buf;
   if (fd < 0) {
@@ -96,10 +96,15 @@ DexClasses DexLoader::load_dex(const char* location) {
   if (validate_dex_header(dh) != DL_SUCCESS) {
     exit(1); // FIXME(snay)
   }
-
+  if (dh->class_defs_size == 0) {
+    return DexClasses(0);
+  }
   m_idx = new DexIdx(dh);
-  m_class_defs = (dex_class_def*)(m_dexmmap + dh->class_defs_off);
-  if (dh->class_defs_size <= 0) return DexClasses(0);
+  auto off = (uint64_t)dh->class_defs_off;
+  auto limit = off + dh->class_defs_size * sizeof(dex_class_def);
+  always_assert_log(off < m_dex_size, "class_defs_off out of range");
+  always_assert_log(limit <= m_dex_size, "invalid class_defs_size");
+  m_class_defs = (dex_class_def*)(m_dexmmap + off);
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
   auto workptrs = new work_item[dh->class_defs_size];
