@@ -215,7 +215,7 @@ class DexEncodedValueMethod : public DexEncodedValue {
 };
 
 class DexEncodedValueArray : public DexEncodedValue {
-  std::unique_ptr<std::list<DexEncodedValue*>> m_evalues;
+  std::unique_ptr<std::deque<DexEncodedValue*>> m_evalues;
   bool m_static_val;
 
  public:
@@ -223,13 +223,13 @@ class DexEncodedValueArray : public DexEncodedValue {
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  DexEncodedValueArray(std::list<DexEncodedValue*>* evalues,
+  DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
                        bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
     m_static_val = static_val;
   }
 
-  std::list<DexEncodedValue*>* const evalues() const { return m_evalues.get(); }
+  std::deque<DexEncodedValue*>* const evalues() const { return m_evalues.get(); }
 
   DexEncodedValue* pop_next() {
     if (m_evalues->empty()) return nullptr;

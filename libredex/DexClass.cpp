@@ -778,7 +778,7 @@ static DexEncodedValueArray* load_static_values(DexIdx* idx, uint32_t sv_off) {
 
 DexEncodedValueArray* DexClass::get_static_values() {
   bool has_static_values = false;
-  auto aev = std::make_unique<std::list<DexEncodedValue*>>();
+  auto aev = std::make_unique<std::deque<DexEncodedValue*>>();
   for (auto it = m_sfields.rbegin(); it != m_sfields.rend(); ++it) {
     auto const& f = *it;
     DexEncodedValue* ev = f->get_static_value();
