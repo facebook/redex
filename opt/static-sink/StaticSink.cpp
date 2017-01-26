@@ -34,7 +34,7 @@ namespace {
  * "[[ILjava/lang/String;B" would become (int[][], String, boolean)
  */
 DexTypeList* parse_type_list_string(const char* str) {
-  std::list<DexType*> type_list;
+  std::deque<DexType*> type_list;
   const char* p = str;
   while (*p != '\0') {
     if (*p == 'L') {

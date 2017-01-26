@@ -482,7 +482,7 @@ DexMethod* DexMethod::get_method(std::string canon) {
   auto name_str = canon.substr(name_start, name_end - name_start);
   auto args_str = canon.substr(args_start, args_end - args_start);
   auto rtype_str = canon.substr(rtype_start);
-  std::list<DexType*> args;
+  std::deque<DexType*> args;
   for (auto const& arg_str : split_args(args_str)) {
     args.push_back(DexType::get_type(arg_str.c_str()));
   }

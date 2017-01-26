@@ -113,7 +113,7 @@ std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
 }
 
 std::string form_java_args(const ProguardMap& pg_map,
-                           const std::list<DexType*>& args) {
+                           const std::deque<DexType*>& args) {
   std::string s;
   unsigned long i = 0;
   for (const auto& arg : args) {
@@ -128,7 +128,7 @@ std::string form_java_args(const ProguardMap& pg_map,
   return s;
 }
 
-std::string java_args(const ProguardMap& pg_map, std::list<DexType*>& args) {
+std::string java_args(const ProguardMap& pg_map, const std::deque<DexType*>& args) {
   std::string str = "(";
   str += form_java_args(pg_map, args);
   str += ")";

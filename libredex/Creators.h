@@ -546,5 +546,5 @@ struct ClassCreator {
 
 private:
   DexClass* m_cls;
-  std::list<DexType*> m_interfaces;
+  std::deque<DexType*> m_interfaces;
 };

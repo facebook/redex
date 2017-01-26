@@ -450,7 +450,7 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
     return false;
   }
   DexProto* old_proto = wrappee->get_proto();
-  std::list<DexType*> new_args = old_proto->get_args()->get_type_list();
+  auto new_args = old_proto->get_args()->get_type_list();
   new_args.push_front(wrappee->get_class());
   DexProto* new_proto = DexProto::make_proto(
     old_proto->get_rtype(),

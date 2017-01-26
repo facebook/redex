@@ -49,7 +49,7 @@ DexProto* get_or_make_proto(DexType* intf, DexType* impl, DexProto* proto) {
   if (rtype == intf) rtype = impl;
   DexTypeList* new_args = nullptr;
   const auto args = proto->get_args();
-  std::list<DexType*> new_arg_list;
+  std::deque<DexType*> new_arg_list;
   const auto& arg_list = args->get_type_list();
   for (const auto arg : arg_list) {
     new_arg_list.push_back(arg == intf ? impl : arg);
@@ -121,10 +121,10 @@ void remove_interface(DexType* intf, SingleImplData& data) {
   collect_interfaces(cls);
   collect_interfaces(type_class(intf));
 
-  std::list<DexType*> revisited_intfs;
+  std::deque<DexType*> revisited_intfs;
   std::copy(
       new_intfs.begin(), new_intfs.end(), std::back_inserter(revisited_intfs));
-  revisited_intfs.sort(compare_dextypes);
+  std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   TRACE(INTF, 3, "(REMI)\t=> %s\n", SHOW(cls));
 }

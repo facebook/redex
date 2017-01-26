@@ -355,10 +355,10 @@ inline bool compare_dexfields(const DexField* a, const DexField* b) {
 class DexTypeList {
   friend struct RedexContext;
 
-  std::list<DexType*> m_list;
+  std::deque<DexType*> m_list;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexTypeList(std::list<DexType*>&& p) {
+  DexTypeList(std::deque<DexType*>&& p) {
     m_list = std::move(p);
   }
 
@@ -367,25 +367,27 @@ class DexTypeList {
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
   // See also get_type_list()
-  static DexTypeList* make_type_list(std::list<DexType*>&& p) {
+  static DexTypeList* make_type_list(std::deque<DexType*>&& p) {
     return g_redex->make_type_list(std::move(p));
   }
 
   // Return an existing DexTypeList or nullptr if one does not exist.
-  static DexTypeList* get_type_list(std::list<DexType*>&& p) {
+  static DexTypeList* get_type_list(std::deque<DexType*>&& p) {
     return g_redex->get_type_list(std::move(p));
   }
 
  public:
-  const std::list<DexType*>& get_type_list() const { return m_list; }
+  const std::deque<DexType*>& get_type_list() const { return m_list; }
+
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
    */
   int encode(DexOutputIdx* dodx, uint32_t* output);
+
   friend bool operator<(DexTypeList& a, DexTypeList& b) {
-    std::list<DexType*>::iterator ita = a.m_list.begin();
-    std::list<DexType*>::iterator itb = b.m_list.begin();
+    auto ita = a.m_list.begin();
+    auto itb = b.m_list.begin();
     while (1) {
       if (itb == b.m_list.end()) return false;
       if (ita == a.m_list.end()) return true;
@@ -668,7 +670,7 @@ class DexMethod {
     DexType* cls = DexType::make_type(cls_name);
     DexString* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
-    std::list<DexType*> args;
+    std::deque<DexType*> args;
     for (auto const arg_str : arg_strs) {
       DexType* arg = DexType::make_type(arg_str);
       args.push_back(arg);

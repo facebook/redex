@@ -57,8 +57,8 @@ struct RedexContext {
   void mutate_field(DexField* field,
                     const DexFieldRef& ref);
 
-  DexTypeList* make_type_list(std::list<DexType*>&& p);
-  DexTypeList* get_type_list(std::list<DexType*>&& p);
+  DexTypeList* make_type_list(std::deque<DexType*>&& p);
+  DexTypeList* get_type_list(std::deque<DexType*>&& p);
 
   DexProto* make_proto(DexType* rtype,
                        DexTypeList* args,
@@ -103,7 +103,7 @@ struct RedexContext {
   std::mutex s_field_lock;
 
   // DexTypeList
-  std::map<std::list<DexType*>, DexTypeList*> s_typelist_map;
+  std::map<std::deque<DexType*>, DexTypeList*> s_typelist_map;
   std::mutex s_typelist_lock;
 
   // DexProto

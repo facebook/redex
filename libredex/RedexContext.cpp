@@ -165,7 +165,7 @@ void RedexContext::mutate_field(DexField* field,
   s_field_map.emplace(r, field);
 }
 
-DexTypeList* RedexContext::make_type_list(std::list<DexType*>&& p) {
+DexTypeList* RedexContext::make_type_list(std::deque<DexType*>&& p) {
   std::lock_guard<std::mutex> lock(s_typelist_lock);
   auto it = s_typelist_map.find(p);
   if (it == s_typelist_map.end()) {
@@ -177,7 +177,7 @@ DexTypeList* RedexContext::make_type_list(std::list<DexType*>&& p) {
   }
 }
 
-DexTypeList* RedexContext::get_type_list(std::list<DexType*>&& p) {
+DexTypeList* RedexContext::get_type_list(std::deque<DexType*>&& p) {
   // We need to use the lock to prevent undefined behavior if this method is
   // called while the map is being modified.
   std::lock_guard<std::mutex> lock(s_typelist_lock);

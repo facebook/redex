@@ -340,7 +340,7 @@ void merge(
 // Helpers to load interface methods in a MethodMap.
 //
 
-bool load_interfaces_methods(const std::list<DexType*>&, InterfaceMethods&);
+bool load_interfaces_methods(const std::deque<DexType*>&, InterfaceMethods&);
 
 /**
  * Load methods for a given interface and its super interfaces.
@@ -364,7 +364,7 @@ bool load_interface_methods(const DexClass* intf_cls,
  * If any interface escapes (no DexClass*) return true.
  */
 bool load_interfaces_methods(
-    const std::list<DexType*>& interfaces, InterfaceMethods& methods) {
+    const std::deque<DexType*>& interfaces, InterfaceMethods& methods) {
   bool escaped = false;
   for (const auto& intf : interfaces) {
     auto intf_cls = type_class(intf);
@@ -540,7 +540,7 @@ void mark_all_escaped(MethodLinkManager& links) {
 }
 
 
-bool load_interfaces_methods_link(const std::list<DexType*>&,
+bool load_interfaces_methods_link(const std::deque<DexType*>&,
     MethodLinkManager&, std::unordered_set<const DexType*>&);
 
 /**
@@ -571,7 +571,7 @@ bool load_interface_methods_link(
  * with the class in links.class_interfaces
  */
 bool load_interfaces_methods_link(
-    const std::list<DexType*>& interfaces, MethodLinkManager& links,
+    const std::deque<DexType*>& interfaces, MethodLinkManager& links,
     std::unordered_set<const DexType*>& class_interfaces) {
   bool escaped = false;
   for (const auto& intf : interfaces) {

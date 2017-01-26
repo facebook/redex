@@ -82,7 +82,7 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
   const uint32_t* tlp = get_uint_data(offset);
   uint32_t size = *tlp++;
   const uint16_t* typep = (const uint16_t*)tlp;
-  std::list<DexType*> tlist;
+  std::deque<DexType*> tlist;
   for (uint32_t i = 0; i < size; i++) {
     tlist.push_back(get_typeidx(typep[i]));
   }

@@ -60,12 +60,12 @@ DexMethod* obj_ctor() {
       get_object_type(),
       DexString::make_string("<init>"),
       DexProto::make_proto(get_void_type(),
-          DexTypeList::make_type_list(std::list<DexType*>())));
+          DexTypeList::make_type_list(std::deque<DexType*>())));
   return ctor;
 }
 
 DexProto* get_updated_proto(DexProto* proto, DexType* impl, DexType* untf) {
-  std::list<DexType*> new_args;
+  std::deque<DexType*> new_args;
   new_args.push_back(untf);
   for (auto arg : proto->get_args()->get_type_list()) {
     if (arg == impl) {
@@ -460,7 +460,7 @@ void make_unterface_class(Unterface& unterface) {
   TRACE(UNTF, 8, "Unterface field %s\n", SHOW(obj_field));
   unterface.obj_field = obj_field;
 
-  std::list<DexType*> args{get_object_type(), get_int_type()};
+  std::deque<DexType*> args{get_object_type(), get_int_type()};
   auto proto = DexProto::make_proto(get_void_type(),
       DexTypeList::make_type_list(std::move(args)));
   auto cr_ctor = new MethodCreator(untf_type, DexString::make_string("<init>"),

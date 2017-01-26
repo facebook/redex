@@ -21,12 +21,10 @@ DexString* get_name(DexMethod* meth) {
 DexProto* make_static_sig(DexMethod* meth) {
   auto proto = meth->get_proto();
   auto rtype = proto->get_rtype();
-  std::list<DexType*> arg_list;
+  std::deque<DexType*> arg_list;
   arg_list.push_back(meth->get_class());
-  auto args = proto->get_args();
-  for (auto arg : args->get_type_list()) {
-    arg_list.push_back(arg);
-  }
+  auto args = proto->get_args()->get_type_list();
+  arg_list.insert(arg_list.end(), args.begin(), args.end());
   auto new_args = DexTypeList::make_type_list(std::move(arg_list));
   return DexProto::make_proto(rtype, new_args);
 }

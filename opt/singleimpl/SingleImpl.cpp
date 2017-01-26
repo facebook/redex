@@ -45,7 +45,7 @@ constexpr const char* METRIC_INVOKE_INT_TO_VIRT = "num_invoke_intf_to_virt";
  * we will only have one entry { A => C }
  * keep that in mind when using this map
  */
-void map_interfaces(const std::list<DexType*>& intf_list,
+void map_interfaces(const std::deque<DexType*>& intf_list,
                     DexClass* cls,
                     TypeToTypes& intfs_to_classes) {
   for (auto& intf : intf_list) {
