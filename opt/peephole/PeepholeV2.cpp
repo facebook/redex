@@ -106,8 +106,6 @@ Register get_pair_register(Register reg) {
 enum class Literal {
   // For an arbitrary literal argument
   A,
-  // For only single-byte modified UTF-8 character literal.
-  A_SingleByteChar,
   // Directive: Compare strings A and B and write the result as a 4-bit integer.
   Compare_Strings_A_B,
   // Directive: Write the length of string A as a 16-bit integer.
@@ -351,15 +349,15 @@ const std::vector<Pattern>& get_patterns() {
       //   invoke_StringBuilder_append(Register::A, Register::B, LjavaString)},
       //  {}},
 
-      // TODO: It only handles a single-byte char.
       // It coalesces init(void) and append(char) into init(string).
       // StringBuilder().append(C) = new StringBuilder("....")
       {"Coalesce_Init_AppendChar",
        {invoke_StringBuilder_init(Register::A),
-        const_char(Register::B, Literal::A_SingleByteChar),
+        const_char(Register::B, Literal::A),
         invoke_StringBuilder_append(Register::A, Register::B, "C"),
         move_result_object(Register::A)},
-       {const_string(Register::B, String::char_A_to_string),
+       {// (3 + [2, 3] + 3 + 1) - (2 + 3) = [4, 5] code unit saving
+        const_string(Register::B, String::char_A_to_string),
         invoke_StringBuilder_init_String(Register::A, Register::B)}},
 
       // It coalesces append(string) and append(integer) into append(string).
@@ -374,16 +372,15 @@ const std::vector<Pattern>& get_patterns() {
         const_string(Register::B, String::concat_string_A_int_A),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString)}},
 
-      // TODO: It only handles a single-byte char.
       // It coalesces append(string) and append(char) into append(string).
       // StringBuilder.append("...").append(C) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendChar",
        {const_string(Register::B, String::A),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
-        const_char(Register::D, Literal::A_SingleByteChar),
+        const_char(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "C")},
-       {// (2 + 3 + 1 + 2 + 3) - (2 + 3) = 6 code unit saving
+       {// (2 + 3 + 1 + [2, 3] + 3) - (2 + 3) = [6, 7] code unit saving
         const_string(Register::B, String::concat_string_A_char_A),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString)}},
 
@@ -431,14 +428,13 @@ const std::vector<Pattern>& get_patterns() {
        {// (1 + 3 + 1) - 2 = 3 16-bit code units saving
         const_string(Register::B, String::boolean_A_to_string)}},
 
-      // TODO: It only handles a single-byte char.
       // It replaces valueOf on a literal character by the character itself.
       // String.valueOf(char) ==> "char"
       {"Replace_ValueOfChar",
-       {const_char(Register::A, Literal::A_SingleByteChar),
+       {const_char(Register::A, Literal::A),
         invoke_String_valueOf(Register::A, "C"),
         move_result_object(Register::B)},
-       {// (2 + 3 + 1) - 2 = 4 units saving
+       {// ([2, 3] + 3 + 1) - 2 = [4, 5] units saving
         const_string(Register::B, String::char_A_to_string)}},
 
       // It replaces valueOf on an integer literal by the integer itself.
@@ -528,13 +524,6 @@ struct Matcher {
     };
 
     auto match_literal = [&](Literal pattern, int64_t insn_literal_val) {
-      if (pattern == Literal::A_SingleByteChar) {
-        // A single-byte modified UTF-8 char is in the range of 0x01 to 0x7F.
-        if (!(0x01 <= insn_literal_val && insn_literal_val <= 0x7F)) {
-          return false;
-        }
-        // It is a single-byte char. Fall through.
-      }
       if (matched_literals.find(pattern) != end(matched_literals)) {
         return matched_literals.at(pattern) == insn_literal_val;
       }
@@ -698,13 +687,10 @@ struct Matcher {
           break;
         }
         case String::char_A_to_string: {
-          // TODO: FIXME: currently it only handles a single-byte char.
-          // A modified UTF-8 character can be 1-3 bytes.
-          int a = check_and_get(matched_literals, Literal::A_SingleByteChar);
-          assert(0x01 <= a && a <= 0x7F);
-          // As 'a' is a single-byte character, treat it as an ASCII char.
+          int a = check_and_get(matched_literals, Literal::A);
+          auto achar = encode_utf8_char_to_mutf8_string(a);
           static_cast<DexOpcodeString*>(replace)->rewrite_string(
-              DexString::make_string(std::string(1, a)));
+              DexString::make_string(achar.c_str(), 1));
           break;
         }
         case String::int_A_to_string: {
@@ -768,12 +754,11 @@ struct Matcher {
           break;
         }
         case String::concat_string_A_char_A: {
-          // TODO: FIXME: currently it only handles a single-byte char.
           auto a = check_and_get(matched_strings, String::A)->c_str();
-          int b = check_and_get(matched_literals, Literal::A_SingleByteChar);
-          assert(0x01 <= b && b <= 0x7F);
+          int b = check_and_get(matched_literals, Literal::A);
+          auto bchar = encode_utf8_char_to_mutf8_string(b);
           static_cast<DexOpcodeString*>(replace)->rewrite_string(
-              DexString::make_string(std::string(a) + std::string(1, b)));
+              DexString::make_string(std::string(a) + bchar));
           break;
         }
         default:

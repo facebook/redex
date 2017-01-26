@@ -213,6 +213,45 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   /* Invalid string. */
   always_assert_log(false, "Invalid size encoding mutf8 string");
 }
+
+inline uint32_t size_of_utf8_char(const int32_t ival) {
+  if (ival >= 0x00 && ival <= 0x7F) {
+    return 1;
+  } else if (ival <= 0x7FF) {
+    return 2;
+  } else {
+    return 3;
+  }
+}
+
+// Pretty much the reverse of mutf8_next_code_point().
+inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
+  uint32_t size = size_of_utf8_char(ival);
+  char buf[4];
+  int idx = 0;
+  if (size == 1) {
+    assert(ival <= 0x7F);
+    buf[idx++] = ival;
+  } else if (size == 2) {
+    uint8_t byte1 = 0xC0 | ((ival >> 6) & 0x1F);
+    uint8_t byte2 = 0x80 | (ival & 0x3F);
+    buf[idx++] = byte1;
+    buf[idx++] = byte2;
+  } else if (size == 3) {
+    uint8_t byte1 = 0xE0 | ((ival >> 12) & 0x0F);
+    uint8_t byte2 = 0x80 | ((ival >> 6) & 0x3F);
+    uint8_t byte3 = 0x80 | (ival & 0x3F);
+    buf[idx++] = byte1;
+    buf[idx++] = byte2;
+    buf[idx++] = byte3;
+  } else {
+    always_assert_log(false, "Unexpected char size: %u", size);
+  }
+
+  buf[idx] = 0x00;
+  return std::string(buf);
+}
+
 /*
  * This header exists at the beginning of a non-optimized dex.  The checking
  * we do on this has to do with making sure we're working on a non-opt
