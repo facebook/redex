@@ -164,7 +164,7 @@ class LocalDce {
     auto transform =
         MethodTransformer(method, true /* want_cfg */);
     auto& cfg = transform->cfg();
-    auto blocks = PostOrderSort(cfg).get();
+    auto blocks = postorder_sort(cfg);
     auto regs = method->get_code()->get_registers_size();
     std::vector<boost::dynamic_bitset<>> liveness(
         cfg.size(), boost::dynamic_bitset<>(regs + 1));

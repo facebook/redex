@@ -207,19 +207,7 @@ bool ends_with_may_throw(Block* b, bool end_block_before_throw = true);
  * Build a postorder sorted vector of blocks from the given CFG.  Uses a
  * standard depth-first search with a side table of already-visited nodes.
  */
-class PostOrderSort {
- private:
-  const std::vector<Block*>& m_cfg;
-  std::unordered_set<Block*> m_visited;
-  std::vector<Block*> m_postorder_list;
-
-  void postorder(Block* b);
-
- public:
-  PostOrderSort(const std::vector<Block*>& cfg) : m_cfg(cfg) {}
-
-  std::vector<Block*>&& get();
-};
+std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
 
 class InlineContext;
 

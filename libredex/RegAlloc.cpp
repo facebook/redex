@@ -227,7 +227,7 @@ void allocate_registers(DexMethod* m) {
   }
   MethodTransformer transform(m, true /* want_cfg */);
   auto& cfg = transform->cfg();
-  auto blocks = PostOrderSort(cfg).get();
+  auto blocks = postorder_sort(cfg);
   auto nregs = m->get_code()->get_registers_size();
   auto liveness_map = Liveness::analyze(blocks, nregs);
   auto ins = m->get_code()->get_ins_size();

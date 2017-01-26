@@ -30,26 +30,35 @@ MethodTransform::FatMethodCache MethodTransform::s_cache;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void PostOrderSort::postorder(Block* b) {
-  auto pos = m_visited.find(b);
-  if (pos != m_visited.end()) {
-    return;
-  }
-  m_visited.emplace_hint(pos, b);
-  for (auto& s : b->succs()) {
-    postorder(s);
-  }
-  m_postorder_list.emplace_back(b);
-}
-
-std::vector<Block*>&& PostOrderSort::get() {
-  if (m_cfg.size() > 0) {
-    postorder(m_cfg[0]);
-    for (size_t i = 1; i < m_cfg.size(); i++) {
-      if (m_cfg[i]->preds().size() == 0) postorder(m_cfg[i]);
+std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
+  std::vector<Block*> postorder;
+  std::vector<Block*> stack;
+  std::unordered_set<Block*> visited;
+  for (size_t i = 1; i < cfg.size(); i++) {
+    if (cfg[i]->preds().size() == 0) {
+      stack.push_back(cfg[i]);
     }
   }
-  return std::move(m_postorder_list);
+  stack.push_back(cfg[0]);
+  while (!stack.empty()) {
+    auto const& curr = stack.back();
+    visited.insert(curr);
+    bool all_succs_visited = [&] {
+      for (auto const& s : curr->succs()) {
+        if (!visited.count(s)) {
+          stack.push_back(s);
+          return false;
+        }
+      }
+      return true;
+    }();
+    if (all_succs_visited) {
+      assert(curr == stack.back());
+      postorder.push_back(curr);
+      stack.pop_back();
+    }
+  }
+  return postorder;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
