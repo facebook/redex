@@ -1483,10 +1483,8 @@ bool end_of_block(const FatMethod* fm,
   if (it->type != MFLOW_OPCODE) {
     return false;
   }
-  if (is_branch(it->insn->opcode()) || is_return(it->insn->opcode())) {
-    return true;
-  }
-  if (in_try && it->insn->opcode() == OPCODE_THROW) {
+  if (is_branch(it->insn->opcode()) || is_return(it->insn->opcode()) ||
+      it->insn->opcode() == OPCODE_THROW) {
     return true;
   }
   return false;
