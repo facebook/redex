@@ -53,7 +53,8 @@
   TM(SYNT)                                      \
   TM(TIME)                                      \
   TM(TRACKRESOURCES)                            \
-  TM(UNTF)
+  TM(UNTF)                                      \
+  TM(VERIFY)
 
 enum TraceModule {
 #define TM(x) x,

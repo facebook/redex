@@ -42,6 +42,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unterface \
+	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/util \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
@@ -149,6 +150,7 @@ redex_all_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
+	opt/verifier/Verifier.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

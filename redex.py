@@ -475,6 +475,7 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
 
     if config_dict.get('proguard_map_output', '') != '':
         merge_proguard_maps(

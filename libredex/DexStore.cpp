@@ -13,11 +13,15 @@
 #include "DexStore.h"
 
 std::string DexStore::get_name() {
-  return m_name;
+  return m_metadata.get_id();
 }
 
 std::vector<DexClasses>& DexStore::get_dexen() {
   return m_dexen;
+}
+
+std::vector<std::string> DexStore::get_dependencies() {
+  return m_metadata.get_dependencies();
 }
 
 void DexStore::add_classes(DexClasses classes) {

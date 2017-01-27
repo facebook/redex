@@ -15,19 +15,33 @@
 
 class DexClasses;
 
+class DexMetadata {
+  std::string id;
+  std::vector<std::string> dependencies;
+  std::vector<std::string> files;
+
+public:
+  const std::string get_id() { return id; }
+  void set_id(std::string name) { id = name; }
+  const std::vector<std::string> get_files() { return files; }
+  const std::vector<std::string> get_dependencies() { return dependencies; }
+
+  void parse(const std::string& path);
+};
+
 class DexStore {
   std::vector<DexClasses> m_dexen;
-  std::string m_name;
+  DexMetadata m_metadata;
 
  public:
-  DexStore(const std::string name) :
-    m_name(name) {
-  };
+  DexStore(const DexMetadata metadata) :
+    m_metadata(metadata) {};
   DexStore(const DexStore&) = delete;
   DexStore(DexStore&&) = default;
 
   std::string get_name();
   std::vector<DexClasses>& get_dexen();
+  std::vector<std::string> get_dependencies();
 
   void add_classes(DexClasses classes);
 };
@@ -79,16 +93,4 @@ public:
   bool operator==(const DexStoreClassesIterator& rhs) { return m_current_classes == rhs.m_current_classes; }
   bool operator!=(const DexStoreClassesIterator& rhs) { return m_current_classes != rhs.m_current_classes; }
   DexClasses& operator*() { return *m_current_classes; }
-};
-
-class DexMetadata {
-  std::string id;
-  std::vector<std::string> dependencies;
-  std::vector<std::string> files;
-
-public:
-  const std::string& get_id() { return id; }
-  const std::vector<std::string> get_files() { return files; }
-
-  void parse(const std::string& path);
 };

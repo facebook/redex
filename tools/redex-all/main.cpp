@@ -414,7 +414,9 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  DexStore root_store("classes");
+  DexMetadata root_metadata;
+  root_metadata.set_id("classes");
+  DexStore root_store(root_metadata);
   DexStoresVector stores;
   stores.emplace_back(std::move(root_store));
 
@@ -428,7 +430,7 @@ int main(int argc, char* argv[]) {
       } else {
         DexMetadata store_metadata;
         store_metadata.parse(filename);
-        DexStore store(store_metadata.get_id().c_str());
+        DexStore store(store_metadata);
         for (auto file_path : store_metadata.get_files()) {
           DexClasses classes = load_classes_from_dex(file_path.c_str());
           store.add_classes(std::move(classes));
