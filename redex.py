@@ -297,6 +297,18 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     else:
         log('Skipping ' + human_name + ' copy, since no file found to copy')
 
+
+def validate_args(args):
+    if args.sign:
+        for arg_name in ['keystore', 'keyalias', 'keypass']:
+            if getattr(args, arg_name) is None:
+                raise argparse.ArgumentTypeError(
+                    'Could not find a suitable default for --{} and no value '
+                    'was provided.  This argument is required when --sign '
+                    'is used'.format(arg_name),
+                )
+
+
 def arg_parser(
         binary=None,
         config=None,
@@ -501,4 +513,5 @@ if __name__ == '__main__':
     except:
         pass
     args = arg_parser(**keys).parse_args()
+    validate_args(args)
     run_redex(args)
