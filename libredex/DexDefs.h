@@ -231,7 +231,12 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
   int idx = 0;
   if (size == 1) {
     assert(ival <= 0x7F);
-    buf[idx++] = ival;
+    if (ival == 0x00) { // \u0000 in 2 bytes
+      buf[idx++] = 0xC0;
+      buf[idx++] = 0x80;
+    } else {
+      buf[idx++] = ival;
+    }
   } else if (size == 2) {
     uint8_t byte1 = 0xC0 | ((ival >> 6) & 0x1F);
     uint8_t byte2 = 0x80 | (ival & 0x3F);

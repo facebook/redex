@@ -299,13 +299,11 @@ const std::vector<Pattern>& get_patterns() {
             {.literal = literal}};
   };
 
-  auto const_char = [](Register dest, Literal literal) -> DexPattern {
-    // Modified UTF-8, 1-3 bytes. DX uses const/16 and const to load a char.
-    return {{OPCODE_CONST_16, OPCODE_CONST},
-            {},
-            {dest},
-            DexPattern::Kind::literal,
-            {.literal = literal}};
+  auto const_char = [&const_integer](Register dest,
+                                     Literal literal) -> DexPattern {
+    // Modified UTF-8, 1-3 bytes. DX uses const/4 for the null character
+    // (\u0000), and const/16 and const to load a char.
+    return const_integer(dest, literal);
   };
 
   static const std::vector<Pattern> kStringPatterns = {
@@ -356,7 +354,7 @@ const std::vector<Pattern>& get_patterns() {
         const_char(Register::B, Literal::A),
         invoke_StringBuilder_append(Register::A, Register::B, "C"),
         move_result_object(Register::A)},
-       {// (3 + [2, 3] + 3 + 1) - (2 + 3) = [4, 5] code unit saving
+       {// (3 + [1, 2, 3] + 3 + 1) - (2 + 3) = [3, 4, 5] code unit saving
         const_string(Register::B, String::char_A_to_string),
         invoke_StringBuilder_init_String(Register::A, Register::B)}},
 
@@ -368,7 +366,7 @@ const std::vector<Pattern>& get_patterns() {
         move_result_object(Register::C),
         const_integer(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "I")},
-       {// (2 + 3 + 1 + [1, 3] + 3) - (2 + 3) = [5, 7] code unit saving
+       {// (2 + 3 + 1 + [1, 2, 3] + 3) - (2 + 3) = [5, 6, 7] code unit saving
         const_string(Register::B, String::concat_string_A_int_A),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString)}},
 
@@ -380,7 +378,7 @@ const std::vector<Pattern>& get_patterns() {
         move_result_object(Register::C),
         const_char(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "C")},
-       {// (2 + 3 + 1 + [2, 3] + 3) - (2 + 3) = [6, 7] code unit saving
+       {// (2 + 3 + 1 + [1, 2, 3] + 3) - (2 + 3) = [5, 6, 7] code unit saving
         const_string(Register::B, String::concat_string_A_char_A),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString)}},
 
@@ -434,7 +432,7 @@ const std::vector<Pattern>& get_patterns() {
        {const_char(Register::A, Literal::A),
         invoke_String_valueOf(Register::A, "C"),
         move_result_object(Register::B)},
-       {// ([2, 3] + 3 + 1) - 2 = [4, 5] units saving
+       {// ([1, 2, 3] + 3 + 1) - 2 = [3, 4, 5] units saving
         const_string(Register::B, String::char_A_to_string)}},
 
       // It replaces valueOf on an integer literal by the integer itself.

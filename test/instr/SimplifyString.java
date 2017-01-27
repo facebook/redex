@@ -69,6 +69,9 @@ public class SimplifyString {
     // Single-byte char [0x0001, 0x007F]: const/16, vA, #int 98 # 0x62
     a = new StringBuilder().append('b');
     assertThat(a.toString()).isEqualTo("b");
+    // 2-byte \u0000: const/4, vA, #int 0
+    a = new StringBuilder().append('\u0000');
+    assertThat(a.toString()).isEqualTo("\u0000");
     // 2-byte char [0x0080, 0x07FF]: const/16, vA, #int 1632 # 0x660
     a = new StringBuilder().append('\u0660');
     assertThat(a.toString()).isEqualTo("\u0660");
@@ -116,7 +119,7 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append('\u0660');
     assertThat(a.toString()).isEqualTo("foo\u0660");
-    // 2-byte \u0000; this is not optimized yet.
+    // 2-byte \u0000
     a = new StringBuilder();
     a.append("foo").append('\u0000');
     assertThat(a.toString()).isEqualTo("foo\u0000");
@@ -190,7 +193,6 @@ public class SimplifyString {
     a = String.valueOf('\u0660');
     assertThat(a).isEqualTo("\u0660");
     // Two bytes, const/16, \u0000
-    // This is not optimized yet!
     a = String.valueOf('\u0000');
     assertThat(a).isEqualTo("\u0000");
     // Three bytes, const
