@@ -414,9 +414,7 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  DexMetadata root_metadata;
-  root_metadata.set_id("classes");
-  DexStore root_store(root_metadata);
+  DexStore root_store("classes");
   DexStoresVector stores;
   stores.emplace_back(std::move(root_store));
 

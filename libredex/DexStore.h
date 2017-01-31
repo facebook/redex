@@ -36,6 +36,7 @@ class DexStore {
  public:
   DexStore(const DexMetadata metadata) :
     m_metadata(metadata) {};
+  DexStore(const std::string name);
   DexStore(const DexStore&) = delete;
   DexStore(DexStore&&) = default;
 
