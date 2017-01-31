@@ -63,12 +63,15 @@ static int open_dex_file(const char* location,
   return DL_SUCCESS;
 }
 
-static int validate_dex_header(dex_header* dh) {
+static void validate_dex_header(dex_header* dh, size_t dexsize) {
   if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC, sizeof(dh->magic))) {
-    fprintf(stderr, "Bad dex magic %s\n", dh->magic);
-    return DL_FAIL;
+    always_assert_log(false, "Bad dex magic %s\n", dh->magic);
   }
-  return DL_SUCCESS;
+  always_assert_log(
+    dh->file_size == dexsize,
+    "Reported size in header (%z) does not match file size (%u)\n",
+    dexsize,
+    dh->file_size);
 }
 
 struct class_load_work {
@@ -93,9 +96,7 @@ DexClasses DexLoader::load_dex(const char* location) {
     exit(1); // FIXME(snay)
   }
   dh = (dex_header*)m_dexmmap;
-  if (validate_dex_header(dh) != DL_SUCCESS) {
-    exit(1); // FIXME(snay)
-  }
+  validate_dex_header(dh, m_dex_size);
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }

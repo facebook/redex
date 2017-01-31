@@ -98,12 +98,12 @@ class DexIdx {
   }
 
   const uint32_t* get_uint_data(uint32_t offset) {
-    /* FIXME: Checks */
+    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
     return (uint32_t*)(m_dexbase + offset);
   }
 
   const uint8_t* get_uleb_data(uint32_t offset) {
-    /* FIXME: Checks */
+    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
     return m_dexbase + offset;
   }
 

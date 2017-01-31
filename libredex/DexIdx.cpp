@@ -14,6 +14,9 @@
 #include "DexClass.h"
 
 #define INIT_DMAP_ID(TYPE, CACHETYPE)                                   \
+  always_assert_log(                                                    \
+    dh->TYPE##_ids_off < dh->file_size,                                 \
+    #TYPE " section offset out of range");                              \
   m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off);  \
   m_##TYPE##_ids_size = dh->TYPE##_ids_size;                            \
   m_##TYPE##_cache = (CACHETYPE*)calloc(dh->TYPE##_ids_size, sizeof(CACHETYPE))
@@ -38,6 +41,9 @@ DexIdx::~DexIdx() {
 DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   assert(stridx < m_string_ids_size);
   uint32_t stroff = m_string_ids[stridx].offset;
+  always_assert_log(
+    stroff < ((dex_header*)m_dexbase)->file_size,
+    "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
   int utfsize = read_uleb128(&dstr);
