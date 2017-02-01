@@ -448,10 +448,9 @@ int main(int argc, char* argv[]) {
             pg_config.basedirectory + "/" + library_jar.c_str();
         if (!load_jar_file(basedir_path.c_str())) {
           fprintf(stderr,
-                  "WARNING: Error in jar %s - continue. This may lead to "
-                  "unexpected "
-                  "behavior, please check your jars\n",
+                  "ERROR: Library jar could not be loaded: %s\n",
                   library_jar.c_str());
+          exit(1);
         }
       }
     }
