@@ -18,6 +18,7 @@ class FinalInlinePass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("keep_class_members", {}, m_keep_class_members);
     pc.get("remove_class_members", {}, m_remove_class_members);
+    pc.get("replace_encodable_clinits", false, m_replace_encodable_clinits);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -26,4 +27,5 @@ class FinalInlinePass : public Pass {
   std::vector<std::string> m_keep_class_member_annos;
   std::vector<std::string> m_keep_class_members;
   std::vector<std::string> m_remove_class_members;
+  bool m_replace_encodable_clinits;
 };

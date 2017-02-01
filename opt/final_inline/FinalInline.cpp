@@ -209,22 +209,21 @@ void inline_sget(DexMethod* method, DexOpcodeField* opfield) {
  */
 void get_sput_in_clinit(DexClass* clazz,
                         std::unordered_map<DexField*, bool>& blank_statics) {
-  auto methods = clazz->get_dmethods();
-  for (auto method : methods) {
-    if (is_clinit(method)) {
-      always_assert_log(is_static(method) && is_constructor(method),
-          "static constructor doesn't have the proper access bits set\n");
-      auto& code = method->get_code();
-      auto opcodes = code->get_instructions();
-      for (auto opcode : opcodes) {
-        if (opcode->has_fields() && is_sput(opcode->opcode())) {
-          auto fieldop = static_cast<DexOpcodeField*>(opcode);
-          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
-          if (field == nullptr || !field->is_concrete()) continue;
-          if (field->get_class() != clazz->get_type()) continue;
-          blank_statics[field] = true;
-        }
-      }
+  auto clinit = clazz->get_clinit();
+  if (clinit == nullptr) {
+    return;
+  }
+  always_assert_log(is_static(clinit) && is_constructor(clinit),
+                    "static constructor doesn't have the proper access bits set\n");
+  auto& code = clinit->get_code();
+  auto opcodes = code->get_instructions();
+  for (auto opcode : opcodes) {
+    if (opcode->has_fields() && is_sput(opcode->opcode())) {
+      auto fieldop = static_cast<DexOpcodeField*>(opcode);
+      auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+      if (field == nullptr || !field->is_concrete()) continue;
+      if (field->get_class() != clazz->get_type()) continue;
+      blank_statics[field] = true;
     }
   }
 }
@@ -288,12 +287,105 @@ void inline_field_values(Scope& fullscope) {
   MethodTransform::sync_all();
 }
 
+/*
+ * Verify that we can handle converting the literal contained in the
+ * const op into an encoded value.
+ *
+ * TODO: Strings and wide
+ */
+static bool validate_const_for_ev(DexInstruction* op) {
+  if (!is_const(op->opcode())) {
+    return false;
+  }
+  switch (op->opcode()) {
+  case OPCODE_CONST_4:
+  case OPCODE_CONST_16:
+  case OPCODE_CONST:
+    return true;
+  default:
+    return false;
+  }
+}
+
+/*
+ * Verify that we can convert the field in the sput into an encoded value.
+ */
+static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op) {
+  if (!(op->has_fields() && is_sput(op->opcode()))) {
+    return false;
+  }
+  auto fieldop = static_cast<DexOpcodeField*>(op);
+  auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+  return (field != nullptr) && (field->get_class() == clazz->get_type());
+}
+
+/*
+ * Attempt to replace the clinit with corresponding encoded values.
+ */
+static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
+  auto& code = clinit->get_code();
+  auto opcodes = code->get_instructions();
+
+  // If there are an odd number of insns the last must be a return
+  if ((opcodes.size() % 2 != 0) && !is_return(opcodes.back()->opcode())) {
+    return false;
+  }
+
+  // Verify opcodes are (const, sput)* pairs
+  for (size_t i = 0; i < opcodes.size() - 1; i += 2) {
+    auto const_op = opcodes[i];
+    auto sput_op = opcodes[i + 1];
+    if (!(validate_const_for_ev(const_op) &&
+          validate_sput_for_ev(clazz, sput_op) &&
+          (const_op->dest() == sput_op->src(0)))) {
+      return false;
+    }
+  }
+
+  // Attach encoded values and remove the clinit
+  for (size_t i = 0; i < opcodes.size() - 1; i += 2) {
+    auto const_op = opcodes[i];
+    auto sput_op = opcodes[i + 1];
+    auto fieldop = static_cast<DexOpcodeField*>(sput_op);
+    auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+    auto ev = DexEncodedValue::zero_for_type(field->get_type());
+    ev->value((uint64_t) const_op->literal());
+    field->make_concrete(field->get_access(), ev);
+  }
+  clazz->remove_method(clinit);
+
+  return true;
+}
+
+static size_t replace_encodable_clinits(Scope& fullscope) {
+  size_t nreplaced = 0;
+  size_t ntotal = 0;
+  for (auto clazz : fullscope) {
+    auto clinit = clazz->get_clinit();
+    if (clinit == nullptr) {
+      continue;
+    }
+    ntotal++;
+    if (try_replace_clinit(clazz, clinit)) {
+      TRACE(FINALINLINE, 2, "Replaced clinit for class %s with encoded values\n", SHOW(clazz));
+      nreplaced++;
+    }
+  }
+  MethodTransform::sync_all();
+  TRACE(FINALINLINE, 1, "Replaced %lu/%lu clinits with encoded values\n", nreplaced, ntotal);
+  return nreplaced;
+}
+
 void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE, 1, "FinalInlinePass not run because no ProGuard configuration was provided.");
     return;
   }
   auto scope = build_class_scope(stores);
+  if (m_replace_encodable_clinits) {
+    auto nreplaced = replace_encodable_clinits(scope);
+    mgr.incr_metric("encodable_clinits_replaced", nreplaced);
+  }
   inline_field_values(scope);
   remove_unused_fields(scope, m_remove_class_members, m_keep_class_members);
 }

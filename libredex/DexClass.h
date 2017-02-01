@@ -844,7 +844,7 @@ class DexClass {
    * Unlike constructors, there's only ever one clinit method.
    * It takes no arguments and returns void.
    */
-  const DexMethod* get_clinit() const {
+  DexMethod* get_clinit() const {
     DexType* return_type = DexType::make_type("V");
     DexString* method_name = DexString::get_string("<clinit>");
     DexTypeList* argument_list = DexTypeList::get_type_list({});
