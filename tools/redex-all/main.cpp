@@ -387,7 +387,6 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  // New ProGuard parser
   redex::ProguardConfiguration pg_config;
   for (const auto pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file " + pg_config_path);

@@ -973,8 +973,8 @@ void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
     // Try with -basedirectory
     config.open(pg_config->basedirectory + "/" + filename);
     if (!config.is_open()) {
-      cerr << "Failed to open ProGuard configuration file " << filename << endl;
-      pg_config->ok = false;
+      cerr << "ERROR: Failed to open ProGuard configuration file " << filename << endl;
+      exit(1);
     }
   }
 
