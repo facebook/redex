@@ -9,7 +9,9 @@
 
 #pragma once
 
-#include <pthread.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 /*
  * Question: What happens when you alot yourself 30 minutes
@@ -32,7 +34,7 @@ struct per_thread {
   work_item* wi __attribute__((aligned(64)));
   int next;
   int last;
-  pthread_mutex_t lock;
+  std::mutex lock;
   pthread_t thread;
   int thread_num;
 };
@@ -40,10 +42,10 @@ struct per_thread {
 class WorkQueue {
  private:
   static per_thread* s_per_thread;
-  static pthread_cond_t s_completion;
-  static pthread_cond_t s_work_ready;
-  static pthread_mutex_t s_lock;
-  static pthread_mutex_t s_work_running;
+  static std::condition_variable s_completion;
+  static std::condition_variable s_work_ready;
+  static std::mutex s_lock;
+  static std::mutex s_work_running;
   static int s_threads_complete;
   static void* worker_thread(void* priv);
   static bool steal_work(per_thread* self);
