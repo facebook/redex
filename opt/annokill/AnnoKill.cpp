@@ -9,10 +9,11 @@
 
 #include "AnnoKill.h"
 
+#include <map>
 #include <stdio.h>
 #include <string>
-#include <vector>
 #include <unordered_set>
+#include <vector>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -50,10 +51,30 @@ struct kill_counters {
 
 kill_counters s_kcount;
 
+static std::map<std::string, size_t> s_build_anno_map;
+static std::map<std::string, size_t> s_runtime_anno_map;
+static std::map<std::string, size_t> s_system_anno_map;
+static size_t s_build_count = 0;
+static size_t s_runtime_count = 0;
+static size_t s_system_count = 0;
+
+void count_annotation(const DexAnnotation* da) {
+  std::string annoName = da->type()->get_name()->c_str();
+  if (da->system_visible()) {
+      s_system_anno_map[annoName]++;
+      s_system_count++;
+  } else if (da->runtime_visible()) {
+      s_runtime_anno_map[annoName]++;
+      s_runtime_count++;
+  } else if (da->build_visible()) {
+      s_build_anno_map[annoName]++;
+      s_build_count++;
+  }
+}
+
 void cleanup_aset(DexAnnotationSet* aset,
     const std::unordered_set<DexType*>& keep_annos,
-    const std::unordered_set<DexType*>& anno_refs_in_code,
-    bool remove_all_build_visible_annos) {
+    const std::unordered_set<DexType*>& anno_refs_in_code) {
   s_kcount.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto iter = annos.begin();
@@ -61,6 +82,9 @@ void cleanup_aset(DexAnnotationSet* aset,
     auto tokill = iter;
     DexAnnotation* da = *iter++;
     auto anno_type = da->type();
+
+    count_annotation(da);
+
     if (anno_refs_in_code.count(anno_type) > 0) {
       TRACE(ANNO, 3,
           "Annotation type %s with type referenced in code, skipping...\n\tannotation: %s\n",
@@ -73,7 +97,8 @@ void cleanup_aset(DexAnnotationSet* aset,
           SHOW(anno_type), SHOW(da));
       continue;
     }
-    if (remove_all_build_visible_annos && da->build_visible()) {
+
+    if (!da->system_visible()) {
       TRACE(ANNO, 3, "Killing annotation %s\n", SHOW(da));
       annos.erase(tokill);
       s_kcount.annotations_killed++;
@@ -84,13 +109,12 @@ void cleanup_aset(DexAnnotationSet* aset,
 
 void kill_annotations(const std::vector<DexClass*>& classes,
     const std::unordered_set<DexType*>& keep_annos,
-    const std::unordered_set<DexType*>& anno_refs_in_code,
-    bool remove_build) {
+    const std::unordered_set<DexType*>& anno_refs_in_code) {
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
     s_kcount.class_asets++;
-    cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
+    cleanup_aset(aset, keep_annos, anno_refs_in_code);
     if (aset->size() == 0) {
       TRACE(ANNO, 3, "Clearing annotation for class %s\n", SHOW(clazz->get_type()));
       clazz->clear_annotations();
@@ -102,7 +126,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = method->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.method_asets++;
-        cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
+        cleanup_aset(aset, keep_annos, anno_refs_in_code);
         if (aset->size() == 0) {
           TRACE(ANNO, 3, "Clearing annotations for method %s.%s:%s\n",
               SHOW(method->get_class()), SHOW(method->get_name()), SHOW(method->get_proto()));
@@ -120,7 +144,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         for (auto pa : *pas) {
           DexAnnotationSet* aset = pa.second;
           if (aset->size() == 0) continue;
-          cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
+          cleanup_aset(aset, keep_annos, anno_refs_in_code);
           if (aset->size() == 0) continue;
           clear_pas = false;
         }
@@ -139,7 +163,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = field->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.field_asets++;
-        cleanup_aset(aset, keep_annos, anno_refs_in_code, remove_build);
+        cleanup_aset(aset, keep_annos, anno_refs_in_code);
         if (aset->size() == 0) {
           TRACE(ANNO, 3, "Clearing annotations for field %s.%s:%s\n",
               SHOW(field->get_class()), SHOW(field->get_name()), SHOW(field->get_type()));
@@ -350,7 +374,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   std::unordered_set<DexType*> anno_refs_in_code;
   referenced_annos(scope, annotations, anno_refs_in_code);
 
-  kill_annotations(scope, keep_annos, anno_refs_in_code, m_remove_build);
+  kill_annotations(scope, keep_annos, anno_refs_in_code);
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
       "Annotations: %d/%d\n",
@@ -372,6 +396,22 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
       "Field Asets: %d/%d\n",
       s_kcount.field_asets_cleared,
       s_kcount.field_asets);
+
+  TRACE(ANNO, 3, "Total referenced Build Annos: %d\n", s_build_count);
+  TRACE(ANNO, 3, "Total referenced Runtime Annos: %d\n", s_runtime_count);
+  TRACE(ANNO, 3, "Total referenced System Annos: %d\n", s_system_count);
+
+  for (const auto& p : s_build_anno_map) {
+    TRACE(ANNO, 3, "Build anno: %lu, %s\n", p.second, p.first.c_str());
+  }
+
+  for (const auto& p : s_runtime_anno_map) {
+    TRACE(ANNO, 3, "Runtime anno: %lu, %s\n", p.second, p.first.c_str());
+  }
+
+  for (const auto& p : s_system_anno_map) {
+    TRACE(ANNO, 3, "System anno: %lu, %s\n", p.second, p.first.c_str());
+  }
 
   mgr.incr_metric(METRIC_ANNO_KILLED,
                   s_kcount.annotations_killed);

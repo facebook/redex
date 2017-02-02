@@ -17,13 +17,11 @@ class AnnoKillPass : public Pass {
   AnnoKillPass() : Pass("AnnoKillPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("remove_all_build_annos", false, m_remove_build);
     pc.get("keep_annos", {}, m_keep_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_remove_build;
   std::vector<std::string> m_keep_annos;
 };
