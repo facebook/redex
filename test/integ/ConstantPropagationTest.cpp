@@ -109,7 +109,9 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexStore> stores;
-  DexStore root_store("classes");
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
   root_store.add_classes(load_classes_from_dex(dexfile));
   DexClasses& classes = root_store.get_dexen().back();
   stores.emplace_back(std::move(root_store));
