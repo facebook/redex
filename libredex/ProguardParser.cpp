@@ -374,11 +374,13 @@ std::string parse_annotation_type(
   return convert_wildcard_type(typ);
 }
 
-bool is_access_flag_set(const DexAccessFlags accessFlags, const DexAccessFlags checkingFlag) {
+bool is_access_flag_set(const DexAccessFlags accessFlags,
+                        const DexAccessFlags checkingFlag) {
   return accessFlags & checkingFlag;
 }
 
-void set_access_flag(DexAccessFlags& accessFlags, const DexAccessFlags settingFlag) {
+void set_access_flag(DexAccessFlags& accessFlags,
+                     const DexAccessFlags settingFlag) {
   accessFlags = accessFlags | settingFlag;
   return;
 }
@@ -514,7 +516,8 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   if (ident == "<init>") {
     member_specification.name = "<init>";
     member_specification.descriptor = "V";
-    set_access_flag(member_specification.requiredSetAccessFlags, ACC_CONSTRUCTOR);
+    set_access_flag(member_specification.requiredSetAccessFlags,
+                    ACC_CONSTRUCTOR);
     ++(*it);
   } else {
     // This token is the type for the member specification.
@@ -973,8 +976,25 @@ void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
     // Try with -basedirectory
     config.open(pg_config->basedirectory + "/" + filename);
     if (!config.is_open()) {
-      cerr << "ERROR: Failed to open ProGuard configuration file " << filename << endl;
-      exit(1);
+      // Look to see if there is a buck-out in the path
+      auto buck_out_pos = filename.find("buck-out");
+      if (buck_out_pos != string::npos) {
+        std::string buck_out_path = filename.substr(buck_out_pos);
+        config.open(buck_out_path);
+        if (!config.is_open()) {
+          auto libraries_pos = filename.find("libraries");
+          if (libraries_pos != string::npos) {
+            std::string libraries_path =
+                "../../../../../" + filename.substr(libraries_pos);
+            config.open(libraries_path);
+            if (!config.is_open()) {
+              cerr << "ERROR: Failed to open ProGuard configuration file "
+                   << filename << endl;
+              exit(1);
+            }
+          }
+        }
+      }
     }
   }
 
