@@ -80,9 +80,6 @@ class DexString {
     free(const_cast<char*>(m_cstr));
   }
 
-  // Only for placeholders
-  DexString() : m_cstr(nullptr), m_utfsize(0), m_strlen(0) {}
-
  public:
   uint32_t size() const { return m_strlen; }
 
@@ -98,7 +95,7 @@ class DexString {
   }
 
   static DexString* make_string(const char* nstr) {
-    return make_string(nstr, (uint32_t)strlen(nstr));
+    return make_string(nstr, length_of_utf8_string(nstr));
   }
 
   static DexString* make_string(const std::string& nstr) {

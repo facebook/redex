@@ -214,6 +214,18 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   always_assert_log(false, "Invalid size encoding mutf8 string");
 }
 
+inline uint32_t length_of_utf8_string(const char* s) {
+  if (s == nullptr) {
+    return 0;
+  }
+  uint32_t len = 0;
+  while (*s != '\0') {
+    ++len;
+    mutf8_next_code_point(s);
+  }
+  return len;
+}
+
 inline uint32_t size_of_utf8_char(const int32_t ival) {
   if (ival >= 0x00 && ival <= 0x7F) {
     return 1;

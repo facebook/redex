@@ -22,22 +22,22 @@
 namespace {
 // We use this ugly macro expansion instead of loops for better gtest reporting.
 // (Name, Expected # of code-unit reduction)
-#define TESTS                                                \
-  WORK(test_Coalesce_InitVoid_AppendString, 4)               \
-  WORK(test_Coalesce_AppendString_AppendString, 2 * 6)       \
-  WORK(test_CompileTime_StringLength, 4 * 4)                 \
-  WORK(test_Remove_AppendEmptyString, 0 * 5)                 \
-  WORK(test_Coalesce_Init_AppendChar, 3 + 2 * 4 + 5)         \
-  WORK(test_Coalesce_AppendString_AppendInt, 5 + 3 * 6 + 7)  \
-  WORK(test_Coalesce_AppendString_AppendChar, 5 + 3 * 6 + 7) \
-  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 5)      \
-  WORK(test_Coalesce_AppendString_AppendLongInt, 9 + 6 + 7)  \
-  WORK(test_CompileTime_StringCompare, 6 * 7)                \
-  WORK(test_Replace_ValueOfBoolean, 2 * 3)                   \
-  WORK(test_Replace_ValueOfChar, 1 * 3 + 2 * 4 + 1 * 5)      \
-  WORK(test_Replace_ValueOfInt, 3 * 3 + 3 * 4 + 2 * 5)       \
-  WORK(test_Replace_ValueOfLongInt, 7 * 2 + 4 * 2 + 5 * 1)   \
-  WORK(test_Replace_ValueOfFloat, 2 * 5 + 1 * 3)             \
+#define TESTS                                                    \
+  WORK(test_Coalesce_InitVoid_AppendString, 4)                   \
+  WORK(test_Coalesce_AppendString_AppendString, 3 * 6)           \
+  WORK(test_CompileTime_StringLength, 4 * 4)                     \
+  WORK(test_Remove_AppendEmptyString, 0 * 5)                     \
+  WORK(test_Coalesce_Init_AppendChar, 3 + 2 * 4 + 5)             \
+  WORK(test_Coalesce_AppendString_AppendInt, 5 + 3 * 6 + 2 * 7)  \
+  WORK(test_Coalesce_AppendString_AppendChar, 5 + 3 * 6 + 7 + 6) \
+  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 5)          \
+  WORK(test_Coalesce_AppendString_AppendLongInt, 9 + 6 + 7 + 9)  \
+  WORK(test_CompileTime_StringCompare, 6 * 7)                    \
+  WORK(test_Replace_ValueOfBoolean, 2 * 3)                       \
+  WORK(test_Replace_ValueOfChar, 1 * 3 + 2 * 4 + 1 * 5)          \
+  WORK(test_Replace_ValueOfInt, 3 * 3 + 3 * 4 + 2 * 5)           \
+  WORK(test_Replace_ValueOfLongInt, 7 * 2 + 4 * 2 + 5 * 1)       \
+  WORK(test_Replace_ValueOfFloat, 2 * 5 + 1 * 3)                 \
   WORK(test_Replace_ValueOfDouble, 2 * 7 + 4)
 
 void loadMethodSizes(DexClasses& classes,

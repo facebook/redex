@@ -15,7 +15,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class SimplifyString {
-
   @Test
   public void test_Coalesce_InitVoid_AppendString() {
     StringBuilder a, b;
@@ -27,15 +26,22 @@ public class SimplifyString {
 
   @Test
   public void test_Coalesce_AppendString_AppendString() {
-    StringBuilder a, b;
+    StringBuilder a;
     a = new StringBuilder();
     a.append("foo").append("bar"); // Match
     assertThat(a.toString()).isEqualTo("foobar");
 
-    b = new StringBuilder();
+    a = new StringBuilder();
     // It matches only one time. So does PG.
-    b.append("abc").append("def").append("ghi"); // Match
-    assertThat(b.toString()).isEqualTo("abcdefghi");
+    a.append("abc").append("def").append("ghi"); // Match
+    assertThat(a.toString()).isEqualTo("abcdefghi");
+
+    a = new StringBuilder();
+    a.append("foo").append("\uAE40\uBBFC\uC7A5");
+    // Intentionally we don't have "foo\uAE40..." to test DexString concatenation.
+    // Declaring "foo\uAE40\uBBFC\uC7A5" here would allocate the correct DexString.
+    assertThat(a.toString().substring(0, 3)).isEqualTo("foo");
+    assertThat(a.toString().substring(3)).isEqualTo("\uAE40\uBBFC\uC7A5");
   }
 
   @Test
@@ -103,6 +109,14 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append(1234567890);
     assertThat(a.toString()).isEqualTo("foo1234567890");
+    // Concatenation with UTF
+    a = new StringBuilder();
+    a.append("\uABCD\u0ABC").append(987654321);
+    // Why substring(0, 4) instead substring(0, 2)? If so, the literal 2 will
+    // be factored out with the above the usage of 2. It prevents our poor
+    // peephole optimizer from detecting the pattern.
+    assertThat(a.toString().substring(0, 4)).isEqualTo("\uABCD\u0ABC98");
+    assertThat(a.toString().substring(4)).isEqualTo("7654321");
   }
 
   @Test
@@ -115,18 +129,23 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append('Z'); // 0x5A
     assertThat(a.toString()).isEqualTo("fooZ");
-    // 2-byte char
+    // 2-byte char, using const/16
     a = new StringBuilder();
     a.append("foo").append('\u0660');
     assertThat(a.toString()).isEqualTo("foo\u0660");
-    // 2-byte \u0000
+    // 2-byte \u0000, but it uses const/4
     a = new StringBuilder();
     a.append("foo").append('\u0000');
     assertThat(a.toString()).isEqualTo("foo\u0000");
-    // 3-byte char
+    // 3-byte char, using const
     a = new StringBuilder();
     a.append("foo").append('\uAE40');
     assertThat(a.toString()).isEqualTo("foo\uAE40");
+    // Concatenation with UTF
+    a = new StringBuilder();
+    a.append("\uABCD\u0ABC").append('x');
+    assertThat(a.toString()).startsWith("\uABCD\u0ABC");
+    assertThat(a.toString().substring(2)).isEqualTo("x");
   }
 
   @Test
@@ -136,8 +155,9 @@ public class SimplifyString {
     a.append("foo").append(true); // iconst_1, const/4, append:(Z)
     assertThat(a.toString()).isEqualTo("footrue");
     a = new StringBuilder();
-    a.append("foo").append(false);
-    assertThat(a.toString()).isEqualTo("foofalse");
+    a.append("\uABCD\u0ABC").append(false);
+    assertThat(a.toString()).startsWith("\uABCD\u0ABC");
+    assertThat(a.toString().substring(2)).isEqualTo("false");
   }
 
   @Test
@@ -155,6 +175,11 @@ public class SimplifyString {
     a = new StringBuilder();
     a.append("foo").append(12345678L);
     assertThat(a.toString()).isEqualTo("foo12345678");
+    // Concatenation with UTF
+    a = new StringBuilder();
+    a.append("\uABCD\u0ABC").append(424242424242L);
+    assertThat(a.toString()).startsWith("\uABCD\u0ABC");
+    assertThat(a.toString().substring(2)).isEqualTo("424242424242");
   }
 
   @Test
