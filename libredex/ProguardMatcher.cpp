@@ -25,6 +25,136 @@
 
 namespace redex {
 
+namespace {
+std::unique_ptr<boost::regex> make_rx(
+  const std::string& s,
+  bool convert = true
+) {
+  if (s.empty()) return nullptr;
+  auto wc = convert ? proguard_parser::convert_wildcard_type(s) : s;
+  auto rx = proguard_parser::form_type_regex(wc);
+  return std::make_unique<boost::regex>(rx);
+}
+
+bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
+  auto annos = cls->get_anno_set();
+  if (!annos) return false;
+  for (const auto& anno : annos->get_annotations()) {
+    if (boost::regex_match(anno->type()->c_str(), annorx)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Helper class that holds the conditions for a class-level match on a keep
+ * rule.
+ */
+struct ClassMatcher {
+  explicit ClassMatcher(const KeepSpec& ks)
+      : setFlags_(ks.class_spec.setAccessFlags),
+        unsetFlags_(ks.class_spec.unsetAccessFlags),
+        m_cls(make_rx(ks.class_spec.className)),
+        m_anno(make_rx(ks.class_spec.annotationType, false)),
+        m_extends(make_rx(ks.class_spec.extendsClassName)),
+        m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false))
+    {}
+
+  bool match(const DexClass* cls) const {
+    // Check for class name match
+    if (!match_name(cls)) {
+      return false;
+    }
+    // Check for access match
+    if (!match_access(cls)) {
+      return false;
+    }
+    // Check to see if an annotation guard needs to be matched.
+    if (!match_annotation(cls)) {
+      return false;
+    }
+    // Check to see if an extends clause needs to be matched.
+    return match_extends(cls);
+  }
+
+ private:
+  bool match_name(const DexClass* cls) const {
+    auto deob_name = cls->get_deobfuscated_name();
+    return boost::regex_match(deob_name, *m_cls);
+  }
+
+  bool match_access(const DexClass* cls) const {
+    return access_matches(setFlags_, unsetFlags_, cls->get_access());
+  }
+
+  bool match_annotation(const DexClass* cls) const {
+    if (!m_anno) return true;
+    return match_annotation_rx(cls, *m_anno);
+  }
+
+  bool match_extends(const DexClass* cls) const {
+    if (!m_extends) return true;
+    auto deob_name = cls->get_deobfuscated_name();
+    return search_extends_and_interfaces(cls);
+  }
+
+  bool type_and_annotation_match(const DexClass* cls) const {
+    if (cls == nullptr) return false;
+    if (cls->get_type() == get_object_type()) return false;
+    // First check to see if an annotation type needs to be matched.
+    if (m_extends_anno) {
+      if (!match_annotation_rx(cls, *m_extends_anno)) {
+        return false;
+      }
+    }
+    auto deob_name = cls->get_deobfuscated_name();
+    return boost::regex_match(deob_name, *m_extends);
+  }
+
+  bool search_interfaces(const DexClass* cls) const {
+    auto interfaces = cls->get_interfaces();
+    if (!interfaces) return false;
+    for (const auto& impl : interfaces->get_type_list()) {
+      auto impl_class = type_class(impl);
+      if (impl_class) {
+        if (search_extends_and_interfaces(impl_class)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool search_extends_and_interfaces(const DexClass* cls) const {
+    always_assert(cls != nullptr);
+    // Does this class match the annotation and type wildcard?
+    if (type_and_annotation_match(cls)) {
+      return true;
+    }
+    // Do any of the classes and interfaces above match?
+    auto super_type = cls->get_super_class();
+    if (super_type && super_type != get_object_type()) {
+      auto super_class = type_class(super_type);
+      if (super_class) {
+        if (search_extends_and_interfaces(super_class)) {
+          return true;
+        }
+      }
+    }
+    // Do any of the interfaces from here and up match?
+    return search_interfaces(cls);
+  }
+
+  DexAccessFlags setFlags_;
+  DexAccessFlags unsetFlags_;
+  std::unique_ptr<boost::regex> m_cls;
+  std::unique_ptr<boost::regex> m_anno;
+  std::unique_ptr<boost::regex> m_extends;
+  std::unique_ptr<boost::regex> m_extends_anno;
+};
+}
+
 // Updatea a class, field or method to add keep modifiers.
 template <class DexMember>
 void apply_keep_modifiers(KeepSpec& k, DexMember* member) {
@@ -71,22 +201,6 @@ inline bool is_blanket_keep_rule(const KeepSpec& keep_rule) {
   return false;
 }
 
-bool check_required_access_flags(const DexAccessFlags requiredSet,
-                                 const DexAccessFlags access_flags) {
-  const DexAccessFlags access_mask = ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED;
-  const DexAccessFlags required_set_flags = requiredSet & ~access_mask;
-  const DexAccessFlags required_one_set_flags = requiredSet & access_mask;
-  return (required_set_flags & ~access_flags) == 0 &&
-           (required_one_set_flags == 0 ||
-           (required_one_set_flags & access_flags) != 0);
-}
-
-bool check_required_unset_access_flags(
-    const DexAccessFlags requiredUnset,
-    const DexAccessFlags access_flags) {
-  return (requiredUnset & access_flags) == 0;
-}
-
 boost::regex* register_matcher(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     const std::string& regex) {
@@ -115,13 +229,6 @@ bool has_annotation(std::unordered_map<std::string, boost::regex*>& regex_map,
     }
   }
   return false;
-}
-
-bool access_matches(const DexAccessFlags requiredSet,
-                    const DexAccessFlags requiredUnset,
-                    const DexAccessFlags access_flags) {
-  return check_required_access_flags(requiredSet, access_flags) &&
-         check_required_unset_access_flags(requiredUnset, access_flags);
 }
 
 // From a fully qualified descriptor for a field, exract just the
@@ -300,118 +407,6 @@ void apply_method_keeps(
   }
 }
 
-// This function checks to see of a class satisfies a match
-// against an annotation type and a class wildcard.
-bool type_and_annotation_match(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    const DexClass* cls,
-    const std::string& extends_class_name,
-    const std::string& annotation) {
-  if (cls == nullptr) {
-    return false;
-  }
-  if (cls->get_type() == get_object_type()) {
-    return false;
-  }
-  // First check to see if an annotation type needs to be matched.
-  if (!(annotation.empty())) {
-    if (!has_annotation(regex_map, cls, annotation)) {
-      return false;
-    }
-  }
-  // Now try to match against the class name.
-  auto deob_name = cls->get_deobfuscated_name();
-  auto descriptor = proguard_parser::convert_wildcard_type(extends_class_name);
-  auto desc_regex = proguard_parser::form_type_regex(descriptor);
-  boost::regex* matcher = register_matcher(regex_map, desc_regex);
-  return boost::regex_match(deob_name, *matcher);
-}
-
-bool search_extends_and_interfaces(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    std::set<const DexClass*>* visited,
-    const DexClass* cls,
-    const std::string& extends_class_name,
-    const std::string& annotation);
-
-bool search_interfaces(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    std::set<const DexClass*>* visited,
-    const DexClass* cls,
-    const std::string& name,
-    const std::string& annotation) {
-  auto interfaces = cls->get_interfaces();
-  if (interfaces) {
-    for (const auto& impl : interfaces->get_type_list()) {
-      auto impl_class = type_class(impl);
-      if (impl_class) {
-        if (search_extends_and_interfaces(
-                regex_map, visited, impl_class, name, annotation)) {
-          return true;
-        }
-      } else {
-        TRACE(PGR, 8, "WARNING: Can't find class for type %s\n", impl->c_str());
-      }
-    }
-  }
-  return false;
-}
-
-bool search_extends_and_interfaces(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    std::set<const DexClass*>* visited,
-    const DexClass* cls,
-    const std::string& extends_class_name,
-    const std::string& annotation) {
-  assert(cls != nullptr);
-  // Have we already visited this class? If yes, then the result is false.
-  if (visited->find(cls) != visited->end()) {
-    return false;
-  }
-  // Does this class match the annotation and type wildcard?
-  if (type_and_annotation_match(
-          regex_map, cls, extends_class_name, annotation)) {
-    return true;
-  }
-  // Do any of the classes and interfaces above match?
-  auto super_type = cls->get_super_class();
-  if (super_type && super_type != get_object_type()) {
-    auto super_class = type_class(super_type);
-    if (super_class) {
-      if (search_extends_and_interfaces(regex_map,
-                                        visited,
-                                        super_class,
-                                        extends_class_name,
-                                        annotation)) {
-        return true;
-      }
-    } else {
-      TRACE(PGR,
-            8,
-            "      WARNING: Can't find class for type %s\n",
-            super_type->get_name()->c_str());
-    }
-  }
-  // Do any of the interfaces from here and up match?
-  bool found = search_interfaces(
-      regex_map, visited, cls, extends_class_name, annotation);
-  visited->emplace(cls);
-  return found;
-}
-
-bool extends(std::unordered_map<std::string, boost::regex*>& regex_map,
-             const DexClass* cls,
-             const std::string& extends_class_name,
-             const std::string& annotation) {
-  if (extends_class_name.empty()) {
-    return true;
-  }
-  auto deob_name = cls->get_deobfuscated_name();
-  std::set<const DexClass*> visited;
-  return search_extends_and_interfaces(
-      regex_map, &visited, cls, extends_class_name, annotation);
-}
-
 bool classname_contains_wildcard(const std::string& classname) {
   for (char ch : classname) {
     if (ch == '*' || ch == '?' || ch == '!' || ch == '%' || ch == ',') {
@@ -419,42 +414,6 @@ bool classname_contains_wildcard(const std::string& classname) {
     }
   }
   return false;
-}
-
-bool class_level_match(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    const KeepSpec& keep_rule,
-    const DexClass* cls) {
-  // Check for access match
-  if (!access_matches(keep_rule.class_spec.setAccessFlags,
-                      keep_rule.class_spec.unsetAccessFlags,
-                      cls->get_access())) {
-    return false;
-  }
-  // Check to see if an annotation guard needs to be matched.
-  if (!(keep_rule.class_spec.annotationType.empty())) {
-    if (!has_annotation(regex_map, cls, keep_rule.class_spec.annotationType)) {
-      return false;
-    }
-  }
-  // Check to see if an extends clause needs to be matched.
-  return extends(regex_map,
-                 cls,
-                 keep_rule.class_spec.extendsClassName,
-                 keep_rule.class_spec.extendsAnnotationType);
-}
-
-bool class_level_match(
-    std::unordered_map<std::string, boost::regex*>& regex_map,
-    const KeepSpec& keep_rule,
-    const DexClass* cls,
-    const boost::regex* matcher) {
-  // Check for a class name match.
-  auto deob_name = cls->get_deobfuscated_name();
-  if (!boost::regex_match(deob_name, *matcher)) {
-    return false;
-  }
-  return class_level_match(regex_map, keep_rule, cls);
 }
 
 DexClass* find_single_class(const ProguardMap& pg_map,
@@ -686,27 +645,25 @@ void process_keep(const ProguardMap& pg_map,
                       std::unordered_map<std::string, boost::regex*>& regex_map,
                       KeepSpec&,
                       DexClass*)> keep_processor) {
-  boost::regex* matcher;
   for (auto& keep_rule : keep_rules) {
+    ClassMatcher class_match(keep_rule);
     auto descriptor =
         proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
     DexClass* cls = find_single_class(pg_map, descriptor);
     if (cls != nullptr) {
-      if (class_level_match(regex_map, keep_rule, cls)) {
+      if (class_match.match(cls)) {
         if (!cls->is_external()) {
           keep_processor(regex_map, keep_rule, cls);
         }
       }
       continue;
     }
-    auto desc_regex = proguard_parser::form_type_regex(descriptor);
-    matcher = register_matcher(regex_map, desc_regex);
     for (const auto& cls : classes) {
       // Skip external classes.
       if (cls->is_external()) {
         continue;
       }
-      if (class_level_match(regex_map, keep_rule, cls, matcher)) {
+      if (class_match.match(cls)) {
         keep_processor(regex_map, keep_rule, cls);
       }
     }

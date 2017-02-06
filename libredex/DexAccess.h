@@ -108,3 +108,31 @@ template<class DexMember>
 void set_public_final(DexMember* m) {
   m->set_access((m->get_access() & ~VISIBILITY_MASK) | ACC_PUBLIC | ACC_FINAL);
 }
+
+inline bool check_required_access_flags(
+  const DexAccessFlags required_set,
+  const DexAccessFlags access_flags
+) {
+  const DexAccessFlags access_mask = ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED;
+  const DexAccessFlags required_set_flags = required_set & ~access_mask;
+  const DexAccessFlags required_one_set_flags = required_set & access_mask;
+  return (required_set_flags & ~access_flags) == 0 &&
+           (required_one_set_flags == 0 ||
+           (required_one_set_flags & access_flags) != 0);
+}
+
+inline bool check_required_unset_access_flags(
+  const DexAccessFlags required_unset,
+  const DexAccessFlags access_flags
+) {
+  return (required_unset & access_flags) == 0;
+}
+
+inline bool access_matches(
+  const DexAccessFlags required_set,
+  const DexAccessFlags required_unset,
+  const DexAccessFlags access_flags
+) {
+  return check_required_access_flags(required_set, access_flags) &&
+         check_required_unset_access_flags(required_unset, access_flags);
+}
