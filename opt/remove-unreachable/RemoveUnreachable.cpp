@@ -10,8 +10,29 @@
 #include "ReachableClasses.h"
 #include "RemoveUnreachable.h"
 
+#include "DexClass.h"
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Show.h"
+
+#include <string>
+
+/**
+ * RemoveUnreachable eliminates unreachable code (classes, methods, and fields)
+ * by using a mark-sweep algorithm.
+ *
+ * Conceptually we start at roots, which are defined by -keep rules in the
+ * config file, and perform a depth-first search to find all references.
+ * Elements visited in this manner will be retained, and are found in the
+ * marked_* sets.
+ *
+ * -keepclassmembers rules are a bit more complicated, because they require
+ * "conditional" marking: these members are kept only if their containing class
+ * is determined to be kept.  The conditional marking logic is also used to
+ * retain (or not) implementations of interface methods.  These elements are
+ * placed in the cond_marked_* sets; care must be taken to promote
+ * conditionally marked elements to fully marked
+ */
 
 namespace {
 
@@ -19,30 +40,14 @@ bool is_canary(const DexClass* cls) {
   return strstr(cls->get_name()->c_str(), "Canary");
 }
 
-bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
-  if (!cls) return false;
-  if (cls->is_external()) {
-    for (auto const& m : cls->get_vmethods()) {
-      if (signatures_match(to_check, m)) {
-        return true;
-      }
-    }
-  }
-  auto const& superclass = type_class(cls->get_super_class());
-  if (implements_library_method(to_check, superclass)) {
-    return true;
-  }
-  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
-    if (implements_library_method(to_check, type_class(interface))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 DexMethod* resolve(const DexMethod* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
+    if (signatures_match(method, m)) {
+      return m;
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
     if (signatures_match(method, m)) {
       return m;
     }
@@ -102,16 +107,15 @@ struct InheritanceGraph {
   void add_child(DexType* child, DexType* ancestor) {
     auto const& ancestor_cls = type_class(ancestor);
     if (!ancestor_cls) return;
+    m_inheritors[ancestor].insert(child);
     auto const& super_type = ancestor_cls->get_super_class();
     if (super_type) {
       TRACE(RMU, 4, "Child %s of %s\n", SHOW(child), SHOW(super_type));
-      m_inheritors[super_type].insert(child);
       add_child(child, super_type);
     }
     auto const& interfaces = ancestor_cls->get_interfaces()->get_type_list();
     for (auto const& interface : interfaces) {
       TRACE(RMU, 4, "Child %s of %s\n", SHOW(child), SHOW(interface));
-      m_inheritors[interface].insert(child);
       add_child(child, interface);
     }
   }
@@ -119,6 +123,43 @@ struct InheritanceGraph {
  private:
   std::unordered_map<DexType*, std::unordered_set<DexType*>> m_inheritors;
 };
+
+bool implements_library_method(
+  const DexMethod* to_check,
+  const DexClass* cls
+) {
+  if (!cls) return false;
+  if (cls->is_external()) {
+    for (auto const& m : cls->get_vmethods()) {
+      if (signatures_match(to_check, m)) {
+        return true;
+      }
+    }
+  }
+  auto const& superclass = type_class(cls->get_super_class());
+  if (implements_library_method(to_check, superclass)) {
+    return true;
+  }
+  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
+    if (implements_library_method(to_check, type_class(interface))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool implements_library_method(
+  InheritanceGraph& graph,
+  const DexMethod* to_check,
+  const DexClass* cls
+) {
+  for (auto child : graph.get_descendants(cls->get_type())) {
+    if (implements_library_method(to_check, type_class(child))) {
+      return true;
+    }
+  }
+  return false;
+}
 
 struct UnreachableCodeRemover {
   UnreachableCodeRemover(DexStoresVector& stores)
@@ -178,44 +219,99 @@ struct UnreachableCodeRemover {
     m_field_stack.emplace_back(field);
   }
 
+  void push_cond(const DexField* field) {
+    if (!field || marked(field)) return;
+    TRACE(RMU, 4, "Conditionally marking field: %s\n", SHOW(field));
+    if (marked(type_class(field->get_class()))) {
+      push(field);
+    } else {
+      m_cond_marked_fields.emplace(field);
+    }
+  }
+
   void push(const DexMethod* method) {
     if (!method || marked(method)) return;
     mark(method);
     m_method_stack.emplace_back(method);
   }
 
-  template<class T>
+  void push_cond(const DexMethod* method) {
+    if (!method || marked(method)) return;
+    TRACE(RMU, 4, "Conditionally marking method: %s\n", SHOW(method));
+    if (marked(type_class(method->get_class()))) {
+      push(method);
+    } else {
+      m_cond_marked_methods.emplace(method);
+    }
+  }
+
+  template<typename T>
   void gather_and_push(T t) {
+    std::vector<DexString*> strings;
     std::vector<DexType*> types;
     std::vector<DexField*> fields;
     std::vector<DexMethod*> methods;
+    t->gather_strings(strings);
     t->gather_types(types);
     t->gather_fields(fields);
     t->gather_methods(methods);
+    for (auto const& str : strings) {
+      auto internal = JavaNameUtil::external_to_internal(str->c_str());
+      auto typestr = DexString::get_string(internal.c_str());
+      if (!typestr) continue;
+      auto type = DexType::get_type(typestr);
+      if (!type) continue;
+      push(type);
+    }
     for (auto const& type : types) {
       push(type);
     }
-    for (auto const& f : fields) {
-      push(f);
+    for (auto const& field : fields) {
+      push(field);
     }
-    for (auto const& m : methods) {
-      push(m);
+    for (auto const& method : methods) {
+      push(method);
     }
   }
 
   void visit(const DexClass* cls) {
     TRACE(RMU, 4, "Visiting class: %s\n", SHOW(cls));
     for (auto& m : cls->get_dmethods()) {
-      if (is_init(m)) push(m);
       if (is_clinit(m)) push(m);
     }
     push(type_class(cls->get_super_class()));
     for (auto const& t : cls->get_interfaces()->get_type_list()) {
-      push(type_class(t));
+      push(t);
     }
     const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
-      gather_and_push(annoset);
+      for (auto const& anno : annoset->get_annotations()) {
+        if (anno->type() == DexType::get_type("Ldalvik/annotation/MemberClasses;")) {
+          // Ignore inner-class annotations.
+          continue;
+        }
+        gather_and_push(anno);
+      }
+    }
+    for (auto const& m : cls->get_ifields()) {
+      if (m_cond_marked_fields.count(m)) {
+        push(m);
+      }
+    }
+    for (auto const& m : cls->get_sfields()) {
+      if (m_cond_marked_fields.count(m)) {
+        push(m);
+      }
+    }
+    for (auto const& m : cls->get_dmethods()) {
+      if (m_cond_marked_methods.count(m)) {
+        push(m);
+      }
+    }
+    for (auto const& m : cls->get_vmethods()) {
+      if (m_cond_marked_methods.count(m)) {
+        push(m);
+      }
     }
   }
 
@@ -233,7 +329,9 @@ struct UnreachableCodeRemover {
 
   void visit(DexMethod* method) {
     TRACE(RMU, 4, "Visiting method: %s\n", SHOW(method));
-    push(resolve(method, type_class(method->get_class())));
+    auto resolved_method = resolve(method, type_class(method->get_class()));
+    TRACE(RMU, 5, "    Resolved to: %s\n", SHOW(resolved_method));
+    push(resolved_method);
     gather_and_push(method);
     push(method->get_class());
     push(method->get_proto()->get_rtype());
@@ -254,7 +352,7 @@ struct UnreachableCodeRemover {
           }
           for (auto const& m : child_cls->get_vmethods()) {
             if (signatures_match(method, m)) {
-              push(m);
+              push_cond(m);
             }
           }
           child = child_cls->get_super_class();
@@ -266,32 +364,32 @@ struct UnreachableCodeRemover {
   void mark() {
     for (auto const& dex : DexStoreClassesIterator(m_stores)) {
       for (auto const& cls : dex) {
-        if (keep(cls) || is_canary(cls)) {
+        if (root(cls) || is_canary(cls)) {
           TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(cls));
           push(cls);
         }
         for (auto const& f : cls->get_ifields()) {
-          if (keep(f) || is_volatile(f)) {
+          if (root(f) || is_volatile(f)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
-            push(f);
+            push_cond(f);
           }
         }
         for (auto const& f : cls->get_sfields()) {
-          if (keep(f)) {
+          if (root(f)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(f));
-            push(f);
+            push_cond(f);
           }
         }
         for (auto const& m : cls->get_dmethods()) {
-          if (keep(m)) {
+          if (root(m)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
-            push(m);
+            push_cond(m);
           }
         }
         for (auto const& m : cls->get_vmethods()) {
-          if (keep(m) || implements_library_method(m, cls)) {
+          if (root(m) || implements_library_method(m_inheritance_graph, m, cls)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
-            push(m);
+            push_cond(m);
           }
         }
       }
@@ -355,6 +453,8 @@ struct UnreachableCodeRemover {
   std::unordered_set<const DexClass*> m_marked_classes;
   std::unordered_set<const DexField*> m_marked_fields;
   std::unordered_set<const DexMethod*> m_marked_methods;
+  std::unordered_set<const DexField*> m_cond_marked_fields;
+  std::unordered_set<const DexMethod*> m_cond_marked_methods;
   std::vector<const DexClass*> m_class_stack;
   std::vector<const DexField*> m_field_stack;
   std::vector<const DexMethod*> m_method_stack;

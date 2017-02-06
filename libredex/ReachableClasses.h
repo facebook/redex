@@ -95,5 +95,21 @@ inline bool keepclasseswithmembernames(DexMember* member) {
   return keepclasseswithmembers(member) && allowshrinking(member);
 }
 
+// deprecated: DO NOT USE
 template<class DexMember>
 inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
+
+// root is an attempt to identify a root for reachability analysis by
+// using any class or member that has keep set on it but does not have
+// allowshrinking set on it.
+template<class DexMember>
+inline bool root(DexMember* member) {
+  return keep(member) && !allowshrinking(member);
+}
+
+// do_not_touch means this class or member should never be deleted
+// nor should it be renamed.
+template<class DexMember>
+inline bool do_not_touch(DexMember* member) {
+  return keep(member) && !allowshrinking(member) && !allowobfuscation(member);
+}
