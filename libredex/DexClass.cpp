@@ -629,15 +629,15 @@ void DexClass::remove_field(const DexField* f) {
 void DexClass::sort_fields() {
   auto& sfields = this->get_sfields();
   auto& ifields = this->get_ifields();
-  sfields.sort(compare_dexfields);
-  ifields.sort(compare_dexfields);
+  std::sort(sfields.begin(), sfields.end(), compare_dexfields);
+  std::sort(ifields.begin(), ifields.end(), compare_dexfields);
 }
 
 void DexClass::sort_methods() {
   auto& vmeths = this->get_vmethods();
   auto& dmeths = this->get_dmethods();
-  vmeths.sort(compare_dexmethods);
-  dmeths.sort(compare_dexmethods);
+  std::sort(vmeths.begin(), vmeths.end(), compare_dexmethods);
+  std::sort(dmeths.begin(), dmeths.end(), compare_dexmethods);
 }
 
 int DexClass::encode(DexOutputIdx* dodx,

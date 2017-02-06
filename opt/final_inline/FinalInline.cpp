@@ -121,13 +121,10 @@ void remove_unused_fields(
 
   for (auto clazz : smallscope) {
     auto& sfields = clazz->get_sfields();
-    auto iter = sfields.begin();
-    while (iter != sfields.end()) {
-      auto todel = iter++;
-      if (dead_fields.count(*todel) > 0) {
-        sfields.erase(todel);
-      }
-    }
+    sfields.erase(std::remove_if(sfields.begin(), sfields.end(),
+      [&](DexField* field) {
+      return dead_fields.count(field) > 0;
+    }), sfields.end());
   }
 }
 

@@ -32,7 +32,7 @@ class ProguardObfuscationTest {
    // Classes we're looking at will always be at dexen.front()
    std::vector<DexClasses> dexen;
    int method_is_renamed_helper(
-     const std::list<DexMethod*>& methods,
+     const std::vector<DexMethod*>& methods,
      const std::string& name);
 
  public:
@@ -43,7 +43,7 @@ class ProguardObfuscationTest {
 
    DexClass* find_class_named(const std::string& name);
 
-   bool field_found(const std::list<DexField*>& fields,
+   bool field_found(const std::vector<DexField*>& fields,
                     const std::string& name);
 
    bool method_is_renamed(const DexClass* cls, const std::string& name);

@@ -802,10 +802,10 @@ class DexClass {
   DexTypeList* m_interfaces;
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
-  std::list<DexField*> m_sfields;
-  std::list<DexField*> m_ifields;
-  std::list<DexMethod*> m_dmethods;
-  std::list<DexMethod*> m_vmethods;
+  std::vector<DexField*> m_sfields;
+  std::vector<DexField*> m_ifields;
+  std::vector<DexMethod*> m_dmethods;
+  std::vector<DexMethod*> m_vmethods;
   bool m_has_class_data;
   bool m_external;
   std::string m_deobfuscated_name;
@@ -823,14 +823,14 @@ class DexClass {
   DexClass(DexIdx* idx, dex_class_def* cdef);
 
  public:
-  const std::list<DexMethod*>& get_dmethods() const { return m_dmethods; }
-  std::list<DexMethod*>& get_dmethods() {
+  const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
+  std::vector<DexMethod*>& get_dmethods() {
     always_assert_log(!m_external,
         "Unexpected external class %s\n", SHOW(m_self));
     return m_dmethods;
   }
-  const std::list<DexMethod*>& get_vmethods() const { return m_vmethods; }
-  std::list<DexMethod*>& get_vmethods() {
+  const std::vector<DexMethod*>& get_vmethods() const { return m_vmethods; }
+  std::vector<DexMethod*>& get_vmethods() {
     always_assert_log(!m_external,
         "Unexpected external class %s\n", SHOW(m_self));
     return m_vmethods;
@@ -852,10 +852,10 @@ class DexClass {
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
-  const std::list<DexField*>& get_sfields() const { return m_sfields; }
-  std::list<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
-  const std::list<DexField*>& get_ifields() const { return m_ifields; }
-  std::list<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
+  const std::vector<DexField*>& get_sfields() const { return m_sfields; }
+  std::vector<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
+  const std::vector<DexField*>& get_ifields() const { return m_ifields; }
+  std::vector<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);

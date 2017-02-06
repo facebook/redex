@@ -144,11 +144,11 @@ void log_final_results(MethodsNameMap& methods) {
  * If the type is java.lang.Object and it is not known (no DexClass for it)
  * it generates fictional methods for it.
  */
-std::list<DexMethod*> get_vmethods(DexType* type) {
+std::vector<DexMethod*> get_vmethods(DexType* type) {
   const DexClass* cls = type_class(type);
   if (cls != nullptr) return cls->get_vmethods();
   always_assert_log(type == get_object_type(), "Unknown type %s\n", SHOW(type));
-  std::list<DexMethod*> object_methods;
+  std::vector<DexMethod*> object_methods;
 
   // create the following methods:
   // protected java.lang.Object.clone()Ljava/lang/Object;

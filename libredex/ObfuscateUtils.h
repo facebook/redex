@@ -597,12 +597,12 @@ bool contains_renamable_elem(const Container& elems,
 template <class T>
 class RenamingContext {
 public:
-  const std::list<T>& elems;
+  const std::vector<T>& elems;
   const std::unordered_set<std::string>& ids_to_avoid;
   const bool operate_on_privates;
   NameGenerator<T>& name_gen;
 
-  RenamingContext(std::list<T>& elems,
+  RenamingContext(std::vector<T>& elems,
                   std::unordered_set<std::string>& ids_to_avoid,
                   NameGenerator<T>& name_gen,
                   bool operate_on_privates)
@@ -628,7 +628,7 @@ class MethodRenamingContext : public RenamingContext<DexMethod*> {
   DexString* clinitstr = DexString::get_string("<clinit>");
   DexMethodManager& name_mapping;
 public:
- MethodRenamingContext(std::list<DexMethod*>& elems,
+ MethodRenamingContext(std::vector<DexMethod*>& elems,
                        std::unordered_set<std::string>& ids_to_avoid,
                        NameGenerator<DexMethod*>& name_gen,
                        DexMethodManager& name_mapping,

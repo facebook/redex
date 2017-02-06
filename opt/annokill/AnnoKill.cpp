@@ -77,34 +77,31 @@ void cleanup_aset(DexAnnotationSet* aset,
     const std::unordered_set<DexType*>& anno_refs_in_code) {
   s_kcount.annotations += aset->size();
   auto& annos = aset->get_annotations();
-  auto iter = annos.begin();
-  while (iter != annos.end()) {
-    auto tokill = iter;
-    DexAnnotation* da = *iter++;
+  annos.erase(std::remove_if(annos.begin(), annos.end(), [&](DexAnnotation* da) {
     auto anno_type = da->type();
-
     count_annotation(da);
 
     if (anno_refs_in_code.count(anno_type) > 0) {
       TRACE(ANNO, 3,
           "Annotation type %s with type referenced in code, skipping...\n\tannotation: %s\n",
           SHOW(anno_type), SHOW(da));
-      continue;
+      return false;
     }
     if (keep_annos.count(anno_type) > 0) {
       TRACE(ANNO, 3,
           "Blacklisted annotation type %s, skipping...\n\tannotation: %s\n",
           SHOW(anno_type), SHOW(da));
-      continue;
+      return false;
     }
 
     if (!da->system_visible()) {
       TRACE(ANNO, 3, "Killing annotation %s\n", SHOW(da));
-      annos.erase(tokill);
       s_kcount.annotations_killed++;
       delete da;
+      return true;
     }
-  }
+    return false;
+  }), annos.end());
 }
 
 void kill_annotations(const std::vector<DexClass*>& classes,

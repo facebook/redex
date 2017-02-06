@@ -46,16 +46,15 @@ int clear_annotation_references(Scope& scope, class_set_t& deadclasses) {
         DexAnnotationSet* aset = pa.second;
         if (aset->size() == 0) continue;
         auto& annos = aset->get_annotations();
-        auto iter = annos.begin();
-        while (iter != annos.end()) {
-          auto tokill = iter;
-          DexAnnotation* da = *iter++;
+        annos.erase(std::remove_if(annos.begin(), annos.end(),
+          [&](DexAnnotation* da) {
           DexClass* clazz = type_class(da->type());
           if (deadclasses.count(clazz)) {
-            annos.erase(tokill);
             delete da;
+            return true;
           }
-        }
+          return false;
+        }), annos.end());
         if (aset->size() != 0) {
           clear_pas = false;
         }

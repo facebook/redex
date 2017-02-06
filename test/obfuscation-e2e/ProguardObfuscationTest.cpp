@@ -46,7 +46,7 @@ DexClass* ProguardObfuscationTest::find_class_named(
   }
 }
 
-bool ProguardObfuscationTest::field_found(const std::list<DexField*>& fields,
+bool ProguardObfuscationTest::field_found(const std::vector<DexField*>& fields,
                                           const std::string& name) {
   auto it = std::find_if(fields.begin(), fields.end(), [&](DexField* field) {
     auto deobfuscated_name =
@@ -59,7 +59,7 @@ bool ProguardObfuscationTest::field_found(const std::list<DexField*>& fields,
 }
 
 int ProguardObfuscationTest::method_is_renamed_helper(
-    const std::list<DexMethod*>& methods, const std::string& name) {
+    const std::vector<DexMethod*>& methods, const std::string& name) {
   for (const auto& method : methods) {
     auto deobfuscated_name =
         proguard_map.deobfuscate_method(proguard_name(method));
