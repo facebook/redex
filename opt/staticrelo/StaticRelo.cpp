@@ -591,7 +591,7 @@ void do_mutations(PassManager& mgr,
                   ConfigFiles& cfg) {
 
   for (auto& meth : meth_deletes) {
-    type_class(meth->get_class())->get_dmethods().remove(meth);
+    type_class(meth->get_class())->remove_method(meth);
   }
 
   // Do method moves. All the moves we're instructed to perform should
@@ -612,7 +612,7 @@ void do_mutations(PassManager& mgr,
       }
       record_move_data(from_meth, from_cls, to_cls, cfg);
       // Move the method to the target class
-      from_cls->get_dmethods().remove(from_meth);
+      from_cls->remove_method(from_meth);
       DexMethodRef ref;
       ref.cls = to_cls->get_type();
       from_meth->change(ref, true /* rename_on_collision */);

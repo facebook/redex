@@ -732,7 +732,7 @@ void remove_dead_methods(
     TRACE(SYNT, 2, "Removing method: %s\n", SHOW(meth));
     if (is_public(meth)) pub_meth++;
     auto cls = type_class(meth->get_class());
-    cls->get_dmethods().remove(meth);
+    cls->remove_method(meth);
     meth->get_access() & ACC_SYNTHETIC ? synth_removed++ : other_removed++;
   };
 

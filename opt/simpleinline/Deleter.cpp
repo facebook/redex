@@ -38,9 +38,9 @@ size_t delete_methods(
         "%s is concrete but does not have a DexClass\n",
         SHOW(callee));
     if (callee->is_virtual()) {
-      cls->get_vmethods().remove(callee);
+      cls->remove_method(callee);
     } else {
-      cls->get_dmethods().remove(callee);
+      cls->remove_method(callee);
     }
     deleted++;
     TRACE(DELMET, 4, "removing %s\n", SHOW(callee));

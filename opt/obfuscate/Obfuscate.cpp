@@ -66,10 +66,8 @@ int obfuscate_elems(const RenamingContext<T>& context,
 void sort_members(std::vector<DexClass*>& classes) {
   // Sort the result because dexes have to be sorted
   for (DexClass* cls : classes) {
-    cls->get_ifields().sort(compare_dexfields);
-    cls->get_sfields().sort(compare_dexfields);
-    cls->get_dmethods().sort(compare_dexmethods);
-    cls->get_vmethods().sort(compare_dexmethods);
+    cls->sort_fields();
+    cls->sort_methods();
     // Debug logging
     TRACE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
     for (DexField* f : cls->get_ifields())

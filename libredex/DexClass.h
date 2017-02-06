@@ -850,13 +850,18 @@ class DexClass {
   }
 
   void add_method(DexMethod* m);
-  void remove_method(DexMethod* m);
+  // Removes the method from this class
+  void remove_method(const DexMethod* m);
   const std::list<DexField*>& get_sfields() const { return m_sfields; }
   std::list<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
   const std::list<DexField*>& get_ifields() const { return m_ifields; }
   std::list<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
   void add_field(DexField* f);
-  void remove_field(DexField* f);
+  // Removes the field from this class
+  void remove_field(const DexField* f);
+  void sort_methods();
+  void sort_fields();
+
   DexAnnotationDirectory* get_annotation_directory();
   DexAccessFlags get_access() const { return m_access_flags; }
   DexType* get_super_class() const { return m_super_class; }

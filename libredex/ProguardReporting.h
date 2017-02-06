@@ -18,20 +18,22 @@ namespace redex {
 
 std::string dexdump_name_to_dot_name(const std::string& dexdump_name);
 
+template <class Container>
 void print_methods(std::ostream& output,
-                   const ProguardMap& pg_map,
-                   const std::string& class_name,
-                   const std::list<DexMethod*>& methods);
+                          const ProguardMap& pg_map,
+                          const std::string& class_name,
+                          const Container& methods);
 
 void print_method(std::ostream& output,
                   const ProguardMap& pg_map,
                   const std::string& class_name,
                   const DexMethod* methods);
 
+template <class Container>
 void print_fields(std::ostream& output,
-                  const ProguardMap& pg_map,
-                  const std::string& class_name,
-                  const std::list<DexField*>& fields);
+                         const ProguardMap& pg_map,
+                         const std::string& class_name,
+                         const Container& fields);
 
 void print_field(std::ostream& output,
                  const ProguardMap& pg_map,

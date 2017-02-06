@@ -268,7 +268,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       init_class_cant_delete++;
       continue;
     }
-    clazz->get_dmethods().remove(init);
+    clazz->remove_method(init);
     TRACE(DELINIT, 5, "Delete init %s.%s %s\n", SHOW(init->get_class()),
         SHOW(init->get_name()), SHOW(init->get_proto()));
     init_deleted++;
@@ -449,7 +449,7 @@ int DeadRefs::remove_unreachable() {
       continue;
     }
     auto clazz = type_class(meth->get_class());
-    clazz->get_dmethods().remove(meth);
+    clazz->remove_method(meth);
     dmethodcnt++;
     TRACE(DELINIT, 6, "Delete dmethod: %s.%s %s\n",
         SHOW(meth->get_class()), SHOW(meth->get_name()),

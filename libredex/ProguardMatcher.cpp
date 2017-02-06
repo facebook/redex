@@ -268,13 +268,14 @@ bool field_level_match(
   return boost::regex_match(dequalified_name, *fieldname_regex);
 }
 
+template <class Container>
 void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
                  redex::KeepSpec& keep_rule,
                  const bool apply_modifiers,
-                 const std::list<DexField*>& fields,
+                 const Container& fields,
                  redex::MemberSpecification& fieldSpecification,
                  const boost::regex* fieldname_regex) {
-  for (auto field : fields) {
+  for (DexField* field : fields) {
     if (field_level_match(
             regex_map, fieldSpecification, field, fieldname_regex)) {
       if (apply_modifiers) {
@@ -351,14 +352,15 @@ void keep_clinits(DexClass* cls) {
   }
 }
 
+template <class Container>
 void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
                   KeepSpec& keep_rule,
                   const bool apply_modifiers,
                   redex::MemberSpecification& methodSpecification,
-                  const std::list<DexMethod*>& methods,
+                  const Container& methods,
                   const boost::regex* method_regex,
                   std::function<void(DexMethod*)> keeper) {
-  for (const auto& method : methods) {
+  for (DexMethod* method : methods) {
     if (method_level_match(
             regex_map, methodSpecification, method, method_regex)) {
       if (apply_modifiers) {

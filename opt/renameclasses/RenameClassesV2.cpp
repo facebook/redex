@@ -714,11 +714,9 @@ void RenameClassesPassV2::rename_classes(
     }
   });
 
-  for (auto clazz : scope) {
-    clazz->get_vmethods().sort(compare_dexmethods);
-    clazz->get_dmethods().sort(compare_dexmethods);
-    clazz->get_sfields().sort(compare_dexfields);
-    clazz->get_ifields().sort(compare_dexfields);
+  for (auto* clazz : scope) {
+    clazz->sort_methods();
+    clazz->sort_fields();
   }
 
   sanity_check(scope, aliases);

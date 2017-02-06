@@ -489,14 +489,25 @@ DexMethod* DexMethod::get_method(std::string canon) {
     DexProto::get_proto(DexType::get_type(rtype_str.c_str()), dtl));
 }
 
+
+void DexClass::remove_method(const DexMethod* m) {
+  auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
+  auto it = std::find(meths.begin(), meths.end(), m);
+  DEBUG_ONLY bool erased = false;
+  if (it != meths.end()) {
+    erased = true;
+    meths.erase(it);
+  }
+  assert(erased);
+}
+
 void DexMethod::become_virtual() {
   assert(!m_virtual);
   m_virtual = true;
   auto cls = type_class(m_ref.cls);
   assert(!cls->is_external());
-  auto& dmethods = cls->get_dmethods();
+  cls->remove_method(this);
   auto& vmethods = cls->get_vmethods();
-  dmethods.remove(this);
   insert_sorted(vmethods, this, compare_dexmethods);
 }
 
@@ -589,19 +600,6 @@ void DexClass::add_method(DexMethod* m) {
   }
 }
 
-void DexClass::remove_method(DexMethod* m) {
-  auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
-  DEBUG_ONLY bool erased = false;
-  for (auto it = meths.begin(); it != meths.end(); it++) {
-    if (*it == m) {
-      erased = true;
-      meths.erase(it);
-      break;
-    }
-  }
-  assert(erased);
-}
-
 void DexClass::add_field(DexField* f) {
   always_assert_log(f->is_concrete() || f->is_external(),
                     "Field %s must be concrete",
@@ -615,18 +613,31 @@ void DexClass::add_field(DexField* f) {
   }
 }
 
-void DexClass::remove_field(DexField* f) {
+void DexClass::remove_field(const DexField* f) {
   bool is_static = f->get_access() & DexAccessFlags::ACC_STATIC;
   auto& fields = is_static ? m_sfields : m_ifields;
   DEBUG_ONLY bool erase = false;
-  for (auto it = fields.begin(); it != fields.end(); it++) {
-    if (*it == f) {
-      erase = true;
-      it = fields.erase(it);
-      break;
-    }
+  auto it = std::find(fields.begin(), fields.end(), f);
+  if (it != fields.end()) {
+    erase = true;
+    fields.erase(it);
   }
   assert(erase);
+}
+
+
+void DexClass::sort_fields() {
+  auto& sfields = this->get_sfields();
+  auto& ifields = this->get_ifields();
+  sfields.sort(compare_dexfields);
+  ifields.sort(compare_dexfields);
+}
+
+void DexClass::sort_methods() {
+  auto& vmeths = this->get_vmethods();
+  auto& dmeths = this->get_dmethods();
+  vmeths.sort(compare_dexmethods);
+  dmeths.sort(compare_dexmethods);
 }
 
 int DexClass::encode(DexOutputIdx* dodx,

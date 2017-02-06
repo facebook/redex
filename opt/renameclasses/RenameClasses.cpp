@@ -246,10 +246,8 @@ void rename_classes(
   });
 
   for (auto clazz : scope) {
-    clazz->get_vmethods().sort(compare_dexmethods);
-    clazz->get_dmethods().sort(compare_dexmethods);
-    clazz->get_sfields().sort(compare_dexfields);
-    clazz->get_ifields().sort(compare_dexfields);
+    clazz->sort_fields();
+    clazz->sort_methods();
   }
 }
 

@@ -101,9 +101,10 @@ Trait check_init(DexMethod* meth) {
   return trait;
 }
 
-Trait check_dmethods(std::list<DexMethod*>& dmethods) {
+template <class Container>
+Trait check_dmethods(const Container& dmethods) {
   Trait trait = NO_TRAIT;
-  for (auto meth : dmethods) {
+  for (DexMethod* meth : dmethods) {
     if (is_init(meth)) {
       trait |= HAS_INIT;
       trait |= check_init(meth);
@@ -118,17 +119,20 @@ Trait check_dmethods(std::list<DexMethod*>& dmethods) {
   return trait;
 }
 
-Trait check_vmethods(std::list<DexMethod*>& vmethods) {
+template <class Container>
+Trait check_vmethods(Container& vmethods) {
   if (vmethods.size() == 0) return NO_VMETHODS;
   return NO_TRAIT;
 }
 
-Trait check_sfields(std::list<DexField*>& sfields) {
+template <class Container>
+Trait check_sfields(Container& sfields) {
   if (sfields.size() > 0) return HAS_STATIC_FIELDS;
   return NO_TRAIT;
 }
 
-Trait check_ifields(std::list<DexField*>& ifields) {
+template <class Container>
+Trait check_ifields(Container& ifields) {
   if (ifields.size() > 1) return HAS_MULTIPLE_INSTANCE_FIELDS;
   return NO_TRAIT;
 }

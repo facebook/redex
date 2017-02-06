@@ -345,7 +345,7 @@ class BridgeRemover {
       // optimization
       assert(!bridgee->is_virtual());
       auto cls = type_class(bridgee->get_class());
-      cls->get_dmethods().remove(bridgee);
+      cls->remove_method(bridgee);
       DexMethod::erase_method(bridgee);
     }
   }

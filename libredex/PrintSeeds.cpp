@@ -12,42 +12,41 @@
 #include "ReachableClasses.h"
 #include "ReferencedState.h"
 
+template <class Container>
 void print_method_seeds(std::ostream& output,
                         const ProguardMap& pg_map,
                         const std::string& class_name,
-                        const std::list<DexMethod*>& methods,
+                        const Container& methods,
                         const bool allowshrinking_filter,
                         const bool allowobfuscation_filter) {
-  for (const auto& method : methods) {
-    if (keep(method)) {
-      if (allowshrinking_filter && !allowshrinking(method)) {
-        continue;
-      }
-      if (allowobfuscation_filter && !allowobfuscation(method)) {
-        continue;
-      }
-      redex::print_method(output, pg_map, class_name, method);
+
+  for (DexMethod* method : methods) {
+    if (keep(method) ||
+      (allowshrinking_filter && !allowshrinking(method)) ||
+      (allowobfuscation_filter && !allowobfuscation(method))
+    ) {
+      return;
     }
+    redex::print_method(output, pg_map, class_name, method);
   }
 }
 
+template <class Container>
 void print_field_seeds(std::ostream& output,
                        const ProguardMap& pg_map,
                        const std::string& class_name,
-                       const std::list<DexField*>& fields,
+                       const Container& fields,
                        const bool allowshrinking_filter,
                        const bool allowobfuscation_filter) {
-  for (const auto& field : fields) {
-    if (keep(field)) {
-      if (allowshrinking_filter && !allowshrinking(field)) {
-        continue;
-      }
-      if (allowobfuscation_filter && !allowobfuscation(field)) {
-        continue;
-      }
-      redex::print_field(output, pg_map, class_name, field);
+  for (DexField* field : fields) {
+    if (!keep(field) ||
+      (allowshrinking_filter && !allowshrinking(field)) ||
+      (allowobfuscation_filter && !allowobfuscation(field))
+    ) {
+      return;
     }
-  }
+    redex::print_field(output, pg_map, class_name, field);
+  };
 }
 
 void show_class(std::ostream& output,

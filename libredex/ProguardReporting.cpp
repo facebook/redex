@@ -168,11 +168,12 @@ void redex::print_method(std::ostream& output,
   output << method_name << java_args(pg_map, args) << std::endl;
 }
 
+template <class Container>
 void redex::print_methods(std::ostream& output,
                           const ProguardMap& pg_map,
                           const std::string& class_name,
-                          const std::list<DexMethod*>& methods) {
-  for (const auto& method : methods) {
+                          const Container& methods) {
+  for (const DexMethod* method : methods) {
     redex::print_method(output, pg_map, class_name, method);
   }
 }
@@ -190,11 +191,12 @@ void redex::print_field(std::ostream& output,
          << std::endl;
 }
 
+template <class Container>
 void redex::print_fields(std::ostream& output,
                          const ProguardMap& pg_map,
                          const std::string& class_name,
-                         const std::list<DexField*>& fields) {
-  for (const auto& field : fields) {
+                         const Container& fields) {
+  for (const DexField* field : fields) {
     redex::print_field(output, pg_map, class_name, field);
   }
 }

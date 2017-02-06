@@ -47,7 +47,8 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
   }
 }
 
-DexMethod* find_method_named(const std::list<DexMethod*>& methods,
+template <class Container>
+DexMethod* find_method_named(const Container& methods,
                              const std::string& name) {
   TRACE(PGR, 8, "==> Searching for method %s\n", name.c_str());
   auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
@@ -80,7 +81,8 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
   return find_method_named(cls->get_dmethods(), name);
 }
 
-DexField* find_field_named(const std::list<DexField*>& fields,
+template <class Container>
+DexField* find_field_named(const Container& fields,
                            const char* name) {
   TRACE(PGR, 8, "==> Searching for field %s\n", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {

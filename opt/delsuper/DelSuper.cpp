@@ -319,7 +319,7 @@ public:
         auto meth = pair.first;
         auto clazz = type_class(meth->get_class());
         always_assert(meth->is_virtual());
-        clazz->get_vmethods().remove(meth);
+        clazz->remove_method(meth);
         DexMethod::erase_method(meth);
         TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s\n",
           SHOW(meth));
