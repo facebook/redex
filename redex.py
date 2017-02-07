@@ -283,9 +283,8 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                     print(line.rstrip(), file=output)
             else:
                 print(line.rstrip(), file=output)
-        if len(redex_dict) != 0:
-            for unmangled, mangled in redex_dict.itervalues():
-                print('%s -> %s:' % (unmangled, mangled), file=output)
+        for unmangled, mangled in redex_dict.iteritems():
+            print('%s -> %s:' % (unmangled, mangled), file=output)
 
 
 def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
