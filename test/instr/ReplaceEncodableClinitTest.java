@@ -20,6 +20,7 @@ public class ReplaceEncodableClinitTest {
     assertThat(Encodable.S_CHAR).isEqualTo('c');
     assertThat(Encodable.S_SHORT).isEqualTo((short) 128);
     assertThat(Encodable.S_INT).isEqualTo(12345);
+    assertThat(Encodable.S_STRING).isEqualTo("Testing 123");
   }
 }
 
@@ -29,11 +30,11 @@ class Encodable {
   public static char S_CHAR = 'c';
   public static short S_SHORT = 128;
   public static int S_INT = 12345;
+  public static String S_STRING = "Testing 123";
 }
 
-// Cannot encode strings (yet) or floats (ever?)
+// Cannot encode wide instrs
 class UnEncodable {
   public static byte S_BYTE = 'b';
-  public static String S_STRING = "Testing 123";
   public static double S_DOUBLE = 123.45;
 }
