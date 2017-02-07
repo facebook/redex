@@ -293,7 +293,7 @@ class DexAnnotationElement {
   DexEncodedValue* encoded_value;
 };
 
-typedef std::list<DexAnnotationElement> EncodedAnnotations;
+typedef std::vector<DexAnnotationElement> EncodedAnnotations;
 
 std::string show(const EncodedAnnotations*);
 
@@ -363,7 +363,7 @@ class DexAnnotation : public Gatherable {
 };
 
 class DexAnnotationSet : public Gatherable {
-  std::list<DexAnnotation*> m_annotations;
+  std::vector<DexAnnotation*> m_annotations;
 
  public:
   DexAnnotationSet() : Gatherable() {}
@@ -386,10 +386,10 @@ class DexAnnotationSet : public Gatherable {
     }
   }
 
-  const std::list<DexAnnotation*>& get_annotations() const {
+  const std::vector<DexAnnotation*>& get_annotations() const {
     return m_annotations;
   }
-  std::list<DexAnnotation*>& get_annotations() { return m_annotations; }
+  std::vector<DexAnnotation*>& get_annotations() { return m_annotations; }
   void add_annotation(DexAnnotation* anno) {
     return m_annotations.emplace_back(anno);
   }
@@ -401,10 +401,10 @@ class DexAnnotationSet : public Gatherable {
 };
 
 typedef std::map<int, DexAnnotationSet*> ParamAnnotations;
-typedef std::list<std::pair<DexField*, DexAnnotationSet*>> DexFieldAnnotations;
-typedef std::list<std::pair<DexMethod*, DexAnnotationSet*>>
+typedef std::vector<std::pair<DexField*, DexAnnotationSet*>> DexFieldAnnotations;
+typedef std::vector<std::pair<DexMethod*, DexAnnotationSet*>>
     DexMethodAnnotations;
-typedef std::list<std::pair<DexMethod*, ParamAnnotations*>>
+typedef std::vector<std::pair<DexMethod*, ParamAnnotations*>>
     DexMethodParamAnnotations;
 
 class DexAnnotationDirectory {

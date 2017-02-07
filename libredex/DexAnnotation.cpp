@@ -584,7 +584,9 @@ void DexAnnotationDirectory::gather_asets(
 void DexAnnotationDirectory::gather_xrefs(
     std::vector<ParamAnnotations*>& xrefs) {
   if (m_method_param) {
-    m_method_param->sort(method_param_annotation_compare);
+    std::sort(m_method_param->begin(),
+              m_method_param->end(),
+              method_param_annotation_compare);
     for (auto param : *m_method_param) {
       ParamAnnotations* pa = param.second;
       xrefs.push_back(pa);
@@ -651,7 +653,7 @@ void DexAnnotationDirectory::vencode(
      * A tape sort could be used instead as there are two different
      * ordered lists here.
      */
-    m_field->sort(field_annotation_compare);
+    std::sort(m_field->begin(), m_field->end(), field_annotation_compare);
     for (auto const& p : *m_field) {
       DexAnnotationSet* das = p.second;
       annodirout.push_back(dodx->fieldidx(p.first));
@@ -662,7 +664,7 @@ void DexAnnotationDirectory::vencode(
     }
   }
   if (m_method) {
-    m_method->sort(method_annotation_compare);
+    std::sort(m_method->begin(), m_method->end(), method_annotation_compare);
     for (auto const& p : *m_method) {
       DexMethod* m = p.first;
       DexAnnotationSet* das = p.second;
@@ -675,12 +677,14 @@ void DexAnnotationDirectory::vencode(
     }
   }
   if (m_method_param) {
-    m_method_param->sort(method_param_annotation_compare);
+    std::sort(m_method_param->begin(),
+              m_method_param->end(),
+              method_param_annotation_compare);
     for (auto const& p : *m_method_param) {
       ParamAnnotations* pa = p.second;
       annodirout.push_back(dodx->methodidx(p.first));
-      always_assert_log(xrefmap.count(pa) != 0,
-                        "Uninitialized ParamAnnotations %p", pa);
+      always_assert_log(
+          xrefmap.count(pa) != 0, "Uninitialized ParamAnnotations %p", pa);
       annodirout.push_back(xrefmap[pa]);
     }
   }
@@ -695,12 +699,14 @@ void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
 void DexAnnotationSet::vencode(DexOutputIdx* dodx,
                                std::vector<uint32_t>& asetout,
                                std::map<DexAnnotation*, uint32_t>& annoout) {
-  asetout.push_back((uint32_t) m_annotations.size());
-  m_annotations.sort(type_annotation_compare);
+  asetout.push_back((uint32_t)m_annotations.size());
+  std::sort(
+      m_annotations.begin(), m_annotations.end(), type_annotation_compare);
   for (auto anno : m_annotations) {
     always_assert_log(annoout.count(anno) != 0,
                       "Uninitialized annotation %p '%s', bailing\n",
-                      anno, show(anno).c_str());
+                      anno,
+                      show(anno).c_str());
     asetout.push_back(annoout[anno]);
   }
 }

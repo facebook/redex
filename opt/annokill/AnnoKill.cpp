@@ -73,24 +73,30 @@ void count_annotation(const DexAnnotation* da) {
 }
 
 void cleanup_aset(DexAnnotationSet* aset,
-    const std::unordered_set<DexType*>& keep_annos,
-    const std::unordered_set<DexType*>& anno_refs_in_code) {
+                  const std::unordered_set<DexType*>& keep_annos,
+                  const std::unordered_set<DexType*>& anno_refs_in_code) {
   s_kcount.annotations += aset->size();
   auto& annos = aset->get_annotations();
-  annos.erase(std::remove_if(annos.begin(), annos.end(), [&](DexAnnotation* da) {
+  auto fn = [&](DexAnnotation* da) {
     auto anno_type = da->type();
     count_annotation(da);
 
     if (anno_refs_in_code.count(anno_type) > 0) {
-      TRACE(ANNO, 3,
-          "Annotation type %s with type referenced in code, skipping...\n\tannotation: %s\n",
-          SHOW(anno_type), SHOW(da));
+      TRACE(ANNO,
+            3,
+            "Annotation type %s with type referenced in "
+            "code, skipping...\n\tannotation: %s\n",
+            SHOW(anno_type),
+            SHOW(da));
       return false;
     }
     if (keep_annos.count(anno_type) > 0) {
-      TRACE(ANNO, 3,
-          "Blacklisted annotation type %s, skipping...\n\tannotation: %s\n",
-          SHOW(anno_type), SHOW(da));
+      TRACE(ANNO,
+            3,
+            "Blacklisted annotation type %s, "
+            "skipping...\n\tannotation: %s\n",
+            SHOW(anno_type),
+            SHOW(da));
       return false;
     }
 
@@ -101,12 +107,13 @@ void cleanup_aset(DexAnnotationSet* aset,
       return true;
     }
     return false;
-  }), annos.end());
+  };
+  annos.erase(std::remove_if(annos.begin(), annos.end(), fn), annos.end());
 }
 
 void kill_annotations(const std::vector<DexClass*>& classes,
-    const std::unordered_set<DexType*>& keep_annos,
-    const std::unordered_set<DexType*>& anno_refs_in_code) {
+                      const std::unordered_set<DexType*>& keep_annos,
+                      const std::unordered_set<DexType*>& anno_refs_in_code) {
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
