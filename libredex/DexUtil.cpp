@@ -279,7 +279,7 @@ DexType* get_array_type(const DexType* type) {
 }
 
 void create_runtime_exception_block(
-    DexString* except_str, std::list<DexInstruction*>& block) {
+    DexString* except_str, std::vector<DexInstruction*>& block) {
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852
   // const-string v1, "Exception String e.g. Too many args" // string@7a6d
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V

@@ -141,7 +141,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
           }
           invoke->set_src(arg_count, 0);
           mt->remove_opcode(insn);
-          std::list<DexInstruction*> new_insns;
+          std::vector<DexInstruction*> new_insns;
           new_insns.push_back(load);
           new_insns.push_back(invoke);
           mt->insert_after(last, new_insns);
@@ -341,7 +341,7 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
     mt->replace_opcode(fop, new_fop);
     DexOpcodeType* check_cast = new DexOpcodeType(OPCODE_CHECK_CAST, type);
     check_cast->set_src(0, dst);
-    std::list<DexInstruction*> ops;
+    std::vector<DexInstruction*> ops;
     ops.push_back(check_cast);
     TRACE(UNTF, 8, "Changed %s to\n%s\n%s\n", show(fop).c_str(),
         show(new_fop).c_str(), show(check_cast).c_str());

@@ -260,8 +260,8 @@ bool passes_args_through(DexOpcodeMethod* insn,
  * by transformations for substituting instructions which throw an exception
  * at runtime. Currently, used for substituting switch case instructions.
  */
-void create_runtime_exception_block(
-   DexString* except_str, std::list<DexInstruction*>& block);
+void create_runtime_exception_block(DexString* except_str,
+                                    std::vector<DexInstruction*>& block);
 
 /**
  * Generates a Scope& object from a set of Dexes.

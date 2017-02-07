@@ -332,7 +332,7 @@ class MethodTransform {
   void push_back(DexInstruction* insn);
 
   /* position = nullptr means at the head */
-  void insert_after(DexInstruction* position, std::list<DexInstruction*>& opcodes);
+  void insert_after(DexInstruction* position, const std::vector<DexInstruction*>& opcodes);
 
   /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(DexInstruction* insn);

@@ -607,7 +607,7 @@ void MethodTransform::push_back(DexInstruction* insn) {
 }
 
 void MethodTransform::insert_after(DexInstruction* position,
-                                   std::list<DexInstruction*>& opcodes) {
+                                   const std::vector<DexInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
    *if
    * a method has a branch target as it's first instruction.
@@ -621,7 +621,7 @@ void MethodTransform::insert_after(DexInstruction* position,
         (position == nullptr || mei.insn == position)) {
       auto insertat = m_fmethod->iterator_to(mei);
       if (position != nullptr) insertat++;
-      for (auto opcode : opcodes) {
+      for (auto* opcode : opcodes) {
         MethodItemEntry* mentry = new MethodItemEntry(opcode);
         m_fmethod->insert(insertat, *mentry);
       }
@@ -665,7 +665,7 @@ void MethodTransform::remove_switch_case(DexInstruction* insn) {
   assert_log(target_count != 0, " There should be atleast one target");
   if (target_count == 1) {
     auto excpt_str = DexString::make_string("Redex switch Exception");
-    std::list<DexInstruction*> excpt_block;
+    std::vector<DexInstruction*> excpt_block;
     create_runtime_exception_block(excpt_str, excpt_block);
     insert_after(insn, excpt_block);
     remove_opcode(insn);

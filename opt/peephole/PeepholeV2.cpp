@@ -872,8 +872,8 @@ class PeepholeOptimizerV2 {
     }
 
     for (auto& pair : inserts) {
-      std::list<DexInstruction*> list{begin(pair.second), end(pair.second)};
-      transform->insert_after(pair.first, list);
+      std::vector<DexInstruction*> vec{begin(pair.second), end(pair.second)};
+      transform->insert_after(pair.first, vec);
     }
     for (auto& insn : deletes) {
       transform->remove_opcode(insn);
