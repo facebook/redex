@@ -842,11 +842,12 @@ class DexClass {
    * It takes no arguments and returns void.
    */
   DexMethod* get_clinit() const {
-    DexType* return_type = DexType::make_type("V");
-    DexString* method_name = DexString::get_string("<clinit>");
-    DexTypeList* argument_list = DexTypeList::get_type_list({});
-    DexProto* proto = DexProto::get_proto(return_type, argument_list);
-    return DexMethod::get_method(m_self, method_name, proto);
+    for (auto meth : get_dmethods()) {
+      if (strcmp(meth->get_name()->c_str(), "<clinit>") == 0) {
+        return meth;
+      }
+    }
+    return nullptr;
   }
 
   void add_method(DexMethod* m);
