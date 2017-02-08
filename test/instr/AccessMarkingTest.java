@@ -99,11 +99,13 @@ public class AccessMarkingTest {
     Field f2 = FinalFixture.class.getDeclaredField("f2");
     Field f3 = FinalFixture.class.getDeclaredField("f3");
     Field f4 = FinalFixture.class.getDeclaredField("f4");
+    Field f5 = FinalFixture.class.getDeclaredField("f5");
     assertThat(isFinal(f0)).isTrue();
     assertThat(isFinal(f1)).isTrue();
     assertThat(isFinal(f2)).isTrue();
     assertThat(isFinal(f3)).isFalse();
     assertThat(isFinal(f4)).isFalse();
+    assertThat(isFinal(f5)).isFalse();
   }
 }
 
@@ -130,6 +132,7 @@ class FinalFixture {
   public static int f2;
   public static int f3;
   public static int f4;
+  public static volatile int f5 = 10;
   static {
     f2 = 2;
     if (Math.random() > 0.5) {

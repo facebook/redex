@@ -52,6 +52,10 @@ size_t mark_sfields_final(const std::vector<DexClass*>& scope) {
           auto const& clinit = cls->get_clinit();
           // ... and it's in our own <clinit>
           if (clinit == putters.front()) {
+            if (is_volatile(sfield)) {
+              TRACE(ACCESS, 2, "Can't finalize volatile sfield: %s\n", SHOW(sfield));
+              continue;
+            }
             TRACE(ACCESS, 2, "Finalizing sfield: %s\n", SHOW(sfield));
             set_final(sfield);
             ++n_sfields_finalized;
