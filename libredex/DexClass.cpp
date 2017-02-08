@@ -31,7 +31,7 @@ uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
   }
-  return length_of_utf8_string(m_cstr);
+  return length_of_utf8_string(c_str());
 }
 
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {

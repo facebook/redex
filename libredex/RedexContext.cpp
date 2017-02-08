@@ -59,8 +59,11 @@ DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   std::lock_guard<std::mutex> lock(s_string_lock);
   auto it = s_string_map.find(nstr);
   if (it == s_string_map.end()) {
+    // note DexStrings are keyed by the c_str() of the underlying std::string
+    // The c_str is valid until a the string is destroyed, or until a non-const
+    // function is called on the string (but note the std::string itself is const)
     auto rv = new DexString(nstr, utfsize);
-    s_string_map.emplace(rv->m_cstr, rv);
+    s_string_map.emplace(rv->c_str(), rv);
     return rv;
   } else {
     return it->second;

@@ -65,23 +65,16 @@ std::string proguard_name(const DexField* field);
 class DexString {
   friend struct RedexContext;
 
-  const char* m_cstr;
+  std::string m_storage;
   uint32_t m_utfsize;
-  uint32_t m_strlen;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexString(const char* nstr, uint32_t utfsize) {
-    m_cstr = (const char*)strdup(nstr);
-    m_utfsize = utfsize;
-    m_strlen = (uint32_t)strlen(nstr);
-  }
-
-  ~DexString() {
-    free(const_cast<char*>(m_cstr));
+  DexString(std::string nstr, uint32_t utfsize) :
+    m_storage(std::move(nstr)), m_utfsize(utfsize) {
   }
 
  public:
-  uint32_t size() const { return m_strlen; }
+  uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
 
   // UTF-aware length
   uint32_t length() const;
@@ -113,22 +106,21 @@ class DexString {
 
  public:
   bool is_simple() const {
-    if (m_strlen == m_utfsize) return true;
-    return false;
+    return size() == m_utfsize;
   }
 
-  const char* c_str() const { return m_cstr; }
+  const char* c_str() const { return m_storage.c_str(); }
 
   uint32_t get_entry_size() const {
     uint32_t len = uleb128_encoding_size(m_utfsize);
-    len += m_strlen;
+    len += size();
     len++; // NULL byte
     return len;
   }
 
   void encode(uint8_t* output) {
     output = write_uleb128(output, m_utfsize);
-    strcpy((char*)output, m_cstr);
+    strcpy((char*)output, c_str());
   }
 
   template <typename V>
