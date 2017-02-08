@@ -34,7 +34,172 @@
  * conditionally marked elements to fully marked
  */
 
+#define DEBUG_UNREACHABLE 0
+
+
 namespace {
+
+#ifdef DEBUG_UNREACHABLE
+enum ReachableObjectType {
+  ANNO,
+  CLASS,
+  FIELD,
+  METHOD,
+  SEED,
+};
+
+/**
+ * Represents an object (class, method, or field) that's considered reachable by this pass.
+ *
+ * Used for logging what retains what so that we can see what things which
+ * should be removed aren't being removed.
+ */
+struct ReachableObject {
+  const ReachableObjectType type;
+  const DexAnnotation* anno;
+  const DexClass* cls;
+  const DexField* field;
+  const DexMethod* method;
+
+  explicit ReachableObject(const DexAnnotation* anno) : type{ReachableObjectType::ANNO},   anno{anno} {}
+  explicit ReachableObject(const DexClass* cls) :       type{ReachableObjectType::CLASS},  cls{cls} {}
+  explicit ReachableObject(const DexMethod* method) :   type{ReachableObjectType::METHOD}, method{method} {}
+  explicit ReachableObject(const DexField* field) :     type{ReachableObjectType::FIELD},  field{field} {}
+  explicit ReachableObject() : type{ReachableObjectType::SEED} {}
+
+  std::string str() const {
+    std::string result;
+    switch (type) {
+      case ReachableObjectType::ANNO:
+        return show(anno);
+      case ReachableObjectType::CLASS:
+        return show(cls);
+      case ReachableObjectType::FIELD:
+        return show(field);
+      case ReachableObjectType::METHOD:
+        return show(method);
+      case ReachableObjectType::SEED:
+        return std::string("<explicitly kept due to is_seed()>");
+    }
+  }
+};
+
+struct ReachableObjectHash {
+  std::size_t operator()(const ReachableObject obj) const {
+    switch (obj.type) {
+      case ReachableObjectType::ANNO:   return std::hash<const DexAnnotation*>{}(obj.anno);
+      case ReachableObjectType::CLASS:  return std::hash<const DexClass*>{}(obj.cls);
+      case ReachableObjectType::FIELD:  return std::hash<const DexField*>{}(obj.field);
+      case ReachableObjectType::METHOD: return std::hash<const DexMethod*>{}(obj.method);
+      case ReachableObjectType::SEED:   return 0;
+    }
+  }
+};
+
+struct ReachableObjectEq {
+  bool operator()(const ReachableObject lhs, const ReachableObject rhs) const {
+    if (lhs.type != rhs.type) {
+      return false;
+    }
+    switch (lhs.type) {
+      case ReachableObjectType::ANNO:   return lhs.anno == rhs.anno;
+      case ReachableObjectType::CLASS:  return lhs.cls == rhs.cls;
+      case ReachableObjectType::FIELD:  return lhs.field == rhs.field;
+      case ReachableObjectType::METHOD: return lhs.method == rhs.method;
+      case ReachableObjectType::SEED:   return true;
+    }
+  }
+};
+
+using ReachableObjectSet = std::unordered_set<ReachableObject, ReachableObjectHash, ReachableObjectEq>;
+static std::unordered_map<ReachableObject, ReachableObjectSet, ReachableObjectHash, ReachableObjectEq> retainers_of;
+static ReachableObject SEED_SINGLETON{};
+
+template<class Reachable>
+void print_reachable_reason(Reachable* reachable) {
+  ReachableObject obj(reachable);
+  std::string reason = obj.str() + " is reachable via [";
+  bool any_added = false;
+  auto retainer_set = retainers_of[obj];
+  for (auto& item : retainer_set) {
+    if (any_added) {
+      reason += ", ";
+    }
+    reason += item.str();
+    any_added = true;
+  }
+  reason += "]";
+
+  TRACE(RMU, 1, "%s\n", reason.c_str());
+}
+
+
+/*
+ * We use templates to specialize record_reachability(parent, child) such that:
+ *
+ *  1. It works for all combinations of
+ *       parent, child in {DexAnnotation*, DexClass*, DexType*, DexMethod*, DexField*}
+ *
+ *  2. We record the reachability relationship iff
+ *       DEBUG_UNREACHABLE and neither type is DexType
+ *
+ *  3. If either argument is a DexType*, we extract the corresponding DexClass*
+ *       and then call the right version of record_reachability()
+ */
+template<class Seed>
+void record_is_seed(Seed* seed) {
+  assert(seed != nullptr);
+  ReachableObject seed_object(seed);
+  retainers_of[seed_object].insert(SEED_SINGLETON);
+}
+
+template<class Parent, class Object>
+struct RecordImpl {
+  static void record_reachability(const Parent* parent, const Object* object) {
+    assert(parent != nullptr && object != nullptr);
+    ReachableObject reachable_obj(object);
+    retainers_of[reachable_obj].emplace(parent);
+  }
+};
+
+template<class Object>
+struct RecordImpl<DexType, Object> {
+  static void record_reachability(const DexType* parent, const Object* object) {
+    DexClass* parent_cls = type_class(get_array_type_or_self(parent));
+    // If parent_class is null then it's not ours (e.g. String), so skip it
+    if (parent_cls) {
+      RecordImpl<DexClass, Object>::record_reachability(parent_cls, object);
+    }
+  }
+};
+
+template<class Parent>
+struct RecordImpl<Parent, DexType> {
+  static void record_reachability(const Parent* parent, const DexType* object) {
+    DexClass* object_cls = type_class(get_array_type_or_self(object));
+    // If object_class is null then it's not ours (e.g. String), so skip it
+    if (object_cls) {
+      RecordImpl<Parent, DexClass>::record_reachability(parent, object_cls);
+    }
+  }
+};
+
+template<class Parent, class Object>
+void record_reachability(Parent* parent, Object* object) {
+  // We need to use this RecordImpl struct trick in order to
+  // partially specialize the template
+  RecordImpl<Parent, Object>::record_reachability(parent, object);
+}
+
+#else // DEBUG_UNREACHABLE is false
+
+template<class Seed>
+inline void record_reachability(Seed* seed) { /* Do nothing */ }
+
+template<class Parent, class Object>
+inline void record_reachability(Parent* parent, Object* object) { /* Do nothing */ }
+
+#endif
 
 bool is_canary(const DexClass* cls) {
   return strstr(cls->get_name()->c_str(), "Canary");
@@ -200,21 +365,35 @@ struct UnreachableCodeRemover {
     return m_marked_methods.count(method);
   }
 
-  void push(const DexType* type) {
-    if (is_array(type)) {
-      type = get_array_type(type);
-    }
-    push(type_class(type));
+  void push_seed(const DexType* type) {
+    type = get_array_type_or_self(type);
+    push_seed(type_class(type));
   }
 
-  void push(const DexClass* cls) {
+  template<class Parent>
+  void push(const Parent* parent, const DexType* type) {
+    type = get_array_type_or_self(type);
+    push(parent, type_class(type));
+  }
+
+  void push_seed(const DexClass* cls) {
     if (!cls || marked(cls)) return;
+    record_is_seed(cls);
     mark(cls);
     m_class_stack.emplace_back(cls);
   }
 
-  void push(const DexField* field) {
+  template<class Parent>
+  void push(const Parent* parent, const DexClass* cls) {
+    if (!cls || marked(cls)) return;
+    record_reachability(parent, cls);
+    mark(cls);
+    m_class_stack.emplace_back(cls);
+  }
+
+  void push_seed(const DexField* field) {
     if (!field || marked(field)) return;
+    record_is_seed(field);
     mark(field);
     m_field_stack.emplace_back(field);
   }
@@ -222,15 +401,34 @@ struct UnreachableCodeRemover {
   void push_cond(const DexField* field) {
     if (!field || marked(field)) return;
     TRACE(RMU, 4, "Conditionally marking field: %s\n", SHOW(field));
-    if (marked(type_class(field->get_class()))) {
-      push(field);
+    auto clazz = type_class(field->get_class());
+
+    if (marked(clazz)) {
+      push(clazz, field);
     } else {
       m_cond_marked_fields.emplace(field);
     }
   }
 
-  void push(const DexMethod* method) {
+  template<class Parent>
+  void push(const Parent* parent, const DexField* field) {
+    if (!field || marked(field)) return;
+    record_reachability(parent, field);
+    mark(field);
+    m_field_stack.emplace_back(field);
+  }
+
+  void push_seed(const DexMethod* method) {
     if (!method || marked(method)) return;
+    record_is_seed(method);
+    mark(method);
+    m_method_stack.emplace_back(method);
+  }
+
+  template<class Parent>
+  void push(const Parent* parent, const DexMethod* method) {
+    if (!method || marked(method)) return;
+    record_reachability(parent, method);
     mark(method);
     m_method_stack.emplace_back(method);
   }
@@ -238,8 +436,9 @@ struct UnreachableCodeRemover {
   void push_cond(const DexMethod* method) {
     if (!method || marked(method)) return;
     TRACE(RMU, 4, "Conditionally marking method: %s\n", SHOW(method));
-    if (marked(type_class(method->get_class()))) {
-      push(method);
+    auto clazz = type_class(method->get_class());
+    if (marked(clazz)) {
+      push(clazz, method);
     } else {
       m_cond_marked_methods.emplace(method);
     }
@@ -261,27 +460,27 @@ struct UnreachableCodeRemover {
       if (!typestr) continue;
       auto type = DexType::get_type(typestr);
       if (!type) continue;
-      push(type);
+      push(t, type);
     }
     for (auto const& type : types) {
-      push(type);
+      push(t, type);
     }
     for (auto const& field : fields) {
-      push(field);
+      push(t, field);
     }
     for (auto const& method : methods) {
-      push(method);
+      push(t, method);
     }
   }
 
   void visit(const DexClass* cls) {
     TRACE(RMU, 4, "Visiting class: %s\n", SHOW(cls));
     for (auto& m : cls->get_dmethods()) {
-      if (is_clinit(m)) push(m);
+      if (is_clinit(m)) push(cls, m);
     }
-    push(type_class(cls->get_super_class()));
+    push(cls, type_class(cls->get_super_class()));
     for (auto const& t : cls->get_interfaces()->get_type_list()) {
-      push(t);
+      push(cls, t);
     }
     const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
@@ -295,22 +494,22 @@ struct UnreachableCodeRemover {
     }
     for (auto const& m : cls->get_ifields()) {
       if (m_cond_marked_fields.count(m)) {
-        push(m);
+        push(cls, m);
       }
     }
     for (auto const& m : cls->get_sfields()) {
       if (m_cond_marked_fields.count(m)) {
-        push(m);
+        push(cls, m);
       }
     }
     for (auto const& m : cls->get_dmethods()) {
       if (m_cond_marked_methods.count(m)) {
-        push(m);
+        push(cls, m);
       }
     }
     for (auto const& m : cls->get_vmethods()) {
       if (m_cond_marked_methods.count(m)) {
-        push(m);
+        push(cls, m);
       }
     }
   }
@@ -320,23 +519,23 @@ struct UnreachableCodeRemover {
     if (!field->is_concrete()) {
       auto const& realfield = resolve_field(
         field->get_class(), field->get_name(), field->get_type());
-      push(realfield);
+      push(field, realfield);
     }
     gather_and_push(field);
-    push(field->get_class());
-    push(field->get_type());
+    push(field, field->get_class());
+    push(field, field->get_type());
   }
 
   void visit(DexMethod* method) {
     TRACE(RMU, 4, "Visiting method: %s\n", SHOW(method));
     auto resolved_method = resolve(method, type_class(method->get_class()));
     TRACE(RMU, 5, "    Resolved to: %s\n", SHOW(resolved_method));
-    push(resolved_method);
+    push(method, resolved_method);
     gather_and_push(method);
-    push(method->get_class());
-    push(method->get_proto()->get_rtype());
+    push(method, method->get_class());
+    push(method, method->get_proto()->get_rtype());
     for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
-      push(t);
+      push(method, t);
     }
     if (method->is_virtual() || !method->is_concrete()) {
       // If we're keeping an interface method, we have to keep its
@@ -366,7 +565,7 @@ struct UnreachableCodeRemover {
       for (auto const& cls : dex) {
         if (root(cls) || is_canary(cls)) {
           TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(cls));
-          push(cls);
+          push_seed(cls);
         }
         for (auto const& f : cls->get_ifields()) {
           if (root(f) || is_volatile(f)) {
@@ -474,10 +673,18 @@ void RemoveUnreachablePass::run_pass(
   UnreachableCodeRemover ucr(stores);
   deleted_stats before = trace_stats("before", stores);
   ucr.mark_sweep();
+
   deleted_stats after = trace_stats("after", stores);
   pm.incr_metric("classes_removed", before.nclasses - after.nclasses);
   pm.incr_metric("fields_removed", before.nfields - after.nfields);
   pm.incr_metric("methods_removed", before.nmethods - after.nmethods);
+
+  // Print out the reason that each class is being kept.
+  //for (auto& dex : DexStoreClassesIterator(stores)) {
+  //  for (auto const& cls : dex) {
+  //    print_reachable_reason(cls);
+  //  }
+  //}
 }
 
 static RemoveUnreachablePass s_pass;

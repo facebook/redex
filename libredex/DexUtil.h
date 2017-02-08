@@ -181,6 +181,15 @@ bool is_array(const DexType* type);
 uint32_t get_array_level(const DexType* type);
 
 /**
+ * Return the type of a given array type or the type itself if it's not an array
+ *
+ * Examples:
+ *   [java.lang.String -> java.lang.String
+ *   java.lang.Integer -> java.lang.Integer
+ */
+const DexType* get_array_type_or_self(const DexType*);
+
+/**
  * Return the type of a given array type or nullptr if the type is not
  * an array.
  */
