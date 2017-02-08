@@ -256,13 +256,13 @@ dexmethod_to_idx* GatheredTypes::get_method_index(cmp_dmethod cmp) {
 }
 
 dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
-  std::list<DexProto*> protos;
+  std::vector<DexProto*> protos;
   for (auto const& m : m_lmethod) {
     protos.push_back(m->get_proto());
   }
-  protos.sort();
-  protos.unique();
-  protos.sort(cmp);
+  std::sort(protos.begin(), protos.end());
+  protos.erase(std::unique(protos.begin(), protos.end()), protos.end());
+  std::sort(protos.begin(), protos.end(), cmp);
   dexproto_to_idx* sidx = new dexproto_to_idx();
   uint32_t idx = 0;
   for (auto const& proto : protos) {
@@ -439,7 +439,7 @@ public:
   void unique_adirs(asetmap_t& asetmap,
                     xrefmap_t& xrefmap,
                     adirmap_t& adirmap,
-                    std::list<DexAnnotationDirectory*>& adirlist);
+                    std::vector<DexAnnotationDirectory*>& adirlist);
   void generate_annotations();
   void generate_debug_items();
   void generate_typelist_data();
@@ -931,7 +931,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
 void DexOutput::unique_adirs(asetmap_t& asetmap,
                              xrefmap_t& xrefmap,
                              adirmap_t& adirmap,
-                             std::list<DexAnnotationDirectory*>& adirlist) {
+                             std::vector<DexAnnotationDirectory*>& adirlist) {
   int adircnt = 0;
   uint32_t mentry_offset = m_offset;
   std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
@@ -966,7 +966,7 @@ void DexOutput::generate_annotations() {
    * 4) Emit annotation_directories
    * 5) Attach annotation_directories to the classdefs
    */
-  std::list<DexAnnotationDirectory*> lad;
+  std::vector<DexAnnotationDirectory*> lad;
   int xrefsize = 0;
   int annodirsize = 0;
   int xrefcnt = 0;
@@ -987,7 +987,7 @@ void DexOutput::generate_annotations() {
       ad_to_classnum[ad] = i;
     }
   }
-  lad.sort(annotation_cmp);
+  std::sort(lad.begin(), lad.end(), annotation_cmp);
   std::vector<DexAnnotation*> annolist;
   std::vector<DexAnnotationSet*> asetlist;
   std::vector<ParamAnnotations*> xreflist;
