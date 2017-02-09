@@ -48,13 +48,13 @@ void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());
   DexOpcode opcode;
   if (meth->is_virtual()) {
-    if (type_class(meth->get_class())->get_access() & ACC_INTERFACE) {
+    if (is_interface(type_class(meth->get_class()))) {
       opcode = OPCODE_INVOKE_INTERFACE;
     } else {
       opcode = OPCODE_INVOKE_VIRTUAL;
     }
   } else {
-    if (meth->get_access() & ACC_STATIC) {
+    if (is_static(meth)) {
       opcode = OPCODE_INVOKE_STATIC;
     } else {
       opcode = OPCODE_INVOKE_DIRECT;
@@ -79,7 +79,7 @@ void MethodBlock::invoke(DexOpcode opcode,
 }
 
 void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
-  always_assert(field->is_concrete() && !(field->get_access() & ACC_STATIC));
+  always_assert(field->is_concrete() && !is_static(field));
   DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
@@ -115,7 +115,7 @@ void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
 }
 
 void MethodBlock::iput(DexField* field, Location obj, Location src) {
-  always_assert(field->is_concrete() && !(field->get_access() & ACC_STATIC));
+  always_assert(field->is_concrete() && !is_static(field));
   DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
@@ -170,7 +170,7 @@ void MethodBlock::ifield_op(DexOpcode opcode,
 }
 
 void MethodBlock::sget(DexField* field, Location& dst) {
-  always_assert(field->is_concrete() && (field->get_access() & ACC_STATIC));
+  always_assert(field->is_concrete() && is_static(field));
   DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
@@ -206,7 +206,7 @@ void MethodBlock::sget(DexField* field, Location& dst) {
 }
 
 void MethodBlock::sput(DexField* field, Location src) {
-  always_assert(field->is_concrete() && (field->get_access() & ACC_STATIC));
+  always_assert(field->is_concrete() && is_static(field));
   DexOpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
@@ -571,7 +571,7 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
                                            DexProto* proto,
                                            DexMethod* meth,
                                            DexClass* target_cls) {
-  assert(!(meth->get_access() & ACC_STATIC));
+  assert(!is_static(meth));
   assert(!is_init(meth) && !is_clinit(meth));
   auto smeth = DexMethod::make_method(target_cls->get_type(), name, proto);
   smeth->make_concrete(

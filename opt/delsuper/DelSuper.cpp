@@ -186,13 +186,13 @@ private:
     }
 
     // Must not be static
-    if (meth->get_access() & ACC_STATIC) {
+    if (is_static(meth)) {
       m_num_culled_static++;
       return nullptr;
     }
 
     // Must not be private
-    if (meth->get_access() & ACC_PRIVATE) {
+    if (is_private(meth)) {
       m_num_private++;
     }
 
@@ -252,7 +252,7 @@ private:
     }
 
     auto cls = type_class(invoked_meth->get_class());
-    if (!(cls->get_access() & ACC_PUBLIC)) {
+    if (!is_public(cls)) {
       if (cls->is_external()) {
         m_num_culled_super_cls_non_public++;
         return nullptr;

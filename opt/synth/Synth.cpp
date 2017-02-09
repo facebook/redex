@@ -404,7 +404,7 @@ bool replace_getter_wrapper(MethodTransformer& transform,
         SHOW(field),
         move_result_dest,
         invoke_src);
-  auto new_get = (field->get_access() & ACC_STATIC)
+  auto new_get = is_static(field)
                 ? make_sget(field, move_result_dest)
                 : make_iget(field, move_result_dest, invoke_src);
   if (!new_get) return false;
@@ -733,7 +733,7 @@ void remove_dead_methods(
     if (is_public(meth)) pub_meth++;
     auto cls = type_class(meth->get_class());
     cls->remove_method(meth);
-    meth->get_access() & ACC_SYNTHETIC ? synth_removed++ : other_removed++;
+    is_synthetic(meth) ? synth_removed++ : other_removed++;
   };
 
   for (auto const gp : ssms.getters) {
@@ -844,7 +844,7 @@ bool trace_analysis(WrapperMethods& ssms) {
   DEBUG_ONLY size_t others = 0;
   for (auto it : ssms.getters) {
     auto meth = it.first;
-    meth->get_access() & ACC_SYNTHETIC ? synth++ : others++;
+    is_synthetic(meth) ? synth++ : others++;
   }
   TRACE(SYNT, 3, "synth getters %ld\n", synth);
   TRACE(SYNT, 3, "other getters %ld\n", others);
@@ -853,7 +853,7 @@ bool trace_analysis(WrapperMethods& ssms) {
   others = 0;
   for (auto it : ssms.ctors) {
     auto meth = it.first;
-    if (meth->get_access() & ACC_SYNTHETIC) {
+    if (is_synthetic(meth)) {
       synth++;
     } else {
       others++;
@@ -866,7 +866,7 @@ bool trace_analysis(WrapperMethods& ssms) {
   others = 0;
   for (auto it : ssms.wrappers) {
     auto meth = it.first;
-    meth->get_access() & ACC_SYNTHETIC ? synth++ : others++;
+    is_synthetic(meth) ? synth++ : others++;
   }
   TRACE(SYNT, 3, "synth methods %ld\n", synth);
   TRACE(SYNT, 3, "other methods %ld\n", others);

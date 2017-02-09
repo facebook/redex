@@ -174,7 +174,7 @@ bool gather_intf_extenders(const DexType* extender,
   bool extends = false;
   const DexClass* extender_cls = type_class(extender);
   if (!extender_cls) return extends;
-  if (extender_cls->get_access() & ACC_INTERFACE) {
+  if (is_interface(extender_cls)) {
     for (const auto& extends_intf :
          extender_cls->get_interfaces()->get_type_list()) {
       if (extends_intf == intf ||
@@ -227,7 +227,7 @@ void get_all_children_and_implementors(
     const Scope& scope,
     const DexClass* base_class,
     std::unordered_set<const DexType*>* result) {
-  if (base_class->get_access() & ACC_INTERFACE) {
+  if (is_interface(base_class)) {
     std::unordered_set<const DexType*> impls;
     get_all_implementors(scope, base_class->get_type(), *result);
   } else {

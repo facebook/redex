@@ -144,7 +144,7 @@ std::vector<DexMethod*> get_noncoldstart_statics(
   int keep_statics = 0;
   for (auto const& cls : classes) {
     for (auto& method : cls->get_dmethods()) {
-      if ((method->get_access() & ACC_STATIC)) {
+      if (is_static(method)) {
         if (!is_clinit(method) &&
             coldstart_methods.count(method) == 0 &&
             can_delete(cls) &&
@@ -201,8 +201,8 @@ bool allow_method_access(DexMethod* meth) {
   if (!meth->is_concrete()) {
     return false;
   }
-  if ((meth->get_access() & ACC_STATIC) != ACC_STATIC &&
-      (meth->get_access() & ACC_CONSTRUCTOR) != ACC_CONSTRUCTOR &&
+  if (!is_static(meth) &&
+      !is_constructor(meth) &&
       !is_public(meth)) {
     return false;
   }
@@ -293,7 +293,7 @@ DexClass* move_statics_out(
       collision_count++;
       continue;
     }
-    if (meth->get_access() & ACC_NATIVE) {
+    if (is_native(meth)) {
       native_count++;
       continue;
     }
@@ -354,7 +354,7 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
   for (auto const cls : classes) {
     for (auto const m : cls->get_dmethods()) {
       num_dmethods++;
-      if (m->get_access() & ACC_STATIC) {
+      if (is_static(m)) {
         num_statics++;
       }
     }

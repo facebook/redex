@@ -273,7 +273,7 @@ bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
 bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
   auto cls = type_class(callee->get_class());
   // Enums are all blacklisted
-  if (cls->get_access() & ACC_ENUM) {
+  if (is_enum(cls)) {
     return true;
   }
   while (cls != nullptr) {
@@ -386,7 +386,7 @@ bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
       return false;
     }
     if (m_config.callee_direct_invoke_inline &&
-        !(method->get_access() & ACC_NATIVE)) {
+        !is_native(method)) {
       m_make_static.insert(method);
     } else {
       info.need_vmethod++;

@@ -372,7 +372,7 @@ void RenameClassesPassV2::build_dont_rename_native_bindings(
   // find all classes with native methods, and all types mentioned in protos of native methods
   for(auto clazz: scope) {
     for (auto meth : clazz->get_dmethods()) {
-      if (meth->get_access() & ACC_NATIVE) {
+      if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
         auto proto = meth->get_proto();
         auto rtype = proto->get_rtype();
@@ -388,7 +388,7 @@ void RenameClassesPassV2::build_dont_rename_native_bindings(
       }
     }
     for (auto meth : clazz->get_vmethods()) {
-      if (meth->get_access() & ACC_NATIVE) {
+      if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
         auto proto = meth->get_proto();
         auto rtype = proto->get_rtype();

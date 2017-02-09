@@ -39,7 +39,7 @@ DEBUG_ONLY bool method_breakup(
     size_t stat = 0;
     auto group = calls_group[i];
     for (auto callee : group) {
-      callee->get_access() & ACC_STATIC ? stat++ : inst++;
+      is_static(callee) ? stat++ : inst++;
     }
     TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
         i, group.size(), inst, stat);
