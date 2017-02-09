@@ -95,7 +95,6 @@ struct ClassMatcher {
 
   bool match_extends(const DexClass* cls) const {
     if (!m_extends) return true;
-    auto deob_name = cls->get_deobfuscated_name();
     return search_extends_and_interfaces(cls);
   }
 
@@ -420,12 +419,13 @@ bool classname_contains_wildcard(const std::string& classname) {
 
 DexClass* find_single_class(const ProguardMap& pg_map,
                             const std::string& descriptor) {
-  if (classname_contains_wildcard(descriptor)) {
-    return nullptr;
-  }
-  DexType* typ = DexType::get_type(pg_map.translate_class(descriptor).c_str());
+  auto const& dsc = JavaNameUtil::external_to_internal(descriptor);
+  DexType* typ = DexType::get_type(pg_map.translate_class(dsc).c_str());
   if (typ == nullptr) {
-    return nullptr;
+    typ = DexType::get_type(dsc.c_str());
+    if (typ == nullptr) {
+      return nullptr;
+    }
   }
   return type_class(typ);
 }
@@ -649,14 +649,11 @@ void process_keep(const ProguardMap& pg_map,
                       DexClass*)> keep_processor) {
   for (auto& keep_rule : keep_rules) {
     ClassMatcher class_match(keep_rule);
-    auto descriptor =
-        proguard_parser::convert_wildcard_type(keep_rule.class_spec.className);
-    DexClass* cls = find_single_class(pg_map, descriptor);
-    if (cls != nullptr) {
-      if (class_match.match(cls)) {
-        if (!cls->is_external()) {
-          keep_processor(regex_map, keep_rule, cls);
-        }
+    auto const& className = keep_rule.class_spec.className;
+    if (!classname_contains_wildcard(className)) {
+      DexClass* cls = find_single_class(pg_map, className);
+      if (cls != nullptr && !cls->is_external() && class_match.match(cls)) {
+        keep_processor(regex_map, keep_rule, cls);
       }
       continue;
     }
