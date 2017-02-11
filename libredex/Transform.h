@@ -72,14 +72,7 @@ enum MethodItemType {
   MFLOW_POSITION,
 
   /*
-   * This serves two purposes:
-   *
-   * First, if we let fall-through blocks start with a normal instruction
-   * (MFLOW_OPCODE), then we can't delete those instructions without breaking
-   * the block boundaries.  So, we add MFLOW_FALLTHROUGH as a dirty hack to have
-   * stable block boundary markers.
-   *
-   * Second, we insert one MFLOW_FALLTHROUGH before every MFLOW_OPCODE that
+   * We insert one MFLOW_FALLTHROUGH before every MFLOW_OPCODE that
    * could potentially throw, and set the throwing_mie field to point to that
    * opcode. The MFLOW_FALLTHROUGH will then be at the end of its basic block
    * and the MFLOW_OPCODE will be at the start of the next one. build_cfg

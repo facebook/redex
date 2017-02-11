@@ -324,10 +324,6 @@ bool encode_offset(FatMethod* fm,
   return true;
 }
 
-static void insert_fallthrough(FatMethod* fm, MethodItemEntry* dest) {
-  MethodItemEntry* fallthrough = new MethodItemEntry();
-  insert_mentry_before(fm, fallthrough, dest);
-}
 
 static bool multi_target_compare_index(const BranchTarget* a,
                                        const BranchTarget* b) {
@@ -1559,7 +1555,6 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     // Start a new block at the next MethodItem.
     auto next_block = new Block(id++);
     if (next->type == MFLOW_OPCODE) {
-      insert_fallthrough(m_fmethod, &*next);
       next = std::next(it);
     }
     m_blocks.back()->m_end = next;
