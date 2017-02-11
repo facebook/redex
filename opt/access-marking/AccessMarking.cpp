@@ -19,54 +19,6 @@
 #include "Walkers.h"
 
 namespace {
-
-size_t mark_sfields_final(const std::vector<DexClass*>& scope) {
-  std::unordered_map<DexField*, std::vector<DexMethod*>> sputters;
-  walk_opcodes(
-    scope,
-    [](DexMethod*) { return true; },
-    [&](DexMethod* m, DexInstruction* inst) {
-      if (!is_sput(inst->opcode()) || !inst->has_fields()) return;
-      auto const sput = static_cast<DexOpcodeField*>(inst);
-      auto sfield = resolve_field(sput->field(), FieldSearch::Static);
-      if (sfield) {
-        always_assert(is_static(sfield) && sfield->is_def());
-        sputters[sfield].push_back(m);
-      }
-    }
-  );
-
-  size_t n_sfields_finalized = 0;
-  for (auto const& cls : scope) {
-    if (cls->is_external()) continue;
-    for (auto const& sfield : cls->get_sfields()) {
-      // If not already final, let's assess it
-      if (!is_final(sfield)) {
-        if (!can_rename(sfield) || !can_delete(sfield)) {
-          TRACE(ACCESS, 2, "Can't delete/rename sfield: %s\n", SHOW(sfield));
-          continue;
-        }
-        auto const& putters = sputters[sfield];
-        // If there's exactly one sput
-        if (putters.size() == 1) {
-          auto const& clinit = cls->get_clinit();
-          // ... and it's in our own <clinit>
-          if (clinit == putters.front()) {
-            if (is_volatile(sfield)) {
-              TRACE(ACCESS, 2, "Can't finalize volatile sfield: %s\n", SHOW(sfield));
-              continue;
-            }
-            TRACE(ACCESS, 2, "Finalizing sfield: %s\n", SHOW(sfield));
-            set_final(sfield);
-            ++n_sfields_finalized;
-          }
-        }
-      }
-    }
-  }
-  return n_sfields_finalized;
-}
-
 size_t mark_classes_final(const DexStoresVector& stores) {
   size_t n_classes_finalized = 0;
   for (auto const& dex : DexStoreClassesIterator(stores)) {
@@ -282,12 +234,6 @@ void AccessMarkingPass::run_pass(
   ConfigFiles& cfg,
   PassManager& pm
 ) {
-  auto scope = build_class_scope(stores);
-  if (m_finalize_sfields) {
-    auto n_sfields_final = mark_sfields_final(scope);
-    pm.incr_metric("finalized_sfields", n_sfields_final);
-    TRACE(ACCESS, 1, "Finalized %lu sfields\n", n_sfields_final);
-  }
   if (m_finalize_classes) {
     auto n_classes_final = mark_classes_final(stores);
     pm.incr_metric("finalized_classes", n_classes_final);
@@ -298,6 +244,7 @@ void AccessMarkingPass::run_pass(
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
   }
+  auto scope = build_class_scope(stores);
   auto candidates = devirtualize(scope);
   auto dmethods = direct_methods(scope);
   candidates.insert(candidates.end(), dmethods.begin(), dmethods.end());

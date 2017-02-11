@@ -16,7 +16,6 @@ class AccessMarkingPass : public Pass {
   AccessMarkingPass() : Pass("AccessMarkingPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("finalize_sfields", true, m_finalize_sfields);
     pc.get("finalize_classes", true, m_finalize_classes);
     pc.get("finalize_methods", true, m_finalize_methods);
     pc.get("staticize_methods", true, m_staticize_methods);
@@ -26,7 +25,6 @@ class AccessMarkingPass : public Pass {
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_finalize_sfields;
   bool m_finalize_classes;
   bool m_finalize_methods;
   bool m_staticize_methods;

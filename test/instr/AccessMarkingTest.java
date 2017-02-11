@@ -11,7 +11,6 @@ package redex;
 
 import static org.fest.assertions.api.Assertions.*;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Method;
 import org.junit.Test;
@@ -19,10 +18,6 @@ import org.junit.Test;
 public class AccessMarkingTest {
   private static boolean isFinal(Class<?> cls) {
     return (cls.getModifiers() & Modifier.FINAL) != 0;
-  }
-
-  private static boolean isFinal(Field f) {
-    return (f.getModifiers() & Modifier.FINAL) != 0;
   }
 
   private static boolean isFinal(Method m) {
@@ -91,22 +86,6 @@ public class AccessMarkingTest {
     Method doubleit = Doubler.class.getDeclaredMethod("doubleit");
     assertThat(isPrivate(doubleit)).isTrue();
   }
-
-  @Test
-  public void testFinalFields() throws NoSuchFieldException {
-    Field f0 = FinalFixture.class.getDeclaredField("f0");
-    Field f1 = FinalFixture.class.getDeclaredField("f1");
-    Field f2 = FinalFixture.class.getDeclaredField("f2");
-    Field f3 = FinalFixture.class.getDeclaredField("f3");
-    Field f4 = FinalFixture.class.getDeclaredField("f4");
-    Field f5 = FinalFixture.class.getDeclaredField("f5");
-    assertThat(isFinal(f0)).isTrue();
-    assertThat(isFinal(f1)).isTrue();
-    assertThat(isFinal(f2)).isTrue();
-    assertThat(isFinal(f3)).isFalse();
-    assertThat(isFinal(f4)).isFalse();
-    assertThat(isFinal(f5)).isFalse();
-  }
 }
 
 class Super {
@@ -124,29 +103,6 @@ class Doubler {
   Doubler(int x) { mX = x; }
   public void doubleit() { mX *= 2; }
   public int get() { doubleit(); return mX; }
-}
-
-class FinalFixture {
-  public static final int f0 = 0;
-  public static int f1 = 1;
-  public static int f2;
-  public static int f3;
-  public static int f4;
-  public static volatile int f5 = 10;
-  static {
-    f2 = 2;
-    if (Math.random() > 0.5) {
-      f3 = 3;
-    } else {
-      f3 = 3;
-    }
-  }
-}
-
-class OtherFinalFixture {
-  static {
-    FinalFixture.f4 = 4;
-  }
 }
 
 abstract class Abstract {
