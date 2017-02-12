@@ -23,9 +23,11 @@ template <class T, class MethodWalkerFn = void(DexMethod*)>
 void walk_methods(const T& scope, MethodWalkerFn walker) {
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
+      TraceContext context(dmethod->get_deobfuscated_name());
       walker(dmethod);
     }
     for (auto vmethod : cls->get_vmethods()) {
+      TraceContext context(vmethod->get_deobfuscated_name());
       walker(vmethod);
     }
   };

@@ -7,6 +7,11 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <memory>
+#include <string>
+
+#include "Util.h"
+
 #pragma once
 
 #define TMS                                     \
@@ -75,3 +80,14 @@ void trace(const char* fmt, ...);
     }                                  \
   } while (0)
 #endif // NDEBUG
+
+struct TraceContext {
+  explicit TraceContext(const std::string& current_method) {
+    s_current_method = std::make_unique<std::string>(current_method);
+  }
+  ~TraceContext() {
+    s_current_method = nullptr;
+  }
+
+  static std::unique_ptr<std::string> s_current_method;
+};

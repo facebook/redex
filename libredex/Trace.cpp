@@ -23,11 +23,13 @@ namespace {
 struct Tracer {
 
   bool m_show_timestamps{false};
+  const char* m_method_filter;
 
   Tracer() {
     const char* traceenv = getenv("TRACE");
     const char* envfile = getenv("TRACEFILE");
     const char* show_timestamps = getenv("SHOW_TIMESTAMPS");
+    m_method_filter = getenv("TRACE_METHOD_FILTER");
     if (!traceenv) {
       return;
     }
@@ -50,6 +52,12 @@ struct Tracer {
   }
 
   void trace(const char* fmt, va_list ap) {
+    if (m_method_filter && TraceContext::s_current_method) {
+      if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
+          nullptr) {
+        return;
+      }
+    }
     if (m_show_timestamps) {
       char buf[26];
       auto t = time(nullptr);
@@ -121,3 +129,5 @@ void trace(const char* fmt, ...) {
   tracer.trace(fmt, ap);
   va_end(ap);
 }
+
+std::unique_ptr<std::string> TraceContext::s_current_method;
