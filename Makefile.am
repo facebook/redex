@@ -151,6 +151,7 @@ redex_all_SOURCES = \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \
+	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

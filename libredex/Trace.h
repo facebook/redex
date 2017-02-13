@@ -59,7 +59,8 @@
   TM(TIME)                                      \
   TM(TRACKRESOURCES)                            \
   TM(UNTF)                                      \
-  TM(VERIFY)
+  TM(VERIFY)                                    \
+  TM(ANALYSIS_REF_GRAPH)
 
 enum TraceModule {
 #define TM(x) x,
