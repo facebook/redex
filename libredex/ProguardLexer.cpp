@@ -434,6 +434,11 @@ vector<unique_ptr<Token>> lex(istream& config) {
             unique_ptr<Token>(new DontUseMixedcaseClassNames(line)));
         continue;
       }
+      if (command == "dontskipnonpubliclibraryclasses") {
+        tokens.push_back(
+            unique_ptr<Token>(new DontSkipNonPublicLibraryClasses(line)));
+        continue;
+      }
       if (command == "keeppackagenames") {
         tokens.push_back(unique_ptr<Token>(new KeepPackageNames(line)));
         continue;

@@ -777,7 +777,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
                    &pg_config->libraryjars))
       continue;
     // -skipnonpubliclibraryclasses not supported
-    // -dontskipnonpubliclibraryclasses not supported
+    if ((*it)->type == token::dontskipnonpubliclibraryclasses) {
+      // Silenty ignore the dontskipnonpubliclibraryclasses option.
+      ++it;
+      continue;
+    }
     // -dontskipnonpubliclibraryclassmembers not supported
     if (parse_filepath_command(&it,
                                token::keepdirectories,
