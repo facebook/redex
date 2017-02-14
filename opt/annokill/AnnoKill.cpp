@@ -73,8 +73,9 @@ void count_annotation(const DexAnnotation* da) {
 }
 
 void cleanup_aset(DexAnnotationSet* aset,
-                  const std::unordered_set<DexType*>& keep_annos,
-                  const std::unordered_set<DexType*>& anno_refs_in_code) {
+    const std::unordered_set<DexType*>& keep_annos,
+    const std::unordered_set<DexType*>& kill_annos,
+    const std::unordered_set<DexType*>& anno_refs_in_code) {
   s_kcount.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](DexAnnotation* da) {
@@ -90,6 +91,7 @@ void cleanup_aset(DexAnnotationSet* aset,
             SHOW(da));
       return false;
     }
+
     if (keep_annos.count(anno_type) > 0) {
       TRACE(ANNO,
             3,
@@ -98,6 +100,14 @@ void cleanup_aset(DexAnnotationSet* aset,
             SHOW(anno_type),
             SHOW(da));
       return false;
+    }
+
+    if (kill_annos.count(anno_type)) {
+      TRACE(ANNO, 3, "Annotation type %s marked for removal in whitelist, annotation: %s\n",
+            SHOW(anno_type), SHOW(da));
+      s_kcount.annotations_killed++;
+      delete da;
+      return true;
     }
 
     if (!da->system_visible()) {
@@ -111,14 +121,15 @@ void cleanup_aset(DexAnnotationSet* aset,
   annos.erase(std::remove_if(annos.begin(), annos.end(), fn), annos.end());
 }
 
-void kill_annotations(const std::vector<DexClass*>& classes,
-                      const std::unordered_set<DexType*>& keep_annos,
-                      const std::unordered_set<DexType*>& anno_refs_in_code) {
+void kill_annotations(std::vector<DexClass*>& classes,
+    const std::unordered_set<DexType*>& keep_annos,
+    const std::unordered_set<DexType*>& kill_annos,
+    const std::unordered_set<DexType*>& anno_refs_in_code) {
   for (auto clazz : classes) {
     DexAnnotationSet* aset = clazz->get_anno_set();
     if (aset == nullptr) continue;
     s_kcount.class_asets++;
-    cleanup_aset(aset, keep_annos, anno_refs_in_code);
+    cleanup_aset(aset, keep_annos, kill_annos, anno_refs_in_code);
     if (aset->size() == 0) {
       TRACE(ANNO, 3, "Clearing annotation for class %s\n", SHOW(clazz->get_type()));
       clazz->clear_annotations();
@@ -130,7 +141,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = method->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.method_asets++;
-        cleanup_aset(aset, keep_annos, anno_refs_in_code);
+        cleanup_aset(aset, keep_annos, kill_annos, anno_refs_in_code);
         if (aset->size() == 0) {
           TRACE(ANNO, 3, "Clearing annotations for method %s.%s:%s\n",
               SHOW(method->get_class()), SHOW(method->get_name()), SHOW(method->get_proto()));
@@ -148,7 +159,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         for (auto pa : *pas) {
           DexAnnotationSet* aset = pa.second;
           if (aset->size() == 0) continue;
-          cleanup_aset(aset, keep_annos, anno_refs_in_code);
+          cleanup_aset(aset, keep_annos, kill_annos, anno_refs_in_code);
           if (aset->size() == 0) continue;
           clear_pas = false;
         }
@@ -167,7 +178,7 @@ void kill_annotations(const std::vector<DexClass*>& classes,
         DexAnnotationSet* aset = field->get_anno_set();
         if (aset == nullptr) return;
         s_kcount.field_asets++;
-        cleanup_aset(aset, keep_annos, anno_refs_in_code);
+        cleanup_aset(aset, keep_annos, kill_annos, anno_refs_in_code);
         if (aset->size() == 0) {
           TRACE(ANNO, 3, "Clearing annotations for field %s.%s:%s\n",
               SHOW(field->get_class()), SHOW(field->get_name()), SHOW(field->get_type()));
@@ -175,6 +186,26 @@ void kill_annotations(const std::vector<DexClass*>& classes,
           s_kcount.field_asets_cleared++;
         }
       });
+
+  // We're done removing annotation instances, go ahead and remove annotation
+  // classes.
+  classes.erase(
+    std::remove_if(
+      classes.begin(), classes.end(),
+      [&](DexClass* cls) {
+        if (!is_annotation(cls)) {
+          return false;
+        }
+        auto type = cls->get_type();
+        if (anno_refs_in_code.count(type)) {
+          return false;
+        }
+        if (keep_annos.count(type)) {
+          return false;
+        }
+        TRACE(ANNO, 3, "Removing annotation type: %s\n", SHOW(type));
+        return true;
+      }), classes.end());
 }
 
 void referenced_annos(const Scope& scope,
@@ -222,7 +253,7 @@ void referenced_annos(const Scope& scope,
         }
       });
 
-  // mark an annotation as "unremovable" if any opecode refrences the annotation type
+  // mark an annotation as "unremovable" if any opcode references the annotation type
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* meth, DexInstruction* insn) {
@@ -316,12 +347,6 @@ void referenced_annos(const Scope& scope,
 }
 
 void gather_annos(const Scope& scope, std::unordered_set<DexType*>& annotations) {
-  // all classes marked as annotation
-  for (const auto& cls : scope) {
-    if (!is_annotation(cls)) continue;
-    annotations.insert(cls->get_type());
-  }
-
   // all used annotations
   auto annos_in_aset = [&](DexAnnotationSet* aset) {
     if (aset == nullptr) return;
@@ -329,30 +354,81 @@ void gather_annos(const Scope& scope, std::unordered_set<DexType*>& annotations)
       annotations.insert(anno->type());
     }
   };
-  // all annotations in classes
-  for (auto cls : scope) {
+
+  for (const auto& cls : scope) {
+    // all annotations referenced in classes
     annos_in_aset(cls->get_anno_set());
+
+    // all classes marked as annotation
+    if (is_annotation(cls)) {
+      annotations.insert(cls->get_type());
+    }
   }
+
   // all annotations in methods
   walk_methods(
-      scope,
-      [&](DexMethod* method) {
-        annos_in_aset(method->get_anno_set());
-        auto pas = method->get_param_anno();
-        if (pas == nullptr) return;
-        for (auto pa : *pas) {
-          annos_in_aset(pa.second);
-        }
-      });
+    scope,
+    [&](DexMethod* method) {
+      annos_in_aset(method->get_anno_set());
+      auto pas = method->get_param_anno();
+      if (pas == nullptr) return;
+      for (auto pa : *pas) {
+        annos_in_aset(pa.second);
+      }
+    });
   // all annotations in fields
   walk_fields(
-      scope,
-      [&](DexField* field) {
-        annos_in_aset(field->get_anno_set());
-      });
+    scope,
+    [&](DexField* field) {
+      annos_in_aset(field->get_anno_set());
+    });
 }
 
+/**
+ * Gather annotation classes that are marked explicitly with a removable
+ * annotation (specified as "kill_annos" in config).  Facebook uses these to
+ * remove DI binding annotations.
+ */
+void get_removable_annotation_classes(
+  Scope& scope,
+  std::unordered_set<DexType*>& kill_annos) {
+  // Determine which annotation classes are removable.
+  std::unordered_set<DexType*> bannotations;
+  for (auto clazz : scope) {
+    if (!(clazz->get_access() & DexAccessFlags::ACC_ANNOTATION)) continue;
+    auto aset = clazz->get_anno_set();
+    if (aset == nullptr) continue;
+    auto& annos = aset->get_annotations();
+    for (auto anno : annos) {
+      if (kill_annos.count(anno->type())) {
+        bannotations.insert(clazz->get_type());
+        TRACE(ANNO, 3, "removable annotation class %s\n",
+              SHOW(clazz->get_type()));
+      }
+    }
+  }
+
+  kill_annos = bannotations;
 }
+
+std::unordered_set<DexType*> get_kill_annos(
+  const std::vector<std::string>& kill) {
+  std::unordered_set<DexType*> kill_annos;
+  try {
+    for (auto const& config_anno : kill) {
+      DexType* anno = DexType::get_type(config_anno.c_str());
+      if (anno) {
+        TRACE(ANNO, 2, "Kill anno: %s\n", SHOW(anno));
+        kill_annos.insert(anno);
+      }
+    }
+  } catch (const std::exception&) {
+    // Swallow exception if the config doesn't have any annos.
+  }
+  return kill_annos;
+}
+
+} // namespace anonymous
 
 void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   // load annotations that should not be deleted
@@ -378,7 +454,18 @@ void AnnoKillPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
   std::unordered_set<DexType*> anno_refs_in_code;
   referenced_annos(scope, annotations, anno_refs_in_code);
 
-  kill_annotations(scope, keep_annos, anno_refs_in_code);
+  // get annotations to kill from config file
+  auto kill_annos = get_kill_annos(m_kill_annos);
+
+  // augment the list of annotation that can be killed
+  get_removable_annotation_classes(scope, kill_annos);
+
+  // go ahead and remove all annotation instances and classes
+  kill_annotations(scope, keep_annos, kill_annos, anno_refs_in_code);
+
+  // commit the class removal changes
+  post_dexen_changes(scope, stores);
+
   TRACE(ANNO, 1, "AnnoKill report killed/total\n");
   TRACE(ANNO, 1,
       "Annotations: %d/%d\n",

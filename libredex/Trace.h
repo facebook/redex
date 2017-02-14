@@ -23,7 +23,6 @@
   TM(CFG)                                       \
   TM(CFP)                                       \
   TM(CPG)                                       \
-  TM(CLASSKILL)                                 \
   TM(CONSTP)                                    \
   TM(CUSTOMSORT)                                \
   TM(DBGSTRIP)                                  \

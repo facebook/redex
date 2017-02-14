@@ -18,7 +18,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/libresource/system \
 	-I$(top_srcdir)/libresource/utils \
 	-I$(top_srcdir)/opt \
-	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/constant_propagation \
@@ -117,7 +116,6 @@ bin_PROGRAMS = redexdump
 noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
-	opt/annoclasskill/AnnoClassKill.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \

@@ -11,7 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/libresource/utils \
 	-I$(top_srcdir)/opt \
 	-I$(top_srcdir)/opt/all-static \
-	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/constant_propagation \
