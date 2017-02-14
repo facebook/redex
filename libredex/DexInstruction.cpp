@@ -793,9 +793,9 @@ int64_t DexInstruction::literal() const {
   case FMT_f21s:
     return signext<16>(m_arg[0]);
   case FMT_f21h:
-    return signext<16>(m_arg[0]) << 48;
+    return signext<16>(m_arg[0]) << 16;
   case FMT_f22b:
-    return signext<8>(m_arg[0] >> 8);
+    return signext<16>(m_arg[0]) << 48;
   case FMT_f22s:
     return signext<16>(m_arg[0]);
   case FMT_f31i: {
@@ -824,11 +824,10 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
     m_arg[0] = literal;
     return this;
   case FMT_f21h:
-    // high value specified as full 64 bits, keep only top 16
-    m_arg[0] = (literal >> 48) & 0xFFFF;
+    m_arg[0] = literal >> 16;
     return this;
   case FMT_f22b:
-    m_arg[0] = (m_arg[0] & 0xFF) | ((literal << 8) & 0xFF00);
+    m_arg[0] = literal >> 48;
     return this;
   case FMT_f22s:
     m_arg[0] = literal;
