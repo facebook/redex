@@ -34,8 +34,10 @@
  * conditionally marked elements to fully marked
  */
 
-#define DEBUG_UNREACHABLE 0
-
+/**
+ * Define this to TRACE the reasons why each object is reachable.
+ */
+//#define DEBUG_UNREACHABLE
 
 namespace {
 
@@ -115,6 +117,29 @@ using ReachableObjectSet = std::unordered_set<ReachableObject, ReachableObjectHa
 static std::unordered_map<ReachableObject, ReachableObjectSet, ReachableObjectHash, ReachableObjectEq> retainers_of;
 static ReachableObject SEED_SINGLETON{};
 
+void print_reachable_stack_h(const ReachableObject& obj) {
+  TRACE(RMU, 1, "    %s\n", obj.str().c_str());
+  if (obj.type == SEED) {
+    return;
+  }
+  auto const& retainer_set = retainers_of[obj];
+  if (retainer_set.empty()) {
+    return; // Shouldn't happen, but...
+  }
+  print_reachable_stack_h(*retainer_set.cbegin());
+}
+
+template<class Reachable>
+void print_reachable_stack(Reachable* r) {
+  ReachableObject obj(r);
+  TRACE(RMU, 1, "%s is reachable via\n", obj.str().c_str());
+  auto const& retainer_set = retainers_of[obj];
+  if (retainer_set.empty()) {
+    return; // Shouldn't happen, but...
+  }
+  print_reachable_stack_h(*retainer_set.cbegin());
+}
+
 template<class Reachable>
 void print_reachable_reason(Reachable* reachable) {
   ReachableObject obj(reachable);
@@ -192,6 +217,9 @@ void record_reachability(Parent* parent, Object* object) {
 }
 
 #else // DEBUG_UNREACHABLE is false
+
+template<class Seed>
+void record_is_seed(Seed* seed) { /* Do nothing */ }
 
 template<class Seed>
 inline void record_reachability(Seed* seed) { /* Do nothing */ }
@@ -489,6 +517,7 @@ struct UnreachableCodeRemover {
           // Ignore inner-class annotations.
           continue;
         }
+        record_reachability(cls, anno);
         gather_and_push(anno);
       }
     }
@@ -679,12 +708,14 @@ void RemoveUnreachablePass::run_pass(
   pm.incr_metric("fields_removed", before.nfields - after.nfields);
   pm.incr_metric("methods_removed", before.nmethods - after.nmethods);
 
+#ifdef DEBUG_UNREACHABLE
   // Print out the reason that each class is being kept.
-  //for (auto& dex : DexStoreClassesIterator(stores)) {
-  //  for (auto const& cls : dex) {
-  //    print_reachable_reason(cls);
-  //  }
-  //}
+  for (auto& dex : DexStoreClassesIterator(stores)) {
+   for (auto const& cls : dex) {
+     print_reachable_stack(cls);
+   }
+  }
+#endif
 }
 
 static RemoveUnreachablePass s_pass;
