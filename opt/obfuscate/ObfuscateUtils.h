@@ -582,14 +582,14 @@ typedef DexElemManager<DexMethod*, DexMethodRef, DexProto*> DexMethodManager;
 DexMethodManager new_dex_method_manager();
 
 // Look at a list of members and check if there is a renamable member
-template <class Container, class T, class R, class K>
-bool contains_renamable_elem(const Container& elems,
+template <class T, class R, class K>
+bool contains_renamable_elem(const std::vector<T>& elems,
     DexElemManager<T, R, K>& name_mapping) {
-  auto it = std::find_if(elems.begin(), elems.end(), [&name_mapping](T e) {
-    return (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
-        name_mapping[e]->should_rename());
-  });
-  return (it != elems.end());
+  for (T e : elems)
+    if (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
+        name_mapping[e]->should_rename())
+      return true;
+  return false;
 }
 
 

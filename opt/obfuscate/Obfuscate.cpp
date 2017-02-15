@@ -18,6 +18,7 @@
 #include "Walkers.h"
 #include "Resolver.h"
 #include "Devirtualizer.h"
+#include "VirtualRenamer.h"
 #include <list>
 
 namespace {

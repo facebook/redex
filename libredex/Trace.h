@@ -59,7 +59,8 @@
   TM(TRACKRESOURCES)                            \
   TM(UNTF)                                      \
   TM(VERIFY)                                    \
-  TM(ANALYSIS_REF_GRAPH)
+  TM(ANALYSIS_REF_GRAPH)                        \
+  TM(VIRT)
 
 enum TraceModule {
 #define TM(x) x,

@@ -67,9 +67,9 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/Devirtualizer.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Mutators.cpp \
-	libredex/ObfuscateUtils.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PrintSeeds.cpp \
@@ -126,6 +126,8 @@ redex_all_SOURCES = \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \
+	opt/obfuscate/ObfuscateUtils.cpp \
+	opt/obfuscate/VirtualRenamer.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
@@ -134,7 +136,6 @@ redex_all_SOURCES = \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \
-	opt/simpleinline/Devirtualizer.cpp \
 	opt/simpleinline/InlineHelper.cpp \
 	opt/simpleinline/SimpleInline.cpp \
 	opt/singleimpl/SingleImpl.cpp \
