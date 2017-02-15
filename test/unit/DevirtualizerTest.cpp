@@ -13,7 +13,7 @@
 #include "DexClass.h"
 #include "Creators.h"
 #include "DexUtil.h"
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 #include "ScopeHelper.h"
 
 namespace {

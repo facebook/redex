@@ -67,7 +67,6 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
-	libredex/Devirtualizer.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
@@ -89,6 +88,7 @@ libredex_la_SOURCES = \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/Vinfo.cpp \
+	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
 	libresource/FileMap.cpp \

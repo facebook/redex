@@ -11,7 +11,7 @@
 
 #include <unordered_map>
 
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 #include "DexUtil.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"

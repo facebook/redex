@@ -11,7 +11,7 @@
 
 #include "DexClass.h"
 #include "ObfuscateUtils.h"
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>

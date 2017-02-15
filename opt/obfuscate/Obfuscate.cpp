@@ -17,7 +17,7 @@
 #include "Transform.h"
 #include "Walkers.h"
 #include "Resolver.h"
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 #include "VirtualRenamer.h"
 #include <list>
 

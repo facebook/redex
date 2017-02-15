@@ -9,7 +9,7 @@
 
 #include "VirtualRenamer.h"
 #include "DexClass.h"
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 #include "DexUtil.h"
 #include "DexAccess.h"
 #include "Trace.h"
@@ -91,8 +91,7 @@ bool load_interface_methods_link(
     if (load_interfaces_methods_link(interfaces, links, class_interfaces))
       escaped = true;
   }
-  for (const auto& meth :
-       get_vmethods(intf_cls->get_type())) {
+  for (const auto& meth : get_vmethods(intf_cls->get_type())) {
     links.interface_methods[meth->get_name()][meth->get_proto()].insert(meth);
   }
   return escaped;

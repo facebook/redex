@@ -17,7 +17,7 @@
 #include "Transform.h"
 #include "Walkers.h"
 #include "ReachableClasses.h"
-#include "Devirtualizer.h"
+#include "VirtualScope.h"
 
 #include <algorithm>
 #include <string>
