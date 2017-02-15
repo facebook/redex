@@ -288,7 +288,7 @@ void inline_field_values(Scope& fullscope) {
  * Verify that we can handle converting the literal contained in the
  * const op into an encoded value.
  *
- * TODO: wide instructions
+ * TODO: Strings and wide
  */
 static bool validate_const_for_ev(DexInstruction* op) {
   if (!is_const(op->opcode())) {
@@ -298,8 +298,6 @@ static bool validate_const_for_ev(DexInstruction* op) {
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
   case OPCODE_CONST:
-  case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
     return true;
   default:
     return false;
@@ -347,15 +345,8 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
     auto sput_op = opcodes[i + 1];
     auto fieldop = static_cast<DexOpcodeField*>(sput_op);
     auto field = resolve_field(fieldop->field(), FieldSearch::Static);
-    DexEncodedValue *ev;
-    if (const_op->has_strings()) {
-      auto str_op = static_cast<DexOpcodeString*>(const_op);
-      auto str = str_op->get_string();
-      ev = new DexEncodedValueString(str);
-    } else {
-      ev = DexEncodedValue::zero_for_type(field->get_type());
-      ev->value((uint64_t) const_op->literal());
-    }
+    auto ev = DexEncodedValue::zero_for_type(field->get_type());
+    ev->value((uint64_t) const_op->literal());
     field->make_concrete(field->get_access(), ev);
   }
   clazz->remove_method(clinit);

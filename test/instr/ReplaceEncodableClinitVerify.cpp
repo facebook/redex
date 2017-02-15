@@ -69,17 +69,6 @@ TEST_F(PostVerify, ReplaceEncodableClinit) {
     ASSERT_EQ(tc.value, v->value()) << "Unexpected value for field " << tc.name;
   }
 
-  auto name = DexString::get_string("S_STRING");
-  auto type = DexType::get_type("Ljava/lang/String;");
-  auto f = resolve_field(enc_type, name, type);
-  ASSERT_NE(nullptr, f) << "Failed resolving field S_STRING";
-  auto ev = f->get_static_value();
-  ASSERT_NE(nullptr, ev) << "Failed getting value for field S_STRING";
-  auto evs = static_cast<DexEncodedValueString*>(ev);
-  std::string expected("Testing 123");
-  std::string actual(evs->string()->c_str());
-  ASSERT_EQ(expected, actual) << "Incorrect value for field S_STRING";
-
   auto unenc_cls = find_class_named(classes, "Lredex/UnEncodable;");
   ASSERT_NE(nullptr, unenc_cls);
   auto unenc_clinit = unenc_cls->get_clinit();
