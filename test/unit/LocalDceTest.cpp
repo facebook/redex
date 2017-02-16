@@ -119,3 +119,33 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 0);
 }
+
+/*
+ * Check that if a try block contains no throwing opcodes, we remove it
+ * entirely (as well as the catch that it was supposed to throw to)
+ */
+TEST_F(LocalDceTryTest, tryNeverThrows) {
+  // setup
+  {
+    using namespace dex_asm;
+
+    MethodTransformer mt(m_method);
+    auto fm = mt->get_fatmethod_for_test();
+    auto exception_type = DexType::make_type("Ljava/lang/Exception;");
+    auto catch_start = new MethodItemEntry(exception_type);
+
+    fm->push_back(*(new MethodItemEntry(TRY_START, catch_start)));
+    fm->push_back(*(new MethodItemEntry(dasm(OPCODE_RETURN_VOID))));
+    fm->push_back(*(new MethodItemEntry(TRY_END, catch_start)));
+    fm->push_back(*catch_start);
+    fm->push_back(*(new MethodItemEntry(
+        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
+  }
+  EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
+  EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
+
+  LocalDcePass().run(m_method);
+
+  EXPECT_EQ(m_method->get_code()->get_instructions().size(), 1);
+  EXPECT_EQ(m_method->get_code()->get_tries().size(), 0);
+}

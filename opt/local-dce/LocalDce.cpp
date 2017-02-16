@@ -276,11 +276,15 @@ class LocalDce {
       remove_edge(e.first, e.second);
     }
     std::unordered_set<Block*> visited;
-    std::function<void (Block*)> visit = [&visit, &visited](Block* b) {
+    std::unordered_map<MethodItemEntry*, int> catch_refcount;
+    std::function<void (Block*)> visit = [&](Block* b) {
       if (visited.find(b) != visited.end()) {
         return;
       }
       visited.emplace(b);
+      if (is_catch(b)) {
+        ++catch_refcount[&*b->begin()];
+      }
       for (auto& s : b->succs()) {
         visit(s);
       }
@@ -299,6 +303,16 @@ class LocalDce {
         remove_edge(p.first, p.second);
       }
       remove_block(transform, b);
+    }
+
+    for (Block* b : blocks) {
+      for (auto& mie : *b) {
+        if (mie.type == MFLOW_TRY &&
+            catch_refcount[mie.tentry->catch_start] == 0) {
+          mie.type = MFLOW_FALLTHROUGH;
+          mie.throwing_mie = nullptr;
+        }
+      }
     }
   }
 
