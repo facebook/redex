@@ -1331,7 +1331,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   auto temps_needed =
       callee_code->get_registers_size() - callee_code->get_ins_size();
   auto invoke_live_in = invoke_live_out;
-  invoke_live_in.trans(invoke);
+  Liveness::trans(invoke, &invoke_live_in);
   uint16_t temps_avail = newregs - invoke_live_in.bits().count();
   if (temps_avail < temps_needed) {
     newregs += temps_needed - temps_avail;

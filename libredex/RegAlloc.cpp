@@ -10,64 +10,10 @@
 #include <algorithm>
 #include <deque>
 
+#include "Dataflow.h"
 #include "DexInstruction.h"
 #include "RegAlloc.h"
 #include "Transform.h"
-
-template <typename T>
-std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
-    const std::vector<Block*>& blocks, const T& bottom) {
-  std::vector<T> block_ins(blocks.size(), bottom);
-  std::deque<Block*> work_list(blocks.begin(), blocks.end());
-  while (!work_list.empty()) {
-    auto block = work_list.front();
-    work_list.pop_front();
-    auto insn_out = bottom;
-    for (Block* succ : block->succs()) {
-      insn_out.meet(block_ins[succ->id()]);
-    }
-    for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
-      DexInstruction* insn = it->insn;
-      insn_out.trans(insn);
-    }
-    if (insn_out != block_ins[block->id()]) {
-      block_ins[block->id()] = std::move(insn_out);
-      for (auto pred : block->preds()) {
-        if (std::find(work_list.begin(), work_list.end(), pred) ==
-            work_list.end()) {
-          work_list.push_back(pred);
-        }
-      }
-    }
-  }
-
-  // Now we do a final pass and record the live-out at each instruction.  We
-  // didn't record this information during the iterative analysis because we
-  // would end up discarding all the information generated before the final
-  // iteration, and it turns out that allocating and deallocating lots of
-  // dynamic_bitsets is very expensive.
-  auto insn_out_map =
-      std::make_unique<std::unordered_map<DexInstruction*, T>>();
-  for (const auto& block : blocks) {
-    auto insn_out = bottom;
-    for (Block* succ : block->succs()) {
-      insn_out.meet(block_ins[succ->id()]);
-    }
-    for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
-      DexInstruction* insn = it->insn;
-      insn_out_map->emplace(insn, insn_out);
-      insn_out.trans(insn);
-    }
-  }
-
-  return insn_out_map;
-}
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -86,23 +32,23 @@ void Liveness::enlarge(uint16_t ins_size, uint16_t newregs) {
   }
 }
 
-void Liveness::trans(const DexInstruction* inst) {
+void Liveness::trans(const DexInstruction* inst, Liveness* liveness) {
   if (inst->dests_size()) {
     bool value = inst->dest_is_src();
-    m_reg_set.set(inst->dest(), value);
+    liveness->m_reg_set.set(inst->dest(), value);
     if (inst->dest_is_wide()) {
-      m_reg_set.set(inst->dest() + 1, value);
+      liveness->m_reg_set.set(inst->dest() + 1, value);
     }
   }
   for (size_t i = 0; i < inst->srcs_size(); i++) {
-    m_reg_set.set(inst->src((int)i));
+    liveness->m_reg_set.set(inst->src((int)i));
     if (inst->src_is_wide((int)i)) {
-      m_reg_set.set(inst->src((int)i) + 1);
+      liveness->m_reg_set.set(inst->src((int)i) + 1);
     }
   }
   if (inst->has_range()) {
     for (size_t i = 0; i < inst->range_size(); i++) {
-      m_reg_set.set(inst->range_base() + i);
+      liveness->m_reg_set.set(inst->range_base() + i);
     }
   }
 }
@@ -114,7 +60,8 @@ void Liveness::meet(const Liveness& that) {
 std::unique_ptr<LivenessMap> Liveness::analyze(std::vector<Block*>& blocks,
                                                uint16_t nregs) {
   TRACE(REG, 5, "%s\n", SHOW(blocks));
-  auto liveness = backwards_dataflow<Liveness>(blocks, Liveness(nregs));
+  auto liveness = backwards_dataflow<Liveness>(blocks, Liveness(nregs),
+      Liveness::trans);
 
   auto DEBUG_ONLY dump_liveness = [&](const LivenessMap& amap) {
     for (auto& block : blocks) {

@@ -28,13 +28,13 @@ class Liveness {
   const RegSet& bits() { return m_reg_set; }
 
   void meet(const Liveness&);
-  void trans(const DexInstruction*);
   bool operator==(const Liveness&) const;
   bool operator!=(const Liveness& that) const {
     return !(*this == that);
   };
   void enlarge(uint16_t ins_size, uint16_t newregs);
 
+  static void trans(const DexInstruction*, Liveness*);
   static std::unique_ptr<LivenessMap> analyze(std::vector<Block*>&,
                                               uint16_t nregs);
 
