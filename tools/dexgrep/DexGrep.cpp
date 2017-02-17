@@ -1,0 +1,72 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <getopt.h>
+
+#include "DexCommon.h"
+
+void print_usage() {
+  fprintf(stderr, "Usage: dexgrep <classname> <dexfile 1> <dexfile 2> ...\n");
+}
+
+int main(int argc, char* argv[]) {
+  bool files_only = false;
+  char c;
+  static const struct option options[] = {
+    { "files-without-match", no_argument, nullptr, 'l' },
+  };
+  while ((c = getopt_long(
+            argc,
+            argv,
+            "hl",
+            &options[0],
+            nullptr)) != -1) {
+    switch (c) {
+      case 'l':
+        files_only = true;
+        break;
+      case 'h':
+        print_usage();
+        return 0;
+      default:
+        print_usage();
+        return 1;
+    }
+  }
+
+  if (optind == argc) {
+    fprintf(stderr, "%s: no dex files given\n", argv[0]);
+    print_usage();
+    return 1;
+  }
+
+  const char* search_str = argv[optind];
+
+  for (int i = optind + 1; i < argc; ++i) {
+    const char* dexfile = argv[i];
+    ddump_data rd;
+    open_dex_file(dexfile, &rd);
+
+    auto size = rd.dexh->class_defs_size;
+    for (uint32_t j = 0; j < size; j++) {
+      dex_class_def* cls_def = rd.dex_class_defs + j;
+      char* name = dex_string_by_type_idx(&rd, cls_def->typeidx);
+      if (strstr(name, search_str) != nullptr) {
+        if (files_only) {
+          printf("%s\n", dexfile);
+        } else {
+          printf("%s: %s\n", dexfile, name);
+        }
+      }
+    }
+  }
+}
