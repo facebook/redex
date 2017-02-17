@@ -21,15 +21,14 @@
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
+#include "ProguardReporting.h"
 #include "ReachableClasses.h"
 
 namespace redex {
 
 namespace {
-std::unique_ptr<boost::regex> make_rx(
-  const std::string& s,
-  bool convert = true
-) {
+std::unique_ptr<boost::regex> make_rx(const std::string& s,
+                                      bool convert = true) {
   if (s.empty()) return nullptr;
   auto wc = convert ? proguard_parser::convert_wildcard_type(s) : s;
   auto rx = proguard_parser::form_type_regex(wc);
@@ -58,8 +57,7 @@ struct ClassMatcher {
         m_cls(make_rx(ks.class_spec.className)),
         m_anno(make_rx(ks.class_spec.annotationType, false)),
         m_extends(make_rx(ks.class_spec.extendsClassName)),
-        m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false))
-    {}
+        m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false)) {}
 
   bool match(const DexClass* cls) const {
     // Check for class name match
@@ -273,6 +271,7 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
                  const bool apply_modifiers,
                  const Container& fields,
                  redex::MemberSpecification& fieldSpecification,
+                 std::function<void(DexField*)> keeper,
                  const boost::regex* fieldname_regex) {
   for (DexField* field : fields) {
     if (field_level_match(
@@ -280,7 +279,11 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
       if (apply_modifiers) {
         apply_keep_modifiers(keep_rule, field);
       }
-      field->rstate.set_keep();
+      keeper(field);
+      if (field->rstate.report_whyareyoukeeping()) {
+        std::cout << "Field " << SHOW(field) << " kept by "
+                  << show_keep(keep_rule) << std::endl;
+      }
       fieldSpecification.count++;
     }
   }
@@ -298,6 +301,7 @@ void apply_field_keeps(
     std::unordered_map<std::string, boost::regex*>& regex_map,
     const DexClass* cls,
     redex::KeepSpec& keep_rule,
+    std::function<void(DexField*)> keeper,
     const bool apply_modifiers) {
   for (auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
     auto fieldname_regex = field_regex(field_spec);
@@ -307,12 +311,14 @@ void apply_field_keeps(
                 apply_modifiers,
                 cls->get_ifields(),
                 field_spec,
+                keeper,
                 matcher);
     keep_fields(regex_map,
                 keep_rule,
                 apply_modifiers,
                 cls->get_sfields(),
                 field_spec,
+                keeper,
                 matcher);
   }
 }
@@ -366,6 +372,10 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
         apply_keep_modifiers(keep_rule, method);
       }
       keeper(method);
+      if (method->rstate.report_whyareyoukeeping()) {
+        std::cout << "Method " << SHOW(method) << " kept by "
+                  << show_keep(keep_rule) << std::endl;
+      }
       methodSpecification.count++;
     }
   }
@@ -597,6 +607,11 @@ void mark_class_and_members_for_keep(
   if (keep_rule.mark_classes || keep_rule.mark_conditionally) {
     apply_keep_modifiers(keep_rule, cls);
     cls->rstate.set_keep();
+    if (cls->rstate.report_whyareyoukeeping()) {
+      std::cout << "Class "
+                << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
+                << " kept by " << show_keep(keep_rule) << std::endl;
+    }
     if (!keep_rule.allowobfuscation) {
       cls->rstate.increment_keep_count();
     }
@@ -611,12 +626,16 @@ void mark_class_and_members_for_keep(
   bool apply_modifiers = true;
   while (class_to_mark != nullptr && !class_to_mark->is_external()) {
     // Mark unconditionally.
-    apply_field_keeps(regex_map, class_to_mark, keep_rule, apply_modifiers);
+    apply_field_keeps(regex_map,
+                      class_to_mark,
+                      keep_rule,
+                      [](DexField* f) -> void { f->rstate.set_keep(); },
+                      apply_modifiers);
     apply_method_keeps(regex_map,
                        class_to_mark,
                        keep_rule,
                        apply_modifiers,
-                       [](DexMethod* f) -> void { f->rstate.set_keep(); });
+                       [](DexMethod* m) -> void { m->rstate.set_keep(); });
     apply_modifiers = false;
     auto typ = class_to_mark->get_super_class();
     if (typ == nullptr) {
@@ -624,6 +643,25 @@ void mark_class_and_members_for_keep(
     }
     class_to_mark = type_class(typ);
   }
+}
+
+void process_whyareyoukeeping(
+    std::unordered_map<std::string, boost::regex*>& regex_map,
+    KeepSpec& keep_rule,
+    DexClass* cls) {
+  cls->rstate.set_whyareyoukeeping();
+
+  apply_field_keeps(
+      regex_map,
+      cls,
+      keep_rule,
+      [](DexField* f) -> void { f->rstate.set_whyareyoukeeping(); },
+      false);
+  // Set any method-level keep whyareyoukeeping bits.
+  apply_method_keeps(
+      regex_map, cls, keep_rule, false, [](DexMethod* m) -> void {
+        m->rstate.set_whyareyoukeeping();
+      });
 }
 
 void process_assumenosideeffects(
@@ -726,7 +764,12 @@ void process_proguard_rules(const ProguardMap& pg_map,
   filter_duplicate_rules(&pg_config->keep_rules);
   filter_duplicate_rules(&pg_config->assumenosideeffects_rules);
   // Now process each of the different kinds of rules as well
-  // as assumenosideeffects.
+  // as -assumenosideeffects and -whyareyoukeeping.
+  process_keep(pg_map,
+               pg_config->whyareyoukeeping_rules,
+               regex_map,
+               classes,
+               process_whyareyoukeeping);
   process_keep(pg_map,
                pg_config->keep_rules,
                regex_map,
@@ -744,6 +787,12 @@ void process_proguard_rules(const ProguardMap& pg_map,
   for (auto cls : classes) {
     if (is_annotation(cls)) {
       cls->rstate.set_keep();
+      if (cls->rstate.report_whyareyoukeeping()) {
+        std::cout
+            << "Class "
+            << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
+            << " kept because it is an annotation class\n";
+      }
       cls->rstate.increment_keep_count();
     }
   }

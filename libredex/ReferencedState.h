@@ -41,12 +41,13 @@ class ReferencedState {
   bool m_blanket_keep{false};
   // The number of keep rules that touch this class.
   unsigned int m_keep_count{0};
+  // If m_whyareyoukeeping is true then report debugging information
+  // about why this class or member is being kept.
+  bool m_whyareyoukeeping{false};
 
  public:
   ReferencedState() = default;
-  bool can_delete() const {
-    return !m_bytype && (!m_keep || m_allowshrinking);
-  }
+  bool can_delete() const { return !m_bytype && (!m_keep || m_allowshrinking); }
   bool can_rename() const {
     return !m_bystring &&
            ((!m_keep || m_allowobfuscation) && !m_allowshrinking);
@@ -68,6 +69,8 @@ class ReferencedState {
 
   bool is_blanket_kept() const { return m_blanket_keep && m_keep_count == 1; }
 
+  bool report_whyareyoukeeping() const { return m_whyareyoukeeping; }
+
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
   // is a ref_by_string with from_code = false
   //
@@ -83,9 +86,7 @@ class ReferencedState {
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
 
-  bool is_referenced_by_type() {
-    return m_bytype;
-  }
+  bool is_referenced_by_type() { return m_bytype; }
 
   /* Called before recompute */
   void clear_if_compute() {
@@ -115,4 +116,6 @@ class ReferencedState {
   void set_blanket_keep() { m_blanket_keep = true; }
 
   void increment_keep_count() { m_keep_count++; }
+
+  void set_whyareyoukeeping() { m_whyareyoukeeping = true; }
 };

@@ -14,22 +14,28 @@
 #include <sstream>
 
 std::string show_keep_style(const redex::KeepSpec& keep_rule) {
-  if (keep_rule.mark_classes && !keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
+  if (keep_rule.mark_classes && !keep_rule.mark_conditionally &&
+      !keep_rule.allowshrinking) {
     return "-keep";
   }
-  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
+  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally &&
+      !keep_rule.allowshrinking) {
     return "-keepclassmembers";
   }
-  if (!keep_rule.mark_classes && keep_rule.mark_conditionally && !keep_rule.allowshrinking) {
+  if (!keep_rule.mark_classes && keep_rule.mark_conditionally &&
+      !keep_rule.allowshrinking) {
     return "-keepclasseswithmembers";
   }
-  if (keep_rule.mark_classes && !keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+  if (keep_rule.mark_classes && !keep_rule.mark_conditionally &&
+      keep_rule.allowshrinking) {
     return "-keepnames";
   }
-  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+  if (!keep_rule.mark_classes && !keep_rule.mark_conditionally &&
+      keep_rule.allowshrinking) {
     return "-keepclassmembernames";
   }
-  if (!keep_rule.mark_classes && keep_rule.mark_conditionally && keep_rule.allowshrinking) {
+  if (!keep_rule.mark_classes && keep_rule.mark_conditionally &&
+      keep_rule.allowshrinking) {
     return "-keepclasseswithmembernames";
   }
   return "-invalidkeep";
@@ -86,10 +92,9 @@ std::string show_access(const DexAccessFlags access, bool isMethod) {
   }
 }
 
-std::string show_access_flags(
-    const DexAccessFlags flags,
-    const DexAccessFlags negated_flags,
-    bool isMethod) {
+std::string show_access_flags(const DexAccessFlags flags,
+                              const DexAccessFlags negated_flags,
+                              bool isMethod) {
   std::stringstream ss;
   for (int offset = 0; offset < 32; offset++) {
     const DexAccessFlags access = static_cast<DexAccessFlags>(1 << offset);
@@ -121,9 +126,8 @@ std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
     if (!(field.annotationType.empty())) {
       ss << "@" << field.annotationType << " ";
     }
-    ss << show_access_flags(field.requiredSetAccessFlags,
-                            field.requiredUnsetAccessFlags,
-                            false);
+    ss << show_access_flags(
+        field.requiredSetAccessFlags, field.requiredUnsetAccessFlags, false);
     auto name = field.name.empty() ? "*" : field.name;
     ss << field.descriptor << " " << name << "; ";
   }
@@ -137,9 +141,8 @@ std::string show_methods(
     if (!(method.annotationType.empty())) {
       ss << "@" << method.annotationType << " ";
     }
-    ss << show_access_flags(method.requiredSetAccessFlags,
-                            method.requiredUnsetAccessFlags,
-                            true);
+    ss << show_access_flags(
+        method.requiredSetAccessFlags, method.requiredUnsetAccessFlags, true);
     auto name = method.name.empty() ? "*" : method.name;
     ss << method.descriptor << " " << name << "(); ";
   }
@@ -156,18 +159,13 @@ std::string redex::show_keep(const KeepSpec& keep_rule) {
   for (const auto& method_spec : keep_rule.class_spec.methodSpecifications) {
     method_count += method_spec.count;
   }
-  auto total = keep_rule.count + field_count + method_count;
-  text << total << "\t" << keep_rule.count << "\t" << field_count << "\t"
-       << method_count << "\t";
-  text << show_keep_style(keep_rule)
-       << show_keep_modifiers(keep_rule) << " ";
+  text << show_keep_style(keep_rule) << show_keep_modifiers(keep_rule) << " ";
   const auto class_spec = keep_rule.class_spec;
   if (!(class_spec.annotationType.empty())) {
     text << "@" << class_spec.annotationType << " ";
   }
-  text << show_access_flags(class_spec.setAccessFlags,
-                            class_spec.unsetAccessFlags,
-                            false);
+  text << show_access_flags(
+      class_spec.setAccessFlags, class_spec.unsetAccessFlags, false);
   if (is_annotation(class_spec.setAccessFlags)) {
     if (is_enum(class_spec.setAccessFlags)) {
       if (is_interface(class_spec.setAccessFlags)) {
@@ -203,8 +201,6 @@ void redex::show_configuration(std::ostream& output,
     total += cls->get_vmethods().size() + cls->get_dmethods().size() +
              cls->get_ifields().size() + cls->get_sfields().size();
   }
-  output << "-1\t"
-         << "classes: " << classes.size() << " total: " << total << std::endl;
   for (const auto& keep : config.keep_rules) {
     output << redex::show_keep(keep) << std::endl;
   }

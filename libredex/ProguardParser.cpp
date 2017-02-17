@@ -874,8 +874,6 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_optional_filepath_command(
             &it, token::printusage, &pg_config->printusage))
       continue;
-    if (ignore_class_specification_command(&it, token::whyareyoukeeping))
-      continue;
 
     // Optimization Options
     if (parse_boolean_command(
@@ -890,6 +888,14 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::assumenosideeffects,
                    &pg_config->assumenosideeffects_rules,
+                   false,
+                   false,
+                   false,
+                   &ok))
+      continue;
+    if (parse_keep(&it,
+                   token::whyareyoukeeping,
+                   &pg_config->whyareyoukeeping_rules,
                    false,
                    false,
                    false,
