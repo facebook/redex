@@ -505,6 +505,13 @@ struct UnreachableCodeRemover {
     TRACE(RMU, 4, "Visiting class: %s\n", SHOW(cls));
     for (auto& m : cls->get_dmethods()) {
       if (is_clinit(m)) push(cls, m);
+      if (is_init(m)) {
+        // Push the parameterless constructor, in case it's constructed via
+        // .class or Class.forName()
+        if (m->get_proto()->get_args()->get_type_list().size() == 0) {
+          push(cls, m);
+        }
+      }
     }
     push(cls, type_class(cls->get_super_class()));
     for (auto const& t : cls->get_interfaces()->get_type_list()) {
