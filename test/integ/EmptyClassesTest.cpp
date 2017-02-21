@@ -70,10 +70,10 @@ TEST(EmptyClassesTest1, emptyclasses) {
   }
   TRACE(EMPTY, 2, "Removed %ld classes\n", before - after);
   ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/EmptyClasses;"));
-  ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty;"));
-  ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty$InnerClass;"));
+  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty;"));
+  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty$InnerClass;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty2;"));
-  ASSERT_EQ(0, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty2$InnerClass2;"));
+  ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/InnerEmpty2$InnerClass2;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NotAnEmptyClass;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NotAnEmptyClass2;"));
   ASSERT_EQ(1, remaining_classes.count("Lcom/facebook/redextest/NotAnEmptyClass3;"));

@@ -43,21 +43,16 @@ bool is_empty_class(DexClass* cls,
   return remove;
 }
 
-void process_annotation(std::unordered_set<const DexType*>* class_references,
-  DexAnnotation* annotation) {
-    if (annotation->runtime_visible()) {
-      auto elements = annotation->anno_elems();
-      for (const DexAnnotationElement& element : elements) {
-        DexEncodedValue* evalue = element.encoded_value;
-        std::vector<DexType*> ltype;
-        evalue->gather_types(ltype);
-        for (DexType* dextype : ltype) {
-          TRACE(EMPTY, 4, "Adding type annotation to keep list: %s\n",
-                dextype->get_name()->c_str());
-          class_references->insert(dextype);
-        }
-      }
-    }
+void process_annotation(
+    std::unordered_set<const DexType*>* class_references,
+    DexAnnotation* annotation) {
+  std::vector<DexType*> ltype;
+  annotation->gather_types(ltype);
+  for (DexType* dextype : ltype) {
+    TRACE(EMPTY, 4, "Adding type annotation to keep list: %s\n",
+          dextype->get_name()->c_str());
+    class_references->insert(dextype);
+  }
 }
 
 DexType* array_base_type(DexType* type) {
