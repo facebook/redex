@@ -793,9 +793,10 @@ int64_t DexInstruction::literal() const {
   case FMT_f21s:
     return signext<16>(m_arg[0]);
   case FMT_f21h:
-    return signext<16>(m_arg[0]) << 16;
+    return signext<16>(m_arg[0])
+      << (opcode() == OPCODE_CONST_WIDE_HIGH16 ? 48 : 16);
   case FMT_f22b:
-    return signext<16>(m_arg[0]) << 48;
+    return signext<8>(m_arg[0] >> 8);
   case FMT_f22s:
     return signext<16>(m_arg[0]);
   case FMT_f31i: {
@@ -824,10 +825,10 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
     m_arg[0] = literal;
     return this;
   case FMT_f21h:
-    m_arg[0] = literal >> 16;
+    m_arg[0] = literal >> (opcode() == OPCODE_CONST_WIDE_HIGH16 ? 48 : 16);
     return this;
   case FMT_f22b:
-    m_arg[0] = literal >> 48;
+    m_arg[0] = (m_arg[0] & 0xFF) | ((literal << 8) & 0xFF00);
     return this;
   case FMT_f22s:
     m_arg[0] = literal;
