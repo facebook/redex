@@ -288,6 +288,10 @@ const std::vector<Pattern>& get_patterns() {
     return {{OPCODE_MOVE_RESULT}, {}, {dest}};
   };
 
+  auto move_ops = [](Register dest, Register src) -> DexPattern {
+    return {{OPCODE_MOVE, OPCODE_MOVE_OBJECT}, {src}, {dest}};
+  };
+
   auto const_literal = [](
       uint16_t opcode, Register dest, Literal literal) -> DexPattern {
     return {{opcode}, {}, {dest}, literal};
@@ -480,6 +484,13 @@ const std::vector<Pattern>& get_patterns() {
         move_result_object(Register::B)},
        {// ([2, 3, 5] + 3 + 1) - 2 = [4, 5, 7] units saving
         const_string(Register::B, String::double_A_to_string)}},
+
+      //Remove redundant move and move_object instructions,
+      //e.g. move v0, v0
+      {"Remove_Redundant_Move",
+        {move_ops(Register::A, Register::A)},
+        {}
+      },
   };
   return kStringPatterns;
 }
