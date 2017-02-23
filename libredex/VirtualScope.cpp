@@ -337,7 +337,8 @@ void merge(
           SHOW(base_sig_map[name][proto][0].type),
           base_sig_map[name][proto][0].methods.size(),
           base_sig_map[name][proto][0].interfaces.size());
-      always_assert(!is_interface(type_class(base_sig_map[name][proto][0].type)));
+      always_assert(base_sig_map[name][proto][0].type == get_object_type() ||
+          !is_interface(type_class(base_sig_map[name][proto][0].type)));
       // walk every scope in derived that we have to merge
       TRACE(VIRT, 3, "-- walking scopes\n");
       for (const auto& scope : derived_scopes_it.second) {
@@ -346,8 +347,9 @@ void merge(
         TRACE(VIRT, 3, "-- checking scope type %s(%ld)\n",
             SHOW(scope.type), scope.methods.size());
         TRACE(VIRT, 3, "-- is interface 0x%X %d\n", scope.type,
-            is_interface(type_class(scope.type)));
-        if (!is_interface(type_class(scope.type))) {
+            scope.type != get_object_type() && is_interface(type_class(scope.type)));
+        if (scope.type == get_object_type() ||
+            !is_interface(type_class(scope.type))) {
           TRACE(VIRT, 3, "-- merging with base scopes %s(%ld) : %s\n",
               SHOW(base_sig_map[name][proto][0].type),
               base_sig_map[name][proto][0].methods.size(),
