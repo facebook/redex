@@ -10,6 +10,7 @@
 #include "VirtualScope.h"
 #include "DexUtil.h"
 #include "DexAccess.h"
+#include "ReachableClasses.h"
 #include "Timer.h"
 #include "Trace.h"
 
@@ -386,7 +387,10 @@ DexMethod* make_miranda(
     const DexType* type, const DexString* name, const DexProto* proto) {
   auto miranda = DexMethod::make_method(const_cast<DexType*>(type),
       const_cast<DexString*>(name), const_cast<DexProto*>(proto));
-  always_assert(!miranda->is_def());
+  // The next assert may fire because we don't delete DexMethod from the
+  // cache and we may find one we have deleted and it was a def.
+  // Come up with a better assert story
+  //always_assert(!miranda->is_def());
   return miranda;
 }
 
@@ -627,6 +631,66 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, DexClass* cls) {
   }
 }
 
+/**
+ * Subclass check.
+ * We can make this much faster in time.
+ */
+bool is_subclass(const DexType* parent, const DexType* child) {
+  auto super = child;
+  while (super != nullptr) {
+    if (parent == super) return true;
+    const auto cls = type_class(super);
+    if (cls == nullptr) break;
+    super = cls->get_super_class();
+  }
+  return false;
+}
+
+/**
+ * Find all scopes rooted to a given type and adds it to
+ * ClassScope for the given type.
+ */
+void get_root_scopes(
+    const SignatureMap& sig_map,
+    const DexType* type,
+    ClassScopes& cls_scopes) {
+  const std::vector<DexMethod*>& methods = get_vmethods(type);
+  for (const auto meth : methods) {
+    const auto& protos = sig_map.find(meth->get_name());
+    always_assert(protos != sig_map.end());
+    const auto& scopes = protos->second.find(meth->get_proto());
+    always_assert(scopes != protos->second.end());
+    for (const auto& scope : scopes->second) {
+      if (scope.type == meth->get_class() && scope.methods[0].first == meth) {
+        cls_scopes[type].emplace_back(&scope);
+      }
+    }
+  }
+}
+
+/**
+ * Builds the ClassScope for type and children.
+ * Calling with get_object_type() builds the ClassScope
+ * for the entire system as redex knows it.
+ */
+bool walk_hierarchy(
+    const DexType* type,
+    const ClassHierarchy& hierarchy,
+    const SignatureMap& sig_map,
+    ClassScopes& class_scopes) {
+  auto cls = type_class(type);
+  always_assert(cls != nullptr || type == get_object_type());
+  get_root_scopes(sig_map, type, class_scopes);
+
+  const auto& children_it = hierarchy.find(type);
+  if (children_it != hierarchy.end()) {
+    for (const auto& child : children_it->second) {
+      walk_hierarchy(child, hierarchy, sig_map, class_scopes);
+    }
+  }
+  return true;
+}
+
 }
 
 ClassHierarchy build_type_hierarchy(const Scope& scope) {
@@ -650,7 +714,45 @@ SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
 const std::vector<DexMethod*>& get_vmethods(const DexType* type) {
   const DexClass* cls = type_class(type);
   if (cls != nullptr) return cls->get_vmethods();
-  always_assert_log(type == get_object_type(), "Unknown type %s\n", SHOW(type));
+  always_assert_log(
+      type == get_object_type(), "Unknown type %s\n", SHOW(type));
   load_object_vmethods();
   return object_methods;
+}
+
+const VirtualScope& find_virtual_scope(
+    const SignatureMap& sig_map, const DexMethod* meth) {
+  const auto& protos = sig_map.find(meth->get_name());
+  always_assert(protos != sig_map.end());
+  const auto& scopes = protos->second.find(meth->get_proto());
+  always_assert(scopes != protos->second.end());
+  const auto meth_type = meth->get_class();
+  for (const auto& scope : scopes->second) {
+    if (scope.type == get_object_type()) return scope;
+    if (is_subclass(scope.type, meth_type)) return scope;
+  }
+  always_assert_log(false,
+      "unreachable. Scope not found for %s\n", SHOW(meth));
+}
+
+ClassScopes get_class_scopes(
+    const ClassHierarchy& hierarchy,
+    const SignatureMap& sig_map) {
+  ClassScopes class_scopes;
+  const auto& obj_t = get_object_type();
+  walk_hierarchy(obj_t, hierarchy, sig_map, class_scopes);
+  return class_scopes;
+}
+
+bool can_rename_scope(const VirtualScope* scope) {
+  for (const auto& vmeth : scope->methods) {
+    if (!can_rename(vmeth.first) || (vmeth.second & ESCAPED) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool is_impl_scope(const VirtualScope* scope) {
+  return scope->interfaces.size() > 0;
 }

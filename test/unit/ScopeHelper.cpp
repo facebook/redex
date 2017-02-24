@@ -192,7 +192,7 @@ DexClass* create_class(DexType* type, DexType* super,
 
 Scope create_empty_scope() {
   Scope scope;
-  scope.push_back(create_java_lang_object());
+  create_java_lang_object();
   return scope;
 }
 
@@ -217,7 +217,6 @@ DexMethod* create_abstract_method(
     const char* name,
     DexProto* proto,
     DexAccessFlags access /*= ACC_PUBLIC*/) {
-  always_assert((access & (ACC_PRIVATE | ACC_STATIC)) == 0);
   access = access | ACC_ABSTRACT;
   auto method = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
@@ -231,7 +230,6 @@ DexMethod* create_empty_method(
     const char* name,
     DexProto* proto,
     DexAccessFlags access /*= ACC_PUBLIC*/) {
-  always_assert((access & (ACC_PRIVATE | ACC_STATIC | ACC_ABSTRACT)) == 0);
   MethodCreator mcreator(cls->get_type(),
       DexString::make_string(name), proto, access);
   auto main_block = mcreator.get_main_block();

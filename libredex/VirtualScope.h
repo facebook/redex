@@ -110,6 +110,16 @@ struct VirtualScope {
 };
 
 /**
+ * Return true if a VirtualScope can be renamed.
+ */
+bool can_rename_scope(const VirtualScope* scope);
+
+/**
+ * Return true if a VirtualScope contributes to interface resolution.
+ */
+bool is_impl_scope(const VirtualScope* scope);
+
+/**
  * A SignatureMap is the following
  * { DexString* (virtual method name) ->
  *        { DexProto* (sig) ->
@@ -167,11 +177,42 @@ using SignatureMap = std::map<const DexString*, ProtoMap>;
  */
 ClassHierarchy build_type_hierarchy(const Scope& scope);
 
+void get_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type,
+    std::vector<const DexType*>& children);
+
 /**
  * Given a ClassHierarchy walk the java.lang.Object hierarchy building
  * all VirtualScope known.
  */
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy);
+
+/**
+ * Given a concrete DexMethod (must be a definition in a DexClass)
+ * return the scope the method is in.
+ */
+const VirtualScope& find_virtual_scope(
+    const SignatureMap& sig_map, const DexMethod* meth);
+
+/*
+ * Map from a class to the virtual scopes introduced by that class.
+ * So every method at position 0 in the list of VirtualScope.methods
+ * is a DexMethod in the vmethods of the class (DexType key).
+ * VirtualScope.type and the DexType key are the same.
+ * An entry for a type gives you back only the scopes rooted to
+ * the type. So the number of VirtualScope is always smaller or
+ * equals to the number of vmethods (unimplemented interface aside).
+ */
+using ClassScopes =
+    std::map<const DexType*, std::vector<const VirtualScope*>>;
+
+/*
+ * Get the ClassScopes.
+ */
+ClassScopes get_class_scopes(
+    const ClassHierarchy& hierarchy,
+    const SignatureMap& sig_map);
 
 //
 // Helpers
@@ -211,6 +252,5 @@ inline std::vector<DexMethod*> devirtualize(
  * Return the list of virtual methods for a given type.
  * If the type is java.lang.Object and it is not known (no DexClass for it)
  * it generates fictional methods for it.
- * TODO: this is likely going to disappear after renamer is done
  */
 const std::vector<DexMethod*>& get_vmethods(const DexType* type);

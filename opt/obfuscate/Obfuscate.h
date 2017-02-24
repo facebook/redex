@@ -17,3 +17,14 @@ class ObfuscatePass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
+
+struct RenameStats {
+  size_t fields_total = 0;
+  size_t fields_renamed = 0;
+  size_t dmethods_total = 0;
+  size_t dmethods_renamed = 0;
+  size_t vmethods_total = 0;
+  size_t vmethods_renamed = 0;
+};
+
+void obfuscate(Scope& classes, RenameStats& stats);

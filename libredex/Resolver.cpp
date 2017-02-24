@@ -93,7 +93,7 @@ DexMethod* find_top_impl(
         top_impl = vmeth;
       }
     }
-    cls = type_class_internal(cls->get_super_class());
+    cls = type_class(cls->get_super_class());
   }
   return top_impl;
 }

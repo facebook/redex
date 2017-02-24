@@ -503,7 +503,7 @@ public:
               type_class(wrap->get()->get_class())->is_external() ? "true" :
                 "false", can_rename(elem) ? "true" : "false");
           if (renamed_elems.count(elem) > 0)
-            TRACE(OBFUSCATE, 1, "Found elem we've already renamed %s\n",
+            TRACE(OBFUSCATE, 2, "Found elem we've already renamed %s\n",
                 SHOW(elem));
           renamed_elems.insert(elem);
           elem->change(ref_getter_fn(wrap->get_name()));
@@ -511,7 +511,6 @@ public:
         }
       }
     }
-    TRACE(OBFUSCATE, 1, " Renamed %d elems\n", renamings);
     return renamings;
   }
 
