@@ -651,6 +651,9 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     }
     return this;
   case FMT_f22x:
+    assert(i == 0);
+    m_arg[0] = vreg;
+    return this;
   case FMT_f23x_d:
     assert(i < 2);
     assert((vreg & 0xff) == vreg);
@@ -673,6 +676,7 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     return this;
   case FMT_f22b:
     assert(i == 0);
+    assert((vreg & 0xff) == vreg);
     m_arg[0] = (m_arg[0] & 0xff00) | vreg;
     return this;
   case FMT_f22t:
