@@ -655,6 +655,10 @@ inline bool is_filled_new_array(DexOpcode op) {
   return op == OPCODE_FILLED_NEW_ARRAY || op == OPCODE_FILLED_NEW_ARRAY_RANGE;
 }
 
+inline bool writes_result_register(DexOpcode op) {
+  return is_invoke(op) || is_filled_new_array(op);
+}
+
 inline bool is_branch(DexOpcode op) {
   switch (op) {
   case OPCODE_PACKED_SWITCH:

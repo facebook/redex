@@ -23,6 +23,7 @@ class PassManager {
     const Json::Value& config = Json::Value(Json::objectValue));
   void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
+  void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   std::map<std::string, std::map<std::string, int> > get_metrics() const;
   const Json::Value& get_config() const { return m_config; }

@@ -145,6 +145,11 @@ void PassManager::incr_metric(const std::string& key, int value) {
   (*m_current_pass_metrics)[key] += value;
 }
 
+void PassManager::set_metric(const std::string& key, int value) {
+  always_assert_log(m_current_pass_metrics != nullptr, "No current pass!");
+  (*m_current_pass_metrics)[key] = value;
+}
+
 int PassManager::get_metric(const std::string& key) {
   return (*m_current_pass_metrics)[key];
 }

@@ -20,6 +20,7 @@
   TM(ANNO)                                      \
   TM(BIND)                                      \
   TM(BRIDGE)                                    \
+  TM(BUILDERS)                                  \
   TM(CFG)                                       \
   TM(CFP)                                       \
   TM(CPG)                                       \
