@@ -321,8 +321,15 @@ class MethodTransform {
    * :to will end up jumping to the same destination as :from. */
   void replace_branch(DexInstruction* from, DexInstruction* to);
 
-  /* push_back will take ownership of insn */
-  void push_back(DexInstruction* insn);
+  template <class... Args>
+  void push_back(Args&&... args) {
+    m_fmethod->push_back(*(new MethodItemEntry(std::forward<Args>(args)...)));
+  }
+
+  /* Passes memory ownership of "mie" to callee. */
+  void push_back(MethodItemEntry& mie) {
+    m_fmethod->push_back(mie);
+  }
 
   /* position = nullptr means at the head */
   void insert_after(DexInstruction* position, const std::vector<DexInstruction*>& opcodes);
@@ -332,8 +339,6 @@ class MethodTransform {
 
   /* This method will delete the switch case where insn resides. */
   void remove_switch_case(DexInstruction* insn);
-
-  FatMethod* get_fatmethod_for_test() { return m_fmethod; }
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }

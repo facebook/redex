@@ -121,23 +121,20 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     MethodTransformer mt(m);
     mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
     mt->push_back(dasm(OPCODE_CONST_4, {2_v, 1_L}));
-    auto fm = mt->get_fatmethod_for_test();
     // if block
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
-    fm->push_back(*branch);
+    mt->push_back(*branch);
     auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_callee, 0);
     invoke->set_arg_word_count(0);
-    fm->push_back(*(new MethodItemEntry(invoke)));
-    fm->push_back(
-        *(new MethodItemEntry(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 2_v}))));
+    mt->push_back(invoke);
+    mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 2_v}));
     // fallthrough to main block
     auto target = new BranchTarget();
     target->type = BRANCH_SIMPLE;
     target->src = branch;
-    fm->push_back(*(new MethodItemEntry(target)));
-    fm->push_back(
-        *(new MethodItemEntry(dasm(OPCODE_SUB_INT_2ADDR, {1_v, 2_v}))));
-    fm->push_back(*(new MethodItemEntry(dasm(OPCODE_RETURN, {1_v}))));
+    mt->push_back(target);
+    mt->push_back(dasm(OPCODE_SUB_INT_2ADDR, {1_v, 2_v}));
+    mt->push_back(dasm(OPCODE_RETURN, {1_v}));
     m->get_code()->set_registers_size(3);
     m->get_code()->set_ins_size(0);
   }

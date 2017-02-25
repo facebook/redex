@@ -44,7 +44,6 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
     using namespace dex_asm;
 
     MethodTransformer mt(m_method);
-    auto fm = mt->get_fatmethod_for_test();
     auto exception_type = DexType::make_type("Ljava/lang/Exception;");
     auto catch_start = new MethodItemEntry(exception_type);
 
@@ -53,19 +52,17 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
     target->type = BRANCH_SIMPLE;
     target->src = goto_mie;
 
-    fm->push_back(*(new MethodItemEntry(target)));
+    mt->push_back(target);
     // this TRY_START is in a block that is live
-    fm->push_back(*(new MethodItemEntry(TRY_START, catch_start)));
+    mt->push_back(TRY_START, catch_start);
     // this invoke will be considered live code by the dce analysis
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
-    fm->push_back(*goto_mie);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(*goto_mie);
     // this TRY_END is in a block that is dead code
-    fm->push_back(*(new MethodItemEntry(TRY_END, catch_start)));
-    fm->push_back(*(new MethodItemEntry(dasm(OPCODE_CONST_16, {0_v, 0x1_L}))));
-    fm->push_back(*catch_start);
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
+    mt->push_back(TRY_END, catch_start);
+    mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
+    mt->push_back(*catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
   }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
@@ -87,7 +84,6 @@ TEST_F(LocalDceTryTest, unreachableTry) {
     using namespace dex_asm;
 
     MethodTransformer mt(m_method);
-    auto fm = mt->get_fatmethod_for_test();
     auto exception_type = DexType::make_type("Ljava/lang/Exception;");
     auto catch_start = new MethodItemEntry(exception_type);
 
@@ -96,19 +92,16 @@ TEST_F(LocalDceTryTest, unreachableTry) {
     target->type = BRANCH_SIMPLE;
     target->src = goto_mie;
 
-    fm->push_back(*(new MethodItemEntry(target)));
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
-    fm->push_back(*goto_mie);
+    mt->push_back(target);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(*goto_mie);
     // everything onwards is unreachable code because of the goto
 
-    fm->push_back(*(new MethodItemEntry(TRY_START, catch_start)));
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
-    fm->push_back(*(new MethodItemEntry(TRY_END, catch_start)));
-    fm->push_back(*catch_start);
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
+    mt->push_back(TRY_START, catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(TRY_END, catch_start);
+    mt->push_back(*catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
   }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
@@ -130,16 +123,14 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
     using namespace dex_asm;
 
     MethodTransformer mt(m_method);
-    auto fm = mt->get_fatmethod_for_test();
     auto exception_type = DexType::make_type("Ljava/lang/Exception;");
     auto catch_start = new MethodItemEntry(exception_type);
 
-    fm->push_back(*(new MethodItemEntry(TRY_START, catch_start)));
-    fm->push_back(*(new MethodItemEntry(dasm(OPCODE_RETURN_VOID))));
-    fm->push_back(*(new MethodItemEntry(TRY_END, catch_start)));
-    fm->push_back(*catch_start);
-    fm->push_back(*(new MethodItemEntry(
-        new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0))));
+    mt->push_back(TRY_START, catch_start);
+    mt->push_back(dasm(OPCODE_RETURN_VOID));
+    mt->push_back(TRY_END, catch_start);
+    mt->push_back(*catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
   }
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
