@@ -93,6 +93,8 @@ const std::set<std::string> getAllowedStores(DexStoresVector& stores, DexStore& 
   if (search != store_map.end()) {
     return search->second;
   }
+  store_map[store.get_name()].emplace(store.get_name());
+  store_map[store.get_name()].emplace(stores[0].get_name());
   for (auto parent : store.get_dependencies()) {
     store_map[store.get_name()].emplace(parent);
     for (auto grandparent : getAllowedStores(stores, findStore(parent, stores), store_map)) {
