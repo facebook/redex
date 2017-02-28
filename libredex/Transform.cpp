@@ -1310,13 +1310,13 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
   auto def_ins = ins_reg_defs(*callee_code);
-  remap_reg_set(def_ins, callee_param_reg_map, newregs);
-  if (def_ins.intersects(invoke_live_out.bits())) {
-    return false;
-  }
   // if we map two callee registers v0 and v1 to the same caller register v2,
   // and v1 gets written to in the callee, we're gonna have a bad time
   if (def_ins.any() && has_aliased_arguments(invoke)) {
+    return false;
+  }
+  remap_reg_set(def_ins, callee_param_reg_map, newregs);
+  if (def_ins.intersects(invoke_live_out.bits())) {
     return false;
   }
 
