@@ -97,6 +97,9 @@ enum class Register : uint16_t {
   pair_D = 8,
 };
 
+// The size of an array enabling us to index by Register
+static constexpr size_t kRegisterArraySize = 9;
+
 Register get_pair_register(Register reg) {
   assert(reg == Register::A || reg == Register::B || reg == Register::C ||
          reg == Register::D);
@@ -197,15 +200,77 @@ struct DexPattern {
         literal(literal) {}
 };
 
+struct Matcher;
+
+// Returns the smallest bit width of any source or destination vreg for the
+// given opcode
+// Returns 16 (no limit) if there is no source or destination (e.g. nop)
+static int8_t min_vreg_bit_width_for_opcode(uint16_t opcode) {
+  DexInstruction insn(opcode);
+  int result = 16;
+  if (insn.dests_size() > 0) {
+    result = std::min(result, insn.dest_bit_width());
+  }
+  for (unsigned i = 0; i < insn.srcs_size(); i++) {
+    result = std::min(result, insn.src_bit_width(i));
+  }
+  return static_cast<int8_t>(result);
+}
+
 struct Pattern {
   const std::string name;
   const std::vector<DexPattern> match;
   const std::vector<DexPattern> replace;
+  const std::function<bool(const Matcher&)> predicate;
+  std::array<int8_t, kRegisterArraySize> register_width_limits;
+
+ private:
+  void determine_register_width_limits() {
+    // We need to ensure we don't match registers that exceed the bit width of
+    // the replacement instruction
+    // Most instructions have the same bit width for source and dest, so we just
+    // calculate a single
+    // minimum bit width for each instruction
+    register_width_limits.fill(16); // default
+    for (const DexPattern& pat : replace) {
+      for (uint16_t opcode : pat.opcodes) { // just expect 1
+        int8_t width = min_vreg_bit_width_for_opcode(opcode);
+        for (Register reg : pat.srcs) {
+          int idx = static_cast<int>(reg);
+          register_width_limits[idx] =
+              std::min(register_width_limits[idx], width);
+        }
+        for (Register reg : pat.dests) {
+          int idx = static_cast<int>(reg);
+          register_width_limits[idx] =
+              std::min(register_width_limits[idx], width);
+        }
+      }
+    }
+  }
+
+ public:
+  Pattern(std::string name,
+          std::vector<DexPattern> match,
+          std::vector<DexPattern> replace,
+          std::function<bool(const Matcher&)> predicate = {})
+      : name(std::move(name)),
+        match(std::move(match)),
+        replace(std::move(replace)),
+        predicate(std::move(predicate)) {
+    determine_register_width_limits();
+  }
+
+  // Returns whether the given vreg value is suitable for the register pattern
+  bool register_can_match_vreg_value(Register pattern, uint16_t value) const {
+    int limit = register_width_limits[static_cast<int>(pattern)];
+    return value < (1U << limit);
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // The patterns
-const std::vector<Pattern>& get_patterns() {
+const std::vector<Pattern>& get_string_patterns() {
   // Helpers
   //
   // invoke-direct {reg_instance}, Ljava/lang/StringBuilder;.<init>:()V
@@ -485,15 +550,14 @@ const std::vector<Pattern>& get_patterns() {
        {// ([2, 3, 5] + 3 + 1) - 2 = [4, 5, 7] units saving
         const_string(Register::B, String::double_A_to_string)}},
 
-      //Remove redundant move and move_object instructions,
-      //e.g. move v0, v0
-      {"Remove_Redundant_Move",
-        {move_ops(Register::A, Register::A)},
-        {}
-      },
+      // Remove redundant move and move_object instructions,
+      // e.g. move v0, v0
+      {"Remove_Redundant_Move", {move_ops(Register::A, Register::A)}, {}},
   };
   return kStringPatterns;
 }
+
+static const std::vector<Pattern>& get_arith_patterns();
 
 template <typename Container, typename Key>
 auto check_and_get(const Container& c, const Key& key) -> decltype(c.at(key)) {
@@ -532,13 +596,19 @@ struct Matcher {
   // It updates the matching state for the given instruction. Returns true if
   // insn matches to the last 'match' pattern.
   bool try_match(DexInstruction* insn) {
-    auto match_reg = [&](Register pattern, uint16_t insn_reg) {
+    auto match_reg = [&](Register pattern_reg, uint16_t insn_reg) {
       // This register has been observed already. Check whether they are same.
-      if (matched_regs.find(pattern) != end(matched_regs)) {
-        return matched_regs.at(pattern) == insn_reg;
+      if (matched_regs.find(pattern_reg) != end(matched_regs)) {
+        return matched_regs.at(pattern_reg) == insn_reg;
       }
+
+      // Refuse to match if the register exceeds the instruction's width limit
+      if (!pattern.register_can_match_vreg_value(pattern_reg, insn_reg)) {
+        return false;
+      }
+
       // Newly observed. Remember it.
-      matched_regs.emplace(pattern, insn_reg);
+      matched_regs.emplace(pattern_reg, insn_reg);
       return true;
     };
 
@@ -628,7 +698,15 @@ struct Matcher {
           SHOW(insn));
     matched_instructions.push_back(insn);
     ++match_index;
-    return match_index == pattern.match.size();
+
+    bool done = match_index == pattern.match.size();
+
+    // if we've matched everything, the predicate may still veto
+    if (done && pattern.predicate && !pattern.predicate(*this)) {
+      reset();
+      return false;
+    }
+    return done;
   }
 
   // Generate skeleton instruction for the replacement.
@@ -647,8 +725,16 @@ struct Matcher {
       return (new DexOpcodeMethod(opcode, replace.method))
           ->set_arg_word_count(replace.srcs.size());
 
+    case OPCODE_MOVE_16:
+      assert(replace.kind == DexPattern::Kind::none);
+      return new DexInstruction(opcode);
+
     case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT:
+      assert(replace.kind == DexPattern::Kind::none);
+      return new DexInstruction(opcode);
+
+    case OPCODE_NEG_INT:
       assert(replace.kind == DexPattern::Kind::none);
       return new DexInstruction(opcode);
 
@@ -817,6 +903,55 @@ struct Matcher {
   }
 };
 
+template <int64_t VALUE>
+static bool first_instruction_literal_is(const Matcher& m) {
+  if (m.matched_instructions.empty()) {
+    return false;
+  }
+  return m.matched_instructions.front()->literal() == VALUE;
+}
+
+static const std::vector<Pattern>& get_arith_patterns() {
+  auto mul_or_div_lit = [](Register src, Register dst) -> DexPattern {
+    return {{OPCODE_MUL_INT_LIT8,
+             OPCODE_MUL_INT_LIT16,
+             OPCODE_DIV_INT_LIT8,
+             OPCODE_DIV_INT_LIT16},
+            {src},
+            {dst}};
+  };
+
+  auto add_lit = [](Register src, Register dst) -> DexPattern {
+    return {{OPCODE_ADD_INT_LIT8, OPCODE_ADD_INT_LIT16}, {src}, {dst}};
+  };
+
+  // Note: these arith patterns emit full 16-bit reg indices
+  // Another pass will tighten these when possible
+  static const std::vector<Pattern> kArithPatterns = {
+      // Replace *1 or /1 with move
+      {"Arith_MulDivLit_Pos1",
+       {mul_or_div_lit(Register::A, Register::B)},
+       {// x = y * 1 -> x = y
+        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<1>},
+
+      // Replace multiplies or divides by -1 with negation
+      {"Arith_MulDivLit_Neg1",
+       {mul_or_div_lit(Register::A, Register::B)},
+       {// Eliminates the literal-carrying halfword
+        {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<-1>},
+
+      // Replace +0 with moves
+      {"Arith_AddLit_0",
+       {add_lit(Register::A, Register::B)},
+       {// Eliminates the literal-carrying halfword
+        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<0>},
+  };
+  return kArithPatterns;
+}
+
 class PeepholeOptimizerV2 {
  private:
   const std::vector<DexClass*>& m_scope;
@@ -828,9 +963,12 @@ class PeepholeOptimizerV2 {
  public:
   explicit PeepholeOptimizerV2(const std::vector<DexClass*>& scope)
       : m_scope(scope) {
-    for (const auto& pattern : get_patterns()) {
-      m_matchers.emplace_back(pattern);
-      m_matchers_stat.push_back(0);
+    auto lists = {&get_string_patterns(), &get_arith_patterns()};
+    for (const auto& pattern_list : lists) {
+      for (const Pattern& pattern : *pattern_list) {
+        m_matchers.emplace_back(pattern);
+        m_matchers_stat.push_back(0);
+      }
     }
   }
 
