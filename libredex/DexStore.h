@@ -21,10 +21,10 @@ class DexMetadata {
   std::vector<std::string> files;
 
 public:
-  const std::string get_id() { return id; }
+  const std::string get_id() const { return id; }
   void set_id(std::string name) { id = name; }
-  const std::vector<std::string> get_files() { return files; }
-  const std::vector<std::string> get_dependencies() { return dependencies; }
+  const std::vector<std::string> get_files() const { return files; }
+  const std::vector<std::string> get_dependencies() const { return dependencies; }
 
   void parse(const std::string& path);
 };
@@ -40,9 +40,9 @@ class DexStore {
   DexStore(const DexStore&) = delete;
   DexStore(DexStore&&) = default;
 
-  std::string get_name();
+  std::string get_name() const;
   std::vector<DexClasses>& get_dexen();
-  std::vector<std::string> get_dependencies();
+  std::vector<std::string> get_dependencies() const;
 
   void add_classes(DexClasses classes);
 };

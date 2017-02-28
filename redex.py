@@ -399,6 +399,9 @@ def run_redex(args):
         module.unpackage(extracted_apk_dir, store_path)
         store_metadata = os.path.join(store_metadata_dir, module.get_name() + '.json')
         module.write_redex_metadata(store_path, store_metadata)
+        # if we're unpacking, put the metadata /in/ the store too
+        if args.unpack_only:
+            module.write_redex_metadata(store_path, os.path.join(store_path, module.get_name() + '.json'))
         store_files.append(store_metadata)
 
     # Some of the native libraries can be concatenated together into one

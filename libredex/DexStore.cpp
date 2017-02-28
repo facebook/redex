@@ -16,7 +16,7 @@ DexStore::DexStore(const std::string name) {
   m_metadata.set_id(name);
 }
 
-std::string DexStore::get_name() {
+std::string DexStore::get_name() const {
   return m_metadata.get_id();
 }
 
@@ -24,7 +24,7 @@ std::vector<DexClasses>& DexStore::get_dexen() {
   return m_dexen;
 }
 
-std::vector<std::string> DexStore::get_dependencies() {
+std::vector<std::string> DexStore::get_dependencies() const {
   return m_metadata.get_dependencies();
 }
 
