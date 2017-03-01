@@ -21,11 +21,11 @@ namespace {
 
 bool has_builder_name(DexClass* cls) {
   static boost::regex re {"\\$Builder;$"};
-  return boost::regex_search(cls->get_name()->c_str(), re);
+  return boost::regex_search(cls->c_str(), re);
 }
 
 DexType* get_buildee(DexType* builder) {
-  auto builder_name = std::string(builder->get_name()->c_str());
+  auto builder_name = std::string(builder->c_str());
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
   return DexType::get_type(buildee_name.c_str());
 }
@@ -183,6 +183,131 @@ bool is_trivial_setter(DexMethod* m) {
   return false;
 }
 
+std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
+  std::vector<DexMethod*> static_methods;
+
+  for (const auto& dmethod: dmethods) {
+    if (is_static(dmethod)) {
+      static_methods.emplace_back(dmethod);
+    }
+  }
+
+  return static_methods;
+}
+
+std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
+  std::vector<DexMethod*> private_methods;
+
+  for (const auto& dmethod: dmethods) {
+    if (!is_constructor(dmethod) && !is_static(dmethod)) {
+      private_methods.emplace_back(dmethod);
+    }
+  }
+
+  return private_methods;
+}
+
+DexMethod* get_build_method(std::vector<DexMethod*>& vmethods) {
+  for (const auto& vmethod : vmethods) {
+    if (strcmp(vmethod->c_str(), "build") == 0) {
+      return vmethod;
+    }
+  }
+
+  return nullptr;
+}
+
+/**
+ * Checks build method does a small amount of work
+ *   - returns an instance of enclosing class type
+ *   - only that instance is created
+ */
+bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
+  // Check it returns an instance of the class it was defined in.
+  auto proto = method->get_proto();
+  auto return_type = proto->get_rtype();
+  if (strcmp(cls_type->c_str(), return_type->c_str()) != 0) {
+    return false;
+  }
+
+  // Check there is only one instance created.
+  const auto& code = method->get_code();
+  const auto& insns = code->get_instructions();
+  int instances = 0;
+
+  for (DexInstruction* insn : insns) {
+    if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+      instances++;
+    }
+  }
+
+  return instances == 1;
+}
+
+/**
+ * Basic check for number of instance fields.
+ *
+ * TODO(emmasevastian); Check relationship between fields.
+ */
+bool have_same_instance_fields(DexClass* builder, DexClass* cls) {
+  return builder->get_ifields().size() == cls->get_ifields().size();
+}
+
+/**
+ * First pass through what "trivial builder" means:
+ *  - is a builder
+ *  - it doesn't escape stack
+ *  - it has only one vmethod: the build method
+ *  - the build method only calls the constructor of the class it is defined in
+ *  - has no private or static method
+ *
+ * TODO(emmasevastian): Extend the "definition".
+ */
+std::unordered_set<DexClass*> get_trivial_builders(
+    const std::unordered_set<DexClass*>& builder_classes,
+    const std::unordered_set<DexType*>& stack_only_builders) {
+
+  std::unordered_set<DexClass*> trivial_builders;
+
+  for (DexClass* builder_class : builder_classes) {
+    DexType* builder_type = builder_class->get_type();
+
+    // Filter out builders that escape the stack.
+    if (stack_only_builders.find(builder_type) == stack_only_builders.end()) {
+      continue;
+    }
+
+    // Filter out builders that do "extra work".
+    bool has_static_methods =
+      get_static_methods(builder_class->get_dmethods()).size() != 0;
+    bool has_private_methods =
+      get_private_methods(builder_class->get_dmethods()).size() != 0;
+    DexMethod* build_method = get_build_method(builder_class->get_vmethods());
+
+    if (has_static_methods ||
+        has_private_methods ||
+        build_method == nullptr ||
+        builder_class->get_vmethods().size() > 1) {
+      continue;
+    }
+
+    DexType* buildee_type = get_buildee(builder_class->get_type());
+    // Filter out builders that do "extra work" in the build method.
+    if (!is_trivial_build_method(build_method, buildee_type)) {
+      continue;
+    }
+
+    // Filter out builders that have extra instance fields.
+    if (!have_same_instance_fields(builder_class, type_class(buildee_type))) {
+      continue;
+    }
+
+    trivial_builders.emplace(builder_class);
+  }
+
+  return trivial_builders;
+}
+
 } // namespace
 
 std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
@@ -233,12 +358,16 @@ void RemoveBuildersPass::run_pass(
   ConfigFiles&,
   PassManager& mgr
 ) {
+  std::unordered_set<DexClass*> builder_classes;
+
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
-    if (has_builder_name(cls)) {
+    if (has_builder_name(cls) && !is_interface(cls)) {
       m_builders.emplace(cls->get_type());
+      builder_classes.emplace(cls);
     }
   }
+
   std::unordered_set<DexType*> escaped_builders;
   walk_methods(scope, [&](DexMethod* m) {
     auto builders = created_builders(m);
@@ -326,6 +455,10 @@ void RemoveBuildersPass::run_pass(
   TRACE(BUILDERS, 1, "\tvmethods: %d\n", vmethod_count);
   TRACE(BUILDERS, 1, "\ttrivial setters: %d\n", setter_count);
   TRACE(BUILDERS, 1, "\tbuild methods: %d\n", build_count);
+
+  std::unordered_set<DexClass*> trivial_builders = get_trivial_builders(
+      builder_classes, stack_only_builders);
+  TRACE(BUILDERS, 1, "Trivial builders: %d\n", trivial_builders.size());
 }
 
 static RemoveBuildersPass s_pass;
