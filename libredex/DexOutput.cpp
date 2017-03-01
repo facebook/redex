@@ -126,7 +126,13 @@ class CustomSort {
       if (!a_in && !b_in) {
         return m_cmp(a,b);
       } else if (a_in && b_in) {
-        return (m_map.at(a) < m_map.at(b));
+        auto const a_idx = m_map.at(a);
+        auto const b_idx = m_map.at(b);
+        if (a_idx != b_idx) {
+          return a_idx < b_idx;
+        } else {
+          return m_cmp(a,b);
+        }
       } else if (a_in) {
         return true;
       } else {
