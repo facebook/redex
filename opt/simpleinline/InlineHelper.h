@@ -40,8 +40,8 @@ class MultiMethodInliner {
 
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
-      DexClasses& primary_dex,
-      std::unordered_set<DexMethod*>& candidates,
+      const DexClasses& primary_dex,
+      const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
       const Config& config);
 
