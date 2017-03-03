@@ -31,7 +31,14 @@ static constexpr char usage_footer[] =
 
 void show_help(const po::options_description& od) {
   std::cout << usage_header << std::endl;
-  for (const auto& tool : ToolRegistry::get().get_tools()) {
+  auto sorted_tools = ToolRegistry::get().get_tools();
+  std::sort(
+    sorted_tools.begin(),
+    sorted_tools.end(),
+    [](const Tool* a, const Tool* b) {
+      return a->name() < b->name();
+    });
+  for (const auto& tool : sorted_tools) {
     printf("  %-20s %s\n", tool->name().c_str(), tool->desc().c_str());
   }
   std::cout << usage_footer << std::endl << od << std::endl;

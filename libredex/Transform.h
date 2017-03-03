@@ -308,6 +308,8 @@ class MethodTransform {
       DexMethod *callee,
       DexOpcodeMethod *invoke);
 
+  const DexMethod* get_method() const { return m_method; }
+  
   /* Return the control flow graph of this method as a vector of blocks. */
   std::vector<Block*>& cfg() { return m_blocks; }
 
