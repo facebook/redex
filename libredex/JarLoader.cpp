@@ -27,6 +27,24 @@
  * Begin Class Loading code.
  */
 
+namespace JarLoaderUtil {
+uint32_t read32(uint8_t*& buffer) {
+  uint32_t rv;
+  memcpy(&rv, buffer, sizeof(uint32_t));
+  buffer += sizeof(uint32_t);
+  return htonl(rv);
+}
+
+uint32_t read16(uint8_t*& buffer) {
+  uint16_t rv;
+  memcpy(&rv, buffer, sizeof(uint16_t));
+  buffer += sizeof(uint16_t);
+  return htons(rv);
+}
+}
+
+using namespace JarLoaderUtil;
+
 namespace {
 
 static const uint32_t kClassMagic = 0xcafebabe;
@@ -59,20 +77,6 @@ struct cp_method_info {
   uint16_t nameNdx;
   uint16_t descNdx;
 };
-
-static uint32_t read32(uint8_t* &buffer) {
-  uint32_t rv;
-  memcpy(&rv, buffer, sizeof(uint32_t));
-  buffer += sizeof(uint32_t);
-  return htonl(rv);
-}
-
-static uint32_t read16(uint8_t* &buffer) {
-  uint16_t rv;
-  memcpy(&rv, buffer, sizeof(uint16_t));
-  buffer += sizeof(uint16_t);
-  return htons(rv);
-}
 }
 
 #define CP_CONST_UTF8         (1)
@@ -141,7 +145,7 @@ static void skip_attributes(uint8_t* &buffer) {
     buffer += length;
   }
 }
-#define MAX_CLASS_NAMELEN (4 * 1024)
+#define MAX_CLASS_NAMELEN (8 * 1024)
 static DexType *make_dextype_from_cref(std::vector<cp_entry> &cpool,
                                        uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
@@ -170,11 +174,11 @@ static bool extract_utf8(std::vector<cp_entry> &cpool, uint16_t utf8ref,
                          char *out, uint32_t size) {
   const cp_entry &utf8cpe = cpool[utf8ref];
   if (utf8cpe.tag != CP_CONST_UTF8) {
-    fprintf(stderr, "Non-utf8 ref in get_utf8, Bailing\n");
+    fprintf(stderr, "Non-utf8 ref in get_utf8, bailing\n");
     return false;
   }
   if (utf8cpe.len > (size - 1)) {
-    fprintf(stderr, "name is greater than max, bailing");
+    fprintf(stderr, "Name is greater (%hu) than max (%u), bailing\n", utf8cpe.len, size);
     return false;
   }
   memcpy(out, utf8cpe.data, utf8cpe.len);
@@ -335,7 +339,7 @@ static DexMethod *make_dexmethod(std::vector<cp_entry> &cpool,
   return method;
 }
 
-static bool parse_class(uint8_t *buffer) {
+static bool parse_class(uint8_t *buffer, attribute_hook_t attr_hook) {
   uint32_t magic = read32(buffer);
   uint16_t vminor DEBUG_ONLY = read16(buffer);
   uint16_t vmajor DEBUG_ONLY = read16(buffer);
@@ -380,16 +384,41 @@ static bool parse_class(uint8_t *buffer) {
   }
   uint16_t fcount = read16(buffer);
 
+  auto invoke_attr_hook = [&](
+      boost::variant<DexField*, DexMethod*> field_or_method, uint8_t* attrPtr) {
+    if (attr_hook == nullptr) {
+      return;
+    }
+    uint16_t attributes_count = read16(attrPtr);
+    for (uint16_t j = 0; j < attributes_count; j++) {
+      uint16_t attribute_name_index = read16(attrPtr);
+      uint32_t attribute_length = read32(attrPtr);
+      char attribute_name[MAX_CLASS_NAMELEN];
+      if (extract_utf8(
+              cpool, attribute_name_index, attribute_name, MAX_CLASS_NAMELEN)) {
+        attr_hook(field_or_method, attribute_name, attrPtr);
+      } else {
+        always_assert_log(
+            false,
+            "attribute hook was specified, but failed to load the "
+            "attribute name due to insufficient name buffer");
+      }
+      attrPtr += attribute_length;
+    }
+  };
+
   for (int i=0; i < fcount; i++) {
     cp_field_info cpfield;
     cpfield.aflags = read16(buffer);
     cpfield.nameNdx = read16(buffer);
     cpfield.descNdx = read16(buffer);
+    uint8_t* attrPtr = buffer;
     skip_attributes(buffer);
     DexField *field = make_dexfield(cpool, self, cpfield);
     if (field == nullptr)
       return false;
     cc.add_field(field);
+    invoke_attr_hook({field}, attrPtr);
   }
 
   uint16_t mcount = read16(buffer);
@@ -399,11 +428,14 @@ static bool parse_class(uint8_t *buffer) {
       cpmethod.aflags = read16(buffer);
       cpmethod.nameNdx = read16(buffer);
       cpmethod.descNdx = read16(buffer);
+
+      uint8_t* attrPtr = buffer;
       skip_attributes(buffer);
       DexMethod *method = make_dexmethod(cpool, self, cpmethod);
       if (method == nullptr)
         return false;
       cc.add_method(method);
+      invoke_attr_hook({method}, attrPtr);
     }
   }
   DexClass *dc DEBUG_ONLY = cc.create();
@@ -662,7 +694,8 @@ static bool decompress_class(jar_entry &file, uint8_t *mapping,
 static const int kStartBufferSize = 128 * 1024;
 
 static bool process_jar_entries(std::vector<jar_entry> &files,
-                                uint8_t *mapping) {
+                                uint8_t *mapping,
+                                attribute_hook_t attr_hook) {
   ssize_t bufsize = kStartBufferSize;
   uint8_t *outbuffer = (uint8_t*)malloc(bufsize);
   static char classEndString[] = ".class";
@@ -693,7 +726,7 @@ static bool process_jar_entries(std::vector<jar_entry> &files,
       return false;
     }
 
-    if (!parse_class(outbuffer)) {
+    if (!parse_class(outbuffer, attr_hook)) {
       free(outbuffer);
       return false;
     }
@@ -702,7 +735,9 @@ static bool process_jar_entries(std::vector<jar_entry> &files,
   return true;
 }
 
-static bool process_jar(uint8_t *mapping, ssize_t size) {
+static bool process_jar(uint8_t* mapping,
+                        ssize_t size,
+                        attribute_hook_t attr_hook) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
   if (!find_central_directory(mapping, size, pce))
@@ -711,13 +746,13 @@ static bool process_jar(uint8_t *mapping, ssize_t size) {
     return false;
   if (!get_jar_entries(mapping, pce, files))
     return false;
-  if (!process_jar_entries(files, mapping)) {
+  if (!process_jar_entries(files, mapping, attr_hook)) {
     return false;
   }
   return true;
 }
 
-bool load_jar_file(const char *location) {
+bool load_jar_file(const char* location, attribute_hook_t attr_hook) {
   int fd = open(location, O_RDONLY);
   struct stat stat;
   ssize_t size;
@@ -739,7 +774,7 @@ bool load_jar_file(const char *location) {
     perror("Address space allocation failed for mmap\n");
     return false;
   }
-  bool rv = process_jar(mapping, size);
+  bool rv = process_jar(mapping, size, attr_hook);
   munmap(mapping, size);
   if (!rv) {
     fprintf(stderr, "Error processing jar: %s\n", location);

@@ -9,10 +9,12 @@
 
 #include "DexUtil.h"
 
+#include <boost/filesystem.hpp>
 #include <unordered_set>
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexLoader.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -337,4 +339,51 @@ Scope build_class_scope(DexStoresVector& stores) {
 void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
   DexStoreClassesIterator iter(stores);
   post_dexen_changes(v, iter);
+}
+
+void load_root_dexen(DexStore& store, const std::string& dexen_dir_str) {
+  namespace fs = boost::filesystem;
+  fs::path dexen_dir_path(dexen_dir_str);
+  assert(fs::is_directory(dexen_dir_path));
+
+  // Discover dex files
+  auto end = fs::directory_iterator();
+  std::vector<fs::path> dexen;
+  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
+    auto file = it->path();
+    if (fs::is_regular_file(file) && !file.extension().compare(".dex")) {
+      dexen.emplace_back(file);
+    }
+  }
+
+  /*
+   * Comparator for dexen filename. 'classes.dex' should sort first,
+   * followed by secondary-[N].dex ordered by N numerically.
+   */
+  auto dex_comparator = [](const fs::path& a, const fs::path& b){
+    auto as = a.stem().string();
+    auto bs = b.stem().string();
+    bool adashed = as.rfind("-") != std::string::npos;
+    bool bdashed = bs.rfind("-") != std::string::npos;
+    if (!adashed && bdashed) {
+      return true;
+    } else if (adashed && !bdashed) {
+      return false;
+    } else if (!adashed && !bdashed) {
+      return strcmp(as.c_str(), bs.c_str()) > 1;
+    } else {
+      auto anum = atoi(as.substr(as.rfind("-") + 1).c_str());
+      auto bnum = atoi(bs.substr(bs.rfind("-") + 1).c_str());
+      return bnum > anum ;
+    }
+  };
+
+  // Sort all discovered dex files
+  std::sort(dexen.begin(), dexen.end(), dex_comparator);
+  // Load all discovered dex files
+  for (const auto& dex : dexen) {
+    std::cout << "Loading " << dex.string() << std::endl;
+    DexClasses classes = load_classes_from_dex(dex.c_str());
+    store.add_classes(std::move(classes));
+  }
 }

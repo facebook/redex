@@ -21,48 +21,6 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-/*
- * Comparator for dexen filename. 'classes.dex' should sort first,
- * followed by secondary-[N].dex ordered by N numerically.
- */
-auto dex_comparator = [](const fs::path& a, const fs::path& b){
-  auto as = a.stem().string();
-  auto bs = b.stem().string();
-  bool adashed = as.rfind("-") != std::string::npos;
-  bool bdashed = bs.rfind("-") != std::string::npos;
-  if (!adashed && bdashed) {
-    return true;
-  } else if (adashed && !bdashed) {
-    return false;
-  } else if (!adashed && !bdashed) {
-    return strcmp(as.c_str(), bs.c_str()) > 1;
-  } else {
-    auto anum = atoi(as.substr(as.rfind("-") + 1).c_str());
-    auto bnum = atoi(bs.substr(bs.rfind("-") + 1).c_str());
-    return bnum > anum ;
-  }
-};
-
-void load_root_dexen(DexStore& store, const fs::path& dexen_dir_path) {
-  // Discover dex files
-  auto end = fs::directory_iterator();
-  std::vector<fs::path> dexen;
-  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
-    auto file = it->path();
-    if (fs::is_regular_file(file) && !file.extension().compare(".dex")) {
-      dexen.emplace_back(file);
-    }
-  }
-  // Sort all discovered dex files
-  std::sort(dexen.begin(), dexen.end(), dex_comparator);
-  // Load all discovered dex files
-  for (const auto& dex : dexen) {
-    std::cout << "Loading " << dex.string() << std::endl;
-    DexClasses classes = load_classes_from_dex(dex.c_str());
-    store.add_classes(std::move(classes));
-  }
-}
-
 void load_store_dexen(DexStore& store, DexMetadata& store_metadata) {
   for (const auto& file_path : store_metadata.get_files()) {
     std::cout << "Loading " << file_path << std::endl;
@@ -71,7 +29,10 @@ void load_store_dexen(DexStore& store, DexMetadata& store_metadata) {
   }
 }
 
-std::vector<std::string> list_modules(const fs::path& path) {
+std::vector<std::string> list_modules(const std::string& path_str) {
+  fs::path path(path_str);
+  assert(fs::is_directory(path));
+
   auto end = fs::directory_iterator();
   std::vector<std::string> modules;
   for (fs::directory_iterator it(path) ; it != end ; ++it) {
@@ -108,8 +69,7 @@ DexStoresVector Tool::init(
   const std::string& system_jar_paths,
   const std::string& apk_dir,
   const std::string& dexen_dir_str) {
-  fs::path dexen_dir_path(dexen_dir_str);
-  if (!fs::is_directory(dexen_dir_path)) {
+  if (!fs::is_directory(fs::path(dexen_dir_str))) {
     throw std::invalid_argument("'" + dexen_dir_str + "' is not a directory");
   }
 
@@ -129,12 +89,12 @@ DexStoresVector Tool::init(
   DexStoresVector stores;
 
   // Load root dexen
-  load_root_dexen(root_store, dexen_dir_path);
+  load_root_dexen(root_store, dexen_dir_str);
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen
-  for (auto module : list_modules(dexen_dir_path)) {
-    fs::path metadata_path = dexen_dir_path;
+  for (auto module : list_modules(dexen_dir_str)) {
+    fs::path metadata_path(dexen_dir_str);
     metadata_path += fs::path::preferred_separator;
     metadata_path += module;
     metadata_path += fs::path::preferred_separator;
