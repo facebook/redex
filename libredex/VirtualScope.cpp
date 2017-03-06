@@ -188,6 +188,33 @@ void merge(VirtualScope& scope, const VirtualScope& another) {
 }
 
 /**
+ * Deal with the tragic escape story...
+ * if an interface down the hierarchy is marked ESCAPED
+ * everything defined in base escapes as well.
+ */
+void escape_all(VirtualScopes& scopes) {
+  for (auto& scope : scopes) {
+    for (auto& vmeth : scope.methods) {
+      TRACE(VIRT, 5, "ESCAPED %s\n", SHOW(vmeth.first));
+      vmeth.second |= ESCAPED;
+    }
+  }
+}
+
+/**
+ * Deal with the tragic escape story...
+ * if an interface at the class level is marked ESCAPED
+ * everything defined in base and children escapes as well.
+ */
+void escape_all(SignatureMap& sig_map) {
+  for (auto& protos_it : sig_map) {
+    for (auto& scopes_it : protos_it.second) {
+      escape_all(scopes_it.second);
+    }
+  }
+}
+
+/**
  * Mark VirtualFlags at each level walking up the hierarchy.
  * Walk through all the method definitions in base.
  */
@@ -205,10 +232,12 @@ void mark_methods(
       // mark final and override accordingly
       auto& scope = scopes[0];
       if (scope.methods.size() == 1) {
+        TRACE(VIRT, 5, "FINAL %s\n", SHOW(scope.methods[0].first));
         scope.methods[0].second |= FINAL;
       } else {
         for (auto& meth = ++scopes[0].methods.begin();
             meth != scope.methods.end(); meth++) {
+          TRACE(VIRT, 5, "OVERRIDE %s\n", SHOW((*meth).first));
           (*meth).second |= OVERRIDE;
         }
       }
@@ -217,18 +246,12 @@ void mark_methods(
       if (scopes.size() > 1) {
         for (auto& scope = ++scopes.begin(); scope != scopes.end(); scope++) {
           always_assert((*scope).methods.size() > 0);
+          TRACE(VIRT, 5, "OVERRIDE %s\n", SHOW((*scope).methods[0].first));
           (*scope).methods[0].second |= OVERRIDE;
         }
       }
-      // deal with the tragic escape story
-      // if an interface down the hierarchy is marked ESCAPED
-      // everything defined in base escapes as well
       if (escape) {
-        for (auto& scope : scopes) {
-          for (auto& vmeth : scope.methods) {
-            vmeth.second |= ESCAPED;
-          }
-        }
+        escape_all(scopes);
       }
     }
   }
@@ -253,6 +276,7 @@ void build_interface_scope(
       always_assert(scopes[0].type == type);
       // mark impl all the class virtual scope
       for (auto& meth : scopes[0].methods) {
+        TRACE(VIRT, 5, "IMPL %s\n", SHOW(meth.first));
         meth.second |= IMPL;
       }
       // remaining scopes must be for interfaces so they are
@@ -579,29 +603,34 @@ bool build_signature_map(
   load_methods(type, sig_map);
   // will hold all the signature introduced by interfaces in type
   BaseIntfSigs intf_sig_map;
-  bool escape = load_interfaces(type, sig_map, intf_sig_map);
+  bool escape_down = load_interfaces(type, sig_map, intf_sig_map);
   BaseSigs base_sigs = load_base_sigs(sig_map);
   TRACE(VIRT, 2, "* Sig map computed for %s\n", SHOW(type));
 
   // recurse through every child to collect all methods
   // and interface methods under type
+  bool escape_up = false;
   for (const auto& child : children) {
     SignatureMap child_sig_map;
-    escape = build_signature_map(
+    escape_up = build_signature_map(
         hierarchy,
         child,
-        child_sig_map) || escape;
+        child_sig_map) || escape_up;
     TRACE(VIRT, 2, "* Merging sig map of %s with child %s\n",
         SHOW(type), SHOW(child));
     merge(base_sigs, intf_sig_map, sig_map, child_sig_map);
   }
 
   TRACE(VIRT, 2, "* Marking methods at %s\n", SHOW(type));
-  mark_methods(type, sig_map, base_sigs, escape);
+  mark_methods(type, sig_map, base_sigs, escape_up);
   build_interface_scope(type, sig_map, intf_sig_map);
+  if (escape_down) {
+    escape_all(sig_map);
+  }
 
-  TRACE(VIRT, 2, "* Visited %s(%d)\n", SHOW(type), escape);
-  return escape;
+  TRACE(VIRT, 2, "* Visited %s(%d, %d)\n",
+      SHOW(type), escape_up, escape_down);
+  return escape_up | escape_down;
 }
 
 /**

@@ -9,8 +9,9 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "Pass.h"
+#include "DexClass.h"
+#include "DexUtil.h"
 #include "Timer.h"
 #include <vector>
 #include <map>
@@ -225,14 +226,23 @@ ClassScopes get_class_scopes(
  * (public, package and protected) and not because they need to be virtual.
  */
 inline std::vector<DexMethod*> devirtualize(const SignatureMap& sig_map) {
-  Timer timer("Devirtualizer innner");
+  Timer timer("Devirtualizer inner");
   std::vector<DexMethod*> non_virtual;
   for (const auto& proto_it : sig_map) {
     for (const auto& scopes : proto_it.second) {
       for (const auto& scope : scopes.second) {
+        if (type_class(scope.type) == nullptr ||
+            is_interface(type_class(scope.type)) ||
+            scope.interfaces.size() > 0) {
+          continue;
+        }
         for (const auto& meth : scope.methods) {
           if (!meth.first->is_concrete()) continue;
-          if (meth.second == FINAL) non_virtual.push_back(meth.first);
+          if (meth.second == FINAL) {
+            always_assert(scope.interfaces.size() == 0);
+            always_assert(scope.methods.size() == 1);
+            non_virtual.push_back(meth.first);
+          }
         }
       }
     }
