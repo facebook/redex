@@ -21,7 +21,7 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-void load_store_dexen(DexStore& store, DexMetadata& store_metadata) {
+void load_store_dexen(DexStore& store, const DexMetadata& store_metadata) {
   for (const auto& file_path : store_metadata.get_files()) {
     std::cout << "Loading " << file_path << std::endl;
     DexClasses classes = load_classes_from_dex(file_path.c_str());
@@ -29,24 +29,60 @@ void load_store_dexen(DexStore& store, DexMetadata& store_metadata) {
   }
 }
 
-std::vector<std::string> list_modules(const std::string& path_str) {
-  fs::path path(path_str);
-  assert(fs::is_directory(path));
-
-  auto end = fs::directory_iterator();
-  std::vector<std::string> modules;
-  for (fs::directory_iterator it(path) ; it != end ; ++it) {
-    auto file = it->path();
-    auto metadata = file;
-    metadata += fs::path::preferred_separator;
-    metadata += file.filename().string() + ".json";
-    if (fs::is_directory(file) &&
-      fs::is_regular_file(metadata) &&
-      fs::exists(metadata)) {
-      modules.emplace_back(file.filename().string());
+DexMetadata parse_store_metadata(const fs::path& metadata_path) {
+  DexMetadata metadata;
+  std::ifstream file(metadata_path.string(), std::ios::in);
+  std::string line;
+  while (std::getline(file, line)) {
+    std::vector<std::string> tokens;
+    boost::split(tokens, line, boost::is_any_of(" "));
+    if (tokens.size() > 1) {
+      if (tokens[0] == ".id") {
+        metadata.set_id(tokens[1]);
+      } else if (tokens[0] == ".requires") {
+        metadata.get_dependencies().emplace_back(tokens[1]);
+      }
     }
   }
-  return modules;
+  return metadata;
+}
+
+std::vector<std::string> find_store_dexen(const fs::path& store_dir_path) {
+  std::vector<std::string> dexen;
+  auto end = fs::directory_iterator();
+  for (fs::directory_iterator it(store_dir_path) ; it != end ; ++it) {
+    auto file = it->path();
+    if (fs::is_regular_file(file) && !file.extension().compare(".dex")) {
+      dexen.emplace_back(file.string());
+    }
+  }
+  return dexen;
+}
+
+std::vector<DexMetadata> find_stores(
+  const std::string& apk_dir_str,
+  const std::string& dexen_dir_str) {
+  fs::path apk_dir_path(apk_dir_str);
+  fs::path dexen_dir_path(dexen_dir_str);
+  auto end = fs::directory_iterator();
+  std::vector<DexMetadata> metadatas;
+  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
+    // Look for metadata.txt for this store in the apk dir
+    auto metadata_path = apk_dir_path;
+    metadata_path += fs::path::preferred_separator;
+    metadata_path += "assets";
+    metadata_path += fs::path::preferred_separator;
+    metadata_path += it->path().filename().string();
+    metadata_path += fs::path::preferred_separator;
+    metadata_path += "metadata.txt";
+    if (fs::is_regular_file(metadata_path) && fs::exists(metadata_path)) {
+      // Build metadata for store
+      auto metadata = parse_store_metadata(metadata_path);
+      metadata.set_files(find_store_dexen(it->path()));
+      metadatas.emplace_back(metadata);
+    }
+  }
+  return metadatas;
 }
 
 } // namespace {
@@ -67,8 +103,11 @@ void Tool::add_standard_options(po::options_description& options) const {
 
 DexStoresVector Tool::init(
   const std::string& system_jar_paths,
-  const std::string& apk_dir,
+  const std::string& apk_dir_str,
   const std::string& dexen_dir_str) {
+  if (!fs::is_directory(fs::path(apk_dir_str))) {
+    throw std::invalid_argument("'" + apk_dir_str + "' is not a directory");
+  }
   if (!fs::is_directory(fs::path(dexen_dir_str))) {
     throw std::invalid_argument("'" + dexen_dir_str + "' is not a directory");
   }
@@ -93,17 +132,9 @@ DexStoresVector Tool::init(
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen
-  for (auto module : list_modules(dexen_dir_str)) {
-    fs::path metadata_path(dexen_dir_str);
-    metadata_path += fs::path::preferred_separator;
-    metadata_path += module;
-    metadata_path += fs::path::preferred_separator;
-    metadata_path += module + ".json";
-
-    DexMetadata store_metadata;
-    store_metadata.parse(metadata_path.string());
-    DexStore store(store_metadata);
-    load_store_dexen(store, store_metadata);
+  for (const auto& metadata : find_stores(apk_dir_str, dexen_dir_str)) {
+    DexStore store(metadata);
+    load_store_dexen(store, metadata);
     stores.emplace_back(std::move(store));
   }
 
