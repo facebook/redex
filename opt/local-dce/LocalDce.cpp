@@ -100,27 +100,6 @@ static bool has_side_effects(DexOpcode opc) {
   not_reached();
 }
 
-/*
- * Pure methods have no observable side effects, so they can be removed if
- * their outputs are not used.
- *
- * TODO: Derive this list with static analysis rather than hard-coding it.
- */
-std::unordered_set<DexMethod*> init_pure_methods() {
-  std::unordered_set<DexMethod*> pure_methods;
-  pure_methods.emplace(DexMethod::make_method(
-      "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
-  return pure_methods;
-}
-
-bool is_pure(DexMethod* method) {
-  static std::unordered_set<DexMethod*> pure_methods = init_pure_methods();
-  if (assumenosideeffects(method)) {
-    return true;
-  }
-  return pure_methods.find(method) != pure_methods.end();
-}
-
 template <typename... T>
 std::string show(const boost::dynamic_bitset<T...>& bits) {
   std::string ret;
@@ -133,6 +112,7 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
 class LocalDce {
   size_t m_instructions_eliminated{0};
   size_t m_total_instructions{0};
+  std::unordered_set<DexMethod*> m_pure_methods;
 
   /*
    * Eliminate dead code using a standard backward dataflow analysis for
@@ -160,6 +140,18 @@ class LocalDce {
    *   potentially-excepting instructions can jump to a catch.)
    */
  public:
+  LocalDce() {
+    /*
+     * Pure methods have no observable side effects, so they can be removed
+     * if their outputs are not used.
+     *
+     * TODO: Derive this list with static analysis rather than hard-coding
+     * it.
+     */
+    m_pure_methods.emplace(DexMethod::make_method( "Ljava/lang/Class;",
+          "getSimpleName", "Ljava/lang/String;", {}));
+  }
+
   void dce(DexMethod* method) {
     auto transform =
         MethodTransformer(method, true /* want_cfg */);
@@ -339,6 +331,14 @@ class LocalDce {
     }
     return false;
   }
+
+  bool is_pure(DexMethod* method) {
+    if (assumenosideeffects(method)) {
+      return true;
+    }
+    return m_pure_methods.find(method) != m_pure_methods.end();
+  }
+
 
   /*
    * Update the liveness vector given that `inst` is live.
