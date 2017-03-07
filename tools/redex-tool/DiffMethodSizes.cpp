@@ -58,8 +58,7 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
   return info;
 }
 
-void diff_in_out_jars_from_command_line(
-    const std::string& command_line_path) {
+void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
   std::ifstream config(command_line_path);
   if (!config.is_open()) {
     std::cerr << "Unable to open \'" << command_line_path << '\'' << std::endl;
@@ -133,7 +132,8 @@ void diff_in_out_jars_from_command_line(
 }
 
 using DexMethodInfoMap =
-    std::unordered_map<std::string /*method as string*/, int /*code size*/>;
+    std::unordered_map<std::string, // Method as string
+                       std::tuple<int, int>>; // code size, register size
 
 DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   DexStore root_store("dex");
@@ -147,14 +147,29 @@ DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   walk_methods(build_class_scope(stores), [&result](DexMethod* method) {
     auto key = show(method);
     always_assert(result.find(key) == end(result));
-    result[key] = (method->get_code() ? method->get_code()->size() : 0);
+    const auto& code = method->get_code();
+    result.emplace(key,
+                   std::make_tuple((code ? code->size() : 0),
+                                   (code ? code->get_registers_size() : 0)));
   });
 
   return result;
 }
 
+void dump_method_sizes_from_dexen_dir(const std::string& dexen_dir) {
+  std::cout << "INFO: "
+            << "Loading directory " << dexen_dir << " ... " << std::endl;
+  auto info = load_dex_method_info(dexen_dir);
+  std::cout << "INFO: " << info.size() << " method information loaded"
+            << std::endl;
+  for (const auto& pair : info) {
+    std::cout << "SIZE: " << pair.first << " " << std::get<0>(pair.second)
+              << " " << std::get<1>(pair.second) << std::endl;
+  }
+}
+
 void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
-                               const std::string& dexen_dir_B) {
+                              const std::string& dexen_dir_B) {
   std::cout << "INFO: "
             << "Loading directory " << dexen_dir_A << " ... " << std::endl;
   RedexContext* A_context = g_redex;
@@ -177,17 +192,20 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
     if (found == end(B_info)) {
       continue;
     }
-    const auto& A_size = pair.second;
-    const auto& B_size = found->second;
-    if (A_size == B_size) {
+    const auto& A_sizes = pair.second;
+    const auto& B_sizes = found->second;
+    if (A_sizes == B_sizes) {
       continue;
     }
 
-    diff.emplace(pair.first, B_size - A_size);
+    diff.emplace(pair.first,
+                 std::make_tuple(std::get<0>(B_sizes) - std::get<0>(A_sizes),
+                                 std::get<1>(B_sizes) - std::get<1>(A_sizes)));
   }
 
   for (const auto& pair : diff) {
-    std::cout << "DIFF: " << pair.first << " " << pair.second << std::endl;
+    std::cout << "DIFF: " << pair.first << " " << std::get<0>(pair.second)
+              << " " << std::get<1>(pair.second) << std::endl;
   }
 
   g_redex = A_context;
@@ -205,7 +223,8 @@ class DiffMethodSizes : public Tool {
         "-injars and -outjars from command-line.txt")(
         "dexendir,d",
         po::value<std::vector<std::string>>()->multitoken(),
-        "compare code size of all methods in two dexen directories");
+        "dump all method sizes in the given dexen directory; if two dexen "
+        "directories are given, compare the method sizes");
   }
 
   virtual void run(const po::variables_map& options) override {
@@ -215,11 +234,17 @@ class DiffMethodSizes : public Tool {
     } else if (!options["dexendir"].empty()) {
       const auto& dexen_dirs =
           options["dexendir"].as<std::vector<std::string>>();
-      if (dexen_dirs.size() != 2) {
-        std::cerr << "Two --dexendir must be provided" << std::endl;
-        return;
+      switch (dexen_dirs.size()) {
+      case 1:
+        dump_method_sizes_from_dexen_dir(dexen_dirs[0]);
+        break;
+      case 2:
+        diff_from_two_dexen_dirs(dexen_dirs[0], dexen_dirs[1]);
+        break;
+      default:
+        std::cerr << "Only one or two --dexendir can be provided" << std::endl;
+        break;
       }
-      diff_from_two_dexen_dirs(dexen_dirs[0], dexen_dirs[1]);
     } else {
       std::cerr << "No option or invalid option was given" << std::endl;
     }
