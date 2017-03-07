@@ -17,6 +17,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "InterDex.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
@@ -65,6 +66,9 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
   }
 }
 
+const std::string PASS_ORDER_KEY = "pass_order";
+
+
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
@@ -99,17 +103,37 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
     redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false, true);
   }
-  for (auto pass : m_activated_passes) {
+
+  // Count the number of appearances of each pass name.
+  std::unordered_map<std::string, int> pass_counters;
+  m_pass_metrics.resize(m_activated_passes.size());
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
-    m_current_pass_metrics = &m_pass_metrics[pass->name()];
+    // This is a special hack to deal with INTERDEX_PASS_NAME pass. Will be
+    // removed later.
+    if (pass->name() == INTERDEX_PASS_NAME) {
+      m_interdex_location = i;
+    }
+    int count = 0;
+    if (pass_counters.find(pass->name()) == pass_counters.end()) {
+      pass_counters[pass->name()] = 1;
+    } else {
+      pass_counters[pass->name()]++;
+    }
+    count = pass_counters[pass->name()];
+    m_pass_metrics[i].name = pass->name() + "#" + std::to_string(count);
+    m_pass_metrics[i].metrics[PASS_ORDER_KEY] = i;
+    m_current_pass_metrics = &m_pass_metrics[i].metrics;
     pass->eval_pass(stores, cfg, *this);
     m_current_pass_metrics = nullptr;
   }
-  for (auto pass : m_activated_passes) {
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
-    m_current_pass_metrics = &m_pass_metrics[pass->name()];
+    m_current_pass_metrics = &m_pass_metrics[i].metrics;
     if (pass->assumes_sync()) {
       MethodTransform::sync_all();
     }
@@ -154,7 +178,15 @@ int PassManager::get_metric(const std::string& key) {
   return (*m_current_pass_metrics)[key];
 }
 
-std::map<std::string, std::map<std::string, int>> PassManager::get_metrics()
+std::vector<PassManager::PassMetrics> PassManager::get_metrics()
     const {
   return m_pass_metrics;
+}
+
+std::unordered_map<std::string, int> PassManager::get_interdex_metrics() {
+  // Does not have the interdex metrics. Return an empty map.
+  if (m_interdex_location == -1) {
+    return std::unordered_map<std::string, int>{};
+  }
+  return m_pass_metrics[m_interdex_location].metrics;
 }
