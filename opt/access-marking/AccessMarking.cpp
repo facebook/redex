@@ -262,6 +262,7 @@ void AccessMarkingPass::run_pass(
     pm.incr_metric("privatized_methods", privates.size());
     TRACE(ACCESS, 1, "Privatized %lu methods\n", privates.size());
   }
+  TRACE(ACCESS, 42, "dummy");
 }
 
 static AccessMarkingPass s_pass;
