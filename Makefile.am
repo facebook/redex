@@ -68,6 +68,7 @@ libredex_la_SOURCES = \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
 	libredex/JarLoader.cpp \
+	libredex/Match.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \

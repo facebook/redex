@@ -236,38 +236,41 @@ match_t<T, std::tuple<> > is_abstract() {
   };
 }
 
-/** Match classes which are interfaces */
-inline match_t<DexClass, std::tuple<> > is_interface() {
-  return {
-    [](const DexClass* cls) {
-      return (bool)(cls->get_access() & ACC_INTERFACE);
-    }
-  };
-}
+/** Match types which are interfaces */
+match_t<DexClass, std::tuple<> > is_interface();
 
 /**
  * Matches DexInstructions
  */
 
 /** Any instruction which holds a type reference */
-inline match_t<DexInstruction> has_types() {
+match_t<DexInstruction> has_types();
+
+/** const-string flavors */
+match_t<DexInstruction> const_string();
+
+/** new-instance flavors */
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
+  new_instance(const match_t<DexInstruction, P>& p) {
   return {
-    [](const DexInstruction* insn) {
-      return insn->has_types();
-    }
+    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+      auto opcode = insn->opcode();
+      if (opcode == OPCODE_NEW_INSTANCE) {
+        return p.matches(insn);
+      } else {
+        return false;
+      }
+    },
+    p
   };
 }
 
-/** const-string flavors */
-inline match_t<DexInstruction> const_string() {
-  return {
-    [](const DexInstruction* insn) {
-      auto opcode = insn->opcode();
-      return opcode == OPCODE_CONST_STRING ||
-        opcode == OPCODE_CONST_STRING_JUMBO;
-    }
-  };
-}
+match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  new_instance();
+
+/** throw flavors */
+ match_t<DexInstruction> throwex();
 
 /** invoke-direct flavors */
 template <typename P>
@@ -287,10 +290,8 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
   };
 }
 
-inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
-  invoke_direct() {
-    return invoke_direct(any<DexInstruction>());
-};
+match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  invoke_direct();
 
 /** invoke-static flavors */
 template <typename P>
@@ -310,41 +311,14 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
   };
 }
 
-inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
-  invoke_static() {
-    return invoke_static(any<DexInstruction>());
-};
+match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  invoke_static();
 
 /** return-void */
-inline match_t<DexInstruction> return_void() {
-  return {
-    [](const DexInstruction* insn) {
-      auto opcode = insn->opcode();
-      return opcode == OPCODE_RETURN_VOID;
-    }
-  };
-}
+match_t<DexInstruction> return_void();
 
 /** Matches instructions with specified number of arguments. Supports /range. */
-inline match_t<DexInstruction, std::tuple<int> > has_n_args(int n) {
-  return {
-    // N.B. "int n" must be const ref in order to appease N-ary matcher template
-    [](const DexInstruction* insn, const int& n) {
-      assert(insn->has_arg_word_count() || insn->has_range());
-      if (insn->has_arg_word_count()) {
-        return insn->arg_word_count() == n;
-      } else if (insn->has_range()) {
-        // N.B. seems like invoke-*/range should never occur with 0 args,
-        // so let's make sure this assumption holds...
-        assert(insn->range_size() > 0);
-        return insn->range_size() == n;
-      } else {
-        assert(false);
-      }
-    },
-    n
-  };
-}
+match_t<DexInstruction, std::tuple<int> > has_n_args(int n);
 
 /** Matchers that map from DexInstruction -> other types */
 template <typename P>
@@ -358,6 +332,22 @@ match_t<DexInstruction, std::tuple<match_t<DexMethod, P> > >
     p
   };
 }
+
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexType, P> > >
+  opcode_type(const match_t<DexType, P>& p) {
+  return {
+    [](const DexInstruction* insn, const match_t<DexType, P>& p) {
+      auto type_insn = (DexOpcodeType*)insn;
+      return p.matches(type_insn->get_type());
+    },
+    p
+  };
+}
+
+/** Match types which can be assigned to the given type */
+match_t<DexType, std::tuple<const DexType*> >
+is_assignable_to(const DexType* parent);
 
 /** Match methods that are bound to the given class. */
 template<typename T>
@@ -398,47 +388,16 @@ match_t<DexMethod, std::tuple<std::tuple<T...> > > has_opcodes(const std::tuple<
 }
 
 /** Match methods that are default constructors */
-inline match_t<DexMethod, std::tuple<> > is_default_constructor() {
-  return {
-    [](const DexMethod* meth) {
-      return !is_static(meth) &&
-              is_constructor(meth) &&
-              has_no_args(meth) &&
-              has_code(meth) &&
-              has_opcodes(std::make_tuple(
-                invoke_direct(),
-                return_void()
-              )).matches(meth);
-    }
-  };
-}
+match_t<DexMethod, std::tuple<> > is_default_constructor();
 
 /** Match methods that are constructors. INCLUDES static constructors! */
-inline match_t<DexMethod, std::tuple<> > is_constructor() {
-  return {
-    [](const DexMethod* meth) {
-      return is_constructor(meth);
-    }
-  };
-}
+match_t<DexMethod, std::tuple<> > is_constructor();
 
 /** Match classes that are enums */
-inline match_t<DexClass, std::tuple<> > is_enum() {
-  return {
-    [](const DexClass* cls) {
-      return (bool)(cls->get_access() & ACC_ENUM);
-    }
-  };
-}
+match_t<DexClass, std::tuple<> > is_enum();
 
 /** Match classes that have class data */
-inline match_t<DexClass, std::tuple<> > has_class_data() {
-  return {
-    [](const DexClass* cls) {
-      return cls->has_class_data();
-    }
-  };
-}
+match_t<DexClass, std::tuple<> > has_class_data();
 
 /** Match classes satisfying the given method match for any vmethods */
 template <typename P>
@@ -663,6 +622,20 @@ match_t<T, std::tuple<match_t<DexType, P> > >
   return {
     [](const T* t, const match_t<DexType, P>& p) {
       return p.matches(t->type());
+    },
+    p };
+}
+
+/**
+ * Maps match<DexType, X> => match<DexClass, X>
+ */
+template <typename T, typename P>
+match_t<T, std::tuple<match_t<DexClass, P> > >
+  as_class(const match_t<DexClass, P>& p) {
+  return {
+    [](const T* t, const match_t<DexClass, P>& p) {
+      auto cls = type_class(t);
+      return cls && p.matches(cls);
     },
     p };
 }
