@@ -375,6 +375,23 @@ Given an APK, produce a better APK!
 def run_redex(args):
     debug_mode = args.unpack_only or args.debug
 
+    config = args.config
+    binary = args.redex_binary
+    log('Using config ' + (config if config is not None else '(default)'))
+    log('Using binary ' + (binary if binary is not None else '(default)'))
+
+    if config is None:
+        config_dict = {}
+        passes_list = []
+    else:
+        with open(config) as config_file:
+            try:
+                config_dict = json.load(config_file)
+            except ValueError:
+                raise ValueError("Invalid JSON in ReDex config file: %s" %
+                                 config_file.name)
+            passes_list = config_dict['redex']['passes']
+
     unpack_start_time = timer()
     extracted_apk_dir = make_temp_dir('.redex_extracted_apk', debug_mode)
 
@@ -422,19 +439,6 @@ def run_redex(args):
         dexen.append(store)
     log('Unpacking APK finished in {:.2f} seconds'.format(
             timer() - unpack_start_time))
-
-    config = args.config
-    binary = args.redex_binary
-    log('Using config ' + (config if config is not None else '(default)'))
-    log('Using binary ' + (binary if binary is not None else '(default)'))
-
-    if config is None:
-        config_dict = {}
-        passes_list = []
-    else:
-        with open(config) as config_file:
-            config_dict = json.load(config_file)
-            passes_list = config_dict['redex']['passes']
 
     for key_value_str in args.passthru_json:
         key_value = key_value_str.split('=', 1)
