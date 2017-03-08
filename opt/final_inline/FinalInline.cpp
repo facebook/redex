@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "Debug.h"
+#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
@@ -26,6 +27,8 @@
 #include "Walkers.h"
 
 static size_t unhandled_inline = 0;
+
+static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op);
 
 std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
   std::vector<DexField*> field_refs;
@@ -125,6 +128,23 @@ void remove_unused_fields(
       [&](DexField* field) {
       return dead_fields.count(field) > 0;
     }), sfields.end());
+  }
+}
+
+static bool check_sget(DexOpcodeField* opfield) {
+  auto opcode = opfield->opcode();
+  switch (opcode) {
+  case OPCODE_SGET_WIDE:
+    unhandled_inline++;
+    return false;
+  case OPCODE_SGET:
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT:
+    return true;
+  default:
+    return false;
   }
 }
 
@@ -230,7 +250,6 @@ void inline_field_values(Scope& fullscope) {
   std::unordered_set<DexField*> cheap_inline_field;
   std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
-
   for (auto clazz : fullscope) {
     std::unordered_map<DexField*, bool> blank_statics;
     get_sput_in_clinit(clazz, blank_statics);
@@ -373,16 +392,178 @@ static size_t replace_encodable_clinits(Scope& fullscope) {
   return nreplaced;
 }
 
+struct FieldDependency {
+  DexMethod *clinit;
+  DexInstruction *sget;
+  DexInstruction *sput;
+  DexField *field;
+
+  FieldDependency(DexMethod *clinit, DexInstruction *sget, DexInstruction *sput,
+                  DexField *field) : clinit(clinit), sget(sget), sput(sput), field(field)
+  {}
+};
+
+/*
+ * Attempt to propagate constant values that are known only after the APK has been
+ * created. Our build process can result in situation where javac sees something
+ * resembling:
+ *
+ *   class Parent {
+ *     public static int CONST = 0;
+ *   }
+ *
+ *   class Child {
+ *     public static final CONST = Parent.CONST;
+ *   }
+ *
+ * Parent.CONST is not final, so javac cannot perform constant propagation. However,
+ * Parent.CONST may be marked final when we package the APK, thereby opening up an
+ * opportunity for constant propagation by redex.
+ */
+size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
+  // Build dependency map (static -> [statics] that depend on it)
+  TRACE(FINALINLINE, 2, "Building dependency map\n");
+  std::unordered_map<DexField*, std::unique_ptr<std::vector<FieldDependency>>> deps;
+  for (auto clazz : fullscope) {
+    auto clinit = clazz->get_clinit();
+    if (clinit == nullptr) {
+      continue;
+    }
+    auto& code = clinit->get_code();
+    auto opcodes = code->get_instructions();
+    if (opcodes.size() == 0) {
+      continue;
+    }
+    for (size_t i = 0; i < opcodes.size() - 1; ++i) {
+      // Check for sget from static final
+      if (!opcodes[i]->has_fields()) {
+        continue;
+      }
+      auto sget_op = static_cast<DexOpcodeField*>(opcodes[i]);
+      if (!check_sget(sget_op)) {
+        continue;
+      }
+      auto src_field = resolve_field(sget_op->field(), FieldSearch::Static);
+      if ((src_field == nullptr) ||
+          !(is_static(src_field) && is_final(src_field))) {
+        continue;
+      }
+
+      // Check for sput to static final
+      if (!validate_sput_for_ev(clazz, opcodes[i + 1])) {
+        continue;
+      }
+      auto sput_op = static_cast<DexOpcodeField*>(opcodes[i + 1]);
+      auto dst_field = resolve_field(sput_op->field(), FieldSearch::Static);
+      if (!(is_static(dst_field) && is_final(dst_field))) {
+        continue;
+      }
+
+      // Check that dst register for sget is src register for sput
+      if (sget_op->dest() != sput_op->src(0)) {
+        continue;
+      }
+
+      // Check that source register is either overwritten or isn't used
+      // again. This ensures we can safely remove the opcode pair without
+      // breaking future instructions that rely on the value of the source
+      // register.  Yes, this means we're N^2 in theory, but hopefully in
+      // practice we don't approach that.
+      bool src_reg_reused = false;
+      for (size_t j = i + 2; j < opcodes.size() && !src_reg_reused; ++j) {
+        // Check if the source register is overwritten
+        if (opcodes[j]->dests_size() > 0 &&
+            opcodes[j]->dest() == sget_op->dest() &&
+            !opcodes[j]->dest_is_src()) {
+          break;
+        }
+        // Check if the source register is reused as the source for another
+        // instruction
+        for (size_t r = 0; r < opcodes[j]->srcs_size(); ++r) {
+          if (opcodes[j]->src(r) == sget_op->dest()) {
+            src_reg_reused = true;
+          }
+        }
+      }
+      if (src_reg_reused) {
+        TRACE(FINALINLINE, 2, "Cannot propagate %s to %s. Source register reused.\n", SHOW(src_field), SHOW(dst_field));
+        continue;
+      }
+
+      // Yay, we found a dependency!
+      if (deps.count(src_field) == 0) {
+        deps[src_field] = std::make_unique<std::vector<FieldDependency>>();
+      }
+      TRACE(FINALINLINE, 2, "Field %s depends on %s\n", SHOW(dst_field), SHOW(src_field));
+      FieldDependency dep(clinit, opcodes[i], opcodes[i + 1], dst_field);
+      deps[src_field]->push_back(dep);
+    }
+  }
+
+  // Collect static finals whose values are known. These serve as the starting point
+  // of the dependency resolution process.
+  std::deque<DexField*> resolved;
+  for (auto clazz : fullscope) {
+    std::unordered_map<DexField*, bool> blank_statics;
+    // TODO: Should we allow static finals that are initialized w/ const, sput?
+    get_sput_in_clinit(clazz, blank_statics);
+    auto sfields = clazz->get_sfields();
+    for (auto sfield : sfields) {
+      if (!(is_static(sfield) && is_final(sfield)) || blank_statics[sfield]) {
+        continue;
+      }
+      resolved.push_back(sfield);
+    }
+  }
+
+  // Resolve dependencies (tsort)
+  size_t nresolved = 0;
+  while (!resolved.empty()) {
+    auto cur = resolved.front();
+    resolved.pop_front();
+    if (deps.count(cur) == 0) {
+      continue;
+    }
+    auto val = cur->get_static_value();
+    for (auto dep : *deps[cur]) {
+      dep.field->make_concrete(dep.field->get_access(), val);
+      auto mt = MethodTransform::get_method_transform(dep.clinit);
+      mt->remove_opcode(dep.sget);
+      mt->remove_opcode(dep.sput);
+      mt->sync();
+      ++nresolved;
+      resolved.push_back(dep.field);
+      TRACE(FINALINLINE, 2, "Resolved field %s\n", SHOW(dep.field));
+    }
+  }
+  TRACE(FINALINLINE, 1, "Resolved %lu static finals via const prop\n", nresolved);
+  return nresolved;
+}
+
 void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE, 1, "FinalInlinePass not run because no ProGuard configuration was provided.");
     return;
   }
   auto scope = build_class_scope(stores);
+
   if (m_replace_encodable_clinits) {
     auto nreplaced = replace_encodable_clinits(scope);
     mgr.incr_metric("encodable_clinits_replaced", nreplaced);
   }
+
+  if (m_propagate_static_finals) {
+    auto nresolved = propagate_constants(scope);
+    mgr.incr_metric("static_finals_resolved", nresolved);
+  }
+
+  // Constprop may resolve statics that were initialized via clinit. This opens
+  // up another opportunity to remove (potentially empty) clinits.
+  if (m_replace_encodable_clinits) {
+    auto nreplaced = replace_encodable_clinits(scope);
+    mgr.incr_metric("encodable_clinits_replaced", nreplaced);
+  }
+
   inline_field_values(scope);
   remove_unused_fields(scope, m_remove_class_members, m_keep_class_members);
 }
