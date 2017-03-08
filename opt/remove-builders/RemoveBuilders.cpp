@@ -208,8 +208,9 @@ std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
 }
 
 DexMethod* get_build_method(std::vector<DexMethod*>& vmethods) {
+  static auto build = DexString::make_string("build");
   for (const auto& vmethod : vmethods) {
-    if (strcmp(vmethod->c_str(), "build") == 0) {
+    if (vmethod->get_name() == build) {
       return vmethod;
     }
   }
@@ -226,12 +227,16 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
   // Check it returns an instance of the class it was defined in.
   auto proto = method->get_proto();
   auto return_type = proto->get_rtype();
-  if (strcmp(cls_type->c_str(), return_type->c_str()) != 0) {
+  if (cls_type != return_type) {
     return false;
   }
 
   // Check there is only one instance created.
   const auto& code = method->get_code();
+  if (!code) {
+    return false;
+  }
+
   const auto& insns = code->get_instructions();
   int instances = 0;
 
@@ -292,6 +297,10 @@ std::unordered_set<DexClass*> get_trivial_builders(
     }
 
     DexType* buildee_type = get_buildee(builder_class->get_type());
+    if (!buildee_type) {
+      continue;
+    }
+
     // Filter out builders that do "extra work" in the build method.
     if (!is_trivial_build_method(build_method, buildee_type)) {
       continue;
@@ -362,7 +371,11 @@ void RemoveBuildersPass::run_pass(
 
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
-    if (has_builder_name(cls) && !is_interface(cls)) {
+    if (is_annotation(cls)) {
+      continue;
+    }
+
+    if (has_builder_name(cls)) {
       m_builders.emplace(cls->get_type());
       builder_classes.emplace(cls);
     }
