@@ -7,12 +7,14 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "RemoveBuilders.h"
+
 #include <boost/dynamic_bitset.hpp>
 #include <boost/regex.hpp>
 
 #include "Dataflow.h"
 #include "DexUtil.h"
-#include "RemoveBuilders.h"
+#include "RemoveBuildersHelper.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"
@@ -207,17 +209,6 @@ std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
   return private_methods;
 }
 
-DexMethod* get_build_method(std::vector<DexMethod*>& vmethods) {
-  static auto build = DexString::make_string("build");
-  for (const auto& vmethod : vmethods) {
-    if (vmethod->get_name() == build) {
-      return vmethod;
-    }
-  }
-
-  return nullptr;
-}
-
 /**
  * Checks build method does a small amount of work
  *   - returns an instance of enclosing class type
@@ -239,7 +230,6 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
 
   const auto& insns = code->get_instructions();
   int instances = 0;
-
   for (DexInstruction* insn : insns) {
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       instances++;
@@ -247,6 +237,44 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
   }
 
   return instances == 1;
+}
+
+/**
+ * Check builder's constructor does a small amount of work
+ *  - instantiates the parent class (Object)
+ *  - returns
+ */
+bool is_trivial_builder_constructor(DexMethod* method) {
+  const auto& code = method->get_code();
+  if (!code) {
+    return false;
+  }
+  const auto& insns = code->get_instructions();
+
+  if (!is_constructor(method)) {
+    return false;
+  }
+
+  if (insns.size() != 2) {
+    return false;
+  }
+
+  static auto init = DexString::make_string("<init>");
+  if (insns.at(0)->opcode() != OPCODE_INVOKE_DIRECT) {
+    return false;
+  } else {
+    auto invoked =
+      static_cast<const DexOpcodeMethod*>(insns.at(0))->get_method();
+    if (invoked->get_name() != init) {
+      return false;
+    }
+  }
+
+  if (insns.at(1)->opcode() != OPCODE_RETURN_VOID) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -306,6 +334,15 @@ std::unordered_set<DexClass*> get_trivial_builders(
       continue;
     }
 
+    // Filter out builders that do extra work in the constructor.
+    if (builder_class->get_dmethods().size() != 1) {
+      continue;
+    }
+    DexMethod* constr = builder_class->get_dmethods().at(0);
+    if (!is_trivial_builder_constructor(constr)) {
+      continue;
+    }
+
     // Filter out builders that have extra instance fields.
     if (!have_same_instance_fields(builder_class, type_class(buildee_type))) {
       continue;
@@ -315,6 +352,22 @@ std::unordered_set<DexClass*> get_trivial_builders(
   }
 
   return trivial_builders;
+}
+
+void remove_builder_classes(
+    const std::unordered_set<DexClass*>& builder,
+    const std::unordered_set<DexClass*>& kept_builders,
+    Scope& classes) {
+
+  classes.erase(
+    remove_if(
+      classes.begin(),
+      classes.end(),
+      [&](DexClass* cls) {
+        return builder.find(cls) != builder.end() &&
+               kept_builders.find(cls) == kept_builders.end();
+      }),
+    classes.end());
 }
 
 } // namespace
@@ -455,6 +508,43 @@ void RemoveBuildersPass::run_pass(
     }
   }
 
+  std::unordered_set<DexClass*> trivial_builders = get_trivial_builders(
+      builder_classes, no_escapes);
+
+  std::unordered_map<DexMethod*, DexClass*> method_to_inlined_builders;
+  std::unordered_set<DexClass*> kept_builders;
+
+  // Inline build methods.
+  walk_methods(scope, [&](DexMethod* method) {
+    auto builders = created_builders(method);
+
+    for (DexType* builder : builders) {
+      DexClass* builder_cls = type_class(builder);
+      // Check it is a trivial one.
+      if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
+        if (!inline_build(method, builder_cls)) {
+          kept_builders.emplace(type_class(builder));
+        } else {
+          method_to_inlined_builders.emplace(method, builder_cls);
+        }
+      }
+    }
+  });
+  MethodTransform::sync_all();
+
+  for (const auto& pair : method_to_inlined_builders) {
+    DexMethod* method = pair.first;
+    DexClass* builder = pair.second;
+
+    if (!remove_builder(
+          method, builder, type_class(get_buildee(builder->get_type())))) {
+      kept_builders.emplace(builder);
+    }
+  }
+
+  remove_builder_classes(trivial_builders, kept_builders, scope);
+  post_dexen_changes(scope, stores);
+
   mgr.set_metric("total_builders", m_builders.size());
   mgr.set_metric("stack_only_builders", stack_only_builders.size());
   mgr.set_metric("no_escapes", no_escapes.size());
@@ -468,9 +558,6 @@ void RemoveBuildersPass::run_pass(
   TRACE(BUILDERS, 1, "\tvmethods: %d\n", vmethod_count);
   TRACE(BUILDERS, 1, "\ttrivial setters: %d\n", setter_count);
   TRACE(BUILDERS, 1, "\tbuild methods: %d\n", build_count);
-
-  std::unordered_set<DexClass*> trivial_builders = get_trivial_builders(
-      builder_classes, stack_only_builders);
   TRACE(BUILDERS, 1, "Trivial builders: %d\n", trivial_builders.size());
 }
 
