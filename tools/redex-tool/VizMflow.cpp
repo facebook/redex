@@ -29,10 +29,8 @@ void dump_viz(
         if (meth->get_code() == nullptr) return;
         if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
         if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
-        auto* mt = MethodTransform::get_method_transform(
-          meth,
-          true,
-          end_block_before_throw);
+        auto mt = meth->get_code()->get_entries();
+        mt->build_cfg(end_block_before_throw);
         const auto& blocks = mt->cfg().blocks();
         fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
         for (const auto& block : blocks) {

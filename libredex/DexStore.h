@@ -13,8 +13,6 @@
 #include <cstring>
 #include "DexClass.h"
 
-class DexClasses;
-
 class DexMetadata {
   std::string id;
   std::vector<std::string> dependencies;

@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "Mutators.h"
+#include "Transform.h"
 
 namespace {
 void drop_this(DexMethod* method) {
@@ -21,7 +22,8 @@ void drop_this(DexMethod* method) {
   assert_log(nins >= 1, "Too few in regs: %s\n", SHOW(method));
   code->set_registers_size(nregs - 1);
   code->set_ins_size(nins - 1);
-  for (auto insn : code->get_instructions()) {
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     if (insn->dests_size() && !insn->dest_is_src()) {
       auto dest = insn->dest();
       assert(dest != this_reg);

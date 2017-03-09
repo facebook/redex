@@ -521,6 +521,8 @@ struct DexTryItem {
     m_start_addr(start_addr), m_insn_count(insn_count) {}
 };
 
+class MethodTransform;
+
 class DexCode {
   uint16_t m_registers_size;
   uint16_t m_ins_size;
@@ -528,6 +530,7 @@ class DexCode {
   std::unique_ptr<std::vector<DexInstruction*>> m_insns;
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
   std::unique_ptr<DexDebugItem> m_dbg;
+  MethodTransform* m_entries {nullptr};
 
  public:
   static std::unique_ptr<DexCode> get_dex_code(DexIdx* idx, uint32_t offset);
@@ -543,8 +546,10 @@ class DexCode {
   DexCode(const DexCode&);
 
   ~DexCode() {
-    for (auto const& op : *m_insns) {
-      delete op;
+    if (m_insns) {
+      for (auto const& op : *m_insns) {
+        delete op;
+      }
     }
   }
 
@@ -600,6 +605,10 @@ class DexCode {
    * instructions.
    */
   uint32_t size() const;
+
+  MethodTransform* get_entries() const { return m_entries; }
+  void balloon();
+  void sync();
 };
 
 class DexMethod {
@@ -903,36 +912,7 @@ class DexClass {
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
 };
 
-class DexClasses {
-  std::vector<DexClass*> m_classes;
-
- public:
-  using iterator = std::vector<DexClass*>::iterator;
-  using const_iterator = std::vector<DexClass*>::const_iterator;
-
-  DexClasses(size_t size) : m_classes(size) {}
-
-  DexClasses(const DexClasses&) = delete;
-  DexClasses(DexClasses&&) = default;
-
-  void insert_at(DexClass* cls, size_t num) {
-    m_classes.at(num) = cls;
-  }
-
-  DexClass* get(size_t num) {
-    return m_classes.at(num);
-  }
-
-  iterator erase(iterator begin, iterator end) {
-    return m_classes.erase(begin, end);
-  }
-
-  size_t size() const { return m_classes.size(); }
-  iterator begin() { return m_classes.begin(); }
-  iterator end() { return m_classes.end(); }
-  const_iterator begin() const { return m_classes.cbegin(); }
-  const_iterator end() const { return m_classes.cend(); }
-};
+using DexClasses = std::vector<DexClass*>;
 
 struct dexmethods_comparator {
   bool operator()(const DexMethod* a, const DexMethod* b) const {

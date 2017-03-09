@@ -18,6 +18,7 @@
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "Pass.h"
 #include "RegAlloc.h"
 
 enum TryEntryType {
@@ -145,6 +146,11 @@ struct MethodItemEntry {
   }
 
   ~MethodItemEntry();
+
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
 };
 
 using MethodItemMemberListOption =
@@ -173,32 +179,17 @@ class MethodSplicer;
 
 class MethodTransform {
  private:
-  using FatMethodCache = std::unordered_map<DexMethod*, MethodTransform*>;
-
-  explicit MethodTransform(DexMethod* method);
-
-  ~MethodTransform();
-
-  /* Create a FatMethod from a DexMethod. FatMethods are easier to manipulate.
-   * E.g. they don't require manual updating of address offsets, and they don't
-   * contain pseudo-opcodes. */
-  void balloon();
+  /*
+   * For use by MethodCreator
+   */
+  explicit MethodTransform();
 
   /* try_sync() is the work-horse of sync.  It's intended such that it can fail
    * in the event that an opcode needs to be resized.  In that instance, it
    * changes the opcode in question, and returns false.  It's intended to be
    * called multiple times until it returns true.
    */
-  bool try_sync();
-
-  /*
-   * If end_block_before_throw is false, opcodes that may throw (e.g. invokes,
-   * {get|put}-object, etc) will terminate their basic blocks. If it is true,
-   * they will instead be at the start of the next basic block. As of right
-   * now the only pass that uses the `false` behavior is SimpleInline, and I
-   * would like to remove it eventually.
-   */
-  void build_cfg(bool end_block_before_throw = true);
+  bool try_sync(DexCode*);
 
   /*
    * This method fixes the goto branches when the instruction is removed or
@@ -206,10 +197,8 @@ class MethodTransform {
    */
   void remove_branch_target(DexInstruction *branch_inst);
 
-  static FatMethodCache s_cache;
-  static std::mutex s_lock;
+  void clear_cfg();
 
-  DexMethod* m_method;
   FatMethod* m_fmethod;
   // mapping from fill-array-data opcodes to the pseudo opcodes containing the
   // array contents
@@ -235,22 +224,22 @@ class MethodTransform {
   friend struct MethodCreator;
 
  public:
-  /*
-   * Static factory method that checks the cache first.  Optionally builds a
-   * control-flow graph, which makes the transform slightly more expensive.
-   */
-  static MethodTransform* get_method_transform(
-      DexMethod* method,
-      bool want_cfg = false,
-      bool end_block_before_throw = true);
+  explicit MethodTransform(const DexCode* code);
 
-  static MethodTransform* get_new_method(DexMethod* method);
+  ~MethodTransform();
+
+  /* Create a FatMethod from a DexMethod. FatMethods are easier to manipulate.
+   * E.g. they don't require manual updating of address offsets, and they don't
+   * contain pseudo-opcodes. */
+  FatMethod* balloon(DexCode*);
+
+  static void balloon_all(const Scope&);
 
   /*
    * Call before writing any dexes out, or doing analysis on DexMethod
    * structures.
    */
-  static void sync_all();
+  static void sync_all(const Scope&);
 
   /*
    * Inline tail-called `callee` into `caller` at instruction `invoke`.
@@ -268,13 +257,20 @@ class MethodTransform {
       DexMethod *callee,
       DexOpcodeMethod *invoke);
 
-  const DexMethod* get_method() const { return m_method; }
-
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
+  /*
+   * If end_block_before_throw is false, opcodes that may throw (e.g. invokes,
+   * {get|put}-object, etc) will terminate their basic blocks. If it is true,
+   * they will instead be at the start of the next basic block. As of right
+   * now the only pass that uses the `false` behavior is SimpleInline, and I
+   * would like to remove it eventually.
+   */
+  void build_cfg(bool end_block_before_throw = true);
+
   /* Write-back FatMethod to DexMethod */
-  void sync();
+  void sync(DexCode*);
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(DexInstruction* from, DexInstruction* to);
@@ -302,6 +298,17 @@ class MethodTransform {
   /* This method will delete the switch case where insn resides. */
   void remove_switch_case(DexInstruction* insn);
 
+  /*
+   * Returns an estimated of the number of 2-byte code units needed to encode
+   * all the instructions.
+   */
+  size_t sum_opcode_sizes() const;
+
+  /*
+   * Returns the number of instructions.
+   */
+  size_t count_opcodes() const;
+
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }
   FatMethod::iterator erase(FatMethod::iterator it) {
@@ -316,20 +323,23 @@ class MethodTransform {
  * Scoped holder for MethodTransform to ensure sync_all is called.
  */
 class MethodTransformer {
-  MethodTransform* m_transform;
+  DexCode* m_code;
 
  public:
   MethodTransformer(DexMethod* m,
                     bool want_cfg = false,
                     bool end_block_before_throw = true) {
-    m_transform = MethodTransform::get_method_transform(
-        m, want_cfg, end_block_before_throw);
+    m_code = &*m->get_code();
+    m_code->balloon();
+    if (want_cfg) {
+      m_code->get_entries()->build_cfg(end_block_before_throw);
+    }
   }
 
-  ~MethodTransformer() { m_transform->sync(); }
+  ~MethodTransformer() { m_code->sync(); }
 
-  MethodTransform* operator*() { return m_transform; }
-  MethodTransform* operator->() { return m_transform; }
+  MethodTransform* operator*() { return m_code->get_entries(); }
+  MethodTransform* operator->() { return m_code->get_entries(); }
 };
 
 /**
@@ -340,9 +350,70 @@ class MethodTransformer {
 class InlineContext {
   std::unique_ptr<LivenessMap> m_liveness;
  public:
-  uint64_t estimated_insn_size;
+  uint64_t estimated_insn_size {0};
   uint16_t original_regs;
-  MethodTransformer mtcaller;
+  DexCode* caller_code;
   InlineContext(DexMethod* caller, bool use_liveness);
   Liveness live_out(DexInstruction*);
+};
+
+class InstructionIterator {
+  FatMethod::iterator m_it;
+  FatMethod::iterator m_end;
+ public:
+  explicit InstructionIterator(FatMethod::iterator it, FatMethod::iterator end)
+      : m_it(it), m_end(end) {}
+  InstructionIterator& operator++() {
+    ++m_it;
+    if (m_it != m_end) {
+      while (m_it->type != MFLOW_OPCODE && ++m_it != m_end);
+    }
+    return *this;
+  }
+  InstructionIterator operator++(int) {
+    auto rv = *this;
+    ++(*this);
+    return rv;
+  }
+  MethodItemEntry& operator*() {
+    return *m_it;
+  }
+  MethodItemEntry* operator->() {
+    return &*m_it;
+  }
+  bool operator==(const InstructionIterator& ii) {
+    return m_it == ii.m_it;
+  }
+  bool operator!=(const InstructionIterator& ii) {
+    return m_it != ii.m_it;
+  }
+
+  using difference_type = long;
+  using value_type = MethodItemEntry&;
+  using pointer = MethodItemEntry*;
+  using reference = MethodItemEntry&;
+  using iterator_category = std::forward_iterator_tag;
+};
+
+class InstructionIterable {
+  FatMethod::iterator m_begin;
+  FatMethod::iterator m_end;
+ public:
+  explicit InstructionIterable(MethodTransform* mt)
+      : m_begin(mt->begin()), m_end(mt->end()) {
+    while (m_begin != m_end) {
+      if (m_begin->type == MFLOW_OPCODE) {
+        break;
+      }
+      ++m_begin;
+    }
+  }
+
+  InstructionIterator begin() {
+    return InstructionIterator(m_begin, m_end);
+  }
+
+  InstructionIterator end() {
+    return InstructionIterator(m_end, m_end);
+  }
 };

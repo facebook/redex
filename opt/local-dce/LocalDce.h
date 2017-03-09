@@ -13,8 +13,7 @@
 
 class LocalDcePass : public Pass {
  public:
-  LocalDcePass()
-    : Pass("LocalDcePass", DoesNotSync{}) {}
+  LocalDcePass() : Pass("LocalDcePass") {}
 
   static void run(DexMethod* method);
 

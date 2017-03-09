@@ -642,7 +642,7 @@ void DexOutput::generate_typelist_data() {
     typel.push_back(proto->get_args());
   }
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->get(i);
+    DexClass* clz = m_classes->at(i);
     typel.push_back(clz->get_interfaces());
   }
   sort_unique(typel, compare_dextypelists);
@@ -720,7 +720,7 @@ void DexOutput::generate_class_data() {
   dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     m_stats.num_classes++;
-    DexClass* clz = m_classes->get(i);
+    DexClass* clz = m_classes->at(i);
     cdefs[i].typeidx = dodx->typeidx(clz->get_type());
     cdefs[i].access_flags = clz->get_access();
     cdefs[i].super_idx = dodx->typeidx(clz->get_super_class());
@@ -765,7 +765,7 @@ void DexOutput::generate_class_data_items() {
     dco[it.first] = offset;
   }
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->get(i);
+    DexClass* clz = m_classes->at(i);
     if (!clz->has_class_data()) continue;
     /* No alignment constraints for this data */
     int size = clz->encode(dodx, dco, m_output + m_offset);
@@ -782,6 +782,7 @@ void DexOutput::generate_code_items(SortMode mode) {
    */
   align_output();
   uint32_t ci_start = m_offset;
+  MethodTransform::sync_all(*m_classes);
 
   std::vector<DexMethod*> lmeth;
   if (mode == CLASS_ORDER) {
@@ -818,7 +819,7 @@ void DexOutput::generate_static_values() {
                      boost::hash<DexEncodedValueArray>>
       enc_arrays;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->get(i);
+    DexClass* clz = m_classes->at(i);
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
     if (!deva) continue;
     if (enc_arrays.count(*deva)) {
@@ -983,7 +984,7 @@ void DexOutput::generate_annotations() {
   adirmap_t adirmap;
 
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->get(i);
+    DexClass* clz = m_classes->at(i);
     DexAnnotationDirectory* ad = clz->get_annotation_directory();
     if (ad) {
       xrefsize += ad->xref_size();
@@ -1055,9 +1056,9 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   auto& code = method->get_code();
   if (!code) return; // nothing to do for native methods
 
-  auto& insts = code->get_instructions();
   std::unordered_set<DexOpcodeString*> jumbo_mismatches;
-  for (auto inst : insts) {
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    auto inst = mie.insn;
     auto op = inst->opcode();
     if (op != OPCODE_CONST_STRING && op != OPCODE_CONST_STRING_JUMBO) continue;
 
@@ -1073,7 +1074,6 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
     }
   }
   if (jumbo_mismatches.empty()) return;
-  MethodTransformer trans_method(method);
   for (auto str_opcode : jumbo_mismatches) {
     str_opcode->set_opcode(
       str_opcode->jumbo() ? OPCODE_CONST_STRING : OPCODE_CONST_STRING_JUMBO);
@@ -1246,7 +1246,7 @@ void write_class_mapping(
 
   for (uint32_t idx = 0; idx < class_defs_size; idx++) {
 
-    DexClass* cls = classes->get(idx);
+    DexClass* cls = classes->at(idx);
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name();

@@ -91,9 +91,8 @@ void get_sput_in_clinit(DexClass* clazz,
     if (is_clinit(method)) {
       always_assert_log(is_static(method) && is_constructor(method),
           "static constructor doesn't have the proper access bits set\n");
-      auto& code = method->get_code();
-      auto opcodes = code->get_instructions();
-      for (auto opcode : opcodes) {
+      for (auto& mie : InstructionIterable(method->get_code()->get_entries())) {
+        auto opcode = mie.insn;
         if (opcode->has_fields() && is_sput(opcode->opcode())) {
           auto fieldop = static_cast<DexOpcodeField*>(opcode);
           auto field = resolve_field(fieldop->field(), FieldSearch::Static);
@@ -161,7 +160,6 @@ void find_accessed_fields(Scope& fullscope,
     TRACE(TRACKRESOURCES, 1,
         "%d sgets to %s \n", it.second, SHOW(it.first->get_name()));
   }
-  MethodTransform::sync_all();
 }
 
 std::unordered_set<DexClass*> build_tracked_cls_set(

@@ -25,16 +25,18 @@ struct Verify : testing::Test {
 
 struct PreVerify : public Verify {
   DexClasses classes;
-  PreVerify():
-    Verify(),
-    classes(load_classes_from_dex(std::getenv("dex_pre"))) {}
+  PreVerify()
+      : Verify(),
+        classes(load_classes_from_dex(std::getenv("dex_pre"),
+                                      /* balloon */ false)) {}
 };
 
 struct PostVerify : public Verify {
   DexClasses classes;
-  PostVerify():
-    Verify(),
-    classes(load_classes_from_dex(std::getenv("dex_post"))) {}
+  PostVerify()
+      : Verify(),
+        classes(load_classes_from_dex(std::getenv("dex_post"),
+                                      /* balloon */ false)) {}
 };
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);

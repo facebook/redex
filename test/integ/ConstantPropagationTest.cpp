@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Transform.h"
@@ -147,6 +148,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   ConfigFiles dummy_cfg(conf_obj);
   dummy_cfg.using_seeds = true;
   manager.run_passes(stores, dummy_cfg);
+  MethodTransform::sync_all(build_class_scope(stores));
 
   TRACE(CONSTP, 2, "Code after:\n");
   for(const auto& cls : classes) {

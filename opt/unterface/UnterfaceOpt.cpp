@@ -103,9 +103,10 @@ bool find_impl(DexType* type, Unterface& unterface) {
 void do_update_method(DexMethod* meth, Unterface& unterface) {
   auto& code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
-  auto mt = MethodTransform::get_method_transform(meth);
+  auto mt = meth->get_code()->get_entries();
   DexInstruction* last = nullptr;
-  for (auto insn : code->get_instructions()) {
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     DexOpcodeMethod* invoke = nullptr;
     auto op = insn->opcode();
     switch (op) {
@@ -169,7 +170,6 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
       }
     }
   }
-  MethodTransform::sync_all();
 }
 
 /**
@@ -187,8 +187,8 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
         return !find_impl(meth->get_class(), unterface);
       },
       [&](DexMethod* meth, const DexCode& code) {
-        const auto insns = code.get_instructions();
-        for (auto insn : insns) {
+        for (auto& mie : InstructionIterable(code.get_entries())) {
+          auto insn = mie.insn;
           auto op = insn->opcode();
           switch (op) {
           case OPCODE_NEW_INSTANCE:
@@ -319,10 +319,12 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
   assert(cls->get_ifields().size() == 1);
   auto outer = cls->get_ifields().front();
   auto type = outer->get_type();
+  auto entries = meth->get_code()->get_entries();
 
   // collect all field access that use the outer field
   std::vector<DexOpcodeField*> field_ops;
-  for (auto insn : meth->get_code()->get_instructions()) {
+  for (auto& mie : InstructionIterable(entries)) {
+    auto insn = mie.insn;
     if (is_iget(insn->opcode())) {
       auto field_op = static_cast<DexOpcodeField*>(insn);
       if (field_op->field() == outer) {
@@ -332,20 +334,19 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
   }
 
   // transform every field access to the new field and add a check_cast
-  auto mt = MethodTransform::get_method_transform(meth);
   for (auto fop : field_ops) {
     DexOpcodeField* new_fop = new DexOpcodeField(fop->opcode(), new_field);
     auto dst = fop->dest();
     new_fop->set_dest(dst);
     new_fop->set_src(0, fop->src(0));
-    mt->replace_opcode(fop, new_fop);
+    entries->replace_opcode(fop, new_fop);
     DexOpcodeType* check_cast = new DexOpcodeType(OPCODE_CHECK_CAST, type);
     check_cast->set_src(0, dst);
     std::vector<DexInstruction*> ops;
     ops.push_back(check_cast);
     TRACE(UNTF, 8, "Changed %s to\n%s\n%s\n", show(fop).c_str(),
         show(new_fop).c_str(), show(check_cast).c_str());
-    mt->insert_after(new_fop, ops);
+    entries->insert_after(new_fop, ops);
   }
 }
 
@@ -407,7 +408,6 @@ void move_methods(Unterface& unterface) {
       TRACE(UNTF, 8, "Moved implementation to %s\n", SHOW(smeth));
     }
   }
-  MethodTransform::sync_all();
 }
 
 /**

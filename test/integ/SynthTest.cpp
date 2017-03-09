@@ -20,6 +20,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
+#include "DexUtil.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 
@@ -85,6 +86,7 @@ TEST(SynthTest1, synthetic) {
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(stores, dummy_cfg);
+  MethodTransform::sync_all(build_class_scope(stores));
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {

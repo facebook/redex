@@ -62,8 +62,10 @@ namespace {
       // The loop traverses all blocks in the method until no more branch is converted
       while (changed) {
         changed = false;
-        auto transform = MethodTransform::get_method_transform(method, true);
+        auto transform = method->get_code()->get_entries();
+        transform->build_cfg();
         auto& cfg = transform->cfg();
+        TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
         std::unordered_map<Block *, bool> visited;
         std::stack<Block *> blocks;
         blocks.push(cfg.blocks()[0]);
@@ -75,8 +77,10 @@ namespace {
         // This loop traverses each block by depth-first
         while (!blocks.empty() && !changed) {
           auto b = blocks.top();
+          TRACE(CONSTP, 5, "Processing block %d\n", b->id());
           blocks.pop();
           if (block_preds[b] != 1) {
+            TRACE(CONSTP, 5, "More than one pred, removing constants\n");
             remove_constants();
           }
           DexInstruction *last_inst = nullptr;
@@ -102,6 +106,7 @@ namespace {
             }
           }
           if (succ_num != 1) {
+            TRACE(CONSTP, 5, "More than one successor, removing constants\n");
             remove_constants();
           }
         }
@@ -121,7 +126,6 @@ namespace {
           transform->remove_opcode(dead);
         }
         dead_instructions.clear();
-        transform->sync();
       }
     }
 

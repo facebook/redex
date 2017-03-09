@@ -24,6 +24,7 @@
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Transform.h"
 #include "Util.h"
 #include "Warning.h"
 
@@ -412,6 +413,17 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
   }
   return (int) (hemit - ((uint8_t*)output));
+}
+
+void DexCode::balloon() {
+  assert(m_entries == nullptr);
+  m_entries = new MethodTransform(this);
+}
+
+void DexCode::sync() {
+  m_entries->sync(this);
+  delete m_entries;
+  m_entries = nullptr;
 }
 
 size_t hash_value(const DexMethodRef& r) {
@@ -1071,39 +1083,33 @@ void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) const {
 }
 
 void DexCode::gather_catch_types(std::vector<DexType*>& ltype) const {
-  for (auto& tryit : m_tries) {
-    for (auto const& it : tryit->m_catches) {
-      if (it.first) {
-        ltype.push_back(it.first);
-      }
+  for (auto& mie : *get_entries()) {
+    if (mie.type != MFLOW_CATCH) {
+      continue;
+    }
+    if (mie.centry->catch_type != nullptr) {
+      ltype.push_back(mie.centry->catch_type);
     }
   }
 }
 
 void DexCode::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto const& opc : get_instructions()) {
-    opc->gather_types(ltype);
+  for (auto& mie : *get_entries()) {
+    mie.gather_types(ltype);
   }
-  gather_catch_types(ltype);
   if (m_dbg) m_dbg->gather_types(ltype);
 }
 
 void DexCode::gather_strings(std::vector<DexString*>& lstring) const {
-  for (auto const& opc : get_instructions()) {
-    opc->gather_strings(lstring);
+  for (auto& mie : *get_entries()) {
+    mie.gather_strings(lstring);
   }
   if (m_dbg) m_dbg->gather_strings(lstring);
 }
 
 void DexCode::gather_fields(std::vector<DexField*>& lfield) const {
-  for (auto const& opc : get_instructions()) {
-    opc->gather_fields(lfield);
-  }
-}
-
-void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
-  for (auto const& opc : get_instructions()) {
-    opc->gather_methods(lmethod);
+  for (auto& mie : *get_entries()) {
+    mie.gather_fields(lfield);
   }
 }
 
@@ -1115,4 +1121,10 @@ uint32_t DexCode::size() const {
     }
   }
   return size;
+}
+
+void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
+  for (auto& mie : *get_entries()) {
+    mie.gather_methods(lmethod);
+  }
 }

@@ -31,12 +31,12 @@ bool inline_build(DexMethod* method, DexClass* builder) {
   if (!code) {
     return false;
   }
-  auto& insns = code->get_instructions();
 
   std::vector<std::pair<DexMethod*, DexOpcodeMethod*>> inlinables;
   DexMethod* build_method = get_build_method(builder->get_vmethods());
 
-  for (auto const& insn : insns) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = static_cast<const DexOpcodeMethod*>(insn)->get_method();
       if (invoked == build_method) {
@@ -70,7 +70,6 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   if (!code) {
     return false;
   }
-  auto& insns = code->get_instructions();
 
   static auto init = DexString::make_string("<init>");
   bool is_builder_removed = true;
@@ -81,7 +80,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   std::vector<DexInstruction*> deletes;
 
   // TODO(emmasevastian): For now, this only works for straight-line code.
-  for (auto const& insn : insns) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     DexOpcode opcode = insn->opcode();
 
     if (is_branch(opcode)) {
@@ -167,7 +167,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   }
 
   if (is_builder_removed) {
-    auto transform = MethodTransform::get_method_transform(method);
+    auto transform = method->get_code()->get_entries();
 
     for (const auto& insn : deletes) {
       transform->remove_opcode(insn);

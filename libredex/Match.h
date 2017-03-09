@@ -17,6 +17,7 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
+#include "Transform.h"
 #include "ReachableClasses.h"
 
 /**

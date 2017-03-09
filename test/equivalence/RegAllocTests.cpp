@@ -20,7 +20,7 @@ class RegAllocTest : public EquivalenceTest {
 
 EQUIVALENCE_TEST(RegAllocTest, DeadCodeKills)(DexMethod* m) {
   using namespace dex_asm;
-  MethodTransformer mt(m);
+  auto mt = m->get_code()->get_entries();
   mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
   // this assignment is dead, but regalloc must still avoid having it write to
   // a live register
@@ -35,7 +35,7 @@ EQUIVALENCE_TEST(RegAllocTest, DeadCodeKills)(DexMethod* m) {
  */
 EQUIVALENCE_TEST(RegAllocTest, TwoAddr)(DexMethod* m) {
   using namespace dex_asm;
-  MethodTransformer mt(m);
+  auto mt = m->get_code()->get_entries();
   mt->push_back(dasm(OPCODE_CONST_16, {1_v, 0x1_L}));
   mt->push_back(dasm(OPCODE_CONST_16, {2_v, 0x2_L}));
   mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 2_v}));

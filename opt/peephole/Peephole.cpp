@@ -192,9 +192,9 @@ class PeepholeOptimizer {
   }
 
   void peephole(DexMethod* method) {
-    auto transform =
-        MethodTransform::get_method_transform(method, true /* want_cfg */);
+    auto transform = method->get_code()->get_entries();
     m_replacements.clear();
+    transform->build_cfg();
     auto const& blocks = transform->cfg().blocks();
     for (auto const& block : blocks) {
       peephole_block(block, method->get_code()->get_registers_size());

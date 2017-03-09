@@ -114,6 +114,9 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
       scope, stores[0].get_dexen()[0], inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
+  MethodTransform::sync_all(scope);
+  MethodTransform::balloon_all(scope);
+
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
@@ -182,7 +185,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
       no_inline_anno_count++;
       return;
     }
-    if (code.get_instructions().size() < SMALL_CODE_SIZE) {
+    if (code.get_entries()->count_opcodes() < SMALL_CODE_SIZE) {
       // always inline small methods even if they are not deletable
       inlinable.insert(meth);
     } else {

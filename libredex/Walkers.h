@@ -14,6 +14,7 @@
 #include "DexClass.h"
 #include "DexAnnotation.h"
 #include "Match.h"
+#include "Transform.h"
 
 /**
  * Walk all methods of all classes defined in 'scope' calling back
@@ -75,10 +76,6 @@ void walk_code(const T& scope,
   };
 }
 
-/**
- * Walk the bytecodes of every method that satisfies the filter function,
- * for all classes defined in 'scope' calling back the walker function.
- */
 template <class T,
           class MethodFilterFn = bool(DexMethod*),
           class InstructionWalkerFn = void(DexMethod*, DexInstruction*)>
@@ -90,9 +87,11 @@ void walk_opcodes(const T& scope,
       if (methodFilter(dmethod)) {
         auto& code = dmethod->get_code();
         if (code) {
-          auto opcodes = code->get_instructions();
-          for (const auto& opcode : opcodes) {
-            opcodeWalker(dmethod, opcode);
+          for (auto& mie : *code->get_entries()) {
+            if (mie.type != MFLOW_OPCODE) {
+              continue;
+            }
+            opcodeWalker(dmethod, mie.insn);
           }
         }
       }
@@ -101,9 +100,11 @@ void walk_opcodes(const T& scope,
       if (methodFilter(vmethod)) {
         auto& code = vmethod->get_code();
         if (code) {
-          auto opcodes = code->get_instructions();
-          for (const auto& opcode : opcodes) {
-            opcodeWalker(vmethod, opcode);
+          for (auto& mie : *code->get_entries()) {
+            if (mie.type != MFLOW_OPCODE) {
+              continue;
+            }
+            opcodeWalker(vmethod, mie.insn);
           }
         }
       }
@@ -199,7 +200,10 @@ void walk_matching_opcodes(
     [&](const DexMethod* m) {
       auto& code = m->get_code();
       if (code) {
-        const std::vector<DexInstruction*>& insns = code->get_instructions();
+        std::vector<DexInstruction*> insns;
+        for (auto& mie : InstructionIterable(code->get_entries())) {
+          insns.emplace_back(mie.insn);
+        }
         // No way to match if we have less insns than N
         if (insns.size() < N) {
           return;

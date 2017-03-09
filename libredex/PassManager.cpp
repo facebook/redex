@@ -134,14 +134,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_metrics = &m_pass_metrics[i].metrics;
-    if (pass->assumes_sync()) {
-      MethodTransform::sync_all();
-    }
     pass->run_pass(stores, cfg, *this);
     m_current_pass_metrics = nullptr;
   }
 
-  MethodTransform::sync_all();
   if (!cfg.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
             ".outgoing");

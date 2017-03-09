@@ -177,7 +177,7 @@ static bool validate_sget(DexMethod* context, DexOpcodeField* opfield) {
 }
 
 void replace_opcode(DexMethod* method, DexInstruction* from, DexInstruction* to) {
-  MethodTransform* mt = MethodTransform::get_method_transform(method);
+  MethodTransform* mt = method->get_code()->get_entries();
   mt->replace_opcode(from, to);
 }
 
@@ -232,9 +232,8 @@ void get_sput_in_clinit(DexClass* clazz,
   }
   always_assert_log(is_static(clinit) && is_constructor(clinit),
                     "static constructor doesn't have the proper access bits set\n");
-  auto& code = clinit->get_code();
-  auto opcodes = code->get_instructions();
-  for (auto opcode : opcodes) {
+  for (auto& mie : InstructionIterable(clinit->get_code()->get_entries())) {
+    auto opcode = mie.insn;
     if (opcode->has_fields() && is_sput(opcode->opcode())) {
       auto fieldop = static_cast<DexOpcodeField*>(opcode);
       auto field = resolve_field(fieldop->field(), FieldSearch::Static);
@@ -300,7 +299,6 @@ void inline_field_values(Scope& fullscope) {
   for (auto simplecase : simple_rewrites) {
     inline_sget(simplecase.first, simplecase.second);
   }
-  MethodTransform::sync_all();
 }
 
 /*
@@ -339,29 +337,32 @@ static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op) {
  * Attempt to replace the clinit with corresponding encoded values.
  */
 static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
-  auto& code = clinit->get_code();
-  auto opcodes = code->get_instructions();
-
-  // If there are an odd number of insns the last must be a return
-  if ((opcodes.size() % 2 != 0) && !is_return(opcodes.back()->opcode())) {
-    return false;
-  }
-
+  std::vector<std::pair<DexInstruction*, DexInstruction*>> const_sputs;
+  auto ii = InstructionIterable(clinit->get_code()->get_entries());
+  auto end = ii.end();
   // Verify opcodes are (const, sput)* pairs
-  for (size_t i = 0; i < opcodes.size() - 1; i += 2) {
-    auto const_op = opcodes[i];
-    auto sput_op = opcodes[i + 1];
-    if (!(validate_const_for_ev(const_op) &&
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto first_op = it->insn;
+    ++it;
+    if (it == end) {
+      if (first_op->opcode() != OPCODE_RETURN_VOID) {
+        return false;
+      }
+      break;
+    }
+    auto sput_op = it->insn;
+    if (!(validate_const_for_ev(first_op) &&
           validate_sput_for_ev(clazz, sput_op) &&
-          (const_op->dest() == sput_op->src(0)))) {
+          (first_op->dest() == sput_op->src(0)))) {
       return false;
     }
+    const_sputs.emplace_back(first_op, sput_op);
   }
 
   // Attach encoded values and remove the clinit
-  for (size_t i = 0; i < opcodes.size() - 1; i += 2) {
-    auto const_op = opcodes[i];
-    auto sput_op = opcodes[i + 1];
+  for (auto& pair : const_sputs) {
+    auto const_op = pair.first;
+    auto sput_op = pair.second;
     auto fieldop = static_cast<DexOpcodeField*>(sput_op);
     auto field = resolve_field(fieldop->field(), FieldSearch::Static);
     auto ev = DexEncodedValue::zero_for_type(field->get_type());
@@ -387,7 +388,6 @@ static size_t replace_encodable_clinits(Scope& fullscope) {
       nreplaced++;
     }
   }
-  MethodTransform::sync_all();
   TRACE(FINALINLINE, 1, "Replaced %lu/%lu clinits with encoded values\n", nreplaced, ntotal);
   return nreplaced;
 }
@@ -430,16 +430,14 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       continue;
     }
     auto& code = clinit->get_code();
-    auto opcodes = code->get_instructions();
-    if (opcodes.size() == 0) {
-      continue;
-    }
-    for (size_t i = 0; i < opcodes.size() - 1; ++i) {
+    auto ii = InstructionIterable(code->get_entries());
+    auto end = ii.end();
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
       // Check for sget from static final
-      if (!opcodes[i]->has_fields()) {
+      if (!it->insn->has_fields()) {
         continue;
       }
-      auto sget_op = static_cast<DexOpcodeField*>(opcodes[i]);
+      auto sget_op = static_cast<DexOpcodeField*>(it->insn);
       if (!check_sget(sget_op)) {
         continue;
       }
@@ -450,10 +448,11 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       }
 
       // Check for sput to static final
-      if (!validate_sput_for_ev(clazz, opcodes[i + 1])) {
+      auto next_insn = std::next(it)->insn;
+      if (!validate_sput_for_ev(clazz, next_insn)) {
         continue;
       }
-      auto sput_op = static_cast<DexOpcodeField*>(opcodes[i + 1]);
+      auto sput_op = static_cast<DexOpcodeField*>(next_insn);
       auto dst_field = resolve_field(sput_op->field(), FieldSearch::Static);
       if (!(is_static(dst_field) && is_final(dst_field))) {
         continue;
@@ -470,17 +469,17 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       // register.  Yes, this means we're N^2 in theory, but hopefully in
       // practice we don't approach that.
       bool src_reg_reused = false;
-      for (size_t j = i + 2; j < opcodes.size() && !src_reg_reused; ++j) {
+      for (auto jt = std::next(it, 2); jt != end && !src_reg_reused; ++jt) {
         // Check if the source register is overwritten
-        if (opcodes[j]->dests_size() > 0 &&
-            opcodes[j]->dest() == sget_op->dest() &&
-            !opcodes[j]->dest_is_src()) {
+        if (jt->insn->dests_size() > 0 &&
+            jt->insn->dest() == sget_op->dest() &&
+            !jt->insn->dest_is_src()) {
           break;
         }
         // Check if the source register is reused as the source for another
         // instruction
-        for (size_t r = 0; r < opcodes[j]->srcs_size(); ++r) {
-          if (opcodes[j]->src(r) == sget_op->dest()) {
+        for (size_t r = 0; r < jt->insn->srcs_size(); ++r) {
+          if (jt->insn->src(r) == sget_op->dest()) {
             src_reg_reused = true;
           }
         }
@@ -495,7 +494,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
         deps[src_field] = std::make_unique<std::vector<FieldDependency>>();
       }
       TRACE(FINALINLINE, 2, "Field %s depends on %s\n", SHOW(dst_field), SHOW(src_field));
-      FieldDependency dep(clinit, opcodes[i], opcodes[i + 1], dst_field);
+      FieldDependency dep(clinit, it->insn, next_insn, dst_field);
       deps[src_field]->push_back(dep);
     }
   }
@@ -527,10 +526,9 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
     auto val = cur->get_static_value();
     for (auto dep : *deps[cur]) {
       dep.field->make_concrete(dep.field->get_access(), val);
-      auto mt = MethodTransform::get_method_transform(dep.clinit);
+      auto mt = dep.clinit->get_code()->get_entries();
       mt->remove_opcode(dep.sget);
       mt->remove_opcode(dep.sput);
-      mt->sync();
       ++nresolved;
       resolved.push_back(dep.field);
       TRACE(FINALINLINE, 2, "Resolved field %s\n", SHOW(dep.field));

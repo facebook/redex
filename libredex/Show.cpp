@@ -1063,7 +1063,5 @@ std::string show(const Liveness& analysis) {
 }
 
 std::string show(const MethodTransform* mt) {
-  std::stringstream ss;
-  ss << show(mt->m_method) << ":\n" << show(mt->m_fmethod);
-  return ss.str();
+  return show(mt->m_fmethod);
 }

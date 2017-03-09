@@ -461,13 +461,13 @@ void UnterfacePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMana
   DexClasses classes((size_t)(orig_classes.size() + untfs.size() - removed.size()));
   int pos = 0;
   for (size_t i = 0; i < orig_classes.size(); ++i) {
-    auto cls = orig_classes.get(i);
+    auto cls = orig_classes.at(i);
     if (removed.find(cls) == removed.end()) {
-      classes.insert_at(cls, pos++);
+      classes.at(pos++) = cls;
     }
   }
   for (auto untf : untfs) {
-    classes.insert_at(untf, pos++);
+    classes.at(pos++) = untf;
   }
   outdex.emplace_back(std::move(classes));
   for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {

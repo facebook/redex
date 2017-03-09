@@ -494,7 +494,7 @@ FatMethod::iterator MethodCreator::make_switch_block(
 
 MethodCreator::MethodCreator(DexMethod* meth)
     : method(meth)
-    , meth_code(MethodTransform::get_new_method(method))
+    , meth_code(new MethodTransform())
     , out_count(0)
     , top_reg(0)
     , access(meth->get_access()) {
@@ -509,7 +509,7 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexProto* proto,
                              DexAccessFlags access)
     : method(DexMethod::make_method(cls, name, proto))
-    , meth_code(MethodTransform::get_new_method(method))
+    , meth_code(new MethodTransform())
     , out_count(0)
     , top_reg(0)
     , access(access) {
@@ -534,7 +534,6 @@ std::unique_ptr<DexCode>& MethodCreator::to_code() {
   code->set_registers_size(top_reg);
   code->set_ins_size(ins_count());
   code->set_outs_size(out_count);
-  method->set_code(std::move(code));
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       DexInstruction* insn = mi.insn;
@@ -549,8 +548,8 @@ std::unique_ptr<DexCode>& MethodCreator::to_code() {
       }
     }
   }
-  while (!meth_code->try_sync())
-    ;
+  meth_code->sync(&*code);
+  method->set_code(std::move(code));
   return method->get_code();
 }
 

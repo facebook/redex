@@ -972,8 +972,8 @@ class PeepholeOptimizerV2 {
   }
 
   void peephole(DexMethod* method) {
-    auto transform =
-        MethodTransform::get_method_transform(method, true /* want_cfg */);
+    auto transform = method->get_code()->get_entries();
+    transform->build_cfg();
 
     std::vector<DexInstruction*> deletes;
     std::vector<std::pair<DexInstruction*, std::vector<DexInstruction*>>>

@@ -19,8 +19,9 @@
 
 namespace po = boost::program_options;
 
-class DexClasses;
 class DexStore;
+class DexClass;
+using DexClasses = std::vector<DexClass*>;
 using DexClassesVector = std::vector<DexClasses>;
 using DexStoresVector = std::vector<DexStore>;
 

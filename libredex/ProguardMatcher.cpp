@@ -23,6 +23,7 @@
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "Transform.h"
 
 namespace redex {
 
@@ -347,12 +348,13 @@ bool method_level_match(
 
 void keep_clinits(DexClass* cls) {
   for (auto method : cls->get_dmethods()) {
-    if (is_clinit(method)) {
-      if (((method->get_code() != nullptr) &&
-           method->get_code()->get_instructions().size() > 1)) {
+    if (is_clinit(method) && method->get_code()) {
+      auto ii = InstructionIterable(method->get_code()->get_entries());
+      auto it = ii.begin();
+      if (!(it->insn->opcode() == OPCODE_RETURN_VOID && (++it) == ii.end())) {
         method->rstate.set_keep();
-        break;
       }
+      break;
     }
   }
 }

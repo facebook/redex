@@ -154,8 +154,8 @@ class LocalDce {
   }
 
   void dce(DexMethod* method) {
-    auto transform =
-        MethodTransformer(method, true /* want_cfg */);
+    auto transform = method->get_code()->get_entries();
+    transform->build_cfg();
     auto& cfg = transform->cfg();
     auto blocks = postorder_sort(cfg.blocks());
     auto regs = method->get_code()->get_registers_size();
@@ -223,7 +223,7 @@ class LocalDce {
       m_instructions_eliminated++;
     }
 
-    remove_unreachable_blocks(method, *transform, cfg);
+    remove_unreachable_blocks(method, transform, cfg);
 
     TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
     TRACE(DCE, 5, "%s", SHOW(cfg));

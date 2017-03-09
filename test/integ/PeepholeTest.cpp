@@ -152,7 +152,7 @@ class PeepholeTest : public ::testing::Test {
     DexClasses& classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
     ASSERT_EQ(classes.size(), 1) << "Expected exactly one class in " << dexfile;
-    dex_class = classes.get(0);
+    dex_class = classes.at(0);
     ASSERT_NE(nullptr, dex_class);
   }
 
@@ -168,7 +168,9 @@ class PeepholeTest : public ::testing::Test {
               const DexInstructionList& expected) {
     DexMethod* method = make_void_method(name, src);
     dex_class->add_method(method);
+    method->get_code()->balloon();
     manager.run_passes(stores, config);
+    method->get_code()->sync();
     DexInstructionList result(method->get_code()->release_instructions());
     method->get_code()->reset_instructions();
     EXPECT_EQ(result, expected) << " for test " << name;

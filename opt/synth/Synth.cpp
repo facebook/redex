@@ -71,21 +71,22 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto& code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto& insns = code->get_instructions();
-  auto it = insns.begin();
-  if (!is_iget((*it)->opcode())) return nullptr;
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
+  auto end = ii.end();
+  if (!is_iget(it->insn->opcode())) return nullptr;
 
-  auto iget = static_cast<DexOpcodeField*>(*it);
+  auto iget = static_cast<DexOpcodeField*>(it->insn);
   uint16_t iget_dest = iget->dest();
   ++it;
 
-  if (!is_return_value((*it)->opcode())) return nullptr;
+  if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = (*it)->src(0);
+  uint16_t ret_reg = it->insn->src(0);
   if (ret_reg != iget_dest) return nullptr;
   ++it;
 
-  if (it != insns.end()) return nullptr;
+  if (it != end) return nullptr;
 
   // Check to make sure we have a concrete field reference.
   auto def = resolve_field(iget->field(), FieldSearch::Instance);
@@ -106,21 +107,22 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto& code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto& insns = code->get_instructions();
-  auto it = insns.begin();
-  if (!is_sget((*it)->opcode())) return nullptr;
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
+  auto end = ii.end();
+  if (!is_sget(it->insn->opcode())) return nullptr;
 
-  auto sget = static_cast<DexOpcodeField*>(*it);
+  auto sget = static_cast<DexOpcodeField*>(it->insn);
   uint16_t sget_dest = sget->dest();
   ++it;
 
-  if (!is_return_value((*it)->opcode())) return nullptr;
+  if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = (*it)->src(0);
+  uint16_t ret_reg = it->insn->src(0);
   if (ret_reg != sget_dest) return nullptr;
   ++it;
 
-  if (it != insns.end()) return nullptr;
+  if (it != end) return nullptr;
 
   // Check to make sure we have a concrete field reference.
   auto def = resolve_field(sget->field(), FieldSearch::Static);
@@ -142,14 +144,15 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
 DexMethod* trivial_method_wrapper(DexMethod* m) {
   auto& code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto& insns = code->get_instructions();
-  auto it = insns.begin();
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
+  auto end = ii.end();
 
-  bool is_direct = (*it)->opcode() == OPCODE_INVOKE_DIRECT;
-  bool is_static = (*it)->opcode() == OPCODE_INVOKE_STATIC;
+  bool is_direct = it->insn->opcode() == OPCODE_INVOKE_DIRECT;
+  bool is_static = it->insn->opcode() == OPCODE_INVOKE_STATIC;
   if (!is_direct && !is_static) return nullptr;
 
-  auto invoke = static_cast<DexOpcodeMethod*>(*it);
+  auto invoke = static_cast<DexOpcodeMethod*>(it->insn);
   auto method = invoke->get_method();
   if (is_static) {
     method = resolve_static(type_class(method->get_class()),
@@ -174,16 +177,20 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
     return nullptr;
   }
   if (!passes_args_through(invoke, *code)) return nullptr;
-  if (++it == insns.end()) return nullptr;
+  ++it;
+  if (it == end) return nullptr;
 
-  if (is_move_result((*it)->opcode())) {
-    if (++it == insns.end()) return nullptr;
-    if (!is_return_value((*it)->opcode())) return nullptr;
-    if (++it != insns.end()) return nullptr; // exception handling code
+  if (is_move_result(it->insn->opcode())) {
+    ++it;
+    if (it == end) return nullptr;
+    if (!is_return_value(it->insn->opcode())) return nullptr;
+    ++it;
+    if (it != end) return nullptr; // exception handling code
     return method;
   }
-  if ((*it)->opcode() == OPCODE_RETURN_VOID) {
-    if (++it != insns.end()) return nullptr; // exception handling code
+  if (it->insn->opcode() == OPCODE_RETURN_VOID) {
+    ++it;
+    if (it != end) return nullptr; // exception handling code
     return method;
   }
   return nullptr;
@@ -197,19 +204,21 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   auto& code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto& insns = code->get_instructions();
-  auto it = insns.begin();
-  if ((*it)->opcode() != OPCODE_INVOKE_DIRECT) {
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
+  auto end = ii.end();
+  if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s\n", SHOW(m));
     return nullptr;
   }
-  auto invoke = static_cast<DexOpcodeMethod*>(*it);
+  auto invoke = static_cast<DexOpcodeMethod*>(it->insn);
   if (!passes_args_through(invoke, *code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s\n", SHOW(m));
     return nullptr;
   }
-  if (++it == insns.end()) return nullptr;
-  if ((*it)->opcode() != OPCODE_RETURN_VOID) return nullptr;
+  ++it;
+  if (it == end) return nullptr;
+  if (it->insn->opcode() != OPCODE_RETURN_VOID) return nullptr;
   auto method = invoke->get_method();
   if (!method->is_concrete() || !is_constructor(method)) return nullptr;
   return method;
@@ -387,7 +396,7 @@ DexInstruction* make_sget(DexField* field, uint8_t dest) {
   return (new DexOpcodeField(opcode, field))->set_dest(dest);
 }
 
-bool replace_getter_wrapper(MethodTransformer& transform,
+bool replace_getter_wrapper(MethodTransform* transform,
                             DexOpcodeMethod* meth_insn,
                             DexInstruction* move_result,
                             DexField* field) {
@@ -415,7 +424,7 @@ bool replace_getter_wrapper(MethodTransformer& transform,
   return true;
 }
 
-void update_invoke(MethodTransformer& transform,
+void update_invoke(MethodTransform* transform,
                    DexOpcodeMethod* meth_insn,
                    DexMethod* method) {
   auto op = meth_insn->opcode();
@@ -472,7 +481,7 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
   return true;
 }
 
-bool replace_method_wrapper(MethodTransformer& transform,
+bool replace_method_wrapper(MethodTransform* transform,
                             DexOpcodeMethod* meth_insn,
                             DexMethod* wrapper,
                             DexMethod* wrappee,
@@ -499,7 +508,7 @@ bool replace_method_wrapper(MethodTransformer& transform,
   return true;
 }
 
-void replace_ctor_wrapper(MethodTransformer& transform,
+void replace_ctor_wrapper(MethodTransform* transform,
                           DexOpcodeMethod* ctor_insn,
                           DexMethod* ctor) {
   TRACE(SYNT, 2, "Optimizing static ctor: %s\n", SHOW(ctor_insn));
@@ -529,7 +538,6 @@ void replace_ctor_wrapper(MethodTransformer& transform,
 }
 
 void replace_wrappers(DexMethod* caller_method,
-                      DexCode& code,
                       WrapperMethods& ssms) {
   std::vector<std::tuple<DexOpcodeMethod*, DexInstruction*, DexField*>> getter_calls;
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapper_calls;
@@ -537,9 +545,9 @@ void replace_wrappers(DexMethod* caller_method,
   std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> ctor_calls;
 
   TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
-  auto& insns = code.get_instructions();
-  for (auto it = insns.begin(); it != insns.end(); ++it) {
-    auto insn = *it;
+  auto ii = InstructionIterable(caller_method->get_code()->get_entries());
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
       // Replace calls to static getters and wrappers
       auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
@@ -549,7 +557,8 @@ void replace_wrappers(DexMethod* caller_method,
 
       auto const found_get = ssms.getters.find(callee);
       if (found_get != ssms.getters.end()) {
-        auto const move_result = *(std::next(it));
+        auto next_it = std::next(it);
+        auto const move_result = next_it->insn;
         if (!is_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
@@ -580,7 +589,8 @@ void replace_wrappers(DexMethod* caller_method,
 
       auto const found_get = ssms.getters.find(callee);
       if (found_get != ssms.getters.end()) {
-        auto const move_result = *(std::next(it));
+        auto next_it = std::next(it);
+        auto const move_result = next_it->insn;
         if (!is_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
@@ -667,7 +677,7 @@ void replace_wrappers(DexMethod* caller_method,
       wrapped_calls.empty()) {
     return;
   }
-  MethodTransformer transform(caller_method);
+  MethodTransform* transform = caller_method->get_code()->get_entries();
   for (auto g : getter_calls) {
     using std::get;
     if (!replace_getter_wrapper(transform, get<0>(g), get<1>(g), get<2>(g))) {
@@ -812,7 +822,7 @@ void transform(const std::vector<DexClass*>& classes,
   }
   for (auto const& m : methods) {
     if (m->get_code()) {
-      replace_wrappers(m, *m->get_code(), ssms);
+      replace_wrappers(m, ssms);
     }
   }
   // check that invokes to promoted static method is correct

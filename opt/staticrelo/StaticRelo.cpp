@@ -387,7 +387,8 @@ DexClass* select_relocation_target(
 bool can_make_references_public(const DexMethod* from_meth) {
   auto const& code = from_meth->get_code();
   if (!code) return false;
-  for (auto const& inst : code->get_instructions()) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto inst = mie.insn;
     if (inst->has_types()) {
       auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
       auto tclass = type_class(tref);
@@ -424,7 +425,8 @@ bool can_make_references_public(const DexMethod* from_meth) {
 void make_references_public(const DexMethod* from_meth) {
   auto const& code = from_meth->get_code();
   if (!code) return;
-  for (auto const& inst : code->get_instructions()) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto inst = mie.insn;
     if (inst->has_types()) {
       auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
       auto tclass = type_class(tref);

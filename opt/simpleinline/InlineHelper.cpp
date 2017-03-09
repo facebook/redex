@@ -160,8 +160,6 @@ void MultiMethodInliner::inline_methods() {
     visited.insert(caller);
     caller_inline(caller, it.second, visited);
   }
-  // save all changes made
-  MethodTransform::sync_all();
 
   invoke_direct_to_static();
 }
@@ -200,15 +198,15 @@ void MultiMethodInliner::caller_inline(
 void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::vector<DexMethod*>& callees) {
   size_t found = 0;
-  auto insns = caller->get_code()->get_instructions();
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, DexOpcodeMethod*>> inlinables;
-  for (auto insn = insns.begin(); insn != insns.end(); ++insn) {
-    if (!is_invoke((*insn)->opcode())) continue;
-    auto mop = static_cast<DexOpcodeMethod*>(*insn);
-    auto callee = resolver(mop->get_method(), opcode_to_search(*insn));
+  for (auto& mie : InstructionIterable(caller->get_code()->get_entries())) {
+    auto insn = mie.insn;
+    if (!is_invoke(insn->opcode())) continue;
+    auto mop = static_cast<DexOpcodeMethod*>(insn);
+    auto callee = resolver(mop->get_method(), opcode_to_search(insn));
     if (callee == nullptr) continue;
     if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
       continue;
@@ -240,7 +238,9 @@ void MultiMethodInliner::inline_callees(
       info.more_than_16regs++;
       continue;
     }
-    inline_context.estimated_insn_size += callee->get_code()->size();
+    TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
+    inline_context.estimated_insn_size +=
+        callee->get_code()->get_entries()->sum_opcode_sizes();
     change_visibility(callee);
     info.calls_inlined++;
     inlined.insert(callee);
@@ -292,7 +292,8 @@ bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  if (ctx.estimated_insn_size + callee->get_code()->size() >
+  auto insns_size = callee->get_code()->get_entries()->sum_opcode_sizes();
+  if (ctx.estimated_insn_size + insns_size >
       MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
     return true;
@@ -338,7 +339,8 @@ bool MultiMethodInliner::has_external_catch(DexMethod* callee) {
 bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
                                                DexMethod* caller) {
   int ret_count = 0;
-  for (auto insn : callee->get_code()->get_instructions()) {
+  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+    auto insn = mie.insn;
     if (create_vmethod(insn)) return true;
     if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
@@ -516,7 +518,8 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
     return true;
   };
 
-  for (auto insn : callee->get_code()->get_instructions()) {
+  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+    auto insn = mie.insn;
     if (insn->has_types()) {
       auto top = static_cast<DexOpcodeType*>(insn);
       if (!ok_from_primary(top->get_type())) {
@@ -560,7 +563,8 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
 void MultiMethodInliner::change_visibility(DexMethod* callee) {
   TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
       SHOW(callee));
-  for (auto insn : callee->get_code()->get_instructions()) {
+  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+    auto insn = mie.insn;
     if (insn->has_fields()) {
       auto fop = static_cast<DexOpcodeField*>(insn);
       auto field = fop->field();

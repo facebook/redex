@@ -113,8 +113,8 @@ void walk_predecessors(
  * throw only.
  */
 void collect_throwing_blocks(
-    MethodTransform* mt, LogicalBlock& throwing_blocks) {
-  const auto& blocks = mt->cfg().blocks();
+    DexMethod* meth, LogicalBlock& throwing_blocks) {
+  const auto& blocks = meth->get_code()->get_entries()->cfg().blocks();
   std::queue<Block*> blocks_to_visit;
   std::unordered_set<Block*> no_throw_blocks;
   // collect all blocks with a return
@@ -143,10 +143,7 @@ void collect_throwing_blocks(
   if (blocks.size() == no_throw_blocks.size()) {
     // I beleive this happens if a method throws and catches within
     // the method, needs some investigation
-    fprintf(
-        stderr,
-        "throw blocks reachable from return in %s\n",
-        SHOW(mt->get_method()));
+    fprintf(stderr, "throw blocks reachable from return in %s\n", SHOW(meth));
     return;
   }
   // collect all remaining blocks
@@ -154,7 +151,7 @@ void collect_throwing_blocks(
   std::queue<Block*> throw_blocks;
   for (const auto& block : blocks) {
     if (no_throw_blocks.count(block) > 0) continue;
-    if (is_throw_block(mt->get_method(), block)) {
+    if (is_throw_block(meth, block)) {
       throw_blocks.push(block);
     } else {
       left_blocks.insert(block);
@@ -182,12 +179,13 @@ void find_throwing_block(const Scope& scope) {
   walk_methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
-        auto* mt = MethodTransform::get_method_transform(meth, true, false);
-        const auto& blocks = mt->cfg().blocks();
-        for (const auto& block : blocks) {
+        auto mt = meth->get_code()->get_entries();
+        mt->build_cfg(false);
+        const auto& cfg = mt->cfg();
+        for (const auto& block : cfg.blocks()) {
           if (is_throw_block(meth, block)) {
             // do the analysis to find the blocks contributing to the throw
-            collect_throwing_blocks(mt, throwing_blocks);
+            collect_throwing_blocks(meth, throwing_blocks);
           }
         }
       });

@@ -13,8 +13,7 @@
 
 class ConstantPropagationPass : public Pass {
  public:
-  ConstantPropagationPass()
-    : Pass("ConstantPropagationPass", DoesNotSync{}) {}
+  ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("blacklist", {}, m_blacklist);

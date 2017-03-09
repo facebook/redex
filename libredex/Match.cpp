@@ -93,14 +93,27 @@ match_t<DexInstruction> throwex() {
 match_t<DexMethod, std::tuple<> > is_default_constructor() {
   return {
     [](const DexMethod* meth) {
-      return !is_static(meth) &&
+      if (!is_static(meth) &&
               is_constructor(meth) &&
               has_no_args(meth) &&
-              has_code(meth) &&
-              has_opcodes(std::make_tuple(
-                invoke_direct(),
-                return_void()
-              )).matches(meth);
+              has_code(meth)) {
+        auto ii = InstructionIterable(meth->get_code()->get_entries());
+        auto it = ii.begin();
+        auto end = ii.end();
+        auto op = it->insn->opcode();
+        if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC_RANGE) {
+          return false;
+        }
+        ++it;
+        if (it->insn->opcode() != OPCODE_RETURN_VOID) {
+          return false;
+        }
+        ++it;
+        if (it != end) {
+          return false;
+        }
+      }
+      return false;
     }
   };
 }

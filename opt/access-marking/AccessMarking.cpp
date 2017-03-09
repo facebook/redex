@@ -16,6 +16,7 @@
 #include "Mutators.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Transform.h"
 #include "Walkers.h"
 
 namespace {
@@ -83,7 +84,8 @@ bool uses_this(const DexMethod* method) {
   auto const& code = method->get_code();
   if (!code) return false;
   auto const this_reg = code->get_registers_size() - code->get_ins_size();
-  for (auto const& insn : code->get_instructions()) {
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     if (insn->has_range()) {
       if (this_reg >= insn->range_base() &&
           this_reg < (insn->range_base() + insn->range_size())) {

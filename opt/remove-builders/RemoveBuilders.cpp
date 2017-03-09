@@ -120,11 +120,13 @@ bool tainted_reg_escapes(
 bool this_arg_escapes(DexMethod* method) {
   always_assert(!(method->get_access() & ACC_STATIC));
   auto& code = method->get_code();
-  DexInstruction* first_insn = code->get_instructions().at(0);
+  DexInstruction* first_insn =
+      InstructionIterable(code->get_entries()).begin()->insn;
   auto regs_size = code->get_registers_size();
   auto this_reg = regs_size - code->get_ins_size();
   auto this_cls = method->get_class();
-  MethodTransformer mt(method, /* want_cfg */ true);
+  auto mt = method->get_code()->get_entries();
+  mt->build_cfg();
   auto blocks = postorder_sort(mt->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(const DexInstruction*, TaintedRegs*)> trans = [&](
@@ -170,7 +172,10 @@ bool is_trivial_setter(DexMethod* m) {
   if (!code) {
     return false;
   }
-  auto& insns = code->get_instructions();
+  std::vector<DexInstruction*> insns;
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    insns.emplace_back(mie.insn);
+  }
   if (insns.size() != 2) {
     return false;
   }
@@ -228,10 +233,10 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
     return false;
   }
 
-  const auto& insns = code->get_instructions();
   int instances = 0;
-  for (DexInstruction* insn : insns) {
-    if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    if (mie.insn->opcode() == OPCODE_NEW_INSTANCE) {
       instances++;
     }
   }
@@ -249,28 +254,30 @@ bool is_trivial_builder_constructor(DexMethod* method) {
   if (!code) {
     return false;
   }
-  const auto& insns = code->get_instructions();
 
   if (!is_constructor(method)) {
     return false;
   }
 
-  if (insns.size() != 2) {
-    return false;
-  }
-
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
   static auto init = DexString::make_string("<init>");
-  if (insns.at(0)->opcode() != OPCODE_INVOKE_DIRECT) {
+  if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     return false;
   } else {
     auto invoked =
-      static_cast<const DexOpcodeMethod*>(insns.at(0))->get_method();
+      static_cast<const DexOpcodeMethod*>(it->insn)->get_method();
     if (invoked->get_name() != init) {
       return false;
     }
   }
 
-  if (insns.at(1)->opcode() != OPCODE_RETURN_VOID) {
+  ++it;
+  if (it->insn->opcode() != OPCODE_RETURN_VOID) {
+    return false;
+  }
+  ++it;
+  if (it != ii.end()) {
     return false;
   }
 
@@ -378,7 +385,8 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   if (!code) {
     return builders;
   }
-  for (DexInstruction* insn : code->get_instructions()) {
+  for (auto& mie : InstructionIterable(code->get_entries())) {
+    auto insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       DexType* cls = static_cast<DexOpcodeType*>(insn)->get_type();
       if (m_builders.find(cls) != m_builders.end()) {
@@ -393,7 +401,8 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
 // passed to a method (aside from when its own instance methods get invoked),
 // or if they get stored in a field, or if they escape as a return value.
 bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
-  MethodTransformer mt(method, /* want_cfg */ true);
+  auto mt = method->get_code()->get_entries();
+  mt->build_cfg();
   auto blocks = postorder_sort(mt->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
@@ -530,7 +539,6 @@ void RemoveBuildersPass::run_pass(
       }
     }
   });
-  MethodTransform::sync_all();
 
   for (const auto& pair : method_to_inlined_builders) {
     DexMethod* method = pair.first;

@@ -68,7 +68,10 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
 
-  LocalDcePass().run(m_method);
+  {
+    MethodTransformer mt(m_method);
+    LocalDcePass().run(m_method);
+  }
 
   // check that the dead const/16 opcode is removed, but that the try item
   // is preserved
@@ -107,7 +110,10 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
 
-  LocalDcePass().run(m_method);
+  {
+    MethodTransformer mt(m_method);
+    LocalDcePass().run(m_method);
+  }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 0);
@@ -139,7 +145,10 @@ TEST_F(LocalDceTryTest, deadCatch) {
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
 
-  LocalDcePass().run(m_method);
+  {
+    MethodTransformer mt(m_method);
+    LocalDcePass().run(m_method);
+  }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 1);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 0);
@@ -172,7 +181,10 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 3);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 2);
 
-  LocalDcePass().run(m_method);
+  {
+    MethodTransformer mt(m_method);
+    LocalDcePass().run(m_method);
+  }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 3);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);

@@ -89,8 +89,8 @@ static bool candidate(DexMethod* m) {
   if (!code) {
     return false;
   }
-  auto const& insts = code->get_instructions();
-  for (auto const& inst : insts) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto inst = mie.insn;
     switch (inst->opcode()) {
     case OPCODE_MOVE_WIDE:
     case OPCODE_MOVE_WIDE_FROM16:
@@ -173,7 +173,8 @@ void allocate_registers(DexMethod* m) {
   if (!candidate(m)) {
     return;
   }
-  MethodTransformer transform(m, true /* want_cfg */);
+  auto transform = m->get_code()->get_entries();
+  transform->build_cfg();
   auto& cfg = transform->cfg();
   auto nregs = m->get_code()->get_registers_size();
   auto liveness_map = Liveness::analyze(cfg, nregs);

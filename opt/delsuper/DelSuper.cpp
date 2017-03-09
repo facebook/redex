@@ -169,8 +169,14 @@ private:
       return nullptr;
     }
 
+    // TODO: rewrite the following code to not require a random-access
+    // container of instructions
+    std::vector<DexInstruction*> insns;
+    for (auto& mie : InstructionIterable(meth->get_code()->get_entries())) {
+      insns.emplace_back(mie.insn);
+    }
+
     // Must have at least two instructions
-    const auto& insns = code->get_instructions();
     if (insns.size() < 2) {
       m_num_culled_too_short++;
       return nullptr;

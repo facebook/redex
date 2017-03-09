@@ -12,5 +12,5 @@
 #include "Transform.h"
 
 TEST(MethodTransformSyncAllTest, empty) {
-  MethodTransform::sync_all();
+  MethodTransform::sync_all(DexClasses());
 }

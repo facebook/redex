@@ -19,7 +19,6 @@
 #include "ConfigFiles.h"
 #include "PassRegistry.h"
 
-class DexClasses;
 class DexClass;
 class DexStore;
 using DexClassesVector = std::vector<DexClasses>;
@@ -94,23 +93,14 @@ class PassConfig {
 
 class Pass {
  public:
-  enum DoesNotSync {};
 
   Pass(std::string name)
-     : m_name(name),
-       m_assumes_sync(true) {
-    PassRegistry::get().register_pass(this);
-  }
-
-  Pass(std::string name, DoesNotSync)
-     : m_name(name),
-       m_assumes_sync(false) {
+     : m_name(name) {
     PassRegistry::get().register_pass(this);
   }
 
   virtual ~Pass() {}
 
-  bool assumes_sync() const { return m_assumes_sync; }
   std::string name() const { return m_name; }
 
   virtual void configure_pass(const PassConfig&) {}
@@ -127,5 +117,4 @@ class Pass {
 
  private:
   std::string m_name;
-  const bool m_assumes_sync;
 };

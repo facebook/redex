@@ -52,8 +52,8 @@ struct ConstPropTest : testing::Test {
     auto clinit = clazz->get_clinit();
     ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str() << " missing clinit";
     auto& code = clinit->get_code();
-    auto opcodes = code->get_instructions();
-    EXPECT_EQ(opcodes.size(), 0) << "Class " << clazz->c_str() << " has non-empty clinit";
+    EXPECT_EQ(code->get_entries()->count_opcodes(), 0)
+        << "Class " << clazz->c_str() << " has non-empty clinit";
   }
 
   void expect_field_eq(DexClass* clazz, const std::string& name, DexType* type, uint64_t expected) {
@@ -87,6 +87,7 @@ DexClass* create_class(const std::string& name) {
   auto clinit = DexMethod::make_method(type, clinit_name, void_void);
   clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, std::make_unique<DexCode>(), false);
   clinit->get_code()->set_registers_size(1);
+  clinit->get_code()->balloon();
   cls->add_method(clinit);
   return cls;
 }
@@ -115,14 +116,13 @@ DexField* add_dependent_field(DexClass* cls, const std::string& name, DexField *
   assert(init_ops.count(parent_type->c_str()) != 0);
   auto ops = init_ops[parent_type->c_str()];
   auto clinit = cls->get_clinit();
-  auto mt = MethodTransform::get_method_transform(clinit);
+  auto mt = clinit->get_code()->get_entries();
   auto sget = new DexOpcodeField(ops.first, parent);
   sget->set_dest(0);
   mt->push_back(static_cast<DexInstruction*>(sget));
   auto sput = new DexOpcodeField(ops.second, field);
   sput->set_src(0, 0);
   mt->push_back(static_cast<DexInstruction*>(sput));
-  MethodTransform::sync_all();
   return field;
 }
 

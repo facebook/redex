@@ -99,7 +99,7 @@ static void flush_out_dex(
     size_t frefs_size) {
   DexClasses dc(det.outs.size());
   for (size_t i = 0; i < det.outs.size(); i++) {
-    dc.insert_at(det.outs[i], i);
+    dc.at(i) = det.outs[i];
   }
   outdex.emplace_back(std::move(dc));
   // print out stats
@@ -322,7 +322,8 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
       },
       [&](DexMethod* meth, const DexCode& code) {
         auto base_cls = type_class(meth->get_class());
-        for (auto const& inst : code.get_instructions()) {
+        for (auto& mie : InstructionIterable(meth->get_code()->get_entries())) {
+          auto inst = mie.insn;
           DexClass* called_cls = nullptr;
           if (inst->has_methods()) {
             auto method_access = static_cast<DexOpcodeMethod*>(inst);

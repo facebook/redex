@@ -13,8 +13,7 @@
 
 class PeepholePassV2 : public Pass {
  public:
-  PeepholePassV2()
-    : Pass("PeepholePassV2", DoesNotSync{}) {}
+  PeepholePassV2() : Pass("PeepholePassV2") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

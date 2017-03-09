@@ -38,26 +38,27 @@ constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 DexMethod* match_pattern(DexMethod* bridge) {
   auto& code = bridge->get_code();
   if (!code) return nullptr;
-  auto const& insts = code->get_instructions();
-  auto it = insts.begin();
-  auto end = insts.end();
+  auto ii = InstructionIterable(code->get_entries());
+  auto it = ii.begin();
+  auto end = ii.end();
   while (it != end) {
-    if ((*it)->opcode() != OPCODE_CHECK_CAST) break;
+    if (it->insn->opcode() != OPCODE_CHECK_CAST) break;
     ++it;
   }
   always_assert_log(it != end, "In %s", SHOW(bridge));
-  if ((*it)->opcode() != OPCODE_INVOKE_DIRECT &&
-      (*it)->opcode() != OPCODE_INVOKE_STATIC) {
-    TRACE(BRIDGE, 5, "Rejecting, unhandled pattern: `%s'\n", SHOW(bridge));
+  if (it->insn->opcode() != OPCODE_INVOKE_DIRECT &&
+      it->insn->opcode() != OPCODE_INVOKE_STATIC) {
+    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
     return nullptr;
   }
-  auto invoke = static_cast<DexOpcodeMethod*>(*it);
+  auto invoke = static_cast<DexOpcodeMethod*>(it->insn);
   ++it;
-  if (is_move_result((*it)->opcode())) {
+
+  if (is_move_result(it->insn->opcode())) {
     ++it;
   }
-  if (!is_return((*it)->opcode())) {
-    TRACE(BRIDGE, 5, "Rejecting, unhandled pattern: `%s'\n", SHOW(bridge));
+  if (!is_return(it->insn->opcode())) {
+    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
     return nullptr;
   }
   ++it;
@@ -109,12 +110,12 @@ bool has_bridgelike_access(DexMethod* m) {
 
 void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
   bridge->set_access(bridge->get_access() & ~(ACC_BRIDGE | ACC_SYNTHETIC));
-  auto& insts = bridge->get_code()->get_instructions();
+  auto mt = bridge->get_code()->get_entries();
   auto invoke =
-      std::find_if(insts.begin(),
-                   insts.end(),
-                   [](const DexInstruction* insn) { return is_invoke(insn->opcode()); });
-  MethodTransform::inline_tail_call(bridge, bridgee, *invoke);
+      std::find_if(mt->begin(), mt->end(), [](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
+      });
+  MethodTransform::inline_tail_call(bridge, bridgee, invoke->insn);
 }
 }
 
@@ -251,8 +252,8 @@ class BridgeRemover {
   }
 
   void exclude_referenced_bridgee(DexMethod* code_method, const DexCode& code) {
-    auto const& insts = code.get_instructions();
-    for (auto inst : insts) {
+    for (auto& mie : InstructionIterable(code.get_entries())) {
+      auto inst = mie.insn;
       if (!is_invoke(inst->opcode())) continue;
       auto method = static_cast<DexOpcodeMethod*>(inst)->get_method();
       auto range = m_potential_bridgee_refs.equal_range(

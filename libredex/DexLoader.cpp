@@ -16,6 +16,7 @@
 #include "DexDefs.h"
 #include "DexAccess.h"
 #include "Trace.h"
+#include "Transform.h"
 #include "WorkQueue.h"
 
 #define DL_FAIL (1)
@@ -87,7 +88,7 @@ static void class_work(void* arg) {
 void DexLoader::load_dex_class(int num) {
   dex_class_def* cdef = m_class_defs + num;
   DexClass* dc = new DexClass(m_idx, cdef);
-  m_classes->insert_at(dc, num);
+  m_classes->at(num) = dc;
 }
 
 DexClasses DexLoader::load_dex(const char* location) {
@@ -122,7 +123,11 @@ DexClasses DexLoader::load_dex(const char* location) {
   return classes;
 }
 
-DexClasses load_classes_from_dex(const char* location) {
+DexClasses load_classes_from_dex(const char* location, bool balloon) {
   DexLoader dl;
-  return dl.load_dex(location);
+  auto classes = dl.load_dex(location);
+  if (balloon) {
+    MethodTransform::balloon_all(classes);
+  }
+  return classes;
 }

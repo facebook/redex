@@ -44,6 +44,8 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
     mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
   }
   {
+    caller->get_code()->balloon();
+    callee->get_code()->balloon();
     InlineContext inline_context(caller, /* use_liveness */ true);
     EXPECT_FALSE(MethodTransform::inline_16regs(inline_context, callee, invoke));
   }

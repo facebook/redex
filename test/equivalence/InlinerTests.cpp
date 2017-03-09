@@ -33,9 +33,10 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
                                proto);
     m_callee->make_concrete(
         ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
+    m_callee->get_code()->balloon();
     {
       using namespace dex_asm;
-      MethodTransformer mt(m_callee);
+      auto mt = m_callee->get_code()->get_entries();
       // note that this method will not behave the same way if v0 and v1 get
       // mapped to the same register
       mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {0_v, 1_v}));
@@ -49,7 +50,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 
   virtual void build_method(DexMethod* m) {
     using namespace dex_asm;
-    MethodTransformer mt(m);
+    auto mt = m->get_code()->get_entries();
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
 
     auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_callee, 0);
@@ -67,7 +68,8 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 
   virtual void transform_method(DexMethod* m) {
     DexOpcodeMethod* mop = nullptr;
-    for (const auto& insn : m->get_code()->get_instructions()) {
+    for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
+      auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
         mop = static_cast<DexOpcodeMethod*>(insn);
         assert(mop->get_method() == m_callee);
@@ -96,21 +98,20 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
                                proto);
     m_callee->make_concrete(
         ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-    {
-      using namespace dex_asm;
-      MethodTransformer mt(m_callee);
-      // if-* opcodes store their jump offset as a 16-bit signed int. Let's
-      // insert enough opcodes such that the offset overflows that width.
-      // These are essentially NOPs, but we don't use actual NOPs because
-      // Transform filters them out.
-      mt->push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
-      for (size_t i = 0; i < NOP_COUNT; ++i) {
-        mt->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
-      }
-      mt->push_back(dasm(OPCODE_RETURN_VOID));
-      m_callee->get_code()->set_registers_size(1);
-      m_callee->get_code()->set_ins_size(0);
+    m_callee->get_code()->balloon();
+    using namespace dex_asm;
+    auto mt = m_callee->get_code()->get_entries();
+    // if-* opcodes store their jump offset as a 16-bit signed int. Let's
+    // insert enough opcodes such that the offset overflows that width.
+    // These are essentially NOPs, but we don't use actual NOPs because
+    // Transform filters them out.
+    mt->push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
+    for (size_t i = 0; i < NOP_COUNT; ++i) {
+      mt->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
     }
+    mt->push_back(dasm(OPCODE_RETURN_VOID));
+    m_callee->get_code()->set_registers_size(1);
+    m_callee->get_code()->set_ins_size(0);
     cls->add_method(m_callee);
   }
 
@@ -118,7 +119,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual void build_method(DexMethod* m) {
     using namespace dex_asm;
-    MethodTransformer mt(m);
+    auto mt = m->get_code()->get_entries();
     mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
     mt->push_back(dasm(OPCODE_CONST_4, {2_v, 1_L}));
     // if block
@@ -141,7 +142,8 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual void transform_method(DexMethod* m) {
     DexOpcodeMethod* mop = nullptr;
-    for (const auto& insn : m->get_code()->get_instructions()) {
+    for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
+      auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
         mop = static_cast<DexOpcodeMethod*>(insn);
         assert(mop->get_method() == m_callee);
@@ -149,12 +151,10 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
       }
     }
     assert(mop != nullptr);
-    {
-      InlineContext context(m, true /* use_liveness */);
-      MethodTransform::inline_16regs(context, m_callee, mop);
-    }
+    InlineContext context(m, true /* use_liveness */);
+    MethodTransform::inline_16regs(context, m_callee, mop);
     // make sure we actually bloated the method
-    always_assert(m->get_code()->get_instructions().size() > NOP_COUNT);
+    always_assert(m->get_code()->get_entries()->count_opcodes() > NOP_COUNT);
   }
 };
 

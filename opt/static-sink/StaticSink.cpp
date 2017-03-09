@@ -245,7 +245,8 @@ bool illegal_access(DexMethod* method) {
       return true;
     }
   }
-  for (auto const& op : code->get_instructions()) {
+  for (auto const& mie : InstructionIterable(code->get_entries())) {
+    auto op = mie.insn;
     if (op->opcode() == OPCODE_INVOKE_SUPER ||
         op->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
       return true;
@@ -388,7 +389,7 @@ void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   TRACE(SINK, 1, "methods in static holder: %lu\n",
           holder->get_dmethods().size());
   DexClasses dc(1);
-  dc.insert_at(holder, 0);
+  dc.at(0) = holder;
   root_store.emplace_back(std::move(dc));
 }
 
