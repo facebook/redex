@@ -32,6 +32,7 @@ const char* safe_types_on_refs[] = {
 };
 
 constexpr int MAX_INSTRUCTION_SIZE = 1 << 16;
+constexpr int INSTRUCTION_BUFFER = 1 << 12;
 
 /**
  * Use this cache once the optimization is invoked to make sure
@@ -288,12 +289,11 @@ bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
 
 bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
                                           DexMethod* callee) {
-  // this is not very precise. from my reading of the ART code, the verifier
-  // only cares if the last "info point" is beyond a certain size. This excludes
-  // e.g. fopcodes, but we aren't making that distinction here. Still, this
-  // should suffice as a conservative heuristic.
+  // INSTRUCTION_BUFFER is added because the final method size is often larger
+  // than our estimate -- during the sync phase, we may have to pick larger
+  // branch opcodes to encode large jumps.
   if (ctx.estimated_insn_size + callee->get_code()->size() >
-      MAX_INSTRUCTION_SIZE) {
+      MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
     return true;
   }

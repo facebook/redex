@@ -1110,7 +1110,9 @@ void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
 uint32_t DexCode::size() const {
   uint32_t size = 0;
   for (auto const& opc : get_instructions()) {
-    size += opc->size();
+    if (!is_fopcode(opc->opcode())) {
+      size += opc->size();
+    }
   }
   return size;
 }
