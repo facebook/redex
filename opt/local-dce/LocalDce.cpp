@@ -268,15 +268,11 @@ class LocalDce {
       remove_edge(e.first, e.second);
     }
     std::unordered_set<Block*> visited;
-    std::unordered_map<MethodItemEntry*, int> catch_refcount;
     std::function<void (Block*)> visit = [&](Block* b) {
       if (visited.find(b) != visited.end()) {
         return;
       }
       visited.emplace(b);
-      if (is_catch(b)) {
-        ++catch_refcount[&*b->begin()];
-      }
       for (auto& s : b->succs()) {
         visit(s);
       }
@@ -297,13 +293,27 @@ class LocalDce {
       remove_block(transform, b);
     }
 
-    for (Block* b : blocks) {
-      for (auto& mie : *b) {
-        if (mie.type == MFLOW_TRY &&
-            catch_refcount[mie.tentry->catch_start] == 0) {
+    // comb the method looking for superfluous try sections that do not enclose
+    // throwing opcodes; remove them. note that try sections should never be
+    // nested, otherwise this won't produce the right result.
+    bool encloses_throw {false};
+    MethodItemEntry* try_start {nullptr};
+    for (auto& mie : *transform) {
+      if (mie.type == MFLOW_TRY) {
+        auto tentry = mie.tentry;
+        if (tentry->type == TRY_START) {
+          encloses_throw = false;
+          try_start = &mie;
+        } else if (!encloses_throw /* && tentry->type == TRY_END */) {
+          try_start->type = MFLOW_FALLTHROUGH;
+          try_start->throwing_mie = nullptr;
+          try_start = nullptr;
           mie.type = MFLOW_FALLTHROUGH;
           mie.throwing_mie = nullptr;
         }
+      } else if (mie.type == MFLOW_OPCODE) {
+        auto op = mie.insn->opcode();
+        encloses_throw = encloses_throw || may_throw(op) || op == OPCODE_THROW;
       }
     }
   }

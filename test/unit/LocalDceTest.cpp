@@ -115,9 +115,13 @@ TEST_F(LocalDceTryTest, unreachableTry) {
 
 /*
  * Check that if a try block contains no throwing opcodes, we remove it
- * entirely (as well as the catch that it was supposed to throw to)
+ * entirely, as well as the catch that it was supposed to throw to.
+ *
+ * Note that if a catch block at the end of a method is removed, it is
+ * necessary to remove any tries that formerly targeted it, as catch target
+ * offsets that point beyond the end of a method are a verification error.
  */
-TEST_F(LocalDceTryTest, tryNeverThrows) {
+TEST_F(LocalDceTryTest, deadCatch) {
   // setup
   {
     using namespace dex_asm;
@@ -139,4 +143,37 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 1);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 0);
+}
+
+/*
+ * Check that if a try block contains no throwing opcodes, we remove it
+ * entirely, even if there are other blocks keeping its target catch live.
+ */
+TEST_F(LocalDceTryTest, tryNeverThrows) {
+  // setup
+  {
+    using namespace dex_asm;
+
+    MethodTransformer mt(m_method);
+    auto exception_type = DexType::make_type("Ljava/lang/Exception;");
+    auto catch_start = new MethodItemEntry(exception_type);
+
+    // this try wraps an opcode which may throw, should not be removed
+    mt->push_back(TRY_START, catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(TRY_END, catch_start);
+    // this one doesn't wrap a may-throw opcode
+    mt->push_back(TRY_START, catch_start);
+    mt->push_back(dasm(OPCODE_RETURN_VOID));
+    mt->push_back(TRY_END, catch_start);
+    mt->push_back(*catch_start);
+    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+  }
+  EXPECT_EQ(m_method->get_code()->get_instructions().size(), 3);
+  EXPECT_EQ(m_method->get_code()->get_tries().size(), 2);
+
+  LocalDcePass().run(m_method);
+
+  EXPECT_EQ(m_method->get_code()->get_instructions().size(), 3);
+  EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
 }
