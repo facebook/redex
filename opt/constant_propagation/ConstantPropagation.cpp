@@ -12,6 +12,7 @@
 #include <vector>
 #include <stack>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
@@ -65,12 +66,12 @@ namespace {
         auto& cfg = transform->cfg();
         std::unordered_map<Block *, bool> visited;
         std::stack<Block *> blocks;
-        blocks.push(cfg[0]);
-        visited[cfg[0]] = true;
+        blocks.push(cfg.blocks()[0]);
+        visited[cfg.blocks()[0]] = true;
         // block_preds saves the re-calculated number of predecessors of each block
         // This number may change as new unreachable blocks are added in each loop
         std::unordered_map<Block*, int> block_preds;
-        find_reachable_predecessors(cfg, block_preds);
+        find_reachable_predecessors(cfg.blocks(), block_preds);
         // This loop traverses each block by depth-first
         while (!blocks.empty() && !changed) {
           auto b = blocks.top();

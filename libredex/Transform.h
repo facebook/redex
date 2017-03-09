@@ -163,45 +163,6 @@ struct FatMethodDisposer {
 
 std::string show(const FatMethod*);
 
-struct Block {
-  Block(size_t id) : m_id(id) {}
-
-  size_t id() const { return m_id; }
-  std::vector<Block*>& preds() { return m_preds; }
-  std::vector<Block*>& succs() { return m_succs; }
-  FatMethod::iterator begin() { return m_begin; }
-  FatMethod::iterator end() { return m_end; }
-  FatMethod::reverse_iterator rbegin() {
-    return FatMethod::reverse_iterator(m_end);
-  }
-  FatMethod::reverse_iterator rend() {
-    return FatMethod::reverse_iterator(m_begin);
-  }
-
- private:
-  friend class MethodTransform;
-  friend std::string show(const std::vector<Block*>& blocks);
-
-  size_t m_id;
-  FatMethod::iterator m_begin;
-  FatMethod::iterator m_end;
-  std::vector<Block*> m_preds;
-  std::vector<Block*> m_succs;
-};
-
-inline bool is_catch(Block* b) {
-  auto it = b->begin();
-  return it->type == MFLOW_CATCH;
-}
-
-bool ends_with_may_throw(Block* b, bool end_block_before_throw = true);
-
-/*
- * Build a postorder sorted vector of blocks from the given CFG.  Uses a
- * standard depth-first search with a side table of already-visited nodes.
- */
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
-
 class InlineContext;
 
 namespace {
@@ -214,8 +175,7 @@ class MethodTransform {
  private:
   using FatMethodCache = std::unordered_map<DexMethod*, MethodTransform*>;
 
-  explicit MethodTransform(DexMethod* method)
-      : m_method(method), m_fmethod(new FatMethod()) {}
+  explicit MethodTransform(DexMethod* method);
 
   ~MethodTransform();
 
@@ -254,7 +214,7 @@ class MethodTransform {
   // mapping from fill-array-data opcodes to the pseudo opcodes containing the
   // array contents
   std::unordered_map<DexInstruction*, DexOpcodeData*> m_array_data;
-  std::vector<Block*> m_blocks;
+  std::unique_ptr<ControlFlowGraph> m_cfg;
 
  private:
   FatMethod::iterator main_block();
@@ -309,9 +269,9 @@ class MethodTransform {
       DexOpcodeMethod *invoke);
 
   const DexMethod* get_method() const { return m_method; }
-  
+
   /* Return the control flow graph of this method as a vector of blocks. */
-  std::vector<Block*>& cfg() { return m_blocks; }
+  ControlFlowGraph& cfg() { return *m_cfg; }
 
   /* Write-back FatMethod to DexMethod */
   void sync();

@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <list>
 
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
@@ -136,12 +137,12 @@ Liveness InlineContext::live_out(DexInstruction* insn) {
   }
 }
 
+MethodTransform::MethodTransform(DexMethod* method)
+    : m_method(method), m_fmethod(new FatMethod()) {}
+
 MethodTransform::~MethodTransform() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
   delete m_fmethod;
-  for (auto block : m_blocks) {
-    delete block;
-  }
 }
 
 MethodTransform* MethodTransform::get_method_transform(
@@ -1511,22 +1512,24 @@ bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
       break;
     }
   }
-  return true;
+  return false;
 }
 
 void MethodTransform::build_cfg(bool end_block_before_throw) {
+  m_cfg = std::make_unique<ControlFlowGraph>();
   // Find the block boundaries
   std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
   std::vector<std::pair<TryEntry*, Block*>> try_ends;
   std::unordered_map<CatchEntry*, Block*> try_catches;
   size_t id = 0;
   bool in_try = false;
-  m_blocks.emplace_back(new Block(id++));
-  m_blocks.back()->m_begin = m_fmethod->begin();
+  auto& blocks = m_cfg->blocks();
+  blocks.emplace_back(new Block(id++));
+  blocks.back()->m_begin = m_fmethod->begin();
   // The first block can be a branch target.
   auto begin = m_fmethod->begin();
   if (begin->type == MFLOW_TARGET) {
-    branch_to_targets[begin->target->src].push_back(m_blocks.back());
+    branch_to_targets[begin->target->src].push_back(blocks.back());
   }
   for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
     split_may_throw(m_fmethod, it);
@@ -1545,7 +1548,7 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     // End the current block.
     auto next = std::next(it);
     if (next == m_fmethod->end()) {
-      m_blocks.back()->m_end = next;
+      blocks.back()->m_end = next;
       continue;
     }
     // Start a new block at the next MethodItem.
@@ -1553,9 +1556,9 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     if (next->type == MFLOW_OPCODE) {
       next = std::next(it);
     }
-    m_blocks.back()->m_end = next;
+    blocks.back()->m_end = next;
     next_block->m_begin = next;
-    m_blocks.emplace_back(next_block);
+    blocks.emplace_back(next_block);
     // Record branch targets to add edges in the next pass.
     if (next->type == MFLOW_TARGET) {
       branch_to_targets[next->target->src].push_back(next_block);
@@ -1569,7 +1572,7 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     }
   }
   // Link the blocks together with edges
-  for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
+  for (auto it = blocks.begin(); it != blocks.end(); ++it) {
     // Set outgoing edge if last MIE falls through
     auto lastmei = (*it)->rbegin();
     bool fallthrough = true;
@@ -1579,17 +1582,16 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
         fallthrough = !is_goto(lastop);
         auto const& targets = branch_to_targets[&*lastmei];
         for (auto target : targets) {
-          (*it)->m_succs.push_back(target);
-          target->m_preds.push_back(*it);
+          m_cfg->add_edge(
+              *it, target, is_goto(lastop) ? EDGE_GOTO : EDGE_BRANCH);
         }
       } else if (is_return(lastop) || lastop == OPCODE_THROW) {
         fallthrough = false;
       }
     }
-    if (fallthrough && std::next(it) != m_blocks.end()) {
+    if (fallthrough && std::next(it) != blocks.end()) {
       Block* next = *std::next(it);
-      (*it)->m_succs.push_back(next);
-      next->m_preds.push_back(*it);
+      m_cfg->add_edge(*it, next, EDGE_GOTO);
     }
   }
   /*
@@ -1609,14 +1611,13 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     always_assert(bid > 0);
     --bid;
     while (true) {
-      auto block = m_blocks[bid];
+      auto block = blocks[bid];
       if (ends_with_may_throw(block, end_block_before_throw)) {
         for (auto mei = try_end->catch_start;
              mei != nullptr;
              mei = mei->centry->next) {
           auto catchblock = try_catches.at(mei->centry);
-          block->m_succs.push_back(catchblock);
-          catchblock->m_preds.push_back(block);
+          m_cfg->add_edge(block, catchblock, EDGE_THROW);
         }
       }
       auto begin = block->begin();
@@ -1632,7 +1633,7 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
     }
   }
   TRACE(CFG, 5, "%s\n", SHOW(m_method));
-  TRACE(CFG, 5, "%s", SHOW(m_blocks));
+  TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
 
 static void mt_sync(void* arg) {

@@ -11,6 +11,7 @@
 
 #include <sstream>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
@@ -979,22 +980,23 @@ std::string show(const FatMethod* fm) {
   return ret;
 }
 
-std::string show(const std::vector<Block*>& blocks) {
+std::string show(const ControlFlowGraph& cfg) {
+  auto& blocks = cfg.blocks();
   std::stringstream ss;
   ss << "CFG:\n";
   for (auto& b : blocks) {
-    ss << "B" << b->m_id << " succs:";
-    for (auto& s : b->m_succs) {
-      ss << " B" << s->m_id;
+    ss << "B" << b->id() << " succs:";
+    for (auto& s : b->succs()) {
+      ss << " B" << s->id();
     }
     ss << " preds:";
-    for (auto& p : b->m_preds) {
-      ss << " B" << p->m_id;
+    for (auto& p : b->preds()) {
+      ss << " B" << p->id();
     }
     ss << "\n";
   }
   for (auto const& b : blocks) {
-    ss << "  Block B" << b->m_id << ":\n";
+    ss << "  Block B" << b->id() << ":\n";
     for (auto const& mei : *b) {
       ss << "    " << show(mei) << "\n";
     }

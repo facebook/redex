@@ -16,6 +16,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
@@ -156,10 +157,10 @@ class LocalDce {
     auto transform =
         MethodTransformer(method, true /* want_cfg */);
     auto& cfg = transform->cfg();
-    auto blocks = postorder_sort(cfg);
+    auto blocks = postorder_sort(cfg.blocks());
     auto regs = method->get_code()->get_registers_size();
     std::vector<boost::dynamic_bitset<>> liveness(
-        cfg.size(), boost::dynamic_bitset<>(regs + 1));
+        cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
     bool changed;
     std::vector<DexInstruction*> dead_instructions;
 
@@ -229,17 +230,6 @@ class LocalDce {
   }
 
  private:
-  void remove_edge(Block* p, Block* s) {
-    p->succs().erase(std::remove_if(p->succs().begin(),
-                                    p->succs().end(),
-                                    [&](Block* b) { return b == s; }),
-                     p->succs().end());
-    s->preds().erase(std::remove_if(s->preds().begin(),
-                                    s->preds().end(),
-                                    [&](Block* b) { return b == p; }),
-                     s->preds().end());
-  }
-
   void remove_block(MethodTransform* transform, Block* b) {
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
@@ -250,7 +240,8 @@ class LocalDce {
 
   void remove_unreachable_blocks(DexMethod* method,
                                  MethodTransform* transform,
-                                 std::vector<Block*>& blocks) {
+                                 ControlFlowGraph& cfg) {
+    auto& blocks = cfg.blocks();
     // Remove edges to catch blocks that no longer exist.
     std::vector<std::pair<Block*, Block*>> remove_edges;
     for (auto& b : blocks) {
@@ -265,8 +256,11 @@ class LocalDce {
       }
     }
     for (auto& e : remove_edges) {
-      remove_edge(e.first, e.second);
+      cfg.remove_edge(e.first, e.second, EDGE_THROW);
     }
+    remove_edges.clear();
+
+    // remove unreachable blocks
     std::unordered_set<Block*> visited;
     std::function<void (Block*)> visit = [&](Block* b) {
       if (visited.find(b) != visited.end()) {
@@ -283,12 +277,11 @@ class LocalDce {
       if (visited.find(b) != visited.end()) {
         continue;
       }
-      auto succs = b->succs(); // copy
-      for (auto& s : succs) {
+      for (auto& s : b->succs()) {
         remove_edges.emplace_back(b, s);
       }
       for (auto& p : remove_edges) {
-        remove_edge(p.first, p.second);
+        cfg.remove_all_edges(p.first, p.second);
       }
       remove_block(transform, b);
     }

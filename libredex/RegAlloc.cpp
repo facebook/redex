@@ -57,14 +57,15 @@ void Liveness::meet(const Liveness& that) {
   m_reg_set |= that.m_reg_set;
 }
 
-std::unique_ptr<LivenessMap> Liveness::analyze(std::vector<Block*>& blocks,
+std::unique_ptr<LivenessMap> Liveness::analyze(ControlFlowGraph& cfg,
                                                uint16_t nregs) {
-  TRACE(REG, 5, "%s\n", SHOW(blocks));
+  TRACE(REG, 5, "%s\n", SHOW(cfg));
+  auto blocks = postorder_sort(cfg.blocks());
   auto liveness = backwards_dataflow<Liveness>(blocks, Liveness(nregs),
       Liveness::trans);
 
   auto DEBUG_ONLY dump_liveness = [&](const LivenessMap& amap) {
-    for (auto& block : blocks) {
+    for (auto& block : cfg.blocks()) {
       for (auto& mie : *block) {
         if (mie.type != MFLOW_OPCODE) {
           continue;
@@ -174,14 +175,13 @@ void allocate_registers(DexMethod* m) {
   }
   MethodTransformer transform(m, true /* want_cfg */);
   auto& cfg = transform->cfg();
-  auto blocks = postorder_sort(cfg);
   auto nregs = m->get_code()->get_registers_size();
-  auto liveness_map = Liveness::analyze(blocks, nregs);
+  auto liveness_map = Liveness::analyze(cfg, nregs);
   auto ins = m->get_code()->get_ins_size();
 
   // Use liveness to build a conflict graph.
   std::vector<RegSet> conflicts(nregs, RegSet(nregs));
-  for (auto& block : blocks) {
+  for (auto& block : cfg.blocks()) {
     for (auto& mie : *block) {
       if (mie.type != MFLOW_OPCODE) {
         continue;
@@ -282,7 +282,7 @@ void allocate_registers(DexMethod* m) {
   };
   TRACE(REG, 5, "%s", dumpAllocation());
 
-  for (auto& block : blocks) {
+  for (auto& block : cfg.blocks()) {
     for (auto& item : *block) {
       if (item.type != MFLOW_OPCODE) {
         continue;

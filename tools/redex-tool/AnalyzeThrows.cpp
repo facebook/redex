@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ControlFlow.h"
 #include "Show.h"
 #include "Tool.h"
 #include "Transform.h"
@@ -113,7 +114,7 @@ void walk_predecessors(
  */
 void collect_throwing_blocks(
     MethodTransform* mt, LogicalBlock& throwing_blocks) {
-  const auto& blocks = mt->cfg();
+  const auto& blocks = mt->cfg().blocks();
   std::queue<Block*> blocks_to_visit;
   std::unordered_set<Block*> no_throw_blocks;
   // collect all blocks with a return
@@ -182,7 +183,7 @@ void find_throwing_block(const Scope& scope) {
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
         auto* mt = MethodTransform::get_method_transform(meth, true, false);
-        const auto& blocks = mt->cfg();
+        const auto& blocks = mt->cfg().blocks();
         for (const auto& block : blocks) {
           if (is_throw_block(meth, block)) {
             // do the analysis to find the blocks contributing to the throw

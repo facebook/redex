@@ -56,6 +56,7 @@ libredex_la_SOURCES = \
 	liblocator/locator.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
+	libredex/ControlFlow.cpp \
 	libredex/Debug.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexClass.cpp \

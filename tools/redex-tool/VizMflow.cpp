@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ControlFlow.h"
 #include "Show.h"
 #include "Tool.h"
 #include "Transform.h"
@@ -32,7 +33,7 @@ void dump_viz(
           meth,
           true,
           end_block_before_throw);
-        const auto& blocks = mt->cfg();
+        const auto& blocks = mt->cfg().blocks();
         fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
         for (const auto& block : blocks) {
           fprintf(stderr, " \"%p\" [label=\"", block);

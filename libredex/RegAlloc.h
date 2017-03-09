@@ -35,7 +35,7 @@ class Liveness {
   void enlarge(uint16_t ins_size, uint16_t newregs);
 
   static void trans(const DexInstruction*, Liveness*);
-  static std::unique_ptr<LivenessMap> analyze(std::vector<Block*>&,
+  static std::unique_ptr<LivenessMap> analyze(ControlFlowGraph&,
                                               uint16_t nregs);
 
   friend std::string show(const Liveness&);

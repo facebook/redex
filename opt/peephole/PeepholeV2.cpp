@@ -15,11 +15,11 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "PassManager.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -978,7 +978,7 @@ class PeepholeOptimizerV2 {
     std::vector<DexInstruction*> deletes;
     std::vector<std::pair<DexInstruction*, std::vector<DexInstruction*>>>
         inserts;
-    const auto& blocks = transform->cfg();
+    const auto& blocks = transform->cfg().blocks();
     for (const auto& block : blocks) {
       // Currently, all patterns do not span over multiple basic blocks. So
       // reset all matching states on visiting every basic block.

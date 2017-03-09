@@ -7,8 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ControlFlow.h"
 #include "DexInstruction.h"
-#include "Transform.h"
 
 template <typename T>
 std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(

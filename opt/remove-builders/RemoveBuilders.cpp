@@ -123,7 +123,7 @@ bool this_arg_escapes(DexMethod* method) {
   auto this_reg = regs_size - code->get_ins_size();
   auto this_cls = method->get_class();
   MethodTransformer mt(method, /* want_cfg */ true);
-  auto blocks = postorder_sort(mt->cfg());
+  auto blocks = postorder_sort(mt->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(const DexInstruction*, TaintedRegs*)> trans = [&](
       const DexInstruction* insn, TaintedRegs* tregs) {
@@ -341,7 +341,7 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
 // or if they get stored in a field, or if they escape as a return value.
 bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   MethodTransformer mt(method, /* want_cfg */ true);
-  auto blocks = postorder_sort(mt->cfg());
+  auto blocks = postorder_sort(mt->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
   std::function<void(const DexInstruction*, TaintedRegs*)> trans = [&](

@@ -13,10 +13,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "PassManager.h"
-#include "Transform.h"
 #include "DexUtil.h"
 #include "Walkers.h"
 
@@ -195,7 +195,7 @@ class PeepholeOptimizer {
     auto transform =
         MethodTransform::get_method_transform(method, true /* want_cfg */);
     m_replacements.clear();
-    auto const& blocks = transform->cfg();
+    auto const& blocks = transform->cfg().blocks();
     for (auto const& block : blocks) {
       peephole_block(block, method->get_code()->get_registers_size());
     }
