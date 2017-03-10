@@ -114,9 +114,6 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
       scope, stores[0].get_dexen()[0], inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
-  MethodTransform::sync_all(scope);
-  MethodTransform::balloon_all(scope);
-
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
