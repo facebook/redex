@@ -117,7 +117,6 @@ void print_scope(Scope& scope) {
 TEST(NoOverload, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_1();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(2, rename_virtuals(scope));
@@ -150,7 +149,6 @@ TEST(NoOverload, empty) {
 TEST(Override, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_2();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(5, rename_virtuals(scope));
@@ -190,7 +188,6 @@ TEST(Override, empty) {
 TEST(OverrideOverload, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_3();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(9, rename_virtuals(scope));
@@ -248,7 +245,6 @@ TEST(OverrideOverload, empty) {
 TEST(Interface, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_4();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(10, rename_virtuals(scope));
@@ -321,7 +317,6 @@ TEST(Interface, empty) {
 TEST(Interface1, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_5();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
@@ -362,7 +357,6 @@ TEST(Interface1, empty) {
 TEST(Interface2, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_6();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
@@ -403,7 +397,6 @@ TEST(Interface2, empty) {
 TEST(Interface3, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_7();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(17, rename_virtuals(scope));
@@ -446,7 +439,6 @@ TEST(Interface3, empty) {
 TEST(Interface3Miranda, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_8();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
@@ -491,7 +483,6 @@ TEST(Interface3Miranda, empty) {
 TEST(Interface3MirandaMultiIntf, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_9();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(17, rename_virtuals(scope));
@@ -541,7 +532,6 @@ TEST(Interface3MirandaMultiIntf, empty) {
 TEST(Interface3IntfOverride, empty) {
   g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_10();
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));
@@ -596,7 +586,6 @@ TEST(Interface3IntfOverEscape, empty) {
   create_empty_method(cls, "A",
       DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({})),
       ACC_PUBLIC | ACC_STATIC);
-  MethodTransform::balloon_all(scope);
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));

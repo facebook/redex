@@ -124,9 +124,10 @@ class PeepholeTest : public ::testing::Test {
         dex_class->get_type(), DexString::make_string(method_name), proto);
     method->make_concrete(
         ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
+    method->get_code()->balloon();
 
     // import our instructions
-    MethodTransformer mt(method);
+    auto mt = method->get_code()->get_entries();
     for (const auto& insn_ptr : insns.instructions) {
       mt->push_back(insn_ptr->clone());
     }
@@ -168,7 +169,6 @@ class PeepholeTest : public ::testing::Test {
               const DexInstructionList& expected) {
     DexMethod* method = make_void_method(name, src);
     dex_class->add_method(method);
-    method->get_code()->balloon();
     manager.run_passes(stores, config);
     method->get_code()->sync();
     DexInstructionList result(method->get_code()->release_instructions());

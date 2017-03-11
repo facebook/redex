@@ -526,6 +526,7 @@ DexMethod* MethodCreator::create() {
     method->make_concrete(access, std::move(to_code()),
         !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
   }
+  method->get_code()->balloon();
   return method;
 }
 

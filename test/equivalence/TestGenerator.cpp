@@ -31,13 +31,9 @@ void EquivalenceTest::generate(DexClass* cls) {
   before->get_code()->balloon();
   build_method(before);
   cls->add_method(before);
-  // TODO: have method cloning work for FatMethods so this sync is unnecessary
-  before->get_code()->sync();
   auto after = DexMethod::make_method_from(
       before, cls->get_type(), DexString::make_string("after_" + test_name()));
-  before->get_code()->balloon();
   cls->add_method(after);
-  after->get_code()->balloon();
   transform_method(after);
 }
 

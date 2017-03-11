@@ -441,7 +441,13 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   if (that->m_anno) {
     m->m_anno = new DexAnnotationSet(*that->m_anno);
   }
+
+  // TODO: have method cloning work for FatMethods so this sync is unnecessary
+  that->m_code->sync();
   m->m_code.reset(new DexCode(*that->m_code));
+  that->m_code->balloon();
+  m->m_code->balloon();
+
   m->m_access = that->m_access;
   m->m_concrete = that->m_concrete;
   m->m_virtual = that->m_virtual;
