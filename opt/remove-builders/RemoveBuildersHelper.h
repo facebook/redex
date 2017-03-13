@@ -9,7 +9,32 @@
 
 #pragma once
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "DexClass.h"
+
+using RegSet = boost::dynamic_bitset<>;
+
+struct TaintedRegs {
+  RegSet m_reg_set;
+
+  explicit TaintedRegs(int nregs): m_reg_set(nregs) {}
+  explicit TaintedRegs(const RegSet&& reg_set)
+      : m_reg_set(std::move(reg_set)) {}
+
+  const RegSet& bits() { return m_reg_set; }
+
+  void meet(const TaintedRegs& that) {
+    m_reg_set |= that.m_reg_set;
+  }
+  void trans(const DexInstruction*);
+  bool operator==(const TaintedRegs& that) const {
+    return m_reg_set == that.m_reg_set;
+  }
+  bool operator!=(const TaintedRegs& that) const {
+    return !(*this == that);
+  }
+};
 
 /**
  * Returns the build method if one exists.

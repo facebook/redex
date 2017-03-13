@@ -9,7 +9,6 @@
 
 #include "RemoveBuilders.h"
 
-#include <boost/dynamic_bitset.hpp>
 #include <boost/regex.hpp>
 
 #include "Dataflow.h"
@@ -31,30 +30,6 @@ DexType* get_buildee(DexType* builder) {
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
   return DexType::get_type(buildee_name.c_str());
 }
-
-using RegSet = boost::dynamic_bitset<>;
-
-struct TaintedRegs {
-  RegSet m_reg_set;
-
-  explicit TaintedRegs(int nregs): m_reg_set(nregs) {}
-  explicit TaintedRegs(const RegSet&& reg_set)
-      : m_reg_set(std::move(reg_set)) {}
-
-  const RegSet& bits() { return m_reg_set; }
-
-  void meet(const TaintedRegs& that) {
-    m_reg_set |= that.m_reg_set;
-  }
-  void trans(const DexInstruction*);
-  bool operator==(const TaintedRegs& that) const {
-    return m_reg_set == that.m_reg_set;
-  }
-  bool operator!=(const TaintedRegs& that) const {
-    return !(*this == that);
-  }
-};
-
 
 void transfer_object_reach(DexType* obj,
                            uint16_t regs_size,
