@@ -209,7 +209,7 @@ void walk_matching_opcodes(
           return;
         }
         // Try to match starting at i
-        for (size_t i = 0 ; i < insns.size() - N ; ++i) {
+        for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
           if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
             DexInstruction* insns_array[N];
             for ( size_t c = 0 ; c < N ; ++c ) {
