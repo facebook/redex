@@ -287,51 +287,7 @@ enum DexOpcodeFormat : uint8_t {
   OP(XOR_INT_LIT8                 , 0xdf, f22b)    \
   OP(SHL_INT_LIT8                 , 0xe0, f22b)    \
   OP(SHR_INT_LIT8                 , 0xe1, f22b)    \
-  OP(USHR_INT_LIT8                , 0xe2, f22b)    \
-  OP(CONST_CLASS_JUMBO            , 0x00ff, f41c_d) \
-  OP(CHECK_CAST_JUMBO             , 0x01ff, f41c_s) \
-  OP(INSTANCE_OF_JUMBO            , 0x02ff, f52c_d) \
-  OP(NEW_INSTANCE_JUMBO           , 0x03ff, f41c_d) \
-  OP(NEW_ARRAY_JUMBO              , 0x04ff, f52c_d) \
-  OP(FILLED_NEW_ARRAY_JUMBO       , 0x05ff, f5rc)   \
-  OP(IGET_JUMBO                   , 0x06ff, f52c_d) \
-  OP(IGET_WIDE_JUMBO              , 0x07ff, f52c_d) \
-  OP(IGET_OBJECT_JUMBO            , 0x08ff, f52c_d) \
-  OP(IGET_BOOLEAN_JUMBO           , 0x09ff, f52c_d) \
-  OP(IGET_BYTE_JUMBO              , 0x0aff, f52c_d) \
-  OP(IGET_CHAR_JUMBO              , 0x0bff, f52c_d) \
-  OP(IGET_SHORT_JUMBO             , 0x0cff, f52c_d) \
-  OP(IPUT_JUMBO                   , 0x0dff, f52c_s) \
-  OP(IPUT_WIDE_JUMBO              , 0x0eff, f52c_s) \
-  OP(IPUT_OBJECT_JUMBO            , 0x0fff, f52c_s) \
-  OP(IPUT_BOOLEAN_JUMBO           , 0x10ff, f52c_s) \
-  OP(IPUT_BYTE_JUMBO              , 0x11ff, f52c_s) \
-  OP(IPUT_CHAR_JUMBO              , 0x12ff, f52c_s) \
-  OP(IPUT_SHORT_JUMBO             , 0x13ff, f52c_s) \
-  OP(SGET_JUMBO                   , 0x14ff, f41c_d) \
-  OP(SGET_WIDE_JUMBO              , 0x15ff, f41c_d) \
-  OP(SGET_OBJECT_JUMBO            , 0x16ff, f41c_d) \
-  OP(SGET_BOOLEAN_JUMBO           , 0x17ff, f41c_d) \
-  OP(SGET_BYTE_JUMBO              , 0x18ff, f41c_d) \
-  OP(SGET_CHAR_JUMBO              , 0x19ff, f41c_d) \
-  OP(SGET_SHORT_JUMBO             , 0x1aff, f41c_d) \
-  OP(SPUT_JUMBO                   , 0x1bff, f41c_s) \
-  OP(SPUT_WIDE_JUMBO              , 0x1cff, f41c_s) \
-  OP(SPUT_OBJECT_JUMBO            , 0x1dff, f41c_s) \
-  OP(SPUT_BOOLEAN_JUMBO           , 0x1eff, f41c_s) \
-  OP(SPUT_BYTE_JUMBO              , 0x1fff, f41c_s) \
-  OP(SPUT_CHAR_JUMBO              , 0x20ff, f41c_s) \
-  OP(SPUT_SHORT_JUMBO             , 0x21ff, f41c_s) \
-  OP(INVOKE_VIRTUAL_RANGE_JUMBO   , 0x22ff, f5rc)   \
-  OP(INVOKE_SUPER_RANGE_JUMBO     , 0x23ff, f5rc)   \
-  OP(INVOKE_DIRECT_RANGE_JUMBO    , 0x24ff, f5rc)   \
-  OP(INVOKE_STATIC_RANGE_JUMBO    , 0x25ff, f5rc)   \
-  OP(INVOKE_INTERFACE_RANGE_JUMBO , 0x26ff, f5rc)   \
-  OP(INVOKE_VIRTUAL_JUMBO         , 0x27ff, f57c)   \
-  OP(INVOKE_SUPER_JUMBO           , 0x28ff, f57c)   \
-  OP(INVOKE_DIRECT_JUMBO          , 0x29ff, f57c)   \
-  OP(INVOKE_STATIC_JUMBO          , 0x2aff, f57c)   \
-  OP(INVOKE_INTERFACE_JUMBO       , 0x2bff, f57c)
+  OP(USHR_INT_LIT8                , 0xe2, f22b)
 
 #define MAX_ARG_COUNT (4)
 

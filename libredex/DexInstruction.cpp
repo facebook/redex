@@ -227,8 +227,6 @@ bool DexInstruction::src_is_wide(int i) const {
   case OPCODE_APUT_WIDE:
   case OPCODE_IPUT_WIDE:
   case OPCODE_SPUT_WIDE:
-  case OPCODE_IPUT_WIDE_JUMBO:
-  case OPCODE_SPUT_WIDE_JUMBO:
     return i == 0;
 
   case OPCODE_NEG_LONG:
@@ -304,8 +302,6 @@ bool DexInstruction::dest_is_wide() const {
   case OPCODE_AGET_WIDE:
   case OPCODE_IGET_WIDE:
   case OPCODE_SGET_WIDE:
-  case OPCODE_IGET_WIDE_JUMBO:
-  case OPCODE_SGET_WIDE_JUMBO:
     return true;
 
   case OPCODE_NEG_LONG:
