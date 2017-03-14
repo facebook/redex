@@ -8,6 +8,7 @@
  */
 
 #include "VirtualScope.h"
+#include "Creators.h"
 #include "DexUtil.h"
 #include "DexAccess.h"
 #include "ReachableClasses.h"
@@ -149,6 +150,17 @@ void load_object_vmethods() {
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
+
+  // Now make sure Object itself exists.
+  if (type_class(type) == nullptr) {
+    ClassCreator cc(type);
+    cc.set_access(ACC_PUBLIC);
+    auto object_class = cc.create();
+    for (auto const& m : object_methods) {
+      object_class->add_method(m);
+    }
+    cc.create();
+  }
 }
 
 // map from a proto to the set of interface implementing that sig
