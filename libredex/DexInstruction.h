@@ -344,6 +344,8 @@ OPS
   FOPCODE_FILLED_ARRAY  = 0x0300,
 };
 
+extern std::vector<DexOpcode> all_opcodes;
+
 std::string show(DexOpcode);
 
 class DexIdx;

@@ -829,7 +829,8 @@ std::string show(DexOpcode opcode) {
     return #op;
     OPS
 #undef OP
-        case FOPCODE_PACKED_SWITCH : return "PACKED_SWITCH_DATA";
+  case FOPCODE_PACKED_SWITCH:
+    return "PACKED_SWITCH_DATA";
   case FOPCODE_SPARSE_SWITCH:
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:

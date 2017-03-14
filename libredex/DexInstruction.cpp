@@ -1388,3 +1388,9 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
     return nullptr;
   }
 }
+
+std::vector<DexOpcode> all_opcodes {
+#define OP(op, ...) OPCODE_ ## op,
+  OPS
+#undef OP
+};
