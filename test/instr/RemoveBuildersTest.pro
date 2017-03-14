@@ -1,5 +1,6 @@
 -dontobfuscate
 -dontshrink
+-dontoptimize
 
 -keep @com.facebook.redex.test.instr.UsingNoEscapeBuilder class *
 -keepclassmembers class * {
@@ -14,8 +15,6 @@
 -keep class sun.misc.** { *; }
 -keep class android.test.** { *; }
 -keep class android.support.test.** { *; }
-
--optimizations !method/inlining/*
 
 -dontwarn org.fest.**
 -dontwarn org.junit.**

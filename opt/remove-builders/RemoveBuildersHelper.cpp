@@ -12,10 +12,118 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/regex.hpp>
 
+#include "ControlFlow.h"
+#include "Dataflow.h"
 #include "DexUtil.h"
 #include "Transform.h"
 
-DexMethod* get_build_method(std::vector<DexMethod*>& vmethods) {
+namespace {
+
+void fields_mapping(const DexInstruction* insn,
+                    FieldsRegs* fregs,
+                    DexClass* builder,
+                    bool is_setter) {
+  // Check if the register that used to hold the field's value is overwritten.
+  if (insn->dests_size()) {
+    const int current_dest = insn->dest();
+
+    for (const auto& pair : fregs->field_to_reg) {
+      if (pair.second == current_dest) {
+        fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
+      }
+
+      if (insn->dest_is_wide()) {
+        if (pair.second == current_dest + 1) {
+          fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
+        }
+      }
+    }
+  }
+
+  if ((is_setter && is_iput(insn->opcode())) ||
+      (!is_setter && is_iget(insn->opcode()))) {
+    auto field = static_cast<const DexOpcodeField*>(insn)->field();
+
+    if (field->get_class() == builder->get_type()) {
+      uint16_t current = is_setter ? insn->src(0) : insn->dest();
+      fregs->field_to_reg[field] = current;
+    }
+  }
+}
+
+/**
+ * Returns for every instruction, field value:
+ * - a register: representing the register that stores the field's value
+ * - UNDEFINED: not defined yet.
+ * - DIFFERENT: no unique register.
+ * - OVERWRITTEN: register no longer holds the value.
+ */
+std::unique_ptr<std::unordered_map<DexInstruction*, FieldsRegs>>
+fields_setters(const std::vector<Block*>& blocks,
+               DexClass* builder) {
+
+  std::function<void(const DexInstruction*, FieldsRegs*)> trans = [&](
+      const DexInstruction* insn, FieldsRegs* fregs) {
+    fields_mapping(insn, fregs, builder, true);
+  };
+
+  return forwards_dataflow(blocks, FieldsRegs(builder), trans);
+}
+
+/**
+ * Returns for every instruction, field value:
+ * - a register: representing the register that had the field's value.
+ * - UNDEFINED: not defined yet (no getter).
+ * - DIFFERENT: different registers used to hold the field's value.
+ * - OVERWRITTEN: register overwritten.
+ */
+std::unique_ptr<std::unordered_map<DexInstruction*, FieldsRegs>>
+fields_getters(const std::vector<Block*>& blocks,
+               DexClass* builder) {
+
+  std::function<void(const DexInstruction*, FieldsRegs*)> trans = [&](
+      const DexInstruction* insn, FieldsRegs* fregs) {
+    fields_mapping(insn, fregs, builder, false);
+  };
+
+  return forwards_dataflow(blocks, FieldsRegs(builder), trans);
+}
+
+}  // namespace
+
+///////////////////////////////////////////////
+
+void TaintedRegs::meet(const TaintedRegs& that) {
+  m_reg_set |= that.m_reg_set;
+}
+
+bool TaintedRegs::operator==(const TaintedRegs& that) const {
+  return m_reg_set == that.m_reg_set;
+}
+
+bool TaintedRegs::operator!=(const TaintedRegs& that) const {
+  return !(*this == that);
+}
+
+void FieldsRegs::meet(const FieldsRegs& that) {
+  for (const auto& pair : field_to_reg) {
+    if (field_to_reg.at(pair.first) != that.field_to_reg.at(pair.first)) {
+      field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
+    }
+  }
+}
+
+bool FieldsRegs::operator==(const FieldsRegs& that) const {
+  return field_to_reg == that.field_to_reg;
+}
+
+bool FieldsRegs::operator!=(const FieldsRegs& that) const {
+  return !(*this == that);
+}
+
+//////////////////////////////////////////////
+
+DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods) {
   static auto build = DexString::make_string("build");
   for (const auto& vmethod : vmethods) {
     if (vmethod->get_name() == build) {
@@ -71,108 +179,89 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
     return false;
   }
 
+  auto transform = code->get_entries();
+  transform->build_cfg();
+  auto blocks = postorder_sort(transform->cfg().blocks());
+
+  auto fields_in = fields_setters(blocks, builder);
+  auto fields_out = fields_getters(blocks, builder);
+
   static auto init = DexString::make_string("<init>");
-  bool is_builder_removed = true;
 
-  std::unordered_map<DexField*, uint16_t> field_to_register;
-  std::unordered_map<uint16_t, uint16_t> old_to_new_reg;
-  std::unordered_set<uint16_t> used_regs;
   std::vector<DexInstruction*> deletes;
+  std::vector<std::tuple<DexInstruction*, size_t, uint16_t>> replacements;
 
-  // TODO(emmasevastian): For now, this only works for straight-line code.
-  for (auto const& mie : InstructionIterable(code->get_entries())) {
-    auto insn = mie.insn;
-    DexOpcode opcode = insn->opcode();
-
-    if (is_branch(opcode)) {
-      is_builder_removed = false;
-      break;
-
-    } else if (opcode == OPCODE_NEW_INSTANCE) {
-      DexType* cls = static_cast<DexOpcodeType*>(insn)->get_type();
-      if (type_class(cls) == builder) {
-        deletes.push_back(insn);
+  for (auto& block : blocks) {
+    for (auto& mie : *block) {
+      if (mie.type != MFLOW_OPCODE) {
+        continue;
       }
 
-    } else if (is_invoke(opcode)) {
-      auto invoked = static_cast<const DexOpcodeMethod*>(insn)->get_method();
-      if (invoked->get_class() == builder->get_type() &&
-          invoked->get_name() == init) {
-        deletes.push_back(insn);
+      auto insn = mie.insn;
+      DexOpcode opcode = insn->opcode();
 
-      } else if (
-          invoked->get_class() == buildee->get_type() &&
-          invoked->get_name() == init) {
+      if (is_iput(opcode) || is_iget(opcode)) {
+        auto field = static_cast<const DexOpcodeField*>(insn)->field();
+        if (field->get_class() == builder->get_type()) {
+          deletes.push_back(insn);
+          continue;
+        }
 
-        // Check all fields were mapped.
-        for (unsigned i = 1; i < insn->srcs_size(); ++i) {
-          if (old_to_new_reg.find(insn->src(i)) == old_to_new_reg.end()) {
-            is_builder_removed = false;
-            break;
+      } else if (opcode == OPCODE_NEW_INSTANCE) {
+        DexType* cls = static_cast<DexOpcodeType*>(insn)->get_type();
+        if (type_class(cls) == builder) {
+          deletes.push_back(insn);
+          continue;
+        }
+
+      } else if (is_invoke(opcode)) {
+        auto invoked = static_cast<const DexOpcodeMethod*>(insn)->get_method();
+        if (invoked->get_class() == builder->get_type() &&
+            invoked->get_name() == init) {
+          deletes.push_back(insn);
+          continue;
+        }
+      }
+
+      auto& fields_in_insn = fields_in->at(mie.insn);
+      auto& fields_out_insn = fields_out->at(mie.insn);
+
+      if (insn->srcs_size()) {
+        for (size_t index = 0; index < insn->srcs_size(); ++index) {
+          const int current_src = insn->src(index);
+
+          for (const auto& pair : fields_out_insn.field_to_reg) {
+            if (pair.second == current_src) {
+
+              // TODO(emmaevastian): Treat the case where no register holds
+              //                     the current field's value.
+              if (fields_in_insn.field_to_reg[pair.first] < 0) {
+                return false;
+
+              } else {
+                replacements.emplace_back(
+                    insn,
+                    index,
+                    fields_in_insn.field_to_reg[pair.first]);
+              }
+            }
           }
         }
-
-        if (!is_builder_removed) {
-           break;
-        }
-
-        for (unsigned i = 1; i < insn->srcs_size(); ++i) {
-          insn->set_src(i, old_to_new_reg.at(insn->src(i)));
-        }
-
-        break;
-      }
-    } else if (is_iput(opcode)) {
-      auto field = static_cast<const DexOpcodeField*>(insn)->field();
-      if (field->get_class() == builder->get_type()) {
-        uint16_t used_reg = insn->src(0);
-        if (used_regs.find(used_reg) != used_regs.end()) {
-          is_builder_removed = false;
-          break;
-        }
-
-        if (field_to_register.find(field) == field_to_register.end()) {
-          field_to_register.emplace(field, insn->src(0));
-        }
-
-        used_regs.emplace(used_reg);
-        deletes.push_back(insn);
-      }
-    } else if (is_iget(opcode)) {
-      auto field = static_cast<const DexOpcodeField*>(insn)->field();
-      if (field->get_class() == builder->get_type()) {
-        if (field_to_register.find(field) == field_to_register.end()) {
-          // Accessing an unset field.
-          // TODO(emmasevastian): treat this case.
-          is_builder_removed = false;
-          break;
-        } else {
-          uint16_t stored_reg = field_to_register.at(field);
-          uint16_t used_reg = insn->dest();
-
-          old_to_new_reg.emplace(used_reg, stored_reg);
-          deletes.push_back(insn);
-        }
-      }
-    } else {
-      // TODO(emmasevastian): allocate extra registers.
-      if (insn->dests_size() > 0) {
-        uint16_t current_dest = insn->dest();
-        if (used_regs.find(current_dest) != used_regs.end()) {
-          is_builder_removed = false;
-          break;
-        }
       }
     }
   }
 
-  if (is_builder_removed) {
-    auto transform = method->get_code()->get_entries();
-
-    for (const auto& insn : deletes) {
-      transform->remove_opcode(insn);
-    }
+  for (const auto& insn : deletes) {
+    transform->remove_opcode(insn);
   }
 
-  return is_builder_removed;
+  for (const auto& insn_replace : replacements) {
+    DexInstruction* insn = std::get<0>(insn_replace);
+    size_t index = std::get<1>(insn_replace);
+    uint16_t new_reg = std::get<2>(insn_replace);
+
+    insn->set_src(index, new_reg);
+  }
+
+  return true;
 }

@@ -24,22 +24,51 @@ struct TaintedRegs {
 
   const RegSet& bits() { return m_reg_set; }
 
-  void meet(const TaintedRegs& that) {
-    m_reg_set |= that.m_reg_set;
-  }
+  void meet(const TaintedRegs& that);
   void trans(const DexInstruction*);
-  bool operator==(const TaintedRegs& that) const {
-    return m_reg_set == that.m_reg_set;
+
+  bool operator==(const TaintedRegs& that) const;
+  bool operator!=(const TaintedRegs& that) const;
+};
+
+/**
+ * Using negative numbers here, since those will be used
+ * alongside registers (uint16_t).
+ */
+enum FieldOrRegStatus : int {
+  // Field not initialized.
+  UNDEFINED = -1,
+
+  // Field initialized with different registers.
+  DIFFERENT = -2,
+
+  // Register that was storing the field's value was overwritten.
+  OVERWRITTEN = -3,
+};
+
+struct FieldsRegs {
+  std::unordered_map<DexField*, int> field_to_reg;
+
+  explicit FieldsRegs(DexClass* builder) {
+    const auto& ifields = builder->get_ifields();
+    for (const auto& ifield : ifields) {
+      field_to_reg[ifield] = FieldOrRegStatus::UNDEFINED;
+    }
   }
-  bool operator!=(const TaintedRegs& that) const {
-    return !(*this == that);
-  }
+  explicit FieldsRegs(const std::unordered_map<DexField*, int>&& field_to_reg)
+      : field_to_reg(std::move(field_to_reg)) {}
+
+  void meet(const FieldsRegs& that);
+  void trans(const DexInstruction*);
+
+  bool operator==(const FieldsRegs& that) const;
+  bool operator!=(const FieldsRegs& that) const;
 };
 
 /**
  * Returns the build method if one exists.
  */
-DexMethod* get_build_method(std::vector<DexMethod*>& vmethods);
+DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods);
 
 /**
  * Given a method that calls the builder, it will remove it completely.
