@@ -454,6 +454,7 @@ int main(int argc, char* argv[]) {
               fprintf(stderr,
                       "ERROR: Library jar could not be loaded: %s\n",
                       library_jar.c_str());
+              exit(1);
             }
           }
         }
