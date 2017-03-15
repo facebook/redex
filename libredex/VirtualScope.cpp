@@ -20,14 +20,12 @@
 
 namespace {
 
-std::vector<DexMethod*> object_methods;
 /**
- * Return the list of methods for a given type.
- * If the type is java.lang.Object and it is not known (no DexClass for it)
- * it generates fictional methods for it.
+ * Create a DexClass for Object, which may be missing if no
+ * jar files were specified on the command line
  */
-void load_object_vmethods() {
-  if (object_methods.size() > 0) return;
+void create_object_class() {
+  std::vector<DexMethod*> object_methods;
 
   auto type = get_object_type();
   // create the following methods:
@@ -754,11 +752,13 @@ SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
 
 const std::vector<DexMethod*>& get_vmethods(const DexType* type) {
   const DexClass* cls = type_class(type);
-  if (cls != nullptr) return cls->get_vmethods();
-  always_assert_log(
-      type == get_object_type(), "Unknown type %s\n", SHOW(type));
-  load_object_vmethods();
-  return object_methods;
+  if (cls == nullptr) {
+    always_assert_log(
+        type == get_object_type(), "Unknown type %s\n", SHOW(type));
+    create_object_class();
+    cls = type_class(type);
+  }
+  return cls->get_vmethods();
 }
 
 const VirtualScope& find_virtual_scope(
