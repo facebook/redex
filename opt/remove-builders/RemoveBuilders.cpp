@@ -10,6 +10,7 @@
 #include "RemoveBuilders.h"
 
 #include <boost/regex.hpp>
+#include <tuple>
 
 #include "Dataflow.h"
 #include "DexUtil.h"
@@ -19,6 +20,20 @@
 #include "Walkers.h"
 
 namespace {
+
+constexpr const char* METRIC_CLASSES_REMOVED = "classes_removed";
+constexpr const char* METRIC_FIELDS_REMOVED = "fields_removed";
+constexpr const char* METRIC_METHODS_REMOVED = "methods_removed";
+constexpr const char* METRIC_METHODS_CLEARED = "methods_cleared";
+
+struct builder_counters {
+  size_t classes_removed{0};
+  size_t fields_removed{0};
+  size_t methods_removed{0};
+  size_t methods_cleared{0};
+};
+
+builder_counters b_counter;
 
 bool has_builder_name(DexClass* cls) {
   static boost::regex re {"\\$Builder;$"};
@@ -142,29 +157,6 @@ bool this_arg_escapes(DexClass* cls) {
   return result;
 }
 
-bool is_trivial_setter(DexMethod* m) {
-  auto& code = m->get_code();
-  if (!code) {
-    return false;
-  }
-  std::vector<DexInstruction*> insns;
-  for (auto& mie : InstructionIterable(code->get_entries())) {
-    insns.emplace_back(mie.insn);
-  }
-  if (insns.size() != 2) {
-    return false;
-  }
-  if (is_iput(insns[0]->opcode()) &&
-      insns[0]->src(0) == 1 &&
-      insns[0]->src(1) == 0 &&
-      insns[1]->opcode() == OPCODE_RETURN_OBJECT &&
-      insns[1]->src(0) == 0) {
-    return true;
-  }
-  TRACE(BUILDERS, 5, "Not quite a setter: %s\n", SHOW(code));
-  return false;
-}
-
 std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> static_methods;
 
@@ -272,9 +264,13 @@ bool have_same_instance_fields(DexClass* builder, DexClass* cls) {
  * First pass through what "trivial builder" means:
  *  - is a builder
  *  - it doesn't escape stack
- *  - it has only one vmethod: the build method
+ *  - it either
+ *    - has only one vmethod: the build method
+ *    or
+ *    - has no virtual methods
  *  - the build method only calls the constructor of the class it is defined in
  *  - has no private or static method
+ *  - has no static fields
  *
  * TODO(emmasevastian): Extend the "definition".
  */
@@ -297,22 +293,15 @@ std::unordered_set<DexClass*> get_trivial_builders(
       get_static_methods(builder_class->get_dmethods()).size() != 0;
     bool has_private_methods =
       get_private_methods(builder_class->get_dmethods()).size() != 0;
-    DexMethod* build_method = get_build_method(builder_class->get_vmethods());
 
     if (has_static_methods ||
         has_private_methods ||
-        build_method == nullptr ||
-        builder_class->get_vmethods().size() > 1) {
+        builder_class->get_sfields().size()) {
       continue;
     }
 
     DexType* buildee_type = get_buildee(builder_class->get_type());
     if (!buildee_type) {
-      continue;
-    }
-
-    // Filter out builders that do "extra work" in the build method.
-    if (!is_trivial_build_method(build_method, buildee_type)) {
       continue;
     }
 
@@ -330,6 +319,22 @@ std::unordered_set<DexClass*> get_trivial_builders(
       continue;
     }
 
+    if (builder_class->get_vmethods().size() > 2) {
+      continue;
+    }
+
+    DexMethod* build_method = get_build_method(builder_class->get_vmethods());
+    if (build_method == nullptr && builder_class->get_vmethods().size() == 1) {
+      continue;
+    }
+
+    if (build_method) {
+      // Filter out builders that do "extra work" in the build method.
+      if (!is_trivial_build_method(build_method, buildee_type)) {
+        continue;
+      }
+    }
+
     trivial_builders.emplace(builder_class);
   }
 
@@ -341,13 +346,35 @@ void remove_builder_classes(
     const std::unordered_set<DexClass*>& kept_builders,
     Scope& classes) {
 
+  std::unordered_set<DexClass*> class_references;
+  for (const auto& cls : classes) {
+    DexType* type = cls->get_super_class();
+    if (has_builder_name(type_class(type))) {
+      class_references.insert(type_class(type));
+    }
+  }
+
   classes.erase(
     remove_if(
       classes.begin(),
       classes.end(),
       [&](DexClass* cls) {
-        return builder.find(cls) != builder.end() &&
-               kept_builders.find(cls) == kept_builders.end();
+        if (class_references.find(cls) != class_references.end()) {
+          return false;
+        }
+
+        if (builder.find(cls) != builder.end() &&
+            kept_builders.find(cls) == kept_builders.end()) {
+
+          b_counter.classes_removed++;
+          b_counter.methods_removed +=
+            cls->get_vmethods().size() + cls-> get_dmethods().size();
+          b_counter.fields_removed += cls->get_ifields().size();
+
+          return true;
+        }
+
+        return false;
       }),
     classes.end());
 }
@@ -408,7 +435,7 @@ void RemoveBuildersPass::run_pass(
 
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
-    if (is_annotation(cls)) {
+    if (is_annotation(cls) || is_interface(cls)) {
       continue;
     }
 
@@ -476,7 +503,6 @@ void RemoveBuildersPass::run_pass(
 
   size_t dmethod_count = 0;
   size_t vmethod_count = 0;
-  size_t setter_count = 0;
   size_t build_count = 0;
   for (DexType* builder : no_escapes) {
     auto cls = type_class(builder);
@@ -486,8 +512,6 @@ void RemoveBuildersPass::run_pass(
     for (DexMethod* m : cls->get_vmethods()) {
       if (m->get_proto()->get_rtype() == buildee) {
         build_count++;
-      } else if (is_trivial_setter(m)) {
-        setter_count++;
       }
     }
   }
@@ -495,7 +519,7 @@ void RemoveBuildersPass::run_pass(
   std::unordered_set<DexClass*> trivial_builders = get_trivial_builders(
       builder_classes, no_escapes);
 
-  std::unordered_map<DexMethod*, DexClass*> method_to_inlined_builders;
+  std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
   std::unordered_set<DexClass*> kept_builders;
 
   // Inline build methods.
@@ -509,19 +533,21 @@ void RemoveBuildersPass::run_pass(
         if (!inline_build(method, builder_cls)) {
           kept_builders.emplace(type_class(builder));
         } else {
-          method_to_inlined_builders.emplace(method, builder_cls);
+          method_to_inlined_builders.emplace_back(method, builder_cls);
         }
       }
     }
   });
 
   for (const auto& pair : method_to_inlined_builders) {
-    DexMethod* method = pair.first;
-    DexClass* builder = pair.second;
+    DexMethod* method = std::get<0>(pair);
+    DexClass* builder = std::get<1>(pair);
 
     if (!remove_builder(
           method, builder, type_class(get_buildee(builder->get_type())))) {
       kept_builders.emplace(builder);
+    } else {
+      b_counter.methods_cleared++;
     }
   }
 
@@ -531,6 +557,10 @@ void RemoveBuildersPass::run_pass(
   mgr.set_metric("total_builders", m_builders.size());
   mgr.set_metric("stack_only_builders", stack_only_builders.size());
   mgr.set_metric("no_escapes", no_escapes.size());
+  mgr.incr_metric(METRIC_CLASSES_REMOVED, b_counter.classes_removed);
+  mgr.incr_metric(METRIC_METHODS_REMOVED, b_counter.methods_removed);
+  mgr.incr_metric(METRIC_FIELDS_REMOVED, b_counter.fields_removed);
+  mgr.incr_metric(METRIC_METHODS_CLEARED, b_counter.methods_cleared);
 
   TRACE(BUILDERS, 1, "Total builders: %d\n", m_builders.size());
   TRACE(BUILDERS, 1, "Stack-only builders: %d\n", stack_only_builders.size());
@@ -539,7 +569,6 @@ void RemoveBuildersPass::run_pass(
   TRACE(BUILDERS, 1, "Stats for unescaping builders:\n", dmethod_count);
   TRACE(BUILDERS, 1, "\tdmethods: %d\n", dmethod_count);
   TRACE(BUILDERS, 1, "\tvmethods: %d\n", vmethod_count);
-  TRACE(BUILDERS, 1, "\ttrivial setters: %d\n", setter_count);
   TRACE(BUILDERS, 1, "\tbuild methods: %d\n", build_count);
   TRACE(BUILDERS, 1, "Trivial builders: %d\n", trivial_builders.size());
 }
