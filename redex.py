@@ -63,6 +63,7 @@ def run_pass(
         apk_dir,
         dex_dir,
         dexfiles,
+        debugger,
         ):
 
     if executable_path is None:
@@ -96,6 +97,11 @@ def run_pass(
     args += ['-J' + x for x in script_args.passthru_json]
 
     args += dexfiles
+
+    if debugger == 'lldb':
+        args = ['lldb', '--'] + args
+    elif debugger == 'gdb':
+        args = ['gdb', '--args'] + args
 
     start = timer()
 
@@ -369,6 +375,9 @@ Given an APK, produce a better APK!
     parser.add_argument('-J', dest='passthru_json', action='append', default=[],
             help='JSON-formatted arguments passed through to redex')
 
+    parser.add_argument('--lldb', action='store_true', help='Run redex binary in lldb')
+    parser.add_argument('--gdb', action='store_true', help='Run redex binary in gdb')
+
     return parser
 
 
@@ -451,13 +460,21 @@ def run_redex(args):
         config_dict[key] = value
 
     log('Running redex-all on {} dex files '.format(len(dexen)))
+    if args.lldb:
+        debugger = 'lldb'
+    elif args.gdb:
+        debugger = 'gdb'
+    else:
+        debugger = None
+
     run_pass(binary,
              args,
              config,
              config_dict,
              extracted_apk_dir,
              dex_dir,
-             dexen)
+             dexen,
+             debugger)
 
     # This file was just here so we could scan it for classnames, but we don't
     # want to pack it back up into the apk
