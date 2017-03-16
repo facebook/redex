@@ -252,15 +252,6 @@ bool is_trivial_builder_constructor(DexMethod* method) {
 }
 
 /**
- * Basic check for number of instance fields.
- *
- * TODO(emmasevastian); Check relationship between fields.
- */
-bool have_same_instance_fields(DexClass* builder, DexClass* cls) {
-  return builder->get_ifields().size() == cls->get_ifields().size();
-}
-
-/**
  * First pass through what "trivial builder" means:
  *  - is a builder
  *  - it doesn't escape stack
@@ -311,11 +302,6 @@ std::unordered_set<DexClass*> get_trivial_builders(
     }
     DexMethod* constr = builder_class->get_dmethods().at(0);
     if (!is_trivial_builder_constructor(constr)) {
-      continue;
-    }
-
-    // Filter out builders that have extra instance fields.
-    if (!have_same_instance_fields(builder_class, type_class(buildee_type))) {
       continue;
     }
 
