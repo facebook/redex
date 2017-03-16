@@ -1519,6 +1519,25 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   return true;
 }
 
+bool MethodTransform::enlarge_regs(DexMethod* method, uint16_t newregs) {
+  if (newregs > 16) {
+    return false;
+  }
+
+  always_assert(method != nullptr);
+  auto& code = method->get_code();
+  if (!code) {
+    return false;
+  }
+  always_assert(code->get_registers_size() <= newregs);
+
+  MethodTransform* tcaller = code->get_entries();
+  auto fcaller = tcaller->m_fmethod;
+
+  enlarge_registers(&*code, fcaller, newregs);
+  return true;
+}
+
 namespace {
 bool end_of_block(const FatMethod* fm,
                   FatMethod::iterator it,
