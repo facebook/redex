@@ -41,33 +41,15 @@ struct DexInstructionList {
     }
   }
 
-  // Checks if two instructions are equal
-  // Note this is woefully incomplete. It does not handle any of the subclasses
-  // of DexInstruction for example. However it is sufficient for the peephole
-  // use cases
-  static bool instructions_equal(const std::unique_ptr<DexInstruction>& lhs,
-                                 const std::unique_ptr<DexInstruction>& rhs) {
-    if ((lhs->opcode() != rhs->opcode()) ||
-        (lhs->has_literal() != rhs->has_literal()) ||
-        (lhs->has_literal() && lhs->literal() != rhs->literal()) ||
-        (lhs->srcs_size() != rhs->srcs_size()) ||
-        (lhs->dest() != rhs->dest())) {
-      return false;
-    }
-    for (unsigned i = 0; i < lhs->srcs_size(); i++) {
-      if (lhs->src(i) != rhs->src(i)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   bool operator==(const DexInstructionList& rhs) const {
     return instructions.size() == rhs.instructions.size() &&
            std::equal(instructions.begin(),
                       instructions.end(),
                       rhs.instructions.begin(),
-                      instructions_equal);
+                      [](const std::unique_ptr<DexInstruction>& a,
+                         const std::unique_ptr<DexInstruction>& b) {
+                        return *a == *b;
+                      });
   }
 };
 

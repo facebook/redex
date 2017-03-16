@@ -1385,6 +1385,43 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
   }
 }
 
+bool DexInstruction::operator==(const DexInstruction& that) const {
+  if (m_ref_type != that.m_ref_type ||
+      m_opcode != that.m_opcode ||
+      m_count != that.m_count) {
+    return false;
+  }
+  for (size_t i = 0; i < m_count; ++i) {
+    if (m_arg[i] != that.m_arg[i]) {
+      return false;
+    }
+  }
+  switch (m_ref_type) {
+  case REF_NONE:
+    return true;
+  case REF_STRING: {
+    auto this_ = static_cast<const DexOpcodeString*>(this);
+    auto that_ = static_cast<const DexOpcodeString*>(&that);
+    return this_->get_string() == that_->get_string();
+  }
+  case REF_TYPE: {
+    auto this_ = static_cast<const DexOpcodeType*>(this);
+    auto that_ = static_cast<const DexOpcodeType*>(&that);
+    return this_->get_type() == that_->get_type();
+  }
+  case REF_FIELD: {
+    auto this_ = static_cast<const DexOpcodeField*>(this);
+    auto that_ = static_cast<const DexOpcodeField*>(&that);
+    return this_->field() == that_->field();
+  }
+  case REF_METHOD: {
+    auto this_ = static_cast<const DexOpcodeMethod*>(this);
+    auto that_ = static_cast<const DexOpcodeMethod*>(&that);
+    return this_->get_method() == that_->get_method();
+  }
+  }
+}
+
 std::vector<DexOpcode> all_opcodes {
 #define OP(op, ...) OPCODE_ ## op,
   OPS

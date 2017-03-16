@@ -309,10 +309,13 @@ class DexOutputIdx;
 
 class DexInstruction : public Gatherable {
  protected:
-  bool m_has_strings{false};
-  bool m_has_types{false};
-  bool m_has_fields{false};
-  bool m_has_methods{false};
+  enum {
+    REF_NONE,
+    REF_STRING,
+    REF_TYPE,
+    REF_FIELD,
+    REF_METHOD
+  } m_ref_type{REF_NONE};
 
  private:
   uint16_t m_opcode;
@@ -362,11 +365,12 @@ class DexInstruction : public Gatherable {
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
   virtual uint16_t size() const;
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
+  bool operator==(const DexInstruction&) const;
 
-  bool has_strings() const { return m_has_strings; }
-  bool has_types() const { return m_has_types; }
-  bool has_fields() const { return m_has_fields; }
-  bool has_methods() const { return m_has_methods; }
+  bool has_strings() const { return m_ref_type == REF_STRING; }
+  bool has_types() const { return m_ref_type == REF_TYPE; }
+  bool has_fields() const { return m_ref_type == REF_FIELD; }
+  bool has_methods() const { return m_ref_type == REF_METHOD; }
 
   /*
    * Number of registers used.
@@ -439,7 +443,7 @@ class DexOpcodeString : public DexInstruction {
 
   DexOpcodeString(uint16_t opcode, DexString* str) : DexInstruction(opcode) {
     m_string = str;
-    m_has_strings = true;
+    m_ref_type = REF_STRING;
   }
 
   DexString* get_string() const { return m_string; }
@@ -461,13 +465,13 @@ class DexOpcodeType : public DexInstruction {
 
   DexOpcodeType(uint16_t opcode, DexType* type) : DexInstruction(opcode) {
     m_type = type;
-    m_has_types = true;
+    m_ref_type = REF_TYPE;
   }
 
   DexOpcodeType(uint16_t opcode, DexType* type, uint16_t arg)
       : DexInstruction(opcode, arg) {
     m_type = type;
-    m_has_types = true;
+    m_ref_type = REF_TYPE;
   }
 
   DexType* get_type() const { return m_type; }
@@ -487,7 +491,7 @@ class DexOpcodeField : public DexInstruction {
 
   DexOpcodeField(uint16_t opcode, DexField* field) : DexInstruction(opcode) {
     m_field = field;
-    m_has_fields = true;
+    m_ref_type = REF_FIELD;
   }
 
   DexField* field() const { return m_field; }
@@ -507,7 +511,7 @@ class DexOpcodeMethod : public DexInstruction {
   DexOpcodeMethod(uint16_t opcode, DexMethod* meth, uint16_t arg = 0)
       : DexInstruction(opcode, arg) {
     m_method = meth;
-    m_has_methods = true;
+    m_ref_type = REF_METHOD;
   }
 
   DexMethod* get_method() const { return m_method; }
