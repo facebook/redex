@@ -72,7 +72,11 @@ def run_pass(
         except subprocess.CalledProcessError:
             pass
     if executable_path is None:
-        executable_path = join(dirname(abspath(__file__)), 'redex-all')
+        # __file__ can be /path/fb-redex.pex/redex.pyc
+        dir_name = dirname(abspath(__file__))
+        while not isdir(dir_name):
+            dir_name = dirname(dir_name)
+        executable_path = join(dir_name, 'redex-all')
     if not isfile(executable_path) or not os.access(executable_path, os.X_OK):
         sys.exit('redex-all is not found or is not executable')
     log('Running redex binary at ' + executable_path)
