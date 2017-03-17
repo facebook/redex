@@ -45,9 +45,9 @@ TEST_F(PostVerify, RemoveFooBuilder) {
     classes, "Lcom/facebook/redex/test/instr/Foo$Builder;");
   EXPECT_EQ(nullptr, foo_builder);
 
-  auto using_foo = find_class_named(
+  auto using_no_escape_builders = find_class_named(
     classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_method = find_vmethod_named(*using_foo, "initializeFoo");
+  auto initialize_method = find_vmethod_named(*using_no_escape_builders, "initializeFoo");
   EXPECT_NE(nullptr, initialize_method);
 
   // No build call.
@@ -99,9 +99,9 @@ TEST_F(PostVerify, RemoveFooBuilderWithMoreArguments) {
     classes, "Lcom/facebook/redex/test/instr/FooMoreArguments$Builder;");
   EXPECT_NE(nullptr, foo_builder);
 
-  auto using_foo = find_class_named(
+  auto using_no_escape_builders = find_class_named(
     classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_method = find_vmethod_named(*using_foo, "initializeFooWithMoreArguments");
+  auto initialize_method = find_vmethod_named(*using_no_escape_builders, "initializeFooWithMoreArguments");
   EXPECT_NE(nullptr, initialize_method);
 
   // No build call.
@@ -154,11 +154,11 @@ TEST_F(PostVerify, RemoveBarBuilder) {
     classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
   EXPECT_NE(nullptr, bar_builder);
 
-  auto using_foo = find_class_named(
+  auto using_no_escape_builders = find_class_named(
     classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_bar = find_vmethod_named(*using_foo, "initializeBar");
+  auto initialize_bar = find_vmethod_named(*using_no_escape_builders, "initializeBar");
   auto initialize_bar_different_regs = find_vmethod_named(
-    *using_foo, "initializeBarDifferentRegs");
+    *using_no_escape_builders, "initializeBarDifferentRegs");
 
   EXPECT_NE(nullptr, initialize_bar_different_regs);
   EXPECT_NE(nullptr, initialize_bar);
@@ -215,4 +215,71 @@ TEST_F(PostVerify, RemoveBarBuilder) {
 
   // Check registers used to initialize field `x` are different.
   EXPECT_EQ(2, iput_regs.size());
+}
+
+namespace {
+
+const size_t PRE_VERIFY_INITIALIZE_CAR_REGS = 4;
+
+}  // namespace
+
+/*
+ * Check builder is actually defined.
+ */
+TEST_F(PreVerify, RemoveCarBuilder) {
+  auto car = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/Car;");
+  EXPECT_NE(nullptr, car);
+
+  auto car_builder = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
+  EXPECT_NE(nullptr, car_builder);
+
+  // Check previous number of registers for initialize method.
+  auto using_no_escape_builders = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_null_model =
+    find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
+  EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS,
+            initialize_null_model->get_code()->get_registers_size());
+}
+
+/*
+ * Ensure the builder was removed and all calls were appropriately removed.
+ */
+TEST_F(PostVerify, RemoveCarBuilder) {
+  auto car = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/Car;");
+  EXPECT_NE(nullptr, car);
+
+  // Check builder class was removed.
+  auto car_builder = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
+  EXPECT_EQ(nullptr, car_builder);
+
+  auto using_no_escape_builders = find_class_named(
+    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_null_model =
+    find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
+
+  EXPECT_NE(nullptr, initialize_null_model);
+  EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS + 1,
+            initialize_null_model->get_code()->get_registers_size());
+
+  // Check there is a register that holds NULL and is passed to
+  // the car's model field.
+  uint16_t null_reg = -1;
+  auto insns = initialize_null_model->get_code()->get_instructions();
+  for (const auto& insn : insns) {
+    DexOpcode opcode = insn->opcode();
+
+    if (opcode == OPCODE_CONST_4) {
+      null_reg = insn->dest();
+    } else if (is_iput(opcode)) {
+      DexField* field = static_cast<DexOpcodeField*>(insn)->field();
+      if (field->get_class() == car->get_type()) {
+        EXPECT_EQ(null_reg, insn->src(0));
+      }
+    }
+  }
 }

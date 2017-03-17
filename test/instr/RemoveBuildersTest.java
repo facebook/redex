@@ -10,6 +10,7 @@
 package com.facebook.redex.test.instr;
 
 import java.util.Random;
+import javax.annotation.Nullable;
 
 class Foo {
   private int x;
@@ -62,6 +63,17 @@ class Bar {
   }
 }
 
+class Car {
+  public @Nullable String model;
+
+  public Car() {
+  }
+
+  public static class Builder {
+    public @Nullable String model;
+  }
+}
+
 class UsingNoEscapeBuilder {
 
   public Foo initializeFoo() {
@@ -100,5 +112,13 @@ class UsingNoEscapeBuilder {
     }
 
     return new Bar(value);
+  }
+
+  public Car initializeNullCarModel(int notUsed) {
+    Car.Builder builder = new Car.Builder();
+    Car car = new Car();
+    car.model = builder.model;
+
+    return car;
   }
 }

@@ -89,6 +89,105 @@ fields_getters(const std::vector<Block*>& blocks,
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
 }
 
+
+/**
+ * Adds an instruction that initializes a new register with null.
+ * Return if the operation succeeded or not.
+ */
+bool add_null_instr(DexMethod* method, MethodTransform* transform) {
+  always_assert(method != nullptr);
+  always_assert(transform != nullptr);
+
+  auto& code = method->get_code();
+  auto oldregs = code->get_registers_size();
+  auto ins = code->get_ins_size();
+  auto newregs = oldregs + 1;
+
+  if (!MethodTransform::enlarge_regs(method, newregs)) {
+    return false;
+  }
+
+  DexInstruction* insn = new DexInstruction(OPCODE_CONST_4);
+
+  // Using last non-input register, since it was freed.
+  uint16_t last_non_input_reg = oldregs - ins;
+  insn->set_dest(last_non_input_reg);
+  insn->set_literal(0);
+
+  std::vector<DexInstruction*> insns;
+  insns.push_back(insn);
+
+  // Adds the instruction at the beginning, since it might be
+  // used in various places later.
+  transform->insert_after(nullptr, insns);
+
+  return true;
+}
+
+using ReplacementsList =
+  std::vector<std::tuple<DexInstruction*, size_t, uint16_t>>;
+
+bool treat_undefined_fields(
+    DexMethod* method,
+    const std::vector<std::tuple<DexInstruction*, size_t>>&
+      undefined_replacements,
+    ReplacementsList* replacements) {
+
+  const bool has_undefined = undefined_replacements.size() > 0;
+
+  if (has_undefined) {
+
+    auto& code = method->get_code();
+    auto transform = code->get_entries();
+
+    auto regs = code->get_registers_size();
+    auto ins = code->get_ins_size();
+    auto non_input_regs = regs - ins;
+
+    if (!add_null_instr(method, transform)) {
+      return false;
+    }
+
+    for (auto& insn_replace : *replacements) {
+      uint16_t new_reg = std::get<2>(insn_replace);
+
+      if (has_undefined && new_reg >= non_input_regs) {
+        std::get<2>(insn_replace) = new_reg + 1;
+      }
+    }
+
+    for (const auto& insn_replace : undefined_replacements) {
+      replacements->emplace_back(
+          std::get<0>(insn_replace),
+          std::get<1>(insn_replace),
+          non_input_regs);
+    }
+  }
+
+  return true;
+}
+
+void method_updates(
+    DexMethod* method,
+    const std::vector<DexInstruction*>& deletes,
+    const ReplacementsList& replacements) {
+
+  auto& code = method->get_code();
+  auto transform = code->get_entries();
+
+  for (const auto& insn : deletes) {
+    transform->remove_opcode(insn);
+  }
+
+  for (const auto& insn_replace : replacements) {
+    DexInstruction* insn = std::get<0>(insn_replace);
+    size_t index = std::get<1>(insn_replace);
+    uint16_t new_reg = std::get<2>(insn_replace);
+
+    insn->set_src(index, new_reg);
+  }
+}
+
 }  // namespace
 
 ///////////////////////////////////////////////
@@ -189,7 +288,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   static auto init = DexString::make_string("<init>");
 
   std::vector<DexInstruction*> deletes;
-  std::vector<std::tuple<DexInstruction*, size_t, uint16_t>> replacements;
+  std::vector<std::tuple<DexInstruction*, size_t>> undefined_replacements;
+  ReplacementsList replacements;
 
   for (auto& block : blocks) {
     for (auto& mie : *block) {
@@ -235,9 +335,16 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
               // TODO(emmaevastian): Treat the case where no register holds
               //                     the current field's value.
-              if (fields_in_insn.field_to_reg[pair.first] < 0) {
-                return false;
+              auto field_in_value = fields_in_insn.field_to_reg[pair.first];
+              if (field_in_value < 0) {
 
+                if (field_in_value == FieldOrRegStatus::UNDEFINED) {
+                  // Will add a new register that holds 'null'. This new
+                  // register will be used here.
+                  undefined_replacements.emplace_back(insn, index);
+                } else {
+                  return false;
+                }
               } else {
                 replacements.emplace_back(
                     insn,
@@ -251,17 +358,10 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
     }
   }
 
-  for (const auto& insn : deletes) {
-    transform->remove_opcode(insn);
+  if (!treat_undefined_fields(method, undefined_replacements, &replacements)) {
+    return false;
   }
 
-  for (const auto& insn_replace : replacements) {
-    DexInstruction* insn = std::get<0>(insn_replace);
-    size_t index = std::get<1>(insn_replace);
-    uint16_t new_reg = std::get<2>(insn_replace);
-
-    insn->set_src(index, new_reg);
-  }
-
+  method_updates(method, deletes,  replacements);
   return true;
 }

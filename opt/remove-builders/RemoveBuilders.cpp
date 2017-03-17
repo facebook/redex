@@ -557,6 +557,10 @@ void RemoveBuildersPass::run_pass(
   TRACE(BUILDERS, 1, "\tvmethods: %d\n", vmethod_count);
   TRACE(BUILDERS, 1, "\tbuild methods: %d\n", build_count);
   TRACE(BUILDERS, 1, "Trivial builders: %d\n", trivial_builders.size());
+  TRACE(BUILDERS, 1, "Classes removed: %d\n", b_counter.classes_removed);
+  TRACE(BUILDERS, 1, "Methods removed: %d\n", b_counter.methods_removed);
+  TRACE(BUILDERS, 1, "Fields removed: %d\n", b_counter.fields_removed);
+  TRACE(BUILDERS, 1, "Methods cleared: %d\n", b_counter.methods_cleared);
 }
 
 static RemoveBuildersPass s_pass;
