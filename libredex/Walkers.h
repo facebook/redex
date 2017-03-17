@@ -11,8 +11,9 @@
 
 #include <functional>
 #include <vector>
-#include "DexClass.h"
+#include "ControlFlow.h"
 #include "DexAnnotation.h"
+#include "DexClass.h"
 #include "Match.h"
 #include "Transform.h"
 
@@ -216,6 +217,49 @@ void walk_matching_opcodes(
               insns_array[c] = insns.at(i+c);
             }
             v(m, N, insns_array);
+          }
+        }
+      }
+    });
+}
+
+/**
+ * walker that respects basic block boundaries.
+ *
+ * It will not match a pattern that crosses block boundaries
+ */
+template<
+    typename P,
+    size_t N = std::tuple_size<P>::value,
+    typename V = void(const DexMethod*, MethodTransform*, Block*, size_t n, DexInstruction**)>
+void walk_matching_opcodes_in_block(
+  const Scope& scope, const P& p, const V& v) {
+  walk_methods(
+    scope,
+    [&](const DexMethod* m) {
+      auto& code = m->get_code();
+      if (code) {
+        MethodTransform* mt = code->get_entries();
+        mt->build_cfg();
+        for (Block* block : mt->cfg().blocks()) {
+          std::vector<DexInstruction*> insns;
+          for (auto mie = block->begin() ; mie != block->end() ; mie++) {
+            if (mie->type == MFLOW_OPCODE) {
+              insns.emplace_back(mie->insn);
+            }
+          }
+          // No way to match if we have less insns than N
+          if (insns.size() >= N) {
+            // Try to match starting at i
+            for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
+              if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
+                DexInstruction* insns_array[N];
+                for ( size_t c = 0 ; c < N ; ++c ) {
+                  insns_array[c] = insns.at(i+c);
+                }
+                v(m, mt, block, N, insns_array);
+              }
+            }
           }
         }
       }

@@ -20,6 +20,7 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "RedundantCheckCastRemover.h"
 #include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1063,9 +1064,10 @@ class PeepholeOptimizerV2 {
 
 void PeepholePassV2::run_pass(DexStoresVector& stores,
                               ConfigFiles& /*cfg*/,
-                              PassManager& /*mgr*/) {
+                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
   PeepholeOptimizerV2(scope).run();
+  RedundantCheckCastRemover(mgr, scope).run();
 }
 
 static PeepholePassV2 s_pass;

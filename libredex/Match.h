@@ -315,11 +315,38 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
 match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
   invoke_static();
 
+/** invoke of any kind */
+template <typename P>
+match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
+  invoke(const match_t<DexInstruction, P>& p) {
+  return {
+    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+      return is_invoke(insn->opcode()) && p.matches(insn);
+    },
+    p
+  };
+}
+
+inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+  invoke() {
+    return invoke(any<DexInstruction>());
+};
+
 /** return-void */
 match_t<DexInstruction> return_void();
 
 /** Matches instructions with specified number of arguments. Supports /range. */
 match_t<DexInstruction, std::tuple<int> > has_n_args(int n);
+
+/** Matches instructions with specified opcode */
+inline match_t<DexInstruction, std::tuple<DexOpcode> > is_opcode(DexOpcode opcode) {
+  return {
+    [](const DexInstruction* insn, const DexOpcode& opcode) {
+      return insn->opcode() == opcode;
+    },
+    opcode
+  };
+}
 
 /** Matchers that map from DexInstruction -> other types */
 template <typename P>
@@ -327,6 +354,7 @@ match_t<DexInstruction, std::tuple<match_t<DexMethod, P> > >
   opcode_method(const match_t<DexMethod, P>& p) {
   return {
     [](const DexInstruction* insn, const match_t<DexMethod, P>& p) {
+      always_assert(insn->has_methods());
       auto method_insn = (DexOpcodeMethod*)insn;
       return p.matches(method_insn->get_method());
     },

@@ -1,0 +1,69 @@
+// Copyright 2004-present Facebook. All Rights Reserved.
+
+#include "RedundantCheckCastRemover.h"
+#include <unordered_map>
+#include "DexUtil.h"
+#include "Match.h"
+#include "Transform.h"
+#include "Walkers.h"
+
+RedundantCheckCastRemover::RedundantCheckCastRemover(
+    PassManager& mgr, const std::vector<DexClass*>& scope)
+    : m_mgr(mgr), m_scope(scope) {}
+
+void remove_instructions(
+    const std::unordered_map<DexMethod*, std::vector<DexInstruction*>>&
+        to_remove) {
+  for (auto& method_instrs : to_remove) {
+    DexMethod* method = method_instrs.first;
+    const auto& instrs = method_instrs.second;
+    MethodTransform* trans = method->get_code()->get_entries();
+    for (auto instr : instrs) {
+      trans->remove_opcode(instr);
+    }
+  }
+}
+
+void RedundantCheckCastRemover::run() {
+  auto match = std::make_tuple(m::invoke(),
+                               m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
+                               m::is_opcode(OPCODE_CHECK_CAST));
+
+  std::unordered_map<DexMethod*, std::vector<DexInstruction*>> to_remove;
+
+  auto& mgr =
+      this->m_mgr; // so the lambda doesn't have to capture all of `this`
+  walk_matching_opcodes_in_block(
+      m_scope,
+      match,
+      [&mgr, &to_remove](const DexMethod* method,
+                         MethodTransform* /* unused */,
+                         Block* /* unused */,
+                         size_t size,
+                         DexInstruction** insns) {
+        if (RedundantCheckCastRemover::can_remove_check_cast(insns, size)) {
+          to_remove[const_cast<DexMethod*>(method)].push_back(insns[2]);
+          mgr.incr_metric("redundant_check_casts_removed", 1);
+
+          TRACE(PEEPHOLE, 8, "found redundant check cast\n");
+          for (size_t i = 0; i < size; ++i) {
+            TRACE(PEEPHOLE, 8, "%s\n", SHOW(insns[i]));
+          }
+        }
+      });
+
+  remove_instructions(to_remove);
+}
+
+bool RedundantCheckCastRemover::can_remove_check_cast(DexInstruction** insns,
+                                                      size_t size) {
+  always_assert(size == 3);
+  DexOpcodeMethod* invoke_op = static_cast<DexOpcodeMethod*>(insns[0]);
+  DexInstruction* move_result_op = insns[1];
+  DexOpcodeType* check_cast_op = static_cast<DexOpcodeType*>(insns[2]);
+
+  auto invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
+  auto check_type = check_cast_op->get_type();
+  return move_result_op->dest() == check_cast_op->src(0) &&
+         check_cast(invoke_return, check_type);
+}
