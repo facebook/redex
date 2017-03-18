@@ -751,7 +751,8 @@ static const std::vector<Pattern>& get_string_patterns() {
        {const_string(Register::A, String::A),
         invoke_String_length(Register::A),
         move_result(Register::B)},
-       {// 4 code unit saving
+       {// 2 code unit saving, but potentially String::A can be dead code.
+        const_string(Register::A, String::A),
         const_literal(OPCODE_CONST_16, Register::B, Literal::Length_String_A)}},
 
       // DISABLED: TODO: Found a crash, causing VerifyError

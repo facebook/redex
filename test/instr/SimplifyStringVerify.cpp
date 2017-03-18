@@ -26,7 +26,7 @@ namespace {
 #define TESTS                                                    \
   WORK(test_Coalesce_InitVoid_AppendString, 4)                   \
   WORK(test_Coalesce_AppendString_AppendString, 3 * 6)           \
-  WORK(test_CompileTime_StringLength, 4 * 4)                     \
+  WORK(test_CompileTime_StringLength, 4 * 2)                     \
   WORK(test_Remove_AppendEmptyString, 0 * 5)                     \
   WORK(test_Coalesce_Init_AppendChar, 3 + 2 * 4 + 5)             \
   WORK(test_Coalesce_AppendString_AppendInt, 5 + 3 * 6 + 2 * 7)  \
