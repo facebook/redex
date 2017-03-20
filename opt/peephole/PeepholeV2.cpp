@@ -269,7 +269,6 @@ struct Pattern {
   }
 };
 
-
 // Matcher holds the matching state for the given pattern.
 struct Matcher {
   const Pattern& pattern;
@@ -520,8 +519,7 @@ struct Matcher {
             int32_t i;
             float f;
           } a;
-          a.i =
-              static_cast<int32_t>(matched_literals.at(Literal::A));
+          a.i = static_cast<int32_t>(matched_literals.at(Literal::A));
           static_cast<DexOpcodeString*>(replace)->rewrite_string(
               DexString::make_string(std::to_string(a.f)));
           break;
@@ -952,6 +950,11 @@ static const std::vector<Pattern>& get_arith_patterns() {
   return kArithPatterns;
 }
 
+template <typename T>
+bool contains(const std::vector<T>& vec, const T& value) {
+  return std::find(vec.begin(), vec.end(), value) != vec.end();
+}
+
 class PeepholeOptimizerV2 {
  private:
   const std::vector<DexClass*>& m_scope;
@@ -961,14 +964,22 @@ class PeepholeOptimizerV2 {
   int m_stats_inserted = 0;
 
  public:
-  explicit PeepholeOptimizerV2(const std::vector<DexClass*>& scope)
+  explicit PeepholeOptimizerV2(const std::vector<DexClass*>& scope,
+                               const std::vector<std::string>& disabled_peepholes)
       : m_scope(scope) {
     auto lists = {
         &get_nop_patterns(), &get_string_patterns(), &get_arith_patterns()};
     for (const auto& pattern_list : lists) {
       for (const Pattern& pattern : *pattern_list) {
-        m_matchers.emplace_back(pattern);
-        m_matchers_stat.push_back(0);
+        if (!contains(disabled_peepholes, pattern.name)) {
+          m_matchers.emplace_back(pattern);
+          m_matchers_stat.push_back(0);
+        } else {
+          TRACE(PEEPHOLE,
+                2,
+                "not running disabled peephole opt %s\n",
+                pattern.name.c_str());
+        }
       }
     }
   }
@@ -1067,8 +1078,16 @@ void PeepholePassV2::run_pass(DexStoresVector& stores,
                               ConfigFiles& /*cfg*/,
                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  PeepholeOptimizerV2(scope).run();
-  RedundantCheckCastRemover(mgr, scope).run();
+  PeepholeOptimizerV2(scope, config.disabled_peepholes).run();
+  if (!contains<std::string>(config.disabled_peepholes,
+                             RedundantCheckCastRemover::get_name())) {
+    RedundantCheckCastRemover(mgr, scope).run();
+  } else {
+    TRACE(PEEPHOLE,
+          2,
+          "not running disabled peephole opt %s\n",
+          RedundantCheckCastRemover::get_name().c_str());
+  }
 }
 
 static PeepholePassV2 s_pass;

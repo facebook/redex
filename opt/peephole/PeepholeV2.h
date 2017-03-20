@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <vector>
 #include "Pass.h"
 
 class PeepholePassV2 : public Pass {
@@ -16,4 +17,14 @@ class PeepholePassV2 : public Pass {
   PeepholePassV2() : Pass("PeepholePassV2") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("disabled_peepholes", {}, config.disabled_peepholes);
+  }
+
+ private:
+  struct Config {
+    std::vector<std::string> disabled_peepholes;
+  };
+  Config config;
 };
