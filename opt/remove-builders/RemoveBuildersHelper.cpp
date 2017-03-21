@@ -23,6 +23,14 @@ void fields_mapping(const DexInstruction* insn,
                     FieldsRegs* fregs,
                     DexClass* builder,
                     bool is_setter) {
+
+  // Set DEFAULT fields to UNDEFINED.
+  for (auto& pair : fregs->field_to_reg) {
+    if (pair.second == FieldOrRegStatus::DEFAULT) {
+      fregs->field_to_reg[pair.first] = FieldOrRegStatus::UNDEFINED;
+    }
+  }
+
   // Check if the register that used to hold the field's value is overwritten.
   if (insn->dests_size()) {
     const int current_dest = insn->dest();
@@ -206,7 +214,12 @@ bool TaintedRegs::operator!=(const TaintedRegs& that) const {
 
 void FieldsRegs::meet(const FieldsRegs& that) {
   for (const auto& pair : field_to_reg) {
-    if (field_to_reg.at(pair.first) != that.field_to_reg.at(pair.first)) {
+    if (pair.second == FieldOrRegStatus::DEFAULT) {
+      field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
+    } else if (that.field_to_reg.at(pair.first) ==
+        FieldOrRegStatus::DEFAULT) {
+      continue;
+    } else if (pair.second != that.field_to_reg.at(pair.first)) {
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
     }
   }

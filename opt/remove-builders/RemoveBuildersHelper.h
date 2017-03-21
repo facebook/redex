@@ -36,14 +36,17 @@ struct TaintedRegs {
  * alongside registers (uint16_t).
  */
 enum FieldOrRegStatus : int {
+  // Default mapping.
+  DEFAULT = -1,
+
   // Field not initialized.
-  UNDEFINED = -1,
+  UNDEFINED = -2,
 
   // Field initialized with different registers.
-  DIFFERENT = -2,
+  DIFFERENT = -3,
 
   // Register that was storing the field's value was overwritten.
-  OVERWRITTEN = -3,
+  OVERWRITTEN = -4,
 };
 
 struct FieldsRegs {
@@ -52,7 +55,7 @@ struct FieldsRegs {
   explicit FieldsRegs(DexClass* builder) {
     const auto& ifields = builder->get_ifields();
     for (const auto& ifield : ifields) {
-      field_to_reg[ifield] = FieldOrRegStatus::UNDEFINED;
+      field_to_reg[ifield] = FieldOrRegStatus::DEFAULT;
     }
   }
   explicit FieldsRegs(const std::unordered_map<DexField*, int>&& field_to_reg)
