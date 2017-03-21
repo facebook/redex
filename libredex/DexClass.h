@@ -609,6 +609,8 @@ class DexCode {
   MethodTransform* get_entries() const { return m_entries; }
   void balloon();
   void sync();
+
+  friend std::string show(const DexCode*);
 };
 
 class DexMethod {
