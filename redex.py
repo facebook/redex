@@ -32,9 +32,10 @@ import zipfile
 from os.path import abspath, basename, dirname, getsize, isdir, isfile, join, \
         realpath, split
 
+import pyredex.logger as logger
 import pyredex.unpacker as unpacker
 from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs
-from pyredex.log import log
+from pyredex.logger import log
 
 timer = timeit.default_timer
 
@@ -113,12 +114,14 @@ def run_pass(
         print(' '.join(args))
         sys.exit()
 
+    env = logger.strip_trace_tag(os.environ)
+
     # Our CI system occasionally fails because it is trying to write the
     # redex-all binary when this tries to run.  This shouldn't happen, and
     # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
     for i in range(5):
         try:
-            subprocess.check_call(args)
+            subprocess.check_call(args, env=env)
         except OSError as err:
             if err.errno == errno.ETXTBSY:
                 if i < 4:

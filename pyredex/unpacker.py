@@ -17,7 +17,7 @@ import zipfile
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
 from pyredex.utils import abs_glob, make_temp_dir
-from pyredex.log import log
+from pyredex.logger import log
 
 class ApplicationModule(object):
 

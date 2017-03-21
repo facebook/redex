@@ -185,7 +185,7 @@ CLEANFILES = redex
 
 PYTHON_SRCS := redex.py \
 	pyredex/__init__.py \
-	pyredex/log.py \
+	pyredex/logger.py \
 	pyredex/unpacker.py \
 	pyredex/utils.py
 
