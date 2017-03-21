@@ -44,6 +44,7 @@
   TM(MTRANS)                                    \
   TM(OBFUSCATE)                                 \
   TM(ORIGINALNAME)                              \
+  TM(OUTLINE)                                   \
   TM(PEEPHOLE)                                  \
   TM(PGR)                                       \
   TM(PM)                                        \

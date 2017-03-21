@@ -78,6 +78,18 @@ void MethodBlock::invoke(DexOpcode opcode,
   push_instruction(invk);
 }
 
+void MethodBlock::new_instance(DexType* type, Location& dst) {
+  auto insn = new DexOpcodeType(OPCODE_NEW_INSTANCE, type);
+  insn->set_dest(reg_num(dst));
+  push_instruction(insn);
+}
+
+void MethodBlock::throwex(Location ex) {
+  auto insn = new DexInstruction(OPCODE_THROW);
+  insn->set_src(0, reg_num(ex));
+  push_instruction(insn);
+}
+
 void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
   always_assert(field->is_concrete() && !is_static(field));
   DexOpcode opcode;

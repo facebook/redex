@@ -254,7 +254,7 @@ void walk_matching_opcodes_in_block(
             for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
               if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
                 DexInstruction* insns_array[N];
-                for ( size_t c = 0 ; c < N ; ++c ) {
+                for (size_t c = 0 ; c < N ; ++c) {
                   insns_array[c] = insns.at(i+c);
                 }
                 v(m, mt, block, N, insns_array);

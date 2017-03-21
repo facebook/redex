@@ -391,7 +391,7 @@ match_t<T, std::tuple<const std::string> > on_class(const std::string& type) {
 
 /** Match methods whose code satisfied the given opcodes match */
 template <typename ...T>
-match_t<DexMethod, std::tuple<std::tuple<T...> > > has_opcodes(const std::tuple<T...>& t) {
+  match_t<DexMethod, std::tuple<std::tuple<T...> > > has_opcodes(const std::tuple<T...>& t) {
   return {
     [](const DexMethod* meth, const std::tuple<T...>& t) {
       auto& code = meth->get_code();

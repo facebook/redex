@@ -142,7 +142,21 @@ match_t<DexClass, std::tuple<> > has_class_data() {
   };
 }
 
-inline bool is_subclass(const DexType* parent, const DexType* child) {
+bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
+  if (type == iface) return true;
+  auto cls = type_class(type);
+  if (cls) {
+    for (auto extends : cls->get_interfaces()->get_type_list()) {
+      if (is_assignable_to_interface(extends, iface)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool is_assignable_to(const DexType* child, const DexType* parent) {
+  // Check class hierarchy
   auto super = child;
   while (super != nullptr) {
     if (parent == super) return true;
@@ -150,14 +164,18 @@ inline bool is_subclass(const DexType* parent, const DexType* child) {
     if (cls == nullptr) break;
     super = cls->get_super_class();
   }
-  return false;
+  // Check interface hierarchy
+  DexClass* parent_cls = type_class(parent);
+  return parent_cls &&
+    is_interface(parent_cls) &&
+    is_assignable_to_interface(child, parent);
 }
 
 match_t<DexType, std::tuple<const DexType*> >
   is_assignable_to(const DexType* parent) {
   return {
     [](const DexType* child, const DexType* const& parent) {
-      return is_subclass(parent, child);
+      return is_assignable_to(child, parent);
     },
     parent
   };

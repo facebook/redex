@@ -285,6 +285,12 @@ class MethodTransform {
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(DexInstruction* from, DexInstruction* to);
 
+  /*
+   * Does exactly what it says and you SHOULD be afraid. This is mainly useful
+   * to appease the compiler in various scenarios of unreachable code.
+   */
+  void replace_opcode_with_infinite_loop(DexInstruction* from);
+
   /* Like replace_opcode, but both :from and :to must be branch opcodes.
    * :to will end up jumping to the same destination as :from. */
   void replace_branch(DexInstruction* from, DexInstruction* to);

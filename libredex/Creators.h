@@ -107,6 +107,16 @@ struct MethodBlock {
               const std::vector<Location>& args);
 
   /**
+   * new-instance; instatiate 'type' into dst location.
+   */
+  void new_instance(DexType* type, Location& dst);
+
+  /**
+   * throw; throw ex object at Location
+   */
+  void throwex(Location ex);
+
+  /**
    * Instance field getter.
    * The field must be a field def.
    */
