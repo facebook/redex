@@ -120,35 +120,43 @@ void fix_call_sites(
   const std::vector<DexClass*>& scope,
   const std::unordered_set<DexMethod*>& statics
 ) {
-  walk_opcodes(
+  walk_code(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod*, DexInstruction* inst) {
-      if (!inst->has_methods()) return;
-      auto mi = static_cast<DexOpcodeMethod*>(inst);
-      auto method = mi->get_method();
-      if (!method->is_concrete()) {
-        method = resolve_method(method, MethodSearch::Any);
-      }
-      if (statics.count(method)) {
-        mi->rewrite_method(method);
-        if (is_invoke_range(inst->opcode())) {
-          if (mi->range_size() == 1) {
-            mi->set_opcode(OPCODE_INVOKE_STATIC);
-            mi->set_arg_word_count(0);
+    [&](DexMethod* m, DexCode& code) {
+      std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
+      for (auto& mie : InstructionIterable(code.get_entries())) {
+        auto inst = mie.insn;
+        if (!inst->has_methods()) continue;
+        auto mi = static_cast<IRMethodInstruction*>(inst);
+        auto method = mi->get_method();
+        if (!method->is_concrete()) {
+          method = resolve_method(method, MethodSearch::Any);
+        }
+        if (statics.count(method)) {
+          mi->rewrite_method(method);
+          if (is_invoke_range(inst->opcode())) {
+            if (mi->range_size() == 1) {
+              auto repl = new IRMethodInstruction(OPCODE_INVOKE_STATIC, method);
+              repl->set_arg_word_count(0);
+              replacements.emplace_back(mi, repl);
+            } else {
+              mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
+              mi->set_range_base(mi->range_base() + 1);
+              mi->set_range_size(mi->range_size() - 1);
+            }
           } else {
-            mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
-            mi->set_range_base(mi->range_base() + 1);
-            mi->set_range_size(mi->range_size() - 1);
-          }
-        } else {
-          mi->set_opcode(OPCODE_INVOKE_STATIC);
-          auto nargs = mi->arg_word_count();
-          mi->set_arg_word_count(nargs - 1);
-          for (uint16_t i = 0; i < nargs - 1; i++) {
-            mi->set_src(i, mi->src(i + 1));
+            mi->set_opcode(OPCODE_INVOKE_STATIC);
+            auto nargs = mi->arg_word_count();
+            for (uint16_t i = 0; i < nargs - 1; i++) {
+              mi->set_src(i, mi->src(i + 1));
+            }
+            mi->set_arg_word_count(nargs - 1);
           }
         }
+      }
+      for (auto& pair : replacements) {
+        code.get_entries()->replace_opcode(pair.first, pair.second);
       }
     }
   );
@@ -175,9 +183,9 @@ std::unordered_set<DexMethod*> find_private_methods(
   walk_opcodes(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod* caller, DexInstruction* inst) {
+    [&](DexMethod* caller, IRInstruction* inst) {
       if (!inst->has_methods()) return;
-      auto mi = static_cast<DexOpcodeMethod*>(inst);
+      auto mi = static_cast<IRMethodInstruction*>(inst);
       auto callee = mi->get_method();
       if (!callee->is_concrete()) {
         callee = resolve_method(callee, MethodSearch::Any);
@@ -199,9 +207,9 @@ void fix_call_sites_private(
   walk_opcodes(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod*, DexInstruction* inst) {
+    [&](DexMethod*, IRInstruction* inst) {
       if (!inst->has_methods()) return;
-      auto mi = static_cast<DexOpcodeMethod*>(inst);
+      auto mi = static_cast<IRMethodInstruction*>(inst);
       auto callee = mi->get_method();
       if (!callee->is_concrete()) {
         callee = resolve_method(callee, MethodSearch::Any);

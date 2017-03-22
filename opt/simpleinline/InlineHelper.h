@@ -111,14 +111,14 @@ class MultiMethodInliner {
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
    */
-  bool create_vmethod(DexInstruction* insn);
+  bool create_vmethod(IRInstruction* insn);
 
   /**
    * Return true if a callee contains an invoke super to a different method
    * in the hierarchy, and the callee and caller are in different classes.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool nonrelocatable_invoke_super(DexInstruction* insn,
+  bool nonrelocatable_invoke_super(IRInstruction* insn,
                                    DexMethod* callee,
                                    DexMethod* caller);
 
@@ -127,7 +127,7 @@ class MultiMethodInliner {
    * Writing over an input registers may change the type of the registers
    * in the caller if the method was inlined and break invariants in the caller.
    */
-  bool writes_ins_reg(DexInstruction* insn, uint16_t temp_regs);
+  bool writes_ins_reg(IRInstruction* insn, uint16_t temp_regs);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.
@@ -135,7 +135,7 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the method
    * was package/protected and we move the call out of context.
    */
-  bool unknown_virtual(DexInstruction* insn,
+  bool unknown_virtual(IRInstruction* insn,
                        DexMethod* caller,
                        DexMethod* callee);
 
@@ -145,7 +145,7 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the field
    * was package/protected and we move the access out of context.
    */
-  bool unknown_field(DexInstruction* insn,
+  bool unknown_field(IRInstruction* insn,
                      DexMethod* callee,
                      DexMethod* caller);
 

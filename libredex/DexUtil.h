@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "IRInstruction.h"
 #include "PassManager.h"
 
 using TypeVector = std::vector<const DexType*>;
@@ -260,7 +261,7 @@ void sort_unique(std::vector<T>& vec, Cmp cmp = std::less<T>()) {
  * the optimization would have to re-map the input regs.  The N arguments to
  * the invoke should be the last N registers of the frame.
  */
-bool passes_args_through(DexOpcodeMethod* insn,
+bool passes_args_through(IRMethodInstruction* insn,
                          const DexCode& code,
                          int ignore = 0);
 
@@ -270,7 +271,7 @@ bool passes_args_through(DexOpcodeMethod* insn,
  * at runtime. Currently, used for substituting switch case instructions.
  */
 void create_runtime_exception_block(DexString* except_str,
-                                    std::vector<DexInstruction*>& block);
+                                    std::vector<IRInstruction*>& block);
 
 /**
  * Generates a Scope& object from a set of Dexes.

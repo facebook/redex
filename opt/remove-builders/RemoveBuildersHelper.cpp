@@ -19,7 +19,7 @@
 
 namespace {
 
-void fields_mapping(const DexInstruction* insn,
+void fields_mapping(const IRInstruction* insn,
                     FieldsRegs* fregs,
                     DexClass* builder,
                     bool is_setter) {
@@ -50,7 +50,7 @@ void fields_mapping(const DexInstruction* insn,
 
   if ((is_setter && is_iput(insn->opcode())) ||
       (!is_setter && is_iget(insn->opcode()))) {
-    auto field = static_cast<const DexOpcodeField*>(insn)->field();
+    auto field = static_cast<const IRFieldInstruction*>(insn)->field();
 
     if (field->get_class() == builder->get_type()) {
       uint16_t current = is_setter ? insn->src(0) : insn->dest();
@@ -66,12 +66,12 @@ void fields_mapping(const DexInstruction* insn,
  * - DIFFERENT: no unique register.
  * - OVERWRITTEN: register no longer holds the value.
  */
-std::unique_ptr<std::unordered_map<DexInstruction*, FieldsRegs>>
+std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>>
 fields_setters(const std::vector<Block*>& blocks,
                DexClass* builder) {
 
-  std::function<void(const DexInstruction*, FieldsRegs*)> trans = [&](
-      const DexInstruction* insn, FieldsRegs* fregs) {
+  std::function<void(const IRInstruction*, FieldsRegs*)> trans = [&](
+      const IRInstruction* insn, FieldsRegs* fregs) {
     fields_mapping(insn, fregs, builder, true);
   };
 
@@ -85,12 +85,12 @@ fields_setters(const std::vector<Block*>& blocks,
  * - DIFFERENT: different registers used to hold the field's value.
  * - OVERWRITTEN: register overwritten.
  */
-std::unique_ptr<std::unordered_map<DexInstruction*, FieldsRegs>>
+std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>>
 fields_getters(const std::vector<Block*>& blocks,
                DexClass* builder) {
 
-  std::function<void(const DexInstruction*, FieldsRegs*)> trans = [&](
-      const DexInstruction* insn, FieldsRegs* fregs) {
+  std::function<void(const IRInstruction*, FieldsRegs*)> trans = [&](
+      const IRInstruction* insn, FieldsRegs* fregs) {
     fields_mapping(insn, fregs, builder, false);
   };
 
@@ -115,14 +115,14 @@ bool add_null_instr(DexMethod* method, MethodTransform* transform) {
     return false;
   }
 
-  DexInstruction* insn = new DexInstruction(OPCODE_CONST_4);
+  IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
 
   // Using last non-input register, since it was freed.
   uint16_t last_non_input_reg = oldregs - ins;
   insn->set_dest(last_non_input_reg);
   insn->set_literal(0);
 
-  std::vector<DexInstruction*> insns;
+  std::vector<IRInstruction*> insns;
   insns.push_back(insn);
 
   // Adds the instruction at the beginning, since it might be
@@ -133,11 +133,11 @@ bool add_null_instr(DexMethod* method, MethodTransform* transform) {
 }
 
 using ReplacementsList =
-  std::vector<std::tuple<DexInstruction*, size_t, uint16_t>>;
+  std::vector<std::tuple<IRInstruction*, size_t, uint16_t>>;
 
 bool treat_undefined_fields(
     DexMethod* method,
-    const std::vector<std::tuple<DexInstruction*, size_t>>&
+    const std::vector<std::tuple<IRInstruction*, size_t>>&
       undefined_replacements,
     ReplacementsList* replacements) {
 
@@ -177,7 +177,7 @@ bool treat_undefined_fields(
 
 void method_updates(
     DexMethod* method,
-    const std::vector<DexInstruction*>& deletes,
+    const std::vector<IRInstruction*>& deletes,
     const ReplacementsList& replacements) {
 
   auto& code = method->get_code();
@@ -188,7 +188,7 @@ void method_updates(
   }
 
   for (const auto& insn_replace : replacements) {
-    DexInstruction* insn = std::get<0>(insn_replace);
+    IRInstruction* insn = std::get<0>(insn_replace);
     size_t index = std::get<1>(insn_replace);
     uint16_t new_reg = std::get<2>(insn_replace);
 
@@ -252,15 +252,15 @@ bool inline_build(DexMethod* method, DexClass* builder) {
     return false;
   }
 
-  std::vector<std::pair<DexMethod*, DexOpcodeMethod*>> inlinables;
+  std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
   DexMethod* build_method = get_build_method(builder->get_vmethods());
 
   for (auto const& mie : InstructionIterable(code->get_entries())) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto invoked = static_cast<const DexOpcodeMethod*>(insn)->get_method();
+      auto invoked = static_cast<const IRMethodInstruction*>(insn)->get_method();
       if (invoked == build_method) {
-        auto mop = static_cast<DexOpcodeMethod*>(insn);
+        auto mop = static_cast<IRMethodInstruction*>(insn);
         inlinables.push_back(std::make_pair(build_method, mop));
       }
     }
@@ -300,8 +300,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
   static auto init = DexString::make_string("<init>");
 
-  std::vector<DexInstruction*> deletes;
-  std::vector<std::tuple<DexInstruction*, size_t>> undefined_replacements;
+  std::vector<IRInstruction*> deletes;
+  std::vector<std::tuple<IRInstruction*, size_t>> undefined_replacements;
   ReplacementsList replacements;
 
   for (auto& block : blocks) {
@@ -314,21 +314,22 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       DexOpcode opcode = insn->opcode();
 
       if (is_iput(opcode) || is_iget(opcode)) {
-        auto field = static_cast<const DexOpcodeField*>(insn)->field();
+        auto field = static_cast<const IRFieldInstruction*>(insn)->field();
         if (field->get_class() == builder->get_type()) {
           deletes.push_back(insn);
           continue;
         }
 
       } else if (opcode == OPCODE_NEW_INSTANCE) {
-        DexType* cls = static_cast<DexOpcodeType*>(insn)->get_type();
+        DexType* cls = static_cast<IRTypeInstruction*>(insn)->get_type();
         if (type_class(cls) == builder) {
           deletes.push_back(insn);
           continue;
         }
 
       } else if (is_invoke(opcode)) {
-        auto invoked = static_cast<const DexOpcodeMethod*>(insn)->get_method();
+        auto invoked =
+            static_cast<const IRMethodInstruction*>(insn)->get_method();
         if (invoked->get_class() == builder->get_type() &&
             invoked->get_name() == init) {
           deletes.push_back(insn);

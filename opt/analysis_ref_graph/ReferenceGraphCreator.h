@@ -53,7 +53,7 @@ class CreateReferenceGraphPass : public Pass {
   using MethodWalkerFn = std::function<void(DexMethod*)>;
   using FieldWalkerFn = std::function<void(DexField*)>;
   using AnnotationWalkerFn = std::function<void(DexAnnotation*)>;
-  using InstructionWalkerFn = std::function<void(DexMethod*, DexInstruction*)>;
+  using InstructionWalkerFn = std::function<void(DexMethod*, IRInstruction*)>;
 
   void build_super_and_interface_refs(
       const Scope& scope,

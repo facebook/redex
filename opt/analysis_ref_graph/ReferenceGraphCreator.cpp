@@ -17,7 +17,7 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 
@@ -141,17 +141,17 @@ CreateReferenceGraphPass::InstructionWalkerFn
 CreateReferenceGraphPass::instruction_ref_builder(
     const Scope& scope,
     refs_t& class_refs) {
-  return ([this, &scope, &class_refs](const DexMethod* meth, DexInstruction* insn) {
+  return ([this, &scope, &class_refs](const DexMethod* meth, IRInstruction* insn) {
     const auto* enclosing_class = type_class(meth->get_class());
 
     if (insn->has_types()) {
-      const auto* top = static_cast<DexOpcodeType*>(insn);
+      const auto* top = static_cast<IRTypeInstruction*>(insn);
       const auto* tref = top->get_type();
       if (tref) class_refs[enclosing_class].emplace(tref);
       return;
     }
     if (insn->has_fields()) {
-      const auto* top = static_cast<DexOpcodeField*>(insn);
+      const auto* top = static_cast<IRFieldInstruction*>(insn);
       auto* field = top->field();
       if (CreateReferenceGraphPass::config.resolve_fields) {
         field = resolve_field(field);
@@ -163,7 +163,7 @@ CreateReferenceGraphPass::instruction_ref_builder(
       return;
     }
     if (insn->has_methods()) {
-      const auto* mop = static_cast<DexOpcodeMethod*>(insn);
+      const auto* mop = static_cast<IRMethodInstruction*>(insn);
       auto* method = mop->get_method();
       if (CreateReferenceGraphPass::config.resolve_methods) {
         method = resolve_method(method, MethodSearch::Any);

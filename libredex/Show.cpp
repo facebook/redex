@@ -859,6 +859,27 @@ std::string show(const DexInstruction* insn) {
   return ss.str();
 }
 
+std::string show(const IRInstruction* insn) {
+  if (!insn) return "";
+  std::stringstream ss;
+  ss << show(insn->opcode());
+  bool first = true;
+  if (insn->dests_size()) {
+    ss << " v" << insn->dest();
+    first = false;
+  }
+  for (unsigned i = 0; i < insn->srcs_size(); ++i) {
+    if (!first) ss << ",";
+    ss << " v" << insn->src(i);
+    first = false;
+  }
+  if (insn->has_methods()) {
+    ss << " "
+       << show(static_cast<const IRMethodInstruction*>(insn)->get_method());
+  }
+  return ss.str();
+}
+
 std::string show(const DexDebugInstruction* insn) {
   if (!insn) return "";
   std::stringstream ss;

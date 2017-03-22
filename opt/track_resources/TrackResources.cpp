@@ -94,7 +94,7 @@ void get_sput_in_clinit(DexClass* clazz,
       for (auto& mie : InstructionIterable(method->get_code()->get_entries())) {
         auto opcode = mie.insn;
         if (opcode->has_fields() && is_sput(opcode->opcode())) {
-          auto fieldop = static_cast<DexOpcodeField*>(opcode);
+          auto fieldop = static_cast<IRFieldInstruction*>(opcode);
           auto field = resolve_field(fieldop->field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) continue;
           if (field->get_class() != clazz->get_type()) continue;
@@ -139,9 +139,9 @@ void find_accessed_fields(Scope& fullscope,
   walk_opcodes(
       fullscope,
       [](DexMethod* method) { return true; },
-      [&](DexMethod* method, DexInstruction* insn) {
+      [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_fields() && is_sfield_op(insn->opcode())) {
-          auto fieldop = static_cast<DexOpcodeField*>(insn);
+          auto fieldop = static_cast<IRFieldInstruction*>(insn);
           auto field = resolve_field(fieldop->field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) return;
           if (inline_field.count(field) == 0) return;

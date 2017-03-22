@@ -22,7 +22,7 @@
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Match.h"
@@ -48,7 +48,7 @@ static int s_line_conflict_but_sig_fine_count;
 /** map of dmethod or class (T) -> method/opcode referencing dmethod or class */
 template <typename T>
 using refs_t = std::unordered_map<
-  const T*, std::vector<std::pair<const DexMethod*, DexInstruction*> > >;
+  const T*, std::vector<std::pair<const DexMethod*, IRInstruction*> > >;
 
 struct compare_dexclasses {
   bool operator()(const DexClass* a, const DexClass* b) const {
@@ -79,16 +79,16 @@ void visit_classes(
  * Helper to visit all opcodes which match the given criteria.
  *
  * @param scope all classes we're processing
- * @param p A match_t<DexInstruction, ...> built up by m::* routines
+ * @param p A match_t<IRInstruction, ...> built up by m::* routines
  * @param v Visitor function
  */
-template<typename P, typename V = void(DexMethod*, DexInstruction*)>
+template<typename P, typename V = void(DexMethod*, IRInstruction*)>
 void visit_opcodes(
-  const Scope& scope, const m::match_t<DexInstruction, P>& p, const V& v) {
+  const Scope& scope, const m::match_t<IRInstruction, P>& p, const V& v) {
   walk_opcodes(
     scope,
     [](const DexMethod*) { return true; },
-    [&](const DexMethod* m, DexInstruction* insn) {
+    [&](const DexMethod* m, IRInstruction* insn) {
       if (p.matches(insn)) {
         v(m, insn);
       }
@@ -160,13 +160,13 @@ void build_refs(
     m::invoke_static()
     or m::invoke_direct()
     or m::has_types();
-  visit_opcodes(scope, match, [&](const DexMethod* meth, DexInstruction* insn){
+  visit_opcodes(scope, match, [&](const DexMethod* meth, IRInstruction* insn){
     if (insn->has_types()) {
-      const auto top = static_cast<DexOpcodeType*>(insn);
+      const auto top = static_cast<IRTypeInstruction*>(insn);
       const auto tref = type_class(top->get_type());
       if (tref) class_refs[tref].push_back(std::make_pair(meth, insn));
     } else {
-      const auto mop = static_cast<DexOpcodeMethod*>(insn);
+      const auto mop = static_cast<IRMethodInstruction*>(insn);
       const auto mref = mop->get_method();
       dmethod_refs[mref].push_back(std::make_pair(meth, insn));
     }
@@ -390,12 +390,12 @@ bool can_make_references_public(const DexMethod* from_meth) {
   for (auto const& mie : InstructionIterable(code->get_entries())) {
     auto inst = mie.insn;
     if (inst->has_types()) {
-      auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
+      auto tref = static_cast<IRTypeInstruction*>(inst)->get_type();
       auto tclass = type_class(tref);
       if (!tclass) return false;
       if (tclass->is_external() && !is_public(tclass)) return false;
     } else if (inst->has_fields()) {
-      auto fref = resolve_field(static_cast<DexOpcodeField*>(inst)->field());
+      auto fref = resolve_field(static_cast<IRFieldInstruction*>(inst)->field());
       if (!fref) return false;
       auto fclass = type_class(fref->get_class());
       if (!fclass) return false;
@@ -403,7 +403,7 @@ bool can_make_references_public(const DexMethod* from_meth) {
         return false;
       }
     } else if (inst->has_methods()) {
-      auto methodinst = static_cast<DexOpcodeMethod*>(inst);
+      auto methodinst = static_cast<IRMethodInstruction*>(inst);
       auto mref = resolve_method(
         methodinst->get_method(),
         opcode_to_search(methodinst));
@@ -428,12 +428,12 @@ void make_references_public(const DexMethod* from_meth) {
   for (auto const& mie : InstructionIterable(code->get_entries())) {
     auto inst = mie.insn;
     if (inst->has_types()) {
-      auto tref = static_cast<DexOpcodeType*>(inst)->get_type();
+      auto tref = static_cast<IRTypeInstruction*>(inst)->get_type();
       auto tclass = type_class(tref);
       always_assert(tclass);
       if (!tclass->is_external()) set_public(tclass);
     } else if (inst->has_fields()) {
-      auto fref = resolve_field(static_cast<DexOpcodeField*>(inst)->field());
+      auto fref = resolve_field(static_cast<IRFieldInstruction*>(inst)->field());
       auto fclass = type_class(fref->get_class());
       always_assert(fclass);
       if (fref->is_concrete()) {
@@ -441,7 +441,7 @@ void make_references_public(const DexMethod* from_meth) {
         set_public(fref);
       }
     } else if (inst->has_methods()) {
-      auto methodinst = static_cast<DexOpcodeMethod*>(inst);
+      auto methodinst = static_cast<IRMethodInstruction*>(inst);
       auto mref = resolve_method(
         methodinst->get_method(),
         opcode_to_search(methodinst)

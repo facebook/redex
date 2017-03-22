@@ -18,7 +18,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include "Walkers.h"
@@ -162,7 +162,7 @@ class LocalDce {
     std::vector<boost::dynamic_bitset<>> liveness(
         cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
     bool changed;
-    std::vector<DexInstruction*> dead_instructions;
+    std::vector<IRInstruction*> dead_instructions;
 
     TRACE(DCE, 5, "%s\n", SHOW(method));
     TRACE(DCE, 5, "%s", SHOW(cfg));
@@ -315,10 +315,10 @@ class LocalDce {
    * An instruction is required (i.e., live) if it has side effects or if its
    * destination register is live.
    */
-  bool is_required(DexInstruction* inst, const boost::dynamic_bitset<>& bliveness) {
+  bool is_required(IRInstruction* inst, const boost::dynamic_bitset<>& bliveness) {
     if (has_side_effects(inst->opcode())) {
       if (is_invoke(inst->opcode())) {
-        auto invoke = static_cast<DexOpcodeMethod*>(inst);
+        auto invoke = static_cast<IRMethodInstruction*>(inst);
         if (!is_pure(invoke->get_method())) {
           return true;
         }
@@ -346,7 +346,7 @@ class LocalDce {
   /*
    * Update the liveness vector given that `inst` is live.
    */
-  void update_liveness(const DexInstruction* inst,
+  void update_liveness(const IRInstruction* inst,
                        boost::dynamic_bitset<>& bliveness) {
     // The destination register is killed, so it isn't live before this.
     if (inst->dests_size()) {

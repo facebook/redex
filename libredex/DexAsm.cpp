@@ -8,6 +8,7 @@
  */
 
 #include "DexAsm.h"
+#include "IRInstruction.h"
 
 namespace dex_asm {
 
@@ -63,17 +64,50 @@ bool unsupported(DexOpcode opcode) {
   case OPCODE_INVOKE_DIRECT_RANGE:
   case OPCODE_INVOKE_STATIC_RANGE:
   case OPCODE_INVOKE_INTERFACE_RANGE:
+
+  case OPCODE_ADD_INT_2ADDR:
+  case OPCODE_SUB_INT_2ADDR:
+  case OPCODE_MUL_INT_2ADDR:
+  case OPCODE_DIV_INT_2ADDR:
+  case OPCODE_REM_INT_2ADDR:
+  case OPCODE_AND_INT_2ADDR:
+  case OPCODE_OR_INT_2ADDR:
+  case OPCODE_XOR_INT_2ADDR:
+  case OPCODE_SHL_INT_2ADDR:
+  case OPCODE_SHR_INT_2ADDR:
+  case OPCODE_USHR_INT_2ADDR:
+  case OPCODE_ADD_LONG_2ADDR:
+  case OPCODE_SUB_LONG_2ADDR:
+  case OPCODE_MUL_LONG_2ADDR:
+  case OPCODE_DIV_LONG_2ADDR:
+  case OPCODE_REM_LONG_2ADDR:
+  case OPCODE_AND_LONG_2ADDR:
+  case OPCODE_OR_LONG_2ADDR:
+  case OPCODE_XOR_LONG_2ADDR:
+  case OPCODE_SHL_LONG_2ADDR:
+  case OPCODE_SHR_LONG_2ADDR:
+  case OPCODE_USHR_LONG_2ADDR:
+  case OPCODE_ADD_FLOAT_2ADDR:
+  case OPCODE_SUB_FLOAT_2ADDR:
+  case OPCODE_MUL_FLOAT_2ADDR:
+  case OPCODE_DIV_FLOAT_2ADDR:
+  case OPCODE_REM_FLOAT_2ADDR:
+  case OPCODE_ADD_DOUBLE_2ADDR:
+  case OPCODE_SUB_DOUBLE_2ADDR:
+  case OPCODE_MUL_DOUBLE_2ADDR:
+  case OPCODE_DIV_DOUBLE_2ADDR:
+  case OPCODE_REM_DOUBLE_2ADDR:
       return true;
     default:
       return false;
   }
 }
 
-DexInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
-  assert(!unsupported(opcode));
-  auto insn = new DexInstruction(opcode);
+IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
+  assert_log(!unsupported(opcode), "%s is unsupported", SHOW(opcode));
+  auto insn = new IRInstruction(opcode);
   auto arg = args.begin();
-  if (insn->dests_size() && !insn->dest_is_src()) {
+  if (insn->dests_size()) {
     always_assert(arg->tag == VREG);
     insn->set_dest(arg->v);
     arg = std::next(arg);

@@ -56,13 +56,13 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
     // this TRY_START is in a block that is live
     mt->push_back(TRY_START, catch_start);
     // this invoke will be considered live code by the dce analysis
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
     mt->push_back(*goto_mie);
     // this TRY_END is in a block that is dead code
     mt->push_back(TRY_END, catch_start);
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
     mt->push_back(*catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
   }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
@@ -96,15 +96,15 @@ TEST_F(LocalDceTryTest, unreachableTry) {
     target->src = goto_mie;
 
     mt->push_back(target);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
     mt->push_back(*goto_mie);
     // everything onwards is unreachable code because of the goto
 
     mt->push_back(TRY_START, catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
     mt->push_back(TRY_END, catch_start);
     mt->push_back(*catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
   }
 
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 4);
@@ -140,7 +140,7 @@ TEST_F(LocalDceTryTest, deadCatch) {
     mt->push_back(dasm(OPCODE_RETURN_VOID));
     mt->push_back(TRY_END, catch_start);
     mt->push_back(*catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
   }
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 2);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 1);
@@ -169,14 +169,14 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
 
     // this try wraps an opcode which may throw, should not be removed
     mt->push_back(TRY_START, catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
     mt->push_back(TRY_END, catch_start);
     // this one doesn't wrap a may-throw opcode
     mt->push_back(TRY_START, catch_start);
     mt->push_back(dasm(OPCODE_RETURN_VOID));
     mt->push_back(TRY_END, catch_start);
     mt->push_back(*catch_start);
-    mt->push_back(new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_method, 0));
+    mt->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
   }
   EXPECT_EQ(m_method->get_code()->get_instructions().size(), 3);
   EXPECT_EQ(m_method->get_code()->get_tries().size(), 2);

@@ -15,7 +15,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "PassManager.h"
 #include "DexUtil.h"
 #include "Walkers.h"
@@ -57,13 +57,13 @@ class PeepholeOptimizer {
  private:
   using RegWriters = std::vector<ssize_t>;
   using DataflowSources =
-      std::vector<std::pair<DexInstruction*, std::vector<ssize_t>>>;
+      std::vector<std::pair<IRInstruction*, std::vector<ssize_t>>>;
 
   const ssize_t kInvalid = -1;
 
   const std::vector<DexClass*>& m_scope;
   PassManager& m_pass_mgr;
-  std::unordered_map<DexInstruction*, DexInstruction*> m_replacements;
+  std::unordered_map<IRInstruction*, IRInstruction*> m_replacements;
   ssize_t m_last_call;
   RegWriters m_last_writer;
   DataflowSources m_dataflow_sources;
@@ -83,7 +83,7 @@ class PeepholeOptimizer {
     m_dataflow_sources.clear();
   }
 
-  DexInstruction* peephole_patterns(DexInstruction* insn) {
+  IRInstruction* peephole_patterns(IRInstruction* insn) {
     if (is_move_result(insn->opcode())) {
       /*
        * const-class vA, Lsome/Class;
@@ -94,7 +94,7 @@ class PeepholeOptimizer {
         return insn;
       }
       auto invokep = m_dataflow_sources[m_last_call];
-      auto invoke = static_cast<DexOpcodeMethod*>(invokep.first);
+      auto invoke = static_cast<IRMethodInstruction*>(invokep.first);
       auto const& invoke_srcs = invokep.second;
       if (invoke->get_method() != method_Class_getSimpleName()) {
         return insn;
@@ -106,9 +106,9 @@ class PeepholeOptimizer {
       if (const_class->opcode() != OPCODE_CONST_CLASS) {
         return insn;
       }
-      auto clstype = static_cast<DexOpcodeType*>(const_class)->get_type();
+      auto clstype = static_cast<IRTypeInstruction*>(const_class)->get_type();
       m_stats_simple_name++;
-      return (new DexOpcodeString(OPCODE_CONST_STRING,
+      return (new IRStringInstruction(OPCODE_CONST_STRING,
                                   get_simple_name(clstype)))
           ->set_dest(insn->dest());
     }
@@ -134,9 +134,9 @@ class PeepholeOptimizer {
         return insn;
       }
       auto invokep = m_dataflow_sources[move_result_srcs[0]];
-      auto invoke = static_cast<DexOpcodeMethod*>(invokep.first);
+      auto invoke = static_cast<IRMethodInstruction*>(invokep.first);
       auto invoke_return_type = invoke->get_method()->get_proto()->get_rtype();
-      auto check_type = static_cast<DexOpcodeType*>(insn)->get_type();
+      auto check_type = static_cast<IRTypeInstruction*>(insn)->get_type();
       if (check_type != invoke_return_type) {
         if (!check_cast(invoke_return_type, check_type)) {
           return insn;
@@ -144,7 +144,7 @@ class PeepholeOptimizer {
         m_stats_check_casts_super_removed++;
       }
       m_stats_check_casts_removed++;
-      return (new DexInstruction(OPCODE_NOP));
+      return (new IRInstruction(OPCODE_NOP));
     }
     return insn;
   }

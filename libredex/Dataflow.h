@@ -8,13 +8,13 @@
  */
 
 #include "ControlFlow.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 
 template <typename T>
-std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(
+std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     const std::vector<Block*>& blocks,
     const T& bottom,
-    const std::function<void(const DexInstruction*, T*)>& trans) {
+    const std::function<void(const IRInstruction*, T*)>& trans) {
   std::vector<T> block_outs(blocks.size(), bottom);
   std::deque<Block*> work_list(blocks.begin(), blocks.end());
   while (!work_list.empty()) {
@@ -28,7 +28,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      DexInstruction* insn = it->insn;
+      IRInstruction* insn = it->insn;
       trans(insn, &insn_in);
     }
     if (insn_in != block_outs[block->id()]) {
@@ -43,7 +43,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(
   }
 
   auto insn_in_map =
-      std::make_unique<std::unordered_map<DexInstruction*, T>>();
+      std::make_unique<std::unordered_map<IRInstruction*, T>>();
   for (const auto& block : blocks) {
     auto insn_in = bottom;
     for (Block* pred : block->preds()) {
@@ -53,7 +53,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      DexInstruction* insn = it->insn;
+      IRInstruction* insn = it->insn;
       insn_in_map->emplace(insn, insn_in);
       trans(insn, &insn_in);
     }
@@ -63,10 +63,10 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> forwards_dataflow(
 }
 
 template <typename T>
-std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
+std::unique_ptr<std::unordered_map<IRInstruction*, T>> backwards_dataflow(
     const std::vector<Block*>& blocks,
     const T& bottom,
-    const std::function<void(const DexInstruction*, T*)>& trans) {
+    const std::function<void(const IRInstruction*, T*)>& trans) {
   std::vector<T> block_ins(blocks.size(), bottom);
   std::deque<Block*> work_list(blocks.begin(), blocks.end());
   while (!work_list.empty()) {
@@ -80,7 +80,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      DexInstruction* insn = it->insn;
+      IRInstruction* insn = it->insn;
       trans(insn, &insn_out);
     }
     if (insn_out != block_ins[block->id()]) {
@@ -100,7 +100,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
   // iteration, and it turns out that allocating and deallocating lots of
   // dynamic_bitsets is very expensive.
   auto insn_out_map =
-      std::make_unique<std::unordered_map<DexInstruction*, T>>();
+      std::make_unique<std::unordered_map<IRInstruction*, T>>();
   for (const auto& block : blocks) {
     auto insn_out = bottom;
     for (Block* succ : block->succs()) {
@@ -110,7 +110,7 @@ std::unique_ptr<std::unordered_map<DexInstruction*, T>> backwards_dataflow(
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
-      DexInstruction* insn = it->insn;
+      IRInstruction* insn = it->insn;
       insn_out_map->emplace(insn, insn_out);
       trans(insn, &insn_out);
     }

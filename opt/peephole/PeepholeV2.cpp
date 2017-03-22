@@ -17,7 +17,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
@@ -207,13 +207,13 @@ struct Matcher;
 // given opcode
 // Returns 16 (no limit) if there is no source or destination (e.g. nop)
 static int8_t min_vreg_bit_width_for_opcode(uint16_t opcode) {
-  DexInstruction insn(opcode);
+  IRInstruction insn((DexOpcode)opcode);
   int result = 16;
   if (insn.dests_size() > 0) {
-    result = std::min(result, insn.dest_bit_width());
+    result = std::min(result, dest_bit_width(insn.opcode()));
   }
   for (unsigned i = 0; i < insn.srcs_size(); i++) {
-    result = std::min(result, insn.src_bit_width(i));
+    result = std::min(result, src_bit_width(insn.opcode(), i));
   }
   return static_cast<int8_t>(result);
 }
@@ -273,7 +273,7 @@ struct Pattern {
 struct Matcher {
   const Pattern& pattern;
   size_t match_index;
-  std::vector<DexInstruction*> matched_instructions;
+  std::vector<IRInstruction*> matched_instructions;
 
   // Another reason why we need C++14...
   struct EnumClassHash {
@@ -299,7 +299,7 @@ struct Matcher {
 
   // It updates the matching state for the given instruction. Returns true if
   // insn matches to the last 'match' pattern.
-  bool try_match(DexInstruction* insn) {
+  bool try_match(IRInstruction* insn) {
     auto match_reg = [&](Register pattern_reg, uint16_t insn_reg) {
       // This register has been observed already. Check whether they are same.
       if (matched_regs.find(pattern_reg) != end(matched_regs)) {
@@ -362,12 +362,12 @@ struct Matcher {
       case DexPattern::Kind::string:
         return match_string(
             pattern.string,
-            static_cast<const DexOpcodeString*>(insn)->get_string());
+            static_cast<const IRStringInstruction*>(insn)->get_string());
       case DexPattern::Kind::literal:
         return match_literal(pattern.literal, insn->literal());
       case DexPattern::Kind::method:
         return pattern.method ==
-               static_cast<const DexOpcodeMethod*>(insn)->get_method();
+               static_cast<const IRMethodInstruction*>(insn)->get_method();
       }
       return false;
     };
@@ -414,7 +414,7 @@ struct Matcher {
   }
 
   // Generate skeleton instruction for the replacement.
-  DexInstruction* generate_dex_instruction(const DexPattern& replace) {
+  IRInstruction* generate_dex_instruction(const DexPattern& replace) {
     if (replace.opcodes.size() != 1) {
       always_assert_log(false, "Replacement must have unique opcode");
       return nullptr;
@@ -426,31 +426,31 @@ struct Matcher {
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
       assert(replace.kind == DexPattern::Kind::method);
-      return (new DexOpcodeMethod(opcode, replace.method))
+      return (new IRMethodInstruction((DexOpcode)opcode, replace.method))
           ->set_arg_word_count(replace.srcs.size());
 
     case OPCODE_MOVE_16:
       assert(replace.kind == DexPattern::Kind::none);
-      return new DexInstruction(opcode);
+      return new IRInstruction((DexOpcode)opcode);
 
     case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT:
       assert(replace.kind == DexPattern::Kind::none);
-      return new DexInstruction(opcode);
+      return new IRInstruction((DexOpcode)opcode);
 
     case OPCODE_NEG_INT:
       assert(replace.kind == DexPattern::Kind::none);
-      return new DexInstruction(opcode);
+      return new IRInstruction((DexOpcode)opcode);
 
     case OPCODE_CONST_STRING:
       assert(replace.kind == DexPattern::Kind::string);
-      return new DexOpcodeString(OPCODE_CONST_STRING, nullptr);
+      return new IRStringInstruction(OPCODE_CONST_STRING, nullptr);
 
     case OPCODE_CONST_4:
     case OPCODE_CONST_16:
     case OPCODE_CONST:
       assert(replace.kind == DexPattern::Kind::literal);
-      return new DexInstruction(opcode);
+      return new IRInstruction((DexOpcode)opcode);
     }
 
     always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
@@ -459,10 +459,10 @@ struct Matcher {
 
   // After a successful match, get the replacement instructions. We substitute
   // the placeholders appropriately including special command placeholders.
-  std::vector<DexInstruction*> get_replacements() {
+  std::vector<IRInstruction*> get_replacements() {
     always_assert(pattern.match.size() == match_index);
 
-    std::vector<DexInstruction*> replacements;
+    std::vector<IRInstruction*> replacements;
     for (const auto& replace_info : pattern.replace) {
       // First, generate the instruction object.
       auto replace = generate_dex_instruction(replace_info);
@@ -486,31 +486,31 @@ struct Matcher {
         switch (replace_info.string) {
         case String::A: {
           auto a = matched_strings.at(String::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(a);
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(a);
           break;
         }
         case String::boolean_A_to_string: {
           bool a = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(a == true ? "true" : "false"));
           break;
         }
         case String::char_A_to_string: {
           int a = matched_literals.at(Literal::A);
           auto achar = encode_utf8_char_to_mutf8_string(a);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(achar.c_str(), 1));
           break;
         }
         case String::int_A_to_string: {
           int a = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::to_string(a)));
           break;
         }
         case String::long_int_A_to_string: {
           int64_t a = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::to_string(a)));
           break;
         }
@@ -520,7 +520,7 @@ struct Matcher {
             float f;
           } a;
           a.i = static_cast<int32_t>(matched_literals.at(Literal::A));
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::to_string(a.f)));
           break;
         }
@@ -530,28 +530,28 @@ struct Matcher {
             double d;
           } a;
           a.i = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::to_string(a.d)));
           break;
         }
         case String::concat_A_B_strings: {
           auto a = matched_strings.at(String::A)->c_str();
           auto b = matched_strings.at(String::B)->c_str();
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::string(a) + std::string(b)));
           break;
         }
         case String::concat_string_A_int_A: {
           auto a = matched_strings.at(String::A)->c_str();
           int b = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
           break;
         }
         case String::concat_string_A_boolean_A: {
           auto a = matched_strings.at(String::A)->c_str();
           bool b = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::string(a) +
                                      (b == true ? "true" : "false")));
           break;
@@ -559,7 +559,7 @@ struct Matcher {
         case String::concat_string_A_long_int_A: {
           auto a = matched_strings.at(String::A)->c_str();
           int64_t b = matched_literals.at(Literal::A);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::string(a) + std::to_string(b)));
           break;
         }
@@ -567,7 +567,7 @@ struct Matcher {
           auto a = matched_strings.at(String::A)->c_str();
           int b = matched_literals.at(Literal::A);
           auto bchar = encode_utf8_char_to_mutf8_string(b);
-          static_cast<DexOpcodeString*>(replace)->rewrite_string(
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(
               DexString::make_string(std::string(a) + bchar));
           break;
         }
@@ -988,8 +988,8 @@ class PeepholeOptimizerV2 {
     auto transform = method->get_code()->get_entries();
     transform->build_cfg();
 
-    std::vector<DexInstruction*> deletes;
-    std::vector<std::pair<DexInstruction*, std::vector<DexInstruction*>>>
+    std::vector<IRInstruction*> deletes;
+    std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
         inserts;
     const auto& blocks = transform->cfg().blocks();
     for (const auto& block : blocks) {
@@ -1033,7 +1033,7 @@ class PeepholeOptimizerV2 {
     }
 
     for (auto& pair : inserts) {
-      std::vector<DexInstruction*> vec{begin(pair.second), end(pair.second)};
+      std::vector<IRInstruction*> vec{begin(pair.second), end(pair.second)};
       transform->insert_after(pair.first, vec);
     }
     for (auto& insn : deletes) {

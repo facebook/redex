@@ -43,6 +43,6 @@ inline Operand operator "" _L(unsigned long long v) {
   return {LITERAL, v};
 }
 
-DexInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> = {});
+IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> = {});
 
 }

@@ -7,10 +7,10 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <array>
 #include <gtest/gtest.h>
 
 #include "DexInstruction.h"
+#include "OpcodeList.h"
 
 static constexpr int kMaxSources = 5;
 
@@ -19,7 +19,7 @@ static void test_opcode(DexOpcode opcode) {
   const std::string text = std::string("for opcode ") + show(opcode);
   const size_t src_count = insn.srcs_size();
   const bool has_dest = (insn.dests_size() > 0);
-  const int dest_width = has_dest ? insn.dest_bit_width() : 0;
+  const int dest_width = has_dest ? dest_bit_width(insn.opcode()) : 0;
   const bool dest_is_src0 = insn.dest_is_src();
 
   // Populate source test values
@@ -28,7 +28,7 @@ static void test_opcode(DexOpcode opcode) {
   uint16_t dest_value = (1U << dest_width) - 1;
   uint16_t src_values[kMaxSources];
   for (int src_idx = 0; src_idx < src_count; src_idx++) {
-    int src_width = insn.src_bit_width(src_idx);
+    int src_width = src_bit_width(insn.opcode(), src_idx);
     EXPECT_GE(src_width, 0) << text;
     uint16_t bits = (src_idx + 5);
     bits |= (bits << 4);
@@ -62,7 +62,7 @@ static void test_opcode(DexOpcode opcode) {
     EXPECT_EQ(insn.dest(), max) << text;
   }
   for (int i = 0; i < src_count; i++) {
-    uint16_t max = (1U << insn.src_bit_width(i)) - 1;
+    uint16_t max = (1U << src_bit_width(insn.opcode(), i)) - 1;
     insn.set_src(i, 0);
     EXPECT_EQ(insn.src(i), 0) << text;
     insn.set_src(i, max);

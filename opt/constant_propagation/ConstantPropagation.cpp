@@ -14,7 +14,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include "Walkers.h"
@@ -41,10 +41,10 @@ namespace {
     // method_returns keeps track of constant returned by methods
     std::unordered_map<DexMethod*, int64_t> method_returns;
     // Store dead instructions to be removed
-    std::vector<DexInstruction*> dead_instructions;
+    std::vector<IRInstruction*> dead_instructions;
     // Store pairs of intructions to be replaced
-    std::vector<std::pair<DexInstruction*, DexInstruction*>> replacements;
-    std::vector<std::pair<DexInstruction*, DexInstruction*>>
+    std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
+    std::vector<std::pair<IRInstruction*, IRInstruction*>>
         branch_replacements;
     size_t m_branch_propagated{0};
     size_t m_method_return_propagated{0};
@@ -83,7 +83,7 @@ namespace {
             TRACE(CONSTP, 5, "More than one pred, removing constants\n");
             remove_constants();
           }
-          DexInstruction *last_inst = nullptr;
+          IRInstruction *last_inst = nullptr;
           for (auto it = b->begin(); it != b->end() && !changed; ++it) {
             if (it->type != MFLOW_OPCODE) {
               continue;
@@ -129,14 +129,14 @@ namespace {
       }
     }
 
-    bool propagate_insn(DexInstruction *inst, DexInstruction *&last_inst, DexMethod *method) {
+    bool propagate_insn(IRInstruction *inst, IRInstruction *&last_inst, DexMethod *method) {
       bool changed = false;
       switch (inst->opcode()) {
         case OPCODE_IF_NEZ:
         case OPCODE_IF_EQZ:
           if (propagate_branch(inst)) {
             TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
-            auto new_inst = new DexInstruction(OPCODE_GOTO_16);
+            auto new_inst = new IRInstruction(OPCODE_GOTO_16);
             branch_replacements.emplace_back(inst, new_inst);
             m_branch_propagated++;
             changed = true;
@@ -155,12 +155,12 @@ namespace {
               last_inst != nullptr &&
               last_inst->opcode() == OPCODE_INVOKE_STATIC &&
               last_inst->has_methods()) {
-              DexOpcodeMethod *referred_method = static_cast<DexOpcodeMethod *>(last_inst);
+              IRMethodInstruction *referred_method = static_cast<IRMethodInstruction *>(last_inst);
               if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
                 auto return_val = method_returns[referred_method->get_method()];
                 TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
                 m_method_return_propagated++;
-                auto new_inst = (new DexInstruction(OPCODE_CONST_16))
+                auto new_inst = (new IRInstruction(OPCODE_CONST_16))
                                     ->set_dest(inst->dest())
                                     ->set_literal(return_val);
                 replacements.emplace_back(inst, new_inst);
@@ -186,7 +186,7 @@ namespace {
     }
 
     // Propagate const instruction value to registers
-    void propagate_constant(DexInstruction *inst) {
+    void propagate_constant(IRInstruction *inst) {
       // Only deal with const/4 and OPCODE_CONST_16 for simplicity
       if (inst->opcode() == OPCODE_CONST_4 ||
           inst->opcode() == OPCODE_CONST_16) {
@@ -200,7 +200,7 @@ namespace {
     // If a branch reads the value from a register loaded in earlier step,
     // the branch will read value from register, do the evaluation and
     // change the conditional branch to a goto branch if possible
-    bool propagate_branch(DexInstruction *inst) {
+    bool propagate_branch(IRInstruction *inst) {
       auto src_reg = inst->src(0);
       if (reg_values[src_reg].known) {
         if (inst->opcode() == OPCODE_IF_EQZ && reg_values[src_reg].val == 0) {

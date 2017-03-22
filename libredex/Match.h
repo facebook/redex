@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include "ReachableClasses.h"
@@ -52,7 +52,7 @@ inline bool has_code(const DexMethod* meth) {
 }
 
 /** Determine if the opcode matches any flavor of invoke-direct */
-inline bool is_invoke_direct(const DexInstruction* insn) {
+inline bool is_invoke_direct(const IRInstruction* insn) {
   auto op = insn->opcode();
   return op == OPCODE_INVOKE_DIRECT ||
     op == OPCODE_INVOKE_DIRECT_RANGE;
@@ -67,7 +67,7 @@ template<typename T, typename N>
 struct insns_matcher {
   static bool matches_at(
     int at,
-    const std::vector<DexInstruction*>& insns,
+    const std::vector<IRInstruction*>& insns,
     const T& t) {
     const auto& insn = insns.at(at);
     typename std::tuple_element<N::value, T>::type insn_match = std::get<N::value>(t);
@@ -81,7 +81,7 @@ template<typename T>
 struct insns_matcher<T, std::integral_constant<size_t, std::tuple_size<T>::value> > {
   static bool matches_at(
     int at,
-    const std::vector<DexInstruction*>& insns,
+    const std::vector<IRInstruction*>& insns,
     const T& t) {
     return true;
   }
@@ -241,21 +241,21 @@ match_t<T, std::tuple<> > is_abstract() {
 match_t<DexClass, std::tuple<> > is_interface();
 
 /**
- * Matches DexInstructions
+ * Matches IRInstructions
  */
 
 /** Any instruction which holds a type reference */
-match_t<DexInstruction> has_types();
+match_t<IRInstruction> has_types();
 
 /** const-string flavors */
-match_t<DexInstruction> const_string();
+match_t<IRInstruction> const_string();
 
 /** new-instance flavors */
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
-  new_instance(const match_t<DexInstruction, P>& p) {
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
+  new_instance(const match_t<IRInstruction, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+    [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       auto opcode = insn->opcode();
       if (opcode == OPCODE_NEW_INSTANCE) {
         return p.matches(insn);
@@ -267,18 +267,18 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
   };
 }
 
-match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   new_instance();
 
 /** throw flavors */
- match_t<DexInstruction> throwex();
+ match_t<IRInstruction> throwex();
 
 /** invoke-direct flavors */
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
-  invoke_direct(const match_t<DexInstruction, P>& p) {
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
+  invoke_direct(const match_t<IRInstruction, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+    [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       auto opcode = insn->opcode();
       if (opcode == OPCODE_INVOKE_DIRECT ||
         opcode == OPCODE_INVOKE_DIRECT_RANGE) {
@@ -291,15 +291,15 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
   };
 }
 
-match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke_direct();
 
 /** invoke-static flavors */
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
-  invoke_static(const match_t<DexInstruction, P>& p) {
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
+  invoke_static(const match_t<IRInstruction, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+    [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       auto opcode = insn->opcode();
       if (opcode == OPCODE_INVOKE_STATIC ||
         opcode == OPCODE_INVOKE_STATIC_RANGE) {
@@ -312,50 +312,50 @@ match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
   };
 }
 
-match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke_static();
 
 /** invoke of any kind */
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexInstruction, P> > >
-  invoke(const match_t<DexInstruction, P>& p) {
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
+  invoke(const match_t<IRInstruction, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexInstruction, P>& p) {
+    [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       return is_invoke(insn->opcode()) && p.matches(insn);
     },
     p
   };
 }
 
-inline match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+inline match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke() {
-    return invoke(any<DexInstruction>());
+    return invoke(any<IRInstruction>());
 };
 
 /** return-void */
-match_t<DexInstruction> return_void();
+match_t<IRInstruction> return_void();
 
 /** Matches instructions with specified number of arguments. Supports /range. */
-match_t<DexInstruction, std::tuple<int> > has_n_args(int n);
+match_t<IRInstruction, std::tuple<int> > has_n_args(int n);
 
 /** Matches instructions with specified opcode */
-inline match_t<DexInstruction, std::tuple<DexOpcode> > is_opcode(DexOpcode opcode) {
+inline match_t<IRInstruction, std::tuple<DexOpcode> > is_opcode(DexOpcode opcode) {
   return {
-    [](const DexInstruction* insn, const DexOpcode& opcode) {
+    [](const IRInstruction* insn, const DexOpcode& opcode) {
       return insn->opcode() == opcode;
     },
     opcode
   };
 }
 
-/** Matchers that map from DexInstruction -> other types */
+/** Matchers that map from IRInstruction -> other types */
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexMethod, P> > >
+match_t<IRInstruction, std::tuple<match_t<DexMethod, P> > >
   opcode_method(const match_t<DexMethod, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexMethod, P>& p) {
+    [](const IRInstruction* insn, const match_t<DexMethod, P>& p) {
       always_assert(insn->has_methods());
-      auto method_insn = (DexOpcodeMethod*)insn;
+      auto method_insn = static_cast<const IRMethodInstruction*>(insn);
       return p.matches(method_insn->get_method());
     },
     p
@@ -363,11 +363,11 @@ match_t<DexInstruction, std::tuple<match_t<DexMethod, P> > >
 }
 
 template <typename P>
-match_t<DexInstruction, std::tuple<match_t<DexType, P> > >
+match_t<IRInstruction, std::tuple<match_t<DexType, P> > >
   opcode_type(const match_t<DexType, P>& p) {
   return {
-    [](const DexInstruction* insn, const match_t<DexType, P>& p) {
-      auto type_insn = (DexOpcodeType*)insn;
+    [](const IRInstruction* insn, const match_t<DexType, P>& p) {
+      auto type_insn = static_cast<const IRTypeInstruction*>(insn);
       return p.matches(type_insn->get_type());
     },
     p
@@ -397,7 +397,11 @@ template <typename ...T>
       auto& code = meth->get_code();
       if (code) {
         const size_t N = std::tuple_size<std::tuple<T...> >::value;
-        const std::vector<DexInstruction*>& insns = code->get_instructions();
+        auto mt = code->get_entries();
+        std::vector<IRInstruction*> insns;
+        for (auto& mie : InstructionIterable(mt)) {
+          insns.push_back(mie.insn);
+        }
         // No way to match if we have less insns than N
         if (insns.size() < N) {
           return false;

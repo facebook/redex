@@ -21,7 +21,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Mutators.h"
@@ -76,7 +76,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto end = ii.end();
   if (!is_iget(it->insn->opcode())) return nullptr;
 
-  auto iget = static_cast<DexOpcodeField*>(it->insn);
+  auto iget = static_cast<IRFieldInstruction*>(it->insn);
   uint16_t iget_dest = iget->dest();
   ++it;
 
@@ -112,7 +112,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto end = ii.end();
   if (!is_sget(it->insn->opcode())) return nullptr;
 
-  auto sget = static_cast<DexOpcodeField*>(it->insn);
+  auto sget = static_cast<IRFieldInstruction*>(it->insn);
   uint16_t sget_dest = sget->dest();
   ++it;
 
@@ -152,7 +152,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
   bool is_static = it->insn->opcode() == OPCODE_INVOKE_STATIC;
   if (!is_direct && !is_static) return nullptr;
 
-  auto invoke = static_cast<DexOpcodeMethod*>(it->insn);
+  auto invoke = static_cast<IRMethodInstruction*>(it->insn);
   auto method = invoke->get_method();
   if (is_static) {
     method = resolve_static(type_class(method->get_class()),
@@ -211,7 +211,7 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s\n", SHOW(m));
     return nullptr;
   }
-  auto invoke = static_cast<DexOpcodeMethod*>(it->insn);
+  auto invoke = static_cast<IRMethodInstruction*>(it->insn);
   if (!passes_args_through(invoke, *code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s\n", SHOW(m));
     return nullptr;
@@ -337,7 +337,7 @@ WrapperMethods analyze(const std::vector<DexClass*>& classes,
   return ssms;
 }
 
-DexInstruction* make_iget(DexField* field, uint8_t dest, uint8_t src) {
+IRInstruction* make_iget(DexField* field, uint8_t dest, uint8_t src) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:
@@ -364,10 +364,10 @@ DexInstruction* make_iget(DexField* field, uint8_t dest, uint8_t src) {
   }();
 
   if (dest > 15 || src > 15) return nullptr;
-  return (new DexOpcodeField(opcode, field))->set_dest(dest)->set_src(0, src);
+  return (new IRFieldInstruction(opcode, field))->set_dest(dest)->set_src(0, src);
 }
 
-DexInstruction* make_sget(DexField* field, uint8_t dest) {
+IRInstruction* make_sget(DexField* field, uint8_t dest) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:
@@ -393,29 +393,22 @@ DexInstruction* make_sget(DexField* field, uint8_t dest) {
     not_reached();
   }();
 
-  return (new DexOpcodeField(opcode, field))->set_dest(dest);
+  return (new IRFieldInstruction(opcode, field))->set_dest(dest);
 }
 
 bool replace_getter_wrapper(MethodTransform* transform,
-                            DexOpcodeMethod* meth_insn,
-                            DexInstruction* move_result,
+                            IRMethodInstruction* meth_insn,
+                            IRInstruction* move_result,
                             DexField* field) {
   TRACE(SYNT, 2, "Optimizing getter wrapper call: %s\n", SHOW(meth_insn));
   assert(field->is_concrete());
   set_public(field);
 
-  auto invoke_src = meth_insn->src(0);
   auto move_result_dest = move_result->dest();
 
-  TRACE(SYNT,
-        2,
-        "Creating instruction %s %d %d\n",
-        SHOW(field),
-        move_result_dest,
-        invoke_src);
   auto new_get = is_static(field)
                 ? make_sget(field, move_result_dest)
-                : make_iget(field, move_result_dest, invoke_src);
+                : make_iget(field, move_result_dest, meth_insn->src(0));
   if (!new_get) return false;
   TRACE(SYNT, 2, "Created instruction: %s\n", SHOW(new_get));
 
@@ -425,14 +418,14 @@ bool replace_getter_wrapper(MethodTransform* transform,
 }
 
 void update_invoke(MethodTransform* transform,
-                   DexOpcodeMethod* meth_insn,
+                   IRMethodInstruction* meth_insn,
                    DexMethod* method) {
   auto op = meth_insn->opcode();
   auto new_invoke = [&] {
     if (op == OPCODE_INVOKE_DIRECT_RANGE) {
       auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC_RANGE
                     : OPCODE_INVOKE_DIRECT_RANGE;
-      auto ret = new DexOpcodeMethod(new_op, method, 0);
+      auto ret = new IRMethodInstruction(new_op, method);
       ret->set_range_base(meth_insn->range_base())
           ->set_range_size(meth_insn->range_size());
       return ret;
@@ -440,9 +433,9 @@ void update_invoke(MethodTransform* transform,
       assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
       auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC
                     : OPCODE_INVOKE_DIRECT;
-      auto ret = new DexOpcodeMethod(new_op, method, 0);
+      auto ret = new IRMethodInstruction(new_op, method);
       ret->set_arg_word_count(meth_insn->arg_word_count());
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < ret->arg_word_count(); i++) {
         ret->set_src(i, meth_insn->src(i));
       }
       return ret;
@@ -482,7 +475,7 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
 }
 
 bool replace_method_wrapper(MethodTransform* transform,
-                            DexOpcodeMethod* meth_insn,
+                            IRMethodInstruction* meth_insn,
                             DexMethod* wrapper,
                             DexMethod* wrappee,
                             WrapperMethods& ssms) {
@@ -509,7 +502,7 @@ bool replace_method_wrapper(MethodTransform* transform,
 }
 
 void replace_ctor_wrapper(MethodTransform* transform,
-                          DexOpcodeMethod* ctor_insn,
+                          IRMethodInstruction* ctor_insn,
                           DexMethod* ctor) {
   TRACE(SYNT, 2, "Optimizing static ctor: %s\n", SHOW(ctor_insn));
   assert(ctor->is_concrete());
@@ -518,15 +511,15 @@ void replace_ctor_wrapper(MethodTransform* transform,
   auto op = ctor_insn->opcode();
   auto new_ctor_call = [&] {
     if (op == OPCODE_INVOKE_DIRECT_RANGE) {
-      auto ret = new DexOpcodeMethod(OPCODE_INVOKE_DIRECT_RANGE, ctor, 0);
+      auto ret = new IRMethodInstruction(OPCODE_INVOKE_DIRECT_RANGE, ctor);
       ret->set_range_base(ctor_insn->range_base())
           ->set_range_size(ctor_insn->range_size() - 1);
       return ret;
     } else {
       assert(op == OPCODE_INVOKE_DIRECT);
-      auto ret = new DexOpcodeMethod(OPCODE_INVOKE_DIRECT, ctor, 0);
+      auto ret = new IRMethodInstruction(OPCODE_INVOKE_DIRECT, ctor);
       ret->set_arg_word_count(ctor_insn->arg_word_count() - 1);
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < ret->arg_word_count(); i++) {
         ret->set_src(i, ctor_insn->src(i));
       }
       return ret;
@@ -539,10 +532,10 @@ void replace_ctor_wrapper(MethodTransform* transform,
 
 void replace_wrappers(DexMethod* caller_method,
                       WrapperMethods& ssms) {
-  std::vector<std::tuple<DexOpcodeMethod*, DexInstruction*, DexField*>> getter_calls;
-  std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapper_calls;
-  std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> wrapped_calls;
-  std::vector<std::pair<DexOpcodeMethod*, DexMethod*>> ctor_calls;
+  std::vector<std::tuple<IRMethodInstruction*, IRInstruction*, DexField*>> getter_calls;
+  std::vector<std::pair<IRMethodInstruction*, DexMethod*>> wrapper_calls;
+  std::vector<std::pair<IRMethodInstruction*, DexMethod*>> wrapped_calls;
+  std::vector<std::pair<IRMethodInstruction*, DexMethod*>> ctor_calls;
 
   TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
   auto ii = InstructionIterable(caller_method->get_code()->get_entries());
@@ -550,7 +543,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto insn = it->insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
       // Replace calls to static getters and wrappers
-      auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
+      auto const meth_insn = static_cast<IRMethodInstruction*>(insn);
       auto const callee = resolve_method(
           meth_insn->get_method(), MethodSearch::Static);
       if (callee == nullptr) continue;
@@ -582,7 +575,7 @@ void replace_wrappers(DexMethod* caller_method,
       ssms.keepers.emplace(callee);
     } else if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
                insn->opcode() == OPCODE_INVOKE_DIRECT_RANGE) {
-      auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
+      auto const meth_insn = static_cast<IRMethodInstruction*>(insn);
       auto const callee =
           resolve_method(meth_insn->get_method(), MethodSearch::Direct);
       if (callee == nullptr) continue;
@@ -622,7 +615,7 @@ void replace_wrappers(DexMethod* caller_method,
       }
     } else if (insn->opcode() == OPCODE_INVOKE_STATIC_RANGE) {
       // We don't handle this yet, but it's not hard.
-      auto const meth_insn = static_cast<DexOpcodeMethod*>(insn);
+      auto const meth_insn = static_cast<IRMethodInstruction*>(insn);
       auto const callee = resolve_method(
           meth_insn->get_method(), MethodSearch::Static);
       if (callee == nullptr) continue;
@@ -659,7 +652,7 @@ void replace_wrappers(DexMethod* caller_method,
   wrapper_calls.erase(
     std::remove_if(
       wrapper_calls.begin(), wrapper_calls.end(),
-      [&](const std::pair<DexOpcodeMethod*, DexMethod*>& p) {
+      [&](const std::pair<IRMethodInstruction*, DexMethod*>& p) {
         return bad_wrappees.count(p.second);
       }),
     wrapper_calls.end()
@@ -667,7 +660,7 @@ void replace_wrappers(DexMethod* caller_method,
   wrapped_calls.erase(
     std::remove_if(
       wrapped_calls.begin(), wrapped_calls.end(),
-      [&](const std::pair<DexOpcodeMethod*, DexMethod*>& p) {
+      [&](const std::pair<IRMethodInstruction*, DexMethod*>& p) {
         return bad_wrappees.count(p.first->get_method());
       }),
     wrapped_calls.end()
@@ -829,13 +822,13 @@ void transform(const std::vector<DexClass*>& classes,
   walk_opcodes(
       classes,
       [](DexMethod*) { return true; },
-      [&](DexMethod* meth, DexInstruction* insn) {
+      [&](DexMethod* meth, IRInstruction* insn) {
         auto opcode = insn->opcode();
         if (opcode != OPCODE_INVOKE_DIRECT &&
             opcode != OPCODE_INVOKE_DIRECT_RANGE) {
           return;
         }
-        auto wrappee = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        auto wrappee = static_cast<IRMethodInstruction*>(insn)->get_method();
         if (ssms.promoted_to_static.count(wrappee) == 0) {
           return;
         }

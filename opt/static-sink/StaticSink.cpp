@@ -169,9 +169,9 @@ void remove_primary_dex_refs(
   walk_opcodes(
     primary_dex,
     [](DexMethod*) { return true; },
-    [&](DexMethod*, DexInstruction* insn) {
+    [&](DexMethod*, IRInstruction* insn) {
       if (insn->has_methods()) {
-        auto callee = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        auto callee = static_cast<IRMethodInstruction*>(insn)->get_method();
         ref_set.insert(callee);
       }
     }
@@ -252,19 +252,19 @@ bool illegal_access(DexMethod* method) {
       return true;
     }
     if (op->has_fields()) {
-      auto field = static_cast<DexOpcodeField*>(op)->field();
+      auto field = static_cast<IRFieldInstruction*>(op)->field();
       if (!allow_field_access(field)) {
         return true;
       }
     }
     if (op->has_methods()) {
-      auto meth = static_cast<DexOpcodeMethod*>(op)->get_method();
+      auto meth = static_cast<IRMethodInstruction*>(op)->get_method();
       if (!allow_method_access(meth)) {
         return true;
       }
     }
     if (op->has_types()) {
-      auto type = static_cast<DexOpcodeType*>(op)->get_type();
+      auto type = static_cast<IRTypeInstruction*>(op)->get_type();
       if (!allow_type_access(type)) {
         return true;
       }
@@ -336,9 +336,9 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
       auto cls = type_class(m->get_class());
       return class_set.count(cls) == 0 && is_public(cls);
     },
-    [&](DexMethod* m, DexInstruction* insn) {
+    [&](DexMethod* m, IRInstruction* insn) {
       if (insn->has_methods()) {
-        auto callee = static_cast<DexOpcodeMethod*>(insn)->get_method();
+        auto callee = static_cast<IRMethodInstruction*>(insn)->get_method();
         if (static_set.count(callee)) {
           statics_to_callers[callee] = type_class(m->get_class());
         }

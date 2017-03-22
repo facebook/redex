@@ -33,7 +33,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   caller->get_code()->balloon();
   caller->get_code()->set_registers_size(1);
 
-  auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, callee);
+  auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, callee);
   invoke->set_arg_word_count(2);
   invoke->set_src(0, 0);
   invoke->set_src(1, 0);

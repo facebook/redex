@@ -10,51 +10,50 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "PassManager.h"
 #include "PeepholeV2.h"
 #include "Transform.h"
 
 // Helper to hold a list of instructions
-struct DexInstructionList {
+struct IRInstructionList {
   // No copying, move only
-  DexInstructionList(const DexInstructionList&) = delete;
-  DexInstructionList& operator=(const DexInstructionList&) = delete;
-  DexInstructionList(DexInstructionList&&) = default;
-  DexInstructionList& operator=(DexInstructionList&&) = default;
+  IRInstructionList(const IRInstructionList&) = delete;
+  IRInstructionList& operator=(const IRInstructionList&) = delete;
+  IRInstructionList(IRInstructionList&&) = default;
+  IRInstructionList& operator=(IRInstructionList&&) = default;
 
-  std::vector<std::unique_ptr<DexInstruction>> instructions;
+  std::vector<std::unique_ptr<IRInstruction>> instructions;
 
-  explicit DexInstructionList(std::initializer_list<DexInstruction*> in) {
-    for (DexInstruction* insn : in) {
+  explicit IRInstructionList(std::initializer_list<IRInstruction*> in) {
+    for (IRInstruction* insn : in) {
       instructions.emplace_back(insn); // moves insn into unique_ptr
     }
   }
 
-  explicit DexInstructionList(
-      std::unique_ptr<std::vector<DexInstruction*>>&& in) {
-    for (DexInstruction* insn : *in) {
-      instructions.emplace_back(insn); // moves insn into unique_ptr
+  explicit IRInstructionList(MethodTransform* mt) {
+    for (auto& mie : InstructionIterable(mt)) {
+      instructions.emplace_back(mie.insn); // moves insn into unique_ptr
     }
   }
 
-  bool operator==(const DexInstructionList& rhs) const {
+  bool operator==(const IRInstructionList& rhs) const {
     return instructions.size() == rhs.instructions.size() &&
            std::equal(instructions.begin(),
                       instructions.end(),
                       rhs.instructions.begin(),
-                      [](const std::unique_ptr<DexInstruction>& a,
-                         const std::unique_ptr<DexInstruction>& b) {
+                      [](const std::unique_ptr<IRInstruction>& a,
+                         const std::unique_ptr<IRInstruction>& b) {
                         return *a == *b;
                       });
   }
 };
 
 // Pretty-print instruction lists for gtest
-static void PrintTo(const DexInstructionList& insn_list, std::ostream* os) {
+static void PrintTo(const IRInstructionList& insn_list, std::ostream* os) {
   if (insn_list.instructions.empty()) {
     *os << "(empty)\n";
     return;
@@ -67,12 +66,12 @@ static void PrintTo(const DexInstructionList& insn_list, std::ostream* os) {
 // Builds some arithmetic involving a literal instruction
 // The opcode should be a literal-carrying opcode like OPCODE_ADD_INT_LIT16
 // The source register is src_reg, dest register is 1
-static DexInstructionList op_lit(DexOpcode opcode,
+static IRInstructionList op_lit(DexOpcode opcode,
                                  int64_t literal,
                                  unsigned dst_reg = 1) {
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
-  return DexInstructionList{
+  return IRInstructionList{
       dasm(OPCODE_CONST_16, {0_v, 42_L}),
       dasm(opcode,
            {Operand{VREG, dst_reg},
@@ -82,9 +81,9 @@ static DexInstructionList op_lit(DexOpcode opcode,
 }
 
 // Builds arithmetic involving an opcode like MOVE or NEG
-static DexInstructionList op_unary(DexOpcode opcode) {
+static IRInstructionList op_unary(DexOpcode opcode) {
   using namespace dex_asm;
-  return DexInstructionList{dasm(OPCODE_CONST_16, {0_v, 42_L}),
+  return IRInstructionList{dasm(OPCODE_CONST_16, {0_v, 42_L}),
                             dasm(opcode, {1_v, 0_v})};
 }
 
@@ -98,7 +97,7 @@ class PeepholeTest : public ::testing::Test {
 
   // add a void->void static method to our dex_class
   DexMethod* make_void_method(const char* method_name,
-                              const DexInstructionList& insns) const {
+                              const IRInstructionList& insns) const {
     auto ret = get_void_type();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // I()
@@ -147,28 +146,26 @@ class PeepholeTest : public ::testing::Test {
   // Performs one peephole test. Applies peephole optimizations to the given
   // source instruction stream, and checks that it equals the expected result
   void test_1(const char* name,
-              const DexInstructionList& src,
-              const DexInstructionList& expected) {
+              const IRInstructionList& src,
+              const IRInstructionList& expected) {
     DexMethod* method = make_void_method(name, src);
     dex_class->add_method(method);
     manager.run_passes(stores, config);
-    method->get_code()->sync();
-    DexInstructionList result(method->get_code()->release_instructions());
-    method->get_code()->reset_instructions();
+    IRInstructionList result(method->get_code()->get_entries());
     EXPECT_EQ(result, expected) << " for test " << name;
     dex_class->remove_method(method);
   }
 
   // Perform a negative peephole test.
   // We expect to NOT modify these instructions.
-  void test_1_nochange(const char* name, const DexInstructionList& src) {
+  void test_1_nochange(const char* name, const IRInstructionList& src) {
     test_1(name, src, src);
   }
 };
 
 TEST_F(PeepholeTest, Arithmetic) {
-  DexInstructionList move16 = op_unary(OPCODE_MOVE_16); // move v0, v1
-  DexInstructionList negate = op_unary(OPCODE_NEG_INT); // neg v0, v1
+  IRInstructionList move16 = op_unary(OPCODE_MOVE_16); // move v0, v1
+  IRInstructionList negate = op_unary(OPCODE_NEG_INT); // neg v0, v1
   test_1("add8_0_to_move", op_lit(OPCODE_ADD_INT_LIT8, 0), move16);
   test_1("add16_0_to_move", op_lit(OPCODE_ADD_INT_LIT16, 0), move16);
 

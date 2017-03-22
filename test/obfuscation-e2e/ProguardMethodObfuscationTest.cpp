@@ -15,7 +15,6 @@
 #include <array>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "Match.h"
 #include "ProguardConfiguration.h"

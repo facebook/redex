@@ -18,7 +18,7 @@
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -326,13 +326,13 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
           auto inst = mie.insn;
           DexClass* called_cls = nullptr;
           if (inst->has_methods()) {
-            auto method_access = static_cast<DexOpcodeMethod*>(inst);
+            auto method_access = static_cast<IRMethodInstruction*>(inst);
             called_cls = type_class(method_access->get_method()->get_class());
           } else if (inst->has_fields()) {
-            auto field_access = static_cast<DexOpcodeField*>(inst);
+            auto field_access = static_cast<IRFieldInstruction*>(inst);
             called_cls = type_class(field_access->field()->get_class());
           } else if (inst->has_types()) {
-            auto type_access = static_cast<DexOpcodeType*>(inst);
+            auto type_access = static_cast<IRTypeInstruction*>(inst);
             called_cls = type_class(type_access->get_type());
           }
           if (called_cls != nullptr &&

@@ -104,16 +104,16 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
   auto& code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
   auto mt = meth->get_code()->get_entries();
-  DexInstruction* last = nullptr;
+  IRInstruction* last = nullptr;
   for (auto& mie : InstructionIterable(code->get_entries())) {
     auto insn = mie.insn;
-    DexOpcodeMethod* invoke = nullptr;
+    IRMethodInstruction* invoke = nullptr;
     auto op = insn->opcode();
     switch (op) {
     case OPCODE_NEW_INSTANCE:
-      if (find_impl(static_cast<DexOpcodeType*>(insn)->get_type(),
+      if (find_impl(static_cast<IRTypeInstruction*>(insn)->get_type(),
           unterface)) {
-        auto new_inst = new DexOpcodeType(
+        auto new_inst = new IRTypeInstruction(
             OPCODE_NEW_INSTANCE, unterface.untf->get_type());
         new_inst->set_dest(insn->dest());
         mt->replace_opcode(insn, new_inst);
@@ -123,15 +123,15 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
       }
       break;
     case OPCODE_INVOKE_DIRECT: {
-      auto cls = static_cast<DexOpcodeMethod*>(insn)->get_method()->get_class();
+      auto cls = static_cast<IRMethodInstruction*>(insn)->get_method()->get_class();
       for (size_t i = 0; i < unterface.impls.size(); i++) {
         auto impl = unterface.impls[i];
         if (impl->get_type() == cls) {
-          auto load = new DexInstruction(OPCODE_CONST_16);
+          auto load = new IRInstruction(OPCODE_CONST_16);
           load->set_dest(0);
           load->set_literal(static_cast<int32_t>(i));
-          invoke = new DexOpcodeMethod(OPCODE_INVOKE_DIRECT,
-              unterface.ctor, 0);
+          invoke =
+              new IRMethodInstruction(OPCODE_INVOKE_DIRECT, unterface.ctor);
           uint16_t arg_count = insn->srcs_size();
           invoke->set_arg_word_count(arg_count + 1);
           if (code->get_outs_size() < arg_count + 1) {
@@ -142,7 +142,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
           }
           invoke->set_src(arg_count, 0);
           mt->remove_opcode(insn);
-          std::vector<DexInstruction*> new_insns;
+          std::vector<IRInstruction*> new_insns;
           new_insns.push_back(load);
           new_insns.push_back(invoke);
           mt->insert_after(last, new_insns);
@@ -192,7 +192,7 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
           auto op = insn->opcode();
           switch (op) {
           case OPCODE_NEW_INSTANCE:
-            if (find_impl(static_cast<DexOpcodeType*>(insn)->get_type(),
+            if (find_impl(static_cast<IRTypeInstruction*>(insn)->get_type(),
                 unterface)) {
               to_change.push_back(meth);
               return;
@@ -200,7 +200,7 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
             break;
           case OPCODE_INVOKE_DIRECT:
             if (find_impl(
-                static_cast<DexOpcodeMethod*>(insn)->get_method()->get_class(),
+                static_cast<IRMethodInstruction*>(insn)->get_method()->get_class(),
                 unterface)) {
               to_change.push_back(meth);
               return;
@@ -322,11 +322,11 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
   auto entries = meth->get_code()->get_entries();
 
   // collect all field access that use the outer field
-  std::vector<DexOpcodeField*> field_ops;
+  std::vector<IRFieldInstruction*> field_ops;
   for (auto& mie : InstructionIterable(entries)) {
     auto insn = mie.insn;
     if (is_iget(insn->opcode())) {
-      auto field_op = static_cast<DexOpcodeField*>(insn);
+      auto field_op = static_cast<IRFieldInstruction*>(insn);
       if (field_op->field() == outer) {
         field_ops.push_back(field_op);
       }
@@ -335,14 +335,14 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
 
   // transform every field access to the new field and add a check_cast
   for (auto fop : field_ops) {
-    DexOpcodeField* new_fop = new DexOpcodeField(fop->opcode(), new_field);
+    IRFieldInstruction* new_fop = new IRFieldInstruction(fop->opcode(), new_field);
     auto dst = fop->dest();
     new_fop->set_dest(dst);
     new_fop->set_src(0, fop->src(0));
     entries->replace_opcode(fop, new_fop);
-    DexOpcodeType* check_cast = new DexOpcodeType(OPCODE_CHECK_CAST, type);
+    IRTypeInstruction* check_cast = new IRTypeInstruction(OPCODE_CHECK_CAST, type);
     check_cast->set_src(0, dst);
-    std::vector<DexInstruction*> ops;
+    std::vector<IRInstruction*> ops;
     ops.push_back(check_cast);
     TRACE(UNTF, 8, "Changed %s to\n%s\n%s\n", show(fop).c_str(),
         show(new_fop).c_str(), show(check_cast).c_str());

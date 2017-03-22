@@ -99,9 +99,9 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
   std::unordered_map<DexMethod*, DexMethod*> m_ref_def_cache;
   walk_opcodes(scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod*, DexInstruction* instr) {
+    [&](DexMethod*, IRInstruction* instr) {
       if (instr->has_fields()) {
-        DexOpcodeField* field_instr = static_cast<DexOpcodeField*>(instr);
+        IRFieldInstruction* field_instr = static_cast<IRFieldInstruction*>(instr);
         DexField* field_ref = field_instr->field();
         if (field_ref->is_def()) return;
         DexField* field_def =
@@ -111,7 +111,7 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
           field_instr->rewrite_field(field_def);
         }
       } else if (instr->has_methods()) {
-        DexOpcodeMethod* meth_instr = static_cast<DexOpcodeMethod*>(instr);
+        IRMethodInstruction* meth_instr = static_cast<IRMethodInstruction*>(instr);
         DexMethod* method_ref = meth_instr->get_method();
         if (method_ref->is_def()) return;
         DexMethod* method_def =

@@ -15,7 +15,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "PassManager.h"
@@ -124,7 +124,7 @@ struct Rebinder {
     walk_opcodes(
       m_scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexInstruction* insn) {
+      [&](DexMethod* m, IRInstruction* insn) {
         switch (insn->opcode()) {
           case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_INTERFACE_RANGE:
@@ -213,8 +213,8 @@ struct Rebinder {
     }
   };
 
-  void rebind_method(DexInstruction* opcode, InvokeType invoke_type) {
-    const auto mop = static_cast<DexOpcodeMethod*>(opcode);
+  void rebind_method(IRInstruction* opcode, InvokeType invoke_type) {
+    const auto mop = static_cast<IRMethodInstruction*>(opcode);
     const auto mref = mop->get_method();
     switch (invoke_type) {
       case InvokeType::Static:
@@ -249,7 +249,7 @@ struct Rebinder {
   }
 
   void rebind_method_opcode(
-      DexOpcodeMethod* mop,
+      IRMethodInstruction* mop,
       DexMethod* mref,
       DexMethod* real_ref) {
     if (!real_ref || real_ref == mref || real_ref->is_external()) {
@@ -291,8 +291,8 @@ struct Rebinder {
     return nullptr;
   }
 
-  void rebind_field(DexInstruction* insn, FieldSearch field_search) {
-    const auto fop = static_cast<DexOpcodeField*>(insn);
+  void rebind_field(IRInstruction* insn, FieldSearch field_search) {
+    const auto fop = static_cast<IRFieldInstruction*>(insn);
     const auto fref = fop->field();
     const auto real_ref = resolve_field(fref, field_search);
     if (real_ref && real_ref != fref) {

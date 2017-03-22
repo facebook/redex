@@ -18,7 +18,7 @@ class RedundantCheckCastRemover {
   void run();
 
  private:
-  static bool can_remove_check_cast(DexInstruction**, size_t);
+  static bool can_remove_check_cast(IRInstruction**, size_t);
 
   PassManager& m_mgr;
   const std::vector<DexClass*>& m_scope;

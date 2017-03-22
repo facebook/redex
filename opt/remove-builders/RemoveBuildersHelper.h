@@ -25,7 +25,7 @@ struct TaintedRegs {
   const RegSet& bits() { return m_reg_set; }
 
   void meet(const TaintedRegs& that);
-  void trans(const DexInstruction*);
+  void trans(const IRInstruction*);
 
   bool operator==(const TaintedRegs& that) const;
   bool operator!=(const TaintedRegs& that) const;
@@ -62,7 +62,7 @@ struct FieldsRegs {
       : field_to_reg(std::move(field_to_reg)) {}
 
   void meet(const FieldsRegs& that);
-  void trans(const DexInstruction*);
+  void trans(const IRInstruction*);
 
   bool operator==(const FieldsRegs& that) const;
   bool operator!=(const FieldsRegs& that) const;

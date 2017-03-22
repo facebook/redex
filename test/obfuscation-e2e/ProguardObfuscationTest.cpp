@@ -85,9 +85,9 @@ bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
   DexClasses& classes(dexen.front());
   walk_opcodes(classes,
     [](DexMethod*){return true;},
-    [&](DexMethod* method, DexInstruction* instr) {
+    [&](DexMethod* method, IRInstruction* instr) {
       if (!is_ifield_op(instr->opcode())) return;
-      DexOpcodeField* field_instr = static_cast<DexOpcodeField*>(instr);
+      auto field_instr = static_cast<IRFieldInstruction*>(instr);
 
       // Is an opcode corresponding to a field
       DexField* field_ref = field_instr->field();

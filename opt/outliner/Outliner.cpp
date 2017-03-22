@@ -19,7 +19,7 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
@@ -114,8 +114,9 @@ void build_dispatcher(DexStoresVector& stores,
   stores[0].get_dexen().rbegin()->emplace_back(dispatch_cls->create());
 }
 
-DexInstruction* make_invoke(const DexMethod* meth, uint16_t v0) {
-  auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, (DexMethod*)meth, 1);
+IRInstruction* make_invoke(const DexMethod* meth, uint16_t v0) {
+  auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC,
+                                        const_cast<DexMethod*>(meth));
   invoke->set_arg_word_count(1);
   invoke->set_src(0, v0);
   return invoke;
@@ -165,13 +166,13 @@ void Outliner::run_pass(DexStoresVector& stores,
           MethodTransform* mt,
           Block* bb,
           size_t n,
-          DexInstruction** insns) {
+          IRInstruction** insns) {
         always_assert(n == 4);
 
-        DexOpcodeType* new_instance = (DexOpcodeType*)insns[0];
-        DexOpcodeString* const_string = (DexOpcodeString*)insns[1];
-        DexOpcodeMethod* invoke_direct = (DexOpcodeMethod*)insns[2];
-        DexInstruction* throwex = (DexInstruction*)insns[3];
+        auto new_instance = static_cast<IRTypeInstruction*>(insns[0]);
+        auto const_string = static_cast<IRStringInstruction*>(insns[1]);
+        auto invoke_direct = static_cast<IRMethodInstruction*>(insns[2]);
+        IRInstruction* throwex = insns[3];
         if (invoke_direct->srcs_size() == 2 &&
             new_instance->dest() == invoke_direct->src(0) &&
             const_string->dest() == invoke_direct->src(1) &&
@@ -189,7 +190,7 @@ void Outliner::run_pass(DexStoresVector& stores,
           auto const_int_extype = dasm(OPCODE_CONST,
                                        {{VREG, new_instance->dest()},
                                         {LITERAL, outlined_throws.size()}});
-          DexInstruction* invoke_static =
+          IRInstruction* invoke_static =
               make_invoke(dispatch_method, new_instance->dest());
 
           /*

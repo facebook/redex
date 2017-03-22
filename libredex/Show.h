@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <list>
 #include <memory>
 #include <string>
@@ -31,6 +32,7 @@ class DexAnnotation;
 class DexAnnotationSet;
 class DexAnnotationDirectory;
 class DexDebugInstruction;
+class IRInstruction;
 class MethodTransform;
 class ControlFlowGraph;
 struct MethodItemEntry;
@@ -55,6 +57,7 @@ std::string show(const DexAnnotation*);
 std::string show(const DexAnnotationSet*);
 std::string show(const DexAnnotationDirectory*);
 std::string show(const DexDebugInstruction*);
+std::string show(const IRInstruction*);
 std::string show(const MethodTransform*);
 std::string show(const MethodItemEntry&);
 std::string show(const ControlFlowGraph&);

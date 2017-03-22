@@ -39,8 +39,8 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
       auto mt = m_callee->get_code()->get_entries();
       // note that this method will not behave the same way if v0 and v1 get
       // mapped to the same register
-      mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {0_v, 1_v}));
-      mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 0_v}));
+      mt->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}));
+      mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 0_v}));
       mt->push_back(dasm(OPCODE_RETURN, {1_v}));
       m_callee->get_code()->set_registers_size(2);
       m_callee->get_code()->set_ins_size(2);
@@ -53,7 +53,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     auto mt = m->get_code()->get_entries();
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
 
-    auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_callee, 0);
+    auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_callee);
     invoke->set_arg_word_count(2);
     // reusing the same register for two separate arguments
     invoke->set_src(0, 0);
@@ -67,11 +67,11 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    DexOpcodeMethod* mop = nullptr;
+    IRMethodInstruction* mop = nullptr;
     for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = static_cast<DexOpcodeMethod*>(insn);
+        mop = static_cast<IRMethodInstruction*>(insn);
         assert(mop->get_method() == m_callee);
         break;
       }
@@ -125,27 +125,27 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     // if block
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
     mt->push_back(*branch);
-    auto invoke = new DexOpcodeMethod(OPCODE_INVOKE_STATIC, m_callee, 0);
+    auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_callee);
     invoke->set_arg_word_count(0);
     mt->push_back(invoke);
-    mt->push_back(dasm(OPCODE_ADD_INT_2ADDR, {1_v, 2_v}));
+    mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}));
     // fallthrough to main block
     auto target = new BranchTarget();
     target->type = BRANCH_SIMPLE;
     target->src = branch;
     mt->push_back(target);
-    mt->push_back(dasm(OPCODE_SUB_INT_2ADDR, {1_v, 2_v}));
+    mt->push_back(dasm(OPCODE_SUB_INT, {1_v, 1_v, 2_v}));
     mt->push_back(dasm(OPCODE_RETURN, {1_v}));
     m->get_code()->set_registers_size(3);
     m->get_code()->set_ins_size(0);
   }
 
   virtual void transform_method(DexMethod* m) {
-    DexOpcodeMethod* mop = nullptr;
+    IRMethodInstruction* mop = nullptr;
     for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = static_cast<DexOpcodeMethod*>(insn);
+        mop = static_cast<IRMethodInstruction*>(insn);
         assert(mop->get_method() == m_callee);
         break;
       }

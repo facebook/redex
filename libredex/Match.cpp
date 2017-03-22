@@ -11,34 +11,31 @@
 
 namespace m {
 
-match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke_static() {
-    return invoke_static(any<DexInstruction>());
+    return invoke_static(any<IRInstruction>());
 };
 
-match_t<DexInstruction> return_void() {
+match_t<IRInstruction> return_void() {
   return {
-    [](const DexInstruction* insn) {
+    [](const IRInstruction* insn) {
       auto opcode = insn->opcode();
       return opcode == OPCODE_RETURN_VOID;
     }
   };
 }
 
-match_t<DexInstruction, std::tuple<int> > has_n_args(int n) {
+match_t<IRInstruction, std::tuple<int> > has_n_args(int n) {
   return {
     // N.B. "int n" must be const ref in order to appease N-ary matcher template
-    [](const DexInstruction* insn, const int& n) {
-      assert(insn->has_arg_word_count() || insn->has_range());
-      if (insn->has_arg_word_count()) {
-        return insn->arg_word_count() == n;
-      } else if (insn->has_range()) {
+    [](const IRInstruction* insn, const int& n) {
+      if (insn->has_range()) {
         // N.B. seems like invoke-*/range should never occur with 0 args,
         // so let's make sure this assumption holds...
         assert(insn->range_size() > 0);
         return insn->range_size() == n;
       } else {
-        assert(false);
+        return insn->arg_word_count() == n;
       }
     },
     n
@@ -53,17 +50,17 @@ match_t<DexClass, std::tuple<> > is_interface() {
   };
 }
 
-match_t<DexInstruction> has_types() {
+match_t<IRInstruction> has_types() {
   return {
-    [](const DexInstruction* insn) {
+    [](const IRInstruction* insn) {
       return insn->has_types();
     }
   };
 }
 
-match_t<DexInstruction> const_string() {
+match_t<IRInstruction> const_string() {
   return {
-    [](const DexInstruction* insn) {
+    [](const IRInstruction* insn) {
       auto opcode = insn->opcode();
       return opcode == OPCODE_CONST_STRING ||
         opcode == OPCODE_CONST_STRING_JUMBO;
@@ -71,23 +68,23 @@ match_t<DexInstruction> const_string() {
   };
 }
 
-match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   new_instance() {
-    return new_instance(any<DexInstruction>());
+    return new_instance(any<IRInstruction>());
 }
 
-match_t<DexInstruction> throwex() {
+match_t<IRInstruction> throwex() {
   return {
-    [](const DexInstruction* insn) {
+    [](const IRInstruction* insn) {
       auto opcode = insn->opcode();
       return opcode == OPCODE_THROW;
     }
   };
 }
 
- match_t<DexInstruction, std::tuple<match_t<DexInstruction> > >
+ match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke_direct() {
-    return invoke_direct(any<DexInstruction>());
+    return invoke_direct(any<IRInstruction>());
 };
 
 match_t<DexMethod, std::tuple<> > is_default_constructor() {

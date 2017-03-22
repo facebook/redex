@@ -341,8 +341,8 @@ class DexInstruction : public Gatherable {
   }
 
  public:
-  DexInstruction(uint16_t opcode)
-      : Gatherable(), m_opcode(opcode), m_count(count_from_opcode()) {}
+  DexInstruction(uint16_t op)
+      : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(uint16_t opcode, uint16_t arg) : DexInstruction(opcode) {
     assert(m_count == 1);
@@ -362,6 +362,8 @@ class DexInstruction : public Gatherable {
 
  public:
   static DexInstruction* make_instruction(DexIdx* idx, const uint16_t*& insns);
+  /* Creates the right subclass of DexInstruction for the given opcode */
+  static DexInstruction* make_instruction(DexOpcode);
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
   virtual uint16_t size() const;
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
@@ -383,15 +385,6 @@ class DexInstruction : public Gatherable {
   bool has_offset() const;
   // if a source register is used as a destination too
   bool dest_is_src() const;
-
-  /*
-   * Information about operands.
-   */
-  bool src_is_wide(int i) const;
-  bool dest_is_wide() const;
-  bool is_wide() const;
-  int src_bit_width(int i) const;
-  int dest_bit_width() const;
 
   /*
    * Accessors for logical parts of the instruction.
@@ -758,3 +751,8 @@ inline bool is_fopcode(DexOpcode op) {
   return op == FOPCODE_PACKED_SWITCH || op == FOPCODE_SPARSE_SWITCH ||
          op == FOPCODE_FILLED_ARRAY;
 }
+
+int src_bit_width(DexOpcode, int i);
+int dest_bit_width(DexOpcode);
+
+DexOpcodeFormat opcode_format(DexOpcode opcode);

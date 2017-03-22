@@ -18,7 +18,7 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 
@@ -44,21 +44,21 @@ void build_refs(
   walk_opcodes(
     scope,
     [](const DexMethod*) { return true; },
-    [&](const DexMethod* meth, DexInstruction* insn) {
+    [&](const DexMethod* meth, IRInstruction* insn) {
       if (insn->has_types()) {
-        const auto top = static_cast<DexOpcodeType*>(insn);
+        const auto top = static_cast<IRTypeInstruction*>(insn);
         const auto tref = type_class(top->get_type());
         if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
         return;
       }
       if (insn->has_fields()) {
-        const auto top = static_cast<DexOpcodeField*>(insn);
+        const auto top = static_cast<IRFieldInstruction*>(insn);
         const auto tref = type_class(top->field()->get_class());
         if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
         return;
       }
       if (insn->has_methods()) {
-        const auto mop = static_cast<DexOpcodeMethod*>(insn);
+        const auto mop = static_cast<IRMethodInstruction*>(insn);
 
         // log methods class type, for virtual methods, this may not actually exist and true
         // verification would require that the binding refers to a class that is valid.

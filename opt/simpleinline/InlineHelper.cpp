@@ -8,7 +8,7 @@
  */
 
 #include "InlineHelper.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Mutators.h"
 #include "Resolver.h"
@@ -134,9 +134,9 @@ MultiMethodInliner::MultiMethodInliner(
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, DexInstruction* opcode) {
+      [&](DexMethod* meth, IRInstruction* opcode) {
         if (is_invoke(opcode->opcode())) {
-          auto mop = static_cast<DexOpcodeMethod*>(opcode);
+          auto mop = static_cast<IRMethodInstruction*>(opcode);
           auto callee = resolver(mop->get_method(), opcode_to_search(opcode));
           if (callee != nullptr && callee->is_concrete() &&
               candidates.find(callee) != candidates.end()) {
@@ -201,11 +201,11 @@ void MultiMethodInliner::inline_callees(
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
-  std::vector<std::pair<DexMethod*, DexOpcodeMethod*>> inlinables;
+  std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
   for (auto& mie : InstructionIterable(caller->get_code()->get_entries())) {
     auto insn = mie.insn;
     if (!is_invoke(insn->opcode())) continue;
-    auto mop = static_cast<DexOpcodeMethod*>(insn);
+    auto mop = static_cast<IRMethodInstruction*>(insn);
     auto callee = resolver(mop->get_method(), opcode_to_search(insn));
     if (callee == nullptr) continue;
     if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
@@ -369,10 +369,10 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
  * referenced by a callee is visible and accessible in the caller context.
  * This step would not be needed if we changed all private instance to static.
  */
-bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
+bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
-    auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+    auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
     method = resolver(method, MethodSearch::Direct);
     if (method == nullptr) {
       info.need_vmethod++;
@@ -403,7 +403,7 @@ bool MultiMethodInliner::create_vmethod(DexInstruction* insn) {
  * in the hierarchy, and the callee and caller are in different classes.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::nonrelocatable_invoke_super(DexInstruction* insn,
+bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
                                                      DexMethod* callee,
                                                      DexMethod* caller) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER ||
@@ -426,7 +426,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(DexInstruction* insn,
  * we don't know we have no idea whether the method was public or not anyway.
  */
 
-bool MultiMethodInliner::unknown_virtual(DexInstruction* insn,
+bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
                                          DexMethod* callee,
                                          DexMethod* caller) {
   // if the caller and callee are in the same class, we don't have to worry
@@ -438,7 +438,7 @@ bool MultiMethodInliner::unknown_virtual(DexInstruction* insn,
   }
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
       insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
-    auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+    auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
       // if it's not known to redex but it's a common java/android API method
@@ -476,7 +476,7 @@ bool MultiMethodInliner::unknown_virtual(DexInstruction* insn,
  * But we need to make all fields public across the hierarchy and for fields
  * we don't know we have no idea whether the field was public or not anyway.
  */
-bool MultiMethodInliner::unknown_field(DexInstruction* insn,
+bool MultiMethodInliner::unknown_field(IRInstruction* insn,
                                        DexMethod* callee,
                                        DexMethod* caller) {
   // if the caller and callee are in the same class, we don't have to worry
@@ -487,7 +487,7 @@ bool MultiMethodInliner::unknown_field(DexInstruction* insn,
     return false;
   }
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
-    auto fop = static_cast<DexOpcodeField*>(insn);
+    auto fop = static_cast<IRFieldInstruction*>(insn);
     auto field = fop->field();
     field = resolve_field(field, is_sfield_op(insn->opcode())
         ? FieldSearch::Static : FieldSearch::Instance);
@@ -521,12 +521,12 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
   for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
     auto insn = mie.insn;
     if (insn->has_types()) {
-      auto top = static_cast<DexOpcodeType*>(insn);
+      auto top = static_cast<IRTypeInstruction*>(insn);
       if (!ok_from_primary(top->get_type())) {
         return true;
       }
     } else if (insn->has_methods()) {
-      auto mop = static_cast<DexOpcodeMethod*>(insn);
+      auto mop = static_cast<IRMethodInstruction*>(insn);
       auto meth = mop->get_method();
       if (!ok_from_primary(meth->get_class())) {
         return true;
@@ -543,7 +543,7 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
         }
       }
     } else if (insn->has_fields()) {
-      auto fop = static_cast<DexOpcodeField*>(insn);
+      auto fop = static_cast<IRFieldInstruction*>(insn);
       auto field = fop->field();
       if (!ok_from_primary(field->get_class()) ||
           !ok_from_primary(field->get_type())) {
@@ -566,7 +566,7 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
   for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
     auto insn = mie.insn;
     if (insn->has_fields()) {
-      auto fop = static_cast<DexOpcodeField*>(insn);
+      auto fop = static_cast<IRFieldInstruction*>(insn);
       auto field = fop->field();
       auto cls = type_class(field->get_class());
       if (cls != nullptr && !cls->is_external()) {
@@ -586,7 +586,7 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
       continue;
     }
     if (insn->has_methods()) {
-      auto mop = static_cast<DexOpcodeMethod*>(insn);
+      auto mop = static_cast<IRMethodInstruction*>(insn);
       auto method = mop->get_method();
       auto cls = type_class(method->get_class());
       if (cls != nullptr && !cls->is_external()) {
@@ -605,7 +605,7 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
       continue;
     }
     if (insn->has_types()) {
-      auto type = static_cast<DexOpcodeType*>(insn)->get_type();
+      auto type = static_cast<IRTypeInstruction*>(insn)->get_type();
       auto cls = type_class(type);
       if (cls != nullptr && !cls->is_external()) {
         TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
@@ -668,10 +668,10 @@ void MultiMethodInliner::invoke_direct_to_static() {
     mutators::make_static(method);
   }
   walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, DexInstruction* opcode) {
+      [&](DexMethod* meth, IRInstruction* opcode) {
         auto op = opcode->opcode();
         if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE) {
-          auto mop = static_cast<DexOpcodeMethod*>(opcode);
+          auto mop = static_cast<IRMethodInstruction*>(opcode);
           if (m_make_static.count(mop->get_method())) {
             opcode->set_opcode(direct_to_static_op(op));
           }

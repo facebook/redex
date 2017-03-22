@@ -11,7 +11,7 @@
 #include <deque>
 
 #include "Dataflow.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "RegAlloc.h"
 #include "Transform.h"
 
@@ -32,12 +32,11 @@ void Liveness::enlarge(uint16_t ins_size, uint16_t newregs) {
   }
 }
 
-void Liveness::trans(const DexInstruction* inst, Liveness* liveness) {
+void Liveness::trans(const IRInstruction* inst, Liveness* liveness) {
   if (inst->dests_size()) {
-    bool value = inst->dest_is_src();
-    liveness->m_reg_set.set(inst->dest(), value);
+    liveness->m_reg_set.reset(inst->dest());
     if (inst->dest_is_wide()) {
-      liveness->m_reg_set.set(inst->dest() + 1, value);
+      liveness->m_reg_set.reset(inst->dest() + 1);
     }
   }
   for (size_t i = 0; i < inst->srcs_size(); i++) {
@@ -292,7 +291,7 @@ void allocate_registers(DexMethod* m) {
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         insn->set_src((int) i, reg_map[insn->src((int) i)]);
       }
-      if (insn->dests_size() && !insn->dest_is_src()) {
+      if (insn->dests_size()) {
         insn->set_dest(reg_map[insn->dest()]);
       }
     }

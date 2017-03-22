@@ -18,7 +18,7 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "ReachableClasses.h"
@@ -141,7 +141,7 @@ void find_referenced_classes(const Scope& scope) {
         auto opcode = mie.insn;
         // Matches any stringref that name-aliases a type.
         if (opcode->has_strings()) {
-          auto stringop = static_cast<DexOpcodeString*>(opcode);
+          auto stringop = static_cast<IRStringInstruction*>(opcode);
           DexString* dsclzref = stringop->get_string();
           DexType* dtexclude =
             get_dextype_from_dotname(dsclzref->c_str());
@@ -150,7 +150,7 @@ void find_referenced_classes(const Scope& scope) {
           referenced_classes.insert(type_class(dtexclude));
         }
         if (opcode->has_types()) {
-          auto typeop = static_cast<DexOpcodeType*>(opcode);
+          auto typeop = static_cast<IRTypeInstruction*>(opcode);
           TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
           referenced_classes.insert(type_class(typeop->get_type()));
         }
@@ -366,9 +366,9 @@ void DeadRefs::track_callers(Scope& scope) {
   called.clear();
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexInstruction* insn) {
+      [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_methods()) {
-          auto methodop = static_cast<DexOpcodeMethod*>(insn);
+          auto methodop = static_cast<IRMethodInstruction*>(insn);
           auto callee = methodop->get_method();
           callee = resolve_method(callee, opcode_to_search(insn));
           if (callee == nullptr || !callee->is_concrete()) return;
@@ -379,7 +379,7 @@ void DeadRefs::track_callers(Scope& scope) {
           return;
         }
         if (insn->has_fields()) {
-          auto fieldop = static_cast<DexOpcodeField*>(insn);
+          auto fieldop = static_cast<IRFieldInstruction*>(insn);
           auto field = fieldop->field();
           field = resolve_field(field,
               is_ifield_op(insn->opcode()) ?

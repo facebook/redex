@@ -17,7 +17,7 @@
 struct Block;
 
 using RegSet = boost::dynamic_bitset<>;
-using LivenessMap = std::unordered_map<DexInstruction*, Liveness>;
+using LivenessMap = std::unordered_map<IRInstruction*, Liveness>;
 
 class Liveness {
   RegSet m_reg_set;
@@ -34,7 +34,7 @@ class Liveness {
   };
   void enlarge(uint16_t ins_size, uint16_t newregs);
 
-  static void trans(const DexInstruction*, Liveness*);
+  static void trans(const IRInstruction*, Liveness*);
   static std::unique_ptr<LivenessMap> analyze(ControlFlowGraph&,
                                               uint16_t nregs);
 

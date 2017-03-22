@@ -79,7 +79,7 @@ void walk_code(const T& scope,
 
 template <class T,
           class MethodFilterFn = bool(DexMethod*),
-          class InstructionWalkerFn = void(DexMethod*, DexInstruction*)>
+          class InstructionWalkerFn = void(DexMethod*, IRInstruction*)>
 void walk_opcodes(const T& scope,
                   MethodFilterFn methodFilter,
                   InstructionWalkerFn opcodeWalker) {
@@ -165,7 +165,7 @@ void walk_annotations(const T& scope, AnnotationWalkerFn annotation_walker) {
  * the register that const-string loads into is actually the register that is referenced by
  * invoke-static. (Without captures, this can't be expressed in the matcher language alone)
  *
- * The opcodes that match are passed in as a pointer to an array of DexInstruction pointers.
+ * The opcodes that match are passed in as a pointer to an array of IRInstruction pointers.
  * The size of the array is passed in as 'n'.
  *
  * Example Code
@@ -180,7 +180,7 @@ void walk_annotations(const T& scope, AnnotationWalkerFn annotation_walker) {
  *      && m::has_n_args(1))
  *  );
  *
- *  match_opcodes(scope, match, [&](const DexMethod* meth, size_t n, DexInstruction** insns){
+ *  match_opcodes(scope, match, [&](const DexMethod* meth, size_t n, IRInstruction** insns){
  *    DexOpcodeString* const_string = (DexOpcodeString*)insns[0];
  *    DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
  *    // Make sure that the registers agree
@@ -193,7 +193,7 @@ void walk_annotations(const T& scope, AnnotationWalkerFn annotation_walker) {
 template<
     typename P,
     size_t N = std::tuple_size<P>::value,
-    typename V = void(const DexMethod*, size_t n, DexInstruction**)>
+    typename V = void(const DexMethod*, size_t n, IRInstruction**)>
 void walk_matching_opcodes(
   const Scope& scope, const P& p, const V& v) {
   walk_methods(
@@ -201,7 +201,7 @@ void walk_matching_opcodes(
     [&](const DexMethod* m) {
       auto& code = m->get_code();
       if (code) {
-        std::vector<DexInstruction*> insns;
+        std::vector<IRInstruction*> insns;
         for (auto& mie : InstructionIterable(code->get_entries())) {
           insns.emplace_back(mie.insn);
         }
@@ -212,7 +212,7 @@ void walk_matching_opcodes(
         // Try to match starting at i
         for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
           if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
-            DexInstruction* insns_array[N];
+            IRInstruction* insns_array[N];
             for ( size_t c = 0 ; c < N ; ++c ) {
               insns_array[c] = insns.at(i+c);
             }
@@ -228,12 +228,14 @@ void walk_matching_opcodes(
  *
  * It will not match a pattern that crosses block boundaries
  */
-template<
+template <
     typename P,
     size_t N = std::tuple_size<P>::value,
-    typename V = void(const DexMethod*, MethodTransform*, Block*, size_t n, DexInstruction**)>
-void walk_matching_opcodes_in_block(
-  const Scope& scope, const P& p, const V& v) {
+    typename V = void(
+        const DexMethod*, MethodTransform*, Block*, size_t n, IRInstruction**)>
+void walk_matching_opcodes_in_block(const Scope& scope,
+                                    const P& p,
+                                    const V& v) {
   walk_methods(
     scope,
     [&](const DexMethod* m) {
@@ -242,7 +244,7 @@ void walk_matching_opcodes_in_block(
         MethodTransform* mt = code->get_entries();
         mt->build_cfg();
         for (Block* block : mt->cfg().blocks()) {
-          std::vector<DexInstruction*> insns;
+          std::vector<IRInstruction*> insns;
           for (auto mie = block->begin() ; mie != block->end() ; mie++) {
             if (mie->type == MFLOW_OPCODE) {
               insns.emplace_back(mie->insn);
@@ -253,7 +255,7 @@ void walk_matching_opcodes_in_block(
             // Try to match starting at i
             for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
               if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
-                DexInstruction* insns_array[N];
+                IRInstruction* insns_array[N];
                 for (size_t c = 0 ; c < N ; ++c) {
                   insns_array[c] = insns.at(i+c);
                 }

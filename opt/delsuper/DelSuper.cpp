@@ -16,7 +16,7 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 
@@ -107,9 +107,8 @@ private:
    */
   bool do_invoke_meth_args_pass_through(
     const DexMethod* meth,
-    const DexInstruction* insn) {
+    const IRInstruction* insn) {
     assert(insn->opcode() == OPCODE_INVOKE_SUPER);
-    assert(insn->has_arg_word_count() == true);
     uint16_t start_reg = meth->get_code()->get_registers_size() -
       meth->get_code()->get_ins_size();
     uint16_t end_reg = meth->get_code()->get_registers_size();
@@ -131,7 +130,7 @@ private:
   }
 
   bool are_opcs_equal(
-    const std::vector<DexInstruction*> insns,
+    const std::vector<IRInstruction*> insns,
     const DexOpcode* opcs,
     size_t opcs_len) {
     if (insns.size() != opcs_len) return false;
@@ -171,7 +170,7 @@ private:
 
     // TODO: rewrite the following code to not require a random-access
     // container of instructions
-    std::vector<DexInstruction*> insns;
+    std::vector<IRInstruction*> insns;
     for (auto& mie : InstructionIterable(meth->get_code()->get_entries())) {
       insns.emplace_back(mie.insn);
     }
@@ -203,8 +202,8 @@ private:
     }
 
     // For non-void scenarios, capture move-result and return opcodes
-    DexInstruction* move_res_opc = nullptr;
-    DexInstruction* return_opc = nullptr;
+    IRInstruction* move_res_opc = nullptr;
+    IRInstruction* return_opc = nullptr;
     if (insns.size() == 3) {
       move_res_opc = insns[1];
       return_opc = insns[2];
@@ -212,8 +211,8 @@ private:
     m_num_trivial++;
 
     // Get invoked method
-    const DexInstruction* insn = insns[0];
-    const DexOpcodeMethod* mopc = static_cast<const DexOpcodeMethod*>(insn);
+    const IRInstruction* insn = insns[0];
+    const IRMethodInstruction* mopc = static_cast<const IRMethodInstruction*>(insn);
     DexMethod* invoked_meth = mopc->get_method();
 
     // Invoked method name must match
@@ -311,9 +310,9 @@ public:
       // that method_id and can avoid emitting it in the dex output.
       walk_opcodes(m_scope,
                    [](DexMethod* meth) { return true; },
-                   [&](DexMethod* meth, DexInstruction* insn) {
+                   [&](DexMethod* meth, IRInstruction* insn) {
                      if (is_invoke(insn->opcode())) {
-                       auto mop = static_cast<DexOpcodeMethod*>(insn);
+                       auto mop = static_cast<IRMethodInstruction*>(insn);
                        auto method = mop->get_method();
                        while (m_delmeths.count(method)) {
                          method = m_delmeths.at(method);

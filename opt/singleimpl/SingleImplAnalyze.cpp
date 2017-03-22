@@ -298,14 +298,14 @@ void AnalysisImpl::collect_method_defs() {
  */
 void AnalysisImpl::analyze_opcodes() {
 
-  auto check_arg = [&](DexType* type, DexMethod* meth, DexOpcodeMethod* mop) {
+  auto check_arg = [&](DexType* type, DexMethod* meth, IRMethodInstruction* mop) {
     auto intf = get_and_check_single_impl(type);
     if (intf) {
       single_impls[intf].methodrefs[meth].insert(mop);
     }
   };
 
-  auto check_sig = [&](DexMethod* meth, DexOpcodeMethod* mop) {
+  auto check_sig = [&](DexMethod* meth, IRMethodInstruction* mop) {
     // check the sig for single implemented interface
     const auto proto = meth->get_proto();
     check_arg(proto->get_rtype(), meth, mop);
@@ -315,7 +315,7 @@ void AnalysisImpl::analyze_opcodes() {
     }
   };
 
-  auto check_field = [&](DexField* field, DexOpcodeField* fop) {
+  auto check_field = [&](DexField* field, IRFieldInstruction* fop) {
     auto cls = field->get_class();
     cls = get_and_check_single_impl(cls);
     if (cls) {
@@ -330,7 +330,7 @@ void AnalysisImpl::analyze_opcodes() {
 
   walk_opcodes(scope,
                [](DexMethod* method) { return true; },
-               [&](DexMethod* method, DexInstruction* insn) {
+               [&](DexMethod* method, IRInstruction* insn) {
                  auto op = insn->opcode();
                  switch (op) {
                  // type ref
@@ -340,7 +340,7 @@ void AnalysisImpl::analyze_opcodes() {
                    // different instances to retrieve, so we simply drop all
                    // single impl
                    // that are used with const_class
-                   auto top = static_cast<DexOpcodeType*>(insn);
+                   auto top = static_cast<IRTypeInstruction*>(insn);
                    const auto typeref = top->get_type();
                    auto intf = get_and_check_single_impl(typeref);
                    if (intf) {
@@ -354,7 +354,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY_RANGE: {
-                   auto top = static_cast<DexOpcodeType*>(insn);
+                   auto top = static_cast<IRTypeInstruction*>(insn);
                    auto intf = get_and_check_single_impl(top->get_type());
                    if (intf) {
                      single_impls[intf].typerefs.push_back(top);
@@ -368,7 +368,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_IPUT:
                  case OPCODE_IPUT_WIDE:
                  case OPCODE_IPUT_OBJECT: {
-                   const auto fop = static_cast<DexOpcodeField*>(insn);
+                   const auto fop = static_cast<IRFieldInstruction*>(insn);
                    auto field =
                        resolve_field(fop->field(), FieldSearch::Instance);
                    if (field == nullptr) {
@@ -383,7 +383,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_SPUT:
                  case OPCODE_SPUT_WIDE:
                  case OPCODE_SPUT_OBJECT: {
-                   const auto fop = static_cast<DexOpcodeField*>(insn);
+                   const auto fop = static_cast<IRFieldInstruction*>(insn);
                    auto field =
                        resolve_field(fop->field(), FieldSearch::Static);
                    if (field == nullptr) {
@@ -397,7 +397,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_INTERFACE_RANGE: {
                    // if it is an invoke on the interface method, collect it as
                    // such
-                   const auto mop = static_cast<DexOpcodeMethod*>(insn);
+                   const auto mop = static_cast<IRMethodInstruction*>(insn);
                    const auto meth = mop->get_method();
                    const auto owner = meth->get_class();
                    const auto intf = get_and_check_single_impl(owner);
@@ -424,7 +424,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_VIRTUAL_RANGE:
                  case OPCODE_INVOKE_SUPER:
                  case OPCODE_INVOKE_SUPER_RANGE: {
-                   const auto mop = static_cast<DexOpcodeMethod*>(insn);
+                   const auto mop = static_cast<IRMethodInstruction*>(insn);
                    const auto meth = mop->get_method();
                    check_sig(meth, mop);
                    return;

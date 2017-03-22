@@ -18,6 +18,7 @@
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "IRInstruction.h"
 #include "Pass.h"
 #include "RegAlloc.h"
 
@@ -50,7 +51,7 @@ struct CatchEntry {
  * for multi-branch encodings.  The target is
  * implicit in the flow, where the target is from
  * i.e. what has to be re-written is what is recorded
- * in DexInstruction*.
+ * in IRInstruction*.
  */
 enum BranchTargetType {
   BRANCH_SIMPLE = 0,
@@ -113,14 +114,14 @@ struct MethodItemEntry {
   union {
     TryEntry* tentry;
     CatchEntry* centry;
-    DexInstruction* insn;
+    IRInstruction* insn;
     BranchTarget* target;
     std::unique_ptr<DexDebugInstruction> dbgop;
     std::unique_ptr<DexPosition> pos;
     MethodItemEntry* throwing_mie;
   };
   explicit MethodItemEntry(const MethodItemEntry&);
-  MethodItemEntry(DexInstruction* insn) {
+  MethodItemEntry(IRInstruction* insn) {
     this->type = MFLOW_OPCODE;
     this->insn = insn;
   }
@@ -195,29 +196,29 @@ class MethodTransform {
    * This method fixes the goto branches when the instruction is removed or
    * replaced by another instruction.
    */
-  void remove_branch_target(DexInstruction *branch_inst);
+  void remove_branch_target(IRInstruction *branch_inst);
 
   void clear_cfg();
 
   FatMethod* m_fmethod;
   // mapping from fill-array-data opcodes to the pseudo opcodes containing the
   // array contents
-  std::unordered_map<DexInstruction*, DexOpcodeData*> m_array_data;
+  std::unordered_map<IRInstruction*, DexOpcodeData*> m_array_data;
   std::unique_ptr<ControlFlowGraph> m_cfg;
 
  private:
   FatMethod::iterator main_block();
-  FatMethod::iterator insert(FatMethod::iterator cur, DexInstruction* insn);
+  FatMethod::iterator insert(FatMethod::iterator cur, IRInstruction* insn);
   FatMethod::iterator make_if_block(FatMethod::iterator cur,
-                                    DexInstruction* insn,
+                                    IRInstruction* insn,
                                     FatMethod::iterator* if_block);
   FatMethod::iterator make_if_else_block(FatMethod::iterator cur,
-                                         DexInstruction* insn,
+                                         IRInstruction* insn,
                                          FatMethod::iterator* if_block,
                                          FatMethod::iterator* else_block);
   FatMethod::iterator make_switch_block(
       FatMethod::iterator cur,
-      DexInstruction* insn,
+      IRInstruction* insn,
       FatMethod::iterator* default_block,
       std::map<int, FatMethod::iterator>& cases);
 
@@ -250,12 +251,12 @@ class MethodTransform {
    */
   static void inline_tail_call(DexMethod* caller,
                                DexMethod* callee,
-                               DexInstruction* invoke);
+                               IRInstruction* invoke);
 
   static bool inline_16regs(
       InlineContext& context,
       DexMethod *callee,
-      DexOpcodeMethod *invoke);
+      IRMethodInstruction *invoke);
 
   /*
    * Simple register allocator.
@@ -283,17 +284,17 @@ class MethodTransform {
   void sync(DexCode*);
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
-  void replace_opcode(DexInstruction* from, DexInstruction* to);
+  void replace_opcode(IRInstruction* from, IRInstruction* to);
 
   /*
    * Does exactly what it says and you SHOULD be afraid. This is mainly useful
    * to appease the compiler in various scenarios of unreachable code.
    */
-  void replace_opcode_with_infinite_loop(DexInstruction* from);
+  void replace_opcode_with_infinite_loop(IRInstruction* from);
 
   /* Like replace_opcode, but both :from and :to must be branch opcodes.
    * :to will end up jumping to the same destination as :from. */
-  void replace_branch(DexInstruction* from, DexInstruction* to);
+  void replace_branch(IRInstruction* from, IRInstruction* to);
 
   template <class... Args>
   void push_back(Args&&... args) {
@@ -306,13 +307,13 @@ class MethodTransform {
   }
 
   /* position = nullptr means at the head */
-  void insert_after(DexInstruction* position, const std::vector<DexInstruction*>& opcodes);
+  void insert_after(IRInstruction* position, const std::vector<IRInstruction*>& opcodes);
 
   /* Memory ownership of "insn" passes to callee, it will delete it. */
-  void remove_opcode(DexInstruction* insn);
+  void remove_opcode(IRInstruction* insn);
 
   /* This method will delete the switch case where insn resides. */
-  void remove_switch_case(DexInstruction* insn);
+  void remove_switch_case(IRInstruction* insn);
 
   /*
    * Returns an estimated of the number of 2-byte code units needed to encode
@@ -370,7 +371,7 @@ class InlineContext {
   uint16_t original_regs;
   DexCode* caller_code;
   InlineContext(DexMethod* caller, bool use_liveness);
-  Liveness live_out(DexInstruction*);
+  Liveness live_out(IRInstruction*);
 };
 
 class InstructionIterator {

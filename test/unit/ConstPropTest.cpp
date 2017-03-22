@@ -117,12 +117,12 @@ DexField* add_dependent_field(DexClass* cls, const std::string& name, DexField *
   auto ops = init_ops[parent_type->c_str()];
   auto clinit = cls->get_clinit();
   auto mt = clinit->get_code()->get_entries();
-  auto sget = new DexOpcodeField(ops.first, parent);
+  auto sget = new IRFieldInstruction(ops.first, parent);
   sget->set_dest(0);
-  mt->push_back(static_cast<DexInstruction*>(sget));
-  auto sput = new DexOpcodeField(ops.second, field);
+  mt->push_back(sget);
+  auto sput = new IRFieldInstruction(ops.second, field);
   sput->set_src(0, 0);
-  mt->push_back(static_cast<DexInstruction*>(sput));
+  mt->push_back(sput);
   return field;
 }
 

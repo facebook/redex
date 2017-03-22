@@ -4,6 +4,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -32,7 +33,7 @@ enum class MethodSearch {
 /**
  * Helper to map an opcode to a MethodSearch rule.
  */
-inline MethodSearch opcode_to_search(DexInstruction* insn) {
+inline MethodSearch opcode_to_search(IRInstruction* insn) {
   auto opcode = insn->opcode();
   always_assert(is_invoke(opcode));
   switch (opcode) {

@@ -12,7 +12,7 @@ RedundantCheckCastRemover::RedundantCheckCastRemover(
     : m_mgr(mgr), m_scope(scope) {}
 
 void remove_instructions(
-    const std::unordered_map<DexMethod*, std::vector<DexInstruction*>>&
+    const std::unordered_map<DexMethod*, std::vector<IRInstruction*>>&
         to_remove) {
   for (auto& method_instrs : to_remove) {
     DexMethod* method = method_instrs.first;
@@ -29,7 +29,7 @@ void RedundantCheckCastRemover::run() {
                                m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
                                m::is_opcode(OPCODE_CHECK_CAST));
 
-  std::unordered_map<DexMethod*, std::vector<DexInstruction*>> to_remove;
+  std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
   auto& mgr =
       this->m_mgr; // so the lambda doesn't have to capture all of `this`
@@ -40,7 +40,7 @@ void RedundantCheckCastRemover::run() {
                          MethodTransform* /* unused */,
                          Block* /* unused */,
                          size_t size,
-                         DexInstruction** insns) {
+                         IRInstruction** insns) {
         if (RedundantCheckCastRemover::can_remove_check_cast(insns, size)) {
           to_remove[const_cast<DexMethod*>(method)].push_back(insns[2]);
           mgr.incr_metric("redundant_check_casts_removed", 1);
@@ -55,12 +55,12 @@ void RedundantCheckCastRemover::run() {
   remove_instructions(to_remove);
 }
 
-bool RedundantCheckCastRemover::can_remove_check_cast(DexInstruction** insns,
+bool RedundantCheckCastRemover::can_remove_check_cast(IRInstruction** insns,
                                                       size_t size) {
   always_assert(size == 3);
-  DexOpcodeMethod* invoke_op = static_cast<DexOpcodeMethod*>(insns[0]);
-  DexInstruction* move_result_op = insns[1];
-  DexOpcodeType* check_cast_op = static_cast<DexOpcodeType*>(insns[2]);
+  IRMethodInstruction* invoke_op = static_cast<IRMethodInstruction*>(insns[0]);
+  IRInstruction* move_result_op = insns[1];
+  IRTypeInstruction* check_cast_op = static_cast<IRTypeInstruction*>(insns[2]);
 
   auto invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
   auto check_type = check_cast_op->get_type();

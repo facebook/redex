@@ -24,7 +24,7 @@ void drop_this(DexMethod* method) {
   code->set_ins_size(nins - 1);
   for (auto& mie : InstructionIterable(code->get_entries())) {
     auto insn = mie.insn;
-    if (insn->dests_size() && !insn->dest_is_src()) {
+    if (insn->dests_size()) {
       auto dest = insn->dest();
       assert(dest != this_reg);
       assert(!insn->dest_is_wide() || insn->dest() != (this_reg - 1));

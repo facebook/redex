@@ -28,7 +28,7 @@
 
 static size_t unhandled_inline = 0;
 
-static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op);
+static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op);
 
 std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
   std::vector<DexField*> field_refs;
@@ -131,7 +131,7 @@ void remove_unused_fields(
   }
 }
 
-static bool check_sget(DexOpcodeField* opfield) {
+static bool check_sget(IRFieldInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
   case OPCODE_SGET_WIDE:
@@ -148,7 +148,7 @@ static bool check_sget(DexOpcodeField* opfield) {
   }
 }
 
-static bool validate_sget(DexMethod* context, DexOpcodeField* opfield) {
+static bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
   case OPCODE_SGET_WIDE:
@@ -176,12 +176,12 @@ static bool validate_sget(DexMethod* context, DexOpcodeField* opfield) {
   return false;
 }
 
-void replace_opcode(DexMethod* method, DexInstruction* from, DexInstruction* to) {
+void replace_opcode(DexMethod* method, IRInstruction* from, IRInstruction* to) {
   MethodTransform* mt = method->get_code()->get_entries();
   mt->replace_opcode(from, to);
 }
 
-void inline_cheap_sget(DexMethod* method, DexOpcodeField* opfield) {
+void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto dest = opfield->dest();
   auto field = resolve_field(opfield->field(), FieldSearch::Static);
@@ -200,11 +200,11 @@ void inline_cheap_sget(DexMethod* method, DexOpcodeField* opfield) {
                       " CONST_16 or CONST_HIGH16, bailing\n");
   }();
 
-  auto newopcode = (new DexInstruction(opcode, 0))->set_dest(dest)->set_literal(v);
+  auto newopcode = (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
   replace_opcode(method, opfield, newopcode);
 }
 
-void inline_sget(DexMethod* method, DexOpcodeField* opfield) {
+void inline_sget(DexMethod* method, IRFieldInstruction* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto opcode = OPCODE_CONST;
   auto dest = opfield->dest();
@@ -214,7 +214,7 @@ void inline_sget(DexMethod* method, DexOpcodeField* opfield) {
   /* FIXME for sget_wide case */
   uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
 
-  auto newopcode = (new DexInstruction(opcode))->set_dest(dest)->set_literal(v);
+  auto newopcode = (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
   replace_opcode(method, opfield, newopcode);
 }
 
@@ -235,7 +235,7 @@ void get_sput_in_clinit(DexClass* clazz,
   for (auto& mie : InstructionIterable(clinit->get_code()->get_entries())) {
     auto opcode = mie.insn;
     if (opcode->has_fields() && is_sput(opcode->opcode())) {
-      auto fieldop = static_cast<DexOpcodeField*>(opcode);
+      auto fieldop = static_cast<IRFieldInstruction*>(opcode);
       auto field = resolve_field(fieldop->field(), FieldSearch::Static);
       if (field == nullptr || !field->is_concrete()) continue;
       if (field->get_class() != clazz->get_type()) continue;
@@ -271,14 +271,14 @@ void inline_field_values(Scope& fullscope) {
       scope.push_back(clazz);
     }
   }
-  std::vector<std::pair<DexMethod*, DexOpcodeField*>> cheap_rewrites;
-  std::vector<std::pair<DexMethod*, DexOpcodeField*>> simple_rewrites;
+  std::vector<std::pair<DexMethod*, IRFieldInstruction*>> cheap_rewrites;
+  std::vector<std::pair<DexMethod*, IRFieldInstruction*>> simple_rewrites;
   walk_opcodes(
       fullscope,
       [](DexMethod* method) { return true; },
-      [&](DexMethod* method, DexInstruction* insn) {
+      [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_fields() && is_sfield_op(insn->opcode())) {
-          auto fieldop = static_cast<DexOpcodeField*>(insn);
+          auto fieldop = static_cast<IRFieldInstruction*>(insn);
           auto field = resolve_field(fieldop->field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) return;
           if (inline_field.count(field) == 0) return;
@@ -307,7 +307,7 @@ void inline_field_values(Scope& fullscope) {
  *
  * TODO: Strings and wide
  */
-static bool validate_const_for_ev(DexInstruction* op) {
+static bool validate_const_for_ev(IRInstruction* op) {
   if (!is_const(op->opcode())) {
     return false;
   }
@@ -324,11 +324,11 @@ static bool validate_const_for_ev(DexInstruction* op) {
 /*
  * Verify that we can convert the field in the sput into an encoded value.
  */
-static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op) {
+static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op) {
   if (!(op->has_fields() && is_sput(op->opcode()))) {
     return false;
   }
-  auto fieldop = static_cast<DexOpcodeField*>(op);
+  auto fieldop = static_cast<IRFieldInstruction*>(op);
   auto field = resolve_field(fieldop->field(), FieldSearch::Static);
   return (field != nullptr) && (field->get_class() == clazz->get_type());
 }
@@ -337,7 +337,7 @@ static bool validate_sput_for_ev(DexClass* clazz, DexInstruction* op) {
  * Attempt to replace the clinit with corresponding encoded values.
  */
 static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
-  std::vector<std::pair<DexInstruction*, DexInstruction*>> const_sputs;
+  std::vector<std::pair<IRInstruction*, IRInstruction*>> const_sputs;
   auto ii = InstructionIterable(clinit->get_code()->get_entries());
   auto end = ii.end();
   // Verify opcodes are (const, sput)* pairs
@@ -363,7 +363,7 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   for (auto& pair : const_sputs) {
     auto const_op = pair.first;
     auto sput_op = pair.second;
-    auto fieldop = static_cast<DexOpcodeField*>(sput_op);
+    auto fieldop = static_cast<IRFieldInstruction*>(sput_op);
     auto field = resolve_field(fieldop->field(), FieldSearch::Static);
     auto ev = DexEncodedValue::zero_for_type(field->get_type());
     ev->value((uint64_t) const_op->literal());
@@ -394,11 +394,11 @@ static size_t replace_encodable_clinits(Scope& fullscope) {
 
 struct FieldDependency {
   DexMethod *clinit;
-  DexInstruction *sget;
-  DexInstruction *sput;
+  IRInstruction *sget;
+  IRInstruction *sput;
   DexField *field;
 
-  FieldDependency(DexMethod *clinit, DexInstruction *sget, DexInstruction *sput,
+  FieldDependency(DexMethod *clinit, IRInstruction *sget, IRInstruction *sput,
                   DexField *field) : clinit(clinit), sget(sget), sput(sput), field(field)
   {}
 };
@@ -437,7 +437,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       if (!it->insn->has_fields()) {
         continue;
       }
-      auto sget_op = static_cast<DexOpcodeField*>(it->insn);
+      auto sget_op = static_cast<IRFieldInstruction*>(it->insn);
       if (!check_sget(sget_op)) {
         continue;
       }
@@ -452,7 +452,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       if (!validate_sput_for_ev(clazz, next_insn)) {
         continue;
       }
-      auto sput_op = static_cast<DexOpcodeField*>(next_insn);
+      auto sput_op = static_cast<IRFieldInstruction*>(next_insn);
       auto dst_field = resolve_field(sput_op->field(), FieldSearch::Static);
       if (!(is_static(dst_field) && is_final(dst_field))) {
         continue;
@@ -472,8 +472,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       for (auto jt = std::next(it, 2); jt != end && !src_reg_reused; ++jt) {
         // Check if the source register is overwritten
         if (jt->insn->dests_size() > 0 &&
-            jt->insn->dest() == sget_op->dest() &&
-            !jt->insn->dest_is_src()) {
+            jt->insn->dest() == sget_op->dest()) {
           break;
         }
         // Check if the source register is reused as the source for another

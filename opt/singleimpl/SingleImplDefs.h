@@ -16,7 +16,7 @@
 #include <utility>
 
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "SingleImpl.h"
 
 /**
@@ -32,10 +32,10 @@ using TypeMap = std::unordered_map<DexType*, DexType*>;
 using TypeToTypes = std::unordered_map<DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
 using MethodSet = std::unordered_set<DexMethod*>;
-using TypeOpcodeList = std::vector<DexOpcodeType*>;
-using MethodOpcodeList = std::vector<DexOpcodeMethod*>;
-using MethodOpcodeSet = std::unordered_set<DexOpcodeMethod*>;
-using FieldOpcodeList = std::vector<DexOpcodeField*>;
+using TypeOpcodeList = std::vector<IRTypeInstruction*>;
+using MethodOpcodeList = std::vector<IRMethodInstruction*>;
+using MethodOpcodeSet = std::unordered_set<IRMethodInstruction*>;
+using FieldOpcodeList = std::vector<IRFieldInstruction*>;
 using FieldRefToOpcodes = std::unordered_map<DexField*, FieldOpcodeList>;
 using MethodToOpcodes = std::unordered_map<DexMethod*, MethodOpcodeSet>;
 using NewMethods = std::unordered_map<DexMethod*, DexMethod*>;

@@ -211,151 +211,8 @@ bool DexInstruction::dest_is_src() const {
   return format == FMT_f12x_2;
 }
 
-bool DexInstruction::src_is_wide(int i) const {
-  switch (opcode()) {
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
-  case OPCODE_RETURN_WIDE:
-    return i == 0;
-
-  case OPCODE_CMPL_DOUBLE:
-  case OPCODE_CMPG_DOUBLE:
-  case OPCODE_CMP_LONG:
-    return i == 0 || i == 1;
-
-  case OPCODE_APUT_WIDE:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_SPUT_WIDE:
-    return i == 0;
-
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_LONG_TO_INT:
-  case OPCODE_LONG_TO_FLOAT:
-  case OPCODE_LONG_TO_DOUBLE:
-  case OPCODE_DOUBLE_TO_INT:
-  case OPCODE_DOUBLE_TO_LONG:
-  case OPCODE_DOUBLE_TO_FLOAT:
-    return i == 0;
-
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
-    return i == 0 || i == 1;
-
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
-    return i == 0;
-
-  default:
-    return false;
-  }
-}
-
-bool DexInstruction::is_wide() const {
-  return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
-}
-
-bool DexInstruction::dest_is_wide() const {
-  switch (opcode()) {
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
-  case OPCODE_MOVE_RESULT_WIDE:
-    return true;
-
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
-  case OPCODE_CONST_WIDE:
-  case OPCODE_CONST_WIDE_HIGH16:
-    return true;
-
-  case OPCODE_AGET_WIDE:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_SGET_WIDE:
-    return true;
-
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_INT_TO_LONG:
-  case OPCODE_INT_TO_DOUBLE:
-  case OPCODE_LONG_TO_DOUBLE:
-  case OPCODE_FLOAT_TO_LONG:
-  case OPCODE_FLOAT_TO_DOUBLE:
-  case OPCODE_DOUBLE_TO_LONG:
-    return true;
-
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
-int DexInstruction::src_bit_width(int i) const {
-  switch (opcode_format(opcode())) {
+int src_bit_width(DexOpcode op, int i) {
+  switch (opcode_format(op)) {
   case FMT_f00x:    assert(false);
   case FMT_f10x:    assert(false);
   case FMT_f12x:    assert(i == 0); return 4;
@@ -404,8 +261,8 @@ int DexInstruction::src_bit_width(int i) const {
   not_reached();
 }
 
-int DexInstruction::dest_bit_width() const {
-  switch (opcode_format(opcode())) {
+int dest_bit_width(DexOpcode op) {
+  switch (opcode_format(op)) {
   case FMT_f00x:    assert(false);
   case FMT_f10x:    assert(false);
   case FMT_f12x:    return 4;
@@ -1385,6 +1242,67 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
   }
 }
 
+DexInstruction* DexInstruction::make_instruction(DexOpcode op) {
+  switch (op) {
+  /* Field ref: */
+  case OPCODE_IGET:
+  case OPCODE_IGET_WIDE:
+  case OPCODE_IGET_OBJECT:
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_SHORT:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_SGET:
+  case OPCODE_SGET_WIDE:
+  case OPCODE_SGET_OBJECT:
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT:
+    return new DexOpcodeField(op, nullptr);
+  /* MethodRef: */
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_VIRTUAL_RANGE:
+  case OPCODE_INVOKE_SUPER_RANGE:
+  case OPCODE_INVOKE_DIRECT_RANGE:
+  case OPCODE_INVOKE_STATIC_RANGE:
+  case OPCODE_INVOKE_INTERFACE_RANGE:
+    return new DexOpcodeMethod(op, nullptr);
+  /* StringRef: */
+  case OPCODE_CONST_STRING:
+  case OPCODE_CONST_STRING_JUMBO:
+    return new DexOpcodeString(op, nullptr);
+  case OPCODE_CONST_CLASS:
+  case OPCODE_CHECK_CAST:
+  case OPCODE_INSTANCE_OF:
+  case OPCODE_NEW_INSTANCE:
+  case OPCODE_NEW_ARRAY:
+  case OPCODE_FILLED_NEW_ARRAY:
+  case OPCODE_FILLED_NEW_ARRAY_RANGE:
+    return new DexOpcodeType(op, nullptr);
+  default:
+    return new DexInstruction(op);
+  }
+}
+
 bool DexInstruction::operator==(const DexInstruction& that) const {
   if (m_ref_type != that.m_ref_type ||
       m_opcode != that.m_opcode ||
@@ -1421,9 +1339,3 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
   }
   }
 }
-
-std::vector<DexOpcode> all_opcodes {
-#define OP(op, ...) OPCODE_ ## op,
-  OPS
-#undef OP
-};

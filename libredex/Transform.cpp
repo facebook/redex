@@ -18,7 +18,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "RegAlloc.h"
 #include "Util.h"
@@ -219,7 +219,7 @@ InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
   }
 }
 
-Liveness InlineContext::live_out(DexInstruction* insn) {
+Liveness InlineContext::live_out(IRInstruction* insn) {
   if (m_liveness) {
     return m_liveness->at(insn);
   } else {
@@ -301,20 +301,21 @@ DexOpcode invert_conditional_branch(DexOpcode op) {
   }
 }
 
-static MethodItemEntry* get_target(MethodItemEntry* mei,
-                                   const addr_mei_t& addr_to_mei) {
+template <typename K, typename V>
+static V get_target(MethodItemEntry* mei,
+                    const std::unordered_map<K, V>& addr_map) {
   uint32_t base = mei->addr;
   int offset = mei->insn->offset();
   uint32_t target = base + offset;
   always_assert_log(
-      addr_to_mei.count(target) != 0,
+      addr_map.count(target) != 0,
       "Invalid opcode target %08x[%p](%08x) %08x in get_target %s\n",
       base,
       mei,
       offset,
       target,
       SHOW(mei->insn));
-  return addr_to_mei.at(target);
+  return addr_map.at(target);
 }
 
 static void insert_mentry_before(FatMethod* fm,
@@ -347,7 +348,7 @@ bool encode_offset(FatMethod* fm,
     DexOpcode goto_op = goto_for_offset(offset);
     if (goto_op != bop) {
       auto insn = branch_op_mie->insn;
-      branch_op_mie->insn = new DexInstruction(goto_op);
+      branch_op_mie->insn = new IRInstruction(goto_op);
       delete insn;
       return false;
     }
@@ -366,10 +367,10 @@ bool encode_offset(FatMethod* fm,
     //   nop
     if (bytecount(offset) > 2) {
       auto insn = branch_op_mie->insn;
-      branch_op_mie->insn = new DexInstruction(OPCODE_GOTO_32);
+      branch_op_mie->insn = new IRInstruction(OPCODE_GOTO_32);
 
       DexOpcode inverted = invert_conditional_branch(bop);
-      MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
+      MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(inverted));
       mei->insn->set_src(0, insn->src(0));
       insert_mentry_before(fm, mei, branch_op_mie);
 
@@ -452,20 +453,22 @@ static void shard_multi_target(FatMethod* fm,
   }
 }
 
-static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
+static void generate_branch_targets(
+    FatMethod* fm,
+    addr_mei_t& addr_to_mei,
+    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data) {
   for (auto miter = fm->begin(); miter != fm->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE) {
       auto insn = mentry->insn;
       if (is_branch(insn->opcode())) {
-        auto target = get_target(mentry, addr_to_mei);
         if (is_multi_branch(insn->opcode())) {
-          auto fopcode = static_cast<DexOpcodeData*>(target->insn);
+          auto fopcode = get_target(mentry, addr_to_data);
           shard_multi_target(fm, fopcode, mentry, addr_to_mei);
-          fm->erase(fm->iterator_to(*target));
           delete fopcode;
-          addr_to_mei.erase(target->addr);
+          // TODO: erase fopcode from map
         } else {
+          auto target = get_target(mentry, addr_to_mei);
           insert_branch_target(fm, target, mentry);
         }
       }
@@ -479,8 +482,8 @@ static void generate_branch_targets(FatMethod* fm, addr_mei_t& addr_to_mei) {
  */
 void gather_array_data(
     FatMethod* fm,
-    addr_mei_t& addr_to_mei,
-    std::unordered_map<DexInstruction*, DexOpcodeData*>* m_array_data) {
+    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data,
+    std::unordered_map<IRInstruction*, DexOpcodeData*>* m_array_data) {
   std::unordered_set<MethodItemEntry*> to_delete;
   for (MethodItemEntry& mentry : *fm) {
     if (mentry.type != MFLOW_OPCODE) {
@@ -488,15 +491,9 @@ void gather_array_data(
     }
     auto insn = mentry.insn;
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      auto target = get_target(&mentry, addr_to_mei);
-      auto fopcode = static_cast<DexOpcodeData*>(target->insn);
+      auto fopcode = get_target(&mentry, addr_to_data);
       m_array_data->emplace(insn, fopcode);
-      to_delete.emplace(target);
-      addr_to_mei.erase(target->addr);
     }
-  }
-  for (auto mentry : to_delete) {
-    fm->erase(fm->iterator_to(*mentry));
   }
 }
 
@@ -559,7 +556,7 @@ static void associate_try_items(FatMethod* fm,
   }
 }
 
-bool has_aliased_arguments(DexInstruction* invoke) {
+bool has_aliased_arguments(IRInstruction* invoke) {
   assert(invoke->has_methods());
   std::unordered_set<uint16_t> seen;
   for (size_t i = 0; i < invoke->srcs_size(); ++i) {
@@ -578,12 +575,15 @@ FatMethod* MethodTransform::balloon(DexCode* code) {
   FatMethod* fmethod = new FatMethod();
   auto instructions = code->release_instructions();
   addr_mei_t addr_to_mei;
+  std::unordered_map<uint32_t, DexOpcodeData*> addr_to_data;
 
   uint32_t addr = 0;
   for (auto insn : *instructions) {
-    // NOPs are used for alignment, which FatMethod doesn't care about
-    if (insn->opcode() != OPCODE_NOP) {
-      MethodItemEntry* mei = new MethodItemEntry(insn);
+    if (is_fopcode(insn->opcode())) {
+      addr_to_data.emplace(addr, static_cast<DexOpcodeData*>(insn));
+    } else if (insn->opcode() != OPCODE_NOP) {
+      // NOPs are used for alignment, which FatMethod doesn't care about
+      MethodItemEntry* mei = new MethodItemEntry(IRInstruction::make(insn));
       fmethod->push_back(*mei);
       addr_to_mei[addr] = mei;
       mei->addr = addr;
@@ -591,8 +591,8 @@ FatMethod* MethodTransform::balloon(DexCode* code) {
     }
     addr += insn->size();
   }
-  generate_branch_targets(fmethod, addr_to_mei);
-  gather_array_data(fmethod, addr_to_mei, &m_array_data);
+  generate_branch_targets(fmethod, addr_to_mei, addr_to_data);
+  gather_array_data(fmethod, addr_to_data, &m_array_data);
   associate_try_items(fmethod, *code, addr_to_mei);
   auto& debugitem = code->get_debug_item();
   if (debugitem) {
@@ -601,7 +601,7 @@ FatMethod* MethodTransform::balloon(DexCode* code) {
   return fmethod;
 }
 
-void MethodTransform::remove_branch_target(DexInstruction *branch_inst) {
+void MethodTransform::remove_branch_target(IRInstruction *branch_inst) {
   always_assert_log(is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -619,7 +619,7 @@ void MethodTransform::remove_branch_target(DexInstruction *branch_inst) {
   }
 }
 
-void MethodTransform::replace_branch(DexInstruction* from, DexInstruction* to) {
+void MethodTransform::replace_branch(IRInstruction* from, IRInstruction* to) {
   always_assert(is_branch(from->opcode()));
   always_assert(is_branch(to->opcode()));
   for (auto& mentry : *m_fmethod) {
@@ -636,8 +636,8 @@ void MethodTransform::replace_branch(DexInstruction* from, DexInstruction* to) {
       SHOW(to));
 }
 
-void MethodTransform::replace_opcode_with_infinite_loop(DexInstruction* from) {
-  DexInstruction* to = new DexInstruction(OPCODE_GOTO_32);
+void MethodTransform::replace_opcode_with_infinite_loop(IRInstruction* from) {
+  IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
   to->set_offset(0);
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
@@ -657,7 +657,7 @@ void MethodTransform::replace_opcode_with_infinite_loop(DexInstruction* from) {
       SHOW(to));
 }
 
-void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
+void MethodTransform::replace_opcode(IRInstruction* from, IRInstruction* to) {
   always_assert_log(!is_branch(to->opcode()),
                     "You may want replace_branch instead");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -678,8 +678,8 @@ void MethodTransform::replace_opcode(DexInstruction* from, DexInstruction* to) {
       SHOW(to));
 }
 
-void MethodTransform::insert_after(DexInstruction* position,
-                                   const std::vector<DexInstruction*>& opcodes) {
+void MethodTransform::insert_after(IRInstruction* position,
+                                   const std::vector<IRInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
    *if
    * a method has a branch target as it's first instruction.
@@ -715,7 +715,7 @@ void MethodTransform::insert_after(DexInstruction* position,
  * later. (We could do it here too, but LocalDCE already knows how to find
  * block boundaries.)
  */
-void MethodTransform::remove_switch_case(DexInstruction* insn) {
+void MethodTransform::remove_switch_case(IRInstruction* insn) {
 
   TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(m_fmethod));
   // Check if we are inside switch method.
@@ -737,7 +737,7 @@ void MethodTransform::remove_switch_case(DexInstruction* insn) {
   assert_log(target_count != 0, " There should be atleast one target");
   if (target_count == 1) {
     auto excpt_str = DexString::make_string("Redex switch Exception");
-    std::vector<DexInstruction*> excpt_block;
+    std::vector<IRInstruction*> excpt_block;
     create_runtime_exception_block(excpt_str, excpt_block);
     insert_after(insn, excpt_block);
     remove_opcode(insn);
@@ -795,7 +795,7 @@ size_t MethodTransform::sum_opcode_sizes() const {
   return size;
 }
 
-void MethodTransform::remove_opcode(DexInstruction* insn) {
+void MethodTransform::remove_opcode(IRInstruction* insn) {
   for (auto& mei : *m_fmethod) {
     if (mei.type == MFLOW_OPCODE && mei.insn == insn) {
       auto it = m_fmethod->iterator_to(mei);
@@ -829,14 +829,14 @@ void MethodTransform::remove_opcode(DexInstruction* insn) {
 FatMethod::iterator MethodTransform::main_block() { return m_fmethod->begin(); }
 
 FatMethod::iterator MethodTransform::insert(FatMethod::iterator cur,
-                                            DexInstruction* insn) {
+                                            IRInstruction* insn) {
   MethodItemEntry* mentry = new MethodItemEntry(insn);
   return m_fmethod->insert(cur, *mentry);
 }
 
 FatMethod::iterator MethodTransform::make_if_block(
     FatMethod::iterator cur,
-    DexInstruction* insn,
+    IRInstruction* insn,
     FatMethod::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
   *false_block = m_fmethod->insert(cur, *if_entry);
@@ -849,7 +849,7 @@ FatMethod::iterator MethodTransform::make_if_block(
 
 FatMethod::iterator MethodTransform::make_if_else_block(
     FatMethod::iterator cur,
-    DexInstruction* insn,
+    IRInstruction* insn,
     FatMethod::iterator* false_block,
     FatMethod::iterator* true_block) {
   // if block
@@ -857,7 +857,7 @@ FatMethod::iterator MethodTransform::make_if_else_block(
   *false_block = m_fmethod->insert(cur, *if_entry);
 
   // end of else goto
-  auto goto_entry = new MethodItemEntry(new DexInstruction(OPCODE_GOTO));
+  auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
   auto goto_it = m_fmethod->insert(m_fmethod->end(), *goto_entry);
 
   // main block
@@ -879,14 +879,14 @@ FatMethod::iterator MethodTransform::make_if_else_block(
 
 FatMethod::iterator MethodTransform::make_switch_block(
     FatMethod::iterator cur,
-    DexInstruction* insn,
+    IRInstruction* insn,
     FatMethod::iterator* default_block,
     std::map<int, FatMethod::iterator>& cases) {
   auto switch_entry = new MethodItemEntry(insn);
   *default_block = m_fmethod->insert(cur, *switch_entry);
   FatMethod::iterator main_block = *default_block;
   for (auto case_it = cases.begin(); case_it != cases.end(); ++case_it) {
-    auto goto_entry = new MethodItemEntry(new DexInstruction(OPCODE_GOTO));
+    auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
     auto goto_it = m_fmethod->insert(m_fmethod->end(), *goto_entry);
 
     auto main_bt = new BranchTarget();
@@ -935,15 +935,14 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
   return "";
 }
 
-void remap_dest(DexInstruction* inst, const RegMap& reg_map) {
+void remap_dest(IRInstruction* inst, const RegMap& reg_map) {
   if (!inst->dests_size()) return;
-  if (inst->dest_is_src()) return;
   auto it = reg_map.find(inst->dest());
   if (it == reg_map.end()) return;
   inst->set_dest(it->second);
 }
 
-void remap_srcs(DexInstruction* inst, const RegMap& reg_map) {
+void remap_srcs(IRInstruction* inst, const RegMap& reg_map) {
   for (unsigned i = 0; i < inst->srcs_size(); i++) {
     auto it = reg_map.find(inst->src(i));
     if (it == reg_map.end()) continue;
@@ -967,7 +966,7 @@ void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
   }
 }
 
-void remap_registers(DexInstruction* insn, const RegMap& reg_map) {
+void remap_registers(IRInstruction* insn, const RegMap& reg_map) {
   remap_dest(insn, reg_map);
   remap_srcs(insn, reg_map);
 
@@ -1021,7 +1020,7 @@ void enlarge_registers(DexCode* code,
   code->set_registers_size(newregs);
 }
 
-void remap_callee_regs(DexInstruction* invoke,
+void remap_callee_regs(IRInstruction* invoke,
                        DexMethod* method,
                        FatMethod* fmethod,
                        uint16_t newregs) {
@@ -1041,7 +1040,7 @@ void remap_callee_regs(DexInstruction* invoke,
  * Maps the callee param registers to the argument registers of the caller's
  * invoke instruction.
  */
-RegMap build_callee_param_reg_map(DexInstruction* invoke, DexMethod* callee) {
+RegMap build_callee_param_reg_map(IRInstruction* invoke, DexMethod* callee) {
   RegMap reg_map;
   auto oldregs = callee->get_code()->get_registers_size();
   auto ins = callee->get_code()->get_ins_size();
@@ -1065,7 +1064,7 @@ RegMap build_callee_param_reg_map(DexInstruction* invoke, DexMethod* callee) {
 /**
  * Builds a register map for a callee.
  */
-RegMap build_callee_reg_map(DexInstruction* invoke,
+RegMap build_callee_reg_map(IRInstruction* invoke,
                             DexMethod* callee,
                             RegSet invoke_live_in) {
   RegMap reg_map;
@@ -1091,17 +1090,17 @@ RegMap build_callee_reg_map(DexInstruction* invoke,
  * Create a move instruction given a return instruction in a callee and
  * a move-result instruction in a caller.
  */
-DexInstruction* move_result(DexInstruction* res, DexInstruction* move_res) {
+IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
   auto opcode = res->opcode();
   always_assert(opcode != OPCODE_RETURN_VOID);
-  DexInstruction* move;
+  IRInstruction* move;
   if (opcode == OPCODE_RETURN_OBJECT) {
-    move = new DexInstruction(OPCODE_MOVE_OBJECT);
+    move = new IRInstruction(OPCODE_MOVE_OBJECT);
   } else if (opcode == OPCODE_RETURN_WIDE) {
-    move = new DexInstruction(OPCODE_MOVE_WIDE);
+    move = new IRInstruction(OPCODE_MOVE_WIDE);
   } else {
     always_assert(opcode == OPCODE_RETURN);
-    move = new DexInstruction(OPCODE_MOVE);
+    move = new IRInstruction(OPCODE_MOVE);
   }
   move->set_dest(move_res->dest());
   move->set_src(0, res->src(0));
@@ -1338,7 +1337,7 @@ RegSet ins_reg_defs(const DexCode& code, MethodTransform* mt) {
 
 void MethodTransform::inline_tail_call(DexMethod* caller,
                                        DexMethod* callee,
-                                       DexInstruction* invoke) {
+                                       IRInstruction* invoke) {
   TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
   MethodTransform* tcaller = caller->get_code()->get_entries();
   MethodTransform* tcallee = callee->get_code()->get_entries();
@@ -1385,8 +1384,8 @@ void MethodTransform::inline_tail_call(DexMethod* caller,
 }
 
 bool MethodTransform::inline_16regs(InlineContext& context,
-                                    DexMethod *callee,
-                                    DexOpcodeMethod *invoke) {
+                                    DexMethod* callee,
+                                    IRMethodInstruction* invoke) {
   auto caller_code = context.caller_code;
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
   uint16_t newregs = caller_code->get_registers_size();
@@ -1497,9 +1496,9 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   }
 
   if (move_res != fcaller->end() && ret_it != fcallee->end()) {
-    std::unique_ptr<DexInstruction> ret_insn(ret_it->insn->clone());
+    std::unique_ptr<IRInstruction> ret_insn(ret_it->insn->clone());
     remap_registers(ret_insn.get(), callee_reg_map);
-    DexInstruction* move = move_result(ret_insn.get(), move_res->insn);
+    IRInstruction* move = move_result(ret_insn.get(), move_res->insn);
     auto move_mei = new MethodItemEntry(move);
     fcaller->insert(pos, *move_mei);
   }
@@ -1809,7 +1808,6 @@ void MethodTransform::sync(DexCode* code) {
 }
 
 bool MethodTransform::try_sync(DexCode* code) {
-  auto& opout = code->reset_instructions();
   uint32_t addr = 0;
   addr_mei_t addr_to_mei;
   // Step 1, regenerate opcode list for the method, and
@@ -1822,7 +1820,6 @@ bool MethodTransform::try_sync(DexCode* code) {
     if (mentry->type == MFLOW_OPCODE) {
       addr_to_mei[addr] = mentry;
       TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
-      opout.push_back(mentry->insn);
       addr += mentry->insn->size();
     }
   }
@@ -1857,10 +1854,18 @@ bool MethodTransform::try_sync(DexCode* code) {
   if (needs_resync) {
     return false;
   }
+  auto& opout = code->reset_instructions();
+  std::unordered_map<IRInstruction*, DexInstruction*> ir_to_dex_insn;
+  for (auto& mie : InstructionIterable(this)) {
+    auto dex_insn = mie.insn->to_dex_instruction();
+    opout.push_back(dex_insn);
+    ir_to_dex_insn.emplace(mie.insn, dex_insn);
+  }
   TRACE(MTRANS, 5, "Emitting multi-branches\n");
   // Step 3, generate multi-branch fopcodes
   for (auto multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
+    auto multi_insn = ir_to_dex_insn.at(multiopcode->insn);
     std::sort(targets.begin(), targets.end(), multi_target_compare_index);
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
@@ -1882,12 +1887,12 @@ bool MethodTransform::try_sync(DexCode* code) {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop = new DexOpcodeData(sparse_payload, (int) (count - 1));
+      DexInstruction* fop = new DexOpcodeData(sparse_payload, (int)(count - 1));
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multiopcode->insn->set_offset(addr - multiopcode->addr);
-      multiopcode->insn->set_opcode(OPCODE_SPARSE_SWITCH);
+      multi_insn->set_offset(addr - multiopcode->addr);
+      multi_insn->set_opcode(OPCODE_SPARSE_SWITCH);
       addr += count;
     } else {
       // Emit packed.
@@ -1911,8 +1916,8 @@ bool MethodTransform::try_sync(DexCode* code) {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multiopcode->insn->set_offset(addr - multiopcode->addr);
-      multiopcode->insn->set_opcode(OPCODE_PACKED_SWITCH);
+      multi_insn->set_offset(addr - multiopcode->addr);
+      multi_insn->set_opcode(OPCODE_PACKED_SWITCH);
       addr += count;
     }
   }
@@ -1923,14 +1928,14 @@ bool MethodTransform::try_sync(DexCode* code) {
     if (mentry->type != MFLOW_OPCODE) {
       continue;
     }
-    auto insn = mentry->insn;
+    auto insn = ir_to_dex_insn.at(mentry->insn);
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
       if (addr & 1) {
         opout.push_back(new DexInstruction(OPCODE_NOP));
         ++addr;
       }
       insn->set_offset(addr - mentry->addr);
-      auto fopcode = m_array_data.at(insn);
+      auto fopcode = m_array_data.at(mentry->insn);
       opout.push_back(fopcode);
       addr += fopcode->size();
     }

@@ -20,7 +20,7 @@
 #include "Warning.h"
 #include "Walkers.h"
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
@@ -210,9 +210,9 @@ void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
       && m::has_n_args(1))
   );
 
-  walk_matching_opcodes(scope, match, [&](const DexMethod*, size_t, DexInstruction** insns){
-    DexOpcodeString* const_string = (DexOpcodeString*)insns[0];
-    DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
+  walk_matching_opcodes(scope, match, [&](const DexMethod*, size_t, IRInstruction** insns){
+    IRStringInstruction* const_string = (IRStringInstruction*)insns[0];
+    IRMethodInstruction* invoke_static = (IRMethodInstruction*)insns[1];
     // Make sure that the registers agree
     if (const_string->dest() == invoke_static->src(0)) {
       auto classname = JavaNameUtil::external_to_internal(
@@ -247,9 +247,9 @@ void RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
 
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* m, DexInstruction* insn) {
+      [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_methods()) {
-          auto methodop = static_cast<DexOpcodeMethod*>(insn);
+          auto methodop = static_cast<IRMethodInstruction*>(insn);
           auto callee = methodop->get_method();
           if (callee == nullptr || !callee->is_concrete()) return;
           auto callee_method_cls = callee->get_class();

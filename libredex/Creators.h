@@ -10,7 +10,7 @@
 #pragma once
 
 #include "DexClass.h"
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Transform.h"
 #include <vector>
@@ -321,10 +321,10 @@ struct MethodBlock {
   // Helpers
   //
 
-  void push_instruction(DexInstruction* insn);
-  MethodBlock* make_if_block(DexInstruction* insn);
-  MethodBlock* make_if_else_block(DexInstruction* insn, MethodBlock** true_block);
-  MethodBlock* make_switch_block(DexInstruction* insn,
+  void push_instruction(IRInstruction* insn);
+  MethodBlock* make_if_block(IRInstruction* insn);
+  MethodBlock* make_if_else_block(IRInstruction* insn, MethodBlock** true_block);
+  MethodBlock* make_switch_block(IRInstruction* insn,
                                  std::map<int, MethodBlock*>& cases);
 
  private:
@@ -426,17 +426,17 @@ struct MethodCreator {
     return top_reg - vreg - 1;
   }
 
-  FatMethod::iterator push_instruction(FatMethod::iterator curr, DexInstruction* insn);
+  FatMethod::iterator push_instruction(FatMethod::iterator curr, IRInstruction* insn);
   FatMethod::iterator make_if_block(FatMethod::iterator curr,
-                                    DexInstruction* insn,
+                                    IRInstruction* insn,
                                     FatMethod::iterator* false_block);
   FatMethod::iterator make_if_else_block(FatMethod::iterator curr,
-                                         DexInstruction* insn,
+                                         IRInstruction* insn,
                                          FatMethod::iterator* false_block,
                                          FatMethod::iterator* true_block);
   FatMethod::iterator make_switch_block(
       FatMethod::iterator curr,
-      DexInstruction* opcode,
+      IRInstruction* opcode,
       FatMethod::iterator* default_block,
       std::map<int, FatMethod::iterator>& cases);
 

@@ -256,7 +256,7 @@ void referenced_annos(const Scope& scope,
   // mark an annotation as "unremovable" if any opcode references the annotation type
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* meth, DexInstruction* insn) {
+      [&](DexMethod* meth, IRInstruction* insn) {
         // don't look at methods defined on the annotation itself
         const auto meth_cls_type = meth->get_class();
         if (annotations.count(meth_cls_type) > 0) return;
@@ -264,7 +264,7 @@ void referenced_annos(const Scope& scope,
         if (meth_cls != nullptr && is_annotation(meth_cls)) return;
 
         if (insn->has_types()) {
-          auto type = static_cast<DexOpcodeType*>(insn)->get_type();
+          auto type = static_cast<IRTypeInstruction*>(insn)->get_type();
           if (annotations.count(type) > 0) {
             referenced_annos.insert(type);
             TRACE(ANNO, 3, "Annotation referenced in type opcode\n\t%s.%s:%s - %s\n",
@@ -272,7 +272,7 @@ void referenced_annos(const Scope& scope,
                 SHOW(insn));
           }
         } else if (insn->has_fields()) {
-          auto field = static_cast<DexOpcodeField*>(insn)->field();
+          auto field = static_cast<IRFieldInstruction*>(insn)->field();
           auto fdef = resolve_field(field,
               is_sfield_op(insn->opcode()) ? FieldSearch::Static : FieldSearch::Instance);
           if (fdef != nullptr) field = fdef;
@@ -294,7 +294,7 @@ void referenced_annos(const Scope& scope,
                 SHOW(insn));
           }
         } else if (insn->has_methods()) {
-          auto method = static_cast<DexOpcodeMethod*>(insn)->get_method();
+          auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
           DexMethod* methdef;
           switch (insn->opcode()) {
             case OPCODE_INVOKE_INTERFACE:
