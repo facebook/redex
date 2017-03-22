@@ -58,7 +58,7 @@ def strip_trace_tag(env):
         trace = parse_trace_string(env['TRACE'])
         trace.pop('REDEX')
         if ALL in trace:
-            trace_str = trace['ALL']
+            trace_str = str(trace[ALL])
             trace.pop(ALL)
         else:
             trace_str = ''
