@@ -15,6 +15,8 @@ import sys
 
 trace = None
 
+ALL = '__ALL__'
+
 def parse_trace_string(trace):
     """
     The trace string is of the form KEY1:VALUE1,KEY2:VALUE2,...
@@ -23,9 +25,13 @@ def parse_trace_string(trace):
     """
     rv = {}
     for t in trace.split(','):
-        (module, level) = t.split(':')
-        rv[module] = int(level)
+        try:
+            module, level = t.split(':')
+            rv[module] = int(level)
+        except ValueError:
+            rv[ALL] = int(t)
     return rv
+
 
 def get_trace():
     global trace
@@ -39,7 +45,9 @@ def get_trace():
 
 
 def get_log_level():
-    return get_trace().get('REDEX', 0)
+    trace = get_trace()
+    return max(trace.get('REDEX', 0), trace.get(ALL, 0))
+
 
 def strip_trace_tag(env):
     """
@@ -47,14 +55,19 @@ def strip_trace_tag(env):
     """
     env = env.copy()
     try:
-        trace_str = env['TRACE']
-        trace = parse_trace_string(trace_str)
+        trace = parse_trace_string(env['TRACE'])
         trace.pop('REDEX')
-        trace_str = ','.join(k + ':' + v for k, v in trace.iteritems())
+        if ALL in trace:
+            trace_str = trace['ALL']
+            trace.pop(ALL)
+        else:
+            trace_str = ''
+        trace_str += ','.join(k + ':' + v for k, v in trace.iteritems())
         env['TRACE'] = trace_str
         return env
     except KeyError:
         return env
+
 
 def log(*stuff):
     if get_log_level() > 0:
