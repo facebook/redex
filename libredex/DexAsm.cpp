@@ -103,9 +103,7 @@ bool unsupported(DexOpcode opcode) {
   }
 }
 
-IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
-  assert_log(!unsupported(opcode), "%s is unsupported", SHOW(opcode));
-  auto insn = new IRInstruction(opcode);
+void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
   auto arg = args.begin();
   if (insn->dests_size()) {
     always_assert(arg->tag == VREG);
@@ -132,8 +130,48 @@ IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
     }
     arg = std::next(arg);
   }
-  always_assert_log(
-      arg == args.end(), "Found excess arguments for opcode 0x%x", opcode);
+  always_assert_log(arg == args.end(),
+                    "Found excess arguments for opcode 0x%x",
+                    insn->opcode());
+}
+
+IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
+  assert_log(!unsupported(opcode), "%s is unsupported", SHOW(opcode));
+  auto insn = new IRInstruction(opcode);
+  assemble(insn, args);
+  return insn;
+}
+
+IRStringInstruction* dasm(DexOpcode opcode,
+                          DexString* string,
+                          std::initializer_list<Operand> args) {
+  auto insn = new IRStringInstruction(opcode, string);
+  assemble(insn, args);
+  return insn;
+}
+
+IRTypeInstruction* dasm(DexOpcode opcode,
+                        DexType* type,
+                        std::initializer_list<Operand> args) {
+  auto insn = new IRTypeInstruction(opcode, type);
+  assemble(insn, args);
+  return insn;
+}
+
+IRFieldInstruction* dasm(DexOpcode opcode,
+                         DexField* field,
+                         std::initializer_list<Operand> args) {
+  auto insn = new IRFieldInstruction(opcode, field);
+  assemble(insn, args);
+  return insn;
+}
+
+IRMethodInstruction* dasm(DexOpcode opcode,
+                          DexMethod* method,
+                          std::initializer_list<Operand> args) {
+  auto insn = new IRMethodInstruction(opcode, method);
+  insn->set_arg_word_count(args.size());
+  assemble(insn, args);
   return insn;
 }
 

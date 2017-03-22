@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <initializer_list>
 
-#include "DexInstruction.h"
+#include "IRInstruction.h"
 
 /*
  * Mini-DSL for building DexInstructions quickly.
@@ -44,5 +44,16 @@ inline Operand operator "" _L(unsigned long long v) {
 }
 
 IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> = {});
-
+IRStringInstruction* dasm(DexOpcode opcode,
+                          DexString* string,
+                          std::initializer_list<Operand> = {});
+IRTypeInstruction* dasm(DexOpcode opcode,
+                        DexType* type,
+                        std::initializer_list<Operand> = {});
+IRFieldInstruction* dasm(DexOpcode opcode,
+                         DexField* field,
+                         std::initializer_list<Operand> = {});
+IRMethodInstruction* dasm(DexOpcode opcode,
+                          DexMethod* method,
+                          std::initializer_list<Operand> = {});
 }
