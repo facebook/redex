@@ -135,6 +135,12 @@ enum class String {
   concat_string_A_char_A,
   concat_string_A_int_A,
   concat_string_A_long_int_A,
+  Type_A_get_simple_name,
+};
+
+enum class Type {
+  A,
+  B,
 };
 
 // Just a minimal refactor for long string constants.
@@ -152,6 +158,8 @@ struct DexPattern {
     method,
     string,
     literal,
+    type,
+    copy, // Replace with the same exact instruction we matched. No change.
   } kind;
 
   const union {
@@ -159,6 +167,8 @@ struct DexPattern {
     DexMethod* const method;
     String const string;
     Literal const literal;
+    Type const type;
+    unsigned int const copy_index;
   };
 
   DexPattern(const std::unordered_set<uint16_t>& opcodes,
@@ -199,6 +209,24 @@ struct DexPattern {
         dests(std::move(dests)),
         kind(DexPattern::Kind::literal),
         literal(literal) {}
+
+  DexPattern(const std::unordered_set<uint16_t>& opcodes,
+             const std::vector<Register>& srcs,
+             const std::vector<Register>& dests,
+             Type const type)
+      : opcodes(std::move(opcodes)),
+        srcs(std::move(srcs)),
+        dests(std::move(dests)),
+        kind(DexPattern::Kind::type),
+        type(type) {}
+
+  static const DexPattern copy_matched_instruction(int index) {
+    return DexPattern(index);
+  }
+
+ private:
+  explicit DexPattern(unsigned int index)
+      : kind(Kind::copy), copy_index(index) {}
 };
 
 struct Matcher;
@@ -286,6 +314,7 @@ struct Matcher {
   std::unordered_map<Register, uint16_t, EnumClassHash> matched_regs;
   std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
+  std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
 
@@ -295,6 +324,7 @@ struct Matcher {
     matched_regs.clear();
     matched_strings.clear();
     matched_literals.clear();
+    matched_types.clear();
   }
 
   // It updates the matching state for the given instruction. Returns true if
@@ -335,6 +365,14 @@ struct Matcher {
       return true;
     };
 
+    auto match_type = [&](Type pattern, DexType* insn_type) {
+      if (matched_types.find(pattern) != end(matched_types)) {
+        return matched_types.at(pattern) == insn_type;
+      }
+      matched_types.emplace(pattern, insn_type);
+      return true;
+    };
+
     // Does 'insn' match to the given DexPattern?
     auto match_instruction = [&](const DexPattern& pattern) {
       if (pattern.opcodes.find(insn->opcode()) == end(pattern.opcodes) ||
@@ -368,6 +406,13 @@ struct Matcher {
       case DexPattern::Kind::method:
         return pattern.method ==
                static_cast<const IRMethodInstruction*>(insn)->get_method();
+      case DexPattern::Kind::type:
+        return match_type(
+            pattern.type,
+            static_cast<const IRTypeInstruction*>(insn)->get_type());
+      case DexPattern::Kind::copy:
+        always_assert_log(
+            false, "Kind::copy can only be used in replacements. Not matches");
       }
       return false;
     };
@@ -457,6 +502,13 @@ struct Matcher {
     return nullptr;
   }
 
+  DexString* get_simple_name(const DexType* type) {
+    std::string full(type->get_name()->c_str());
+    auto lpos = full.rfind('/');
+    auto simple = full.substr(lpos + 1, full.size() - lpos - 2);
+    return DexString::make_string(simple.c_str());
+  }
+
   // After a successful match, get the replacement instructions. We substitute
   // the placeholders appropriately including special command placeholders.
   std::vector<IRInstruction*> get_replacements() {
@@ -465,6 +517,12 @@ struct Matcher {
     std::vector<IRInstruction*> replacements;
     for (const auto& replace_info : pattern.replace) {
       // First, generate the instruction object.
+      if (replace_info.kind == DexPattern::Kind::copy) {
+        always_assert(matched_instructions.size() > replace_info.copy_index);
+        replacements.push_back(
+            matched_instructions[replace_info.copy_index]->clone());
+        continue;
+      }
       auto replace = generate_dex_instruction(replace_info);
       replacements.push_back(replace);
 
@@ -571,6 +629,12 @@ struct Matcher {
               DexString::make_string(std::string(a) + bchar));
           break;
         }
+        case String::Type_A_get_simple_name: {
+          DexType* a = matched_types.at(Type::A);
+          DexString* simple = get_simple_name(a);
+          static_cast<IRStringInstruction*>(replace)->rewrite_string(simple);
+          break;
+        }
         default:
           always_assert_log(
               false, "Unexpected string directive: 0x%x", replace_info.string);
@@ -600,6 +664,20 @@ struct Matcher {
               false, "Unexpected literal directive 0x%x", replace_info.literal);
           break;
         }
+      } else if (replace_info.kind == DexPattern::Kind::type) {
+        auto replace_type = static_cast<IRTypeInstruction*>(replace);
+        switch (replace_info.type) {
+        case Type::A:
+          replace_type->rewrite_type(matched_types.at(Type::A));
+          break;
+        case Type::B:
+          replace_type->rewrite_type(matched_types.at(Type::B));
+          break;
+        default:
+          always_assert_log(
+              false, "Unexpected type directive 0x%x", replace_info.type);
+          break;
+        }
       }
     }
     return replacements;
@@ -607,118 +685,112 @@ struct Matcher {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// The patterns
+namespace patterns {
+// Helpers
+//
+// invoke-direct {reg_instance}, Ljava/lang/StringBuilder;.<init>:()V
+DexPattern invoke_StringBuilder_init(Register instance) {
+  return {{OPCODE_INVOKE_DIRECT},
+          {instance},
+          {},
+          DexMethod::make_method(LjavaStringBuilder, "<init>", "V", {})};
+}
+
+// invoke-direct {reg_instance, reg_argument},
+// Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V
+DexPattern invoke_StringBuilder_init_String(Register instance,
+                                            Register argument) {
+  return {
+      {OPCODE_INVOKE_DIRECT},
+      {instance, argument},
+      {},
+      DexMethod::make_method(LjavaStringBuilder, "<init>", "V", {LjavaString})};
+};
+
+// invoke-virtual {reg_instance, reg_argument},
+// Ljava/lang/StringBuilder;.append:(param_type)Ljava/lang/StringBuilder;
+DexPattern invoke_StringBuilder_append(Register instance,
+                                       Register argument,
+                                       const char* param_type) {
+  std::vector<Register> srcs;
+  if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
+    srcs = {instance, argument, get_pair_register(argument)};
+  } else {
+    srcs = {instance, argument};
+  }
+  return {{OPCODE_INVOKE_VIRTUAL},
+          std::move(srcs),
+          {},
+          DexMethod::make_method(
+              LjavaStringBuilder, "append", LjavaStringBuilder, {param_type})};
+};
+
+DexPattern invoke_String_valueOf(Register argument, const char* param_type) {
+  std::vector<Register> srcs;
+  if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
+    srcs = {argument, get_pair_register(argument)};
+  } else {
+    srcs = {argument};
+  }
+  return {{OPCODE_INVOKE_STATIC},
+          std::move(srcs),
+          {},
+          DexMethod::make_method(
+              LjavaString, "valueOf", LjavaString, {param_type})};
+};
+
+DexPattern invoke_String_equals(Register instance, Register argument) {
+  return {{OPCODE_INVOKE_VIRTUAL},
+          {instance, argument},
+          {},
+          DexMethod::make_method(LjavaString, "equals", "Z", {LjavaObject})};
+};
+
+DexPattern invoke_String_length(Register instance) {
+  return {{OPCODE_INVOKE_VIRTUAL},
+          {instance},
+          {},
+          DexMethod::make_method(LjavaString, "length", "I", {})};
+};
+
+DexPattern const_string(Register dest, String string) {
+  return {{OPCODE_CONST_STRING}, {}, {dest}, string};
+};
+
+DexPattern move_result_object(Register dest) {
+  return {{OPCODE_MOVE_RESULT_OBJECT}, {}, {dest}};
+};
+
+DexPattern move_result(Register dest) {
+  return {{OPCODE_MOVE_RESULT}, {}, {dest}};
+};
+
+DexPattern const_literal(uint16_t opcode, Register dest, Literal literal) {
+  return {{opcode}, {}, {dest}, literal};
+};
+
+DexPattern const_wide(Register dest, Literal literal) {
+  return {{OPCODE_CONST_WIDE_16, OPCODE_CONST_WIDE_32, OPCODE_CONST_WIDE},
+          {},
+          {dest},
+          literal};
+};
+
+DexPattern const_integer(Register dest, Literal literal) {
+  return {{OPCODE_CONST_4, OPCODE_CONST_16, OPCODE_CONST}, {}, {dest}, literal};
+};
+
+DexPattern const_float(Register dest, Literal literal) {
+  return {{OPCODE_CONST_4, OPCODE_CONST}, {}, {dest}, literal};
+};
+
+DexPattern const_char(Register dest, Literal literal) {
+  // Modified UTF-8, 1-3 bytes. DX uses const/4 for the null character
+  // (\u0000), and const/16 and const to load a char.
+  return const_integer(dest, literal);
+};
+
 static const std::vector<Pattern>& get_string_patterns() {
-  // Helpers
-  //
-  // invoke-direct {reg_instance}, Ljava/lang/StringBuilder;.<init>:()V
-  auto invoke_StringBuilder_init = [](Register instance) -> DexPattern {
-    return {{OPCODE_INVOKE_DIRECT},
-            {instance},
-            {},
-            DexMethod::make_method(LjavaStringBuilder, "<init>", "V", {})};
-  };
-
-  // invoke-direct {reg_instance, reg_argument},
-  // Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V
-  auto invoke_StringBuilder_init_String = [](Register instance,
-                                             Register argument) -> DexPattern {
-    return {{OPCODE_INVOKE_DIRECT},
-            {instance, argument},
-            {},
-            DexMethod::make_method(
-                LjavaStringBuilder, "<init>", "V", {LjavaString})};
-  };
-
-  // invoke-virtual {reg_instance, reg_argument},
-  // Ljava/lang/StringBuilder;.append:(param_type)Ljava/lang/StringBuilder;
-  auto invoke_StringBuilder_append = [](Register instance,
-                                        Register argument,
-                                        const char* param_type) -> DexPattern {
-    std::vector<Register> srcs;
-    if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
-      srcs = {instance, argument, get_pair_register(argument)};
-    } else {
-      srcs = {instance, argument};
-    }
-    return {
-        {OPCODE_INVOKE_VIRTUAL},
-        std::move(srcs),
-        {},
-        DexMethod::make_method(
-            LjavaStringBuilder, "append", LjavaStringBuilder, {param_type})};
-  };
-
-  auto invoke_String_valueOf = [](Register argument,
-                                  const char* param_type) -> DexPattern {
-    std::vector<Register> srcs;
-    if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
-      srcs = {argument, get_pair_register(argument)};
-    } else {
-      srcs = {argument};
-    }
-    return {{OPCODE_INVOKE_STATIC},
-            std::move(srcs),
-            {},
-            DexMethod::make_method(
-                LjavaString, "valueOf", LjavaString, {param_type})};
-  };
-
-  auto invoke_String_equals = [](Register instance,
-                                 Register argument) -> DexPattern {
-    return {{OPCODE_INVOKE_VIRTUAL},
-            {instance, argument},
-            {},
-            DexMethod::make_method(LjavaString, "equals", "Z", {LjavaObject})};
-  };
-
-  auto invoke_String_length = [](Register instance) -> DexPattern {
-    return {{OPCODE_INVOKE_VIRTUAL},
-            {instance},
-            {},
-            DexMethod::make_method(LjavaString, "length", "I", {})};
-  };
-
-  auto const_string = [](Register dest, String string) -> DexPattern {
-    return {{OPCODE_CONST_STRING}, {}, {dest}, string};
-  };
-
-  auto move_result_object = [](Register dest) -> DexPattern {
-    return {{OPCODE_MOVE_RESULT_OBJECT}, {}, {dest}};
-  };
-
-  auto move_result = [](Register dest) -> DexPattern {
-    return {{OPCODE_MOVE_RESULT}, {}, {dest}};
-  };
-
-  auto const_literal = [](
-      uint16_t opcode, Register dest, Literal literal) -> DexPattern {
-    return {{opcode}, {}, {dest}, literal};
-  };
-
-  auto const_wide = [](Register dest, Literal literal) -> DexPattern {
-    return {{OPCODE_CONST_WIDE_16, OPCODE_CONST_WIDE_32, OPCODE_CONST_WIDE},
-            {},
-            {dest},
-            literal};
-  };
-
-  auto const_integer = [](Register dest, Literal literal) -> DexPattern {
-    return {
-        {OPCODE_CONST_4, OPCODE_CONST_16, OPCODE_CONST}, {}, {dest}, literal};
-  };
-
-  auto const_float = [](Register dest, Literal literal) -> DexPattern {
-    return {{OPCODE_CONST_4, OPCODE_CONST}, {}, {dest}, literal};
-  };
-
-  auto const_char = [&const_integer](Register dest,
-                                     Literal literal) -> DexPattern {
-    // Modified UTF-8, 1-3 bytes. DX uses const/4 for the null character
-    // (\u0000), and const/16 and const to load a char.
-    return const_integer(dest, literal);
-  };
-
   static const std::vector<Pattern> kStringPatterns = {
       // It coalesces init(void) and append(string) into init(string).
       // new StringBuilder().append("...") = new StringBuilder("...")
@@ -888,11 +960,11 @@ static const std::vector<Pattern>& get_string_patterns() {
   return kStringPatterns;
 }
 
-static const std::vector<Pattern>& get_nop_patterns() {
-  auto move_ops = [](Register dest, Register src) -> DexPattern {
-    return {{OPCODE_MOVE, OPCODE_MOVE_OBJECT}, {src}, {dest}};
-  };
+DexPattern move_ops(Register dest, Register src) {
+  return {{OPCODE_MOVE, OPCODE_MOVE_OBJECT}, {src}, {dest}};
+};
 
+const std::vector<Pattern>& get_nop_patterns() {
   static const std::vector<Pattern> kNopPatterns = {
       // Remove redundant move and move_object instructions,
       // e.g. move v0, v0
@@ -909,20 +981,20 @@ static bool first_instruction_literal_is(const Matcher& m) {
   return m.matched_instructions.front()->literal() == VALUE;
 }
 
-static const std::vector<Pattern>& get_arith_patterns() {
-  auto mul_or_div_lit = [](Register src, Register dst) -> DexPattern {
-    return {{OPCODE_MUL_INT_LIT8,
-             OPCODE_MUL_INT_LIT16,
-             OPCODE_DIV_INT_LIT8,
-             OPCODE_DIV_INT_LIT16},
-            {src},
-            {dst}};
-  };
+DexPattern mul_or_div_lit(Register src, Register dst) {
+  return {{OPCODE_MUL_INT_LIT8,
+           OPCODE_MUL_INT_LIT16,
+           OPCODE_DIV_INT_LIT8,
+           OPCODE_DIV_INT_LIT16},
+          {src},
+          {dst}};
+};
 
-  auto add_lit = [](Register src, Register dst) -> DexPattern {
-    return {{OPCODE_ADD_INT_LIT8, OPCODE_ADD_INT_LIT16}, {src}, {dst}};
-  };
+DexPattern add_lit(Register src, Register dst) {
+  return {{OPCODE_ADD_INT_LIT8, OPCODE_ADD_INT_LIT16}, {src}, {dst}};
+};
 
+const std::vector<Pattern>& get_arith_patterns() {
   // Note: these arith patterns emit full 16-bit reg indices
   // Another pass will tighten these when possible
   static const std::vector<Pattern> kArithPatterns = {
@@ -950,6 +1022,51 @@ static const std::vector<Pattern>& get_arith_patterns() {
   return kArithPatterns;
 }
 
+const std::unordered_set<uint16_t> kAnyInvoke = {OPCODE_INVOKE_VIRTUAL,
+                                                 OPCODE_INVOKE_SUPER,
+                                                 OPCODE_INVOKE_DIRECT,
+                                                 OPCODE_INVOKE_STATIC,
+                                                 OPCODE_INVOKE_INTERFACE,
+                                                 OPCODE_INVOKE_VIRTUAL_RANGE,
+                                                 OPCODE_INVOKE_SUPER_RANGE,
+                                                 OPCODE_INVOKE_DIRECT_RANGE,
+                                                 OPCODE_INVOKE_STATIC_RANGE,
+                                                 OPCODE_INVOKE_INTERFACE_RANGE};
+
+const DexPattern invoke_class_get_simple_name() {
+  return {kAnyInvoke,
+          {Register::A},
+          {},
+          DexMethod::make_method(
+              "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {})};
+}
+
+DexPattern const_class(Register dest_reg, Type type) {
+  return {{OPCODE_CONST_CLASS}, {}, {dest_reg}, type};
+};
+
+const std::vector<Pattern>& get_func_patterns() {
+  static const std::vector<Pattern> kFuncPatterns = {
+      {"Remove_LangClass_GetSimpleName",
+       {const_class(Register::A, Type::A),
+        invoke_class_get_simple_name(),
+        move_result_object(Register::B)},
+       {DexPattern::copy_matched_instruction(0), // const_class (maybe dead)
+        const_string(Register::B, String::Type_A_get_simple_name)}},
+  };
+  return kFuncPatterns;
+}
+
+const std::vector<std::vector<Pattern>>& get_all_patterns() {
+  static const std::vector<std::vector<Pattern>>& kAllPatterns = {
+      get_nop_patterns(),
+      get_string_patterns(),
+      get_arith_patterns(),
+      get_func_patterns()};
+  return kAllPatterns;
+}
+}
+
 template <typename T>
 bool contains(const std::vector<T>& vec, const T& value) {
   return std::find(vec.begin(), vec.end(), value) != vec.end();
@@ -967,10 +1084,8 @@ class PeepholeOptimizerV2 {
   explicit PeepholeOptimizerV2(const std::vector<DexClass*>& scope,
                                const std::vector<std::string>& disabled_peepholes)
       : m_scope(scope) {
-    auto lists = {
-        &get_nop_patterns(), &get_string_patterns(), &get_arith_patterns()};
-    for (const auto& pattern_list : lists) {
-      for (const Pattern& pattern : *pattern_list) {
+    for (const auto& pattern_list : patterns::get_all_patterns()) {
+      for (const Pattern& pattern : pattern_list) {
         if (!contains(disabled_peepholes, pattern.name)) {
           m_matchers.emplace_back(pattern);
           m_matchers_stat.push_back(0);
