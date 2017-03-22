@@ -17,11 +17,10 @@
 #include "DexInstruction.h"
 #include "DexDebugInstruction.h"
 #include "DexIdx.h"
-#include "Creators.h"
-#include "RegAlloc.h"
-#include "Transform.h"
 #include "DexUtil.h"
-
+#include "Creators.h"
+#include "Liveness.h"
+#include "Transform.h"
 
 namespace {
 

@@ -19,8 +19,8 @@
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
+#include "Liveness.h"
 #include "Pass.h"
-#include "RegAlloc.h"
 
 enum TryEntryType {
   TRY_START = 0,

@@ -70,6 +70,7 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \
+	libredex/Liveness.cpp \
 	libredex/Match.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
@@ -84,7 +85,6 @@ libredex_la_SOURCES = \
 	libredex/ProguardReporting.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
-	libredex/RegAlloc.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
 	libredex/Timer.cpp \

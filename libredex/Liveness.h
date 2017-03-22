@@ -40,5 +40,3 @@ class Liveness {
 
   friend std::string show(const Liveness&);
 };
-
-void allocate_registers(DexMethod*);

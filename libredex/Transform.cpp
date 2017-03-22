@@ -20,7 +20,6 @@
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
 #include "DexUtil.h"
-#include "RegAlloc.h"
 #include "Util.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
