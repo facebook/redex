@@ -192,7 +192,7 @@ class WeakTopologicalOrdering final {
  private:
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
-  NodeId visit(NodeId vertex, int32_t* partition) {
+  uint32_t visit(NodeId vertex, int32_t* partition) {
     m_stack.push(vertex);
     int32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;

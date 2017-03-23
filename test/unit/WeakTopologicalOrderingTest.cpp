@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 #include <set>
 #include <sstream>
+#include <string>
 #include <unordered_map>
 
 #include "WeakTopologicalOrdering.h"
@@ -18,15 +19,17 @@ class SimpleGraph final {
  public:
   SimpleGraph() {}
 
-  void add_edge(int source, int target) { m_edges[source].insert(target); }
+  void add_edge(std::string source, std::string target) {
+    m_edges[source].insert(target);
+  }
 
-  std::vector<int> successors(int node) {
+  std::vector<std::string> successors(std::string node) {
     auto& succs = m_edges[node];
-    return std::vector<int>(succs.begin(), succs.end());
+    return std::vector<std::string>(succs.begin(), succs.end());
   }
 
  private:
-  std::unordered_map<int, std::set<int>> m_edges;
+  std::unordered_map<std::string, std::set<std::string>> m_edges;
 };
 
 /*
@@ -44,59 +47,60 @@ class SimpleGraph final {
  *           |           |                 ^     ^
  *           |           |                 |     |
  *           |           +-----------------+     |
- *           +-----------------------------------+ 
+ *           +-----------------------------------+
  *
  * Bourdoncle's algorithm computes the following weak topological ordering:
- * 
+ *
  *     1 2 (3 4 (5 6) 7) 8
  */
 TEST(WeakTopologicalOrderingTest, exampleFromThePaper) {
   SimpleGraph g;
-  g.add_edge(1, 2);
-  g.add_edge(2, 3);
-  g.add_edge(3, 4);
-  g.add_edge(4, 5);
-  g.add_edge(5, 6);
-  g.add_edge(6, 7);
-  g.add_edge(7, 8);
-  g.add_edge(2, 8);
-  g.add_edge(4, 7);
-  g.add_edge(6, 5);
-  g.add_edge(7, 3);
+  g.add_edge("1", "2");
+  g.add_edge("2", "3");
+  g.add_edge("3", "4");
+  g.add_edge("4", "5");
+  g.add_edge("5", "6");
+  g.add_edge("6", "7");
+  g.add_edge("7", "8");
+  g.add_edge("2", "8");
+  g.add_edge("4", "7");
+  g.add_edge("6", "5");
+  g.add_edge("7", "3");
 
-  WeakTopologicalOrdering<int> wto(1, [&g](int n) { return g.successors(n); });
+  WeakTopologicalOrdering<std::string> wto(
+      "1", [&g](std::string n) { return g.successors(n); });
 
   std::ostringstream s;
   s << wto;
   EXPECT_EQ("1 2 (3 4 (5 6) 7) 8", s.str());
 
   auto it = wto.begin();
-  EXPECT_EQ(1, it->head_node());
+  EXPECT_EQ("1", it->head_node());
   EXPECT_TRUE(it->is_vertex());
   ++it;
-  EXPECT_EQ(2, it->head_node());
+  EXPECT_EQ("2", it->head_node());
   EXPECT_TRUE(it->is_vertex());
   ++it;
-  EXPECT_EQ(3, it->head_node());
+  EXPECT_EQ("3", it->head_node());
   EXPECT_TRUE(it->is_scc());
   auto it1 = it->begin();
-  EXPECT_EQ(4, it1->head_node());
+  EXPECT_EQ("4", it1->head_node());
   EXPECT_TRUE(it1->is_vertex());
   ++it1;
-  EXPECT_EQ(5, it1->head_node());
+  EXPECT_EQ("5", it1->head_node());
   EXPECT_TRUE(it1->is_scc());
   auto it2 = it1->begin();
-  EXPECT_EQ(6, it2->head_node());
+  EXPECT_EQ("6", it2->head_node());
   EXPECT_TRUE(it2->is_vertex());
   ++it2;
   EXPECT_TRUE(it2 == it1->end());
   ++it1;
-  EXPECT_EQ(7, it1->head_node());
+  EXPECT_EQ("7", it1->head_node());
   EXPECT_TRUE(it1->is_vertex());
   ++it1;
   EXPECT_TRUE(it1 == it->end());
   ++it;
-  EXPECT_EQ(8, it->head_node());
+  EXPECT_EQ("8", it->head_node());
   EXPECT_TRUE(it->is_vertex());
   ++it;
   EXPECT_TRUE(it == wto.end());
