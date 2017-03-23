@@ -36,7 +36,7 @@ struct builder_counters {
 builder_counters b_counter;
 
 bool has_builder_name(DexClass* cls) {
-  static boost::regex re {"\\$Builder;$"};
+  static boost::regex re{"\\$Builder;$"};
   return boost::regex_search(cls->c_str(), re);
 }
 
@@ -57,7 +57,8 @@ void transfer_object_reach(DexType* obj,
     regs[insn->dest()] = regs[regs_size];
   } else if (writes_result_register(op)) {
     if (is_invoke(op)) {
-      auto invoked = static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked =
+          static_cast<const IRMethodInstruction*>(insn)->get_method();
       if (invoked->get_proto()->get_rtype() == obj) {
         regs[regs_size] = 1;
         return;
@@ -77,12 +78,13 @@ bool tainted_reg_escapes(
     auto tainted = it.second.bits();
     auto op = insn->opcode();
     if (is_invoke(insn->opcode())) {
-      auto invoked = static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked =
+          static_cast<const IRMethodInstruction*>(insn)->get_method();
       invoked = resolve_method(invoked, MethodSearch::Any);
       if (!invoked) {
         TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
       } else if (invoked->get_class() == ty &&
-          !(invoked->get_access() & ACC_STATIC)) {
+                 !(invoked->get_access() & ACC_STATIC)) {
         // TODO: check if we are actually passing the tainted register as the
         // `this` arg
         continue;
@@ -94,7 +96,7 @@ bool tainted_reg_escapes(
         }
       }
     } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
-        op == OPCODE_APUT_OBJECT || op == OPCODE_RETURN_OBJECT) {
+               op == OPCODE_APUT_OBJECT || op == OPCODE_RETURN_OBJECT) {
       if (tainted[insn->src(0)]) {
         TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
         return true;
@@ -137,9 +139,10 @@ bool this_arg_escapes(DexClass* cls) {
     if (!m->get_code()) {
       continue;
     }
-    if (!(m->get_access() & ACC_STATIC) &&
-        this_arg_escapes(m)) {
-      TRACE(BUILDERS, 3, "this escapes in %s\n",
+    if (!(m->get_access() & ACC_STATIC) && this_arg_escapes(m)) {
+      TRACE(BUILDERS,
+            3,
+            "this escapes in %s\n",
             m->get_deobfuscated_name().c_str());
       result = true;
     }
@@ -149,7 +152,9 @@ bool this_arg_escapes(DexClass* cls) {
       continue;
     }
     if (this_arg_escapes(m)) {
-      TRACE(BUILDERS, 3, "this escapes in %s\n",
+      TRACE(BUILDERS,
+            3,
+            "this escapes in %s\n",
             m->get_deobfuscated_name().c_str());
       result = true;
     }
@@ -160,7 +165,7 @@ bool this_arg_escapes(DexClass* cls) {
 std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> static_methods;
 
-  for (const auto& dmethod: dmethods) {
+  for (const auto& dmethod : dmethods) {
     if (is_static(dmethod)) {
       static_methods.emplace_back(dmethod);
     }
@@ -172,7 +177,7 @@ std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
 std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> private_methods;
 
-  for (const auto& dmethod: dmethods) {
+  for (const auto& dmethod : dmethods) {
     if (!is_constructor(dmethod) && !is_static(dmethod)) {
       private_methods.emplace_back(dmethod);
     }
@@ -233,7 +238,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   } else {
     auto invoked =
-      static_cast<const IRMethodInstruction*>(it->insn)->get_method();
+        static_cast<const IRMethodInstruction*>(it->insn)->get_method();
     if (invoked->get_name() != init) {
       return false;
     }
@@ -281,12 +286,11 @@ std::unordered_set<DexClass*> get_trivial_builders(
 
     // Filter out builders that do "extra work".
     bool has_static_methods =
-      get_static_methods(builder_class->get_dmethods()).size() != 0;
+        get_static_methods(builder_class->get_dmethods()).size() != 0;
     bool has_private_methods =
-      get_private_methods(builder_class->get_dmethods()).size() != 0;
+        get_private_methods(builder_class->get_dmethods()).size() != 0;
 
-    if (has_static_methods ||
-        has_private_methods ||
+    if (has_static_methods || has_private_methods ||
         builder_class->get_sfields().size()) {
       continue;
     }
@@ -327,10 +331,9 @@ std::unordered_set<DexClass*> get_trivial_builders(
   return trivial_builders;
 }
 
-void remove_builder_classes(
-    const std::unordered_set<DexClass*>& builder,
-    const std::unordered_set<DexClass*>& kept_builders,
-    Scope& classes) {
+void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
+                            const std::unordered_set<DexClass*>& kept_builders,
+                            Scope& classes) {
 
   std::unordered_set<DexClass*> class_references;
   for (const auto& cls : classes) {
@@ -341,28 +344,27 @@ void remove_builder_classes(
   }
 
   classes.erase(
-    remove_if(
-      classes.begin(),
-      classes.end(),
-      [&](DexClass* cls) {
-        if (class_references.find(cls) != class_references.end()) {
-          return false;
-        }
+      remove_if(classes.begin(),
+                classes.end(),
+                [&](DexClass* cls) {
+                  if (class_references.find(cls) != class_references.end()) {
+                    return false;
+                  }
 
-        if (builder.find(cls) != builder.end() &&
-            kept_builders.find(cls) == kept_builders.end()) {
+                  if (builder.find(cls) != builder.end() &&
+                      kept_builders.find(cls) == kept_builders.end()) {
 
-          b_counter.classes_removed++;
-          b_counter.methods_removed +=
-            cls->get_vmethods().size() + cls-> get_dmethods().size();
-          b_counter.fields_removed += cls->get_ifields().size();
+                    b_counter.classes_removed++;
+                    b_counter.methods_removed +=
+                        cls->get_vmethods().size() + cls->get_dmethods().size();
+                    b_counter.fields_removed += cls->get_ifields().size();
 
-          return true;
-        }
+                    return true;
+                  }
 
-        return false;
-      }),
-    classes.end());
+                  return false;
+                }),
+      classes.end());
 }
 
 } // namespace
@@ -411,12 +413,9 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   return tainted_reg_escapes(builder, *taint_map);
 }
 
-
-void RemoveBuildersPass::run_pass(
-  DexStoresVector& stores,
-  ConfigFiles&,
-  PassManager& mgr
-) {
+void RemoveBuildersPass::run_pass(DexStoresVector& stores,
+                                  ConfigFiles&,
+                                  PassManager& mgr) {
   std::unordered_set<DexClass*> builder_classes;
 
   auto scope = build_class_scope(stores);
@@ -436,7 +435,9 @@ void RemoveBuildersPass::run_pass(
     auto builders = created_builders(m);
     for (DexType* builder : builders) {
       if (escapes_stack(builder, m)) {
-        TRACE(BUILDERS, 3, "%s escapes in %s\n",
+        TRACE(BUILDERS,
+              3,
+              "%s escapes in %s\n",
               SHOW(builder),
               m->get_deobfuscated_name().c_str());
         escaped_builders.emplace(builder);
@@ -502,8 +503,8 @@ void RemoveBuildersPass::run_pass(
     }
   }
 
-  std::unordered_set<DexClass*> trivial_builders = get_trivial_builders(
-      builder_classes, no_escapes);
+  std::unordered_set<DexClass*> trivial_builders =
+      get_trivial_builders(builder_classes, no_escapes);
 
   std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
   std::unordered_set<DexClass*> kept_builders;
@@ -530,7 +531,7 @@ void RemoveBuildersPass::run_pass(
     DexClass* builder = std::get<1>(pair);
 
     if (!remove_builder(
-          method, builder, type_class(get_buildee(builder->get_type())))) {
+            method, builder, type_class(get_buildee(builder->get_type())))) {
       kept_builders.emplace(builder);
     } else {
       b_counter.methods_cleared++;
@@ -550,7 +551,9 @@ void RemoveBuildersPass::run_pass(
 
   TRACE(BUILDERS, 1, "Total builders: %d\n", m_builders.size());
   TRACE(BUILDERS, 1, "Stack-only builders: %d\n", stack_only_builders.size());
-  TRACE(BUILDERS, 1, "Stack-only builders that don't let `this` escape: %d\n",
+  TRACE(BUILDERS,
+        1,
+        "Stack-only builders that don't let `this` escape: %d\n",
         no_escapes.size());
   TRACE(BUILDERS, 1, "Stats for unescaping builders:\n", dmethod_count);
   TRACE(BUILDERS, 1, "\tdmethods: %d\n", dmethod_count);

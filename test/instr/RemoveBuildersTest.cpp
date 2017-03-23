@@ -18,6 +18,26 @@
 #include "Match.h"
 #include "VerifyUtil.h"
 
+namespace {
+
+void check_no_builder(DexMethod* method, DexType* builder_type) {
+  auto& insns = method->get_code()->get_instructions();
+
+  for (const auto& insn : insns) {
+    DexOpcode opcode = insn->opcode();
+
+    if (opcode == OPCODE_NEW_INSTANCE || opcode == OPCODE_INVOKE_DIRECT) {
+      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
+      EXPECT_NE(builder_type, cls_type);
+    } else if (is_iget(opcode) || is_iput(opcode)) {
+      DexField* field = static_cast<const DexOpcodeField*>(insn)->field();
+      EXPECT_NE(builder_type, field->get_class());
+    }
+  }
+}
+
+}  // namespace
+
 /*
  * Check builder is actually defined.
  */
@@ -47,83 +67,27 @@ TEST_F(PostVerify, RemoveFooBuilder) {
 
   auto using_no_escape_builders = find_class_named(
     classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+
   auto initialize_method = find_vmethod_named(*using_no_escape_builders, "initializeFoo");
   EXPECT_NE(nullptr, initialize_method);
 
-  // No build call.
-  EXPECT_EQ(nullptr,
-            find_invoke(initialize_method, OPCODE_INVOKE_DIRECT, "build"));
-
-  DexType* builder_type = DexType::get_type("Lcom/facebook/redex/test/instr/Foo$Builder;");
-  auto insns = initialize_method->get_code()->get_instructions();
-  for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
-
-    if (opcode == OPCODE_NEW_INSTANCE) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
-      EXPECT_NE(builder_type, cls_type);
-    } else if (is_iget(opcode) || is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->field();
-      EXPECT_NE(builder_type, field->get_class());
-    }
-  }
-}
-
-/*
- * Check builder is actually defined.
- */
-TEST_F(PreVerify, RemoveFooBuilderWithMoreArguments) {
-  auto foo = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/FooMoreArguments;");
-  EXPECT_NE(nullptr, foo);
-
-  auto foo_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/FooMoreArguments$Builder;");
-  EXPECT_NE(nullptr, foo_builder);
-}
-
-/*
- * Ensure the builder was not removed and all calls were appropriately
- * replaced / removed / kept.
- *
- * TODO(emmasevastian): will update this after we treat the case where
- *                      we should reallocate registers.
- */
-TEST_F(PostVerify, RemoveFooBuilderWithMoreArguments) {
-  auto foo = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/FooMoreArguments;");
-  EXPECT_NE(nullptr, foo);
-
-  // Check builder class was not removed.
-  auto foo_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/FooMoreArguments$Builder;");
-  EXPECT_NE(nullptr, foo_builder);
-
-  auto using_no_escape_builders = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_method = find_vmethod_named(*using_no_escape_builders, "initializeFooWithMoreArguments");
-  EXPECT_NE(nullptr, initialize_method);
+  auto initialize_more_arguments = find_vmethod_named(
+      *using_no_escape_builders, "initializeFooWithMoreArguments");
+  EXPECT_NE(nullptr, initialize_more_arguments);
 
   // No build call.
   EXPECT_EQ(nullptr,
             find_invoke(initialize_method, OPCODE_INVOKE_DIRECT, "build"));
+  EXPECT_EQ(nullptr,
+            find_invoke(initialize_more_arguments,
+                        OPCODE_INVOKE_DIRECT,
+                        "build"));
 
-  DexType* builder_type =
-    DexType::get_type("Lcom/facebook/redex/test/instr/FooMoreArguments$Builder;");
-  int builder_instances = 0;
+  DexType* builder_type = DexType::get_type(
+      "Lcom/facebook/redex/test/instr/Foo$Builder;");
 
-  auto insns = initialize_method->get_code()->get_instructions();
-  for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
-
-    if (opcode == OPCODE_NEW_INSTANCE) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
-      if (builder_type == cls_type) {
-        builder_instances++;
-      }
-    }
-  }
-  EXPECT_EQ(1, builder_instances);
+  check_no_builder(initialize_method, builder_type);
+  check_no_builder(initialize_more_arguments, builder_type);
 }
 
 /*
@@ -275,11 +239,8 @@ TEST_F(PostVerify, RemoveCarBuilder) {
 
     if (opcode == OPCODE_CONST_4) {
       null_reg = insn->dest();
-    } else if (is_iput(opcode)) {
-      DexField* field = static_cast<DexOpcodeField*>(insn)->field();
-      if (field->get_class() == car->get_type()) {
-        EXPECT_EQ(null_reg, insn->src(0));
-      }
+    } else if (opcode == OPCODE_MOVE) {
+      EXPECT_EQ(null_reg, insn->src(0));
     }
   }
 }

@@ -19,7 +19,7 @@ using RegSet = boost::dynamic_bitset<>;
 struct TaintedRegs {
   RegSet m_reg_set;
 
-  explicit TaintedRegs(int nregs): m_reg_set(nregs) {}
+  explicit TaintedRegs(int nregs) : m_reg_set(nregs) {}
   explicit TaintedRegs(const RegSet&& reg_set)
       : m_reg_set(std::move(reg_set)) {}
 

@@ -15,6 +15,7 @@
 #include "ControlFlow.h"
 #include "Dataflow.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "Transform.h"
 
 namespace {
@@ -69,9 +70,8 @@ void fields_mapping(const IRInstruction* insn,
  * - DIFFERENT: no unique register.
  * - OVERWRITTEN: register no longer holds the value.
  */
-std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>>
-fields_setters(const std::vector<Block*>& blocks,
-               DexClass* builder) {
+std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
+    const std::vector<Block*>& blocks, DexClass* builder) {
 
   std::function<void(const IRInstruction*, FieldsRegs*)> trans = [&](
       const IRInstruction* insn, FieldsRegs* fregs) {
@@ -81,48 +81,39 @@ fields_setters(const std::vector<Block*>& blocks,
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
 }
 
-/**
- * Returns for every instruction, field value:
- * - a register: representing the register that had the field's value.
- * - UNDEFINED: not defined yet (no getter).
- * - DIFFERENT: different registers used to hold the field's value.
- * - OVERWRITTEN: register overwritten.
- */
-std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>>
-fields_getters(const std::vector<Block*>& blocks,
-               DexClass* builder) {
+bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
 
-  std::function<void(const IRInstruction*, FieldsRegs*)> trans = [&](
-      const IRInstruction* insn, FieldsRegs* fregs) {
-    fields_mapping(insn, fregs, builder, false);
-  };
-
-  return forwards_dataflow(blocks, FieldsRegs(builder), trans);
-}
-
-
-/**
- * Adds an instruction that initializes a new register with null.
- * Return if the operation succeeded or not.
- */
-bool add_null_instr(DexMethod* method, MethodTransform* transform) {
   always_assert(method != nullptr);
-  always_assert(transform != nullptr);
 
   auto& code = method->get_code();
   auto oldregs = code->get_registers_size();
-  auto ins = code->get_ins_size();
-  auto newregs = oldregs + 1;
+  auto newregs = oldregs + extra_regs;
 
-  if (!MethodTransform::enlarge_regs(method, newregs)) {
-    return false;
+  return MethodTransform::enlarge_regs(method, newregs);
+}
+
+DexOpcode get_move_opcode(const IRInstruction* insn) {
+  always_assert(insn != nullptr);
+  always_assert(is_iput(insn->opcode()));
+
+  if (insn->opcode() == OPCODE_IPUT_WIDE) {
+    return OPCODE_MOVE_WIDE;
+  } else if (insn->opcode() == OPCODE_IPUT_OBJECT) {
+    return OPCODE_MOVE_OBJECT;
   }
+
+  return OPCODE_MOVE;
+}
+
+/**
+ * Adds an instruction that initializes a new register with null.
+ */
+void add_null_instr(MethodTransform* transform, uint16_t reg) {
+  always_assert(transform != nullptr);
 
   IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
 
-  // Using last non-input register, since it was freed.
-  uint16_t last_non_input_reg = oldregs - ins;
-  insn->set_dest(last_non_input_reg);
+  insn->set_dest(reg);
   insn->set_literal(0);
 
   std::vector<IRInstruction*> insns;
@@ -131,81 +122,60 @@ bool add_null_instr(DexMethod* method, MethodTransform* transform) {
   // Adds the instruction at the beginning, since it might be
   // used in various places later.
   transform->insert_after(nullptr, insns);
-
-  return true;
 }
 
-using ReplacementsList =
-  std::vector<std::tuple<IRInstruction*, size_t, uint16_t>>;
+/**
+ * Adds a move instruction after the given instruction.
+ */
+void add_move_instr(MethodTransform* transform,
+                    const IRInstruction* position,
+                    uint16_t src_reg,
+                    uint16_t dest_reg,
+                    DexOpcode move_opcode) {
 
-bool treat_undefined_fields(
-    DexMethod* method,
-    const std::vector<std::tuple<IRInstruction*, size_t>>&
-      undefined_replacements,
-    ReplacementsList* replacements) {
+  always_assert(transform != nullptr);
+  always_assert(position != nullptr);
 
-  const bool has_undefined = undefined_replacements.size() > 0;
+  IRInstruction* insn = new IRInstruction(move_opcode);
+  insn->set_dest(dest_reg);
+  insn->set_src(0, src_reg);
 
-  if (has_undefined) {
+  std::vector<IRInstruction*> insns;
+  insns.push_back(insn);
 
-    auto& code = method->get_code();
-    auto transform = code->get_entries();
-
-    auto regs = code->get_registers_size();
-    auto ins = code->get_ins_size();
-    auto non_input_regs = regs - ins;
-
-    if (!add_null_instr(method, transform)) {
-      return false;
-    }
-
-    for (auto& insn_replace : *replacements) {
-      uint16_t new_reg = std::get<2>(insn_replace);
-
-      if (has_undefined && new_reg >= non_input_regs) {
-        std::get<2>(insn_replace) = new_reg + 1;
-      }
-    }
-
-    for (const auto& insn_replace : undefined_replacements) {
-      replacements->emplace_back(
-          std::get<0>(insn_replace),
-          std::get<1>(insn_replace),
-          non_input_regs);
-    }
-  }
-
-  return true;
+  transform->insert_after(const_cast<IRInstruction*>(position), insns);
 }
 
-void method_updates(
-    DexMethod* method,
-    const std::vector<IRInstruction*>& deletes,
-    const ReplacementsList& replacements) {
+using MoveList = std::unordered_map<
+    const IRInstruction*,
+    std::tuple</* dest reg */ uint16_t, /* src reg */ uint16_t, DexOpcode>>;
+
+void method_updates(DexMethod* method,
+                    const std::vector<IRInstruction*>& deletes,
+                    const MoveList& move_list) {
 
   auto& code = method->get_code();
   auto transform = code->get_entries();
 
+  for (const auto& move_elem : move_list) {
+    const IRInstruction* insn = move_elem.first;
+    uint16_t dest_reg = std::get<0>(move_elem.second);
+    uint16_t src_reg = std::get<1>(move_elem.second);
+    DexOpcode move_opcode = std::get<2>(move_elem.second);
+
+    add_move_instr(transform, insn, src_reg, dest_reg, move_opcode);
+  }
+
   for (const auto& insn : deletes) {
     transform->remove_opcode(insn);
   }
-
-  for (const auto& insn_replace : replacements) {
-    IRInstruction* insn = std::get<0>(insn_replace);
-    size_t index = std::get<1>(insn_replace);
-    uint16_t new_reg = std::get<2>(insn_replace);
-
-    insn->set_src(index, new_reg);
-  }
 }
 
-}  // namespace
+} // namespace
 
 ///////////////////////////////////////////////
 
-void TaintedRegs::meet(const TaintedRegs& that) {
-  m_reg_set |= that.m_reg_set;
-}
+void TaintedRegs::meet(const TaintedRegs& that) { m_reg_set |= that.m_reg_set; }
 
 bool TaintedRegs::operator==(const TaintedRegs& that) const {
   return m_reg_set == that.m_reg_set;
@@ -220,8 +190,7 @@ void FieldsRegs::meet(const FieldsRegs& that) {
     if (pair.second == FieldOrRegStatus::DEFAULT) {
       field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
       field_to_iput_insn[pair.first] = that.field_to_iput_insn.at(pair.first);
-    } else if (that.field_to_reg.at(pair.first) ==
-        FieldOrRegStatus::DEFAULT) {
+    } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
       continue;
     } else if (pair.second != that.field_to_reg.at(pair.first)) {
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
@@ -263,7 +232,8 @@ bool inline_build(DexMethod* method, DexClass* builder) {
   for (auto const& mie : InstructionIterable(code->get_entries())) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto invoked = static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked =
+          static_cast<const IRMethodInstruction*>(insn)->get_method();
       if (invoked == build_method) {
         auto mop = static_cast<IRMethodInstruction*>(insn);
         inlinables.push_back(std::make_pair(build_method, mop));
@@ -282,7 +252,7 @@ bool inline_build(DexMethod* method, DexClass* builder) {
     // TODO(emmasevastian): We will need to gate this with a check, mostly as
     //                      we loosen the build method restraints.
     if (!MethodTransform::inline_16regs(
-          inline_context, inlinable.first, inlinable.second)) {
+            inline_context, inlinable.first, inlinable.second)) {
       return false;
     }
   }
@@ -301,13 +271,16 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   auto blocks = postorder_sort(transform->cfg().blocks());
 
   auto fields_in = fields_setters(blocks, builder);
-  auto fields_out = fields_getters(blocks, builder);
 
   static auto init = DexString::make_string("<init>");
+  uint16_t regs_size = code->get_registers_size();
+  uint16_t in_regs_size = code->get_ins_size();
+  uint16_t non_input_reg_size = regs_size - in_regs_size;
+  uint16_t extra_regs = 0;
+  int null_reg = FieldOrRegStatus::UNDEFINED;
 
   std::vector<IRInstruction*> deletes;
-  std::vector<std::tuple<IRInstruction*, size_t>> undefined_replacements;
-  ReplacementsList replacements;
+  MoveList move_replacements;
 
   for (auto& block : blocks) {
     for (auto& mie : *block) {
@@ -318,9 +291,88 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       auto insn = mie.insn;
       DexOpcode opcode = insn->opcode();
 
-      if (is_iput(opcode) || is_iget(opcode)) {
+      auto& fields_in_insn = fields_in->at(mie.insn);
+
+      if (is_iput(opcode)) {
         auto field = static_cast<const IRFieldInstruction*>(insn)->field();
         if (field->get_class() == builder->get_type()) {
+          // TODO(emmasevastian): Treat case where we move parameters around.
+          if (insn->src(0) >= non_input_reg_size) {
+            return false;
+          }
+
+          deletes.push_back(insn);
+          continue;
+        }
+
+      } else if (is_iget(opcode)) {
+        auto field = static_cast<const IRFieldInstruction*>(insn)->field();
+        if (field->get_class() == builder->get_type()) {
+          // TODO(emmasevastian): Treat case where we move parameters around
+          if (insn->dest() >= non_input_reg_size) {
+            return false;
+          }
+
+          // Not treating the cases where we are not sure how the field
+          // was initialized.
+          if (fields_in_insn.field_to_reg[field] ==
+              FieldOrRegStatus::DIFFERENT) {
+            return false;
+
+          } else if (fields_in_insn.field_to_reg[field] ==
+                     FieldOrRegStatus::UNDEFINED) {
+
+            // We need to add the null one or use it.
+            if (null_reg == FieldOrRegStatus::UNDEFINED) {
+              null_reg = non_input_reg_size + extra_regs;
+              extra_regs++;
+            }
+
+            move_replacements[insn] =
+                std::make_tuple(insn->dest(), null_reg, OPCODE_MOVE);
+
+          } else {
+            // If we got here, the field is either:
+            //   OVERWRITTEN or held in a register.
+
+            // Get instruction that sets the field.
+            const IRInstruction* iput_insn =
+                fields_in_insn.field_to_iput_insn[field];
+            if (iput_insn == nullptr) {
+              return false;
+            }
+
+            DexOpcode move_opcode = get_move_opcode(iput_insn);
+            bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
+
+            // Check if we already have a value for it.
+            if (move_replacements.find(iput_insn) != move_replacements.end()) {
+              move_replacements[insn] =
+                  std::make_tuple(insn->dest(),
+                                  std::get<0>(move_replacements[iput_insn]),
+                                  move_opcode);
+
+            } else if (fields_in_insn.field_to_reg[field] ==
+                       FieldOrRegStatus::OVERWRITTEN) {
+
+              // We need to add 2 moves: one for the iput, one for iget.
+              move_replacements[iput_insn] =
+                  std::make_tuple(non_input_reg_size + extra_regs,
+                                  iput_insn->src(0),
+                                  move_opcode);
+
+              move_replacements[insn] = std::make_tuple(
+                  insn->dest(), non_input_reg_size + extra_regs, move_opcode);
+
+              extra_regs += is_wide ? 2 : 1;
+
+            } else {
+              // We can reuse the existing reg, so will have only 1 move.
+              move_replacements[insn] =
+                  std::make_tuple(insn->dest(), iput_insn->src(0), move_opcode);
+            }
+          }
+
           deletes.push_back(insn);
           continue;
         }
@@ -341,46 +393,17 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
           continue;
         }
       }
-
-      auto& fields_in_insn = fields_in->at(mie.insn);
-      auto& fields_out_insn = fields_out->at(mie.insn);
-
-      if (insn->srcs_size()) {
-        for (size_t index = 0; index < insn->srcs_size(); ++index) {
-          const int current_src = insn->src(index);
-
-          for (const auto& pair : fields_out_insn.field_to_reg) {
-            if (pair.second == current_src) {
-
-              // TODO(emmaevastian): Treat the case where no register holds
-              //                     the current field's value.
-              auto field_in_value = fields_in_insn.field_to_reg[pair.first];
-              if (field_in_value < 0) {
-
-                if (field_in_value == FieldOrRegStatus::UNDEFINED) {
-                  // Will add a new register that holds 'null'. This new
-                  // register will be used here.
-                  undefined_replacements.emplace_back(insn, index);
-                } else {
-                  return false;
-                }
-              } else {
-                replacements.emplace_back(
-                    insn,
-                    index,
-                    fields_in_insn.field_to_reg[pair.first]);
-              }
-            }
-          }
-        }
-      }
     }
   }
 
-  if (!treat_undefined_fields(method, undefined_replacements, &replacements)) {
+  if (!enlarge_register_frame(method, extra_regs)) {
     return false;
   }
 
-  method_updates(method, deletes,  replacements);
+  if (null_reg != FieldOrRegStatus::UNDEFINED) {
+    add_null_instr(transform, null_reg);
+  }
+
+  method_updates(method, deletes, move_replacements);
   return true;
 }
