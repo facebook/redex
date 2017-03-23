@@ -61,72 +61,90 @@ namespace {
       TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
       // The loop traverses all blocks in the method until no more branch is converted
       while (changed) {
-        changed = false;
         auto transform = method->get_code()->get_entries();
         transform->build_cfg();
         auto& cfg = transform->cfg();
         TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
-        std::unordered_map<Block *, bool> visited;
-        std::stack<Block *> blocks;
-        blocks.push(cfg.blocks()[0]);
-        visited[cfg.blocks()[0]] = true;
+        auto first_block = cfg.blocks()[0];
         // block_preds saves the re-calculated number of predecessors of each block
         // This number may change as new unreachable blocks are added in each loop
-        std::unordered_map<Block*, int> block_preds;
-        find_reachable_predecessors(cfg.blocks(), block_preds);
-        // This loop traverses each block by depth-first
-        while (!blocks.empty() && !changed) {
-          auto b = blocks.top();
-          TRACE(CONSTP, 5, "Processing block %d\n", b->id());
-          blocks.pop();
-          if (block_preds[b] != 1) {
-            TRACE(CONSTP, 5, "More than one pred, removing constants\n");
-            remove_constants();
-          }
-          IRInstruction *last_inst = nullptr;
-          for (auto it = b->begin(); it != b->end() && !changed; ++it) {
-            if (it->type != MFLOW_OPCODE) {
-              continue;
-            }
-            auto inst = it->insn;
-            TRACE(CONSTP, 5, "instruction: %s\n",  SHOW(inst));
-            if (is_const(inst->opcode())) {
-              propagate_constant(inst);
-            } else {
-              changed = propagate_insn(inst, last_inst, method);
-            }
-          }
-          // Propagate successive blocks
-          int succ_num = 0;
-          for (auto succs_b: b->succs()) {
-            if (!visited[succs_b]) {
-              blocks.push(succs_b);
-              visited[succs_b] = true;
-              succ_num++;
-            }
-          }
-          if (succ_num != 1) {
-            TRACE(CONSTP, 5, "More than one successor, removing constants\n");
-            remove_constants();
-          }
-        }
-        for (auto const& p : replacements) {
-          auto const& old_op = p.first;
-          auto const& new_op = p.second;
-          transform->replace_opcode(old_op, new_op);
-        }
-        replacements.clear();
-        for (auto const& p : branch_replacements) {
-          auto const& old_op = p.first;
-          auto const& new_op = p.second;
-          transform->replace_branch(old_op, new_op);
-        }
-        branch_replacements.clear();
-        for (auto dead: dead_instructions) {
-          transform->remove_opcode(dead);
-        }
-        dead_instructions.clear();
+        std::unordered_map<Block*, int> block_to_predecessors_count;
+        find_reachable_predecessors(cfg.blocks(), block_to_predecessors_count);
+        changed = propagate_constant_in_method(
+            method, first_block, block_to_predecessors_count);
+        apply_changes(transform);
       }
+    }
+
+    bool propagate_constant_in_method(
+        DexMethod* method,
+        Block* first_block,
+        std::unordered_map<Block*, int>& block_preds) {
+      bool changed = false;
+      std::stack<Block*> dfs_front;
+      dfs_front.push(first_block);
+      std::unordered_map<Block*, bool> visited;
+      visited[first_block] = true;
+      // This loop traverses each block by depth-first
+      while (!dfs_front.empty() && !changed) {
+        auto current_block = dfs_front.top();
+        dfs_front.pop();
+        TRACE(CONSTP, 5, "Processing block %d\n", current_block->id());
+        if (block_preds[current_block] != 1) {
+          TRACE(CONSTP, 5, "More than one pred, removing constants\n");
+          remove_constants();
+        }
+        IRInstruction* last_inst = nullptr;
+        for (auto it = current_block->begin();
+             it != current_block->end() && !changed;
+             ++it) {
+          if (it->type != MFLOW_OPCODE) {
+            continue;
+          }
+          auto inst = it->insn;
+          TRACE(CONSTP, 5, "instruction: %s\n", SHOW(inst));
+          if (is_const(inst->opcode())) {
+            propagate_constant(inst);
+          } else {
+            changed = propagate_insn(inst, last_inst, method);
+          }
+        }
+        // Propagate successive blocks
+        int succ_num = 0;
+        for (auto successor_block : current_block->succs()) {
+          if (!visited[successor_block]) {
+            dfs_front.push(successor_block);
+            visited[successor_block] = true;
+            succ_num++;
+          }
+        }
+        if (succ_num != 1) {
+          TRACE(CONSTP, 5, "More than one successor, removing constants\n");
+          remove_constants();
+        }
+      }
+      return changed;
+    }
+
+    void apply_changes(MethodTransform* transform) {
+      for (auto const& p : replacements) {
+        auto const& old_op = p.first;
+        auto const& new_op = p.second;
+        transform->replace_opcode(old_op, new_op);
+      }
+      replacements.clear();
+
+      for (auto const& p : branch_replacements) {
+        auto const& old_op = p.first;
+        auto const& new_op = p.second;
+        transform->replace_branch(old_op, new_op);
+      }
+      branch_replacements.clear();
+
+      for (auto dead : dead_instructions) {
+        transform->remove_opcode(dead);
+      }
+      dead_instructions.clear();
     }
 
     bool propagate_insn(IRInstruction *inst, IRInstruction *&last_inst, DexMethod *method) {
@@ -221,23 +239,26 @@ namespace {
     }
 
     // This method calculates number of reachable predecessors of each block
-    // The difference between this method and remove_unreachable_blocks in LocalDCE is that
-    // this method only finds unreachable classes without deleting any edge or block
-    void find_reachable_predecessors(std::vector<Block*>& blocks,
-                                     std::unordered_map<Block*, int>& block_preds) {
+    // The difference between this method and remove_unreachable_blocks in
+    // LocalDCE is that
+    // this method only finds unreachable blocks without deleting any edge
+    // or block
+    void find_reachable_predecessors(
+        std::vector<Block*>& original_blocks,
+        std::unordered_map<Block*, int>& block_to_predecessors_count) {
       std::vector<Block*> unreachable_blocks;
-      for (size_t i = 1; i < blocks.size(); ++i) {
-        auto pred_size = blocks[i]->preds().size();
-        block_preds[blocks[i]] = pred_size;
+      for (size_t i = 1; i < original_blocks.size(); ++i) {
+        auto pred_size = original_blocks[i]->preds().size();
+        block_to_predecessors_count[original_blocks[i]] = pred_size;
         if (pred_size == 0) {
-          unreachable_blocks.push_back(blocks[i]);
+          unreachable_blocks.push_back(original_blocks[i]);
         }
       }
       while (unreachable_blocks.size() > 0) {
         auto b = unreachable_blocks.back();
         unreachable_blocks.pop_back();
-        for (auto succs_b: b->succs()) {
-          if (--block_preds[succs_b] == 0) {
+        for (auto succs_b : b->succs()) {
+          if (--block_to_predecessors_count[succs_b] == 0) {
             unreachable_blocks.push_back(succs_b);
           }
         }
