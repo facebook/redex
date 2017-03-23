@@ -55,6 +55,9 @@ void fields_mapping(const IRInstruction* insn,
     if (field->get_class() == builder->get_type()) {
       uint16_t current = is_setter ? insn->src(0) : insn->dest();
       fregs->field_to_reg[field] = current;
+      if (is_setter) {
+        fregs->field_to_iput_insn[field] = insn;
+      }
     }
   }
 }
@@ -216,11 +219,13 @@ void FieldsRegs::meet(const FieldsRegs& that) {
   for (const auto& pair : field_to_reg) {
     if (pair.second == FieldOrRegStatus::DEFAULT) {
       field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
+      field_to_iput_insn[pair.first] = that.field_to_iput_insn.at(pair.first);
     } else if (that.field_to_reg.at(pair.first) ==
         FieldOrRegStatus::DEFAULT) {
       continue;
     } else if (pair.second != that.field_to_reg.at(pair.first)) {
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
+      field_to_iput_insn[pair.first] = nullptr;
     }
   }
 }

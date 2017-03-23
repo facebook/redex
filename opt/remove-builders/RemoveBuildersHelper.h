@@ -12,6 +12,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "DexClass.h"
+#include "IRInstruction.h"
 
 using RegSet = boost::dynamic_bitset<>;
 
@@ -51,15 +52,15 @@ enum FieldOrRegStatus : int {
 
 struct FieldsRegs {
   std::unordered_map<DexField*, int> field_to_reg;
+  std::unordered_map<DexField*, const IRInstruction*> field_to_iput_insn;
 
   explicit FieldsRegs(DexClass* builder) {
     const auto& ifields = builder->get_ifields();
     for (const auto& ifield : ifields) {
       field_to_reg[ifield] = FieldOrRegStatus::DEFAULT;
+      field_to_iput_insn[ifield] = nullptr;
     }
   }
-  explicit FieldsRegs(const std::unordered_map<DexField*, int>&& field_to_reg)
-      : field_to_reg(std::move(field_to_reg)) {}
 
   void meet(const FieldsRegs& that);
   void trans(const IRInstruction*);
