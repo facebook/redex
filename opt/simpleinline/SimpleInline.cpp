@@ -123,10 +123,6 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   TRACE(SINL, 3, "blacklisted meths %ld\n", inliner.get_info().blacklisted);
   TRACE(SINL, 3, "more than 16 regs %ld\n",
       inliner.get_info().more_than_16regs);
-  TRACE(SINL, 3, "try/catch in callee %ld\n",
-      inliner.get_info().try_catch_block);
-  TRACE(SINL, 3, "try/catch in caller %ld\n",
-      inliner.get_info().caller_tries);
   TRACE(SINL, 3, "virtualizing methods %ld\n", inliner.get_info().need_vmethod);
   TRACE(SINL, 3, "invoke super %ld\n", inliner.get_info().invoke_super);
   TRACE(SINL, 3, "override inputs %ld\n", inliner.get_info().write_over_ins);

@@ -188,10 +188,6 @@ void MultiMethodInliner::caller_inline(
       visited.erase(callee);
     }
   }
-  if (!m_config.try_catch_inline && caller->get_code()->get_tries().size() > 0) {
-    info.caller_tries++;
-    return;
-  }
   inline_callees(caller, nonrecursive_callees);
 }
 
@@ -258,8 +254,7 @@ bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
     return false;
   }
   if (is_blacklisted(callee)) return false;
-  if (!m_config.try_catch_inline && has_try_catch(callee)) return false;
-  if (m_config.try_catch_inline && has_external_catch(callee)) return false;
+  if (has_external_catch(callee)) return false;
   if (cannot_inline_opcodes(callee, caller)) return false;
   if (caller_too_large(ctx, callee)) return false;
 
@@ -296,19 +291,6 @@ bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
   if (ctx.estimated_insn_size + insns_size >
       MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
-    return true;
-  }
-  return false;
-}
-
-/**
- * Return whether the callee has any try/catch.
- * We don't inline try/catch for now but it should be relatively trivial
- * to do so.
- */
-bool MultiMethodInliner::has_try_catch(DexMethod* callee) {
-  if (callee->get_code()->get_tries().size() > 0) {
-    info.try_catch_block++;
     return true;
   }
   return false;

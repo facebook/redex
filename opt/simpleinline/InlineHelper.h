@@ -30,7 +30,6 @@
 class MultiMethodInliner {
  public:
   struct Config {
-    bool try_catch_inline; // inline methods with try-catch
     bool callee_direct_invoke_inline;
     bool virtual_same_class_inline;
     bool super_same_class_inline;
@@ -87,12 +86,6 @@ class MultiMethodInliner {
    * not own.
    */
   bool is_blacklisted(DexMethod* callee);
-
-  /**
-   * Return true if the callee contains try/catch.
-   * Try/catch regions may need to be merged with those of the caller.
-   */
-  bool has_try_catch(DexMethod* callee);
 
   /**
    * Return true if the callee contains external catch exception types
@@ -206,11 +199,9 @@ class MultiMethodInliner {
   struct InliningInfo {
     size_t calls_inlined{0};
     size_t recursive{0};
-    size_t caller_tries{0};
     size_t not_found{0};
     size_t blacklisted{0};
     size_t more_than_16regs{0};
-    size_t try_catch_block{0};
     size_t throws{0};
     size_t multi_ret{0};
     size_t need_vmethod{0};

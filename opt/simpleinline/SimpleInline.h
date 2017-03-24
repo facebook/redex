@@ -24,7 +24,6 @@ public:
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("virtual", true, m_virtual_inline);
-    pc.get("try_catch", false, m_inliner_config.try_catch_inline);
     pc.get("callee_invoke_direct",
            false,
            m_inliner_config.callee_direct_invoke_inline);
