@@ -152,15 +152,29 @@ using MoveList = std::unordered_map<
 
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
-                    const MoveList& move_list) {
+                    const MoveList& move_list,
+                    uint16_t initial_non_input_reg_size,
+                    uint16_t extra_regs) {
 
   auto& code = method->get_code();
   auto transform = code->get_entries();
 
   for (const auto& move_elem : move_list) {
     const IRInstruction* insn = move_elem.first;
+
     uint16_t dest_reg = std::get<0>(move_elem.second);
     uint16_t src_reg = std::get<1>(move_elem.second);
+
+    // If we are moving parameters around we need to account
+    // for the extra allocated regs.
+    if (is_iput(insn->opcode())) {
+      if (src_reg >= initial_non_input_reg_size) {
+        src_reg += extra_regs;
+      }
+    } else if (dest_reg >= initial_non_input_reg_size) {
+      dest_reg += extra_regs;
+    }
+
     DexOpcode move_opcode = std::get<2>(move_elem.second);
 
     add_move_instr(transform, insn, src_reg, dest_reg, move_opcode);
@@ -296,11 +310,6 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       if (is_iput(opcode)) {
         auto field = static_cast<const IRFieldInstruction*>(insn)->field();
         if (field->get_class() == builder->get_type()) {
-          // TODO(emmasevastian): Treat case where we move parameters around.
-          if (insn->src(0) >= non_input_reg_size) {
-            return false;
-          }
-
           deletes.push_back(insn);
           continue;
         }
@@ -308,10 +317,6 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       } else if (is_iget(opcode)) {
         auto field = static_cast<const IRFieldInstruction*>(insn)->field();
         if (field->get_class() == builder->get_type()) {
-          // TODO(emmasevastian): Treat case where we move parameters around
-          if (insn->dest() >= non_input_reg_size) {
-            return false;
-          }
 
           // Not treating the cases where we are not sure how the field
           // was initialized.
@@ -404,6 +409,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
     add_null_instr(transform, null_reg);
   }
 
-  method_updates(method, deletes, move_replacements);
+  method_updates(
+      method, deletes, move_replacements, non_input_reg_size, extra_regs);
   return true;
 }
