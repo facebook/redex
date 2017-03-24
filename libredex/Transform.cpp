@@ -794,29 +794,35 @@ size_t MethodTransform::sum_opcode_sizes() const {
   return size;
 }
 
+void MethodTransform::remove_opcode(const FatMethod::iterator& it) {
+  always_assert(it->type == MFLOW_OPCODE);
+  auto insn = it->insn;
+  if (may_throw(insn->opcode())) {
+    for (auto rev = --FatMethod::reverse_iterator(it);
+         rev != m_fmethod->rend();
+         ++rev) {
+      if (rev->type == MFLOW_FALLTHROUGH && rev->throwing_mie) {
+        assert(rev->throwing_mie == &*it);
+        rev->throwing_mie = nullptr;
+        break;
+      } else if (rev->type == MFLOW_OPCODE) {
+        break;
+      }
+    }
+  }
+  if (is_branch(insn->opcode())) {
+    remove_branch_target(insn);
+  }
+  it->type = MFLOW_FALLTHROUGH;
+  it->insn = nullptr;
+  delete insn;
+}
+
 void MethodTransform::remove_opcode(IRInstruction* insn) {
   for (auto& mei : *m_fmethod) {
     if (mei.type == MFLOW_OPCODE && mei.insn == insn) {
       auto it = m_fmethod->iterator_to(mei);
-      if (may_throw(insn->opcode())) {
-        for (auto rev = --FatMethod::reverse_iterator(it);
-             rev != m_fmethod->rend();
-             ++rev) {
-          if (rev->type == MFLOW_FALLTHROUGH && rev->throwing_mie) {
-            assert(rev->throwing_mie == &mei);
-            rev->throwing_mie = nullptr;
-            break;
-          } else if (rev->type == MFLOW_OPCODE) {
-            break;
-          }
-        }
-      }
-      if (is_branch(insn->opcode())) {
-        remove_branch_target(insn);
-      }
-      mei.type = MFLOW_FALLTHROUGH;
-      mei.insn = nullptr;
-      delete insn;
+      remove_opcode(it);
       return;
     }
   }

@@ -162,7 +162,7 @@ class LocalDce {
     std::vector<boost::dynamic_bitset<>> liveness(
         cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
     bool changed;
-    std::vector<IRInstruction*> dead_instructions;
+    std::vector<FatMethod::iterator> dead_instructions;
 
     TRACE(DCE, 5, "%s\n", SHOW(method));
     TRACE(DCE, 5, "%s", SHOW(cfg));
@@ -201,7 +201,7 @@ class LocalDce {
           if (required) {
             update_liveness(it->insn, bliveness);
           } else {
-            dead_instructions.push_back(it->insn);
+            dead_instructions.push_back(std::prev(it.base()));
           }
           TRACE(CFG,
                 5,
@@ -216,9 +216,9 @@ class LocalDce {
     } while (changed);
 
     // Remove dead instructions.
-    TRACE(DCE, 2, "%s\n", show(method).c_str());
+    TRACE(DCE, 2, "%s\n", SHOW(method));
     for (auto dead : dead_instructions) {
-      TRACE(DCE, 2, "DEAD: %s\n", show(dead).c_str());
+      TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
       transform->remove_opcode(dead);
       m_instructions_eliminated++;
     }

@@ -309,8 +309,12 @@ class MethodTransform {
   /* position = nullptr means at the head */
   void insert_after(IRInstruction* position, const std::vector<IRInstruction*>& opcodes);
 
+  /* DEPRECATED! Use the version below that passes in the iterator instead,
+   * which is O(1) instead of O(n). */
   /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(IRInstruction* insn);
+
+  void remove_opcode(const FatMethod::iterator&);
 
   /* This method will delete the switch case where insn resides. */
   void remove_switch_case(IRInstruction* insn);
