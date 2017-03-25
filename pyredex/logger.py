@@ -14,6 +14,7 @@ import os
 import sys
 
 trace = None
+trace_fp = None
 
 ALL = '__ALL__'
 
@@ -53,7 +54,6 @@ def strip_trace_tag(env):
     """
     Remove the "REDEX:N" component from the trace string
     """
-    env = env.copy()
     try:
         trace = parse_trace_string(env['TRACE'])
         trace.pop('REDEX')
@@ -62,13 +62,56 @@ def strip_trace_tag(env):
             trace.pop(ALL)
         else:
             trace_str = ''
-        trace_str += ','.join(k + ':' + v for k, v in trace.iteritems())
+        trace_str += ','.join(k + ':' + str(v) for k, v in trace.iteritems())
         env['TRACE'] = trace_str
-        return env
     except KeyError:
-        return env
+        pass
+
+
+def get_trace_file():
+    global trace_fp
+    if trace_fp is not None:
+        return trace_fp
+
+    trace_file = os.environ.get('TRACEFILE')
+    if trace_file:
+        trace_fp = open(trace_file, 'w')
+    else:
+        trace_fp = sys.stderr
+    return trace_fp
+
+
+def update_trace_file(env):
+    """
+    If TRACEFILE is specified, update it to point to the file descriptor
+    instead of the filename. (redex-all will treat integer TRACEFILE values as
+    file descriptors.) This allows the redex-all subprocess to append to
+    the file instead of calling open() on it again, which would overwrite its
+    contents.
+
+    Note that having redex-all open() the file under append mode is not a
+    desirable solution as we still want to overwrite the file between runs.
+    """
+    trace_fp = get_trace_file()
+    if trace_fp is not sys.stderr:
+        env['TRACEFILE'] = str(trace_fp.fileno())
+
+
+def setup_trace_for_child(env):
+    """
+    Change relevant environment variables so that tracing in the redex-all
+    subprocess works
+    """
+    env = env.copy()
+    strip_trace_tag(env)
+    update_trace_file(env)
+    return env
+
+
+def flush():
+    get_trace_file().flush()
 
 
 def log(*stuff):
     if get_log_level() > 0:
-        print(*stuff, file=sys.stderr)
+        print(*stuff, file=get_trace_file())

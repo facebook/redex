@@ -114,7 +114,8 @@ def run_pass(
         print(' '.join(args))
         sys.exit()
 
-    env = logger.strip_trace_tag(os.environ)
+    env = logger.setup_trace_for_child(os.environ)
+    logger.flush()
 
     # Our CI system occasionally fails because it is trying to write the
     # redex-all binary when this tries to run.  This shouldn't happen, and

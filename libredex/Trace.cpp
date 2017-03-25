@@ -104,7 +104,12 @@ struct Tracer {
     if (!envfile) {
       envfile = "/dev/stderr";
     }
-    m_file = fopen(envfile, "w");
+    try {
+      auto fd = std::stoi(envfile);
+      m_file = fdopen(fd, "w");
+    } catch (std::invalid_argument&) {
+      m_file = fopen(envfile, "w");
+    }
     if (!m_file) {
       m_file = stderr;
     }
