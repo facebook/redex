@@ -64,13 +64,13 @@ void walk_code(const T& scope,
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
       if (methodFilter(dmethod)) {
-        auto& code = dmethod->get_code();
+        auto code = dmethod->get_code();
         if (code) codeWalker(dmethod, *code);
       }
     }
     for (auto vmethod : cls->get_vmethods()) {
       if (methodFilter(vmethod)) {
-        auto& code = vmethod->get_code();
+        auto code = vmethod->get_code();
         if (code) codeWalker(vmethod, *code);
       }
     }
@@ -86,7 +86,7 @@ void walk_opcodes(const T& scope,
   for (const auto& cls : scope) {
     for (auto dmethod : cls->get_dmethods()) {
       if (methodFilter(dmethod)) {
-        auto& code = dmethod->get_code();
+        auto code = dmethod->get_code();
         if (code) {
           for (auto& mie : *code->get_entries()) {
             if (mie.type != MFLOW_OPCODE) {
@@ -99,7 +99,7 @@ void walk_opcodes(const T& scope,
     }
     for (auto vmethod : cls->get_vmethods()) {
       if (methodFilter(vmethod)) {
-        auto& code = vmethod->get_code();
+        auto code = vmethod->get_code();
         if (code) {
           for (auto& mie : *code->get_entries()) {
             if (mie.type != MFLOW_OPCODE) {
@@ -199,7 +199,7 @@ void walk_matching_opcodes(
   walk_methods(
     scope,
     [&](const DexMethod* m) {
-      auto& code = m->get_code();
+      auto code = m->get_code();
       if (code) {
         std::vector<IRInstruction*> insns;
         for (auto& mie : InstructionIterable(code->get_entries())) {
@@ -239,7 +239,7 @@ void walk_matching_opcodes_in_block(const Scope& scope,
   walk_methods(
     scope,
     [&](const DexMethod* m) {
-      auto& code = m->get_code();
+      auto code = m->get_code();
       if (code) {
         MethodTransform* mt = code->get_entries();
         mt->build_cfg();

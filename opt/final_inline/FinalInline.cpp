@@ -429,7 +429,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
     if (clinit == nullptr) {
       continue;
     }
-    auto& code = clinit->get_code();
+    auto code = clinit->get_code();
     auto ii = InstructionIterable(code->get_entries());
     auto end = ii.end();
     for (auto it = ii.begin(); it != ii.end(); ++it) {

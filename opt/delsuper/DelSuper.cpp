@@ -160,7 +160,7 @@ private:
    * super.
    */
   DexMethod* get_trivial_return_invoke_super(const DexMethod* meth) {
-    const auto& code = meth->get_code();
+    const auto* code = meth->get_code();
 
     // Must have code
     if (!code) {

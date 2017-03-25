@@ -58,7 +58,7 @@ void strip_debug_info(Scope& scope,
             meth->get_code()->remove_debug_item();
             num_matches++;
           } else if (drop_local_variables || drop_line_numbers) {
-            auto& dbg_item = meth->get_code()->get_debug_item();
+            auto dbg_item = meth->get_code()->get_debug_item();
             if (dbg_item) {
               dbg_item->remove_parameter_names();
               auto& dbg_entries = dbg_item->get_entries();

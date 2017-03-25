@@ -593,7 +593,7 @@ FatMethod* MethodTransform::balloon(DexCode* code) {
   generate_branch_targets(fmethod, addr_to_mei, addr_to_data);
   gather_array_data(fmethod, addr_to_data, &m_array_data);
   associate_try_items(fmethod, *code, addr_to_mei);
-  auto& debugitem = code->get_debug_item();
+  auto debugitem = code->get_debug_item();
   if (debugitem) {
     associate_debug_entries(fmethod, *debugitem, addr_to_mei);
   }
@@ -1398,7 +1398,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     return false;
   }
 
-  auto& callee_code = callee->get_code();
+  auto callee_code = callee->get_code();
   auto mtcallee = callee_code->get_entries();
   bool simple_remap_ok = simple_reg_remap(mtcallee);
   // if the simple approach won't work, just be conservative and assume all
@@ -1550,7 +1550,7 @@ bool MethodTransform::enlarge_regs(DexMethod* method, uint16_t newregs) {
   }
 
   always_assert(method != nullptr);
-  auto& code = method->get_code();
+  auto code = method->get_code();
   if (!code) {
     return false;
   }
@@ -1948,7 +1948,7 @@ bool MethodTransform::try_sync(DexCode* code) {
 
   // Step 4, emit debug opcodes
   TRACE(MTRANS, 5, "Emitting debug opcodes\n");
-  auto& debugitem = code->get_debug_item();
+  auto debugitem = code->get_debug_item();
   if (debugitem) {
     auto& entries = debugitem->get_entries();
     for (auto& mentry : *m_fmethod) {

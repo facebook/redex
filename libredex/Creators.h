@@ -415,11 +415,10 @@ struct MethodCreator {
   // Helpers
   //
 
-  std::unique_ptr<DexCode>& to_code();
   void load_locals(DexMethod* meth);
   uint16_t ins_count() const;
 
-  uint16_t get_real_reg_num(uint16_t vreg) {
+  uint16_t get_real_reg_num(uint16_t vreg) const {
     if (vreg < ins_count()) {
       return static_cast<uint16_t>(top_reg - ins_count() + vreg);
     }

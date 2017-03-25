@@ -36,7 +36,7 @@ constexpr const char* METRIC_BRIDGES_REMOVED = "bridges_removed_count";
 constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 
 DexMethod* match_pattern(DexMethod* bridge) {
-  auto& code = bridge->get_code();
+  auto code = bridge->get_code();
   if (!code) return nullptr;
   auto ii = InstructionIterable(code->get_entries());
   auto it = ii.begin();

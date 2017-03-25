@@ -13,7 +13,7 @@
 
 namespace {
 void drop_this(DexMethod* method) {
-  auto const& code = method->get_code();
+  auto code = method->get_code();
   if (!code) return;
   auto nregs = code->get_registers_size();
   auto nins = code->get_ins_size();
@@ -62,13 +62,13 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
     ref.proto = new_proto;
     method->change(ref, true /* rename_on_collision */);
 
-    auto& code = method->get_code();
+    auto code = method->get_code();
     // If the debug info param count doesn't match the param count in the
     // method signature, ART will not parse any of the debug info for the
     // method. Note that this shows up as a runtime error and not a
     // verification error. To avoid that, we insert a nullptr here.
     if (code) {
-      auto& debug = code->get_debug_item();
+      auto debug = code->get_debug_item();
       if (debug) {
         auto& param_names = debug->get_param_names();
         param_names.insert(param_names.begin(), nullptr);

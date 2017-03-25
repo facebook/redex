@@ -174,7 +174,7 @@ void build_refs(
   // collect all exceptions and add to the set of references for the app
   walk_methods(scope,
       [&](DexMethod* method) {
-        auto& code = method->get_code();
+        auto code = method->get_code();
         if (code == nullptr) return;
         std::vector<DexType*> exceptions;
         code->gather_catch_types(exceptions);
@@ -279,8 +279,8 @@ bool does_method_collide(
   const DexMethod* method,
   const std::vector<DexMethod*> methods) {
   for (auto other_method : methods) {
-    auto& first_dbg = method->get_code()->get_debug_item();
-    auto& sec_dbg = other_method->get_code()->get_debug_item();
+    auto first_dbg = method->get_code()->get_debug_item();
+    auto sec_dbg = other_method->get_code()->get_debug_item();
     bool line_nums_equal = false;
     // In a stack trace we can't disambiguate between
     // two methods if they have the same name and line number

@@ -798,13 +798,13 @@ void DexOutput::generate_code_items(SortMode mode) {
       continue;
     }
     TRACE(CUSTOMSORT, 3, "method emit %s %s\n", SHOW(meth->get_class()), SHOW(meth));
-    std::unique_ptr<DexCode>& code = meth->get_code();
+    DexCode* code = meth->get_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
         "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
-    m_code_item_emits.emplace_back(code.get(),
+    m_code_item_emits.emplace_back(code,
                                    (dex_code_item*)(m_output + m_offset));
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
@@ -1022,7 +1022,7 @@ void DexOutput::generate_debug_items() {
   for (auto& it : m_code_item_emits) {
     DexCode* dc = it.first;
     dex_code_item* dci = it.second;
-    auto& dbg = dc->get_debug_item();
+    auto dbg = dc->get_debug_item();
     if (dbg == nullptr) continue;
     dbgcount++;
     // No align requirement for debug items.
@@ -1053,7 +1053,7 @@ void DexOutput::generate_map() {
  * with the jumbo-ness of their stridx.
  */
 static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
-  auto& code = method->get_code();
+  auto code = method->get_code();
   if (!code) return; // nothing to do for native methods
 
   std::unordered_set<IRStringInstruction*> jumbo_mismatches;

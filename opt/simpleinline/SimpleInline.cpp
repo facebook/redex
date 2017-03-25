@@ -201,7 +201,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
         all_methods++;
         if (method->is_virtual()) return;
 
-        auto& code = method->get_code();
+        auto code = method->get_code();
         bool dont_inline = code == nullptr;
 
         direct_methods++;
@@ -221,7 +221,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
     auto non_virtual = devirtualize(scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
-      auto& code = vmeth->get_code();
+      auto code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
         continue;

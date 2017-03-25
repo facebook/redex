@@ -51,7 +51,7 @@ struct ConstPropTest : testing::Test {
   void expect_empty_clinit(DexClass* clazz) {
     auto clinit = clazz->get_clinit();
     ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str() << " missing clinit";
-    auto& code = clinit->get_code();
+    auto code = clinit->get_code();
     EXPECT_EQ(code->get_entries()->count_opcodes(), 0)
         << "Class " << clazz->c_str() << " has non-empty clinit";
   }

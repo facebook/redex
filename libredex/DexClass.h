@@ -554,8 +554,8 @@ class DexCode {
   }
 
  public:
-  const std::unique_ptr<DexDebugItem>& get_debug_item() const { return m_dbg; }
-  std::unique_ptr<DexDebugItem>& get_debug_item() { return m_dbg; }
+  const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
+  DexDebugItem* get_debug_item() { return m_dbg.get(); }
   void remove_debug_item() { m_dbg = nullptr; }
   std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
     return std::move(m_insns);
@@ -702,8 +702,9 @@ class DexMethod {
   DexString* get_name() const { return m_ref.name; }
   const char* c_str() const { return get_name()->c_str(); }
   DexProto* get_proto() const { return m_ref.proto; }
-  const std::unique_ptr<DexCode>& get_code() const { return m_code; }
-  std::unique_ptr<DexCode>& get_code() { return m_code; }
+  const DexCode* get_code() const { return m_code.get(); }
+  DexCode* get_code() { return m_code.get(); }
+  std::unique_ptr<DexCode> release_code() { return std::move(m_code); }
   bool is_concrete() const { return m_concrete; }
   bool is_virtual() const { return m_virtual; }
   bool is_external() const { return m_external; }

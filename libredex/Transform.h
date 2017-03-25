@@ -350,7 +350,7 @@ class MethodTransformer {
   MethodTransformer(DexMethod* m,
                     bool want_cfg = false,
                     bool end_block_before_throw = true) {
-    m_code = &*m->get_code();
+    m_code = m->get_code();
     m_code->balloon();
     if (want_cfg) {
       m_code->get_entries()->build_cfg(end_block_before_throw);

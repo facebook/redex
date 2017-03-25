@@ -101,7 +101,7 @@ TEST(SynthTest1, synthetic) {
     // Make sure there are no references to the synthetic method.
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
-        const auto& code = method->get_code();
+        const auto* code = method->get_code();
         const auto& opcodes = code->get_instructions();
         for (auto& inst : opcodes) {
           std::cout << SHOW(inst) << std::endl;

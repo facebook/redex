@@ -101,7 +101,7 @@ bool find_impl(DexType* type, Unterface& unterface) {
  * scenario.
  */
 void do_update_method(DexMethod* meth, Unterface& unterface) {
-  auto& code = meth->get_code();
+  auto code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
   auto mt = meth->get_code()->get_entries();
   IRInstruction* last = nullptr;

@@ -68,7 +68,7 @@ bool can_remove(DexMethod* meth, const SynthConfig& synthConfig) {
  *   return-TYPE vA
  */
 DexField* trivial_get_field_wrapper(DexMethod* m) {
-  auto& code = m->get_code();
+  auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
   auto ii = InstructionIterable(code->get_entries());
@@ -104,7 +104,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
  *   return-TYPE vA
  */
 DexField* trivial_get_static_field_wrapper(DexMethod* m) {
-  auto& code = m->get_code();
+  auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
   auto ii = InstructionIterable(code->get_entries());
@@ -142,7 +142,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
  *    | return-void )
  */
 DexMethod* trivial_method_wrapper(DexMethod* m) {
-  auto& code = m->get_code();
+  auto code = m->get_code();
   if (code == nullptr) return nullptr;
   auto ii = InstructionIterable(code->get_entries());
   auto it = ii.begin();
@@ -202,7 +202,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
  *   return-void
  */
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
-  auto& code = m->get_code();
+  auto code = m->get_code();
   if (code == nullptr) return nullptr;
   auto ii = InstructionIterable(code->get_entries());
   auto it = ii.begin();

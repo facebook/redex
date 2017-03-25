@@ -394,7 +394,7 @@ template <typename ...T>
   match_t<DexMethod, std::tuple<std::tuple<T...> > > has_opcodes(const std::tuple<T...>& t) {
   return {
     [](const DexMethod* meth, const std::tuple<T...>& t) {
-      auto& code = meth->get_code();
+      auto code = meth->get_code();
       if (code) {
         const size_t N = std::tuple_size<std::tuple<T...> >::value;
         auto mt = code->get_entries();

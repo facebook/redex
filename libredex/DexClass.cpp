@@ -722,8 +722,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code().get())) {
-      code_off = dco[m->get_code().get()];
+    if (m->get_code() != nullptr && dco.count(m->get_code())) {
+      code_off = dco[m->get_code()];
     }
     encdata = write_uleb128(encdata, code_off);
   }
@@ -747,8 +747,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code().get())) {
-      code_off = dco[m->get_code().get()];
+    if (m->get_code() != nullptr && dco.count(m->get_code())) {
+      code_off = dco[m->get_code()];
     }
     encdata = write_uleb128(encdata, code_off);
   }

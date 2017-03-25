@@ -111,7 +111,7 @@ bool tainted_reg_escapes(
 // in a field, or if it escapes as a return value.
 bool this_arg_escapes(DexMethod* method) {
   always_assert(!(method->get_access() & ACC_STATIC));
-  auto& code = method->get_code();
+  auto code = method->get_code();
   IRInstruction* first_insn =
       InstructionIterable(code->get_entries()).begin()->insn;
   auto regs_size = code->get_registers_size();
@@ -200,7 +200,7 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
   }
 
   // Check there is only one instance created.
-  const auto& code = method->get_code();
+  const auto* code = method->get_code();
   if (!code) {
     return false;
   }
@@ -222,7 +222,7 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
  *  - returns
  */
 bool is_trivial_builder_constructor(DexMethod* method) {
-  const auto& code = method->get_code();
+  const auto* code = method->get_code();
   if (!code) {
     return false;
   }
@@ -371,7 +371,7 @@ void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
 
 std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   std::vector<DexType*> builders;
-  auto& code = m->get_code();
+  auto code = m->get_code();
   if (!code) {
     return builders;
   }

@@ -68,7 +68,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
     find_invoke(retop, callee_insns.end(), OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throw);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -80,7 +80,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeElseThrows) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse");
   ASSERT_EQ(nullptr, invoke);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
   // verify that we haven't increased the number of catch handlers -- both
   // try blocks should point to the same handler
@@ -117,7 +117,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
     find_invoke(ifop, retop, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throw);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -129,7 +129,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeIfThrows) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInIf");
   ASSERT_EQ(nullptr, invoke);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -146,7 +146,7 @@ TEST_F(PreVerify, InlineCallerNestedTry) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_NE(nullptr, invoke);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -157,7 +157,7 @@ TEST_F(PostVerify, InlineCallerNestedTry) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_EQ(nullptr, invoke);
 
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 3);
 }
 
@@ -171,7 +171,7 @@ TEST_F(PreVerify, InlineCalleeTryUncaught) {
   auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsUncaught");
   ASSERT_NE(nullptr, invoke);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -183,7 +183,7 @@ TEST_F(PostVerify, InlineCalleeTryUncaught) {
   ASSERT_EQ(nullptr, invoke);
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -197,7 +197,7 @@ TEST_F(PreVerify, InlineCalleeTryCaught) {
   auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsCaught");
   ASSERT_NE(nullptr, invoke);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -210,7 +210,7 @@ TEST_F(PostVerify, InlineCalleeTryCaught) {
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
       "wrapsArithmeticThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -224,7 +224,7 @@ TEST_F(PreVerify, InlineTryHandlerThrows) {
   auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "handlerThrows");
   ASSERT_NE(nullptr, invoke);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -240,7 +240,7 @@ TEST_F(PostVerify, InlineTryHandlerThrows) {
   invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
       "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -254,7 +254,7 @@ TEST_F(PreVerify, InlineCalleeTryTwice) {
   auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
   ASSERT_NE(nullptr, invoke);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -266,7 +266,7 @@ TEST_F(PostVerify, InlineCalleeTryTwice) {
   ASSERT_EQ(nullptr, invoke);
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto& code = m->get_code();
+  auto code = m->get_code();
   ASSERT_EQ(code->get_tries().size(), 3);
 }
 

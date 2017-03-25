@@ -85,7 +85,7 @@ bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
 
   always_assert(method != nullptr);
 
-  auto& code = method->get_code();
+  auto code = method->get_code();
   auto oldregs = code->get_registers_size();
   auto newregs = oldregs + extra_regs;
 
@@ -132,7 +132,6 @@ void add_move_instr(MethodTransform* transform,
                     uint16_t src_reg,
                     uint16_t dest_reg,
                     DexOpcode move_opcode) {
-
   always_assert(transform != nullptr);
   always_assert(position != nullptr);
 
@@ -156,7 +155,7 @@ void method_updates(DexMethod* method,
                     uint16_t initial_non_input_reg_size,
                     uint16_t extra_regs) {
 
-  auto& code = method->get_code();
+  auto code = method->get_code();
   auto transform = code->get_entries();
 
   for (const auto& move_elem : move_list) {
@@ -235,7 +234,7 @@ DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods) {
 }
 
 bool inline_build(DexMethod* method, DexClass* builder) {
-  auto& code = method->get_code();
+  auto code = method->get_code();
   if (!code) {
     return false;
   }
@@ -275,7 +274,7 @@ bool inline_build(DexMethod* method, DexClass* builder) {
 }
 
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
-  auto& code = method->get_code();
+  auto code = method->get_code();
   if (!code) {
     return false;
   }
