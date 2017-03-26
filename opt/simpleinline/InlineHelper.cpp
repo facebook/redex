@@ -301,15 +301,12 @@ bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
  * in which case we cannot inline.
  */
 bool MultiMethodInliner::has_external_catch(DexMethod* callee) {
-  // Check if catch exception types is external and not public.
-  for(auto &tryit : callee->get_code()->get_tries()) {
-    for (auto const& it : tryit->m_catches) {
-      if (it.first) {
-        auto cls = type_class(it.first);
-        if (cls != nullptr && cls->is_external() && !is_public(cls)) {
-          return true;
-        }
-      }
+  std::vector<DexType*> types;
+  callee->get_code()->gather_catch_types(types);
+  for (auto type : types) {
+    auto cls = type_class(type);
+    if (cls != nullptr && cls->is_external() && !is_public(cls)) {
+      return true;
     }
   }
   return false;
