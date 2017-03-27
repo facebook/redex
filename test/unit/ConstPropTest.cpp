@@ -85,9 +85,8 @@ DexClass* create_class(const std::string& name) {
   auto void_args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(get_void_type(), void_args);
   auto clinit = DexMethod::make_method(type, clinit_name, void_void);
-  clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, std::make_unique<DexCode>(), false);
+  clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
   clinit->get_code()->set_registers_size(1);
-  clinit->get_code()->balloon();
   cls->add_method(clinit);
   return cls;
 }

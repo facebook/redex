@@ -86,7 +86,6 @@ TEST(SynthTest1, synthetic) {
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(stores, dummy_cfg);
-  MethodTransform::sync_all(build_class_scope(stores));
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {
@@ -102,11 +101,11 @@ TEST(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
         const auto* code = method->get_code();
-        const auto& opcodes = code->get_instructions();
-        for (auto& inst : opcodes) {
+        for (auto& mie : InstructionIterable(code->get_entries())) {
+          auto inst = mie.insn;
           std::cout << SHOW(inst) << std::endl;
           if (is_invoke(inst->opcode())) {
-            auto invoke = static_cast<DexOpcodeMethod*>(inst);
+            auto invoke = static_cast<IRMethodInstruction*>(inst);
             const auto clazz =
                 invoke->get_method()->get_class()->get_name()->c_str();
             const auto n = invoke->get_method()->get_name()->c_str();
@@ -136,7 +135,9 @@ TEST(SynthTest1, synthetic) {
       for (const auto& method : cls->get_dmethods()) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
           TRACE(DCE, 2, "dmethod: %s\n",  SHOW(method->get_code()));
-  			  for (auto const instruction : method->get_code()->get_instructions()) {
+          for (auto& mie :
+               InstructionIterable(method->get_code()->get_entries())) {
+            auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
             ASSERT_NE(instruction->opcode(), OPCODE_CONST_4);
   			  }

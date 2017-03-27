@@ -538,6 +538,12 @@ void DexMethod::make_concrete(DexAccessFlags access,
   m_virtual = is_virtual;
 }
 
+void DexMethod::make_concrete(DexAccessFlags access,
+                              bool is_virtual) {
+  make_concrete(access, std::make_unique<DexCode>(), is_virtual);
+  get_code()->balloon();
+}
+
 /*
  * See class_data_item in Dex spec.
  */

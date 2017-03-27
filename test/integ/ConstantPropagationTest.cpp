@@ -148,7 +148,6 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   ConfigFiles dummy_cfg(conf_obj);
   dummy_cfg.using_seeds = true;
   manager.run_passes(stores, dummy_cfg);
-  MethodTransform::sync_all(build_class_scope(stores));
 
   TRACE(CONSTP, 2, "Code after:\n");
   for(const auto& cls : classes) {
@@ -160,22 +159,25 @@ TEST(ConstantPropagationTest1, constantpropagation) {
         TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto const instruction : dm->get_code()->get_instructions()) {
+          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+            auto instruction = mie.insn;
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
             ASSERT_NE(instruction->opcode(), OPCODE_NEW_INSTANCE);
           }
         } else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto const instruction : dm->get_code()->get_instructions()) {
+          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+            auto instruction = mie.insn;
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
 // Disabled due to return prop being disabled
 //          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
           }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto const instruction : dm->get_code()->get_instructions()) {
+          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
 // Disabled due to return prop being disabled
-//            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
+//          auto instruction = mie.insn;
+//          ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
 //          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
           }
         }

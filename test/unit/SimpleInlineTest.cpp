@@ -20,17 +20,13 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   auto proto = DexProto::make_proto(get_void_type(), args);
   auto callee = DexMethod::make_method(
       get_object_type(), DexString::make_string("testCallee"), proto);
-  callee->make_concrete(
-      ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-  callee->get_code()->balloon();
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   callee->get_code()->set_registers_size(2);
   callee->get_code()->set_ins_size(2);
 
   auto caller = DexMethod::make_method(
       get_object_type(), DexString::make_string("testCaller"), proto);
-  caller->make_concrete(
-      ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-  caller->get_code()->balloon();
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->get_code()->set_registers_size(1);
 
   auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, callee);

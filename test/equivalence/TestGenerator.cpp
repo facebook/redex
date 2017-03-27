@@ -26,9 +26,7 @@ void EquivalenceTest::generate(DexClass* cls) {
   auto proto = DexProto::make_proto(ret, args); // I()
   DexMethod* before = DexMethod::make_method(
       cls->get_type(), DexString::make_string("before_" + test_name()), proto);
-  before->make_concrete(
-      ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-  before->get_code()->balloon();
+  before->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   build_method(before);
   cls->add_method(before);
   auto after = DexMethod::make_method_from(

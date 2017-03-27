@@ -751,6 +751,8 @@ class DexMethod {
   void make_concrete(DexAccessFlags access,
                      std::unique_ptr<DexCode> dc,
                      bool is_virtual);
+  void make_concrete(DexAccessFlags access,
+                     bool is_virtual);
   void change(const DexMethodRef& ref, bool rename_on_collision = false) {
     g_redex->mutate_method(this, ref, rename_on_collision);
   }

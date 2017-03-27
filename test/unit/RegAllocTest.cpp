@@ -103,8 +103,7 @@ TEST_F(RegAllocTest, InsertMoveDest) {
   using namespace dex_asm;
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "InsertMoveDest", "V", {});
-  method->make_concrete(ACC_STATIC, std::make_unique<DexCode>(), false);
-  method->get_code()->balloon();
+  method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(18);
   method->get_code()->set_ins_size(0);
   auto mt = method->get_code()->get_entries();
@@ -132,8 +131,7 @@ TEST_F(RegAllocTest, InsertMoveSrc) {
   std::vector<const char*> arg_types(17, "Ljava/lang/Object;");
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "InsertMoveSrc", "V", arg_types);
-  method->make_concrete(ACC_STATIC, std::make_unique<DexCode>(), false);
-  method->get_code()->balloon();
+  method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(17);
   method->get_code()->set_ins_size(17);
   auto mt = method->get_code()->get_entries();
@@ -168,8 +166,7 @@ TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
   using namespace dex_asm;
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "ConvertToRangeForOneSrc", "V", {});
-  method->make_concrete(ACC_STATIC, std::make_unique<DexCode>(), false);
-  method->get_code()->balloon();
+  method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(17);
   method->get_code()->set_ins_size(0);
   auto mt = method->get_code()->get_entries();
@@ -201,8 +198,7 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
   using namespace dex_asm;
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "ConvertToRangeForTwoSrc", "V", {});
-  method->make_concrete(ACC_STATIC, std::make_unique<DexCode>(), false);
-  method->get_code()->balloon();
+  method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(19);
   method->get_code()->set_ins_size(0);
   auto mt = method->get_code()->get_entries();

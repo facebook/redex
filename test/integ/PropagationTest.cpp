@@ -86,7 +86,6 @@ TEST(PropagationTest1, localDCE1) {
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(stores, dummy_cfg);
-  MethodTransform::sync_all(build_class_scope(stores));
 
   TRACE(DCE, 2, "Code after:\n");
   for(const auto& cls : classes) {
@@ -95,7 +94,8 @@ TEST(PropagationTest1, localDCE1) {
       TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
         TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-        for (auto const instruction : dm->get_code()->get_instructions()) {
+        for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+          auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.
           ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_VIRTUAL);
           // Make sure there is no const-class in the optimized method.

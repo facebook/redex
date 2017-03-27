@@ -31,9 +31,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
                                proto);
-    m_callee->make_concrete(
-        ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-    m_callee->get_code()->balloon();
+    m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     {
       using namespace dex_asm;
       auto mt = m_callee->get_code()->get_entries();
@@ -96,9 +94,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
                                proto);
-    m_callee->make_concrete(
-        ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-    m_callee->get_code()->balloon();
+    m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     using namespace dex_asm;
     auto mt = m_callee->get_code()->get_entries();
     // if-* opcodes store their jump offset as a 16-bit signed int. Let's

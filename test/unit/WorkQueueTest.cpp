@@ -9,8 +9,10 @@
 
 #include <gtest/gtest.h>
 
-#include "Transform.h"
+#include "WorkQueue.h"
 
-TEST(MethodTransformSyncAllTest, empty) {
-  MethodTransform::sync_all(DexClasses());
+TEST(WorkQueueTest, EmptyQueue) {
+  std::vector<work_item> workitems;
+  WorkQueue wq;
+  wq.run_work_items(workitems.data(), (int)workitems.size());
 }

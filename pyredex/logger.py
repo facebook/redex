@@ -90,7 +90,8 @@ def update_trace_file(env):
     contents.
 
     Note that having redex-all open() the file under append mode is not a
-    desirable solution as we still want to overwrite the file between runs.
+    desirable solution as we still want to overwrite the file when redex-all is
+    run outside of the wrapper script.
     """
     trace_fp = get_trace_file()
     if trace_fp is not sys.stderr:

@@ -103,9 +103,7 @@ class PeepholeTest : public ::testing::Test {
     auto proto = DexProto::make_proto(ret, args); // I()
     DexMethod* method = DexMethod::make_method(
         dex_class->get_type(), DexString::make_string(method_name), proto);
-    method->make_concrete(
-        ACC_PUBLIC | ACC_STATIC, std::make_unique<DexCode>(), false);
-    method->get_code()->balloon();
+    method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
     // import our instructions
     auto mt = method->get_code()->get_entries();
