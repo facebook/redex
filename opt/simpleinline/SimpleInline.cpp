@@ -27,26 +27,6 @@
 
 namespace {
 
-// the max number of callers we care to track explicitly, after that we
-// group all callees/callers count in the same bucket
-const int MAX_COUNT = 10;
-
-DEBUG_ONLY bool method_breakup(
-    std::vector<std::vector<DexMethod*>>& calls_group) {
-  size_t size = calls_group.size();
-  for (size_t i = 0; i < size; ++i) {
-    size_t inst = 0;
-    size_t stat = 0;
-    auto group = calls_group[i];
-    for (auto callee : group) {
-      is_static(callee) ? stat++ : inst++;
-    }
-    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
-        i, group.size(), inst, stat);
-  }
-  return true;
-}
-
 std::unordered_set<DexType*> no_inline_annos(
   const std::vector<std::string>& annos,
   ConfigFiles& cfg
@@ -103,7 +83,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   auto scope = build_class_scope(stores);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope, no_inline, force_inline);
-  select_single_called(scope, methods);
+  select_single_called(scope, methods, resolved_refs, &inlinable);
 
   auto resolver = [&](DexMethod* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);
@@ -247,46 +227,6 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   TRACE(SINL, 2, "Don't strip inlinable methods count: %ld\n", dont_strip);
   TRACE(SINL, 2, "Don't inline annotation count: %ld\n", no_inline_anno_count);
   return methods;
-}
-
-/**
- * Add to the list the single called.
- */
-void SimpleInlinePass::select_single_called(
-    Scope& scope, std::unordered_set<DexMethod*>& methods) {
-  std::unordered_map<DexMethod*, int> calls;
-  for (const auto& method : methods) {
-    calls[method] = 0;
-  }
-  // count call sites for each method
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto mop = static_cast<IRMethodInstruction*>(insn);
-          auto callee = resolve_method(
-              mop->get_method(), opcode_to_search(insn), resolved_refs);
-          if (callee != nullptr && callee->is_concrete()
-              && methods.count(callee) > 0) {
-            calls[callee]++;
-          }
-        }
-      });
-
-  // pick methods with a single call site and add to candidates.
-  // This vector usage is only because of logging we should remove it
-  // once the optimization is "closed"
-  std::vector<std::vector<DexMethod*>> calls_group(MAX_COUNT);
-  for (auto call_it : calls) {
-    if (call_it.second >= MAX_COUNT) {
-      calls_group[MAX_COUNT - 1].push_back(call_it.first);
-      continue;
-    }
-    calls_group[call_it.second].push_back(call_it.first);
-  }
-  assert(method_breakup(calls_group));
-  for (auto callee : calls_group[1]) {
-    inlinable.insert(callee);
-  }
 }
 
 static SimpleInlinePass s_pass;

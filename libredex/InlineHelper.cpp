@@ -16,6 +16,26 @@
 
 namespace {
 
+// the max number of callers we care to track explicitly, after that we
+// group all callees/callers count in the same bucket
+const int MAX_COUNT = 10;
+
+DEBUG_ONLY bool method_breakup(
+    std::vector<std::vector<DexMethod*>>& calls_group) {
+  size_t size = calls_group.size();
+  for (size_t i = 0; i < size; ++i) {
+    size_t inst = 0;
+    size_t stat = 0;
+    auto group = calls_group[i];
+    for (auto callee : group) {
+      callee->get_access() & ACC_STATIC ? stat++ : inst++;
+    }
+    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
+        i, group.size(), inst, stat);
+  }
+  return true;
+}
+
 // add any type on which an access is allowed and safe without accessibility
 // issues
 const char* safe_types_on_refs[] = {
@@ -254,6 +274,7 @@ bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
     return false;
   }
   if (is_blacklisted(callee)) return false;
+  if (caller_is_blacklisted(caller)) return false;
   if (has_external_catch(callee)) return false;
   if (cannot_inline_opcodes(callee, caller)) return false;
   if (caller_too_large(ctx, callee)) return false;
@@ -291,6 +312,15 @@ bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
   if (ctx.estimated_insn_size + insns_size >
       MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
+    return true;
+  }
+  return false;
+}
+
+bool MultiMethodInliner::caller_is_blacklisted(DexMethod* caller) {
+  auto cls = caller->get_class();
+  if (m_config.caller_black_list.count(cls)) {
+    info.blacklisted++;
     return true;
   }
   return false;
@@ -656,4 +686,44 @@ void MultiMethodInliner::invoke_direct_to_static() {
           }
         }
       });
+}
+
+void select_single_called(
+    const Scope& scope,
+    const std::unordered_set<DexMethod*>& methods,
+    MethodRefCache& resolved_refs,
+    std::unordered_set<DexMethod*>* inlinable) {
+  std::unordered_map<DexMethod*, int> calls;
+  for (const auto& method : methods) {
+    calls[method] = 0;
+  }
+  // count call sites for each method
+  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (is_invoke(insn->opcode())) {
+          auto mop = static_cast<IRMethodInstruction*>(insn);
+          auto callee = resolve_method(
+              mop->get_method(), opcode_to_search(insn), resolved_refs);
+          if (callee != nullptr && callee->is_concrete()
+              && methods.count(callee) > 0) {
+            calls[callee]++;
+          }
+        }
+      });
+
+  // pick methods with a single call site and add to candidates.
+  // This vector usage is only because of logging we should remove it
+  // once the optimization is "closed"
+  std::vector<std::vector<DexMethod*>> calls_group(MAX_COUNT);
+  for (auto call_it : calls) {
+    if (call_it.second >= MAX_COUNT) {
+      calls_group[MAX_COUNT - 1].push_back(call_it.first);
+      continue;
+    }
+    calls_group[call_it.second].push_back(call_it.first);
+  }
+  assert(method_breakup(calls_group));
+  for (auto callee : calls_group[1]) {
+    inlinable->insert(callee);
+  }
 }

@@ -35,6 +35,7 @@ class MultiMethodInliner {
     bool super_same_class_inline;
     bool use_liveness;
     std::unordered_set<DexType*> black_list;
+    std::unordered_set<DexType*> caller_black_list;
   };
 
   MultiMethodInliner(
@@ -86,6 +87,8 @@ class MultiMethodInliner {
    * not own.
    */
   bool is_blacklisted(DexMethod* callee);
+
+  bool caller_is_blacklisted(DexMethod* caller);
 
   /**
    * Return true if the callee contains external catch exception types
@@ -228,3 +231,12 @@ class MultiMethodInliner {
     return info;
   }
 };
+
+/**
+ * Add the single-callsite methods to the inlinable set.
+ */
+void select_single_called(
+    const Scope& scope,
+    const std::unordered_set<DexMethod*>& methods,
+    MethodRefCache& resolved_refs,
+    std::unordered_set<DexMethod*>* inlinable);

@@ -68,6 +68,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/InlineHelper.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Liveness.cpp \
@@ -140,7 +141,6 @@ redex_all_SOURCES = \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \
-	opt/simpleinline/InlineHelper.cpp \
 	opt/simpleinline/SimpleInline.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \

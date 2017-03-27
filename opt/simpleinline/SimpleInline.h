@@ -49,8 +49,6 @@ private:
     Scope& scope,
     const std::unordered_set<DexType*>& no_inline,
     const std::unordered_set<DexType*>& force_inline);
-  void select_single_called(
-      Scope& scope, std::unordered_set<DexMethod*>& methods);
 
 private:
   // count of instructions that define a method as inlinable always
