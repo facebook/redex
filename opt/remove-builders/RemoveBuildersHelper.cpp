@@ -89,7 +89,11 @@ bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
   auto oldregs = code->get_registers_size();
   auto newregs = oldregs + extra_regs;
 
-  return MethodTransform::enlarge_regs(method, newregs);
+  if (newregs > 16) {
+    return false;
+  }
+  MethodTransform::enlarge_regs(method, newregs);
+  return true;
 }
 
 DexOpcode get_move_opcode(const IRInstruction* insn) {

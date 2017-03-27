@@ -702,6 +702,17 @@ void MethodTransform::insert_after(IRInstruction* position,
   always_assert_log(false, "No match found");
 }
 
+FatMethod::iterator MethodTransform::insert_before(
+    const FatMethod::iterator& position, MethodItemEntry& mie) {
+  return m_fmethod->insert(position, mie);
+}
+
+FatMethod::iterator MethodTransform::insert_after(
+    const FatMethod::iterator& position, MethodItemEntry& mie) {
+  always_assert(position != m_fmethod->end());
+  return m_fmethod->insert(std::next(position), mie);
+}
+
 /*
  * Param `insn` should be part of a switch...case statement. Find the case
  * block it is contained within and remove it. Then decrement the index of
@@ -1544,23 +1555,15 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   return true;
 }
 
-bool MethodTransform::enlarge_regs(DexMethod* method, uint16_t newregs) {
-  if (newregs > 16) {
-    return false;
-  }
-
-  always_assert(method != nullptr);
+void MethodTransform::enlarge_regs(DexMethod* method, uint16_t newregs) {
   auto code = method->get_code();
-  if (!code) {
-    return false;
-  }
+  always_assert(code != nullptr);
   always_assert(code->get_registers_size() <= newregs);
 
   MethodTransform* tcaller = code->get_entries();
   auto fcaller = tcaller->m_fmethod;
 
   enlarge_registers(&*code, fcaller, newregs);
-  return true;
 }
 
 namespace {
@@ -1794,13 +1797,19 @@ static void mt_sync(void* arg) {
 }
 
 void MethodTransform::sync_all(const Scope& scope) {
+  constexpr bool serial = false; // for debugging
   std::vector<work_item> workitems;
   walk_code(scope,
             [](DexMethod*) { return true; },
-            [&](DexMethod*, DexCode& code) {
+            [&](DexMethod* m, DexCode& code) {
               auto mt = code.get_entries();
               if (mt) {
-                workitems.push_back(work_item{mt_sync, &code});
+                if (serial) {
+                  TRACE(MTRANS, 2, "Syncing %s\n", SHOW(m));
+                  code.sync();
+                } else {
+                  workitems.push_back(work_item{mt_sync, &code});
+                }
               }
             });
   WorkQueue wq;
@@ -1862,6 +1871,7 @@ bool MethodTransform::try_sync(DexCode* code) {
   auto& opout = code->reset_instructions();
   std::unordered_map<IRInstruction*, DexInstruction*> ir_to_dex_insn;
   for (auto& mie : InstructionIterable(this)) {
+    TRACE(MTRANS, 6, "Emitting insn %s\n", SHOW(mie.insn));
     auto dex_insn = mie.insn->to_dex_instruction();
     opout.push_back(dex_insn);
     ir_to_dex_insn.emplace(mie.insn, dex_insn);

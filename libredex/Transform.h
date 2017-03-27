@@ -263,10 +263,8 @@ class MethodTransform {
    * Example:
    * - before: 4 registers, 2 ins -> [v0, v1, p0, p1]
    * - after: 7 registers -> [v0, v1, v2, v3, v4, p0, p1] where v2 -> v4 are new.
-   *
-   * Returns if the operation succeeded or not.
    */
-  static bool enlarge_regs(DexMethod* method, uint16_t newregs);
+  static void enlarge_regs(DexMethod* method, uint16_t newregs);
 
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
@@ -308,6 +306,28 @@ class MethodTransform {
 
   /* position = nullptr means at the head */
   void insert_after(IRInstruction* position, const std::vector<IRInstruction*>& opcodes);
+
+  FatMethod::iterator insert_before(const FatMethod::iterator& position,
+                                    MethodItemEntry&);
+
+  FatMethod::iterator insert_after(const FatMethod::iterator& position,
+                                   MethodItemEntry&);
+
+  template <class... Args>
+  FatMethod::iterator insert_before(const FatMethod::iterator& position,
+                                    Args&&... args) {
+    return m_fmethod->insert(
+        position, *(new MethodItemEntry(std::forward<Args>(args)...)));
+  }
+
+  template <class... Args>
+  FatMethod::iterator insert_after(const FatMethod::iterator& position,
+                                   Args&&... args) {
+    always_assert(position != m_fmethod->end());
+    return m_fmethod->insert(
+        std::next(position),
+        *(new MethodItemEntry(std::forward<Args>(args)...)));
+  }
 
   /* DEPRECATED! Use the version below that passes in the iterator instead,
    * which is O(1) instead of O(n). */
@@ -402,11 +422,17 @@ class InstructionIterator {
   MethodItemEntry* operator->() {
     return &*m_it;
   }
-  bool operator==(const InstructionIterator& ii) {
+  bool operator==(const InstructionIterator& ii) const {
     return m_it == ii.m_it;
   }
-  bool operator!=(const InstructionIterator& ii) {
+  bool operator!=(const InstructionIterator& ii) const {
     return m_it != ii.m_it;
+  }
+  FatMethod::iterator unwrap() const {
+    return m_it;
+  }
+  void reset(FatMethod::iterator it) {
+    m_it = it;
   }
 
   using difference_type = long;

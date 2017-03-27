@@ -90,6 +90,11 @@ DexType* get_enum_type();
 bool is_primitive(DexType* type);
 
 /**
+ * Return true if the type is either a long or a double
+ */
+bool is_wide_type(DexType* type);
+
+/**
  * Return true if method signatures (name and proto) match.
  */
 inline bool signatures_match(const DexMethod* a, const DexMethod* b) {

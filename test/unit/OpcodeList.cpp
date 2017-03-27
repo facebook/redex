@@ -7,10 +7,11 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#pragma once
+#include "OpcodeList.h"
 
-#include <vector>
+std::vector<DexOpcode> all_opcodes {
+#define OP(op, ...) OPCODE_ ## op,
+  OPS
+#undef OP
+};
 
-#include "DexInstruction.h"
-
-extern std::vector<DexOpcode> all_opcodes;

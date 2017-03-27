@@ -134,6 +134,8 @@ redex_all_SOURCES = \
 	opt/obfuscate/VirtualRenamer.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
+	opt/regalloc/RegAlloc.cpp \
+	opt/regalloc/RegisterKind.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \

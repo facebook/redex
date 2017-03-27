@@ -88,6 +88,18 @@ bool is_primitive(DexType* type) {
   not_reached();
 }
 
+bool is_wide_type(DexType* type) {
+  auto const name = type->get_name()->c_str();
+  switch (name[0]) {
+  case 'J':
+  case 'D':
+    return true;
+  default:
+    return false;
+  }
+  not_reached();
+}
+
 DataType type_to_datatype(const DexType* t) {
   auto const name = t->get_name()->c_str();
   switch (name[0]) {

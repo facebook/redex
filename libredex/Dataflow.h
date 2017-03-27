@@ -14,13 +14,17 @@ template <typename T>
 std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     const std::vector<Block*>& blocks,
     const T& bottom,
-    const std::function<void(const IRInstruction*, T*)>& trans) {
+    const std::function<void(const IRInstruction*, T*)>& trans,
+    const T& entry_value) {
   std::vector<T> block_outs(blocks.size(), bottom);
   std::deque<Block*> work_list(blocks.begin(), blocks.end());
   while (!work_list.empty()) {
     auto block = work_list.front();
     work_list.pop_front();
     auto insn_in = bottom;
+    if (block->id() == 0) {
+      insn_in = entry_value;
+    }
     for (Block* pred : block->preds()) {
       insn_in.meet(block_outs[pred->id()]);
     }
@@ -46,6 +50,9 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
       std::make_unique<std::unordered_map<IRInstruction*, T>>();
   for (const auto& block : blocks) {
     auto insn_in = bottom;
+    if (block->id() == 0) {
+      insn_in = entry_value;
+    }
     for (Block* pred : block->preds()) {
       insn_in.meet(block_outs[pred->id()]);
     }
@@ -60,6 +67,14 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
   }
 
   return insn_in_map;
+}
+
+template <typename T>
+std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
+    const std::vector<Block*>& blocks,
+    const T& bottom,
+    const std::function<void(const IRInstruction*, T*)>& trans) {
+  return forwards_dataflow(blocks, bottom, trans, bottom);
 }
 
 template <typename T>
