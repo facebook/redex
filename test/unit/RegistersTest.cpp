@@ -20,7 +20,7 @@ static void test_opcode(DexOpcode opcode) {
   const size_t src_count = insn.srcs_size();
   const bool has_dest = (insn.dests_size() > 0);
   const int dest_width = has_dest ? dest_bit_width(insn.opcode()) : 0;
-  const bool dest_is_src0 = insn.dest_is_src();
+  const bool dest_is_src0 = opcode::dest_is_src(insn.opcode());
 
   // Populate source test values
   // We want to ensure that setting registers don't stomp each other

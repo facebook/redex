@@ -29,7 +29,7 @@ match_t<IRInstruction, std::tuple<int> > has_n_args(int n) {
   return {
     // N.B. "int n" must be const ref in order to appease N-ary matcher template
     [](const IRInstruction* insn, const int& n) {
-      if (insn->has_range()) {
+      if (opcode::has_range(insn->opcode())) {
         // N.B. seems like invoke-*/range should never occur with 0 args,
         // so let's make sure this assumption holds...
         assert(insn->range_size() > 0);

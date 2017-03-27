@@ -14,22 +14,6 @@
 #include "DexOutput.h"
 #include "Warning.h"
 
-DexOpcodeFormat opcode_format(DexOpcode opcode) {
-  switch (opcode) {
-#define OP(op, code, fmt) \
-  case code:              \
-    return FMT_##fmt;
-    OPS
-#undef OP
-  case FOPCODE_PACKED_SWITCH : return FMT_fopcode;
-  case FOPCODE_SPARSE_SWITCH:
-    return FMT_fopcode;
-  case FOPCODE_FILLED_ARRAY:
-    return FMT_fopcode;
-  }
-  always_assert_log(false, "Unexpected opcode 0x%x", opcode);
-}
-
 unsigned DexInstruction::count_from_opcode() const {
   static int args[] = {
       0, /* FMT_f00x   */
@@ -76,7 +60,7 @@ unsigned DexInstruction::count_from_opcode() const {
       2, /* FMT_f57c */
       0, /* FMT_fopcode   */
   };
-  return args[opcode_format(opcode())];
+  return args[opcode::format(opcode())];
 };
 
 DexOpcode DexInstruction::opcode() const {
@@ -98,60 +82,11 @@ DexInstruction* DexInstruction::set_opcode(DexOpcode op) {
 }
 
 unsigned DexInstruction::dests_size() const {
-  auto format = opcode_format(opcode());
-  switch (format) {
-  case FMT_f00x:
-  case FMT_f10x:
-  case FMT_f11x_s:
-  case FMT_f10t:
-  case FMT_f20t:
-  case FMT_f21t:
-  case FMT_f21c_s:
-  case FMT_f23x_s:
-  case FMT_f22t:
-  case FMT_f22c_s:
-  case FMT_f30t:
-  case FMT_f31t:
-  case FMT_f35c:
-  case FMT_f3rc:
-  case FMT_f41c_s:
-  case FMT_f52c_s:
-  case FMT_f5rc:
-  case FMT_f57c:
-  case FMT_fopcode:
-    return 0;
-  case FMT_f12x:
-  case FMT_f12x_2:
-  case FMT_f11n:
-  case FMT_f11x_d:
-  case FMT_f22x:
-  case FMT_f21s:
-  case FMT_f21h:
-  case FMT_f21c_d:
-  case FMT_f23x_d:
-  case FMT_f22b:
-  case FMT_f22s:
-  case FMT_f22c_d:
-  case FMT_f32x:
-  case FMT_f31i:
-  case FMT_f31c:
-  case FMT_f51l:
-  case FMT_f41c_d:
-  case FMT_f52c_d:
-    return 1;
-  case FMT_f20bc:
-  case FMT_f22cs:
-  case FMT_f35ms:
-  case FMT_f35mi:
-  case FMT_f3rms:
-  case FMT_f3rmi:
-    always_assert_log(false, "Unimplemented opcode `%s'", SHOW(this));
-  }
-  not_reached();
+  return opcode::dests_size(opcode());
 }
 
 unsigned DexInstruction::srcs_size() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f00x:
   case FMT_f10x:
@@ -206,13 +141,8 @@ unsigned DexInstruction::srcs_size() const {
   not_reached();
 }
 
-bool DexInstruction::dest_is_src() const {
-  auto format = opcode_format(opcode());
-  return format == FMT_f12x_2;
-}
-
 int src_bit_width(DexOpcode op, int i) {
-  switch (opcode_format(op)) {
+  switch (opcode::format(op)) {
   case FMT_f00x:    assert(false);
   case FMT_f10x:    assert(false);
   case FMT_f12x:    assert(i == 0); return 4;
@@ -262,7 +192,7 @@ int src_bit_width(DexOpcode op, int i) {
 }
 
 int dest_bit_width(DexOpcode op) {
-  switch (opcode_format(op)) {
+  switch (opcode::format(op)) {
   case FMT_f00x:    assert(false);
   case FMT_f10x:    assert(false);
   case FMT_f12x:    return 4;
@@ -312,7 +242,7 @@ int dest_bit_width(DexOpcode op) {
 }
 
 uint16_t DexInstruction::dest() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f12x:
   case FMT_f12x_2:
@@ -345,7 +275,7 @@ uint16_t DexInstruction::dest() const {
 }
 
 DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f12x:
   case FMT_f12x_2:
@@ -384,7 +314,7 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
 }
 
 uint16_t DexInstruction::src(int i) const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f11x_s:
   case FMT_f21t:
@@ -477,7 +407,7 @@ uint16_t DexInstruction::src(int i) const {
 }
 
 DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f11x_s:
   case FMT_f21t:
@@ -618,23 +548,6 @@ DexInstruction* DexInstruction::set_srcs(const std::vector<uint16_t>& vregs) {
   return this;
 }
 
-bool DexInstruction::has_literal() const {
-  auto format = opcode_format(opcode());
-  switch (format) {
-  case FMT_f11n:
-  case FMT_f21s:
-  case FMT_f21h:
-  case FMT_f22b:
-  case FMT_f22s:
-  case FMT_f31i:
-  case FMT_f51l:
-    return true;
-  default:
-    return false;
-  }
-  not_reached();
-}
-
 template <int Width>
 int64_t signext(uint64_t uv) {
   int shift = 64 - Width;
@@ -642,8 +555,8 @@ int64_t signext(uint64_t uv) {
 }
 
 int64_t DexInstruction::literal() const {
-  assert(has_literal());
-  auto format = opcode_format(opcode());
+  assert(opcode::has_literal(opcode()));
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f11n:
     return signext<4>(m_opcode >> 12);
@@ -672,8 +585,8 @@ int64_t DexInstruction::literal() const {
 }
 
 DexInstruction* DexInstruction::set_literal(int64_t literal) {
-  assert(has_literal());
-  auto format = opcode_format(opcode());
+  assert(opcode::has_literal(opcode()));
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f11n:
     m_opcode = (m_opcode & 0xfff) | ((literal & 0xf) << 12);
@@ -706,24 +619,8 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
   not_reached();
 }
 
-bool DexInstruction::has_offset() const {
-  auto format = opcode_format(opcode());
-  switch (format) {
-  case FMT_f10t:
-  case FMT_f20t:
-  case FMT_f21t:
-  case FMT_f22t:
-  case FMT_f30t:
-  case FMT_f31t:
-    return true;
-  default:
-    return false;
-  }
-  not_reached();
-}
-
 int32_t DexInstruction::offset() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f10t:
     return (int32_t) signext<8>(m_opcode >> 8);
@@ -743,7 +640,7 @@ int32_t DexInstruction::offset() const {
 }
 
 DexInstruction* DexInstruction::set_offset(int32_t offset) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   switch (format) {
   case FMT_f10t:
     always_assert_log((int32_t)(int8_t)(offset & 0xff) == offset,
@@ -772,15 +669,8 @@ DexInstruction* DexInstruction::set_offset(int32_t offset) {
   not_reached();
 }
 
-bool DexInstruction::has_range() const {
-  auto format = opcode_format(opcode());
-  if (format == FMT_f3rc || format == FMT_f5rc)
-    return true;
-  return false;
-}
-
 uint16_t DexInstruction::range_base() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f3rc || format == FMT_f5rc);
   if (format == FMT_f5rc)
     return m_arg[1];
@@ -788,7 +678,7 @@ uint16_t DexInstruction::range_base() const {
 }
 
 uint16_t DexInstruction::range_size() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f3rc || format == FMT_f5rc);
   if (format == FMT_f5rc)
     return m_arg[0];
@@ -796,7 +686,7 @@ uint16_t DexInstruction::range_size() const {
 }
 
 DexInstruction* DexInstruction::set_range_base(uint16_t base) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f3rc || format == FMT_f5rc);
   if (format == FMT_f5rc) {
     m_arg[1] = base;
@@ -807,7 +697,7 @@ DexInstruction* DexInstruction::set_range_base(uint16_t base) {
 }
 
 DexInstruction* DexInstruction::set_range_size(uint16_t size) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f3rc || format == FMT_f5rc);
   if (format == FMT_f5rc) {
     m_arg[0] = size;
@@ -819,14 +709,14 @@ DexInstruction* DexInstruction::set_range_size(uint16_t size) {
 }
 
 bool DexInstruction::has_arg_word_count() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   if(format == FMT_f35c || format == FMT_f57c)
     return true;
   return false;
 }
 
 uint16_t DexInstruction::arg_word_count() const {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f35c || format == FMT_f57c);
   if (format == FMT_f57c) {
     return (m_arg[0]) & 0xf;
@@ -835,7 +725,7 @@ uint16_t DexInstruction::arg_word_count() const {
 }
 
 DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
-  auto format = opcode_format(opcode());
+  auto format = opcode::format(opcode());
   assert(format == FMT_f35c || format == FMT_f57c);
   assert((count & 0xf) == count);
   if (format == FMT_f57c) {
@@ -854,13 +744,14 @@ void DexInstruction::verify_encoding() const {
   for (unsigned i = 0; i < srcs_size(); i++) {
     test->set_src(i, src(i));
   }
-  if (has_range()) {
+  auto op = opcode();
+  if (opcode::has_range(op)) {
     test->set_range_base(range_base());
     test->set_range_size(range_size());
   }
   if (has_arg_word_count()) test->set_arg_word_count(arg_word_count());
-  if (has_literal()) test->set_literal(literal());
-  if (has_offset()) test->set_offset(offset());
+  if (opcode::has_literal(op)) test->set_literal(literal());
+  if (opcode::has_offset(op)) test->set_offset(offset());
 
   assert_log(m_opcode == test->m_opcode, "%x %x\n", m_opcode, test->m_opcode);
   for (unsigned i = 0; i < m_count; i++) {

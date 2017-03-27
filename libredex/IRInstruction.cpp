@@ -50,26 +50,30 @@ IRInstruction* IRInstruction::make(const DexInstruction* insn) {
   return ir_insn;
 }
 
+IRInstruction::IRInstruction(DexOpcode op) : Gatherable(), m_opcode(op) {
+  always_assert(!is_fopcode(op));
+  m_srcs.resize(opcode::min_srcs_size(op));
+}
+
 IRInstruction::IRInstruction(const DexInstruction* insn) : Gatherable() {
   m_opcode = insn->opcode();
   always_assert(!is_fopcode(m_opcode));
-  m_dests_size = insn->dests_size();
-  if (m_dests_size) {
+  if (opcode::dests_size(m_opcode)) {
     m_dest = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     m_srcs.emplace_back(insn->src(i));
   }
-  if (insn->dest_is_src()) {
+  if (opcode::dest_is_src(m_opcode)) {
     m_opcode = convert_2to3addr(m_opcode);
   }
-  if (insn->has_literal()) {
+  if (opcode::has_literal(m_opcode)) {
     m_literal = insn->literal();
   }
-  if (insn->has_offset()) {
+  if (opcode::has_offset(m_opcode)) {
     m_offset = insn->offset();
   }
-  if (insn->has_range()) {
+  if (opcode::has_range(m_opcode)) {
     m_range =
         std::pair<uint16_t, uint16_t>(insn->range_base(), insn->range_size());
   }
@@ -79,7 +83,6 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_ref_type == that.m_ref_type &&
     m_opcode == that.m_opcode &&
     m_srcs == that.m_srcs &&
-    m_dests_size == that.m_dests_size &&
     m_dest == that.m_dest &&
     m_literal == that.m_literal &&
     m_offset == that.m_offset &&
@@ -133,26 +136,26 @@ uint16_t IRInstruction::size() const {
       0, /* FMT_fopcode   */
   };
   auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
-  return args[opcode_format(op)];
-};
+  return args[opcode::format(op)];
+}
 
 void IRInstruction::set_dex_instruction_args(DexInstruction* insn) const {
-  if (m_dests_size) {
+  if (insn->dests_size()) {
     insn->set_dest(dest());
   }
   for (size_t i = 0; i < srcs_size(); ++i) {
     insn->set_src(i, src(i));
   }
-  if (insn->has_literal()) {
+  if (opcode::has_literal(insn->opcode())) {
     insn->set_literal(literal());
   }
-  if (insn->has_offset()) {
+  if (opcode::has_offset(insn->opcode())) {
     insn->set_offset(offset());
   }
   if (insn->has_arg_word_count()) {
     insn->set_arg_word_count(srcs_size());
   }
-  if (has_range()) {
+  if (opcode::has_range(insn->opcode())) {
     insn->set_range_base(range_base());
     insn->set_range_size(range_size());
   }

@@ -45,7 +45,7 @@ void Liveness::trans(const IRInstruction* inst, Liveness* liveness) {
       liveness->m_reg_set.set(inst->src((int)i) + 1);
     }
   }
-  if (inst->has_range()) {
+  if (opcode::has_range(inst->opcode())) {
     for (size_t i = 0; i < inst->range_size(); i++) {
       liveness->m_reg_set.set(inst->range_base() + i);
     }

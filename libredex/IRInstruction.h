@@ -15,9 +15,7 @@
 
 class IRInstruction : public Gatherable {
  public:
-  // TODO: construct directly instead of going via DexInstruction
-  explicit IRInstruction(DexOpcode op)
-      : IRInstruction(new DexInstruction(op)) {}
+  explicit IRInstruction(DexOpcode op);
 
   static IRInstruction* make(const DexInstruction*);
   virtual IRInstruction* clone() const { return new IRInstruction(*this); }
@@ -36,11 +34,8 @@ class IRInstruction : public Gatherable {
   /*
    * Number of registers used.
    */
-  unsigned dests_size() const { return m_dests_size; }
+  unsigned dests_size() const { return opcode::dests_size(m_opcode); }
   unsigned srcs_size() const { return m_srcs.size(); }
-  bool has_range() const { return (bool)m_range; }
-  bool has_literal() const;
-  bool has_offset() const;
 
   /*
    * Information about operands.
@@ -55,11 +50,20 @@ class IRInstruction : public Gatherable {
    * Accessors for logical parts of the instruction.
    */
   DexOpcode opcode() const { return m_opcode; }
-  uint16_t dest() const { return m_dest; }
+  uint16_t dest() const {
+    always_assert(opcode::dests_size(m_opcode));
+    return m_dest;
+  }
   uint16_t src(int i) const { return m_srcs.at(i); }
   uint16_t arg_word_count() const { return m_srcs.size(); }
-  uint16_t range_base() const { return m_range->first; }
-  uint16_t range_size() const { return m_range->second; }
+  uint16_t range_base() const {
+    always_assert(opcode::has_range(m_opcode));
+    return m_range.first;
+  }
+  uint16_t range_size() const {
+    always_assert(opcode::has_range(m_opcode));
+    return m_range.second;
+  }
   int64_t literal() const { return m_literal; }
   int32_t offset() const { return m_offset; }
 
@@ -79,11 +83,13 @@ class IRInstruction : public Gatherable {
     return this;
   }
   IRInstruction* set_range_base(uint16_t vreg) {
-    m_range->first = vreg;
+    always_assert(opcode::has_range(m_opcode));
+    m_range.first = vreg;
     return this;
   }
   IRInstruction* set_range_size(uint16_t size) {
-    m_range->second = size;
+    always_assert(opcode::has_range(m_opcode));
+    m_range.second = size;
     return this;
   }
   IRInstruction* set_arg_word_count(uint16_t count) {
@@ -120,13 +126,11 @@ class IRInstruction : public Gatherable {
  private:
   DexOpcode m_opcode;
   std::vector<uint16_t> m_srcs;
-
-  uint8_t m_dests_size; // 0 or 1
   uint16_t m_dest {0};
 
   uint64_t m_literal {0};
   int32_t m_offset {0};
-  boost::optional<std::pair<uint16_t, uint16_t>> m_range;
+  std::pair<uint16_t, uint16_t> m_range {0, 0};
 };
 
 class IRStringInstruction : public IRInstruction {
@@ -134,9 +138,14 @@ class IRStringInstruction : public IRInstruction {
   DexString* m_string;
 
  public:
-  // TODO: construct directly
   IRStringInstruction(DexOpcode op, DexString* str)
-      : IRStringInstruction(new DexOpcodeString(op, str)) {}
+      : IRInstruction(op), m_string(str) {
+    m_ref_type = REF_STRING;
+  }
+  explicit IRStringInstruction(const DexOpcodeString* insn)
+      : IRInstruction(insn), m_string(insn->get_string()) {
+    m_ref_type = REF_STRING;
+  }
 
   virtual void gather_strings(std::vector<DexString*>& lstring) const override {
     lstring.push_back(m_string);
@@ -145,11 +154,6 @@ class IRStringInstruction : public IRInstruction {
     return new IRStringInstruction(*this);
   }
   virtual DexInstruction* to_dex_instruction() const override;
-
-  explicit IRStringInstruction(const DexOpcodeString* insn)
-      : IRInstruction(insn), m_string(insn->get_string()) {
-    m_ref_type = REF_STRING;
-  }
 
   DexString* get_string() const { return m_string; }
 
@@ -163,9 +167,15 @@ class IRTypeInstruction : public IRInstruction {
   DexType* m_type;
 
  public:
-  // TODO: construct directly
   IRTypeInstruction(DexOpcode op, DexType* ty)
-      : IRTypeInstruction(new DexOpcodeType(op, ty)) {}
+      : IRInstruction(op), m_type(ty) {
+    m_ref_type = REF_TYPE;
+  }
+  explicit IRTypeInstruction(const DexOpcodeType* insn)
+      : IRInstruction(insn), m_type(insn->get_type()) {
+    m_ref_type = REF_TYPE;
+  }
+
   virtual void gather_types(std::vector<DexType*>& ltype) const override {
     ltype.push_back(m_type);
   }
@@ -173,11 +183,6 @@ class IRTypeInstruction : public IRInstruction {
     return new IRTypeInstruction(*this);
   }
   virtual DexInstruction* to_dex_instruction() const override;
-
-  explicit IRTypeInstruction(const DexOpcodeType* insn)
-      : IRInstruction(insn), m_type(insn->get_type()) {
-    m_ref_type = REF_TYPE;
-  }
 
   DexType* get_type() const { return m_type; }
 
@@ -189,9 +194,15 @@ class IRFieldInstruction : public IRInstruction {
   DexField* m_field;
 
  public:
-  // TODO: construct directly
   IRFieldInstruction(DexOpcode op, DexField* field)
-      : IRFieldInstruction(new DexOpcodeField(op, field)) {}
+      : IRInstruction(op), m_field(field) {
+    m_ref_type = REF_FIELD;
+  }
+  explicit IRFieldInstruction(const DexOpcodeField* insn)
+      : IRInstruction(insn), m_field(insn->field()) {
+    m_ref_type = REF_FIELD;
+  }
+
   virtual void gather_fields(std::vector<DexField*>& lfield) const override {
     lfield.push_back(m_field);
   }
@@ -199,11 +210,6 @@ class IRFieldInstruction : public IRInstruction {
     return new IRFieldInstruction(*this);
   }
   virtual DexInstruction* to_dex_instruction() const override;
-
-  explicit IRFieldInstruction(const DexOpcodeField* insn)
-      : IRInstruction(insn), m_field(insn->field()) {
-    m_ref_type = REF_FIELD;
-  }
 
   DexField* field() const { return m_field; }
   void rewrite_field(DexField* field) { m_field = field; }
@@ -214,9 +220,15 @@ class IRMethodInstruction : public IRInstruction {
   DexMethod* m_method;
 
  public:
-  // TODO: construct directly
   IRMethodInstruction(DexOpcode op, DexMethod* method)
-      : IRMethodInstruction(new DexOpcodeMethod(op, method)) {}
+      : IRInstruction(op), m_method(method) {
+    m_ref_type = REF_METHOD;
+  }
+  explicit IRMethodInstruction(const DexOpcodeMethod* insn)
+      : IRInstruction(insn), m_method(insn->get_method()) {
+    m_ref_type = REF_METHOD;
+  }
+
   virtual void gather_methods(std::vector<DexMethod*>& lmethod) const override {
     lmethod.push_back(m_method);
   }
@@ -224,11 +236,6 @@ class IRMethodInstruction : public IRInstruction {
     return new IRMethodInstruction(*this);
   }
   virtual DexInstruction* to_dex_instruction() const override;
-
-  explicit IRMethodInstruction(const DexOpcodeMethod* insn)
-      : IRInstruction(insn), m_method(insn->get_method()) {
-    m_ref_type = REF_METHOD;
-  }
 
   DexMethod* get_method() const { return m_method; }
 

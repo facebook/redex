@@ -363,7 +363,7 @@ class LocalDce {
     }
     // `invoke-range` instructions need special handling since their sources
     // are encoded as a range.
-    if (inst->has_range()) {
+    if (opcode::has_range(inst->opcode())) {
       for (size_t i = 0; i < inst->range_size(); i++) {
         bliveness.set(inst->range_base() + i);
       }

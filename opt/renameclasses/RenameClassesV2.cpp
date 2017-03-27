@@ -214,8 +214,9 @@ void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
     IRStringInstruction* const_string = (IRStringInstruction*)insns[0];
     IRMethodInstruction* invoke_static = (IRMethodInstruction*)insns[1];
     // Make sure that the registers agree
-    auto src = invoke_static->has_range() ? invoke_static->range_base()
-                                          : invoke_static->src(0);
+    auto src = opcode::has_range(invoke_static->opcode())
+                   ? invoke_static->range_base()
+                   : invoke_static->src(0);
     if (const_string->dest() == src) {
       auto classname = JavaNameUtil::external_to_internal(
           const_string->get_string()->c_str());

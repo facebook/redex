@@ -937,7 +937,7 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
 bool simple_reg_remap(MethodTransform* mt) {
   for (auto& mie : InstructionIterable(mt)) {
     auto insn = mie.insn;
-    if (insn->is_wide() || insn->has_range()) {
+    if (insn->is_wide() || opcode::has_range(insn->opcode())) {
       return false;
     }
   }
@@ -986,7 +986,7 @@ void remap_registers(IRInstruction* insn, const RegMap& reg_map) {
   remap_dest(insn, reg_map);
   remap_srcs(insn, reg_map);
 
-  if (insn->has_range()) {
+  if (opcode::has_range(insn->opcode())) {
     auto it = reg_map.find(insn->range_base());
     if (it != reg_map.end()) {
       insn->set_range_base(it->second);

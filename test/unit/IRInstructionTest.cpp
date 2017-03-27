@@ -39,13 +39,13 @@ TEST(IRInstruction, RoundTrip) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, i + 1);
     }
-    if (insn->has_offset()) {
+    if (opcode::has_offset(op)) {
       insn->set_offset(0xf);
     }
-    if (insn->has_literal()) {
+    if (opcode::has_literal(op)) {
       insn->set_literal(0xface);
     }
-    if (insn->has_range()) {
+    if (opcode::has_range(op)) {
       insn->set_range_base(0xf);
       insn->set_range_size(0xf);
     }

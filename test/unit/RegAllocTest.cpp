@@ -91,8 +91,7 @@ TEST_F(RegAllocTest, MoveGen) {
 TEST_F(RegAllocTest, RegKindWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
-    auto insn = std::make_unique<DexInstruction>(op);
-    if (insn->dests_size() && !insn->dest_is_src()) {
+    if (opcode::dests_size(op) && !opcode::dest_is_src(op)) {
       EXPECT_EQ((new IRInstruction(op))->dest_is_wide(),
                 dest_kind(op) == RegisterKind::WIDE)
           << "mismatch for " << show(op);

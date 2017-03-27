@@ -200,7 +200,7 @@ void HighRegMoveInserter::increment_all_regs(DexCode* code,
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + size);
     }
-    if (insn->has_range()) {
+    if (opcode::has_range(insn->opcode())) {
       insn->set_range_base(insn->range_base() + size);
     }
   }
