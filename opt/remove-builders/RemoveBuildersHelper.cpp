@@ -266,8 +266,10 @@ bool inline_build(DexMethod* method, DexClass* builder) {
   for (auto inlinable : inlinables) {
     // TODO(emmasevastian): We will need to gate this with a check, mostly as
     //                      we loosen the build method restraints.
-    if (!IRCode::inline_16regs(
-            inline_context, inlinable.first, inlinable.second)) {
+    if (!IRCode::inline_method(inline_context,
+                               inlinable.first,
+                               inlinable.second,
+                               /* no_exceed_16regs */ true)) {
       return false;
     }
   }

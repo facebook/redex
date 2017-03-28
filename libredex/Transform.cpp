@@ -1438,13 +1438,14 @@ void IRCode::inline_tail_call(DexMethod* caller,
   caller->get_code()->set_outs_size(callee->get_code()->get_outs_size());
 }
 
-bool IRCode::inline_16regs(InlineContext& context,
+bool IRCode::inline_method(InlineContext& context,
                            DexMethod* callee,
-                           IRMethodInstruction* invoke) {
+                           IRMethodInstruction* invoke,
+                           bool no_exceed_16regs) {
   auto caller_code = context.caller_code;
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
   uint16_t newregs = caller_code->get_registers_size();
-  if (newregs > 16) {
+  if (no_exceed_16regs && newregs > 16) {
     return false;
   }
 
@@ -1484,7 +1485,7 @@ bool IRCode::inline_16regs(InlineContext& context,
   uint16_t temps_avail = newregs - invoke_live_in.bits().count();
   if (temps_avail < temps_needed) {
     newregs += temps_needed - temps_avail;
-    if (newregs > 16) {
+    if (no_exceed_16regs && newregs > 16) {
       return false;
     }
     enlarge_registers(caller_code, fcaller, newregs);
@@ -1519,8 +1520,9 @@ bool IRCode::inline_16regs(InlineContext& context,
   auto& invoke_position =
     position_it == fcaller->rend() ? pos_nullptr : position_it->pos;
   if (invoke_position) {
-    TRACE(MTRANS, 3, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
-        invoke_position->line);
+    TRACE(INL, 3, "Inlining call at %s:%d\n",
+          invoke_position->file->c_str(),
+          invoke_position->line);
   }
 
   // check if we are in a try block

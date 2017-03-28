@@ -75,7 +75,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
       }
     }
     InlineContext context(m, true /* use_liveness */);
-    IRCode::inline_16regs(context, m_callee, mop);
+    IRCode::inline_method(context, m_callee, mop, /* no_exceed_16regs */ true);
   }
 };
 
@@ -148,7 +148,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     }
     assert(mop != nullptr);
     InlineContext context(m, true /* use_liveness */);
-    IRCode::inline_16regs(context, m_callee, mop);
+    IRCode::inline_method(context, m_callee, mop, /* no_exceed_16regs */ true);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }

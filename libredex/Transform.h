@@ -271,10 +271,11 @@ class IRCode {
                                DexMethod* callee,
                                IRInstruction* invoke);
 
-  static bool inline_16regs(
+  static bool inline_method(
       InlineContext& context,
       DexMethod *callee,
-      IRMethodInstruction *invoke);
+      IRMethodInstruction *invoke,
+      bool limit_to_16regs);
 
   /*
    * Simple register allocator.

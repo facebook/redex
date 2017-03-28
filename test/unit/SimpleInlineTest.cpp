@@ -43,6 +43,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ true);
-  EXPECT_FALSE(IRCode::inline_16regs(inline_context, callee, invoke));
+  EXPECT_FALSE(IRCode::inline_method(
+      inline_context, callee, invoke, /* no_exceed_16regs */ true));
   delete g_redex;
 }

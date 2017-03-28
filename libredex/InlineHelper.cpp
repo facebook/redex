@@ -250,7 +250,8 @@ void MultiMethodInliner::inline_callees(
         SHOW(caller),
         callee->get_code()->get_registers_size() -
         callee->get_code()->get_ins_size());
-    if (!IRCode::inline_16regs(inline_context, callee, mop)) {
+    if (!IRCode::inline_method(
+            inline_context, callee, mop, m_config.no_exceed_16regs)) {
       info.more_than_16regs++;
       continue;
     }

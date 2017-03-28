@@ -32,6 +32,7 @@ public:
            m_inliner_config.virtual_same_class_inline);
     pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
     pc.get("use_liveness", false, m_inliner_config.use_liveness);
+    pc.get("no_exceed_16regs", true, m_inliner_config.no_exceed_16regs);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
     pc.get("force_inline_annos", {}, m_force_inline_annos);
 
