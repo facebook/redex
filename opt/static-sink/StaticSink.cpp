@@ -245,7 +245,7 @@ bool illegal_access(DexMethod* method) {
       return true;
     }
   }
-  for (auto const& mie : InstructionIterable(code->get_entries())) {
+  for (auto const& mie : InstructionIterable(code)) {
     auto op = mie.insn;
     if (op->opcode() == OPCODE_INVOKE_SUPER ||
         op->opcode() == OPCODE_INVOKE_SUPER_RANGE) {

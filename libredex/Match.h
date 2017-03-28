@@ -397,9 +397,8 @@ template <typename ...T>
       auto code = meth->get_code();
       if (code) {
         const size_t N = std::tuple_size<std::tuple<T...> >::value;
-        auto mt = code->get_entries();
         std::vector<IRInstruction*> insns;
-        for (auto& mie : InstructionIterable(mt)) {
+        for (auto& mie : InstructionIterable(code)) {
           insns.push_back(mie.insn);
         }
         // No way to match if we have less insns than N

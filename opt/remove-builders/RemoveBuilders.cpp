@@ -112,14 +112,12 @@ bool tainted_reg_escapes(
 bool this_arg_escapes(DexMethod* method) {
   always_assert(!(method->get_access() & ACC_STATIC));
   auto code = method->get_code();
-  IRInstruction* first_insn =
-      InstructionIterable(code->get_entries()).begin()->insn;
+  IRInstruction* first_insn = InstructionIterable(code).begin()->insn;
   auto regs_size = code->get_registers_size();
   auto this_reg = regs_size - code->get_ins_size();
   auto this_cls = method->get_class();
-  auto mt = method->get_code()->get_entries();
-  mt->build_cfg();
-  auto blocks = postorder_sort(mt->cfg().blocks());
+  code->build_cfg();
+  auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
       const IRInstruction* insn, TaintedRegs* tregs) {
@@ -207,7 +205,7 @@ bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
 
   int instances = 0;
 
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     if (mie.insn->opcode() == OPCODE_NEW_INSTANCE) {
       instances++;
     }
@@ -231,7 +229,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   }
 
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   static auto init = DexString::make_string("<init>");
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
@@ -375,7 +373,7 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   if (!code) {
     return builders;
   }
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       DexType* cls = static_cast<IRTypeInstruction*>(insn)->get_type();
@@ -391,9 +389,9 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
 // passed to a method (aside from when its own instance methods get invoked),
 // or if they get stored in a field, or if they escape as a return value.
 bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
-  auto mt = method->get_code()->get_entries();
-  mt->build_cfg();
-  auto blocks = postorder_sort(mt->cfg().blocks());
+  auto code = method->get_code();
+  code->build_cfg();
+  auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
   std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](

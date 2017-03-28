@@ -387,7 +387,7 @@ struct MethodCreator {
    * Transfer code from a given method to a static with the same signature
    * in the given class.
    * This can be used to "promote" instance methods to static.
-   * On return the DexCode of the method in input is null'ed.
+   * On return the IRCode of the method in input is null'ed.
    * Essentially ownership of the code is passed to the generated static.
    */
   static DexMethod* make_static_from(DexMethod* meth, DexClass* target_cls);
@@ -441,7 +441,7 @@ struct MethodCreator {
 
  private:
   DexMethod* method;
-  MethodTransform* meth_code;
+  std::unique_ptr<IRCode> meth_code;
   uint16_t out_count;
   uint16_t top_reg;
   DexAccessFlags access;

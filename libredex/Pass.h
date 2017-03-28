@@ -23,7 +23,6 @@ class DexClass;
 class DexStore;
 using DexClassesVector = std::vector<DexClasses>;
 using DexStoresVector = std::vector<DexStore>;
-using Scope = std::vector<DexClass*>;
 class PassManager;
 
 class PassConfig {

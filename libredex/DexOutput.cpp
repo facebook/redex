@@ -775,6 +775,28 @@ void DexOutput::generate_class_data_items() {
   insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t) m_cdi_offsets.size(), cdi_start);
 }
 
+static void mt_sync(void* arg) {
+  auto method = reinterpret_cast<DexMethod*>(arg);
+  method->sync();
+}
+
+static void sync_all(const Scope& scope) {
+  constexpr bool serial = false; // for debugging
+  std::vector<work_item> workitems;
+  walk_code(scope,
+            [](DexMethod*) { return true; },
+            [&](DexMethod* m, IRCode&) {
+              if (serial) {
+                TRACE(MTRANS, 2, "Syncing %s\n", SHOW(m));
+                m->sync();
+              } else {
+                workitems.push_back(work_item{mt_sync, m});
+              }
+            });
+  WorkQueue wq;
+  wq.run_work_items(workitems.data(), (int)workitems.size());
+}
+
 void DexOutput::generate_code_items(SortMode mode) {
   /*
    * Optimization note:  We should pass a sort routine to the
@@ -782,7 +804,7 @@ void DexOutput::generate_code_items(SortMode mode) {
    */
   align_output();
   uint32_t ci_start = m_offset;
-  MethodTransform::sync_all(*m_classes);
+  sync_all(*m_classes);
 
   std::vector<DexMethod*> lmeth;
   if (mode == CLASS_ORDER) {
@@ -798,7 +820,7 @@ void DexOutput::generate_code_items(SortMode mode) {
       continue;
     }
     TRACE(CUSTOMSORT, 3, "method emit %s %s\n", SHOW(meth->get_class()), SHOW(meth));
-    DexCode* code = meth->get_code();
+    DexCode* code = meth->get_dex_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
         "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
@@ -1057,7 +1079,7 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   if (!code) return; // nothing to do for native methods
 
   std::unordered_set<IRStringInstruction*> jumbo_mismatches;
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     auto inst = mie.insn;
     auto op = inst->opcode();
     if (op != OPCODE_CONST_STRING && op != OPCODE_CONST_STRING_JUMBO) continue;

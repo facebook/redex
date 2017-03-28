@@ -349,7 +349,7 @@ bool method_level_match(
 void keep_clinits(DexClass* cls) {
   for (auto method : cls->get_dmethods()) {
     if (is_clinit(method) && method->get_code()) {
-      auto ii = InstructionIterable(method->get_code()->get_entries());
+      auto ii = InstructionIterable(method->get_code());
       auto it = ii.begin();
       if (!(it->insn->opcode() == OPCODE_RETURN_VOID && (++it) == ii.end())) {
         method->rstate.set_keep();

@@ -115,27 +115,26 @@ HighRegMoveInserter::SwapInfo HighRegMoveInserter::reserve_swap(
     DexMethod* method) {
   SwapInfo info;
   auto code = method->get_code();
-  auto mt = code->get_entries();
-  auto low_regs_shortfall = low_reg_space_needed(mt);
-  auto range_shortfall = range_space_needed(mt);
+  auto low_regs_shortfall = low_reg_space_needed(&*code);
+  auto range_shortfall = range_space_needed(&*code);
   while (low_regs_shortfall > 0 || range_shortfall > 0) {
     // XXX(jezng): increment_all_regs takes the number of regs to increment by,
     // while enlarge_regs takes the total number of regs after the
     // transformation... should make them uniform
-    increment_all_regs(&*code, mt, low_regs_shortfall);
-    MethodTransform::enlarge_regs(method,
+    increment_all_regs(&*code, low_regs_shortfall);
+    IRCode::enlarge_regs(method,
                                   code->get_registers_size() + range_shortfall);
 
     info.low_reg_swap += low_regs_shortfall;
     info.range_swap += range_shortfall;
-    low_regs_shortfall = low_reg_space_needed(mt) - info.low_reg_swap;
-    range_shortfall = range_space_needed(mt) - info.range_swap;
+    low_regs_shortfall = low_reg_space_needed(&*code) - info.low_reg_swap;
+    range_shortfall = range_space_needed(&*code) - info.range_swap;
   }
   return info;
 }
 
 size_t HighRegMoveInserter::low_reg_space_needed(
-    MethodTransform* code) {
+    IRCode* code) {
   size_t rv = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
@@ -159,7 +158,7 @@ size_t HighRegMoveInserter::low_reg_space_needed(
 }
 
 size_t HighRegMoveInserter::range_space_needed(
-    MethodTransform* code) {
+    IRCode* code) {
   size_t rv = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
@@ -189,10 +188,9 @@ size_t HighRegMoveInserter::range_space_needed(
   return rv;
 }
 
-void HighRegMoveInserter::increment_all_regs(DexCode* code,
-                                             MethodTransform* mt,
+void HighRegMoveInserter::increment_all_regs(IRCode* code,
                                              size_t size) {
-  for (auto& mie : InstructionIterable(mt)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       insn->set_dest(insn->dest() + size);
@@ -207,7 +205,7 @@ void HighRegMoveInserter::increment_all_regs(DexCode* code,
   code->set_registers_size(code->get_registers_size() + size);
 }
 
-void HighRegMoveInserter::handle_rangeable(MethodTransform* mt,
+void HighRegMoveInserter::handle_rangeable(IRCode* code,
                                            InstructionIterator& it,
                                            const KindVec& reg_kinds,
                                            reg_t range_start) {
@@ -238,7 +236,7 @@ void HighRegMoveInserter::handle_rangeable(MethodTransform* mt,
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     auto reg_kind = reg_kinds.at(insn->src(i));
     auto mov = gen_move(reg_kind, range_start + i, insn->src(i));
-    mt->insert_before(it.unwrap(), mov);
+    code->insert_before(it.unwrap(), mov);
     m_stats.add_move(mov);
 
     // methods taking wide arguments have each register in the pair specified
@@ -252,10 +250,10 @@ void HighRegMoveInserter::handle_rangeable(MethodTransform* mt,
 }
 
 static std::string show_register_kinds(
-    MethodTransform* mt,
+    IRCode* code,
     const std::unordered_map<IRInstruction*, KindVec>& reg_kind_map) {
   std::stringstream ss;
-  auto ii = InstructionIterable(mt);
+  auto ii = InstructionIterable(code);
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it ->insn;
@@ -272,9 +270,8 @@ void HighRegMoveInserter::insert_moves(
     DexMethod* method, const HighRegMoveInserter::SwapInfo& swap_info) {
   auto reg_kind_map = analyze_register_kinds(method);
   auto code = method->get_code();
-  auto mt = code->get_entries();
-  TRACE(REG, 5, "%s", show_register_kinds(mt, *reg_kind_map).c_str());
-  auto ii = InstructionIterable(mt);
+  TRACE(REG, 5, "%s", show_register_kinds(&*code, *reg_kind_map).c_str());
+  auto ii = InstructionIterable(code);
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
@@ -284,7 +281,7 @@ void HighRegMoveInserter::insert_moves(
       auto reg_kinds = reg_kind_map->at(insn);
       auto range_start = code->get_registers_size() - code->get_ins_size() -
                          swap_info.range_swap;
-      handle_rangeable(mt, it, reg_kinds, range_start);
+      handle_rangeable(&*code, it, reg_kinds, range_start);
       continue;
     }
     size_t swap_used {0};
@@ -292,7 +289,7 @@ void HighRegMoveInserter::insert_moves(
       if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
         auto reg_kind = reg_kind_map->at(insn).at(insn->src(i));
         auto mov = gen_move(reg_kind, swap_used, insn->src(i));
-        mt->insert_before(it.unwrap(), mov);
+        code->insert_before(it.unwrap(), mov);
         insn->set_src(i, swap_used);
         swap_used += reg_kind == RegisterKind::WIDE ? 2 : 1;
         m_stats.add_move(mov);
@@ -302,7 +299,7 @@ void HighRegMoveInserter::insert_moves(
         required_bit_width(insn->dest()) > dest_bit_width(op)) {
       auto reg_kind = dest_kind(insn->opcode());
       auto mov = gen_move(reg_kind, insn->dest(), 0);
-      it.reset(mt->insert_after(it.unwrap(), mov));
+      it.reset(code->insert_after(it.unwrap(), mov));
       insn->set_dest(0);
       m_stats.add_move(mov);
     }
@@ -316,18 +313,16 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   HighRegMoveInserter move_inserter;
   walk_code(scope,
             [](DexMethod*) { return true; },
-            [&](DexMethod* m, DexCode& code) {
+            [&](DexMethod* m, IRCode& code) {
               TRACE(REG, 3, "Allocating %s regs: %d ins: %d\n",
                     SHOW(m), code.get_registers_size(), code.get_ins_size());
               try {
-                TRACE(REG, 5, "Before reservation:\n%s\n",
-                      SHOW(code.get_entries()));
+                TRACE(REG, 5, "Before reservation:\n%s\n", SHOW(&code));
                 auto swap_info = HighRegMoveInserter::reserve_swap(m);
                 TRACE(REG, 3, "Swap info: %d %d\n",
                       swap_info.low_reg_swap,
                       swap_info.range_swap);
-                TRACE(REG, 5, "After reservation:\n%s\n",
-                      SHOW(code.get_entries()));
+                TRACE(REG, 5, "After reservation:\n%s\n", SHOW(&code));
                 move_inserter.insert_moves(m, swap_info);
               } catch (std::exception&) {
                 fprintf(stderr, "Failed to allocate %s\n", SHOW(m));

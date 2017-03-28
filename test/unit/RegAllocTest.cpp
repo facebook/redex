@@ -106,7 +106,7 @@ TEST_F(RegAllocTest, InsertMoveDest) {
   method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(18);
   method->get_code()->set_ins_size(0);
-  auto mt = method->get_code()->get_entries();
+  auto mt = method->get_code();
   auto array_ty = DexType::make_type("[I");
   mt->push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
   mt->push_back(dasm(OPCODE_NEW_ARRAY, array_ty, {18_v, 1_v}));
@@ -134,7 +134,7 @@ TEST_F(RegAllocTest, InsertMoveSrc) {
   method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(17);
   method->get_code()->set_ins_size(17);
-  auto mt = method->get_code()->get_entries();
+  auto mt = method->get_code();
   auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {15_v, 16_v}));
   mt->push_back(*if_);
   mt->push_back(dasm(OPCODE_INSTANCE_OF, get_object_type(), {0_v, 15_v}));
@@ -169,7 +169,7 @@ TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
   method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(17);
   method->get_code()->set_ins_size(0);
-  auto mt = method->get_code()->get_entries();
+  auto mt = method->get_code();
   mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
   // can be converted to invoke-virtual/range without needing to move the
   // register
@@ -201,7 +201,7 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
   method->make_concrete(ACC_STATIC, false);
   method->get_code()->set_registers_size(19);
   method->get_code()->set_ins_size(0);
-  auto mt = method->get_code()->get_entries();
+  auto mt = method->get_code();
   mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
   mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {17_v}));
   // the register args to invoke don't map directly to a range, so we'll insert

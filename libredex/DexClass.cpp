@@ -24,9 +24,12 @@
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "Transform.h"
 #include "Util.h"
 #include "Warning.h"
+#include "Walkers.h"
+#include "WorkQueue.h"
 
 uint32_t DexString::length() const {
   if (is_simple()) {
@@ -415,15 +418,33 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   return (int) (hemit - ((uint8_t*)output));
 }
 
-void DexCode::balloon() {
-  assert(m_entries == nullptr);
-  m_entries = new MethodTransform(this);
+DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
+    : m_ref(type, name, proto) {
+  m_concrete = false;
+  m_virtual = false;
+  m_external = false;
+  m_anno = nullptr;
+  m_dex_code = nullptr;
+  m_code = nullptr;
+  m_access = static_cast<DexAccessFlags>(0);
 }
 
-void DexCode::sync() {
-  m_entries->sync(this);
-  delete m_entries;
-  m_entries = nullptr;
+DexMethod::~DexMethod() = default;
+
+void DexMethod::set_code(std::unique_ptr<IRCode> code) {
+  m_code = std::move(code);
+}
+
+void DexMethod::balloon() {
+  assert(m_code == nullptr);
+  m_code = std::make_unique<IRCode>(this);
+  m_dex_code.reset();
+}
+
+void DexMethod::sync() {
+  assert(m_dex_code == nullptr);
+  m_dex_code = m_code->sync(this);
+  m_code.reset();
 }
 
 size_t hash_value(const DexMethodRef& r) {
@@ -443,10 +464,10 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   }
 
   // TODO: have method cloning work for FatMethods so this sync is unnecessary
-  that->m_code->sync();
-  m->m_code.reset(new DexCode(*that->m_code));
-  that->m_code->balloon();
-  m->m_code->balloon();
+  that->sync();
+  m->m_dex_code.reset(new DexCode(*that->m_dex_code));
+  that->balloon();
+  m->balloon();
 
   m->m_access = that->m_access;
   m->m_concrete = that->m_concrete;
@@ -533,6 +554,15 @@ void DexMethod::make_concrete(DexAccessFlags access,
                               std::unique_ptr<DexCode> dc,
                               bool is_virtual) {
   m_access = access;
+  m_dex_code = std::move(dc);
+  m_concrete = true;
+  m_virtual = is_virtual;
+}
+
+void DexMethod::make_concrete(DexAccessFlags access,
+                              std::unique_ptr<IRCode> dc,
+                              bool is_virtual) {
+  m_access = access;
   m_code = std::move(dc);
   m_concrete = true;
   m_virtual = is_virtual;
@@ -540,8 +570,7 @@ void DexMethod::make_concrete(DexAccessFlags access,
 
 void DexMethod::make_concrete(DexAccessFlags access,
                               bool is_virtual) {
-  make_concrete(access, std::make_unique<DexCode>(), is_virtual);
-  get_code()->balloon();
+  make_concrete(access, std::make_unique<IRCode>(), is_virtual);
 }
 
 /*
@@ -603,7 +632,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
     DexMethod* dm = idx->get_methodidx(ndex);
-    std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
+    auto dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
@@ -611,6 +640,8 @@ void DexClass::load_class_data_item(DexIdx* idx,
     m_vmethods.push_back(dm);
   }
 }
+
+std::unique_ptr<IRCode> DexMethod::release_code() { return std::move(m_code); }
 
 void DexClass::add_method(DexMethod* m) {
   always_assert_log(m->is_concrete() || m->is_external(),
@@ -728,8 +759,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code())) {
-      code_off = dco[m->get_code()];
+    if (m->get_dex_code() != nullptr && dco.count(m->get_dex_code())) {
+      code_off = dco[m->get_dex_code()];
     }
     encdata = write_uleb128(encdata, code_off);
   }
@@ -753,8 +784,8 @@ int DexClass::encode(DexOutputIdx* dodx,
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
     uint32_t code_off = 0;
-    if (m->get_code() != nullptr && dco.count(m->get_code())) {
-      code_off = dco[m->get_code()];
+    if (m->get_dex_code() != nullptr && dco.count(m->get_dex_code())) {
+      code_off = dco[m->get_dex_code()];
     }
     encdata = write_uleb128(encdata, code_off);
   }
@@ -1094,37 +1125,6 @@ void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) const {
   m_ref.proto->gather_strings(lstring);
 }
 
-void DexCode::gather_catch_types(std::vector<DexType*>& ltype) const {
-  for (auto& mie : *get_entries()) {
-    if (mie.type != MFLOW_CATCH) {
-      continue;
-    }
-    if (mie.centry->catch_type != nullptr) {
-      ltype.push_back(mie.centry->catch_type);
-    }
-  }
-}
-
-void DexCode::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto& mie : *get_entries()) {
-    mie.gather_types(ltype);
-  }
-  if (m_dbg) m_dbg->gather_types(ltype);
-}
-
-void DexCode::gather_strings(std::vector<DexString*>& lstring) const {
-  for (auto& mie : *get_entries()) {
-    mie.gather_strings(lstring);
-  }
-  if (m_dbg) m_dbg->gather_strings(lstring);
-}
-
-void DexCode::gather_fields(std::vector<DexField*>& lfield) const {
-  for (auto& mie : *get_entries()) {
-    mie.gather_fields(lfield);
-  }
-}
-
 uint32_t DexCode::size() const {
   uint32_t size = 0;
   for (auto const& opc : get_instructions()) {
@@ -1133,10 +1133,4 @@ uint32_t DexCode::size() const {
     }
   }
   return size;
-}
-
-void DexCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
-  for (auto& mie : *get_entries()) {
-    mie.gather_methods(lmethod);
-  }
 }

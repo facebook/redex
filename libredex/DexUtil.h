@@ -267,7 +267,7 @@ void sort_unique(std::vector<T>& vec, Cmp cmp = std::less<T>()) {
  * the invoke should be the last N registers of the frame.
  */
 bool passes_args_through(IRMethodInstruction* insn,
-                         const DexCode& code,
+                         const IRCode& code,
                          int ignore = 0);
 
 /**

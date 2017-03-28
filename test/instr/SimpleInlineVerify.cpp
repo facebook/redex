@@ -58,7 +58,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
   // (which throws an exception) comes after the return opcode... meaning that
   // for the instrumentation test to pass, we must duplicate the caller try
   // item
-  auto callee_insns = invoke->get_method()->get_code()->get_instructions();
+  auto callee_insns = invoke->get_method()->get_dex_code()->get_instructions();
   auto retop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
       return insn->opcode() == OPCODE_RETURN_VOID;
@@ -68,7 +68,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
     find_invoke(retop, callee_insns.end(), OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throw);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -80,7 +80,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeElseThrows) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse");
   ASSERT_EQ(nullptr, invoke);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
   // verify that we haven't increased the number of catch handlers -- both
   // try blocks should point to the same handler
@@ -102,7 +102,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
 
   // verify that the callee has an if-else statement, and that the if block
   // (which throws an exception) comes before the return opcode
-  auto callee_insns = invoke->get_method()->get_code()->get_instructions();
+  auto callee_insns = invoke->get_method()->get_dex_code()->get_instructions();
   auto ifop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
       return insn->opcode() == OPCODE_IF_NEZ;
@@ -117,7 +117,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
     find_invoke(ifop, retop, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throw);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -129,7 +129,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeIfThrows) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInIf");
   ASSERT_EQ(nullptr, invoke);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -146,7 +146,7 @@ TEST_F(PreVerify, InlineCallerNestedTry) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_NE(nullptr, invoke);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -157,7 +157,7 @@ TEST_F(PostVerify, InlineCallerNestedTry) {
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_EQ(nullptr, invoke);
 
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 3);
 }
 
@@ -171,7 +171,7 @@ TEST_F(PreVerify, InlineCalleeTryUncaught) {
   auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsUncaught");
   ASSERT_NE(nullptr, invoke);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -183,7 +183,7 @@ TEST_F(PostVerify, InlineCalleeTryUncaught) {
   ASSERT_EQ(nullptr, invoke);
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -197,7 +197,7 @@ TEST_F(PreVerify, InlineCalleeTryCaught) {
   auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "throwsCaught");
   ASSERT_NE(nullptr, invoke);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -210,7 +210,7 @@ TEST_F(PostVerify, InlineCalleeTryCaught) {
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
       "wrapsArithmeticThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -224,7 +224,7 @@ TEST_F(PreVerify, InlineTryHandlerThrows) {
   auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "handlerThrows");
   ASSERT_NE(nullptr, invoke);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -240,7 +240,7 @@ TEST_F(PostVerify, InlineTryHandlerThrows) {
   invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL,
       "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 2);
 }
 
@@ -254,7 +254,7 @@ TEST_F(PreVerify, InlineCalleeTryTwice) {
   auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
   auto invoke = find_invoke(m, OPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
   ASSERT_NE(nullptr, invoke);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 1);
 }
 
@@ -266,7 +266,7 @@ TEST_F(PostVerify, InlineCalleeTryTwice) {
   ASSERT_EQ(nullptr, invoke);
   auto invoke_throws = find_invoke(m, OPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
-  auto code = m->get_code();
+  auto code = m->get_dex_code();
   ASSERT_EQ(code->get_tries().size(), 3);
 }
 
@@ -307,7 +307,7 @@ TEST_F(PostVerify, InlineInvokeDirect) {
             "(Lcom/facebook/redexinline/SimpleInlineTest;)V");
   EXPECT_EQ(
       noninlinable->get_proto()->get_args()->get_type_list().size(),
-      noninlinable->get_code()->get_debug_item()->get_param_names().size());
+      noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
 
   auto dmethods = cls->get_dmethods();
   // verify that we've replaced the instance noninlinable() method with
@@ -334,14 +334,14 @@ TEST_F(PreVerify, testArrayDataInCaller) {
   // check that the callee indeed has a non-terminal if, which will exercise
   // the inliner code path that searches for fopcodes in the caller
   auto callee = find_invoke(m, OPCODE_INVOKE_DIRECT, "calleeWithIf");
-  auto insns = callee->get_method()->get_code()->get_instructions();
+  auto insns = callee->get_method()->get_dex_code()->get_instructions();
   auto ret_it =
       std::find_if(insns.begin(), insns.end(), [&](DexInstruction* insn) {
         return is_return(insn->opcode());
       });
   ASSERT_NE(ret_it, insns.end());
 
-  auto last_insn = m->get_code()->get_instructions().back();
+  auto last_insn = m->get_dex_code()->get_instructions().back();
   ASSERT_EQ(last_insn->opcode(), FOPCODE_FILLED_ARRAY);
 }
 
@@ -350,7 +350,7 @@ TEST_F(PostVerify, testArrayDataInCaller) {
     classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
   auto m = find_vmethod_named(*cls, "testArrayDataInCaller");
   ASSERT_EQ(nullptr, find_invoke(m, OPCODE_INVOKE_DIRECT, "callerWithIf"));
-  auto last_insn = m->get_code()->get_instructions().back();
+  auto last_insn = m->get_dex_code()->get_instructions().back();
   ASSERT_EQ(last_insn->opcode(), FOPCODE_FILLED_ARRAY);
 }
 

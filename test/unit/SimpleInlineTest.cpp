@@ -34,15 +34,15 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   invoke->set_src(0, 0);
   invoke->set_src(1, 0);
 
-  auto mtcaller = caller->get_code()->get_entries();
+  auto mtcaller = caller->get_code();
   mtcaller->push_back(invoke);
   mtcaller->push_back(dasm(OPCODE_RETURN_VOID));
 
-  auto mtcallee = callee->get_code()->get_entries();
+  auto mtcallee = callee->get_code();
   mtcallee->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
   mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ true);
-  EXPECT_FALSE(MethodTransform::inline_16regs(inline_context, callee, invoke));
+  EXPECT_FALSE(IRCode::inline_16regs(inline_context, callee, invoke));
   delete g_redex;
 }

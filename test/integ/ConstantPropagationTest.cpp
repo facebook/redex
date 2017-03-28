@@ -159,14 +159,14 @@ TEST(ConstantPropagationTest1, constantpropagation) {
         TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+          for (auto& mie : InstructionIterable(dm->get_code())) {
             auto instruction = mie.insn;
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
             ASSERT_NE(instruction->opcode(), OPCODE_NEW_INSTANCE);
           }
         } else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+          for (auto& mie : InstructionIterable(dm->get_code())) {
             auto instruction = mie.insn;
             ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
 // Disabled due to return prop being disabled
@@ -174,7 +174,7 @@ TEST(ConstantPropagationTest1, constantpropagation) {
           }
         } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
           TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code()->get_entries())) {
+          for (auto& mie : InstructionIterable(dm->get_code())) {
 // Disabled due to return prop being disabled
 //          auto instruction = mie.insn;
 //          ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);

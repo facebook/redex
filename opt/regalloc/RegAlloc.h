@@ -58,13 +58,13 @@ class HighRegMoveInserter {
   void insert_moves(DexMethod*, const SwapInfo&);
   const Stats& get_stats() const { return m_stats; }
  private:
-  void handle_rangeable(MethodTransform* mt,
+  void handle_rangeable(IRCode* mt,
                         InstructionIterator& it,
                         const KindVec& reg_kinds,
                         reg_t range_start);
-  static size_t low_reg_space_needed(MethodTransform* code);
-  static size_t range_space_needed(MethodTransform* code);
-  static void increment_all_regs(DexCode*, MethodTransform*, size_t size);
+  static size_t low_reg_space_needed(IRCode* code);
+  static size_t range_space_needed(IRCode* code);
+  static void increment_all_regs(IRCode*, size_t size);
 
   Stats m_stats;
 };

@@ -17,9 +17,9 @@ void remove_instructions(
   for (auto& method_instrs : to_remove) {
     DexMethod* method = method_instrs.first;
     const auto& instrs = method_instrs.second;
-    MethodTransform* trans = method->get_code()->get_entries();
+    auto code = method->get_code();
     for (auto instr : instrs) {
-      trans->remove_opcode(instr);
+      code->remove_opcode(instr);
     }
   }
 }
@@ -37,7 +37,7 @@ void RedundantCheckCastRemover::run() {
       m_scope,
       match,
       [&mgr, &to_remove](const DexMethod* method,
-                         MethodTransform* /* unused */,
+                         IRCode* /* unused */,
                          Block* /* unused */,
                          size_t size,
                          IRInstruction** insns) {

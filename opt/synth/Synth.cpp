@@ -71,7 +71,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   if (!is_iget(it->insn->opcode())) return nullptr;
@@ -107,7 +107,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   if (!is_sget(it->insn->opcode())) return nullptr;
@@ -144,7 +144,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
 DexMethod* trivial_method_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
 
@@ -204,7 +204,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
@@ -396,7 +396,7 @@ IRInstruction* make_sget(DexField* field, uint8_t dest) {
   return (new IRFieldInstruction(opcode, field))->set_dest(dest);
 }
 
-bool replace_getter_wrapper(MethodTransform* transform,
+bool replace_getter_wrapper(IRCode* transform,
                             IRMethodInstruction* meth_insn,
                             IRInstruction* move_result,
                             DexField* field) {
@@ -417,7 +417,7 @@ bool replace_getter_wrapper(MethodTransform* transform,
   return true;
 }
 
-void update_invoke(MethodTransform* transform,
+void update_invoke(IRCode* transform,
                    IRMethodInstruction* meth_insn,
                    DexMethod* method) {
   auto op = meth_insn->opcode();
@@ -474,7 +474,7 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
   return true;
 }
 
-bool replace_method_wrapper(MethodTransform* transform,
+bool replace_method_wrapper(IRCode* transform,
                             IRMethodInstruction* meth_insn,
                             DexMethod* wrapper,
                             DexMethod* wrappee,
@@ -501,7 +501,7 @@ bool replace_method_wrapper(MethodTransform* transform,
   return true;
 }
 
-void replace_ctor_wrapper(MethodTransform* transform,
+void replace_ctor_wrapper(IRCode* transform,
                           IRMethodInstruction* ctor_insn,
                           DexMethod* ctor) {
   TRACE(SYNT, 2, "Optimizing static ctor: %s\n", SHOW(ctor_insn));
@@ -538,7 +538,7 @@ void replace_wrappers(DexMethod* caller_method,
   std::vector<std::pair<IRMethodInstruction*, DexMethod*>> ctor_calls;
 
   TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
-  auto ii = InstructionIterable(caller_method->get_code()->get_entries());
+  auto ii = InstructionIterable(caller_method->get_code());
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -670,10 +670,10 @@ void replace_wrappers(DexMethod* caller_method,
       wrapped_calls.empty()) {
     return;
   }
-  MethodTransform* transform = caller_method->get_code()->get_entries();
+  auto code = caller_method->get_code();
   for (auto g : getter_calls) {
     using std::get;
-    if (!replace_getter_wrapper(transform, get<0>(g), get<1>(g), get<2>(g))) {
+    if (!replace_getter_wrapper(&*code, get<0>(g), get<1>(g), get<2>(g))) {
       ssms.keepers.emplace(get<0>(g)->get_method());
     }
   }
@@ -683,7 +683,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrappee = wpair.second;
     auto success =
       replace_method_wrapper(
-        transform,
+        &*code,
         call_inst,
         wrapper,
         wrappee,
@@ -698,7 +698,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrappee = call_inst->get_method();
     auto success =
       replace_method_wrapper(
-        transform,
+        &*code,
         call_inst,
         wrapper,
         wrappee,
@@ -708,7 +708,7 @@ void replace_wrappers(DexMethod* caller_method,
     }
   }
   for (auto cpair : ctor_calls) {
-    replace_ctor_wrapper(transform, cpair.first, cpair.second);
+    replace_ctor_wrapper(&*code, cpair.first, cpair.second);
   }
 }
 

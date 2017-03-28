@@ -177,8 +177,7 @@ static bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
 }
 
 void replace_opcode(DexMethod* method, IRInstruction* from, IRInstruction* to) {
-  MethodTransform* mt = method->get_code()->get_entries();
-  mt->replace_opcode(from, to);
+  method->get_code()->replace_opcode(from, to);
 }
 
 void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
@@ -232,7 +231,7 @@ void get_sput_in_clinit(DexClass* clazz,
   }
   always_assert_log(is_static(clinit) && is_constructor(clinit),
                     "static constructor doesn't have the proper access bits set\n");
-  for (auto& mie : InstructionIterable(clinit->get_code()->get_entries())) {
+  for (auto& mie : InstructionIterable(clinit->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_fields() && is_sput(opcode->opcode())) {
       auto fieldop = static_cast<IRFieldInstruction*>(opcode);
@@ -338,7 +337,7 @@ static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op) {
  */
 static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   std::vector<std::pair<IRInstruction*, IRInstruction*>> const_sputs;
-  auto ii = InstructionIterable(clinit->get_code()->get_entries());
+  auto ii = InstructionIterable(clinit->get_code());
   auto end = ii.end();
   // Verify opcodes are (const, sput)* pairs
   for (auto it = ii.begin(); it != end; ++it) {
@@ -430,7 +429,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       continue;
     }
     auto code = clinit->get_code();
-    auto ii = InstructionIterable(code->get_entries());
+    auto ii = InstructionIterable(code);
     auto end = ii.end();
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       // Check for sget from static final
@@ -525,9 +524,9 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
     auto val = cur->get_static_value();
     for (auto dep : *deps[cur]) {
       dep.field->make_concrete(dep.field->get_access(), val);
-      auto mt = dep.clinit->get_code()->get_entries();
-      mt->remove_opcode(dep.sget);
-      mt->remove_opcode(dep.sput);
+      auto code = dep.clinit->get_code();
+      code->remove_opcode(dep.sget);
+      code->remove_opcode(dep.sput);
       ++nresolved;
       resolved.push_back(dep.field);
       TRACE(FINALINLINE, 2, "Resolved field %s\n", SHOW(dep.field));

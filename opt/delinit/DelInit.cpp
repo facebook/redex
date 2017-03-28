@@ -135,9 +135,9 @@ void find_referenced_classes(const Scope& scope) {
   walk_code(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod* meth, DexCode& code) {
+    [&](DexMethod* meth, IRCode& code) {
       for (const auto& mie :
-           InstructionIterable(meth->get_code()->get_entries())) {
+           InstructionIterable(meth->get_code())) {
         auto opcode = mie.insn;
         // Matches any stringref that name-aliases a type.
         if (opcode->has_strings()) {

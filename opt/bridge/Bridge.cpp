@@ -38,7 +38,7 @@ constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 DexMethod* match_pattern(DexMethod* bridge) {
   auto code = bridge->get_code();
   if (!code) return nullptr;
-  auto ii = InstructionIterable(code->get_entries());
+  auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end) {
@@ -110,12 +110,12 @@ bool has_bridgelike_access(DexMethod* m) {
 
 void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
   bridge->set_access(bridge->get_access() & ~(ACC_BRIDGE | ACC_SYNTHETIC));
-  auto mt = bridge->get_code()->get_entries();
+  auto code = bridge->get_code();
   auto invoke =
-      std::find_if(mt->begin(), mt->end(), [](const MethodItemEntry& mie) {
+      std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
       });
-  MethodTransform::inline_tail_call(bridge, bridgee, invoke->insn);
+  IRCode::inline_tail_call(bridge, bridgee, invoke->insn);
 }
 }
 
@@ -251,8 +251,8 @@ class BridgeRemover {
     }
   }
 
-  void exclude_referenced_bridgee(DexMethod* code_method, const DexCode& code) {
-    for (auto& mie : InstructionIterable(code.get_entries())) {
+  void exclude_referenced_bridgee(DexMethod* code_method, IRCode& code) {
+    for (auto& mie : InstructionIterable(&code)) {
       auto inst = mie.insn;
       if (!is_invoke(inst->opcode())) continue;
       auto method = static_cast<IRMethodInstruction*>(inst)->get_method();
@@ -320,7 +320,7 @@ class BridgeRemover {
 
     walk_code(*m_scope,
               [](DexMethod*) { return true; },
-              [&](DexMethod* m, DexCode& code) {
+              [&](DexMethod* m, IRCode& code) {
                 exclude_referenced_bridgee(m, code);
               });
   }

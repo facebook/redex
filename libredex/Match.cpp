@@ -94,7 +94,7 @@ match_t<DexMethod, std::tuple<> > is_default_constructor() {
               is_constructor(meth) &&
               has_no_args(meth) &&
               has_code(meth)) {
-        auto ii = InstructionIterable(meth->get_code()->get_entries());
+        auto ii = InstructionIterable(meth->get_code());
         auto it = ii.begin();
         auto end = ii.end();
         auto op = it->insn->opcode();

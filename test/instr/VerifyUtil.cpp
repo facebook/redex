@@ -29,7 +29,7 @@ DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
 
 DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
     const char* target_mname) {
-  auto insns = m->get_code()->get_instructions();
+  auto insns = m->get_dex_code()->get_instructions();
   return find_invoke(insns.begin(), insns.end(), opcode, target_mname);
 }
 

@@ -1100,13 +1100,13 @@ class PeepholeOptimizerV2 {
   }
 
   void peephole(DexMethod* method) {
-    auto transform = method->get_code()->get_entries();
-    transform->build_cfg();
+    auto code = method->get_code();
+    code->build_cfg();
 
     std::vector<IRInstruction*> deletes;
     std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
         inserts;
-    const auto& blocks = transform->cfg().blocks();
+    const auto& blocks = code->cfg().blocks();
     for (const auto& block : blocks) {
       // Currently, all patterns do not span over multiple basic blocks. So
       // reset all matching states on visiting every basic block.
@@ -1149,10 +1149,10 @@ class PeepholeOptimizerV2 {
 
     for (auto& pair : inserts) {
       std::vector<IRInstruction*> vec{begin(pair.second), end(pair.second)};
-      transform->insert_after(pair.first, vec);
+      code->insert_after(pair.first, vec);
     }
     for (auto& insn : deletes) {
-      transform->remove_opcode(insn);
+      code->remove_opcode(insn);
     }
   }
 

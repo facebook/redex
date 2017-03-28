@@ -55,7 +55,7 @@ void strip_debug_info(Scope& scope,
           should_strip(meth->get_class()->get_name()->c_str(), cls_patterns) ||
           should_strip(meth->get_name()->c_str(), meth_patterns)) {
           if (drop_all_dbg_info) {
-            meth->get_code()->remove_debug_item();
+            meth->get_code()->release_debug_item();
             num_matches++;
           } else if (drop_local_variables || drop_line_numbers) {
             auto dbg_item = meth->get_code()->get_debug_item();

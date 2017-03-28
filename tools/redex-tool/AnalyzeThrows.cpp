@@ -114,7 +114,7 @@ void walk_predecessors(
  */
 void collect_throwing_blocks(
     DexMethod* meth, LogicalBlock& throwing_blocks) {
-  const auto& blocks = meth->get_code()->get_entries()->cfg().blocks();
+  const auto& blocks = meth->get_code()->cfg().blocks();
   std::queue<Block*> blocks_to_visit;
   std::unordered_set<Block*> no_throw_blocks;
   // collect all blocks with a return
@@ -179,7 +179,7 @@ void find_throwing_block(const Scope& scope) {
   walk_methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
-        auto mt = meth->get_code()->get_entries();
+        auto mt = meth->get_code();
         mt->build_cfg(false);
         const auto& cfg = mt->cfg();
         for (const auto& block : cfg.blocks()) {

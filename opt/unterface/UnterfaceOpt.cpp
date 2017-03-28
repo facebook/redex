@@ -97,15 +97,13 @@ bool find_impl(DexType* type, Unterface& unterface) {
  * Helper for update_impl_refereces() which performs the code transformation.
  *
  * TODO: this needs a serious rationalization around MEthodCreator and
- * MethodTransform usage. It works for now given the simplicity of the
- * scenario.
+ * IRCode usage. It works for now given the simplicity of the scenario.
  */
 void do_update_method(DexMethod* meth, Unterface& unterface) {
   auto code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
-  auto mt = meth->get_code()->get_entries();
   IRInstruction* last = nullptr;
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     IRMethodInstruction* invoke = nullptr;
     auto op = insn->opcode();
@@ -116,7 +114,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
         auto new_inst = new IRTypeInstruction(
             OPCODE_NEW_INSTANCE, unterface.untf->get_type());
         new_inst->set_dest(insn->dest());
-        mt->replace_opcode(insn, new_inst);
+        code->replace_opcode(insn, new_inst);
         last = new_inst;
       } else {
         last = insn;
@@ -141,11 +139,11 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
             invoke->set_src(j, insn->src(j) + 1);
           }
           invoke->set_src(arg_count, 0);
-          mt->remove_opcode(insn);
+          code->remove_opcode(insn);
           std::vector<IRInstruction*> new_insns;
           new_insns.push_back(load);
           new_insns.push_back(invoke);
-          mt->insert_after(last, new_insns);
+          code->insert_after(last, new_insns);
           last = invoke;
           break;
         }
@@ -186,8 +184,8 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
       [&](DexMethod* meth) {
         return !find_impl(meth->get_class(), unterface);
       },
-      [&](DexMethod* meth, const DexCode& code) {
-        for (auto& mie : InstructionIterable(code.get_entries())) {
+      [&](DexMethod* meth, IRCode& code) {
+        for (auto& mie : InstructionIterable(&code)) {
           auto insn = mie.insn;
           auto op = insn->opcode();
           switch (op) {
@@ -319,11 +317,11 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
   assert(cls->get_ifields().size() == 1);
   auto outer = cls->get_ifields().front();
   auto type = outer->get_type();
-  auto entries = meth->get_code()->get_entries();
+  auto code = meth->get_code();
 
   // collect all field access that use the outer field
   std::vector<IRFieldInstruction*> field_ops;
-  for (auto& mie : InstructionIterable(entries)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_iget(insn->opcode())) {
       auto field_op = static_cast<IRFieldInstruction*>(insn);
@@ -339,14 +337,14 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
     auto dst = fop->dest();
     new_fop->set_dest(dst);
     new_fop->set_src(0, fop->src(0));
-    entries->replace_opcode(fop, new_fop);
+    code->replace_opcode(fop, new_fop);
     IRTypeInstruction* check_cast = new IRTypeInstruction(OPCODE_CHECK_CAST, type);
     check_cast->set_src(0, dst);
     std::vector<IRInstruction*> ops;
     ops.push_back(check_cast);
     TRACE(UNTF, 8, "Changed %s to\n%s\n%s\n", show(fop).c_str(),
         show(new_fop).c_str(), show(check_cast).c_str());
-    entries->insert_after(new_fop, ops);
+    code->insert_after(new_fop, ops);
   }
 }
 

@@ -171,7 +171,7 @@ private:
     // TODO: rewrite the following code to not require a random-access
     // container of instructions
     std::vector<IRInstruction*> insns;
-    for (auto& mie : InstructionIterable(meth->get_code()->get_entries())) {
+    for (auto& mie : InstructionIterable(meth->get_code())) {
       insns.emplace_back(mie.insn);
     }
 

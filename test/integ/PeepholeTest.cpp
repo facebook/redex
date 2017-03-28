@@ -34,7 +34,7 @@ struct IRInstructionList {
     }
   }
 
-  explicit IRInstructionList(MethodTransform* mt) {
+  explicit IRInstructionList(IRCode* mt) {
     for (auto& mie : InstructionIterable(mt)) {
       instructions.emplace_back(mie.insn); // moves insn into unique_ptr
     }
@@ -106,7 +106,7 @@ class PeepholeTest : public ::testing::Test {
     method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
     // import our instructions
-    auto mt = method->get_code()->get_entries();
+    auto mt = method->get_code();
     for (const auto& insn_ptr : insns.instructions) {
       mt->push_back(insn_ptr->clone());
     }
@@ -149,7 +149,7 @@ class PeepholeTest : public ::testing::Test {
     DexMethod* method = make_void_method(name, src);
     dex_class->add_method(method);
     manager.run_passes(stores, config);
-    IRInstructionList result(method->get_code()->get_entries());
+    IRInstructionList result(method->get_code());
     EXPECT_EQ(result, expected) << " for test " << name;
     dex_class->remove_method(method);
   }

@@ -368,7 +368,6 @@ bool KindVec::operator==(const KindVec& that) const {
 std::unique_ptr<std::unordered_map<IRInstruction*, KindVec>>
 analyze_register_kinds(DexMethod* method) {
   auto code = method->get_code();
-  auto mt = code->get_entries();
   KindVec entry_kinds(code->get_registers_size());
   auto args = method->get_proto()->get_args()->get_type_list();
   auto args_reg = code->get_registers_size() - code->get_ins_size();
@@ -395,8 +394,8 @@ analyze_register_kinds(DexMethod* method) {
       (*kinds)[insn->dest()] = dest_kind(insn->opcode());
     }
   };
-  mt->build_cfg();
-  return forwards_dataflow<KindVec>(mt->cfg().blocks(),
+  code->build_cfg();
+  return forwards_dataflow<KindVec>(code->cfg().blocks(),
                                     KindVec(code->get_registers_size()),
                                     trans,
                                     entry_kinds);

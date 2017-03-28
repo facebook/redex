@@ -105,7 +105,7 @@ enum MethodItemType {
  * For example, when inserting a new instruction into a DexMethod, one needs
  * to recalculate branch offsets, try-catch regions, and debug info. None of
  * that is necessary when inserting into a FatMethod; it gets done when the
- * FatMethod gets translated back into a DexMethod by MethodTransform::sync().
+ * FatMethod gets translated back into a DexMethod by IRCode::sync().
  */
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
@@ -178,13 +178,10 @@ namespace {
 
 class MethodSplicer;
 
-class MethodTransform {
+// TODO(jezng): IRCode currently contains too many methods that shouldn't
+// belong there... I'm going to move them out soon
+class IRCode {
  private:
-  /*
-   * For use by MethodCreator
-   */
-  explicit MethodTransform();
-
   /* try_sync() is the work-horse of sync.  It's intended such that it can fail
    * in the event that an opcode needs to be resized.  In that instance, it
    * changes the opcode in question, and returns false.  It's intended to be
@@ -206,6 +203,14 @@ class MethodTransform {
   std::unordered_map<IRInstruction*, DexOpcodeData*> m_array_data;
   std::unique_ptr<ControlFlowGraph> m_cfg;
 
+  uint16_t m_registers_size {0};
+  uint16_t m_ins_size {0};
+  // TODO calculate this automatically when syncing
+  uint16_t m_outs_size {0};
+  // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
+  // exposing the param names should be enough
+  std::unique_ptr<DexDebugItem> m_dbg;
+
  private:
   FatMethod::iterator main_block();
   FatMethod::iterator insert(FatMethod::iterator cur, IRInstruction* insn);
@@ -225,22 +230,35 @@ class MethodTransform {
   friend struct MethodCreator;
 
  public:
-  explicit MethodTransform(const DexCode* code);
+  explicit IRCode();
+  explicit IRCode(DexMethod*);
 
-  ~MethodTransform();
+  ~IRCode();
+
+  uint16_t get_registers_size() const { return m_registers_size; }
+  uint16_t get_ins_size() const { return m_ins_size; }
+  uint16_t get_outs_size() const { return m_outs_size; }
+
+  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+  void set_ins_size(uint16_t sz) { m_ins_size = sz; }
+  void set_outs_size(uint16_t sz) { m_outs_size = sz; }
+
+  const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
+  DexDebugItem* get_debug_item() { return m_dbg.get(); }
+  std::unique_ptr<DexDebugItem> release_debug_item() {
+    return std::move(m_dbg);
+  }
+
+  void gather_catch_types(std::vector<DexType*>& ltype) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_types(std::vector<DexType*>& ltype) const;
+  void gather_fields(std::vector<DexField*>& lfield) const;
+  void gather_methods(std::vector<DexMethod*>& lmethod) const;
 
   /* Create a FatMethod from a DexMethod. FatMethods are easier to manipulate.
    * E.g. they don't require manual updating of address offsets, and they don't
    * contain pseudo-opcodes. */
-  FatMethod* balloon(DexCode*);
-
-  static void balloon_all(const Scope&);
-
-  /*
-   * Call before writing any dexes out, or doing analysis on DexMethod
-   * structures.
-   */
-  static void sync_all(const Scope&);
+  FatMethod* balloon(DexMethod*);
 
   /*
    * Inline tail-called `callee` into `caller` at instruction `invoke`.
@@ -278,8 +296,8 @@ class MethodTransform {
    */
   void build_cfg(bool end_block_before_throw = true);
 
-  /* Write-back FatMethod to DexMethod */
-  void sync(DexCode*);
+  /* Generate DexCode from IRCode */
+  std::unique_ptr<DexCode> sync(const DexMethod*);
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);
@@ -355,32 +373,9 @@ class MethodTransform {
   FatMethod::iterator erase(FatMethod::iterator it) {
     return m_fmethod->erase(it);
   }
-  friend std::string show(const MethodTransform*);
+  friend std::string show(const IRCode*);
 
   friend class MethodSplicer;
-};
-
-/*
- * Scoped holder for MethodTransform to ensure sync_all is called.
- */
-class MethodTransformer {
-  DexCode* m_code;
-
- public:
-  MethodTransformer(DexMethod* m,
-                    bool want_cfg = false,
-                    bool end_block_before_throw = true) {
-    m_code = m->get_code();
-    m_code->balloon();
-    if (want_cfg) {
-      m_code->get_entries()->build_cfg(end_block_before_throw);
-    }
-  }
-
-  ~MethodTransformer() { m_code->sync(); }
-
-  MethodTransform* operator*() { return m_code->get_entries(); }
-  MethodTransform* operator->() { return m_code->get_entries(); }
 };
 
 /**
@@ -393,7 +388,7 @@ class InlineContext {
  public:
   uint64_t estimated_insn_size {0};
   uint16_t original_regs;
-  DexCode* caller_code;
+  IRCode* caller_code;
   InlineContext(DexMethod* caller, bool use_liveness);
   Liveness live_out(IRInstruction*);
 };
@@ -446,7 +441,10 @@ class InstructionIterable {
   FatMethod::iterator m_begin;
   FatMethod::iterator m_end;
  public:
-  explicit InstructionIterable(MethodTransform* mt)
+  // TODO: make this const-correct
+  explicit InstructionIterable(const IRCode* ir_code)
+      : InstructionIterable(const_cast<IRCode*>(ir_code)) {}
+  explicit InstructionIterable(IRCode* mt)
       : m_begin(mt->begin()), m_end(mt->end()) {
     while (m_begin != m_end) {
       if (m_begin->type == MFLOW_OPCODE) {

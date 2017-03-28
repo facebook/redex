@@ -151,14 +151,14 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
 
-  const auto can_inline_method = [&](DexMethod* meth, const DexCode& code) {
+  const auto can_inline_method = [&](DexMethod* meth, const IRCode& code) {
     DexClass* cls = type_class(meth->get_class());
     if (has_anno(cls, no_inline) ||
         has_anno(meth, no_inline)) {
       no_inline_anno_count++;
       return;
     }
-    if (code.get_entries()->count_opcodes() < SMALL_CODE_SIZE) {
+    if (code.count_opcodes() < SMALL_CODE_SIZE) {
       // always inline small methods even if they are not deletable
       inlinable.insert(meth);
     } else {

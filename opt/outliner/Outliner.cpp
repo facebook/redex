@@ -163,7 +163,7 @@ void Outliner::run_pass(DexStoresVector& stores,
       scope,
       match,
       [&](const DexMethod* method,
-          MethodTransform* mt,
+          IRCode* mt,
           Block* bb,
           size_t n,
           IRInstruction** insns) {

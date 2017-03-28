@@ -21,8 +21,6 @@
 #include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Util.h"
-#include "Walkers.h"
-#include "WorkQueue.h"
 
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
   std::vector<Block*> postorder;
@@ -210,7 +208,7 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
 InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
     : original_regs(caller->get_code()->get_registers_size()),
       caller_code(&*caller->get_code()) {
-  auto mtcaller = caller_code->get_entries();
+  auto mtcaller = caller_code;
   estimated_insn_size = mtcaller->sum_opcode_sizes();
   if (use_liveness) {
     mtcaller->build_cfg(false);
@@ -229,16 +227,58 @@ Liveness InlineContext::live_out(IRInstruction* insn) {
   }
 }
 
-MethodTransform::MethodTransform()
+IRCode::IRCode()
     : m_fmethod(new FatMethod()) {}
 
-MethodTransform::MethodTransform(const DexCode* code) {
-  m_fmethod = balloon(const_cast<DexCode*>(code));
+IRCode::IRCode(DexMethod* method) {
+  m_fmethod = balloon(const_cast<DexMethod*>(method));
+  auto dc = &*method->get_dex_code();
+  m_registers_size = dc->get_registers_size();
+  m_ins_size = dc->get_ins_size();
+  m_outs_size = dc->get_outs_size();
+  m_dbg = dc->release_debug_item();
 }
 
-MethodTransform::~MethodTransform() {
+IRCode::~IRCode() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
   delete m_fmethod;
+}
+
+void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
+  for (auto& mie : *m_fmethod) {
+    if (mie.type != MFLOW_CATCH) {
+      continue;
+    }
+    if (mie.centry->catch_type != nullptr) {
+      ltype.push_back(mie.centry->catch_type);
+    }
+  }
+}
+
+void IRCode::gather_types(std::vector<DexType*>& ltype) const {
+  for (auto& mie : *m_fmethod) {
+    mie.gather_types(ltype);
+  }
+  if (m_dbg) m_dbg->gather_types(ltype);
+}
+
+void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
+  for (auto& mie : *m_fmethod) {
+    mie.gather_strings(lstring);
+  }
+  if (m_dbg) m_dbg->gather_strings(lstring);
+}
+
+void IRCode::gather_fields(std::vector<DexField*>& lfield) const {
+  for (auto& mie : *m_fmethod) {
+    mie.gather_fields(lfield);
+  }
+}
+
+void IRCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
+  for (auto& mie : *m_fmethod) {
+    mie.gather_methods(lmethod);
+  }
 }
 
 namespace {
@@ -570,9 +610,10 @@ bool has_aliased_arguments(IRInstruction* invoke) {
 
 }
 
-FatMethod* MethodTransform::balloon(DexCode* code) {
+FatMethod* IRCode::balloon(DexMethod* method) {
+  auto dex_code = method->get_dex_code();
   FatMethod* fmethod = new FatMethod();
-  auto instructions = code->release_instructions();
+  auto instructions = dex_code->release_instructions();
   addr_mei_t addr_to_mei;
   std::unordered_map<uint32_t, DexOpcodeData*> addr_to_data;
 
@@ -592,15 +633,15 @@ FatMethod* MethodTransform::balloon(DexCode* code) {
   }
   generate_branch_targets(fmethod, addr_to_mei, addr_to_data);
   gather_array_data(fmethod, addr_to_data, &m_array_data);
-  associate_try_items(fmethod, *code, addr_to_mei);
-  auto debugitem = code->get_debug_item();
+  associate_try_items(fmethod, *dex_code, addr_to_mei);
+  auto debugitem = dex_code->get_debug_item();
   if (debugitem) {
     associate_debug_entries(fmethod, *debugitem, addr_to_mei);
   }
   return fmethod;
 }
 
-void MethodTransform::remove_branch_target(IRInstruction *branch_inst) {
+void IRCode::remove_branch_target(IRInstruction *branch_inst) {
   always_assert_log(is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -618,7 +659,7 @@ void MethodTransform::remove_branch_target(IRInstruction *branch_inst) {
   }
 }
 
-void MethodTransform::replace_branch(IRInstruction* from, IRInstruction* to) {
+void IRCode::replace_branch(IRInstruction* from, IRInstruction* to) {
   always_assert(is_branch(from->opcode()));
   always_assert(is_branch(to->opcode()));
   for (auto& mentry : *m_fmethod) {
@@ -635,7 +676,7 @@ void MethodTransform::replace_branch(IRInstruction* from, IRInstruction* to) {
       SHOW(to));
 }
 
-void MethodTransform::replace_opcode_with_infinite_loop(IRInstruction* from) {
+void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
   IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
   to->set_offset(0);
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -656,7 +697,7 @@ void MethodTransform::replace_opcode_with_infinite_loop(IRInstruction* from) {
       SHOW(to));
 }
 
-void MethodTransform::replace_opcode(IRInstruction* from, IRInstruction* to) {
+void IRCode::replace_opcode(IRInstruction* from, IRInstruction* to) {
   always_assert_log(!is_branch(to->opcode()),
                     "You may want replace_branch instead");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -677,7 +718,7 @@ void MethodTransform::replace_opcode(IRInstruction* from, IRInstruction* to) {
       SHOW(to));
 }
 
-void MethodTransform::insert_after(IRInstruction* position,
+void IRCode::insert_after(IRInstruction* position,
                                    const std::vector<IRInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
    *if
@@ -702,12 +743,12 @@ void MethodTransform::insert_after(IRInstruction* position,
   always_assert_log(false, "No match found");
 }
 
-FatMethod::iterator MethodTransform::insert_before(
+FatMethod::iterator IRCode::insert_before(
     const FatMethod::iterator& position, MethodItemEntry& mie) {
   return m_fmethod->insert(position, mie);
 }
 
-FatMethod::iterator MethodTransform::insert_after(
+FatMethod::iterator IRCode::insert_after(
     const FatMethod::iterator& position, MethodItemEntry& mie) {
   always_assert(position != m_fmethod->end());
   return m_fmethod->insert(std::next(position), mie);
@@ -725,7 +766,7 @@ FatMethod::iterator MethodTransform::insert_after(
  * later. (We could do it here too, but LocalDCE already knows how to find
  * block boundaries.)
  */
-void MethodTransform::remove_switch_case(IRInstruction* insn) {
+void IRCode::remove_switch_case(IRInstruction* insn) {
 
   TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(m_fmethod));
   // Check if we are inside switch method.
@@ -785,7 +826,7 @@ void MethodTransform::remove_switch_case(IRInstruction* insn) {
   target_mei->throwing_mie = nullptr;
 }
 
-size_t MethodTransform::count_opcodes() const {
+size_t IRCode::count_opcodes() const {
   size_t count {0};
   for (const auto& mie : *m_fmethod) {
     if (mie.type == MFLOW_OPCODE) {
@@ -795,7 +836,7 @@ size_t MethodTransform::count_opcodes() const {
   return count;
 }
 
-size_t MethodTransform::sum_opcode_sizes() const {
+size_t IRCode::sum_opcode_sizes() const {
   size_t size {0};
   for (const auto& mie : *m_fmethod) {
     if (mie.type == MFLOW_OPCODE) {
@@ -805,7 +846,7 @@ size_t MethodTransform::sum_opcode_sizes() const {
   return size;
 }
 
-void MethodTransform::remove_opcode(const FatMethod::iterator& it) {
+void IRCode::remove_opcode(const FatMethod::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
   if (may_throw(insn->opcode())) {
@@ -829,7 +870,7 @@ void MethodTransform::remove_opcode(const FatMethod::iterator& it) {
   delete insn;
 }
 
-void MethodTransform::remove_opcode(IRInstruction* insn) {
+void IRCode::remove_opcode(IRInstruction* insn) {
   for (auto& mei : *m_fmethod) {
     if (mei.type == MFLOW_OPCODE && mei.insn == insn) {
       auto it = m_fmethod->iterator_to(mei);
@@ -842,15 +883,15 @@ void MethodTransform::remove_opcode(IRInstruction* insn) {
                     SHOW(insn));
 }
 
-FatMethod::iterator MethodTransform::main_block() { return m_fmethod->begin(); }
+FatMethod::iterator IRCode::main_block() { return m_fmethod->begin(); }
 
-FatMethod::iterator MethodTransform::insert(FatMethod::iterator cur,
+FatMethod::iterator IRCode::insert(FatMethod::iterator cur,
                                             IRInstruction* insn) {
   MethodItemEntry* mentry = new MethodItemEntry(insn);
   return m_fmethod->insert(cur, *mentry);
 }
 
-FatMethod::iterator MethodTransform::make_if_block(
+FatMethod::iterator IRCode::make_if_block(
     FatMethod::iterator cur,
     IRInstruction* insn,
     FatMethod::iterator* false_block) {
@@ -863,7 +904,7 @@ FatMethod::iterator MethodTransform::make_if_block(
   return m_fmethod->insert(m_fmethod->end(), *bentry);
 }
 
-FatMethod::iterator MethodTransform::make_if_else_block(
+FatMethod::iterator IRCode::make_if_else_block(
     FatMethod::iterator cur,
     IRInstruction* insn,
     FatMethod::iterator* false_block,
@@ -893,7 +934,7 @@ FatMethod::iterator MethodTransform::make_if_else_block(
   return main_block;
 }
 
-FatMethod::iterator MethodTransform::make_switch_block(
+FatMethod::iterator IRCode::make_switch_block(
     FatMethod::iterator cur,
     IRInstruction* insn,
     FatMethod::iterator* default_block,
@@ -934,7 +975,7 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
  * Similarly, range opcodes require contiguity in their registers, and that
  * cannot be handled by a naive 1-1 remapping.
  */
-bool simple_reg_remap(MethodTransform* mt) {
+bool simple_reg_remap(IRCode* mt) {
   for (auto& mie : InstructionIterable(mt)) {
     auto insn = mie.insn;
     if (insn->is_wide() || opcode::has_range(insn->opcode())) {
@@ -1023,7 +1064,7 @@ void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
   reg_set |= mapped;
 }
 
-void enlarge_registers(DexCode* code,
+void enlarge_registers(IRCode* code,
                        FatMethod* fmethod,
                        uint16_t newregs) {
   RegMap reg_map;
@@ -1160,8 +1201,8 @@ void cleanup_callee_debug(FatMethod* fcallee) {
  * For splicing a callee's FatMethod into a caller.
  */
 class MethodSplicer {
-  MethodTransform* m_mtcaller;
-  MethodTransform* m_mtcallee;
+  IRCode* m_mtcaller;
+  IRCode* m_mtcallee;
   // We need a map of MethodItemEntry we have created because a branch
   // points to another MethodItemEntry which may have been created or not
   std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
@@ -1173,8 +1214,8 @@ class MethodSplicer {
   std::unordered_set<uint16_t> m_valid_dbg_regs;
 
  public:
-  MethodSplicer(MethodTransform* mtcaller,
-                MethodTransform* mtcallee,
+  MethodSplicer(IRCode* mtcaller,
+                IRCode* mtcallee,
                 const RegMap& callee_reg_map,
                 DexPosition* invoke_position,
                 MethodItemEntry* active_catch)
@@ -1325,9 +1366,9 @@ MethodItemEntry* find_active_catch(FatMethod* method,
  * When inlining, writing over one of the ins may change the type of the
  * register to a type that breaks the invariants in the caller.
  */
-RegSet ins_reg_defs(const DexCode& code, MethodTransform* mt) {
+RegSet ins_reg_defs(IRCode& code) {
   RegSet def_ins(code.get_registers_size());
-  for (auto& mie : InstructionIterable(mt)) {
+  for (auto& mie : InstructionIterable(&code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_CHECK_CAST) {
       def_ins.set(insn->src(0));
@@ -1351,14 +1392,12 @@ RegSet ins_reg_defs(const DexCode& code, MethodTransform* mt) {
 
 }
 
-void MethodTransform::inline_tail_call(DexMethod* caller,
+void IRCode::inline_tail_call(DexMethod* caller,
                                        DexMethod* callee,
                                        IRInstruction* invoke) {
   TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
-  MethodTransform* tcaller = caller->get_code()->get_entries();
-  MethodTransform* tcallee = callee->get_code()->get_entries();
-  auto fcaller = tcaller->m_fmethod;
-  auto fcallee = tcallee->m_fmethod;
+  auto fcaller = caller->get_code()->m_fmethod;
+  auto fcallee = callee->get_code()->m_fmethod;
 
   auto bregs = caller->get_code()->get_registers_size();
   auto eregs = callee->get_code()->get_registers_size();
@@ -1399,9 +1438,9 @@ void MethodTransform::inline_tail_call(DexMethod* caller,
   caller->get_code()->set_outs_size(callee->get_code()->get_outs_size());
 }
 
-bool MethodTransform::inline_16regs(InlineContext& context,
-                                    DexMethod* callee,
-                                    IRMethodInstruction* invoke) {
+bool IRCode::inline_16regs(InlineContext& context,
+                           DexMethod* callee,
+                           IRMethodInstruction* invoke) {
   auto caller_code = context.caller_code;
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
   uint16_t newregs = caller_code->get_registers_size();
@@ -1410,8 +1449,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   }
 
   auto callee_code = callee->get_code();
-  auto mtcallee = callee_code->get_entries();
-  bool simple_remap_ok = simple_reg_remap(mtcallee);
+  bool simple_remap_ok = simple_reg_remap(&*callee_code);
   // if the simple approach won't work, just be conservative and assume all
   // caller temp regs are live
   auto invoke_live_out = context.live_out(invoke);
@@ -1425,7 +1463,7 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   invoke_live_out.enlarge(caller_code->get_ins_size(), newregs);
 
   auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
-  auto def_ins = ins_reg_defs(*callee_code, mtcallee);
+  auto def_ins = ins_reg_defs(*callee_code);
   // if we map two callee registers v0 and v1 to the same caller register v2,
   // and v1 gets written to in the callee, we're gonna have a bad time
   if (def_ins.any() && has_aliased_arguments(invoke)) {
@@ -1436,9 +1474,8 @@ bool MethodTransform::inline_16regs(InlineContext& context,
     return false;
   }
 
-  auto mtcaller = context.caller_code->get_entries();
-  auto fcaller = mtcaller->m_fmethod;
-  auto fcallee = mtcallee->m_fmethod;
+  auto fcaller = caller_code->m_fmethod;
+  auto fcallee = callee_code->m_fmethod;
 
   auto temps_needed =
       callee_code->get_registers_size() - callee_code->get_ins_size();
@@ -1491,8 +1528,8 @@ bool MethodTransform::inline_16regs(InlineContext& context,
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  auto splice = MethodSplicer(mtcaller,
-                              mtcallee,
+  auto splice = MethodSplicer(&*caller_code,
+                              &*callee_code,
                               callee_reg_map,
                               invoke_position.get(),
                               caller_catch);
@@ -1555,13 +1592,12 @@ bool MethodTransform::inline_16regs(InlineContext& context,
   return true;
 }
 
-void MethodTransform::enlarge_regs(DexMethod* method, uint16_t newregs) {
+void IRCode::enlarge_regs(DexMethod* method, uint16_t newregs) {
   auto code = method->get_code();
   always_assert(code != nullptr);
   always_assert(code->get_registers_size() <= newregs);
 
-  MethodTransform* tcaller = code->get_entries();
-  auto fcaller = tcaller->m_fmethod;
+  auto fcaller = code->m_fmethod;
 
   enlarge_registers(&*code, fcaller, newregs);
 }
@@ -1641,7 +1677,7 @@ bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
   return false;
 }
 
-void MethodTransform::clear_cfg() {
+void IRCode::clear_cfg() {
   m_cfg.reset();
   std::vector<FatMethod::iterator> fallthroughs;
   for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
@@ -1654,7 +1690,7 @@ void MethodTransform::clear_cfg() {
   }
 }
 
-void MethodTransform::build_cfg(bool end_block_before_throw) {
+void IRCode::build_cfg(bool end_block_before_throw) {
   clear_cfg();
   m_cfg = std::make_unique<ControlFlowGraph>();
   // Find the block boundaries
@@ -1775,53 +1811,20 @@ void MethodTransform::build_cfg(bool end_block_before_throw) {
   TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
 
-static void mt_balloon(void* arg) {
-  auto code = reinterpret_cast<DexCode*>(arg);
-  code->balloon();
-}
-
-void MethodTransform::balloon_all(const Scope& scope) {
-  std::vector<work_item> workitems;
-  walk_code(scope,
-            [](DexMethod*) { return true; },
-            [&](DexMethod*, DexCode& code) {
-              workitems.push_back(work_item{mt_balloon, &code});
-            });
-  WorkQueue wq;
-  wq.run_work_items(workitems.data(), (int)workitems.size());
-}
-
-static void mt_sync(void* arg) {
-  auto code = reinterpret_cast<DexCode*>(arg);
-  code->sync();
-}
-
-void MethodTransform::sync_all(const Scope& scope) {
-  constexpr bool serial = false; // for debugging
-  std::vector<work_item> workitems;
-  walk_code(scope,
-            [](DexMethod*) { return true; },
-            [&](DexMethod* m, DexCode& code) {
-              auto mt = code.get_entries();
-              if (mt) {
-                if (serial) {
-                  TRACE(MTRANS, 2, "Syncing %s\n", SHOW(m));
-                  code.sync();
-                } else {
-                  workitems.push_back(work_item{mt_sync, &code});
-                }
-              }
-            });
-  WorkQueue wq;
-  wq.run_work_items(workitems.data(), (int)workitems.size());
-}
-
-void MethodTransform::sync(DexCode* code) {
-  while (try_sync(code) == false)
+std::unique_ptr<DexCode> IRCode::sync(const DexMethod*) {
+  // TODO: when we have load-param opcodes, check that they square with the
+  // prototype of the DexMethod
+  auto dex_code = std::make_unique<DexCode>();
+  dex_code->set_registers_size(m_registers_size);
+  dex_code->set_ins_size(m_ins_size);
+  dex_code->set_outs_size(m_outs_size);
+  dex_code->set_debug_item(std::move(m_dbg));
+  while (try_sync(&*dex_code) == false)
     ;
+  return dex_code;
 }
 
-bool MethodTransform::try_sync(DexCode* code) {
+bool IRCode::try_sync(DexCode* code) {
   uint32_t addr = 0;
   addr_mei_t addr_to_mei;
   // Step 1, regenerate opcode list for the method, and

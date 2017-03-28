@@ -74,10 +74,10 @@ void process_proto(std::unordered_set<const DexType*>* class_references,
 
 void process_code(std::unordered_set<const DexType*>* class_references,
                   DexMethod* meth,
-                  DexCode& code) {
+                  IRCode& code) {
   process_proto(class_references, meth);
   // Types referenced in code.
-  for (auto const& mie : InstructionIterable(meth->get_code()->get_entries())) {
+  for (auto const& mie : InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_types()) {
       auto typeop = static_cast<IRTypeInstruction*>(opcode);
@@ -115,7 +115,7 @@ size_t remove_empty_classes(Scope& classes) {
 
   walk_code(classes,
             [](DexMethod*) { return true; },
-            [&](DexMethod* meth, DexCode& code)
+            [&](DexMethod* meth, IRCode& code)
                { process_code(&class_references, meth, code); });
 
   size_t classes_before_size = classes.size();

@@ -185,21 +185,21 @@ class PeepholeOptimizer {
     }
   }
 
-  void apply_peepholes(MethodTransform* transform) {
+  void apply_peepholes(IRCode* transform) {
     for (auto rep : m_replacements) {
       transform->replace_opcode(rep.first, rep.second);
     }
   }
 
   void peephole(DexMethod* method) {
-    auto transform = method->get_code()->get_entries();
+    auto transform = method->get_code();
     m_replacements.clear();
     transform->build_cfg();
     auto const& blocks = transform->cfg().blocks();
     for (auto const& block : blocks) {
       peephole_block(block, method->get_code()->get_registers_size());
     }
-    apply_peepholes(transform);
+    apply_peepholes(&*transform);
   }
 
   void print_stats() {

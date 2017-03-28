@@ -17,6 +17,7 @@
 #include "DexAccess.h"
 #include "Trace.h"
 #include "Transform.h"
+#include "Walkers.h"
 #include "WorkQueue.h"
 
 #define DL_FAIL (1)
@@ -123,11 +124,27 @@ DexClasses DexLoader::load_dex(const char* location) {
   return classes;
 }
 
+static void mt_balloon(void* arg) {
+  auto method = reinterpret_cast<DexMethod*>(arg);
+  method->balloon();
+}
+
+static void balloon_all(const Scope& scope) {
+  std::vector<work_item> workitems;
+  walk_methods(scope, [&](DexMethod* m) {
+    if (m->get_dex_code()) {
+      workitems.push_back(work_item{mt_balloon, m});
+    }
+  });
+  WorkQueue wq;
+  wq.run_work_items(workitems.data(), (int)workitems.size());
+}
+
 DexClasses load_classes_from_dex(const char* location, bool balloon) {
   DexLoader dl;
   auto classes = dl.load_dex(location);
   if (balloon) {
-    MethodTransform::balloon_all(classes);
+    balloon_all(classes);
   }
   return classes;
 }

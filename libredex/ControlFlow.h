@@ -37,7 +37,7 @@ struct Block {
   }
 
  private:
-  friend class MethodTransform;
+  friend class IRCode;
 
   size_t m_id;
   FatMethod::iterator m_begin;

@@ -51,7 +51,7 @@ void loadMethodSizes(DexClasses& classes,
   {                                                       \
     auto method_##name = find_vmethod_named(*cls, #name); \
     ASSERT_NE(nullptr, method_##name);                    \
-    map[#name] = method_##name->get_code()->get_entries()->sum_opcode_sizes();\
+    map[#name] = method_##name->get_code()->sum_opcode_sizes();\
   }
   TESTS
 #undef WORK

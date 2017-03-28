@@ -84,7 +84,7 @@ bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
   if (!code) return false;
   auto const this_reg = code->get_registers_size() - code->get_ins_size();
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (opcode::has_range(insn->opcode())) {
       if (this_reg >= insn->range_base() &&
@@ -123,9 +123,9 @@ void fix_call_sites(
   walk_code(
     scope,
     [](DexMethod*) { return true; },
-    [&](DexMethod* m, DexCode& code) {
+    [&](DexMethod* m, IRCode& code) {
       std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
-      for (auto& mie : InstructionIterable(code.get_entries())) {
+      for (auto& mie : InstructionIterable(&code)) {
         auto inst = mie.insn;
         if (!inst->has_methods()) continue;
         auto mi = static_cast<IRMethodInstruction*>(inst);
@@ -156,7 +156,7 @@ void fix_call_sites(
         }
       }
       for (auto& pair : replacements) {
-        code.get_entries()->replace_opcode(pair.first, pair.second);
+        code.replace_opcode(pair.first, pair.second);
       }
     }
   );

@@ -218,7 +218,7 @@ void MultiMethodInliner::inline_callees(
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
-  for (auto& mie : InstructionIterable(caller->get_code()->get_entries())) {
+  for (auto& mie : InstructionIterable(caller->get_code())) {
     auto insn = mie.insn;
     if (!is_invoke(insn->opcode())) continue;
     auto mop = static_cast<IRMethodInstruction*>(insn);
@@ -250,13 +250,13 @@ void MultiMethodInliner::inline_callees(
         SHOW(caller),
         callee->get_code()->get_registers_size() -
         callee->get_code()->get_ins_size());
-    if (!MethodTransform::inline_16regs(inline_context, callee, mop)) {
+    if (!IRCode::inline_16regs(inline_context, callee, mop)) {
       info.more_than_16regs++;
       continue;
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     inline_context.estimated_insn_size +=
-        callee->get_code()->get_entries()->sum_opcode_sizes();
+        callee->get_code()->sum_opcode_sizes();
     change_visibility(callee);
     info.calls_inlined++;
     inlined.insert(callee);
@@ -308,7 +308,7 @@ bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  auto insns_size = callee->get_code()->get_entries()->sum_opcode_sizes();
+  auto insns_size = callee->get_code()->sum_opcode_sizes();
   if (ctx.estimated_insn_size + insns_size >
       MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
@@ -348,7 +348,7 @@ bool MultiMethodInliner::has_external_catch(DexMethod* callee) {
 bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
                                                DexMethod* caller) {
   int ret_count = 0;
-  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+  for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (create_vmethod(insn)) return true;
     if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
@@ -527,7 +527,7 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
     return true;
   };
 
-  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+  for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (insn->has_types()) {
       auto top = static_cast<IRTypeInstruction*>(insn);
@@ -572,7 +572,7 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
 void MultiMethodInliner::change_visibility(DexMethod* callee) {
   TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
       SHOW(callee));
-  for (auto& mie : InstructionIterable(callee->get_code()->get_entries())) {
+  for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (insn->has_fields()) {
       auto fop = static_cast<IRFieldInstruction*>(insn);
@@ -624,16 +624,13 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
     }
   }
 
-  // Changing visibility of catch exception types.
-  for(auto &tryit : callee->get_code()->get_tries()) {
-    for (auto const& it : tryit->m_catches) {
-      if (it.first) {
-        auto cls = type_class(it.first);
-        if (cls != nullptr && !cls->is_external()) {
-          TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(it.first));
-          set_public(cls);
-        }
-      }
+  std::vector<DexType*> types;
+  callee->get_code()->gather_catch_types(types);
+  for (auto type : types) {
+    auto cls = type_class(type);
+    if (cls != nullptr && !cls->is_external()) {
+      TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
+      set_public(cls);
     }
   }
 }

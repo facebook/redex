@@ -128,11 +128,10 @@ CreateReferenceGraphPass::exception_ref_builder(
   return ([this, &scope, &class_refs](const DexMethod* meth) {
     const auto* enclosing_class = type_class(meth->get_class());
 
-    for (const auto& tries : meth->get_code()->get_tries()) {
-      for (const auto& catch_pair : tries->m_catches) {
-        const auto* caught_except = catch_pair.first;
-        if (caught_except) class_refs[enclosing_class].emplace(caught_except);
-      }
+    std::vector<DexType*> catch_types;
+    meth->get_code()->gather_catch_types(catch_types);
+    for (auto type : catch_types) {
+      class_refs[enclosing_class].emplace(type);
     }
   });
 }

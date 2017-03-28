@@ -1089,6 +1089,6 @@ std::string show(const Liveness& analysis) {
   return ss.str();
 }
 
-std::string show(const MethodTransform* mt) {
+std::string show(const IRCode* mt) {
   return show(mt->m_fmethod);
 }

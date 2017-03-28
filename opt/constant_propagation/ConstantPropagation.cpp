@@ -61,9 +61,9 @@ namespace {
       TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
       // The loop traverses all blocks in the method until no more branch is converted
       while (changed) {
-        auto transform = method->get_code()->get_entries();
-        transform->build_cfg();
-        auto& cfg = transform->cfg();
+        auto code = method->get_code();
+        code->build_cfg();
+        auto& cfg = code->cfg();
         TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
         auto first_block = cfg.blocks()[0];
         // block_preds saves the re-calculated number of predecessors of each block
@@ -72,7 +72,7 @@ namespace {
         find_reachable_predecessors(cfg.blocks(), block_to_predecessors_count);
         changed = propagate_constant_in_method(
             method, first_block, block_to_predecessors_count);
-        apply_changes(transform);
+        apply_changes(code);
       }
     }
 
@@ -126,23 +126,23 @@ namespace {
       return changed;
     }
 
-    void apply_changes(MethodTransform* transform) {
+    void apply_changes(IRCode* code) {
       for (auto const& p : replacements) {
         auto const& old_op = p.first;
         auto const& new_op = p.second;
-        transform->replace_opcode(old_op, new_op);
+        code->replace_opcode(old_op, new_op);
       }
       replacements.clear();
 
       for (auto const& p : branch_replacements) {
         auto const& old_op = p.first;
         auto const& new_op = p.second;
-        transform->replace_branch(old_op, new_op);
+        code->replace_branch(old_op, new_op);
       }
       branch_replacements.clear();
 
       for (auto dead : dead_instructions) {
-        transform->remove_opcode(dead);
+        code->remove_opcode(dead);
       }
       dead_instructions.clear();
     }

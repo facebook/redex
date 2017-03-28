@@ -22,7 +22,7 @@ void drop_this(DexMethod* method) {
   assert_log(nins >= 1, "Too few in regs: %s\n", SHOW(method));
   code->set_registers_size(nregs - 1);
   code->set_ins_size(nins - 1);
-  for (auto& mie : InstructionIterable(code->get_entries())) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       auto dest = insn->dest();

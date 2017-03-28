@@ -85,14 +85,13 @@ bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
 
   always_assert(method != nullptr);
 
-  auto code = method->get_code();
-  auto oldregs = code->get_registers_size();
+  auto oldregs = method->get_code()->get_registers_size();
   auto newregs = oldregs + extra_regs;
 
   if (newregs > 16) {
     return false;
   }
-  MethodTransform::enlarge_regs(method, newregs);
+  IRCode::enlarge_regs(method, newregs);
   return true;
 }
 
@@ -112,8 +111,8 @@ DexOpcode get_move_opcode(const IRInstruction* insn) {
 /**
  * Adds an instruction that initializes a new register with null.
  */
-void add_null_instr(MethodTransform* transform, uint16_t reg) {
-  always_assert(transform != nullptr);
+void add_null_instr(IRCode* code, uint16_t reg) {
+  always_assert(code != nullptr);
 
   IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
 
@@ -125,18 +124,18 @@ void add_null_instr(MethodTransform* transform, uint16_t reg) {
 
   // Adds the instruction at the beginning, since it might be
   // used in various places later.
-  transform->insert_after(nullptr, insns);
+  code->insert_after(nullptr, insns);
 }
 
 /**
  * Adds a move instruction after the given instruction.
  */
-void add_move_instr(MethodTransform* transform,
+void add_move_instr(IRCode* code,
                     const IRInstruction* position,
                     uint16_t src_reg,
                     uint16_t dest_reg,
                     DexOpcode move_opcode) {
-  always_assert(transform != nullptr);
+  always_assert(code != nullptr);
   always_assert(position != nullptr);
 
   IRInstruction* insn = new IRInstruction(move_opcode);
@@ -146,7 +145,7 @@ void add_move_instr(MethodTransform* transform,
   std::vector<IRInstruction*> insns;
   insns.push_back(insn);
 
-  transform->insert_after(const_cast<IRInstruction*>(position), insns);
+  code->insert_after(const_cast<IRInstruction*>(position), insns);
 }
 
 using MoveList = std::unordered_map<
@@ -160,7 +159,6 @@ void method_updates(DexMethod* method,
                     uint16_t extra_regs) {
 
   auto code = method->get_code();
-  auto transform = code->get_entries();
 
   for (const auto& move_elem : move_list) {
     const IRInstruction* insn = move_elem.first;
@@ -180,11 +178,11 @@ void method_updates(DexMethod* method,
 
     DexOpcode move_opcode = std::get<2>(move_elem.second);
 
-    add_move_instr(transform, insn, src_reg, dest_reg, move_opcode);
+    add_move_instr(code, insn, src_reg, dest_reg, move_opcode);
   }
 
   for (const auto& insn : deletes) {
-    transform->remove_opcode(insn);
+    code->remove_opcode(insn);
   }
 }
 
@@ -246,7 +244,7 @@ bool inline_build(DexMethod* method, DexClass* builder) {
   std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
   DexMethod* build_method = get_build_method(builder->get_vmethods());
 
-  for (auto const& mie : InstructionIterable(code->get_entries())) {
+  for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked =
@@ -268,7 +266,7 @@ bool inline_build(DexMethod* method, DexClass* builder) {
   for (auto inlinable : inlinables) {
     // TODO(emmasevastian): We will need to gate this with a check, mostly as
     //                      we loosen the build method restraints.
-    if (!MethodTransform::inline_16regs(
+    if (!IRCode::inline_16regs(
             inline_context, inlinable.first, inlinable.second)) {
       return false;
     }
@@ -283,9 +281,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
     return false;
   }
 
-  auto transform = code->get_entries();
-  transform->build_cfg();
-  auto blocks = postorder_sort(transform->cfg().blocks());
+  code->build_cfg();
+  auto blocks = postorder_sort(code->cfg().blocks());
 
   auto fields_in = fields_setters(blocks, builder);
 
@@ -409,7 +406,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   }
 
   if (null_reg != FieldOrRegStatus::UNDEFINED) {
-    add_null_instr(transform, null_reg);
+    add_null_instr(code, null_reg);
   }
 
   method_updates(

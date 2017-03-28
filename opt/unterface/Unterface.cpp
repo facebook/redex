@@ -91,6 +91,8 @@ Trait check_init(DexMethod* meth) {
   }
   if (code == nullptr) return trait;
   if (code->get_ins_size() != 2) return trait;
+  /*
+  FIXME: convert to use IRCode
   auto insns = code->get_instructions();
   if (insns.size() != 3) return trait;
   if (insns[0]->opcode() == OPCODE_IPUT_OBJECT &&
@@ -98,6 +100,7 @@ Trait check_init(DexMethod* meth) {
       insns[2]->opcode() == OPCODE_RETURN_VOID) {
     trait |= HAS_SIMPLE_INIT;
   }
+  */
   return trait;
 }
 

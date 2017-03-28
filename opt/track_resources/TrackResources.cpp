@@ -91,7 +91,7 @@ void get_sput_in_clinit(DexClass* clazz,
     if (is_clinit(method)) {
       always_assert_log(is_static(method) && is_constructor(method),
           "static constructor doesn't have the proper access bits set\n");
-      for (auto& mie : InstructionIterable(method->get_code()->get_entries())) {
+      for (auto& mie : InstructionIterable(method->get_code())) {
         auto opcode = mie.insn;
         if (opcode->has_fields() && is_sput(opcode->opcode())) {
           auto fieldop = static_cast<IRFieldInstruction*>(opcode);

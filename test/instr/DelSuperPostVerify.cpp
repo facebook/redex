@@ -56,7 +56,7 @@ TEST_F(PostVerify, DelSuper) {
     classes, "Lcom/facebook/redex/test/instr/DelSuperTest;");
   auto test_opt_1 = find_vmethod_named(*test_class, "testOptimized1");
   int optimized1_count = 0;
-  for (auto& insn : test_opt_1->get_code()->get_instructions()) {
+  for (auto& insn : test_opt_1->get_dex_code()->get_instructions()) {
     if (is_invoke(insn->opcode())) {
       auto mop = static_cast<DexOpcodeMethod*>(insn);
       auto m = mop->get_method();

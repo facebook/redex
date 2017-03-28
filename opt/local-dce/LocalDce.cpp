@@ -154,9 +154,9 @@ class LocalDce {
   }
 
   void dce(DexMethod* method) {
-    auto transform = method->get_code()->get_entries();
-    transform->build_cfg();
-    auto& cfg = transform->cfg();
+    auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
     auto blocks = postorder_sort(cfg.blocks());
     auto regs = method->get_code()->get_registers_size();
     std::vector<boost::dynamic_bitset<>> liveness(
@@ -219,27 +219,27 @@ class LocalDce {
     TRACE(DCE, 2, "%s\n", SHOW(method));
     for (auto dead : dead_instructions) {
       TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
-      transform->remove_opcode(dead);
+      code->remove_opcode(dead);
       m_instructions_eliminated++;
     }
 
-    remove_unreachable_blocks(method, transform, cfg);
+    remove_unreachable_blocks(method, &*code, cfg);
 
     TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
     TRACE(DCE, 5, "%s", SHOW(cfg));
   }
 
  private:
-  void remove_block(MethodTransform* transform, Block* b) {
+  void remove_block(IRCode* code, Block* b) {
     for (auto& mei : *b) {
       if (mei.type == MFLOW_OPCODE) {
-        transform->remove_opcode(mei.insn);
+        code->remove_opcode(mei.insn);
       }
     }
   }
 
   void remove_unreachable_blocks(DexMethod* method,
-                                 MethodTransform* transform,
+                                 IRCode* code,
                                  ControlFlowGraph& cfg) {
     auto& blocks = cfg.blocks();
     // Remove edges to catch blocks that no longer exist.
@@ -283,7 +283,7 @@ class LocalDce {
       for (auto& p : remove_edges) {
         cfg.remove_all_edges(p.first, p.second);
       }
-      remove_block(transform, b);
+      remove_block(code, b);
     }
 
     // comb the method looking for superfluous try sections that do not enclose
@@ -291,7 +291,7 @@ class LocalDce {
     // nested, otherwise this won't produce the right result.
     bool encloses_throw {false};
     MethodItemEntry* try_start {nullptr};
-    for (auto& mie : *transform) {
+    for (auto& mie : *code) {
       if (mie.type == MFLOW_TRY) {
         auto tentry = mie.tentry;
         if (tentry->type == TRY_START) {

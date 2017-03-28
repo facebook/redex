@@ -147,7 +147,7 @@ DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   walk_methods(build_class_scope(stores), [&result](DexMethod* method) {
     auto key = show(method);
     always_assert(result.find(key) == end(result));
-    const auto& code = method->get_code();
+    const auto* code = method->get_dex_code();
     result.emplace(key,
                    std::make_tuple((code ? code->size() : 0),
                                    (code ? code->get_registers_size() : 0)));

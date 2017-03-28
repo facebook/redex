@@ -220,7 +220,7 @@ DexMethod* create_abstract_method(
   access = access | ACC_ABSTRACT;
   auto method = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
-  method->make_concrete(access, nullptr, true);
+  method->make_concrete(access, std::unique_ptr<IRCode>(nullptr), true);
   cls->add_method(method);
   return method;
 }

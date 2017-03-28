@@ -21,7 +21,7 @@
 namespace {
 
 void check_no_builder(DexMethod* method, DexType* builder_type) {
-  auto& insns = method->get_code()->get_instructions();
+  auto& insns = method->get_dex_code()->get_instructions();
 
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
@@ -136,7 +136,7 @@ TEST_F(PostVerify, RemoveBarBuilder) {
   DexType* builder_type = DexType::get_type("Lcom/facebook/redex/test/instr/Bar$Builder;");
 
   // Check builder was properly removed from the initialize_bar.
-  auto insns = initialize_bar->get_code()->get_instructions();
+  auto insns = initialize_bar->get_dex_code()->get_instructions();
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
@@ -154,7 +154,7 @@ TEST_F(PostVerify, RemoveBarBuilder) {
   int get_put_count = 0;
   std::unordered_set<uint16_t> iput_regs;
 
-  insns = initialize_bar_different_regs->get_code()->get_instructions();
+  insns = initialize_bar_different_regs->get_dex_code()->get_instructions();
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
@@ -205,7 +205,7 @@ TEST_F(PreVerify, RemoveCarBuilder) {
   auto initialize_null_model =
     find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
   EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS,
-            initialize_null_model->get_code()->get_registers_size());
+            initialize_null_model->get_dex_code()->get_registers_size());
 }
 
 /*
@@ -228,12 +228,12 @@ TEST_F(PostVerify, RemoveCarBuilder) {
 
   EXPECT_NE(nullptr, initialize_null_model);
   EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS + 1,
-            initialize_null_model->get_code()->get_registers_size());
+            initialize_null_model->get_dex_code()->get_registers_size());
 
   // Check there is a register that holds NULL and is passed to
   // the car's model field.
   uint16_t null_reg = -1;
-  auto insns = initialize_null_model->get_code()->get_instructions();
+  auto insns = initialize_null_model->get_dex_code()->get_instructions();
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 

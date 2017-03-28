@@ -15,6 +15,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "Transform.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -329,7 +330,7 @@ void create_runtime_exception_block(
 }
 
 bool passes_args_through(IRMethodInstruction* insn,
-                         const DexCode& code,
+                         const IRCode& code,
                          int ignore /* = 0 */
                          ) {
   auto regs = code.get_registers_size();

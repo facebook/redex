@@ -506,7 +506,7 @@ FatMethod::iterator MethodCreator::make_switch_block(
 
 MethodCreator::MethodCreator(DexMethod* meth)
     : method(meth)
-    , meth_code(new MethodTransform())
+    , meth_code(new IRCode())
     , out_count(0)
     , top_reg(0)
     , access(meth->get_access()) {
@@ -521,7 +521,7 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexProto* proto,
                              DexAccessFlags access)
     : method(DexMethod::make_method(cls, name, proto))
-    , meth_code(new MethodTransform())
+    , meth_code(new IRCode())
     , out_count(0)
     , top_reg(0)
     , access(access) {
@@ -532,10 +532,9 @@ MethodCreator::MethodCreator(DexType* cls,
 }
 
 DexMethod* MethodCreator::create() {
-  auto code = std::make_unique<DexCode>();
-  code->set_registers_size(top_reg);
-  code->set_ins_size(ins_count());
-  code->set_outs_size(out_count);
+  meth_code->set_registers_size(top_reg);
+  meth_code->set_ins_size(ins_count());
+  meth_code->set_outs_size(out_count);
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       IRInstruction* insn = mi.insn;
@@ -550,15 +549,12 @@ DexMethod* MethodCreator::create() {
       }
     }
   }
-  meth_code->sync(code.get());
-
   if (method->is_concrete()) {
-    method->set_code(std::move(code));
+    method->set_code(std::move(meth_code));
   } else {
-    method->make_concrete(access, std::move(code),
+    method->make_concrete(access, std::move(meth_code),
         !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
   }
-  method->get_code()->balloon();
   return method;
 }
 

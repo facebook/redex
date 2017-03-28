@@ -34,7 +34,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     {
       using namespace dex_asm;
-      auto mt = m_callee->get_code()->get_entries();
+      auto mt = m_callee->get_code();
       // note that this method will not behave the same way if v0 and v1 get
       // mapped to the same register
       mt->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}));
@@ -48,7 +48,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 
   virtual void build_method(DexMethod* m) {
     using namespace dex_asm;
-    auto mt = m->get_code()->get_entries();
+    auto mt = m->get_code();
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
 
     auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_callee);
@@ -66,7 +66,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 
   virtual void transform_method(DexMethod* m) {
     IRMethodInstruction* mop = nullptr;
-    for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
+    for (const auto& mie : InstructionIterable(m->get_code())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
         mop = static_cast<IRMethodInstruction*>(insn);
@@ -75,7 +75,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
       }
     }
     InlineContext context(m, true /* use_liveness */);
-    MethodTransform::inline_16regs(context, m_callee, mop);
+    IRCode::inline_16regs(context, m_callee, mop);
   }
 };
 
@@ -96,7 +96,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
                                proto);
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     using namespace dex_asm;
-    auto mt = m_callee->get_code()->get_entries();
+    auto mt = m_callee->get_code();
     // if-* opcodes store their jump offset as a 16-bit signed int. Let's
     // insert enough opcodes such that the offset overflows that width.
     // These are essentially NOPs, but we don't use actual NOPs because
@@ -115,7 +115,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual void build_method(DexMethod* m) {
     using namespace dex_asm;
-    auto mt = m->get_code()->get_entries();
+    auto mt = m->get_code();
     mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
     mt->push_back(dasm(OPCODE_CONST_4, {2_v, 1_L}));
     // if block
@@ -138,7 +138,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual void transform_method(DexMethod* m) {
     IRMethodInstruction* mop = nullptr;
-    for (const auto& mie : InstructionIterable(m->get_code()->get_entries())) {
+    for (const auto& mie : InstructionIterable(m->get_code())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
         mop = static_cast<IRMethodInstruction*>(insn);
@@ -148,9 +148,9 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     }
     assert(mop != nullptr);
     InlineContext context(m, true /* use_liveness */);
-    MethodTransform::inline_16regs(context, m_callee, mop);
+    IRCode::inline_16regs(context, m_callee, mop);
     // make sure we actually bloated the method
-    always_assert(m->get_code()->get_entries()->count_opcodes() > NOP_COUNT);
+    always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }
 };
 

@@ -52,8 +52,8 @@ struct ConstPropTest : testing::Test {
     auto clinit = clazz->get_clinit();
     ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str() << " missing clinit";
     auto code = clinit->get_code();
-    EXPECT_EQ(code->get_entries()->count_opcodes(), 0)
-        << "Class " << clazz->c_str() << " has non-empty clinit";
+    EXPECT_EQ(code->count_opcodes(), 0) << "Class " << clazz->c_str()
+                                        << " has non-empty clinit";
   }
 
   void expect_field_eq(DexClass* clazz, const std::string& name, DexType* type, uint64_t expected) {
@@ -115,7 +115,7 @@ DexField* add_dependent_field(DexClass* cls, const std::string& name, DexField *
   assert(init_ops.count(parent_type->c_str()) != 0);
   auto ops = init_ops[parent_type->c_str()];
   auto clinit = cls->get_clinit();
-  auto mt = clinit->get_code()->get_entries();
+  auto mt = clinit->get_code();
   auto sget = new IRFieldInstruction(ops.first, parent);
   sget->set_dest(0);
   mt->push_back(sget);

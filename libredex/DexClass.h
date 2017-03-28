@@ -51,10 +51,12 @@
  * the pointer values of each type that has a uniqueness requirement.
  */
 
+class DexClass;
 class DexDebugInstruction;
 class DexOutputIdx;
 class DexString;
 class DexType;
+using Scope = std::vector<DexClass*>;
 
 // Forward decls to break cycle with ProguardMap.h
 std::string proguard_name(const DexType* cls);
@@ -521,16 +523,17 @@ struct DexTryItem {
     m_start_addr(start_addr), m_insn_count(insn_count) {}
 };
 
-class MethodTransform;
+class IRCode;
 
 class DexCode {
+  friend class DexMethod;
+
   uint16_t m_registers_size;
   uint16_t m_ins_size;
   uint16_t m_outs_size;
   std::unique_ptr<std::vector<DexInstruction*>> m_insns;
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
   std::unique_ptr<DexDebugItem> m_dbg;
-  MethodTransform* m_entries {nullptr};
 
  public:
   static std::unique_ptr<DexCode> get_dex_code(DexIdx* idx, uint32_t offset);
@@ -555,8 +558,13 @@ class DexCode {
 
  public:
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
+  void set_debug_item(std::unique_ptr<DexDebugItem> dbg) {
+    m_dbg = std::move(dbg);
+  }
   DexDebugItem* get_debug_item() { return m_dbg.get(); }
-  void remove_debug_item() { m_dbg = nullptr; }
+  std::unique_ptr<DexDebugItem> release_debug_item() {
+    return std::move(m_dbg);
+  }
   std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
     return std::move(m_insns);
   }
@@ -594,21 +602,11 @@ class DexCode {
    */
   int encode(DexOutputIdx* dodx, uint32_t* output);
 
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_catch_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
-
   /*
    * Returns the number of 2-byte code units needed to encode all the
    * instructions.
    */
   uint32_t size() const;
-
-  MethodTransform* get_entries() const { return m_entries; }
-  void balloon();
-  void sync();
 
   friend std::string show(const DexCode*);
 };
@@ -619,7 +617,8 @@ class DexMethod {
   DexMethodRef m_ref;
   /* Concrete method members */
   DexAnnotationSet* m_anno;
-  std::unique_ptr<DexCode> m_code;
+  std::unique_ptr<DexCode> m_dex_code;
+  std::unique_ptr<IRCode> m_code;
   DexAccessFlags m_access;
   bool m_concrete;
   bool m_virtual;
@@ -628,15 +627,8 @@ class DexMethod {
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexMethod(DexType* type, DexString* name, DexProto* proto)
-      : m_ref(type, name, proto) {
-    m_concrete = false;
-    m_virtual = false;
-    m_external = false;
-    m_anno = nullptr;
-    m_code = nullptr;
-    m_access = static_cast<DexAccessFlags>(0);
-  }
+  DexMethod(DexType* type, DexString* name, DexProto* proto);
+  ~DexMethod();
 
  public:
   // Tracks whether this method can be deleted or renamed
@@ -702,9 +694,11 @@ class DexMethod {
   DexString* get_name() const { return m_ref.name; }
   const char* c_str() const { return get_name()->c_str(); }
   DexProto* get_proto() const { return m_ref.proto; }
-  const DexCode* get_code() const { return m_code.get(); }
-  DexCode* get_code() { return m_code.get(); }
-  std::unique_ptr<DexCode> release_code() { return std::move(m_code); }
+  const DexCode* get_dex_code() const { return m_dex_code.get(); }
+  DexCode* get_dex_code() { return m_dex_code.get(); }
+  IRCode* get_code() { return m_code.get(); }
+  const IRCode* get_code() const { return m_code.get(); }
+  std::unique_ptr<IRCode> release_code();
   bool is_concrete() const { return m_concrete; }
   bool is_virtual() const { return m_virtual; }
   bool is_external() const { return m_external; }
@@ -746,13 +740,15 @@ class DexMethod {
         "Unexpected concrete method %s\n", SHOW(this));
     m_external = true;
   }
-  void set_code(std::unique_ptr<DexCode> code) { m_code = std::move(code); }
+  void set_dex_code(std::unique_ptr<DexCode> code) {
+    m_dex_code = std::move(code);
+  }
+  void set_code(std::unique_ptr<IRCode> code);
 
-  void make_concrete(DexAccessFlags access,
-                     std::unique_ptr<DexCode> dc,
-                     bool is_virtual);
-  void make_concrete(DexAccessFlags access,
-                     bool is_virtual);
+  void make_concrete(DexAccessFlags, std::unique_ptr<DexCode>, bool is_virtual);
+  void make_concrete(DexAccessFlags, std::unique_ptr<IRCode>, bool is_virtual);
+  void make_concrete(DexAccessFlags access, bool is_virtual);
+
   void change(const DexMethodRef& ref, bool rename_on_collision = false) {
     g_redex->mutate_method(this, ref, rename_on_collision);
   }
@@ -785,6 +781,18 @@ class DexMethod {
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
+
+  /*
+   * DexCode <-> IRCode conversion methods.
+   *
+   * In general DexCode is only used in the load / output phases, and in tests
+   * when we wish to verify that we have generated specific instructions.
+   *
+   * Most operations can and should use IRCode. Optimizations should never
+   * have to call sync().
+   */
+  void balloon();
+  void sync();
 };
 
 /* Non-optimizing DexSpec compliant ordering */

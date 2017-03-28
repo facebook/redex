@@ -27,7 +27,7 @@ std::unordered_set<DexMethod*> InlineInitPass::gather_init_candidates(
   walk_methods(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (is_constructor(method) && !is_static(method)) {
-      if (code->get_entries()->count_opcodes() < SMALL_CODE_SIZE) {
+      if (code->count_opcodes() < SMALL_CODE_SIZE) {
         candidates.emplace(method);
       } else if (!can_delete(method)) {
         deletable_ctors.insert(method);
