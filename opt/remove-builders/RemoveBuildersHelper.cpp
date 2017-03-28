@@ -148,35 +148,32 @@ void add_move_instr(IRCode* code,
   code->insert_after(const_cast<IRInstruction*>(position), insns);
 }
 
-using MoveList = std::unordered_map<
-    const IRInstruction*,
-    std::tuple</* dest reg */ uint16_t, /* src reg */ uint16_t, DexOpcode>>;
+using MoveList =
+    std::unordered_map<const IRInstruction*, std::pair<uint16_t, DexOpcode>>;
 
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
-                    const MoveList& move_list,
-                    uint16_t initial_non_input_reg_size,
-                    uint16_t extra_regs) {
+                    const MoveList& move_list) {
 
   auto code = method->get_code();
 
+  // This will basically replace an iput / iget instruction
+  // with a move (giving the instruction will be removed later).
+  //
+  // Example:
+  //  iput v0, object // field -> move new_reg, v0
+  //  iget v0, object // field -> move v0, new_reg
   for (const auto& move_elem : move_list) {
     const IRInstruction* insn = move_elem.first;
+    bool is_iput_insn = is_iput(insn->opcode());
 
-    uint16_t dest_reg = std::get<0>(move_elem.second);
-    uint16_t src_reg = std::get<1>(move_elem.second);
+    uint16_t new_reg = move_elem.second.first;
+    uint16_t insn_reg = is_iput_insn ? insn->src(0) : insn->dest();
 
-    // If we are moving parameters around we need to account
-    // for the extra allocated regs.
-    if (is_iput(insn->opcode())) {
-      if (src_reg >= initial_non_input_reg_size) {
-        src_reg += extra_regs;
-      }
-    } else if (dest_reg >= initial_non_input_reg_size) {
-      dest_reg += extra_regs;
-    }
+    uint16_t src_reg = is_iput_insn ? insn_reg : new_reg;
+    uint16_t dest_reg = is_iput_insn ? new_reg : insn_reg;
 
-    DexOpcode move_opcode = std::get<2>(move_elem.second);
+    DexOpcode move_opcode = move_elem.second.second;
 
     add_move_instr(code, insn, src_reg, dest_reg, move_opcode);
   }
@@ -335,8 +332,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
               extra_regs++;
             }
 
-            move_replacements[insn] =
-                std::make_tuple(insn->dest(), null_reg, OPCODE_MOVE);
+            move_replacements[insn] = std::make_pair(null_reg, OPCODE_MOVE);
 
           } else {
             // If we got here, the field is either:
@@ -354,29 +350,25 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
             // Check if we already have a value for it.
             if (move_replacements.find(iput_insn) != move_replacements.end()) {
-              move_replacements[insn] =
-                  std::make_tuple(insn->dest(),
-                                  std::get<0>(move_replacements[iput_insn]),
-                                  move_opcode);
+              move_replacements[insn] = std::make_pair(
+                  move_replacements[iput_insn].first, move_opcode);
 
             } else if (fields_in_insn.field_to_reg[field] ==
                        FieldOrRegStatus::OVERWRITTEN) {
 
               // We need to add 2 moves: one for the iput, one for iget.
               move_replacements[iput_insn] =
-                  std::make_tuple(non_input_reg_size + extra_regs,
-                                  iput_insn->src(0),
-                                  move_opcode);
+                  std::make_pair(non_input_reg_size + extra_regs, move_opcode);
 
-              move_replacements[insn] = std::make_tuple(
-                  insn->dest(), non_input_reg_size + extra_regs, move_opcode);
+              move_replacements[insn] =
+                  std::make_pair(non_input_reg_size + extra_regs, move_opcode);
 
               extra_regs += is_wide ? 2 : 1;
 
             } else {
               // We can reuse the existing reg, so will have only 1 move.
               move_replacements[insn] =
-                  std::make_tuple(insn->dest(), iput_insn->src(0), move_opcode);
+                  std::make_pair(iput_insn->src(0), move_opcode);
             }
           }
 
@@ -411,7 +403,6 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
     add_null_instr(code, null_reg);
   }
 
-  method_updates(
-      method, deletes, move_replacements, non_input_reg_size, extra_regs);
+  method_updates(method, deletes, move_replacements);
   return true;
 }
