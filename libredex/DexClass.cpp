@@ -573,6 +573,14 @@ void DexMethod::make_concrete(DexAccessFlags access,
   make_concrete(access, std::make_unique<IRCode>(), is_virtual);
 }
 
+void DexMethod::make_non_concrete() {
+  m_access = static_cast<DexAccessFlags>(0);
+  m_concrete = false;
+  m_code.reset();
+  m_virtual = false;
+  m_param_anno.clear();
+}
+
 /*
  * See class_data_item in Dex spec.
  */

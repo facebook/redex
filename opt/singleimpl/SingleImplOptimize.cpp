@@ -249,6 +249,11 @@ void OptimizationImpl::rewrite_method_defs(DexType* intf,
     assert(proto != meth->get_proto());
     auto new_meth = DexMethod::make_method(
         meth->get_class(), meth->get_name(), proto);
+    // new_meth may have already existed in RedexContext, so
+    // we need to make sure it isn't concrete.
+    // TODO: this is horrible. After we remove methods, we shouldn't
+    // have these zombies lying around.
+    new_meth->make_non_concrete();
     new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
     new_meth->rstate = meth->rstate;
     assert(new_meth != meth);
