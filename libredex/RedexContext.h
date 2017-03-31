@@ -41,12 +41,10 @@ struct RedexContext {
 
   DexString* make_string(const char* nstr, uint32_t utfsize);
   DexString* get_string(const char* nstr, uint32_t utfsize);
-  template <typename V> void visit_all_dexstring(V v);
 
   DexType* make_type(DexString* dstring);
   DexType* get_type(DexString* dstring);
   void alias_type_name(DexType* type, DexString* new_name);
-  template <typename V> void visit_all_dextype(V v);
 
   DexField* make_field(const DexType* container,
                        const DexString* name,
@@ -95,7 +93,7 @@ struct RedexContext {
   std::mutex s_string_lock;
 
   // DexType
-  std::map<DexString*, DexType*> s_type_map;
+  std::unordered_map<DexString*, DexType*> s_type_map;
   std::mutex s_type_lock;
 
   // DexField
@@ -107,7 +105,8 @@ struct RedexContext {
   std::mutex s_typelist_lock;
 
   // DexProto
-  std::map<DexType*, std::map<DexTypeList*, DexProto*>> s_proto_map;
+  std::unordered_map<DexType*, std::unordered_map<DexTypeList*, DexProto*>>
+      s_proto_map;
   std::mutex s_proto_lock;
 
   // DexMethod
@@ -122,19 +121,3 @@ struct RedexContext {
 
   const std::vector<const DexType*> m_empty_types;
 };
-
-template <typename V>
-void RedexContext::visit_all_dexstring(V v) {
-  std::lock_guard<std::mutex> lock(s_string_lock);
-  for (auto const& p : s_string_map) {
-    v(p.second);
-  }
-}
-
-template <typename V>
-void RedexContext::visit_all_dextype(V v) {
-  std::lock_guard<std::mutex> lock(s_type_lock);
-  for (auto const& p : s_type_map) {
-    v(p.second);
-  }
-}

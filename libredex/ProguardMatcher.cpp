@@ -37,7 +37,7 @@ std::unique_ptr<boost::regex> make_rx(const std::string& s,
 }
 
 bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
-  auto annos = cls->get_anno_set();
+  const auto* annos = cls->get_anno_set();
   if (!annos) return false;
   for (const auto& anno : annos->get_annotations()) {
     if (boost::regex_match(anno->type()->c_str(), annorx)) {
@@ -79,7 +79,7 @@ struct ClassMatcher {
 
  private:
   bool match_name(const DexClass* cls) const {
-    auto deob_name = cls->get_deobfuscated_name();
+    const auto& deob_name = cls->get_deobfuscated_name();
     return boost::regex_match(deob_name, *m_cls);
   }
 
@@ -106,12 +106,12 @@ struct ClassMatcher {
         return false;
       }
     }
-    auto deob_name = cls->get_deobfuscated_name();
+    const auto& deob_name = cls->get_deobfuscated_name();
     return boost::regex_match(deob_name, *m_extends);
   }
 
   bool search_interfaces(const DexClass* cls) const {
-    auto interfaces = cls->get_interfaces();
+    const auto* interfaces = cls->get_interfaces();
     if (!interfaces) return false;
     for (const auto& impl : interfaces->get_type_list()) {
       auto impl_class = type_class(impl);

@@ -124,9 +124,6 @@ class DexString {
     output = write_uleb128(output, m_utfsize);
     strcpy((char*)output, c_str());
   }
-
-  template <typename V>
-  static void visit_all_dexstring(V v);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -208,11 +205,6 @@ class DexType {
 
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
-
-  template <typename V>
-  static void visit_all_dextype(V v) {
-    g_redex->visit_all_dextype(v);
-  }
 };
 
 /* Non-optimizing DexSpec compliant ordering */
