@@ -78,9 +78,9 @@ class GatheredTypes {
   std::vector<DexField*> m_lfield;
   std::vector<DexMethod*> m_lmethod;
   DexClasses* m_classes;
-  std::map<const DexString*, unsigned int> m_cls_load_strings;
-  std::map<const DexString*, unsigned int> m_cls_strings;
-  std::map<const DexMethod*, unsigned int> m_methods_in_cls_order;
+  std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
+  std::unordered_map<const DexString*, unsigned int> m_cls_strings;
+  std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
 
   void gather_components();
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -111,11 +111,11 @@ class GatheredTypes {
 template<class T, class U>
 class CustomSort {
   private:
-    std::map<const T*, unsigned int> m_map;
+    std::unordered_map<const T*, unsigned int> m_map;
     U m_cmp;
 
   public:
-    CustomSort(std::map<const T*, unsigned int> input_map, U cmp) {
+    CustomSort(std::unordered_map<const T*, unsigned int> input_map, U cmp) {
       m_map = input_map;
       m_cmp = cmp;
     }
