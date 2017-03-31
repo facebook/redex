@@ -27,17 +27,17 @@ public class SimplifyString {
   @Test
   public void test_Coalesce_AppendString_AppendString() {
     StringBuilder a;
-    a = new StringBuilder();
-    a.append("foo").append("bar"); // Match
+    a = new StringBuilder("f"); // Don't trigger InitVoid_AppendString
+    a.append("oo").append("bar"); // Match
     assertThat(a.toString()).isEqualTo("foobar");
 
-    a = new StringBuilder();
+    a = new StringBuilder("a"); // Don't trigger InitVoid_AppendString
     // It matches only one time. So does PG.
-    a.append("abc").append("def").append("ghi"); // Match
+    a.append("bc").append("def").append("ghi"); // Match
     assertThat(a.toString()).isEqualTo("abcdefghi");
 
-    a = new StringBuilder();
-    a.append("foo").append("\uAE40\uBBFC\uC7A5");
+    a = new StringBuilder("f"); // Don't trigger InitVoid_AppendString
+    a.append("oo").append("\uAE40\uBBFC\uC7A5");
     // Intentionally we don't have "foo\uAE40..." to test DexString concatenation.
     // Declaring "foo\uAE40\uBBFC\uC7A5" here would allocate the correct DexString.
     assertThat(a.toString().substring(0, 3)).isEqualTo("foo");

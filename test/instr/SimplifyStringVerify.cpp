@@ -19,27 +19,31 @@
 #include "Show.h"
 #include "Transform.h"
 #include "VerifyUtil.h"
+#include "Walkers.h"
 
 namespace {
 // We use this ugly macro expansion instead of loops for better gtest reporting.
 // (Name, Expected # of code-unit reduction)
+//
+// when computing the total number of code units, write it this order:
+// (how many times optimization runs) * (code units saved per run)
 #define TESTS                                                    \
   WORK(test_Coalesce_InitVoid_AppendString, 4)                   \
-  WORK(test_Coalesce_AppendString_AppendString, 3 * 6)           \
+  WORK(test_Coalesce_AppendString_AppendString, 2 * 1 + 1 * 2)   \
   WORK(test_CompileTime_StringLength, 4 * 2)                     \
-  WORK(test_Remove_AppendEmptyString, 0 * 5)                     \
-  WORK(test_Coalesce_Init_AppendChar, 3 + 2 * 4 + 5)             \
-  WORK(test_Coalesce_AppendString_AppendInt, 5 + 3 * 6 + 2 * 7)  \
-  WORK(test_Coalesce_AppendString_AppendChar, 5 + 3 * 6 + 7 + 6) \
-  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 5)          \
-  WORK(test_Coalesce_AppendString_AppendLongInt, 9 + 6 + 7 + 9)  \
-  WORK(test_CompileTime_StringCompare, 6 * 7)                    \
-  WORK(test_Replace_ValueOfBoolean, 2 * 3)                       \
-  WORK(test_Replace_ValueOfChar, 1 * 3 + 2 * 4 + 1 * 5)          \
-  WORK(test_Replace_ValueOfInt, 3 * 3 + 3 * 4 + 2 * 5)           \
-  WORK(test_Replace_ValueOfLongInt, 7 * 2 + 4 * 2 + 5 * 1)       \
-  WORK(test_Replace_ValueOfFloat, 2 * 5 + 1 * 3)                 \
-  WORK(test_Replace_ValueOfDouble, 2 * 7 + 4)
+  WORK(test_Remove_AppendEmptyString, 1 * 3)                     \
+  WORK(test_Coalesce_Init_AppendChar, 4 * 2)                     \
+  WORK(test_Coalesce_AppendString_AppendInt, 6 * 1)              \
+  WORK(test_Coalesce_AppendString_AppendChar, 6 * 1)             \
+  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 1)          \
+  WORK(test_Coalesce_AppendString_AppendLongInt, 4 * 1)          \
+  WORK(test_CompileTime_StringCompare, 6 * 3)                    \
+  WORK(test_Replace_ValueOfBoolean, 2 * 2)                       \
+  WORK(test_Replace_ValueOfChar, 4 * 2)                          \
+  WORK(test_Replace_ValueOfInt, 8 * 2)                           \
+  WORK(test_Replace_ValueOfLongInt, 5 * 2)                       \
+  WORK(test_Replace_ValueOfFloat, 3 * 2)                         \
+  WORK(test_Replace_ValueOfDouble, 3 * 2)
 
 void loadMethodSizes(DexClasses& classes,
                      std::unordered_map<std::string, int>& map) {
