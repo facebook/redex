@@ -59,10 +59,8 @@ std::unordered_set<DexField*> get_field_target(
   return ftarget;
 }
 
-bool keep_member(
-  const std::vector<std::string>& keep_members,
-  const DexField* field
-) {
+bool keep_member(const std::vector<std::string>& keep_members,
+                 const DexField* field) {
   for (auto const& keep : keep_members) {
     if (!strcmp(keep.c_str(), field->get_name()->c_str())) {
       return true;
@@ -71,11 +69,9 @@ bool keep_member(
   return false;
 }
 
-void remove_unused_fields(
-  Scope& scope,
-  const std::vector<std::string>& remove_members,
-  const std::vector<std::string>& keep_members
-) {
+void remove_unused_fields(Scope& scope,
+                          const std::vector<std::string>& remove_members,
+                          const std::vector<std::string>& keep_members) {
   std::vector<DexField*> moveable_fields;
   std::vector<DexClass*> smallscope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
@@ -116,18 +112,21 @@ void remove_unused_fields(
       dead_fields.insert(field);
     }
   }
-  TRACE(FINALINLINE, 1,
-          "Removable fields %lu/%lu\n",
-          dead_fields.size(),
-          moveable_fields.size());
+  TRACE(FINALINLINE,
+        1,
+        "Removable fields %lu/%lu\n",
+        dead_fields.size(),
+        moveable_fields.size());
   TRACE(FINALINLINE, 1, "Unhandled inline %ld\n", unhandled_inline);
 
   for (auto clazz : smallscope) {
     auto& sfields = clazz->get_sfields();
-    sfields.erase(std::remove_if(sfields.begin(), sfields.end(),
-      [&](DexField* field) {
-      return dead_fields.count(field) > 0;
-    }), sfields.end());
+    sfields.erase(std::remove_if(sfields.begin(),
+                                 sfields.end(),
+                                 [&](DexField* field) {
+                                   return dead_fields.count(field) > 0;
+                                 }),
+                  sfields.end());
   }
 }
 
@@ -229,8 +228,9 @@ void get_sput_in_clinit(DexClass* clazz,
   if (clinit == nullptr) {
     return;
   }
-  always_assert_log(is_static(clinit) && is_constructor(clinit),
-                    "static constructor doesn't have the proper access bits set\n");
+  always_assert_log(
+      is_static(clinit) && is_constructor(clinit),
+      "static constructor doesn't have the proper access bits set\n");
   for (auto& mie : InstructionIterable(clinit->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_fields() && is_sput(opcode->opcode())) {
@@ -272,26 +272,27 @@ void inline_field_values(Scope& fullscope) {
   }
   std::vector<std::pair<DexMethod*, IRFieldInstruction*>> cheap_rewrites;
   std::vector<std::pair<DexMethod*, IRFieldInstruction*>> simple_rewrites;
-  walk_opcodes(
-      fullscope,
-      [](DexMethod* method) { return true; },
-      [&](DexMethod* method, IRInstruction* insn) {
-        if (insn->has_fields() && is_sfield_op(insn->opcode())) {
-          auto fieldop = static_cast<IRFieldInstruction*>(insn);
-          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
-          if (field == nullptr || !field->is_concrete()) return;
-          if (inline_field.count(field) == 0) return;
-          if (cheap_inline_field.count(field) > 0) {
-            cheap_rewrites.push_back(std::make_pair(method, fieldop));
-            return;
-          }
-          simple_rewrites.push_back(std::make_pair(method, fieldop));
-        }
-      });
-  TRACE(FINALINLINE, 1,
-          "Method Re-writes Cheap %lu  Simple %lu\n",
-          cheap_rewrites.size(),
-          simple_rewrites.size());
+  walk_opcodes(fullscope,
+               [](DexMethod* method) { return true; },
+               [&](DexMethod* method, IRInstruction* insn) {
+                 if (insn->has_fields() && is_sfield_op(insn->opcode())) {
+                   auto fieldop = static_cast<IRFieldInstruction*>(insn);
+                   auto field =
+                       resolve_field(fieldop->field(), FieldSearch::Static);
+                   if (field == nullptr || !field->is_concrete()) return;
+                   if (inline_field.count(field) == 0) return;
+                   if (cheap_inline_field.count(field) > 0) {
+                     cheap_rewrites.push_back(std::make_pair(method, fieldop));
+                     return;
+                   }
+                   simple_rewrites.push_back(std::make_pair(method, fieldop));
+                 }
+               });
+  TRACE(FINALINLINE,
+        1,
+        "Method Re-writes Cheap %lu  Simple %lu\n",
+        cheap_rewrites.size(),
+        simple_rewrites.size());
   for (auto cheapcase : cheap_rewrites) {
     inline_cheap_sget(cheapcase.first, cheapcase.second);
   }
@@ -365,7 +366,7 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
     auto fieldop = static_cast<IRFieldInstruction*>(sput_op);
     auto field = resolve_field(fieldop->field(), FieldSearch::Static);
     auto ev = DexEncodedValue::zero_for_type(field->get_type());
-    ev->value((uint64_t) const_op->literal());
+    ev->value((uint64_t)const_op->literal());
     field->make_concrete(field->get_access(), ev);
   }
   clazz->remove_method(clinit);
@@ -383,27 +384,37 @@ static size_t replace_encodable_clinits(Scope& fullscope) {
     }
     ntotal++;
     if (try_replace_clinit(clazz, clinit)) {
-      TRACE(FINALINLINE, 2, "Replaced clinit for class %s with encoded values\n", SHOW(clazz));
+      TRACE(FINALINLINE,
+            2,
+            "Replaced clinit for class %s with encoded values\n",
+            SHOW(clazz));
       nreplaced++;
     }
   }
-  TRACE(FINALINLINE, 1, "Replaced %lu/%lu clinits with encoded values\n", nreplaced, ntotal);
+  TRACE(FINALINLINE,
+        1,
+        "Replaced %lu/%lu clinits with encoded values\n",
+        nreplaced,
+        ntotal);
   return nreplaced;
 }
 
 struct FieldDependency {
-  DexMethod *clinit;
-  IRInstruction *sget;
-  IRInstruction *sput;
-  DexField *field;
+  DexMethod* clinit;
+  IRInstruction* sget;
+  IRInstruction* sput;
+  DexField* field;
 
-  FieldDependency(DexMethod *clinit, IRInstruction *sget, IRInstruction *sput,
-                  DexField *field) : clinit(clinit), sget(sget), sput(sput), field(field)
-  {}
+  FieldDependency(DexMethod* clinit,
+                  IRInstruction* sget,
+                  IRInstruction* sput,
+                  DexField* field)
+      : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };
 
 /*
- * Attempt to propagate constant values that are known only after the APK has been
+ * Attempt to propagate constant values that are known only after the APK has
+ * been
  * created. Our build process can result in situation where javac sees something
  * resembling:
  *
@@ -415,14 +426,17 @@ struct FieldDependency {
  *     public static final CONST = Parent.CONST;
  *   }
  *
- * Parent.CONST is not final, so javac cannot perform constant propagation. However,
- * Parent.CONST may be marked final when we package the APK, thereby opening up an
+ * Parent.CONST is not final, so javac cannot perform constant propagation.
+ * However,
+ * Parent.CONST may be marked final when we package the APK, thereby opening up
+ * an
  * opportunity for constant propagation by redex.
  */
 size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
   // Build dependency map (static -> [statics] that depend on it)
   TRACE(FINALINLINE, 2, "Building dependency map\n");
-  std::unordered_map<DexField*, std::unique_ptr<std::vector<FieldDependency>>> deps;
+  std::unordered_map<DexField*, std::unique_ptr<std::vector<FieldDependency>>>
+      deps;
   for (auto clazz : fullscope) {
     auto clinit = clazz->get_clinit();
     if (clinit == nullptr) {
@@ -470,8 +484,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       bool src_reg_reused = false;
       for (auto jt = std::next(it, 2); jt != end && !src_reg_reused; ++jt) {
         // Check if the source register is overwritten
-        if (jt->insn->dests_size() > 0 &&
-            jt->insn->dest() == sget_op->dest()) {
+        if (jt->insn->dests_size() > 0 && jt->insn->dest() == sget_op->dest()) {
           break;
         }
         // Check if the source register is reused as the source for another
@@ -483,7 +496,11 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
         }
       }
       if (src_reg_reused) {
-        TRACE(FINALINLINE, 2, "Cannot propagate %s to %s. Source register reused.\n", SHOW(src_field), SHOW(dst_field));
+        TRACE(FINALINLINE,
+              2,
+              "Cannot propagate %s to %s. Source register reused.\n",
+              SHOW(src_field),
+              SHOW(dst_field));
         continue;
       }
 
@@ -491,14 +508,18 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       if (deps.count(src_field) == 0) {
         deps[src_field] = std::make_unique<std::vector<FieldDependency>>();
       }
-      TRACE(FINALINLINE, 2, "Field %s depends on %s\n", SHOW(dst_field), SHOW(src_field));
+      TRACE(FINALINLINE,
+            2,
+            "Field %s depends on %s\n",
+            SHOW(dst_field),
+            SHOW(src_field));
       FieldDependency dep(clinit, it->insn, next_insn, dst_field);
       deps[src_field]->push_back(dep);
     }
   }
 
-  // Collect static finals whose values are known. These serve as the starting point
-  // of the dependency resolution process.
+  // Collect static finals whose values are known. These serve as the starting
+  // point of the dependency resolution process.
   std::deque<DexField*> resolved;
   for (auto clazz : fullscope) {
     std::unordered_map<DexField*, bool> blank_statics;
@@ -532,13 +553,19 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       TRACE(FINALINLINE, 2, "Resolved field %s\n", SHOW(dep.field));
     }
   }
-  TRACE(FINALINLINE, 1, "Resolved %lu static finals via const prop\n", nresolved);
+  TRACE(
+      FINALINLINE, 1, "Resolved %lu static finals via const prop\n", nresolved);
   return nresolved;
 }
 
-void FinalInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void FinalInlinePass::run_pass(DexStoresVector& stores,
+                               ConfigFiles& cfg,
+                               PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(FINALINLINE, 1, "FinalInlinePass not run because no ProGuard configuration was provided.");
+    TRACE(FINALINLINE,
+          1,
+          "FinalInlinePass not run because no ProGuard configuration was "
+          "provided.");
     return;
   }
   auto scope = build_class_scope(stores);
