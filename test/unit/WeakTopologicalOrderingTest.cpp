@@ -19,11 +19,11 @@ class SimpleGraph final {
  public:
   SimpleGraph() {}
 
-  void add_edge(std::string source, std::string target) {
+  void add_edge(const std::string& source, const std::string& target) {
     m_edges[source].insert(target);
   }
 
-  std::vector<std::string> successors(std::string node) {
+  std::vector<std::string> successors(const std::string& node) {
     auto& succs = m_edges[node];
     return std::vector<std::string>(succs.begin(), succs.end());
   }
@@ -68,7 +68,7 @@ TEST(WeakTopologicalOrderingTest, exampleFromThePaper) {
   g.add_edge("7", "3");
 
   WeakTopologicalOrdering<std::string> wto(
-      "1", [&g](std::string n) { return g.successors(n); });
+      "1", [&g](const std::string& n) { return g.successors(n); });
 
   std::ostringstream s;
   s << wto;

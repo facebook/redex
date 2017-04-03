@@ -56,11 +56,11 @@ class WtoComponentIterator final
     return retval;
   }
 
-  bool operator==(WtoComponentIterator other) const {
+  bool operator==(const WtoComponentIterator& other) const {
     return m_component == other.m_component;
   }
 
-  bool operator!=(WtoComponentIterator other) const {
+  bool operator!=(const WtoComponentIterator& other) const {
     return !(*this == other);
   }
 
@@ -99,6 +99,22 @@ class WtoComponent final {
 
   enum class Kind { Vertex, Scc };
 
+  WtoComponent(const NodeId& node,
+               Kind kind,
+               int32_t position,
+               int32_t next_component_position)
+      : m_node(node), m_kind(kind) {
+    assert(position > next_component_position);
+    // When a component is constructed, its position inside the vector is
+    // specified by its absolute index. Since we want to navigate the WTO by
+    // recursively exploring SCCs, it's more efficient to maintain relative
+    // offsets between adjacent components. An absolute position of -1 means
+    // the end of an SCC or the end of the WTO.
+    m_next_component_offset = (next_component_position == -1)
+                                  ? 0
+                                  : position - next_component_position;
+  }
+
   /*
    * If the component is not strongly connected, this method returns the single
    * node contained inside a Vertex component.
@@ -127,22 +143,6 @@ class WtoComponent final {
     return iterator(nullptr);
   }
 
-  WtoComponent(NodeId node,
-               Kind kind,
-               int32_t position,
-               int32_t next_component_position)
-      : m_node(node), m_kind(kind) {
-    assert(position > next_component_position);
-    // When a component is constructed, its position inside the vector is
-    // specified by its absolute index. Since we want to navigate the WTO by
-    // recursively exploring SCCs, it's more efficient to maintain relative
-    // offsets between adjacent components. An absolute position of -1 means
-    // the end of an SCC or the end of the WTO.
-    m_next_component_offset = (next_component_position == -1)
-                                  ? 0
-                                  : position - next_component_position;
-  }
-
  private:
   NodeId m_node;
   Kind m_kind;
@@ -150,8 +150,6 @@ class WtoComponent final {
 
   template <typename T>
   friend class wto_impl::WtoComponentIterator;
-  template <typename T>
-  friend class WeakTopologicalOrdering;
 };
 
 /*
@@ -178,8 +176,8 @@ class WeakTopologicalOrdering final {
    * In order to construct a WTO, we just need to specify the root of the graph
    * and the successor function.
    */
-  WeakTopologicalOrdering(NodeId root,
-                          std::function<std::vector<NodeId>(NodeId)> successors)
+  WeakTopologicalOrdering(
+      NodeId root, std::function<std::vector<NodeId>(const NodeId&)> successors)
       : m_successors(successors), m_free_position(0), m_num(0) {
     int32_t partition = -1;
     visit(root, &partition);
@@ -192,7 +190,7 @@ class WeakTopologicalOrdering final {
  private:
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
-  uint32_t visit(NodeId vertex, int32_t* partition) {
+  uint32_t visit(const NodeId& vertex, int32_t* partition) {
     m_stack.push(vertex);
     int32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
@@ -225,7 +223,7 @@ class WeakTopologicalOrdering final {
     return head;
   }
 
-  void push_component(NodeId vertex) {
+  void push_component(const NodeId& vertex) {
     int32_t partition = -1;
     for (NodeId succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
@@ -234,7 +232,7 @@ class WeakTopologicalOrdering final {
     }
   }
 
-  uint32_t get_dfn(NodeId node) {
+  uint32_t get_dfn(const NodeId& node) {
     auto it = m_dfn.find(node);
     if (it != m_dfn.end()) {
       return it->second;
@@ -242,7 +240,7 @@ class WeakTopologicalOrdering final {
     return 0;
   }
 
-  uint32_t set_dfn(NodeId node, uint32_t number) {
+  uint32_t set_dfn(const NodeId& node, uint32_t number) {
     if (number == 0) {
       m_dfn.erase(node);
     } else {
@@ -251,7 +249,7 @@ class WeakTopologicalOrdering final {
     return number;
   }
 
-  std::function<std::vector<NodeId>(NodeId)> m_successors;
+  std::function<std::vector<NodeId>(const NodeId&)> m_successors;
   // We store all the components of a WTO inside a vector. This is more
   // efficient than allocating each component individually on the heap.
   // It's also more cache-friendly when repeatedly traversing the WTO during
