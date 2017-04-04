@@ -282,11 +282,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   std::unordered_set<IRInstruction*> update_list;
 
   for (auto& block : blocks) {
-    for (auto& mie : *block) {
-      if (mie.type != MFLOW_OPCODE) {
-        continue;
-      }
-
+    for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       DexOpcode opcode = insn->opcode();
 

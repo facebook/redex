@@ -231,10 +231,8 @@ class LocalDce {
 
  private:
   void remove_block(IRCode* code, Block* b) {
-    for (auto& mei : *b) {
-      if (mei.type == MFLOW_OPCODE) {
-        code->remove_opcode(mei.insn);
-      }
+    for (auto& mei : InstructionIterable(b)) {
+      code->remove_opcode(mei.insn);
     }
   }
 

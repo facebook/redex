@@ -1295,11 +1295,7 @@ class PeepholeOptimizerV2 {
         // reset all matching states on visiting every basic block.
         matcher.reset();
 
-        for (auto& mei : *block) {
-          if (mei.type != MFLOW_OPCODE) {
-            continue;
-          }
-
+        for (auto& mei : InstructionIterable(block)) {
           if (!matcher.try_match(mei.insn)) {
             continue;
           }

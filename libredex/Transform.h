@@ -443,10 +443,12 @@ class InstructionIterable {
   FatMethod::iterator m_end;
  public:
   // TODO: make this const-correct
-  explicit InstructionIterable(const IRCode* ir_code)
-      : InstructionIterable(const_cast<IRCode*>(ir_code)) {}
-  explicit InstructionIterable(IRCode* mt)
-      : m_begin(mt->begin()), m_end(mt->end()) {
+  template <typename T>
+  explicit InstructionIterable(const T* mentry_list)
+      : InstructionIterable(const_cast<T*>(mentry_list)) {}
+  template <typename T>
+  explicit InstructionIterable(T* mentry_list)
+      : m_begin(mentry_list->begin()), m_end(mentry_list->end()) {
     while (m_begin != m_end) {
       if (m_begin->type == MFLOW_OPCODE) {
         break;
