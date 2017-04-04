@@ -12,7 +12,9 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "DexClass.h"
+#include "InlineHelper.h"
 #include "IRInstruction.h"
+#include "Resolver.h"
 
 using RegSet = boost::dynamic_bitset<>;
 
@@ -79,7 +81,33 @@ DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods);
  */
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee);
 
-/**
- * Given a method and a builder, it inlines, if possible, the build method.
- */
-bool inline_build(DexMethod* method, DexClass* builder);
+class BuilderTransform {
+ public:
+  BuilderTransform(const PassConfig& pc,
+                   const Scope& scope,
+                   const DexClasses& primary_dex) {
+    pc.get("callee_invoke_direct",
+           false,
+           m_inliner_config.callee_direct_invoke_inline);
+    pc.get("virtual_same_class",
+           false,
+           m_inliner_config.virtual_same_class_inline);
+    pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
+    pc.get("use_liveness", false, m_inliner_config.use_liveness);
+
+    auto resolver = [&](DexMethod* method, MethodSearch search) {
+      return resolve_method(method, search, m_resolved_refs);
+    };
+
+    std::unordered_set<DexMethod*> no_default_inlinables;
+    m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
+      scope, primary_dex, no_default_inlinables, resolver, m_inliner_config));
+  }
+
+  bool inline_builder_methods(DexMethod* method, DexClass* builder);
+
+ private:
+  std::unique_ptr<MultiMethodInliner> m_inliner;
+  MultiMethodInliner::Config m_inliner_config;
+  MethodRefCache m_resolved_refs;
+};

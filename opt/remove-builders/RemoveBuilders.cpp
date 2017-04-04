@@ -185,36 +185,6 @@ std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
 }
 
 /**
- * Checks build method does a small amount of work
- *   - returns an instance of enclosing class type
- *   - only that instance is created
- */
-bool is_trivial_build_method(DexMethod* method, DexType* cls_type) {
-  // Check it returns an instance of the class it was defined in.
-  auto proto = method->get_proto();
-  auto return_type = proto->get_rtype();
-  if (cls_type != return_type) {
-    return false;
-  }
-
-  // Check there is only one instance created.
-  const auto* code = method->get_code();
-  if (!code) {
-    return false;
-  }
-
-  int instances = 0;
-
-  for (auto& mie : InstructionIterable(code)) {
-    if (mie.insn->opcode() == OPCODE_NEW_INSTANCE) {
-      instances++;
-    }
-  }
-
-  return instances == 1;
-}
-
-/**
  * Check builder's constructor does a small amount of work
  *  - instantiates the parent class (Object)
  *  - returns
@@ -307,20 +277,13 @@ std::unordered_set<DexClass*> get_trivial_builders(
       continue;
     }
 
-    if (builder_class->get_vmethods().size() > 2) {
+    if (builder_class->get_vmethods().size() >= 2) {
       continue;
     }
 
     DexMethod* build_method = get_build_method(builder_class->get_vmethods());
     if (build_method == nullptr && builder_class->get_vmethods().size() == 1) {
       continue;
-    }
-
-    if (build_method) {
-      // Filter out builders that do "extra work" in the build method.
-      if (!is_trivial_build_method(build_method, buildee_type)) {
-        continue;
-      }
     }
 
     trivial_builders.emplace(builder_class);
@@ -507,6 +470,9 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
   std::unordered_set<DexClass*> kept_builders;
 
+  PassConfig pc(mgr.get_config());
+  BuilderTransform b_transform(pc, scope, stores[0].get_dexen()[0]);
+
   // Inline build methods.
   walk_methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
@@ -515,7 +481,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       DexClass* builder_cls = type_class(builder);
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
-        if (!inline_build(method, builder_cls)) {
+        if (!b_transform.inline_builder_methods(method, builder_cls)) {
           kept_builders.emplace(type_class(builder));
         } else {
           method_to_inlined_builders.emplace_back(method, builder_cls);

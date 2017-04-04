@@ -232,43 +232,38 @@ DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods) {
   return nullptr;
 }
 
-bool inline_build(DexMethod* method, DexClass* builder) {
+bool BuilderTransform::inline_builder_methods(DexMethod* method, DexClass* builder) {
   auto code = method->get_code();
   if (!code) {
     return false;
   }
 
-  std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
-  DexMethod* build_method = get_build_method(builder->get_vmethods());
-
+  std::vector<DexMethod*> to_inline;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked =
           static_cast<const IRMethodInstruction*>(insn)->get_method();
-      if (invoked == build_method) {
-        auto mop = static_cast<IRMethodInstruction*>(insn);
-        inlinables.push_back(std::make_pair(build_method, mop));
+      // TODO(emmasevastian): Treat constructors separately.
+      if (invoked->get_class() == builder->get_type() &&
+          !is_init(invoked)) {
+        to_inline.emplace_back(invoked);
       }
     }
   }
 
-  // For the moment, not treating the case where we have 2 instances
-  // of the same builder.
-  if (inlinables.size() > 1) {
-    return false;
+  // Skip this step if nothing to inline.
+  if (to_inline.size() == 0) {
+    return true;
   }
 
-  InlineContext inline_context(method, false);
-  for (auto inlinable : inlinables) {
-    // TODO(emmasevastian): We will need to gate this with a check, mostly as
-    //                      we loosen the build method restraints.
-    if (!IRCode::inline_method(inline_context,
-                               inlinable.first,
-                               inlinable.second,
-                               /* no_exceed_16regs */ true)) {
-      return false;
-    }
+  size_t old_inlined = m_inliner->get_inlined().size();
+  m_inliner->inline_callees(method, to_inline);
+  size_t new_inlined = m_inliner->get_inlined().size();
+
+  // Check all possible methods were inlined.
+  if (to_inline.size() != new_inlined - old_inlined) {
+    return false;
   }
 
   return true;

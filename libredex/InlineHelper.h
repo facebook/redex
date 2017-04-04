@@ -58,6 +58,13 @@ class MultiMethodInliner {
     return inlined;
   }
 
+  /**
+   * Inline callees in the caller defined by InlineContext if is_inlinable
+   * below returns true.
+   */
+  void inline_callees(DexMethod* caller,
+                      const std::vector<DexMethod*>& callees);
+
  private:
   /**
    * Inline all callees into caller.
@@ -68,13 +75,6 @@ class MultiMethodInliner {
       DexMethod* caller,
       const std::vector<DexMethod*>& callees,
       std::unordered_set<DexMethod*>& visited);
-
-  /**
-   * Inline callees in the caller defined by InlineContext if is_inlinable
-   * below returns true.
-   */
-  void inline_callees(DexMethod* caller,
-                      const std::vector<DexMethod*>& callees);
 
   /**
    * Return true if the callee is inlinable into the caller.
