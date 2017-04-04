@@ -23,12 +23,15 @@ namespace {
 struct Tracer {
 
   bool m_show_timestamps{false};
+  bool m_show_tracemodule{false};
   const char* m_method_filter;
+  std::unordered_map<int/*TraceModule*/, std::string> m_module_id_name_map;
 
   Tracer() {
     const char* traceenv = getenv("TRACE");
     const char* envfile = getenv("TRACEFILE");
     const char* show_timestamps = getenv("SHOW_TIMESTAMPS");
+    const char* show_tracemodule = getenv("SHOW_TRACEMODULE");
     m_method_filter = getenv("TRACE_METHOD_FILTER");
     if (!traceenv) {
       return;
@@ -39,6 +42,13 @@ struct Tracer {
     if (show_timestamps) {
       m_show_timestamps = true;
     }
+    if (show_tracemodule) {
+      m_show_tracemodule = true;
+    }
+
+#define TM(x) m_module_id_name_map[static_cast<int>(x)] = #x;
+    TMS
+#undef TM
   }
 
   ~Tracer() {
@@ -51,7 +61,7 @@ struct Tracer {
     return level <= m_level || level <= m_traces[module];
   }
 
-  void trace(const char* fmt, va_list ap) {
+  void trace(TraceModule module, int level, const char* fmt, va_list ap) {
     if (m_method_filter && TraceContext::s_current_method) {
       if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
           nullptr) {
@@ -63,7 +73,13 @@ struct Tracer {
       auto t = time(nullptr);
       ctime_r(&t, buf);
       buf[strlen(buf) - 1] = '\0';
-      fprintf(m_file, "[%s] ", buf);
+      fprintf(m_file, "[%s]", buf);
+      if (!m_show_tracemodule) {
+        fprintf(m_file, " ");
+      }
+    }
+    if (m_show_tracemodule) {
+      fprintf(m_file, "[%s:%d] ", m_module_id_name_map[module].c_str(), level);
     }
     vfprintf(m_file, fmt, ap);
     fflush(m_file);
@@ -128,10 +144,10 @@ bool traceEnabled(TraceModule module, int level) {
   return tracer.traceEnabled(module, level);
 }
 
-void trace(const char* fmt, ...) {
+void trace(TraceModule module, int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  tracer.trace(fmt, ap);
+  tracer.trace(module, level, fmt, ap);
   va_end(ap);
 }
 

@@ -64,7 +64,7 @@
   TM(ANALYSIS_REF_GRAPH)                        \
   TM(VIRT)
 
-enum TraceModule {
+enum TraceModule : int {
 #define TM(x) x,
 TMS
 #undef TM
@@ -75,12 +75,12 @@ TMS
 #define TRACE(...)
 #else
 bool traceEnabled(TraceModule module, int level);
-void trace(const char* fmt, ...);
-#define TRACE(module, level, fmt, ...) \
-  do {                                 \
-    if (traceEnabled(module, level)) { \
-      trace(fmt, ##__VA_ARGS__);       \
-    }                                  \
+void trace(TraceModule module, int level, const char* fmt, ...);
+#define TRACE(module, level, fmt, ...)          \
+  do {                                          \
+    if (traceEnabled(module, level)) {          \
+      trace(module, level, fmt, ##__VA_ARGS__); \
+    }                                           \
   } while (0)
 #endif // NDEBUG
 
