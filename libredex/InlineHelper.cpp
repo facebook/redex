@@ -355,7 +355,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
     if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
     if (unknown_virtual(insn, callee, caller)) return true;
     if (unknown_field(insn, callee, caller)) return true;
-    if (insn->opcode() == OPCODE_THROW) {
+    if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
       info.throws++;
       return true;
     }
