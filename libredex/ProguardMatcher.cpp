@@ -60,7 +60,7 @@ struct ClassMatcher {
         m_extends(make_rx(ks.class_spec.extendsClassName)),
         m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false)) {}
 
-  bool match(const DexClass* cls) const {
+  bool match(const DexClass* cls) {
     // Check for class name match
     if (!match_name(cls)) {
       return false;
@@ -92,7 +92,7 @@ struct ClassMatcher {
     return match_annotation_rx(cls, *m_anno);
   }
 
-  bool match_extends(const DexClass* cls) const {
+  bool match_extends(const DexClass* cls) {
     if (!m_extends) return true;
     return search_extends_and_interfaces(cls);
   }
@@ -110,7 +110,7 @@ struct ClassMatcher {
     return boost::regex_match(deob_name, *m_extends);
   }
 
-  bool search_interfaces(const DexClass* cls) const {
+  bool search_interfaces(const DexClass* cls) {
     const auto* interfaces = cls->get_interfaces();
     if (!interfaces) return false;
     for (const auto& impl : interfaces->get_type_list()) {
@@ -124,7 +124,17 @@ struct ClassMatcher {
     return false;
   }
 
-  bool search_extends_and_interfaces(const DexClass* cls) const {
+  bool search_extends_and_interfaces(const DexClass* cls) {
+    auto cached_it = m_extends_result_cache.find(cls);
+    if (cached_it != m_extends_result_cache.end()) {
+      return cached_it->second;
+    }
+    auto result = search_extends_and_interfaces_nocache(cls);
+    m_extends_result_cache.emplace(cls, result);
+    return result;
+  }
+
+  bool search_extends_and_interfaces_nocache(const DexClass* cls) {
     always_assert(cls != nullptr);
     // Does this class match the annotation and type wildcard?
     if (type_and_annotation_match(cls)) {
@@ -150,6 +160,8 @@ struct ClassMatcher {
   std::unique_ptr<boost::regex> m_anno;
   std::unique_ptr<boost::regex> m_extends;
   std::unique_ptr<boost::regex> m_extends_anno;
+
+  std::unordered_map<const DexClass*, bool> m_extends_result_cache;
 };
 }
 

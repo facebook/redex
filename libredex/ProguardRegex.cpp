@@ -100,11 +100,11 @@ std::string form_type_regex(std::string proguard_regex) {
           continue;
         }
         // **: Match class type containing any number of seperators
-        r += "([^\\/]+(?:\\/[^\\/]+)*)";
+        r += "(?:[^\\/]+(?:\\/[^\\/]+)*)";
         i++;
         continue;
       }
-      r += "([^\\/]*)";
+      r += "(?:[^\\/]*)";
       continue;
     }
     if (ch == '.') {

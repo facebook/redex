@@ -105,23 +105,23 @@ TEST(ProguardRegexTest, types) {
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("Lcom\\/([^\\/]*)\\/redex\\/test\\/proguard\\/Delta;", r);
+    ASSERT_EQ("Lcom\\/(?:[^\\/]*)\\/redex\\/test\\/proguard\\/Delta;", r);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
-    ASSERT_EQ(2, m.size());
-    ASSERT_EQ("facebook", std::string(m[1]));
+    ASSERT_TRUE(boost::regex_match(
+        "Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_EQ(1, m.size());
   }
 
   { auto proguard_regex = "com.*.redex.*.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("Lcom\\/([^\\/]*)\\/redex\\/([^\\/]*)\\/proguard\\/Delta;", r);
+    ASSERT_EQ("Lcom\\/(?:[^\\/]*)\\/redex\\/(?:[^\\/]*)\\/proguard\\/Delta;",
+              r);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
-    ASSERT_EQ(3, m.size());
-    ASSERT_EQ("facebook", std::string(m[1]));
-    ASSERT_EQ("test", std::string(m[2]));
+    ASSERT_TRUE(boost::regex_match(
+        "Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_EQ(1, m.size());
 
     // Match against the first * but not the second *
     ASSERT_FALSE(boost::regex_match("Lcom/facebook/redex/", m, matcher));
@@ -134,9 +134,9 @@ TEST(ProguardRegexTest, types) {
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
-    ASSERT_EQ(2, m.size());
-    ASSERT_EQ("facebook/redex/test", std::string(m[1]));
+    ASSERT_TRUE(boost::regex_match(
+        "Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_EQ(1, m.size());
   }
 
   { auto proguard_regex = "com.**.proguard.**";
@@ -145,9 +145,7 @@ TEST(ProguardRegexTest, types) {
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
     ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
-    ASSERT_EQ(3, m.size());
-    ASSERT_EQ("facebook/redex/test", std::string(m[1]));
-    ASSERT_EQ("Delta", std::string(m[2]));
+    ASSERT_EQ(1, m.size());
   }
 
   { // The ? symbol should match any character in a class type except
@@ -167,7 +165,7 @@ TEST(ProguardRegexTest, types) {
     auto proguard_regex = "**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("L([^\\/]+(?:\\/[^\\/]+)*);", r);
+    ASSERT_EQ("L(?:[^\\/]+(?:\\/[^\\/]+)*);", r);
     boost::regex matcher(r);
     ASSERT_TRUE(boost::regex_match("Ljava/lang/String;", matcher));
     ASSERT_FALSE(boost::regex_match("I", matcher));
@@ -179,7 +177,7 @@ TEST(ProguardRegexTest, types) {
     auto proguard_regex = "**[]";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("\\[L([^\\/]+(?:\\/[^\\/]+)*);", r);
+    ASSERT_EQ("\\[L(?:[^\\/]+(?:\\/[^\\/]+)*);", r);
     boost::regex matcher(r);
     ASSERT_FALSE(boost::regex_match("Ljava/lang/String;", matcher));
     ASSERT_FALSE(boost::regex_match("I", matcher));
@@ -192,7 +190,7 @@ TEST(ProguardRegexTest, types) {
     auto proguard_regex = "java.**[][]";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
-    ASSERT_EQ("\\[\\[Ljava\\/([^\\/]+(?:\\/[^\\/]+)*);", r);
+    ASSERT_EQ("\\[\\[Ljava\\/(?:[^\\/]+(?:\\/[^\\/]+)*);", r);
     boost::regex matcher(r);
     ASSERT_FALSE(boost::regex_match("Ljava/lang/String;", matcher));
     ASSERT_FALSE(boost::regex_match("I", matcher));
