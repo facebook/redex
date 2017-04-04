@@ -127,20 +127,20 @@ void add_null_instr(IRCode* code, uint16_t reg) {
   code->insert_after(nullptr, insns);
 }
 
-/**
- * Adds a move instruction after the given instruction.
- */
-void add_move_instr(IRCode* code,
-                    const IRInstruction* position,
-                    uint16_t src_reg,
-                    uint16_t dest_reg,
-                    DexOpcode move_opcode) {
-  always_assert(code != nullptr);
-  always_assert(position != nullptr);
-
+IRInstruction* construct_move_instr(uint16_t dest_reg,
+                                    uint16_t src_reg,
+                                    DexOpcode move_opcode) {
   IRInstruction* insn = new IRInstruction(move_opcode);
   insn->set_dest(dest_reg);
   insn->set_src(0, src_reg);
+  return insn;
+}
+
+void add_instr(IRCode* code,
+               const IRInstruction* position,
+               IRInstruction* insn) {
+  always_assert(code != nullptr);
+  always_assert(position != nullptr);
 
   std::vector<IRInstruction*> insns;
   insns.push_back(insn);
@@ -148,8 +148,7 @@ void add_move_instr(IRCode* code,
   code->insert_after(const_cast<IRInstruction*>(position), insns);
 }
 
-using MoveList =
-    std::unordered_map<const IRInstruction*, std::pair<uint16_t, DexOpcode>>;
+using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
 
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
@@ -164,18 +163,9 @@ void method_updates(DexMethod* method,
   //  iput v0, object // field -> move new_reg, v0
   //  iget v0, object // field -> move v0, new_reg
   for (const auto& move_elem : move_list) {
-    const IRInstruction* insn = move_elem.first;
-    bool is_iput_insn = is_iput(insn->opcode());
-
-    uint16_t new_reg = move_elem.second.first;
-    uint16_t insn_reg = is_iput_insn ? insn->src(0) : insn->dest();
-
-    uint16_t src_reg = is_iput_insn ? insn_reg : new_reg;
-    uint16_t dest_reg = is_iput_insn ? new_reg : insn_reg;
-
-    DexOpcode move_opcode = move_elem.second.second;
-
-    add_move_instr(code, insn, src_reg, dest_reg, move_opcode);
+    const IRInstruction* position = move_elem.first;
+    IRInstruction* insn = move_elem.second;
+    add_instr(code, position, insn);
   }
 
   for (const auto& insn : deletes) {
@@ -232,7 +222,8 @@ DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods) {
   return nullptr;
 }
 
-bool BuilderTransform::inline_builder_methods(DexMethod* method, DexClass* builder) {
+bool BuilderTransform::inline_builder_methods(DexMethod* method,
+                                              DexClass* builder) {
   auto code = method->get_code();
   if (!code) {
     return false;
@@ -245,8 +236,7 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method, DexClass* build
       auto invoked =
           static_cast<const IRMethodInstruction*>(insn)->get_method();
       // TODO(emmasevastian): Treat constructors separately.
-      if (invoked->get_class() == builder->get_type() &&
-          !is_init(invoked)) {
+      if (invoked->get_class() == builder->get_type() && !is_init(invoked)) {
         to_inline.emplace_back(invoked);
       }
     }
@@ -289,6 +279,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
   std::vector<IRInstruction*> deletes;
   MoveList move_replacements;
+  std::unordered_set<IRInstruction*> update_list;
 
   for (auto& block : blocks) {
     for (auto& mie : *block) {
@@ -327,8 +318,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
               extra_regs++;
             }
 
-            move_replacements[insn] = std::make_pair(null_reg, OPCODE_MOVE);
-
+            move_replacements[insn] =
+                construct_move_instr(insn->dest(), null_reg, OPCODE_MOVE);
           } else {
             // If we got here, the field is either:
             //   OVERWRITTEN or held in a register.
@@ -345,25 +336,34 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
             // Check if we already have a value for it.
             if (move_replacements.find(iput_insn) != move_replacements.end()) {
-              move_replacements[insn] = std::make_pair(
-                  move_replacements[iput_insn].first, move_opcode);
+              // Get the actual value.
+              IRInstruction* new_insn = move_replacements[iput_insn];
+              uint16_t new_reg = new_insn->dest();
+              move_replacements[insn] =
+                  construct_move_instr(insn->dest(), new_reg, move_opcode);
 
             } else if (fields_in_insn.field_to_reg[field] ==
                        FieldOrRegStatus::OVERWRITTEN) {
 
               // We need to add 2 moves: one for the iput, one for iget.
               move_replacements[iput_insn] =
-                  std::make_pair(non_input_reg_size + extra_regs, move_opcode);
-
-              move_replacements[insn] =
-                  std::make_pair(non_input_reg_size + extra_regs, move_opcode);
+                  construct_move_instr(non_input_reg_size + extra_regs,
+                                       iput_insn->src(0),
+                                       move_opcode);
+              move_replacements[insn] = construct_move_instr(
+                  insn->dest(), non_input_reg_size + extra_regs, move_opcode);
 
               extra_regs += is_wide ? 2 : 1;
 
             } else {
               // We can reuse the existing reg, so will have only 1 move.
-              move_replacements[insn] =
-                  std::make_pair(iput_insn->src(0), move_opcode);
+              //
+              // In case this is a parameter reg, it needs to be updated.
+              if (iput_insn->src(0) >= non_input_reg_size) {
+                update_list.emplace(insn);
+              }
+              move_replacements[insn] = construct_move_instr(
+                  insn->dest(), iput_insn->src(0), move_opcode);
             }
           }
 
@@ -396,6 +396,12 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
   if (null_reg != FieldOrRegStatus::UNDEFINED) {
     add_null_instr(code, null_reg);
+  }
+
+  // Update register parameters.
+  for (const auto& update : update_list) {
+    IRInstruction* new_insn = move_replacements[update];
+    new_insn->set_src(0, new_insn->src(0) + extra_regs);
   }
 
   method_updates(method, deletes, move_replacements);

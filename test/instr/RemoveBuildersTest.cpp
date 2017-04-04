@@ -8,10 +8,10 @@
  */
 
 #include <cstdint>
-#include <iostream>
 #include <cstdlib>
-#include <memory>
 #include <gtest/gtest.h>
+#include <iostream>
+#include <memory>
 #include <string>
 
 #include "DexInstruction.h"
@@ -36,18 +36,17 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
   }
 }
 
-}  // namespace
+} // namespace
 
 /*
  * Check builder is actually defined.
  */
 TEST_F(PreVerify, RemoveFooBuilder) {
-  auto foo = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Foo;");
+  auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
   EXPECT_NE(nullptr, foo);
 
-  auto foo_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Foo$Builder;");
+  auto foo_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo$Builder;");
   EXPECT_NE(nullptr, foo_builder);
 }
 
@@ -56,19 +55,19 @@ TEST_F(PreVerify, RemoveFooBuilder) {
  * replaced / removed.
  */
 TEST_F(PostVerify, RemoveFooBuilder) {
-  auto foo = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Foo;");
+  auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
   EXPECT_NE(nullptr, foo);
 
   // Check builder class was removed.
-  auto foo_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Foo$Builder;");
+  auto foo_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo$Builder;");
   EXPECT_EQ(nullptr, foo_builder);
 
   auto using_no_escape_builders = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
 
-  auto initialize_method = find_vmethod_named(*using_no_escape_builders, "initializeFoo");
+  auto initialize_method =
+      find_vmethod_named(*using_no_escape_builders, "initializeFoo");
   EXPECT_NE(nullptr, initialize_method);
 
   auto initialize_more_arguments = find_vmethod_named(
@@ -78,13 +77,12 @@ TEST_F(PostVerify, RemoveFooBuilder) {
   // No build call.
   EXPECT_EQ(nullptr,
             find_invoke(initialize_method, OPCODE_INVOKE_DIRECT, "build"));
-  EXPECT_EQ(nullptr,
-            find_invoke(initialize_more_arguments,
-                        OPCODE_INVOKE_DIRECT,
-                        "build"));
+  EXPECT_EQ(
+      nullptr,
+      find_invoke(initialize_more_arguments, OPCODE_INVOKE_DIRECT, "build"));
 
-  DexType* builder_type = DexType::get_type(
-      "Lcom/facebook/redex/test/instr/Foo$Builder;");
+  DexType* builder_type =
+      DexType::get_type("Lcom/facebook/redex/test/instr/Foo$Builder;");
 
   check_no_builder(initialize_method, builder_type);
   check_no_builder(initialize_more_arguments, builder_type);
@@ -94,12 +92,11 @@ TEST_F(PostVerify, RemoveFooBuilder) {
  * Check builder is actually defined.
  */
 TEST_F(PreVerify, RemoveBarBuilder) {
-  auto bar = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Bar;");
+  auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
   EXPECT_NE(nullptr, bar);
 
-  auto bar_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
+  auto bar_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
   EXPECT_NE(nullptr, bar_builder);
 }
 
@@ -108,32 +105,34 @@ TEST_F(PreVerify, RemoveBarBuilder) {
  * replaced / removed / kept.
  */
 TEST_F(PostVerify, RemoveBarBuilder) {
-  auto bar = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Bar;");
+  auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
   EXPECT_NE(nullptr, bar);
 
   // Check builder class was not removed, for now, since we are not
   // replacing it in one of the callsites.
-  auto bar_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
+  auto bar_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
   EXPECT_NE(nullptr, bar_builder);
 
   auto using_no_escape_builders = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_bar = find_vmethod_named(*using_no_escape_builders, "initializeBar");
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_bar =
+      find_vmethod_named(*using_no_escape_builders, "initializeBar");
   auto initialize_bar_different_regs = find_vmethod_named(
-    *using_no_escape_builders, "initializeBarDifferentRegs");
+      *using_no_escape_builders, "initializeBarDifferentRegs");
 
   EXPECT_NE(nullptr, initialize_bar_different_regs);
   EXPECT_NE(nullptr, initialize_bar);
 
   // No build call.
   EXPECT_EQ(nullptr,
-            find_invoke(initialize_bar_different_regs, OPCODE_INVOKE_DIRECT, "build"));
+            find_invoke(
+                initialize_bar_different_regs, OPCODE_INVOKE_DIRECT, "build"));
   EXPECT_EQ(nullptr,
             find_invoke(initialize_bar, OPCODE_INVOKE_DIRECT, "build"));
 
-  DexType* builder_type = DexType::get_type("Lcom/facebook/redex/test/instr/Bar$Builder;");
+  DexType* builder_type =
+      DexType::get_type("Lcom/facebook/redex/test/instr/Bar$Builder;");
 
   // Check builder was properly removed from the initialize_bar.
   auto insns = initialize_bar->get_dex_code()->get_instructions();
@@ -183,27 +182,27 @@ TEST_F(PostVerify, RemoveBarBuilder) {
 
 namespace {
 
-const size_t PRE_VERIFY_INITIALIZE_CAR_REGS = 4;
+const size_t PRE_VERIFY_INITIALIZE_CAR_REGS = 5;
+const size_t POST_VERIFY_INITIALIZE_CAR_PARAM = 5;
 
-}  // namespace
+} // namespace
 
 /*
  * Check builder is actually defined.
  */
 TEST_F(PreVerify, RemoveCarBuilder) {
-  auto car = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Car;");
+  auto car = find_class_named(classes, "Lcom/facebook/redex/test/instr/Car;");
   EXPECT_NE(nullptr, car);
 
-  auto car_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
+  auto car_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
   EXPECT_NE(nullptr, car_builder);
 
   // Check previous number of registers for initialize method.
   auto using_no_escape_builders = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
   auto initialize_null_model =
-    find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
+      find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
   EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS,
             initialize_null_model->get_dex_code()->get_registers_size());
 }
@@ -212,19 +211,18 @@ TEST_F(PreVerify, RemoveCarBuilder) {
  * Ensure the builder was removed and all calls were appropriately removed.
  */
 TEST_F(PostVerify, RemoveCarBuilder) {
-  auto car = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Car;");
+  auto car = find_class_named(classes, "Lcom/facebook/redex/test/instr/Car;");
   EXPECT_NE(nullptr, car);
 
   // Check builder class was removed.
-  auto car_builder = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
+  auto car_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
   EXPECT_EQ(nullptr, car_builder);
 
   auto using_no_escape_builders = find_class_named(
-    classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
   auto initialize_null_model =
-    find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
+      find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
 
   EXPECT_NE(nullptr, initialize_null_model);
   EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS + 1,
@@ -232,15 +230,27 @@ TEST_F(PostVerify, RemoveCarBuilder) {
 
   // Check there is a register that holds NULL and is passed to
   // the car's model field.
-  uint16_t null_reg = -1;
   auto insns = initialize_null_model->get_dex_code()->get_instructions();
+
+  // First instruction should hold the null value.
+  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
+  uint16_t null_reg = insns[0]->dest();
+
+  // While removing the builders 2 moves are added:
+  // * one for the undefined field: move <reg>, null_reg
+  // * one for the 'version' field, which uses a method parameter: move <reg>, 5
+  std::vector<uint16_t> used_regs;
+  std::vector<uint16_t> expected_regs = {null_reg,
+                                         POST_VERIFY_INITIALIZE_CAR_PARAM};
+
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
-    if (opcode == OPCODE_CONST_4) {
-      null_reg = insn->dest();
-    } else if (opcode == OPCODE_MOVE) {
-      EXPECT_EQ(null_reg, insn->src(0));
+    if (opcode == OPCODE_MOVE) {
+      used_regs.emplace_back(insn->src(0));
     }
   }
+
+  std::sort(used_regs.begin(), used_regs.end());
+  EXPECT_EQ(expected_regs, used_regs);
 }

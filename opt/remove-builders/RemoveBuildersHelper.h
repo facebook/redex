@@ -12,8 +12,8 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "DexClass.h"
-#include "InlineHelper.h"
 #include "IRInstruction.h"
+#include "InlineHelper.h"
 #include "Resolver.h"
 
 using RegSet = boost::dynamic_bitset<>;
@@ -94,6 +94,7 @@ class BuilderTransform {
            m_inliner_config.virtual_same_class_inline);
     pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
     pc.get("use_liveness", false, m_inliner_config.use_liveness);
+    pc.get("no_exceed_16regs", true, m_inliner_config.no_exceed_16regs);
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {
       return resolve_method(method, search, m_resolved_refs);
@@ -101,7 +102,7 @@ class BuilderTransform {
 
     std::unordered_set<DexMethod*> no_default_inlinables;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, primary_dex, no_default_inlinables, resolver, m_inliner_config));
+        scope, primary_dex, no_default_inlinables, resolver, m_inliner_config));
   }
 
   bool inline_builder_methods(DexMethod* method, DexClass* builder);

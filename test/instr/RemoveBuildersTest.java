@@ -65,12 +65,15 @@ class Bar {
 
 class Car {
   public @Nullable String model;
+  public int version;
 
-  public Car() {
+  public Car(int version) {
+    this.version = version;
   }
 
   public static class Builder {
     public @Nullable String model;
+    public int version;
   }
 }
 
@@ -114,9 +117,10 @@ class UsingNoEscapeBuilder {
     return new Bar(value);
   }
 
-  public Car initializeNullCarModel(int notUsed) {
+  public Car initializeNullCarModel(int version) {
     Car.Builder builder = new Car.Builder();
-    Car car = new Car();
+    builder.version = version;
+    Car car = new Car(builder.version);
     car.model = builder.model;
 
     return car;
