@@ -40,9 +40,9 @@ void Liveness::trans(const IRInstruction* inst, Liveness* liveness) {
     }
   }
   for (size_t i = 0; i < inst->srcs_size(); i++) {
-    liveness->m_reg_set.set(inst->src((int)i));
+    liveness->m_reg_set.set(inst->src(i));
     if (inst->src_is_wide((int)i)) {
-      liveness->m_reg_set.set(inst->src((int)i) + 1);
+      liveness->m_reg_set.set(inst->src(i) + 1);
     }
   }
   if (opcode::has_range(inst->opcode())) {

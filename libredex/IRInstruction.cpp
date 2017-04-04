@@ -261,7 +261,7 @@ bool IRInstruction::dest_is_wide() const {
   }
 }
 
-bool IRInstruction::src_is_wide(int i) const {
+bool IRInstruction::src_is_wide(size_t i) const {
   switch (opcode()) {
   case OPCODE_MOVE_WIDE:
   case OPCODE_MOVE_WIDE_FROM16:

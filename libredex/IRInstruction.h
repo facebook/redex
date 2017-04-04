@@ -34,13 +34,13 @@ class IRInstruction : public Gatherable {
   /*
    * Number of registers used.
    */
-  unsigned dests_size() const { return opcode::dests_size(m_opcode); }
-  unsigned srcs_size() const { return m_srcs.size(); }
+  size_t dests_size() const { return opcode::dests_size(m_opcode); }
+  size_t srcs_size() const { return m_srcs.size(); }
 
   /*
    * Information about operands.
    */
-  bool src_is_wide(int i) const;
+  bool src_is_wide(size_t i) const;
   bool dest_is_wide() const;
   bool is_wide() const {
     return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
@@ -54,7 +54,7 @@ class IRInstruction : public Gatherable {
     always_assert(opcode::dests_size(m_opcode));
     return m_dest;
   }
-  uint16_t src(int i) const { return m_srcs.at(i); }
+  uint16_t src(size_t i) const { return m_srcs.at(i); }
   uint16_t arg_word_count() const { return m_srcs.size(); }
   uint16_t range_base() const {
     always_assert(opcode::has_range(m_opcode));
@@ -78,7 +78,7 @@ class IRInstruction : public Gatherable {
     m_dest = vreg;
     return this;
   }
-  IRInstruction* set_src(int i, uint16_t vreg) {
+  IRInstruction* set_src(size_t i, uint16_t vreg) {
     m_srcs.at(i) = vreg;
     return this;
   }
