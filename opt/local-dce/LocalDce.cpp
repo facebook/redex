@@ -193,10 +193,10 @@ class LocalDce {
         // Compute live-in for this block by walking its instruction list in
         // reverse and applying the liveness rules.
         for (auto it = b->rbegin(); it != b->rend(); ++it) {
-          m_total_instructions++;
           if (it->type != MFLOW_OPCODE) {
             continue;
           }
+          m_total_instructions++;
           bool required = is_required(it->insn, bliveness);
           if (required) {
             update_liveness(it->insn, bliveness);
