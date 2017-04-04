@@ -1174,8 +1174,6 @@ namespace {
 void write_method_mapping(
   const std::string& filename,
   const DexOutputIdx* dodx,
-  size_t dex_number,
-  uint32_t dex_checksum,
   uint8_t* dex_signature
 ) {
   if (filename.empty()) return;
@@ -1226,19 +1224,6 @@ void write_method_mapping(
     auto end = deobf_method.rfind(':');
     auto deobf_method_name = deobf_method.substr(begin, end-begin);
 
-    fprintf(fd,
-            "%u %lu %s %s\n",
-            idx,
-            dex_number,
-            deobf_method_name.c_str(),
-            deobf_class.c_str());
-
-    fprintf(fd, "%u %u %s %s\n",
-            idx,
-            dex_checksum,
-            deobf_method_name.c_str(),
-            deobf_class.c_str());
-
     //
     // Turns out, the checksum can change on-device. (damn you dexopt)
     // The signature, however, is never recomputed. Let's log the top 4 bytes,
@@ -1259,8 +1244,6 @@ void write_class_mapping(
   const std::string& filename,
   DexClasses* classes,
   const size_t class_defs_size,
-  const size_t dex_number,
-  uint32_t dex_checksum,
   uint8_t* dex_signature
 ) {
   if (filename.empty()) return;
@@ -1277,8 +1260,6 @@ void write_class_mapping(
       return proguard_name(cls);
     }();
 
-    fprintf(fd, "%u %lu %s\n", idx, dex_number, deobf_class.c_str());
-    fprintf(fd, "%u %u %s\n", idx, dex_checksum, deobf_class.c_str());
     //
     // See write_method_mapping above for why checksum is insufficient.
     //
@@ -1323,16 +1304,12 @@ void DexOutput::write_symbol_files() {
   write_method_mapping(
     m_method_mapping_filename,
     dodx,
-    m_dex_number,
-    hdr.checksum,
     hdr.signature
   );
   write_class_mapping(
     m_class_mapping_filename,
     m_classes,
     hdr.class_defs_size,
-    m_dex_number,
-    hdr.checksum,
     hdr.signature
   );
   write_pg_mapping(
