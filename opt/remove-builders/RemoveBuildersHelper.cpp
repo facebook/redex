@@ -204,6 +204,24 @@ void method_updates(DexMethod* method,
   }
 }
 
+std::vector<DexMethod*> get_non_init_methods(IRCode* code,
+                                             DexType* builder_type) {
+  std::vector<DexMethod*> methods;
+  for (auto const& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto invoked =
+          static_cast<const IRMethodInstruction*>(insn)->get_method();
+      // TODO(emmasevastian): Treat constructors separately.
+      if (invoked->get_class() == builder_type && !is_init(invoked)) {
+        methods.emplace_back(invoked);
+      }
+    }
+  }
+
+  return methods;
+}
+
 } // namespace
 
 ///////////////////////////////////////////////
@@ -262,34 +280,18 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method,
     return false;
   }
 
-  std::vector<DexMethod*> to_inline;
-  for (auto const& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
-      auto invoked =
-          static_cast<const IRMethodInstruction*>(insn)->get_method();
-      // TODO(emmasevastian): Treat constructors separately.
-      if (invoked->get_class() == builder->get_type() && !is_init(invoked)) {
-        to_inline.emplace_back(invoked);
-      }
-    }
-  }
+  std::vector<DexMethod*> to_inline =
+      get_non_init_methods(code, builder->get_type());
 
   // Skip this step if nothing to inline.
   if (to_inline.size() == 0) {
     return true;
   }
 
-  size_t old_inlined = m_inliner->get_inlined().size();
   m_inliner->inline_callees(method, to_inline);
-  size_t new_inlined = m_inliner->get_inlined().size();
 
   // Check all possible methods were inlined.
-  if (to_inline.size() != new_inlined - old_inlined) {
-    return false;
-  }
-
-  return true;
+  return get_non_init_methods(code, builder->get_type()).size() == 0;
 }
 
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
