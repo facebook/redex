@@ -29,6 +29,7 @@ void fields_mapping(const IRInstruction* insn,
   for (auto& pair : fregs->field_to_reg) {
     if (pair.second == FieldOrRegStatus::DEFAULT) {
       fregs->field_to_reg[pair.first] = FieldOrRegStatus::UNDEFINED;
+      fregs->field_to_iput_insns[pair.first].clear();
     }
   }
 
@@ -57,7 +58,8 @@ void fields_mapping(const IRInstruction* insn,
       uint16_t current = is_setter ? insn->src(0) : insn->dest();
       fregs->field_to_reg[field] = current;
       if (is_setter) {
-        fregs->field_to_iput_insn[field] = insn;
+        fregs->field_to_iput_insns[field].clear();
+        fregs->field_to_iput_insns[field].emplace(insn);
       }
     }
   }
@@ -220,12 +222,14 @@ void FieldsRegs::meet(const FieldsRegs& that) {
   for (const auto& pair : field_to_reg) {
     if (pair.second == FieldOrRegStatus::DEFAULT) {
       field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
-      field_to_iput_insn[pair.first] = that.field_to_iput_insn.at(pair.first);
+      field_to_iput_insns[pair.first] = that.field_to_iput_insns.at(pair.first);
     } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
       continue;
     } else if (pair.second != that.field_to_reg.at(pair.first)) {
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
-      field_to_iput_insn[pair.first] = nullptr;
+      field_to_iput_insns[pair.first].insert(
+          that.field_to_iput_insns.at(pair.first).begin(),
+          that.field_to_iput_insns.at(pair.first).end());
     }
   }
 }
@@ -350,11 +354,14 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
             //   OVERWRITTEN or held in a register.
 
             // Get instruction that sets the field.
-            const IRInstruction* iput_insn =
-                fields_in_insn.field_to_iput_insn[field];
-            if (iput_insn == nullptr) {
+            const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
+            if (iput_insns.size() == 0) {
               return false;
             }
+
+            always_assert(fields_in_insn.field_to_reg[field] == OVERWRITTEN ||
+                          iput_insns.size() == 1);
+            const IRInstruction* iput_insn = *iput_insns.begin();
 
             DexOpcode move_opcode = get_move_opcode(iput_insn);
             bool is_wide = move_opcode == OPCODE_MOVE_WIDE;

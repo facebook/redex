@@ -54,13 +54,14 @@ enum FieldOrRegStatus : int {
 
 struct FieldsRegs {
   std::unordered_map<DexField*, int> field_to_reg;
-  std::unordered_map<DexField*, const IRInstruction*> field_to_iput_insn;
+  std::unordered_map<DexField*, std::unordered_set<const IRInstruction*>>
+      field_to_iput_insns;
 
   explicit FieldsRegs(DexClass* builder) {
     const auto& ifields = builder->get_ifields();
     for (const auto& ifield : ifields) {
       field_to_reg[ifield] = FieldOrRegStatus::DEFAULT;
-      field_to_iput_insn[ifield] = nullptr;
+      field_to_iput_insns[ifield] = std::unordered_set<const IRInstruction*>();
     }
   }
 
