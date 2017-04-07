@@ -150,6 +150,35 @@ void add_instr(IRCode* code,
 
 using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
 
+/**
+ * Updates parameter registers to account for the extra registers.
+ */
+void update_reg_params(const std::unordered_set<IRInstruction*>& update_list,
+                       uint16_t non_input_reg_size,
+                       uint16_t extra_regs,
+                       MoveList& move_list) {
+
+  for (const auto& update : update_list) {
+    IRInstruction* new_insn = move_list[update];
+    new_insn->set_src(0, new_insn->src(0) + extra_regs);
+  }
+
+  for (const auto& move_elem : move_list) {
+    const IRInstruction* old_insn = move_elem.first;
+    IRInstruction* new_insn = move_elem.second;
+
+    if (is_iput(old_insn->opcode())) {
+      if (old_insn->src(0) >= non_input_reg_size) {
+        new_insn->set_src(0, new_insn->src(0) + extra_regs);
+      }
+    } else if (is_iget(old_insn->opcode())) {
+      if (old_insn->dest() >= non_input_reg_size) {
+        new_insn->set_dest(new_insn->dest() + extra_regs);
+      }
+    }
+  }
+}
+
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
                     const MoveList& move_list) {
@@ -395,10 +424,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   }
 
   // Update register parameters.
-  for (const auto& update : update_list) {
-    IRInstruction* new_insn = move_replacements[update];
-    new_insn->set_src(0, new_insn->src(0) + extra_regs);
-  }
+  update_reg_params(
+      update_list, non_input_reg_size, extra_regs, move_replacements);
 
   method_updates(method, deletes, move_replacements);
   return true;
