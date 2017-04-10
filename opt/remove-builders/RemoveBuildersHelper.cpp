@@ -99,11 +99,11 @@ bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
 
 DexOpcode get_move_opcode(const IRInstruction* insn) {
   always_assert(insn != nullptr);
-  always_assert(is_iput(insn->opcode()));
+  always_assert(is_iget(insn->opcode()));
 
-  if (insn->opcode() == OPCODE_IPUT_WIDE) {
+  if (insn->opcode() == OPCODE_IGET_WIDE) {
     return OPCODE_MOVE_WIDE;
-  } else if (insn->opcode() == OPCODE_IPUT_OBJECT) {
+  } else if (insn->opcode() == OPCODE_IGET_OBJECT) {
     return OPCODE_MOVE_OBJECT;
   }
 
@@ -333,12 +333,47 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       } else if (is_iget(opcode)) {
         auto field = static_cast<const IRFieldInstruction*>(insn)->field();
         if (field->get_class() == builder->get_type()) {
+          DexOpcode move_opcode = get_move_opcode(insn);
+          bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
 
-          // Not treating the cases where we are not sure how the field
-          // was initialized.
           if (fields_in_insn.field_to_reg[field] ==
-              FieldOrRegStatus::DIFFERENT) {
-            return false;
+                  FieldOrRegStatus::DIFFERENT ||
+              fields_in_insn.field_to_reg[field] ==
+                  FieldOrRegStatus::OVERWRITTEN) {
+
+            int new_reg = FieldOrRegStatus::UNDEFINED;
+            const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
+
+            if (iput_insns.size() == 0) {
+              return false;
+            }
+
+            // Adding a move instruction for each of the setters.
+            for (const auto& iput_insn :
+                 fields_in_insn.field_to_iput_insns[field]) {
+
+              if (move_replacements.find(iput_insn) !=
+                  move_replacements.end()) {
+                if (new_reg == FieldOrRegStatus::UNDEFINED) {
+                  new_reg = move_replacements[iput_insn]->dest();
+                } else {
+                  always_assert(new_reg ==
+                                move_replacements[iput_insn]->dest());
+                }
+              } else {
+                if (new_reg == FieldOrRegStatus::UNDEFINED) {
+                  new_reg = non_input_reg_size + extra_regs;
+                  extra_regs += is_wide ? 2 : 1;
+                }
+
+                move_replacements[iput_insn] = construct_move_instr(
+                    new_reg, iput_insn->src(0), move_opcode);
+              }
+            }
+
+            always_assert(new_reg != FieldOrRegStatus::UNDEFINED);
+            move_replacements[insn] =
+                construct_move_instr(insn->dest(), new_reg, move_opcode);
 
           } else if (fields_in_insn.field_to_reg[field] ==
                      FieldOrRegStatus::UNDEFINED) {
@@ -352,8 +387,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
             move_replacements[insn] =
                 construct_move_instr(insn->dest(), null_reg, OPCODE_MOVE);
           } else {
-            // If we got here, the field is either:
-            //   OVERWRITTEN or held in a register.
+            // If we got here, the field is held in a register.
 
             // Get instruction that sets the field.
             const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
@@ -361,12 +395,8 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
               return false;
             }
 
-            always_assert(fields_in_insn.field_to_reg[field] == OVERWRITTEN ||
-                          iput_insns.size() == 1);
+            always_assert(iput_insns.size() == 1);
             const IRInstruction* iput_insn = *iput_insns.begin();
-
-            DexOpcode move_opcode = get_move_opcode(iput_insn);
-            bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
 
             // Check if we already have a value for it.
             if (move_replacements.find(iput_insn) != move_replacements.end()) {
@@ -375,19 +405,6 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
               uint16_t new_reg = new_insn->dest();
               move_replacements[insn] =
                   construct_move_instr(insn->dest(), new_reg, move_opcode);
-
-            } else if (fields_in_insn.field_to_reg[field] ==
-                       FieldOrRegStatus::OVERWRITTEN) {
-
-              // We need to add 2 moves: one for the iput, one for iget.
-              move_replacements[iput_insn] =
-                  construct_move_instr(non_input_reg_size + extra_regs,
-                                       iput_insn->src(0),
-                                       move_opcode);
-              move_replacements[insn] = construct_move_instr(
-                  insn->dest(), non_input_reg_size + extra_regs, move_opcode);
-
-              extra_regs += is_wide ? 2 : 1;
 
             } else {
               // We can reuse the existing reg, so will have only 1 move.

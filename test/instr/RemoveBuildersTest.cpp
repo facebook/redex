@@ -101,18 +101,15 @@ TEST_F(PreVerify, RemoveBarBuilder) {
 }
 
 /*
- * Ensure the builder was not removed and all calls were appropriately
- * replaced / removed / kept.
+ * Ensure the builder was removed.
  */
 TEST_F(PostVerify, RemoveBarBuilder) {
   auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
   EXPECT_NE(nullptr, bar);
 
-  // Check builder class was not removed, for now, since we are not
-  // replacing it in one of the callsites.
   auto bar_builder =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar$Builder;");
-  EXPECT_NE(nullptr, bar_builder);
+  EXPECT_EQ(nullptr, bar_builder);
 
   auto using_no_escape_builders = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
@@ -130,54 +127,61 @@ TEST_F(PostVerify, RemoveBarBuilder) {
                 initialize_bar_different_regs, OPCODE_INVOKE_DIRECT, "build"));
   EXPECT_EQ(nullptr,
             find_invoke(initialize_bar, OPCODE_INVOKE_DIRECT, "build"));
+}
 
+TEST_F(PostVerify, RemoveBarBuilder_simpleCase) {
+  auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
+  auto using_no_escape_builders = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_bar =
+      find_vmethod_named(*using_no_escape_builders, "initializeBar");
   DexType* builder_type =
       DexType::get_type("Lcom/facebook/redex/test/instr/Bar$Builder;");
 
   // Check builder was properly removed from the initialize_bar.
-  auto insns = initialize_bar->get_dex_code()->get_instructions();
+  check_no_builder(initialize_bar, builder_type);
+}
+
+namespace {
+  const size_t POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG = 6;
+}
+
+TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
+  auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
+  auto using_no_escape_builders = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_bar_different_regs = find_vmethod_named(
+      *using_no_escape_builders, "initializeBarDifferentRegs");
+  DexType* builder_type =
+      DexType::get_type("Lcom/facebook/redex/test/instr/Bar$Builder;");
+
+  // Check builder was properly removed from the initialize_bar.
+  check_no_builder(initialize_bar_different_regs, builder_type);
+
+  // While removing the builder 3 moves are added:
+  // * 2 for both iputs -> where we move the old value into the new register
+  // * 1 for getting the field's value -> where we get the value from the new register
+  uint16_t num_dest = 0;
+  uint16_t num_src = 0;
+
+  auto insns = initialize_bar_different_regs->get_dex_code()->get_instructions();
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
-    if (opcode == OPCODE_NEW_INSTANCE) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
-      EXPECT_NE(builder_type, cls_type);
-    } else if (is_iget(opcode) || is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->field();
-      EXPECT_NE(builder_type, field->get_class());
-    }
-  }
+    if (opcode == OPCODE_MOVE) {
+      uint16_t src = insn->src(0);
+      uint16_t dest = insn->dest();
 
-  // Check builder wasn't removed from initialize_bar_different_regs.
-  int builder_instances = 0;
-  int get_put_count = 0;
-  std::unordered_set<uint16_t> iput_regs;
-
-  insns = initialize_bar_different_regs->get_dex_code()->get_instructions();
-  for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
-
-    if (opcode == OPCODE_NEW_INSTANCE) {
-      DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
-      if (builder_type == cls_type) {
-        builder_instances++;
-      }
-    } else if (is_iget(opcode) || is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->field();
-      if (builder_type == field->get_class()) {
-        if (is_iput(opcode)) {
-          iput_regs.emplace(insn->src(0));
-        }
-        get_put_count++;
+      if (src == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
+        num_src++;
+      } else if (dest == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
+        num_dest++;
       }
     }
   }
 
-  EXPECT_EQ(1, builder_instances);
-  EXPECT_EQ(3, get_put_count);
-
-  // Check registers used to initialize field `x` are different.
-  EXPECT_EQ(2, iput_regs.size());
+  EXPECT_EQ(2, num_dest);
+  EXPECT_EQ(1, num_src);
 }
 
 namespace {
