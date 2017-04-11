@@ -228,11 +228,6 @@ bool is_trivial_builder_constructor(DexMethod* method) {
  * First pass through what "trivial builder" means:
  *  - is a builder
  *  - it doesn't escape stack
- *  - it either
- *    - has only one vmethod: the build method
- *    or
- *    - has no virtual methods
- *  - the build method only calls the constructor of the class it is defined in
  *  - has no private or static method
  *  - has no static fields
  *
@@ -274,15 +269,6 @@ std::unordered_set<DexClass*> get_trivial_builders(
     }
     DexMethod* constr = builder_class->get_dmethods().at(0);
     if (!is_trivial_builder_constructor(constr)) {
-      continue;
-    }
-
-    if (builder_class->get_vmethods().size() >= 2) {
-      continue;
-    }
-
-    DexMethod* build_method = get_build_method(builder_class->get_vmethods());
-    if (build_method == nullptr && builder_class->get_vmethods().size() == 1) {
       continue;
     }
 

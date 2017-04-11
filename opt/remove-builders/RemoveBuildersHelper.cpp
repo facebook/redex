@@ -280,18 +280,26 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method,
     return false;
   }
 
+  std::vector<DexMethod*> previous_to_inline;
   std::vector<DexMethod*> to_inline =
       get_non_init_methods(code, builder->get_type());
 
-  // Skip this step if nothing to inline.
-  if (to_inline.size() == 0) {
-    return true;
+  while (to_inline.size() != 0) {
+
+    m_inliner->inline_callees(method, to_inline);
+
+    // Check all possible methods were inlined.
+    previous_to_inline = to_inline;
+    to_inline = get_non_init_methods(code, builder->get_type());
+
+    // Return false if  nothing changed / nothing got inlined though
+    // there were methods to inline.
+    if (previous_to_inline == to_inline) {
+      return false;
+    }
   }
 
-  m_inliner->inline_callees(method, to_inline);
-
-  // Check all possible methods were inlined.
-  return get_non_init_methods(code, builder->get_type()).size() == 0;
+  return true;
 }
 
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
