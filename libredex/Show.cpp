@@ -875,6 +875,9 @@ std::string show(const IRInstruction* insn) {
   if (insn->has_methods()) {
     ss << " "
        << show(static_cast<const IRMethodInstruction*>(insn)->get_method());
+  } else if (insn->has_fields()) {
+    ss << " "
+       << show(static_cast<const IRFieldInstruction*>(insn)->field());
   }
   if (opcode::has_range(insn->opcode())) {
     ss << " range base: " << insn->range_base() << ", "
