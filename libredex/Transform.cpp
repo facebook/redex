@@ -10,6 +10,7 @@
 #include "Transform.h"
 
 #include <algorithm>
+#include <boost/numeric/conversion/cast.hpp>
 #include <memory>
 #include <unordered_set>
 #include <list>
@@ -235,7 +236,6 @@ IRCode::IRCode(DexMethod* method) {
   auto dc = &*method->get_dex_code();
   m_registers_size = dc->get_registers_size();
   m_ins_size = dc->get_ins_size();
-  m_outs_size = dc->get_outs_size();
   m_dbg = dc->release_debug_item();
 }
 
@@ -1434,8 +1434,6 @@ void IRCode::inline_tail_call(DexMethod* caller,
       ++pos;
     }
   }
-
-  caller->get_code()->set_outs_size(callee->get_code()->get_outs_size());
 }
 
 bool IRCode::inline_method(InlineContext& context,
@@ -1588,9 +1586,6 @@ bool IRCode::inline_method(InlineContext& context,
 
   // adjust method header
   caller_code->set_registers_size(newregs);
-  caller_code->set_outs_size(
-      std::max(callee->get_code()->get_outs_size(),
-      caller_code->get_outs_size()));
   return true;
 }
 
@@ -1813,13 +1808,26 @@ void IRCode::build_cfg(bool end_block_before_throw) {
   TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
 
+static uint16_t calc_outs_size(const IRCode* code) {
+  uint16_t size {0};
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke_range(insn->opcode())) {
+      size = std::max(size, boost::numeric_cast<uint16_t>(insn->range_size()));
+    } else if (is_invoke(insn->opcode())) {
+      size = std::max(size, boost::numeric_cast<uint16_t>(insn->srcs_size()));
+    }
+  }
+  return size;
+}
+
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod*) {
   // TODO: when we have load-param opcodes, check that they square with the
   // prototype of the DexMethod
   auto dex_code = std::make_unique<DexCode>();
   dex_code->set_registers_size(m_registers_size);
   dex_code->set_ins_size(m_ins_size);
-  dex_code->set_outs_size(m_outs_size);
+  dex_code->set_outs_size(calc_outs_size(this));
   dex_code->set_debug_item(std::move(m_dbg));
   while (try_sync(&*dex_code) == false)
     ;

@@ -442,7 +442,6 @@ struct MethodCreator {
  private:
   DexMethod* method;
   std::unique_ptr<IRCode> meth_code;
-  uint16_t out_count;
   uint16_t top_reg;
   DexAccessFlags access;
   std::vector<Location> locals;

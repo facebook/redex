@@ -59,7 +59,6 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     mt->push_back(invoke);
 
     m->get_code()->set_registers_size(2);
-    m->get_code()->set_outs_size(2);
     mt->push_back(dasm(OPCODE_MOVE_RESULT, {1_v}));
     mt->push_back(dasm(OPCODE_RETURN, {1_v}));
   }

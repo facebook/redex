@@ -205,8 +205,6 @@ class IRCode {
 
   uint16_t m_registers_size {0};
   uint16_t m_ins_size {0};
-  // TODO calculate this automatically when syncing
-  uint16_t m_outs_size {0};
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -237,11 +235,9 @@ class IRCode {
 
   uint16_t get_registers_size() const { return m_registers_size; }
   uint16_t get_ins_size() const { return m_ins_size; }
-  uint16_t get_outs_size() const { return m_outs_size; }
 
   void set_registers_size(uint16_t sz) { m_registers_size = sz; }
   void set_ins_size(uint16_t sz) { m_ins_size = sz; }
-  void set_outs_size(uint16_t sz) { m_outs_size = sz; }
 
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
   DexDebugItem* get_debug_item() { return m_dbg.get(); }

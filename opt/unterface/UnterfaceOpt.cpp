@@ -132,9 +132,6 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
               new IRMethodInstruction(OPCODE_INVOKE_DIRECT, unterface.ctor);
           uint16_t arg_count = insn->srcs_size();
           invoke->set_arg_word_count(arg_count + 1);
-          if (code->get_outs_size() < arg_count + 1) {
-            code->set_outs_size(arg_count + 1);
-          }
           for (int j = 0; j < arg_count; j++) {
             invoke->set_src(j, insn->src(j) + 1);
           }

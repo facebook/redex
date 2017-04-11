@@ -74,7 +74,6 @@ void MethodBlock::invoke(DexOpcode opcode,
     auto arg = args.at(i);
     invk->set_src(i, reg_num(arg));
   }
-  if (arg_count > mc->out_count) mc->out_count = arg_count;
   push_instruction(invk);
 }
 
@@ -507,7 +506,6 @@ FatMethod::iterator MethodCreator::make_switch_block(
 MethodCreator::MethodCreator(DexMethod* meth)
     : method(meth)
     , meth_code(new IRCode())
-    , out_count(0)
     , top_reg(0)
     , access(meth->get_access()) {
   always_assert_log(meth->is_concrete(),
@@ -522,7 +520,6 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexAccessFlags access)
     : method(DexMethod::make_method(cls, name, proto))
     , meth_code(new IRCode())
-    , out_count(0)
     , top_reg(0)
     , access(access) {
   always_assert_log(!method->is_concrete(), "Method already defined");
@@ -534,7 +531,6 @@ MethodCreator::MethodCreator(DexType* cls,
 DexMethod* MethodCreator::create() {
   meth_code->set_registers_size(top_reg);
   meth_code->set_ins_size(ins_count());
-  meth_code->set_outs_size(out_count);
   for (auto& mi : *meth_code->m_fmethod) {
     if (mi.type == MFLOW_OPCODE) {
       IRInstruction* insn = mi.insn;
