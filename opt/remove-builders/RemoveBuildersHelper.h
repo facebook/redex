@@ -87,15 +87,11 @@ class BuilderTransform {
   BuilderTransform(const PassConfig& pc,
                    const Scope& scope,
                    const DexClasses& primary_dex) {
-    pc.get("callee_invoke_direct",
-           false,
-           m_inliner_config.callee_direct_invoke_inline);
-    pc.get("virtual_same_class",
-           false,
-           m_inliner_config.virtual_same_class_inline);
-    pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
-    pc.get("use_liveness", false, m_inliner_config.use_liveness);
-    pc.get("no_exceed_16regs", true, m_inliner_config.no_exceed_16regs);
+    m_inliner_config.callee_direct_invoke_inline = true;
+    m_inliner_config.virtual_same_class_inline = true;
+    m_inliner_config.super_same_class_inline = true;
+    m_inliner_config.use_liveness = true;
+    m_inliner_config.no_exceed_16regs = true;
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {
       return resolve_method(method, search, m_resolved_refs);

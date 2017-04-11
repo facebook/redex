@@ -143,7 +143,7 @@ TEST_F(PostVerify, RemoveBarBuilder_simpleCase) {
 }
 
 namespace {
-  const size_t POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG = 6;
+  const size_t POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG = 4;
 }
 
 TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
