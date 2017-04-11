@@ -160,7 +160,21 @@ bool this_arg_escapes(DexClass* cls) {
   return result;
 }
 
-std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
+std::vector<DexMethod*> get_constructors(
+    const std::vector<DexMethod*>& dmethods) {
+  std::vector<DexMethod*> constructors;
+
+  for (const auto& dmethod : dmethods) {
+    if (is_init(dmethod)) {
+      constructors.emplace_back(dmethod);
+    }
+  }
+
+  return constructors;
+}
+
+std::vector<DexMethod*> get_static_methods(
+    const std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> static_methods;
 
   for (const auto& dmethod : dmethods) {
@@ -170,18 +184,6 @@ std::vector<DexMethod*> get_static_methods(std::vector<DexMethod*>& dmethods) {
   }
 
   return static_methods;
-}
-
-std::vector<DexMethod*> get_private_methods(std::vector<DexMethod*>& dmethods) {
-  std::vector<DexMethod*> private_methods;
-
-  for (const auto& dmethod : dmethods) {
-    if (!is_constructor(dmethod) && !is_static(dmethod)) {
-      private_methods.emplace_back(dmethod);
-    }
-  }
-
-  return private_methods;
 }
 
 /**
@@ -250,11 +252,8 @@ std::unordered_set<DexClass*> get_trivial_builders(
     // Filter out builders that do "extra work".
     bool has_static_methods =
         get_static_methods(builder_class->get_dmethods()).size() != 0;
-    bool has_private_methods =
-        get_private_methods(builder_class->get_dmethods()).size() != 0;
 
-    if (has_static_methods || has_private_methods ||
-        builder_class->get_sfields().size()) {
+    if (has_static_methods || builder_class->get_sfields().size()) {
       continue;
     }
 
@@ -264,11 +263,10 @@ std::unordered_set<DexClass*> get_trivial_builders(
     }
 
     // Filter out builders that do extra work in the constructor.
-    if (builder_class->get_dmethods().size() != 1) {
-      continue;
-    }
-    DexMethod* constr = builder_class->get_dmethods().at(0);
-    if (!is_trivial_builder_constructor(constr)) {
+    std::vector<DexMethod*> builder_constructors =
+        get_constructors(builder_class->get_dmethods());
+    if (builder_constructors.size() != 1 ||
+        !is_trivial_builder_constructor(builder_constructors[0])) {
       continue;
     }
 

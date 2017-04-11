@@ -74,6 +74,14 @@ class Car {
   public static class Builder {
     public @Nullable String model;
     public int version;
+
+    private void extraCallSetVersion(int version) {
+      this.version = version;
+    }
+
+    public void setVersion(int version) {
+      this.extraCallSetVersion(version);
+    }
   }
 }
 
@@ -119,7 +127,7 @@ class UsingNoEscapeBuilder {
 
   public Car initializeNullCarModel(int version) {
     Car.Builder builder = new Car.Builder();
-    builder.version = version;
+    builder.setVersion(version);
     Car car = new Car(builder.version);
     car.model = builder.model;
 
