@@ -9,9 +9,16 @@
 
 #pragma once
 
-#include <unordered_set>
 #include <string>
+#include <unordered_set>
 
+#include "androidfw/ResourceTypes.h"
+
+std::string read_entire_file(const std::string& filename);
+std::string get_string_attribute_value(const android::ResXMLTree& parser,
+                                       const android::String16& attribute_name);
+android::Res_value get_raw_attribute_value(
+    const android::ResXMLTree& parser, const android::String16& attribute_name);
 std::unordered_set<std::string> get_manifest_classes(
     const std::string& filename);
 std::unordered_set<std::string> get_native_classes(

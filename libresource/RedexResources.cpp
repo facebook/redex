@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -14,12 +15,11 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include <boost/filesystem.hpp>
 
 #include "androidfw/ResourceTypes.h"
-#include "utils/TypeHelpers.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
+#include "utils/TypeHelpers.h"
 
 #include "StringUtil.h"
 
@@ -30,16 +30,14 @@ using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
 using rdir_iterator = boost::filesystem::recursive_directory_iterator;
 
-
 std::string convert_from_string16(const android::String16& string16) {
   android::String8 string8(string16);
   std::string converted(string8.string());
   return converted;
 }
 
-
 // Returns the attribute with the given name for the current XML element
-std::string get_attribute_value(
+std::string get_string_attribute_value(
     const android::ResXMLTree& parser,
     const android::String16& attribute_name) {
 
@@ -60,6 +58,24 @@ std::string get_attribute_value(
   return std::string("");
 }
 
+android::Res_value get_raw_attribute_value(
+    const android::ResXMLTree& parser,
+    const android::String16& attribute_name) {
+  const size_t attr_count = parser.getAttributeCount();
+  android::Res_value outValue;
+
+  for (size_t i = 0; i < attr_count; ++i) {
+    size_t len;
+    android::String16 key(parser.getAttributeName(i, &len));
+    if (key == attribute_name) {
+
+      parser.getAttributeValue(i, &outValue);
+      return outValue;
+    }
+  }
+  return outValue;
+}
+
 std::string dotname_to_dexname(const std::string& classname) {
   std::string dexname;
   dexname.reserve(classname.size() + 2);
@@ -71,7 +87,8 @@ std::string dotname_to_dexname(const std::string& classname) {
 }
 
 /*
- * Parse AndroidManifest from buffer, return a list of class names that are referenced
+ * Parse AndroidManifest from buffer, return a list of class names that are
+ * referenced
  */
 std::unordered_set<std::string> extract_classes_from_manifest(const std::string& manifest_contents) {
 
@@ -111,27 +128,27 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
           tag == service ||
           tag == instrumentation) {
 
-        std::string classname = get_attribute_value(parser, name);
+        std::string classname = get_string_attribute_value(parser, name);
         if (classname.size()) {
           result.insert(dotname_to_dexname(classname));
         }
 
         if (tag == provider) {
-          std::string text = get_attribute_value(parser, authorities);
+          std::string text = get_string_attribute_value(parser, authorities);
           size_t start = 0;
           size_t end = 0;
           while ((end = text.find(';', start)) != std::string::npos) {
-              result.insert(dotname_to_dexname(text.substr(start, end - start)));
-              start = end + 1;
+            result.insert(dotname_to_dexname(text.substr(start, end - start)));
+            start = end + 1;
           }
           result.insert(dotname_to_dexname(text.substr(start)));
         }
       } else if (tag == activity_alias) {
-        std::string classname = get_attribute_value(parser, target_activity);
+        std::string classname = get_string_attribute_value(parser, target_activity);
         if (classname.size()) {
           result.insert(dotname_to_dexname(classname));
         }
-        classname = get_attribute_value(parser, name);
+        classname = get_string_attribute_value(parser, name);
         if (classname.size()) {
           result.insert(dotname_to_dexname(classname));
         }
@@ -141,7 +158,6 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
            type != android::ResXMLParser::END_DOCUMENT);
   return result;
 }
-
 
 std::unordered_set<std::string> extract_classes_from_layout(const std::string& layout_contents) {
 
@@ -165,9 +181,9 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
       android::String16 tag(parser.getElementName(&len));
       std::string classname = convert_from_string16(tag);
       if (!strcmp(classname.c_str(), "fragment") || !strcmp(classname.c_str(), "view")) {
-        classname = get_attribute_value(parser, klazz);
+        classname = get_string_attribute_value(parser, klazz);
         if (classname.empty()) {
-          classname = get_attribute_value(parser, name);
+          classname = get_string_attribute_value(parser, name);
         }
       }
       std::string converted = std::string("L") + classname + std::string(";");
@@ -182,7 +198,6 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
            type != android::ResXMLParser::END_DOCUMENT);
   return result;
 }
-
 
 /*
  * Returns all strings that look like java class names from a native library.
@@ -204,8 +219,9 @@ std::unordered_set<std::string> extract_classes_from_native_lib(const std::strin
   while (inptr < end) {
     outptr = buffer;
     length = 0;
-    // All classnames start with a package, which starts with a lowercase letter. Some of them are
-    // preceded by an 'L' and followed by a ';' in native libraries while others are not.
+    // All classnames start with a package, which starts with a lowercase
+    // letter. Some of them are preceded by an 'L' and followed by a ';' in
+    // native libraries while others are not.
     if ((*inptr >= 'a' && *inptr <= 'z') || *inptr == 'L') {
 
       if (*inptr != 'L') {
@@ -214,11 +230,11 @@ std::unordered_set<std::string> extract_classes_from_native_lib(const std::strin
       }
 
       while (( // This loop is safe since lib_contents.data() ends with a \0
-          (*inptr >= 'a' && *inptr <= 'z') ||
-          (*inptr >= 'A' && *inptr <= 'Z') ||
-          (*inptr >= '0' && *inptr <= '9') ||
-          *inptr == '/' || *inptr == '_' || *inptr == '$')
-          && length < MAX_CLASSNAME_LENGTH) {
+                 (*inptr >= 'a' && *inptr <= 'z') ||
+                 (*inptr >= 'A' && *inptr <= 'Z') ||
+                 (*inptr >= '0' && *inptr <= '9') ||
+                 *inptr == '/' || *inptr == '_' || *inptr == '$')
+             && length < MAX_CLASSNAME_LENGTH) {
 
         *outptr++ = *inptr++;
         length++;
@@ -234,10 +250,9 @@ std::unordered_set<std::string> extract_classes_from_native_lib(const std::strin
   return classes;
 }
 
-
 /*
- * Reads an entire file into a std::string. Returns an empty string if anything
- * went wrong (e.g. file not found).
+ * Reads an entire file into a std::string. Returns an empty string if
+ * anything went wrong (e.g. file not found).
  */
 std::string read_entire_file(const std::string& filename) {
   std::ifstream in(filename, std::ios::in | std::ios::binary);
@@ -245,7 +260,6 @@ std::string read_entire_file(const std::string& filename) {
   sstr << in.rdbuf();
   return sstr.str();
 }
-
 
 std::unordered_set<std::string> get_manifest_classes(const std::string& filename) {
   std::string manifest = read_entire_file(filename);
@@ -257,7 +271,6 @@ std::unordered_set<std::string> get_manifest_classes(const std::string& filename
   }
   return classes;
 }
-
 
 std::vector<std::string> find_layout_files(const std::string& apk_directory) {
 
@@ -272,7 +285,7 @@ std::vector<std::string> find_layout_files(const std::string& apk_directory) {
       path_t entry_path = entry.path();
 
       if (is_directory(entry_path) &&
-        starts_with(entry_path.filename().string().c_str(), "layout")) {
+          starts_with(entry_path.filename().string().c_str(), "layout")) {
         for (auto lit = dir_iterator(entry_path); lit != dir_iterator(); ++lit) {
           auto const& layout_entry = *lit;
           path_t layout_path = layout_entry.path();
@@ -297,7 +310,6 @@ std::unordered_set<std::string> get_layout_classes(const std::string& apk_direct
   return all_classes;
 }
 
-
 /**
  * Return a list of all the .so files in /lib
  */
@@ -321,7 +333,6 @@ std::vector<std::string> find_native_library_files(const std::string& apk_direct
   }
   return native_library_files;
 }
-
 
 /**
  * Return all potential java class names located in native libraries.
