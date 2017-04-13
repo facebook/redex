@@ -20,14 +20,15 @@
 #include "Resolver.h"
 #include "Transform.h"
 
-  // Map of type string -> (sget opcode, sput opcode)
-static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>> init_ops = {
-  {"I", {OPCODE_SGET, OPCODE_SPUT}},
-  {"Z", {OPCODE_SGET_BOOLEAN, OPCODE_SPUT_BOOLEAN}},
-  {"B", {OPCODE_SGET_BYTE, OPCODE_SPUT_BYTE}},
-  {"C", {OPCODE_SGET_CHAR, OPCODE_SPUT_CHAR}},
-  {"S", {OPCODE_SGET_SHORT, OPCODE_SPUT_SHORT}},
-  {"Ljava/lang/String;", {OPCODE_SGET_OBJECT, OPCODE_SPUT_OBJECT}},
+// Map of type string -> (sget opcode, sput opcode)
+static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>>
+    init_ops = {
+        {"I", {OPCODE_SGET, OPCODE_SPUT}},
+        {"Z", {OPCODE_SGET_BOOLEAN, OPCODE_SPUT_BOOLEAN}},
+        {"B", {OPCODE_SGET_BYTE, OPCODE_SPUT_BYTE}},
+        {"C", {OPCODE_SGET_CHAR, OPCODE_SPUT_CHAR}},
+        {"S", {OPCODE_SGET_SHORT, OPCODE_SPUT_SHORT}},
+        {"Ljava/lang/String;", {OPCODE_SGET_OBJECT, OPCODE_SPUT_OBJECT}},
 };
 
 struct ConstPropTest : testing::Test {
@@ -48,26 +49,29 @@ struct ConstPropTest : testing::Test {
     m_string_type = DexType::make_type("Ljava/lang/String;");
   }
 
-  ~ConstPropTest() {
-    delete g_redex;
-  }
+  ~ConstPropTest() { delete g_redex; }
 
   void expect_empty_clinit(DexClass* clazz) {
     auto clinit = clazz->get_clinit();
-    ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str() << " missing clinit";
+    ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str()
+                               << " missing clinit";
     auto code = clinit->get_code();
     EXPECT_EQ(code->count_opcodes(), 0) << "Class " << clazz->c_str()
                                         << " has non-empty clinit";
   }
 
-  void expect_field_eq(DexClass* clazz, const std::string& name, DexType* type, boost::any expected) {
+  void expect_field_eq(DexClass* clazz,
+                       const std::string& name,
+                       DexType* type,
+                       boost::any expected) {
     auto field_name = DexString::make_string(name);
-    auto field = resolve_field(clazz->get_type(), field_name, type, FieldSearch::Static);
+    auto field =
+        resolve_field(clazz->get_type(), field_name, type, FieldSearch::Static);
     ASSERT_NE(field, nullptr) << "Failed resolving field " << name
                               << " in class " << clazz->c_str();
     auto val = field->get_static_value();
-    ASSERT_NE(val, nullptr) << "Failed getting static value for field " << field->c_str()
-                            << " in class " << clazz->c_str();
+    ASSERT_NE(val, nullptr) << "Failed getting static value for field "
+                            << field->c_str() << " in class " << clazz->c_str();
     if (expected.type() == typeid(uint64_t)) {
       ASSERT_EQ(val->value(), boost::any_cast<uint64_t>(expected))
           << "Incorrect value for field " << field->c_str() << " in class "
@@ -114,7 +118,10 @@ DexClass* create_class(const std::string& name) {
 }
 
 // Add a field that is initialized to a value
-DexField* add_concrete_field(DexClass* cls, const std::string& name, DexType* type, boost::any val) {
+DexField* add_concrete_field(DexClass* cls,
+                             const std::string& name,
+                             DexType* type,
+                             boost::any val) {
   auto container = cls->get_type();
   auto field_name = DexString::make_string(name);
   auto field = DexField::make_field(container, field_name, type);
@@ -125,7 +132,9 @@ DexField* add_concrete_field(DexClass* cls, const std::string& name, DexType* ty
 }
 
 // Add a field that is initialized to the value of parent
-DexField* add_dependent_field(DexClass* cls, const std::string& name, DexField *parent) {
+DexField* add_dependent_field(DexClass* cls,
+                              const std::string& name,
+                              DexField* parent) {
   // Create the field
   auto container = cls->get_type();
   auto field_name = DexString::make_string(name);
@@ -165,15 +174,15 @@ struct FieldDescriptor {
 //   }
 TEST_F(ConstPropTest, simplePropagate) {
   FieldDescriptor test_cases[] = {
-    {"int", m_int_type, static_cast<uint64_t>(12345)},
-    {"bool", m_bool_type, static_cast<uint64_t>(1)},
-    {"byte", m_byte_type, static_cast<uint64_t>('b')},
-    {"char", m_char_type, static_cast<uint64_t>('c')},
-    {"short", m_short_type, static_cast<uint64_t>(256)}
-  };
+      {"int", m_int_type, static_cast<uint64_t>(12345)},
+      {"bool", m_bool_type, static_cast<uint64_t>(1)},
+      {"byte", m_byte_type, static_cast<uint64_t>('b')},
+      {"char", m_char_type, static_cast<uint64_t>('c')},
+      {"short", m_short_type, static_cast<uint64_t>(256)}};
   for (auto test_case : test_cases) {
     auto parent = create_class("Lcom/redex/Parent_" + test_case.name + ";");
-    auto parent_field = add_concrete_field(parent, "CONST", test_case.type, test_case.value);
+    auto parent_field =
+        add_concrete_field(parent, "CONST", test_case.type, test_case.value);
 
     auto child = create_class("Lcom/redex/Child_" + test_case.name + ";");
     auto child_field = add_dependent_field(child, "CONST", parent_field);
@@ -186,8 +195,8 @@ TEST_F(ConstPropTest, simplePropagate) {
   }
 }
 
-// Check that we can do a simple, single level propagation with multiple fields. As source,
-// this would look like:
+// Check that we can do a simple, single level propagation with multiple fields.
+// As source, this would look like:
 //
 //   class Parent {
 //     public static final int CONST_INT = 1111;
@@ -208,13 +217,12 @@ TEST_F(ConstPropTest, simplePropagate) {
 //   }
 TEST_F(ConstPropTest, simplePropagateMultiField) {
   FieldDescriptor field_descs[] = {
-    {"CONST_INT", m_int_type, static_cast<uint64_t>(1111)},
-    {"CONST_BOOL", m_bool_type, static_cast<uint64_t>(0)},
-    {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
-    {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
-    {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
-    {"CONST_STRING", m_string_type, DexString::make_string("foo")}
-  };
+      {"CONST_INT", m_int_type, static_cast<uint64_t>(1111)},
+      {"CONST_BOOL", m_bool_type, static_cast<uint64_t>(0)},
+      {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
+      {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
+      {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
+      {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
   for (auto fd : field_descs) {
@@ -230,8 +238,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
   }
 }
 
-// Check that we can propagate across multiple levels of dependencies. As source, this
-// looks like:
+// Check that we can propagate across multiple levels of dependencies. As
+// source, this looks like:
 //   class Parent {
 //     public static final int CONST_INT = 1111;
 //     public static final bool CONST_BOOL = false;
@@ -260,13 +268,12 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
 //   }
 TEST_F(ConstPropTest, multiLevelPropagate) {
   FieldDescriptor field_descs[] = {
-    {"CONST_INT", m_int_type, static_cast<uint64_t>(1111)},
-    {"CONST_BOOL", m_bool_type, static_cast<uint64_t>(0)},
-    {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
-    {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
-    {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
-    {"CONST_STRING", m_string_type, DexString::make_string("foo")}
-  };
+      {"CONST_INT", m_int_type, static_cast<uint64_t>(1111)},
+      {"CONST_BOOL", m_bool_type, static_cast<uint64_t>(0)},
+      {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
+      {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
+      {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
+      {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
   auto grandchild = create_class("Lcom/redex/GrandChild;");
@@ -288,8 +295,8 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
   }
 }
 
-// Check that we can propagate across multiple levels of dependencies where there
-// are siblings at each level. In source, this looks like:
+// Check that we can propagate across multiple levels of dependencies where
+// there are siblings at each level. In source, this looks like:
 //
 //   class Parent1 {
 //     public static final int CONST_INT = 1111;
@@ -332,26 +339,36 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
 //   }
 TEST_F(ConstPropTest, multiLevelWithSiblings) {
   auto parent1 = create_class("Lcom/redex/Parent1;");
-  auto parent1_int = add_concrete_field(parent1, "CONST_INT", m_int_type, static_cast<uint64_t>(1111));
-  auto parent1_char = add_concrete_field(parent1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
-  auto parent1_string = add_concrete_field(parent1, "CONST_STRING", m_char_type, DexString::make_string("foo"));
+  auto parent1_int = add_concrete_field(
+      parent1, "CONST_INT", m_int_type, static_cast<uint64_t>(1111));
+  auto parent1_char = add_concrete_field(
+      parent1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
+  auto parent1_string = add_concrete_field(
+      parent1, "CONST_STRING", m_char_type, DexString::make_string("foo"));
 
   auto parent2 = create_class("Lcom/redex/Parent2;");
-  auto parent2_int = add_concrete_field(parent2, "CONST_INT", m_int_type, static_cast<uint64_t>(2222));
-  auto parent2_char = add_concrete_field(parent2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
-  auto parent2_string = add_concrete_field(parent2, "CONST_STRING", m_char_type, DexString::make_string("bar"));
+  auto parent2_int = add_concrete_field(
+      parent2, "CONST_INT", m_int_type, static_cast<uint64_t>(2222));
+  auto parent2_char = add_concrete_field(
+      parent2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
+  auto parent2_string = add_concrete_field(
+      parent2, "CONST_STRING", m_char_type, DexString::make_string("bar"));
 
   auto child1 = create_class("Lcom/redex/Child1;");
   auto child1_int = add_dependent_field(child1, "CONST_INT", parent1_int);
   auto child1_char = add_dependent_field(child1, "CONST_CHAR", parent2_char);
-  auto child1_string = add_dependent_field(child1, "CONST_STRING", parent1_string);
-  auto child1_bool = add_concrete_field(child1, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(1));
+  auto child1_string =
+      add_dependent_field(child1, "CONST_STRING", parent1_string);
+  auto child1_bool = add_concrete_field(
+      child1, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(1));
 
   auto child2 = create_class("Lcom/redex/Child2;");
   auto child2_int = add_dependent_field(child2, "CONST_INT", parent2_int);
   auto child2_char = add_dependent_field(child2, "CONST_CHAR", parent1_char);
-  auto child2_string = add_dependent_field(child2, "CONST_STRING", parent2_string);
-  auto child2_bool = add_concrete_field(child2, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(0));
+  auto child2_string =
+      add_dependent_field(child2, "CONST_STRING", parent2_string);
+  auto child2_bool = add_concrete_field(
+      child2, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(0));
 
   auto grandchild1 = create_class("Lcom/redex/GrandChild1;");
   add_dependent_field(grandchild1, "CONST_INT", child1_int);
@@ -374,13 +391,21 @@ TEST_F(ConstPropTest, multiLevelWithSiblings) {
   }
 
   expect_field_eq(child1, "CONST_INT", m_int_type, static_cast<uint64_t>(1111));
-  expect_field_eq(child1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
+  expect_field_eq(
+      child1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
   expect_field_eq(child2, "CONST_INT", m_int_type, static_cast<uint64_t>(2222));
-  expect_field_eq(child2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
-  expect_field_eq(grandchild1, "CONST_INT", m_int_type, static_cast<uint64_t>(1111));
-  expect_field_eq(grandchild1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
-  expect_field_eq(grandchild1, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(1));
-  expect_field_eq(grandchild2, "CONST_INT", m_int_type, static_cast<uint64_t>(2222));
-  expect_field_eq(grandchild2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
-  expect_field_eq(grandchild2, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(0));
+  expect_field_eq(
+      child2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
+  expect_field_eq(
+      grandchild1, "CONST_INT", m_int_type, static_cast<uint64_t>(1111));
+  expect_field_eq(
+      grandchild1, "CONST_CHAR", m_char_type, static_cast<uint64_t>('b'));
+  expect_field_eq(
+      grandchild1, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(1));
+  expect_field_eq(
+      grandchild2, "CONST_INT", m_int_type, static_cast<uint64_t>(2222));
+  expect_field_eq(
+      grandchild2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
+  expect_field_eq(
+      grandchild2, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(0));
 }
