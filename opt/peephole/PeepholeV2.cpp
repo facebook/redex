@@ -1263,7 +1263,7 @@ class PeepholeOptimizerV2 {
       PassManager& mgr,
       const std::vector<DexClass*>& scope,
       const std::vector<std::string>& disabled_peepholes)
-      : m_mgr(mgr), m_scope(scope) {
+      : m_scope(scope), m_mgr(mgr) {
     for (const auto& pattern_list : patterns::get_all_patterns()) {
       for (const Pattern& pattern : pattern_list) {
         if (!contains(disabled_peepholes, pattern.name)) {
