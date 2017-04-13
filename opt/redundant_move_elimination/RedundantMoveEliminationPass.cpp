@@ -51,9 +51,11 @@ namespace {
 
 class RedundantMoveEliminationImpl {
  public:
-  RedundantMoveEliminationImpl(const std::vector<DexClass*>& scope,
-                               const PassManager& mgr)
-      : m_scope(scope), m_mgr(mgr) {}
+  RedundantMoveEliminationImpl(
+      const std::vector<DexClass*>& scope,
+      PassManager& mgr,
+      const RedundantMoveEliminationPass::Config& config)
+      : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   void run() {
     walk_methods(m_scope, [this](DexMethod* m) {
@@ -65,7 +67,8 @@ class RedundantMoveEliminationImpl {
 
  private:
   const std::vector<DexClass*>& m_scope;
-  PassManager m_mgr;
+  PassManager& m_mgr;
+  const RedundantMoveEliminationPass::Config& m_config;
 
   void run_on_method(DexMethod* method) {
     std::vector<IRInstruction*> deletes;
@@ -95,7 +98,7 @@ class RedundantMoveEliminationImpl {
     AliasedRegisters aliases;
     for (auto& mei : InstructionIterable(block)) {
       RegisterValue src = get_src_value(mei.insn);
-      if (src.kind != RegisterValue::Kind::NONE) {
+      if (src != RegisterValue::none()) {
         // either a move or a constant load into `dst`
         RegisterValue dst{mei.insn->dest()};
         if (aliases.are_aliases(dst, src)) {
@@ -144,20 +147,32 @@ class RedundantMoveEliminationImpl {
     case OPCODE_CONST:
     case OPCODE_CONST_4:
     case OPCODE_CONST_16:
-      return RegisterValue{insn->literal()};
+      if (m_config.eliminate_const_literals) {
+        return RegisterValue{insn->literal()};
+      } else {
+        return RegisterValue::none();
+      }
     case OPCODE_CONST_STRING:
     case OPCODE_CONST_STRING_JUMBO: {
-      auto str_instr = static_cast<IRStringInstruction*>(insn);
-      DexString* str = str_instr->get_string();
-      return RegisterValue{str};
+      if (m_config.eliminate_const_strings) {
+        auto str_instr = static_cast<IRStringInstruction*>(insn);
+        DexString* str = str_instr->get_string();
+        return RegisterValue{str};
+      } else {
+        return RegisterValue::none();
+      }
     }
     case OPCODE_CONST_CLASS: {
-      auto type_instr = static_cast<IRTypeInstruction*>(insn);
-      DexType* type = type_instr->get_type();
-      return RegisterValue{type};
+      if (m_config.eliminate_const_classes) {
+        auto type_instr = static_cast<IRTypeInstruction*>(insn);
+        DexType* type = type_instr->get_type();
+        return RegisterValue{type};
+      } else {
+        return RegisterValue::none();
+      }
     }
     default:
-      return RegisterValue{}; // kind == NONE
+      return RegisterValue::none();
     }
   }
 };
@@ -167,7 +182,7 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /* unused */,
                                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  RedundantMoveEliminationImpl impl(scope, mgr);
+  RedundantMoveEliminationImpl impl(scope, mgr, m_config);
   impl.run();
   TRACE(RME,
         2,

@@ -18,6 +18,43 @@ typedef uint16_t Register;
 
 struct RegisterValue {
 
+  explicit RegisterValue(Register r) : kind(Kind::REGISTER), reg(r) {}
+  explicit RegisterValue(int64_t l) : kind(Kind::CONST_LITERAL), literal(l) {}
+  explicit RegisterValue(DexString* s) : kind(Kind::CONST_STRING), str(s) {}
+  explicit RegisterValue(DexType* t) : kind(Kind::CONST_TYPE), type(t) {}
+  explicit RegisterValue() : kind(Kind::NONE), dummy() {}
+
+  bool operator==(const RegisterValue& other) const {
+    if (kind != other.kind) {
+      return false;
+    }
+
+    switch (kind) {
+    case Kind::REGISTER:
+      return reg == other.reg;
+    case Kind::CONST_LITERAL:
+      return literal == other.literal;
+    case Kind::CONST_STRING:
+      return str == other.str;
+    case Kind::CONST_TYPE:
+      return type == other.type;
+    case Kind::NONE:
+      return true;
+    default:
+      always_assert_log(false, "unknown RegisterValue kind");
+    }
+  }
+
+  bool operator!=(const RegisterValue& other) const {
+    return !(*this == other);
+  }
+
+  static const RegisterValue& none() {
+    static const RegisterValue s_none;
+    return s_none;
+  }
+
+ private:
   const enum class Kind {
     REGISTER,
     CONST_LITERAL,
@@ -33,33 +70,6 @@ struct RegisterValue {
     DexType* const type;
     std::nullptr_t const dummy;
   };
-
-  explicit RegisterValue(Register r) : kind(Kind::REGISTER), reg(r) {}
-  explicit RegisterValue(int64_t l) : kind(Kind::CONST_LITERAL), literal(l) {}
-  explicit RegisterValue(DexString* s) : kind(Kind::CONST_STRING), str(s) {}
-  explicit RegisterValue(DexType* t) : kind(Kind::CONST_TYPE), type(t) {}
-  explicit RegisterValue() : kind(Kind::NONE), dummy() {}
-
-  bool operator==(RegisterValue other) {
-    if (kind != other.kind) {
-      return false;
-    }
-
-    switch (kind) {
-    case Kind::REGISTER:
-      return reg == other.reg;
-    case Kind::CONST_LITERAL:
-      return literal == other.literal;
-    case Kind::CONST_STRING:
-      return str == other.str;
-    case Kind::CONST_TYPE:
-      return type == other.type;
-    default:
-      always_assert_log(false, "unknown RegisterValue kind");
-    }
-  }
-
-  bool operator!=(RegisterValue other) { return !(*this == other); }
 };
 
 class AliasedRegisters {

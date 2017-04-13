@@ -17,5 +17,15 @@ class RedundantMoveEliminationPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& /* unused */) override {}
+  virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("eliminate_const_literals", true, m_config.eliminate_const_literals);
+    pc.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
+    pc.get("eliminate_const_classes", true, m_config.eliminate_const_classes);
+  }
+
+  struct Config {
+    bool eliminate_const_literals;
+    bool eliminate_const_strings;
+    bool eliminate_const_classes;
+  } m_config;
 };
