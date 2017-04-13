@@ -26,10 +26,7 @@
 #include "Transform.h"
 #include "Walkers.h"
 
-static size_t unhandled_inline = 0;
-
-static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op);
-
+namespace {
 std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
   std::vector<DexField*> field_refs;
   walk_methods(scope,
@@ -117,7 +114,6 @@ void remove_unused_fields(Scope& scope,
         "Removable fields %lu/%lu\n",
         dead_fields.size(),
         moveable_fields.size());
-  TRACE(FINALINLINE, 1, "Unhandled inline %ld\n", unhandled_inline);
 
   for (auto clazz : smallscope) {
     auto& sfields = clazz->get_sfields();
@@ -130,28 +126,26 @@ void remove_unused_fields(Scope& scope,
   }
 }
 
-static bool check_sget(IRFieldInstruction* opfield) {
+bool check_sget(IRFieldInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
-  case OPCODE_SGET_WIDE:
-    unhandled_inline++;
-    return false;
+  // TODO: OPCODE_SGET_WIDE:
   case OPCODE_SGET:
   case OPCODE_SGET_BOOLEAN:
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
   case OPCODE_SGET_SHORT:
+  case OPCODE_SGET_OBJECT:
     return true;
   default:
     return false;
   }
 }
 
-static bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
+bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
   case OPCODE_SGET_WIDE:
-    unhandled_inline++;
     return false;
   case OPCODE_SGET:
   case OPCODE_SGET_BOOLEAN:
@@ -217,10 +211,10 @@ void inline_sget(DexMethod* method, IRFieldInstruction* opfield) {
 }
 
 /*
- * There's no "good way" to differentiate blank vs. non-blank
- * finals.  So, we just scan the code in the CL-init.  If
- * it's sput there, then it's a blank.  Lame, agreed, but functional.
- *
+ * There's no "good way" to differentiate blank vs. non-blank finals.
+ * So, we just scan the code in the CL-init.  If it's sput there, then it's
+ * a blank static, i.e., one without an encoded value field.
+ * Lame, agreed, but functional.
  */
 void get_sput_in_clinit(DexClass* clazz,
                         std::unordered_map<DexField*, bool>& blank_statics) {
@@ -236,8 +230,10 @@ void get_sput_in_clinit(DexClass* clazz,
     if (opcode->has_fields() && is_sput(opcode->opcode())) {
       auto fieldop = static_cast<IRFieldInstruction*>(opcode);
       auto field = resolve_field(fieldop->field(), FieldSearch::Static);
-      if (field == nullptr || !field->is_concrete()) continue;
-      if (field->get_class() != clazz->get_type()) continue;
+      if (field == nullptr || !field->is_concrete() ||
+          field->get_class() != clazz->get_type()) {
+        continue;
+      }
       blank_statics[field] = true;
     }
   }
@@ -253,8 +249,9 @@ void inline_field_values(Scope& fullscope) {
     get_sput_in_clinit(clazz, blank_statics);
     auto sfields = clazz->get_sfields();
     for (auto sfield : sfields) {
-      if ((sfield->get_access() & aflags) != aflags) continue;
-      if (blank_statics[sfield]) continue;
+      if ((sfield->get_access() & aflags) != aflags || blank_statics[sfield]) {
+        continue;
+      }
       auto value = sfield->get_static_value();
       if (value == nullptr && !is_primitive(sfield->get_type())) {
         continue;
@@ -304,17 +301,17 @@ void inline_field_values(Scope& fullscope) {
 /*
  * Verify that we can handle converting the literal contained in the
  * const op into an encoded value.
- *
- * TODO: Strings and wide
  */
-static bool validate_const_for_ev(IRInstruction* op) {
+bool validate_const_for_encoded_value(IRInstruction* op) {
   if (!is_const(op->opcode())) {
     return false;
   }
   switch (op->opcode()) {
+  // TODO: OPCODE_CONST_WIDE
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
   case OPCODE_CONST:
+  case OPCODE_CONST_STRING:
     return true;
   default:
     return false;
@@ -324,7 +321,7 @@ static bool validate_const_for_ev(IRInstruction* op) {
 /*
  * Verify that we can convert the field in the sput into an encoded value.
  */
-static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op) {
+bool validate_sput_for_encoded_value(DexClass* clazz, IRInstruction* op) {
   if (!(op->has_fields() && is_sput(op->opcode()))) {
     return false;
   }
@@ -336,11 +333,12 @@ static bool validate_sput_for_ev(DexClass* clazz, IRInstruction* op) {
 /*
  * Attempt to replace the clinit with corresponding encoded values.
  */
-static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
+bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   std::vector<std::pair<IRInstruction*, IRInstruction*>> const_sputs;
   auto ii = InstructionIterable(clinit->get_code());
   auto end = ii.end();
-  // Verify opcodes are (const, sput)* pairs
+  // Verify the entire opcodes in this clinit are (const, sput)* pairs followed
+  // by return-void.
   for (auto it = ii.begin(); it != end; ++it) {
     auto first_op = it->insn;
     ++it;
@@ -351,8 +349,8 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
       break;
     }
     auto sput_op = it->insn;
-    if (!(validate_const_for_ev(first_op) &&
-          validate_sput_for_ev(clazz, sput_op) &&
+    if (!(validate_const_for_encoded_value(first_op) &&
+          validate_sput_for_encoded_value(clazz, sput_op) &&
           (first_op->dest() == sput_op->src(0)))) {
       return false;
     }
@@ -360,13 +358,34 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   }
 
   // Attach encoded values and remove the clinit
+  TRACE(FINALINLINE,
+        8,
+        "Replacing <clinit> %s: %lu pairs...\n",
+        SHOW(clinit),
+        const_sputs.size());
   for (auto& pair : const_sputs) {
     auto const_op = pair.first;
     auto sput_op = pair.second;
     auto fieldop = static_cast<IRFieldInstruction*>(sput_op);
     auto field = resolve_field(fieldop->field(), FieldSearch::Static);
-    auto ev = DexEncodedValue::zero_for_type(field->get_type());
-    ev->value((uint64_t)const_op->literal());
+    DexEncodedValue* ev;
+    if (const_op->opcode() == OPCODE_CONST_STRING) {
+      TRACE(FINALINLINE,
+            8,
+            "- String Field: %s, \"%s\"\n",
+            SHOW(field),
+            SHOW(static_cast<IRStringInstruction*>(const_op)->get_string()));
+      ev = new DexEncodedValueString(
+          static_cast<IRStringInstruction*>(const_op)->get_string());
+    } else {
+      TRACE(FINALINLINE,
+            9,
+            "- Integer Field: %s, %lu\n",
+            SHOW(field),
+            (uint64_t)const_op->literal());
+      ev = DexEncodedValue::zero_for_type(field->get_type());
+      ev->value((uint64_t)const_op->literal());
+    }
     field->make_concrete(field->get_access(), ev);
   }
   clazz->remove_method(clinit);
@@ -374,7 +393,7 @@ static bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   return true;
 }
 
-static size_t replace_encodable_clinits(Scope& fullscope) {
+size_t replace_encodable_clinits(Scope& fullscope) {
   size_t nreplaced = 0;
   size_t ntotal = 0;
   for (auto clazz : fullscope) {
@@ -411,12 +430,12 @@ struct FieldDependency {
                   DexField* field)
       : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };
+}
 
 /*
  * Attempt to propagate constant values that are known only after the APK has
- * been
- * created. Our build process can result in situation where javac sees something
- * resembling:
+ * been created. Our build process can result in situation where javac sees
+ * something resembling:
  *
  *   class Parent {
  *     public static int CONST = 0;
@@ -427,16 +446,13 @@ struct FieldDependency {
  *   }
  *
  * Parent.CONST is not final, so javac cannot perform constant propagation.
- * However,
- * Parent.CONST may be marked final when we package the APK, thereby opening up
- * an
- * opportunity for constant propagation by redex.
+ * However, Parent.CONST may be marked final when we package the APK, thereby
+ * opening up an opportunity for constant propagation by redex.
  */
 size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
   // Build dependency map (static -> [statics] that depend on it)
   TRACE(FINALINLINE, 2, "Building dependency map\n");
-  std::unordered_map<DexField*, std::unique_ptr<std::vector<FieldDependency>>>
-      deps;
+  std::unordered_map<DexField*, std::vector<FieldDependency>> deps;
   for (auto clazz : fullscope) {
     auto clinit = clazz->get_clinit();
     if (clinit == nullptr) {
@@ -445,7 +461,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
     auto code = clinit->get_code();
     auto ii = InstructionIterable(code);
     auto end = ii.end();
-    for (auto it = ii.begin(); it != ii.end(); ++it) {
+    for (auto it = ii.begin(); it != end; ++it) {
       // Check for sget from static final
       if (!it->insn->has_fields()) {
         continue;
@@ -462,7 +478,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
 
       // Check for sput to static final
       auto next_insn = std::next(it)->insn;
-      if (!validate_sput_for_ev(clazz, next_insn)) {
+      if (!validate_sput_for_encoded_value(clazz, next_insn)) {
         continue;
       }
       auto sput_op = static_cast<IRFieldInstruction*>(next_insn);
@@ -492,6 +508,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
         for (size_t r = 0; r < jt->insn->srcs_size(); ++r) {
           if (jt->insn->src(r) == sget_op->dest()) {
             src_reg_reused = true;
+            break;
           }
         }
       }
@@ -505,16 +522,12 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       }
 
       // Yay, we found a dependency!
-      if (deps.count(src_field) == 0) {
-        deps[src_field] = std::make_unique<std::vector<FieldDependency>>();
-      }
       TRACE(FINALINLINE,
             2,
             "Field %s depends on %s\n",
             SHOW(dst_field),
             SHOW(src_field));
-      FieldDependency dep(clinit, it->insn, next_insn, dst_field);
-      deps[src_field]->push_back(dep);
+      deps[src_field].emplace_back(clinit, it->insn, next_insn, dst_field);
     }
   }
 
@@ -543,7 +556,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       continue;
     }
     auto val = cur->get_static_value();
-    for (auto dep : *deps[cur]) {
+    for (const auto& dep : deps[cur]) {
       dep.field->make_concrete(dep.field->get_access(), val);
       auto code = dep.clinit->get_code();
       code->remove_opcode(dep.sget);
