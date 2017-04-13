@@ -849,7 +849,7 @@ size_t IRCode::sum_opcode_sizes() const {
 void IRCode::remove_opcode(const FatMethod::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  if (may_throw(insn->opcode())) {
+  if (opcode::may_throw(insn->opcode())) {
     for (auto rev = --FatMethod::reverse_iterator(it);
          rev != m_fmethod->rend();
          ++rev) {
@@ -1618,7 +1618,8 @@ bool end_of_block(const FatMethod* fm,
       return true;
     }
   } else {
-    if (in_try && it->type == MFLOW_OPCODE && may_throw(it->insn->opcode())) {
+    if (in_try && it->type == MFLOW_OPCODE &&
+        opcode::may_throw(it->insn->opcode())) {
       return true;
     }
   }
@@ -1634,7 +1635,7 @@ bool end_of_block(const FatMethod* fm,
 
 void split_may_throw(FatMethod* fm, FatMethod::iterator it) {
   auto& mie = *it;
-  if (mie.type == MFLOW_OPCODE && may_throw(mie.insn->opcode())) {
+  if (mie.type == MFLOW_OPCODE && opcode::may_throw(mie.insn->opcode())) {
     fm->insert(it, *MethodItemEntry::make_throwing_fallthrough(&mie));
   }
 }
@@ -1647,7 +1648,7 @@ bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
         continue;
       }
       return last->insn->opcode() == OPCODE_THROW ||
-             may_throw(last->insn->opcode());
+             opcode::may_throw(last->insn->opcode());
     }
   }
   for (auto last = p->rbegin(); last != p->rend(); ++last) {

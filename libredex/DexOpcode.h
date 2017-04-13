@@ -306,4 +306,6 @@ namespace opcode {
   bool has_literal(DexOpcode);
   bool has_offset(DexOpcode);
   bool has_range(DexOpcode);
+
+  bool may_throw(DexOpcode);
 } // namespace opcode

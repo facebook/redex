@@ -304,7 +304,8 @@ class LocalDce {
         }
       } else if (mie.type == MFLOW_OPCODE) {
         auto op = mie.insn->opcode();
-        encloses_throw = encloses_throw || may_throw(op) || op == OPCODE_THROW;
+        encloses_throw =
+            encloses_throw || opcode::may_throw(op) || op == OPCODE_THROW;
       }
     }
   }
