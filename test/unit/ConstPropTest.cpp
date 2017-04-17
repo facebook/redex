@@ -28,6 +28,8 @@ static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>>
         {"B", {OPCODE_SGET_BYTE, OPCODE_SPUT_BYTE}},
         {"C", {OPCODE_SGET_CHAR, OPCODE_SPUT_CHAR}},
         {"S", {OPCODE_SGET_SHORT, OPCODE_SPUT_SHORT}},
+        {"J", {OPCODE_SGET_WIDE, OPCODE_SPUT_WIDE}},
+        {"D", {OPCODE_SGET_WIDE, OPCODE_SPUT_WIDE}},
         {"Ljava/lang/String;", {OPCODE_SGET_OBJECT, OPCODE_SPUT_OBJECT}},
 };
 
@@ -37,6 +39,8 @@ struct ConstPropTest : testing::Test {
   DexType* m_byte_type;
   DexType* m_char_type;
   DexType* m_short_type;
+  DexType* m_long_type;
+  DexType* m_double_type;
   DexType* m_string_type;
 
   ConstPropTest() {
@@ -46,6 +50,8 @@ struct ConstPropTest : testing::Test {
     m_byte_type = DexType::make_type("B");
     m_char_type = DexType::make_type("C");
     m_short_type = DexType::make_type("S");
+    m_long_type = DexType::make_type("J");
+    m_double_type = DexType::make_type("D");
     m_string_type = DexType::make_type("Ljava/lang/String;");
   }
 
@@ -204,6 +210,8 @@ TEST_F(ConstPropTest, simplePropagate) {
 //     public static final byte CONST_BYTE = 'b';
 //     public static final char CONST_CHAR = 'c';
 //     public static final short CONST_SHORT = 555;
+//     public static final short CONST_LONG = 0x1000200030004000;
+//     public static final short CONST_DOUBLE = 1.0000000000000002;
 //     public static final String CONST_STRING = "foo";
 //   }
 //
@@ -213,6 +221,8 @@ TEST_F(ConstPropTest, simplePropagate) {
 //     public static final byte CONST_BYTE = Parent.CONST_BYTE;
 //     public static final char CONST_CHAR = Parent.CONST_CHAR;
 //     public static final short CONST_SHORT = Parent.CONST_SHORT;
+//     public static final short CONST_LONG = Parent.CONST_LONG;
+//     public static final short CONST_DOUBLE = Parent.CONST_DOUBLE;
 //     public static final String CONST_STRING = Parent.CONST_STRING;
 //   }
 TEST_F(ConstPropTest, simplePropagateMultiField) {
@@ -222,6 +232,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
       {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
+      {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
+      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
@@ -246,6 +258,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
 //     public static final byte CONST_BYTE = 'b';
 //     public static final char CONST_CHAR = 'c';
 //     public static final short CONST_SHORT = 555;
+//     public static final short CONST_LONG = 0x1000200030004000;
+//     public static final short CONST_DOUBLE = 1.0000000000000002;
 //     public static final String CONST_STRING = "foo";
 //   }
 //
@@ -255,6 +269,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
 //     public static final byte CONST_BYTE = Parent.CONST_BYTE;
 //     public static final char CONST_CHAR = Parent.CONST_CHAR;
 //     public static final short CONST_SHORT = Parent.CONST_SHORT;
+//     public static final short CONST_LONG = Parent.CONST_LONG;
+//     public static final short CONST_DOUBLE = Parent.CONST_DOUBLE;
 //     public static final String CONST_STRING = Parent.CONST_STRING;
 //   }
 //
@@ -264,6 +280,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
 //     public static final byte CONST_BYTE = Child.CONST_BYTE;
 //     public static final char CONST_CHAR = Child.CONST_CHAR;
 //     public static final short CONST_SHORT = Child.CONST_SHORT;
+//     public static final short CONST_LONG = Child.CONST_LONG;
+//     public static final short CONST_DOUBLE = Child.CONST_DOUBLE;
 //     public static final String CONST_STRING = Child.CONST_STRING;
 //   }
 TEST_F(ConstPropTest, multiLevelPropagate) {
@@ -273,6 +291,8 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
       {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
+      {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
+      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");

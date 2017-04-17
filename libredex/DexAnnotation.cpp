@@ -365,6 +365,10 @@ bool DexEncodedValue::is_zero() const {
   }
 }
 
+bool DexEncodedValue::is_wide() const {
+  return m_evtype == DEVT_LONG || m_evtype == DEVT_DOUBLE;
+}
+
 DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
   if (type == get_byte_type()) {
     return new DexEncodedValue(DEVT_BYTE, 0);
@@ -379,7 +383,7 @@ DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
   } else if (type == get_float_type()) {
     return new DexEncodedValue(DEVT_FLOAT, 0);
   } else if (type == get_double_type()) {
-    return new DexEncodedValue(DEVT_FLOAT, 0);
+    return new DexEncodedValue(DEVT_DOUBLE, 0);
   } else if (type == get_boolean_type()) {
     return new DexEncodedValueBit(DEVT_BOOLEAN, false);
   } else {

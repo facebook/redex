@@ -88,6 +88,7 @@ class DexEncodedValue : public Gatherable {
   }
 
   bool is_zero() const;
+  bool is_wide() const;
   static DexEncodedValue* zero_for_type(DexType* type);
 };
 

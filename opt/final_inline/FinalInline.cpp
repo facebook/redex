@@ -129,8 +129,8 @@ void remove_unused_fields(Scope& scope,
 bool check_sget(IRFieldInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
-  // TODO: OPCODE_SGET_WIDE:
   case OPCODE_SGET:
+  case OPCODE_SGET_WIDE:
   case OPCODE_SGET_BOOLEAN:
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
@@ -143,17 +143,9 @@ bool check_sget(IRFieldInstruction* opfield) {
 }
 
 bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
-  auto opcode = opfield->opcode();
-  switch (opcode) {
-  case OPCODE_SGET_WIDE:
-    return false;
-  case OPCODE_SGET:
-  case OPCODE_SGET_BOOLEAN:
-  case OPCODE_SGET_BYTE:
-  case OPCODE_SGET_CHAR:
-  case OPCODE_SGET_SHORT:
+  if (check_sget(opfield)) {
     return true;
-  default:
+  } else {
     auto field = resolve_field(opfield->field(), FieldSearch::Static);
     always_assert_log(field->is_concrete(), "Must be a concrete field");
     auto value = field->get_static_value();
@@ -165,8 +157,8 @@ bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
         SHOW(field),
         value != nullptr ? value->show().c_str() : "('nullptr')",
         SHOW(context));
+    return false;
   }
-  return false;
 }
 
 void replace_opcode(DexMethod* method, IRInstruction* from, IRInstruction* to) {
@@ -179,8 +171,7 @@ void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
   auto field = resolve_field(opfield->field(), FieldSearch::Static);
   always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
-  /* FIXME for sget_wide case */
-  uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
+  uint32_t v = value != nullptr ? static_cast<uint32_t>(value->value()) : 0;
   auto opcode = [&] {
     if ((v & 0xffff) == v) {
       return OPCODE_CONST_16;
@@ -198,13 +189,12 @@ void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
 
 void inline_sget(DexMethod* method, IRFieldInstruction* opfield) {
   if (!validate_sget(method, opfield)) return;
-  auto opcode = OPCODE_CONST;
   auto dest = opfield->dest();
   auto field = resolve_field(opfield->field(), FieldSearch::Static);
   always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
-  /* FIXME for sget_wide case */
-  uint32_t v = value != nullptr ? (uint32_t)value->value() : 0;
+  auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
+  uint64_t v = value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
 
   auto newopcode = (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
   replace_opcode(method, opfield, newopcode);
@@ -259,8 +249,9 @@ void inline_field_values(Scope& fullscope) {
       if (value != nullptr && !value->is_evtype_primitive()) {
         continue;
       }
-      uint64_t v = value != nullptr ? value->value() : 0;
-      if ((v & 0xffff) == v || (v & 0xffff0000) == v) {
+
+      uint64_t v = value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
+      if (!value->is_wide() && ((v & 0xffff) == v || (v & 0xffff0000) == v)) {
         cheap_inline_field.insert(sfield);
       }
       inline_field.insert(sfield);
@@ -307,10 +298,12 @@ bool validate_const_for_encoded_value(IRInstruction* op) {
     return false;
   }
   switch (op->opcode()) {
-  // TODO: OPCODE_CONST_WIDE
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
   case OPCODE_CONST:
+  case OPCODE_CONST_WIDE_16:
+  case OPCODE_CONST_WIDE_32:
+  case OPCODE_CONST_WIDE:
   case OPCODE_CONST_STRING:
     return true;
   default:
@@ -382,9 +375,9 @@ bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
             9,
             "- Integer Field: %s, %lu\n",
             SHOW(field),
-            (uint64_t)const_op->literal());
+            static_cast<uint64_t>(const_op->literal()));
       ev = DexEncodedValue::zero_for_type(field->get_type());
-      ev->value((uint64_t)const_op->literal());
+      ev->value(static_cast<uint64_t>(const_op->literal()));
     }
     field->make_concrete(field->get_access(), ev);
   }
@@ -497,6 +490,7 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       // breaking future instructions that rely on the value of the source
       // register.  Yes, this means we're N^2 in theory, but hopefully in
       // practice we don't approach that.
+      // TODO? wide?
       bool src_reg_reused = false;
       for (auto jt = std::next(it, 2); jt != end && !src_reg_reused; ++jt) {
         // Check if the source register is overwritten

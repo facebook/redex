@@ -19,6 +19,8 @@ public class ReplaceEncodableClinitTest {
     assertThat(Encodable.S_BYTE).isEqualTo((byte) 'b');
     assertThat(Encodable.S_CHAR).isEqualTo('c');
     assertThat(Encodable.S_SHORT).isEqualTo((short) 128);
+    assertThat(Encodable.S_LONG).isEqualTo(0x1000200030004000L);
+    assertThat(Encodable.S_DOUBLE).isEqualTo(1.0000000000000002);
     assertThat(Encodable.S_INT).isEqualTo(12345);
   }
 }
@@ -28,12 +30,12 @@ class Encodable {
   public static byte S_BYTE = 'b';
   public static char S_CHAR = 'c';
   public static short S_SHORT = 128;
+  public static long S_LONG = 0x1000200030004000L;
+  public static double S_DOUBLE = 1.0000000000000002;
   public static int S_INT = 12345;
+  public static String S_STR = "string";
 }
 
-// Cannot encode strings (yet) or floats (ever?)
 class UnEncodable {
-  public static byte S_BYTE = 'b';
-  public static String S_STRING = "Testing 123";
-  public static double S_DOUBLE = 123.45;
+  public static final int S_INT = Math.random() > .5 ? 1 : 0;
 }
