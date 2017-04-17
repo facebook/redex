@@ -20,11 +20,8 @@ DEXDUMP=
 if [[ "$INPUT" =~ dex$ ]]; then
     DEXDUMP="dexdump -d"
 elif [[ "$INPUT" =~ apk$ ]]; then
-    ROOT=$((git rev-parse --show-toplevel || hg root) 2>/dev/null)
-    DEXDUMP="$ROOT/fbandroid/scripts/ordering/extractdexdump"
-    if [ ! -f $DEXDUMP ]; then
-        DEXDUMP="$ROOT/scripts/ordering/extractdexdump"
-    fi
+    FBANDROID="$(dirname ${BASH_SOURCE[0]})/../../.."
+    DEXDUMP="$(realpath "$FBANDROID/scripts/ordering/extractdexdump")"
 else
     DEXDUMP=cat
 fi
@@ -34,12 +31,14 @@ export LC_ALL=C
 function strip_cruft() {
     local GET_DUMP_CMD="$1"
     local OUT="$2"
-    $GET_DUMP_CMD | \
+    echo Running $GET_DUMP_CMD
+    time $GET_DUMP_CMD | \
         sed 's/^Processing .*dex//' | \
         sed 's/^Opened .*dex//' | \
         sed 's/^  source_file_idx   : [0-9]* /  source_file_idx   : /' | \
         sed 's/^.*|/|/' | \
         sed 's/|\[[0-9a-f]*\]/|\[\]/' | \
+        sed 's/^Class #[0-9]*/Class/' | \
         sed 's/type@[0-9a-f]*/type@/' | \
         sed 's/string@[0-9a-f]*/string@/' | \
         sed 's/method@[0-9a-f]*/method@/' | \
