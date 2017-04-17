@@ -44,7 +44,7 @@ class SetValue final : public AbstractValue<SetValue<Element, Hash, Equal>> {
 
   Kind kind() const override { return Kind::Value; }
 
-  bool leq(const SetValue<Element, Hash, Equal>& other) const override {
+  bool leq(const SetValue& other) const override {
     if (m_set.size() > other.m_set.size()) {
       return false;
     }
@@ -56,22 +56,20 @@ class SetValue final : public AbstractValue<SetValue<Element, Hash, Equal>> {
     return true;
   }
 
-  bool equals(const SetValue<Element, Hash, Equal>& other) const override {
+  bool equals(const SetValue& other) const override {
     return (m_set.size() == other.m_set.size()) && leq(other);
   }
 
-  Kind join_with(const SetValue<Element, Hash, Equal>& other) override {
+  Kind join_with(const SetValue& other) override {
     for (const Element& e : other.m_set) {
       m_set.insert(e);
     }
     return Kind::Value;
   }
 
-  Kind widen_with(const SetValue<Element, Hash, Equal>& other) override {
-    return join_with(other);
-  }
+  Kind widen_with(const SetValue& other) override { return join_with(other); }
 
-  Kind meet_with(const SetValue<Element, Hash, Equal>& other) override {
+  Kind meet_with(const SetValue& other) override {
     for (auto it = m_set.begin(); it != m_set.end();) {
       if (other.m_set.count(*it) == 0) {
         it = m_set.erase(it);
@@ -82,9 +80,7 @@ class SetValue final : public AbstractValue<SetValue<Element, Hash, Equal>> {
     return Kind::Value;
   }
 
-  Kind narrow_with(const SetValue<Element, Hash, Equal>& other) override {
-    return meet_with(other);
-  }
+  Kind narrow_with(const SetValue& other) override { return meet_with(other); }
 
  private:
   std::unordered_set<Element, Hash, Equal> m_set;
