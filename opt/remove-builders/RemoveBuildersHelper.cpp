@@ -24,6 +24,9 @@ void fields_mapping(const IRInstruction* insn,
                     FieldsRegs* fregs,
                     DexClass* builder,
                     bool is_setter) {
+  always_assert(insn != nullptr);
+  always_assert(fregs != nullptr);
+  always_assert(builder != nullptr);
 
   // Set DEFAULT fields to UNDEFINED.
   for (auto& pair : fregs->field_to_reg) {
@@ -143,6 +146,7 @@ void add_instr(IRCode* code,
                IRInstruction* insn) {
   always_assert(code != nullptr);
   always_assert(position != nullptr);
+  always_assert(insn != nullptr);
 
   std::vector<IRInstruction*> insns;
   insns.push_back(insn);
@@ -184,6 +188,7 @@ void update_reg_params(const std::unordered_set<IRInstruction*>& update_list,
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
                     const MoveList& move_list) {
+  always_assert(method != nullptr);
 
   auto code = method->get_code();
 
@@ -206,6 +211,9 @@ void method_updates(DexMethod* method,
 
 std::vector<DexMethod*> get_non_init_methods(IRCode* code,
                                              DexType* builder_type) {
+  always_assert(code != nullptr);
+  always_assert(builder_type != nullptr);
+
   std::vector<DexMethod*> methods;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
@@ -262,19 +270,11 @@ bool FieldsRegs::operator!=(const FieldsRegs& that) const {
 
 //////////////////////////////////////////////
 
-DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods) {
-  static auto build = DexString::make_string("build");
-  for (const auto& vmethod : vmethods) {
-    if (vmethod->get_name() == build) {
-      return vmethod;
-    }
-  }
-
-  return nullptr;
-}
-
 bool BuilderTransform::inline_builder_methods(DexMethod* method,
                                               DexClass* builder) {
+  always_assert(method != nullptr);
+  always_assert(builder != nullptr);
+
   auto code = method->get_code();
   if (!code) {
     return false;
@@ -303,6 +303,10 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method,
 }
 
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
+  always_assert(method != nullptr);
+  always_assert(builder != nullptr);
+  always_assert(buildee != nullptr);
+
   auto code = method->get_code();
   if (!code) {
     return false;

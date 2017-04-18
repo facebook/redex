@@ -73,11 +73,6 @@ struct FieldsRegs {
 };
 
 /**
- * Returns the build method if one exists.
- */
-DexMethod* get_build_method(const std::vector<DexMethod*>& vmethods);
-
-/**
  * Given a method that calls the builder, it will remove it completely.
  */
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee);

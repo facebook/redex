@@ -36,11 +36,15 @@ struct builder_counters {
 builder_counters b_counter;
 
 bool has_builder_name(DexClass* cls) {
+  always_assert(cls != nullptr);
+
   static boost::regex re{"\\$Builder;$"};
   return boost::regex_search(cls->c_str(), re);
 }
 
 DexType* get_buildee(DexType* builder) {
+  always_assert(builder != nullptr);
+
   auto builder_name = std::string(builder->c_str());
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
   return DexType::get_type(buildee_name.c_str());
@@ -50,6 +54,9 @@ void transfer_object_reach(DexType* obj,
                            uint16_t regs_size,
                            const IRInstruction* insn,
                            RegSet& regs) {
+  always_assert(obj != nullptr);
+  always_assert(insn != nullptr);
+
   auto op = insn->opcode();
   if (op == OPCODE_MOVE_OBJECT) {
     regs[insn->dest()] = regs[insn->src(0)];
@@ -73,6 +80,8 @@ void transfer_object_reach(DexType* obj,
 bool tainted_reg_escapes(
     DexType* ty,
     const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
+  always_assert(ty != nullptr);
+
   for (auto it : taint_map) {
     auto insn = it.first;
     auto tainted = it.second.bits();
@@ -110,7 +119,9 @@ bool tainted_reg_escapes(
 // a method that doesn't belong to the same instance, or if it gets stored
 // in a field, or if it escapes as a return value.
 bool this_arg_escapes(DexMethod* method) {
+  always_assert(method != nullptr);
   always_assert(!(method->get_access() & ACC_STATIC));
+
   auto code = method->get_code();
   IRInstruction* first_insn = InstructionIterable(code).begin()->insn;
   auto regs_size = code->get_registers_size();
@@ -132,6 +143,8 @@ bool this_arg_escapes(DexMethod* method) {
 }
 
 bool this_arg_escapes(DexClass* cls) {
+  always_assert(cls != nullptr);
+
   bool result = false;
   for (DexMethod* m : cls->get_dmethods()) {
     if (!m->get_code()) {
@@ -192,6 +205,8 @@ std::vector<DexMethod*> get_static_methods(
  *  - returns
  */
 bool is_trivial_builder_constructor(DexMethod* method) {
+  always_assert(method != nullptr);
+
   const auto* code = method->get_code();
   if (!code) {
     return false;
@@ -230,7 +245,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
  * First pass through what "trivial builder" means:
  *  - is a builder
  *  - it doesn't escape stack
- *  - has no private or static method
+ *  - has no static methods
  *  - has no static fields
  *
  * TODO(emmasevastian): Extend the "definition".
@@ -282,9 +297,18 @@ void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
 
   std::unordered_set<DexClass*> class_references;
   for (const auto& cls : classes) {
-    DexType* type = cls->get_super_class();
-    if (has_builder_name(type_class(type))) {
-      class_references.insert(type_class(type));
+    DexType* super_type = cls->get_super_class();
+    if (!super_type) {
+      continue;
+    }
+
+    DexClass* super_cls = type_class(super_type);
+    if (!super_cls) {
+      continue;
+    }
+
+    if (has_builder_name(super_cls)) {
+      class_references.insert(super_cls);
     }
   }
 
@@ -315,6 +339,8 @@ void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
 } // namespace
 
 std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
+  always_assert(m != nullptr);
+
   std::vector<DexType*> builders;
   auto code = m->get_code();
   if (!code) {
@@ -336,6 +362,9 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
 // passed to a method (aside from when its own instance methods get invoked),
 // or if they get stored in a field, or if they escape as a return value.
 bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
+  always_assert(builder != nullptr);
+  always_assert(method != nullptr);
+
   auto code = method->get_code();
   code->build_cfg();
   auto blocks = postorder_sort(code->cfg().blocks());
@@ -361,6 +390,14 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles&,
                                   PassManager& mgr) {
+  if (mgr.no_proguard_rules()) {
+    TRACE(BUILDERS,
+          1,
+          "RemoveBuildersPass did not run because no Proguard configuration "
+          "was provided.");
+    return;
+  }
+
   std::unordered_set<DexClass*> builder_classes;
 
   auto scope = build_class_scope(stores);
@@ -466,7 +503,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
         if (!b_transform.inline_builder_methods(method, builder_cls)) {
-          kept_builders.emplace(type_class(builder));
+          kept_builders.emplace(builder_cls);
         } else {
           method_to_inlined_builders.emplace_back(method, builder_cls);
         }
@@ -478,8 +515,10 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     DexMethod* method = std::get<0>(pair);
     DexClass* builder = std::get<1>(pair);
 
-    if (!remove_builder(
-            method, builder, type_class(get_buildee(builder->get_type())))) {
+    DexType* buildee = get_buildee(builder->get_type());
+    always_assert(buildee != nullptr);
+
+    if (!remove_builder(method, builder, type_class(buildee))) {
       kept_builders.emplace(builder);
     } else {
       b_counter.methods_cleared++;
