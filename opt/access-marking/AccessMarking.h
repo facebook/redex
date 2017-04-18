@@ -18,7 +18,6 @@ class AccessMarkingPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("finalize_classes", true, m_finalize_classes);
     pc.get("finalize_methods", true, m_finalize_methods);
-    pc.get("staticize_methods", true, m_staticize_methods);
     pc.get("privatize_methods", true, m_privatize_methods);
   }
 
@@ -27,6 +26,5 @@ class AccessMarkingPass : public Pass {
  private:
   bool m_finalize_classes;
   bool m_finalize_methods;
-  bool m_staticize_methods;
   bool m_privatize_methods;
 };

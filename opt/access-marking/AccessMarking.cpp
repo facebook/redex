@@ -80,95 +80,6 @@ std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
   return ret;
 }
 
-bool uses_this(const DexMethod* method) {
-  auto const* code = method->get_code();
-  if (!code) return false;
-  auto const this_reg = code->get_registers_size() - code->get_ins_size();
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (opcode::has_range(insn->opcode())) {
-      if (this_reg >= insn->range_base() &&
-          this_reg < (insn->range_base() + insn->range_size())) {
-        return true;
-      }
-    }
-    for (unsigned i = 0; i < insn->srcs_size(); i++) {
-      if (this_reg == insn->src(i)) return true;
-    }
-  }
-  return false;
-}
-
-std::unordered_set<DexMethod*> find_static_methods(
-  const std::vector<DexMethod*>& candidates
-) {
-  std::unordered_set<DexMethod*> staticized;
-  for (auto const& method : candidates) {
-    if (is_static(method) ||
-        uses_this(method) ||
-        keep(method) ||
-        method->is_external() ||
-        is_abstract(method)) {
-      continue;
-    }
-    staticized.emplace(method);
-  }
-  return staticized;
-}
-
-void fix_call_sites(
-  const std::vector<DexClass*>& scope,
-  const std::unordered_set<DexMethod*>& statics
-) {
-  walk_code(
-    scope,
-    [](DexMethod*) { return true; },
-    [&](DexMethod* m, IRCode& code) {
-      std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
-      for (auto& mie : InstructionIterable(&code)) {
-        auto inst = mie.insn;
-        if (!inst->has_methods()) continue;
-        auto mi = static_cast<IRMethodInstruction*>(inst);
-        auto method = mi->get_method();
-        if (!method->is_concrete()) {
-          method = resolve_method(method, MethodSearch::Any);
-        }
-        if (statics.count(method)) {
-          mi->rewrite_method(method);
-          if (is_invoke_range(inst->opcode())) {
-            if (mi->range_size() == 1) {
-              auto repl = new IRMethodInstruction(OPCODE_INVOKE_STATIC, method);
-              repl->set_arg_word_count(0);
-              replacements.emplace_back(mi, repl);
-            } else {
-              mi->set_opcode(OPCODE_INVOKE_STATIC_RANGE);
-              mi->set_range_base(mi->range_base() + 1);
-              mi->set_range_size(mi->range_size() - 1);
-            }
-          } else {
-            mi->set_opcode(OPCODE_INVOKE_STATIC);
-            auto nargs = mi->arg_word_count();
-            for (uint16_t i = 0; i < nargs - 1; i++) {
-              mi->set_src(i, mi->src(i + 1));
-            }
-            mi->set_arg_word_count(nargs - 1);
-          }
-        }
-      }
-      for (auto& pair : replacements) {
-        code.replace_opcode(pair.first, pair.second);
-      }
-    }
-  );
-}
-
-void mark_methods_static(const std::unordered_set<DexMethod*>& statics) {
-  for (auto method : statics) {
-    TRACE(ACCESS, 2, "Staticized method: %s\n", SHOW(method));
-    mutators::make_static(method, mutators::KeepThis::No);
-  }
-}
-
 std::unordered_set<DexMethod*> find_private_methods(
   const std::vector<DexClass*>& scope,
   const std::vector<DexMethod*>& cv
@@ -258,13 +169,6 @@ void AccessMarkingPass::run_pass(
   auto candidates = devirtualize(scope);
   auto dmethods = direct_methods(scope);
   candidates.insert(candidates.end(), dmethods.begin(), dmethods.end());
-  if (m_staticize_methods) {
-    auto static_methods = find_static_methods(candidates);
-    fix_call_sites(scope, static_methods);
-    mark_methods_static(static_methods);
-    pm.incr_metric("staticized_methods", static_methods.size());
-    TRACE(ACCESS, 1, "Staticized %lu methods\n", static_methods.size());
-  }
   if (m_privatize_methods) {
     auto privates = find_private_methods(scope, candidates);
     fix_call_sites_private(scope, privates);

@@ -42,33 +42,6 @@ struct VirtualRenamer {
 };
 
 /**
- * Walk a VirtualScope and calls the walker function for each scope.
- * The walk is top down the class hierarchy.
- */
-template <class VirtualScopeWalkerFn =
-    void(const DexType*, const VirtualScope&)>
-void walk_virtual_scopes(
-    const ClassScopes& class_scopes,
-    const DexType* type,
-    const ClassHierarchy& cls_hierarchy,
-    VirtualScopeWalkerFn walker) {
-  const auto& scopes_it = class_scopes.find(type);
-  // first walk all scopes in type
-  if (scopes_it != class_scopes.end()) {
-    for (const auto& scope : scopes_it->second) {
-      walker(type, scope);
-    }
-  }
-  always_assert_log(
-      cls_hierarchy.find(type) != cls_hierarchy.end(),
-      "no entry in ClassHierarchy for type %s\n", SHOW(type));
-  // recursively call for each child
-  for (const auto& child : cls_hierarchy.at(type)) {
-    walk_virtual_scopes(class_scopes, child, cls_hierarchy, walker);
-  }
-}
-
-/**
  * Debug utility to collect info about ClassScopes.
  * Likely to disappear soon....
  */
