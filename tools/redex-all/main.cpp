@@ -446,17 +446,10 @@ int main(int argc, char* argv[]) {
         std::string basedir_path =
             pg_config.basedirectory + "/" + library_jar.c_str();
         if (!load_jar_file(basedir_path.c_str())) {
-          // Look for buck-out in path.
-          auto buck_out_pos = library_jar.find("buck-out");
-          if (buck_out_pos != std::string::npos) {
-            std::string buck_out_path = library_jar.substr(buck_out_pos);
-            if (!load_jar_file(buck_out_path.c_str())) {
-              fprintf(stderr,
-                      "ERROR: Library jar could not be loaded: %s\n",
-                      library_jar.c_str());
-              exit(1);
-            }
-          }
+          fprintf(stderr,
+                  "ERROR: Library jar could not be loaded: %s\n",
+                  library_jar.c_str());
+          exit(1);
         }
       }
     }

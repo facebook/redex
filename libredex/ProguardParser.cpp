@@ -986,25 +986,9 @@ void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
     // Try with -basedirectory
     config.open(pg_config->basedirectory + "/" + filename);
     if (!config.is_open()) {
-      // Look to see if there is a buck-out in the path
-      auto buck_out_pos = filename.find("buck-out");
-      if (buck_out_pos != string::npos) {
-        std::string buck_out_path = filename.substr(buck_out_pos);
-        config.open(buck_out_path);
-        if (!config.is_open()) {
-          auto libraries_pos = filename.find("libraries");
-          if (libraries_pos != string::npos) {
-            std::string libraries_path =
-                "../../../../../" + filename.substr(libraries_pos);
-            config.open(libraries_path);
-            if (!config.is_open()) {
-              cerr << "ERROR: Failed to open ProGuard configuration file "
-                   << filename << endl;
-              exit(1);
-            }
-          }
-        }
-      }
+      cerr << "ERROR: Failed to open ProGuard configuration file "
+           << filename << endl;
+      exit(1);
     }
   }
 
