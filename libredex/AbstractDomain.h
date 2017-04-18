@@ -239,7 +239,13 @@ class AbstractValue {
 /*
  * This abstract domain combinator takes an abstract value specification and
  * constructs a full-fledged abstract domain, handling all the logic for Top and
- * Bottom.
+ * Bottom. It takes a poset and adds the two extremal elements Top and Bottom.
+ * If the poset contains a Top and/or Bottom element, then those should be
+ * coalesced with the extremal elements added by AbstractDomainScaffolding. This
+ * is the purpose of the normalize() operation. It also explains why the lattice
+ * operations return an AbstractValueKind: the scaffolding must be able to
+ * identify when the result of one of these operations is an extremal element
+ * that must be coalesced.
  *
  * Sample usage:
  *
@@ -368,6 +374,16 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
   void set_to_value(const Value& value) {
     m_kind = value.kind();
     m_value = value;
+  }
+
+  // This method is used to normalize the representation when the abstract value
+  // can denote Top and/or Bottom.
+  void normalize() {
+    m_kind = m_value.kind();
+    if (m_kind == AbstractValueKind::Bottom ||
+        m_kind == AbstractValueKind::Top) {
+      m_value.clear();
+    }
   }
 
  private:
