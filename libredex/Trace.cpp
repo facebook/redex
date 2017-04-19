@@ -52,7 +52,7 @@ struct Tracer {
   }
 
   ~Tracer() {
-    if (m_file) {
+    if (m_file != nullptr && m_file != stderr) {
       fclose(m_file);
     }
   }
@@ -118,12 +118,17 @@ struct Tracer {
 
   void init_trace_file(const char* envfile) {
     if (!envfile) {
-      envfile = "/dev/stderr";
+      m_file = stderr;
+      return;
     }
     try {
+      // If redex-all is called from redex.py, the tracefile has been created
+      // already. And TRACEFILE is replaced by the file descriptor instead.
+      // Refer to update_trace_file in pyredex/logger.py.
       auto fd = std::stoi(envfile);
       m_file = fdopen(fd, "w");
     } catch (std::invalid_argument&) {
+      // Not an integer file descriptor; real file name.
       m_file = fopen(envfile, "w");
     }
     if (!m_file) {
