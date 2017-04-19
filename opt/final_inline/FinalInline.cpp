@@ -425,6 +425,37 @@ struct FieldDependency {
 };
 }
 
+// Check that source register is either overwritten or isn't used
+// again. This ensures we can safely remove the opcode pair without
+// breaking future instructions that rely on the value of the source
+// register.  Yes, this means we're N^2 in theory, but hopefully in
+// practice we don't approach that.
+bool reg_reused(uint16_t reg,
+                const InstructionIterator& it,
+                const InstructionIterator& end) {
+  for (auto jt = std::next(it, 2); jt != end; ++jt) {
+    auto insn = jt->insn;
+
+    // Check if the source register is overwritten
+    if (insn->dests_size() > 0) {
+      if (insn->dest() == reg ||
+          (insn->dest_is_wide() && insn->dest() + 1 == reg)) {
+        return false;
+      }
+    }
+
+    // Check if the source register is reused as the source for another
+    // instruction
+    for (size_t r = 0; r < insn->srcs_size(); ++r) {
+      if (insn->src(r) == reg ||
+          (insn->src_is_wide(r) && insn->src(r) + 1 == reg)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /*
  * Attempt to propagate constant values that are known only after the APK has
  * been created. Our build process can result in situation where javac sees
@@ -485,28 +516,9 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
         continue;
       }
 
-      // Check that source register is either overwritten or isn't used
-      // again. This ensures we can safely remove the opcode pair without
-      // breaking future instructions that rely on the value of the source
-      // register.  Yes, this means we're N^2 in theory, but hopefully in
-      // practice we don't approach that.
-      // TODO? wide?
-      bool src_reg_reused = false;
-      for (auto jt = std::next(it, 2); jt != end && !src_reg_reused; ++jt) {
-        // Check if the source register is overwritten
-        if (jt->insn->dests_size() > 0 && jt->insn->dest() == sget_op->dest()) {
-          break;
-        }
-        // Check if the source register is reused as the source for another
-        // instruction
-        for (size_t r = 0; r < jt->insn->srcs_size(); ++r) {
-          if (jt->insn->src(r) == sget_op->dest()) {
-            src_reg_reused = true;
-            break;
-          }
-        }
-      }
-      if (src_reg_reused) {
+      if (reg_reused(sget_op->dest(), it, end) ||
+          (sget_op->opcode() == OPCODE_SGET_WIDE &&
+           reg_reused(sget_op->dest() + 1, it, end))) {
         TRACE(FINALINLINE,
               2,
               "Cannot propagate %s to %s. Source register reused.\n",
