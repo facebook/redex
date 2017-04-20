@@ -41,6 +41,7 @@
   TM(MAGIC_FIELDS)                              \
   TM(MAIN)                                      \
   TM(MMINL)                                     \
+  TM(MORTIROLO)                                 \
   TM(MTRANS)                                    \
   TM(OBFUSCATE)                                 \
   TM(ORIGINALNAME)                              \
