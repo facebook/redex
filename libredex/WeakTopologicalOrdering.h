@@ -127,7 +127,9 @@ class WtoComponent final {
 
   iterator begin() const {
     assert(is_scc());
-    if (m_next_component_offset == 1) {
+    // The offset can be zero if this is a singleton SCC that is the last
+    // component of the WTO / last subcomponent in a component
+    if (m_next_component_offset <= 1) {
       return end();
     }
     // All the components of a WTO are stored linearly inside a vector. A vector
@@ -192,7 +194,7 @@ class WeakTopologicalOrdering final {
   // algorithm.
   uint32_t visit(const NodeId& vertex, int32_t* partition) {
     m_stack.push(vertex);
-    int32_t head = set_dfn(vertex, ++m_num);
+    uint32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
     for (NodeId succ : m_successors(vertex)) {
       uint32_t succ_dfn = get_dfn(succ);
