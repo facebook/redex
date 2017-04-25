@@ -232,7 +232,6 @@ void get_sput_in_clinit(DexClass* clazz,
 void inline_field_values(Scope& fullscope) {
   std::unordered_set<DexField*> inline_field;
   std::unordered_set<DexField*> cheap_inline_field;
-  std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
   for (auto clazz : fullscope) {
     std::unordered_map<DexField*, bool> blank_statics;
@@ -255,7 +254,6 @@ void inline_field_values(Scope& fullscope) {
         cheap_inline_field.insert(sfield);
       }
       inline_field.insert(sfield);
-      scope.push_back(clazz);
     }
   }
   std::vector<std::pair<DexMethod*, IRFieldInstruction*>> cheap_rewrites;
