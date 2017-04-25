@@ -263,16 +263,16 @@ void referenced_annos(const Scope& scope,
         const auto meth_cls = type_class(meth_cls_type);
         if (meth_cls != nullptr && is_annotation(meth_cls)) return;
 
-        if (insn->has_types()) {
-          auto type = static_cast<IRTypeInstruction*>(insn)->get_type();
+        if (insn->has_type()) {
+          auto type = insn->get_type();
           if (annotations.count(type) > 0) {
             referenced_annos.insert(type);
             TRACE(ANNO, 3, "Annotation referenced in type opcode\n\t%s.%s:%s - %s\n",
                 SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()),
                 SHOW(insn));
           }
-        } else if (insn->has_fields()) {
-          auto field = static_cast<IRFieldInstruction*>(insn)->field();
+        } else if (insn->has_field()) {
+          auto field = insn->get_field();
           auto fdef = resolve_field(field,
               is_sfield_op(insn->opcode()) ? FieldSearch::Static : FieldSearch::Instance);
           if (fdef != nullptr) field = fdef;
@@ -293,8 +293,8 @@ void referenced_annos(const Scope& scope,
                 SHOW(meth->get_class()), SHOW(meth->get_name()), SHOW(meth->get_proto()),
                 SHOW(insn));
           }
-        } else if (insn->has_methods()) {
-          auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
+        } else if (insn->has_method()) {
+          auto method = insn->get_method();
           DexMethod* methdef;
           switch (insn->opcode()) {
             case OPCODE_INVOKE_INTERFACE:

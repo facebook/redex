@@ -108,7 +108,7 @@ class PeepholeTest : public ::testing::Test {
     // import our instructions
     auto mt = method->get_code();
     for (const auto& insn_ptr : insns.instructions) {
-      mt->push_back(insn_ptr->clone());
+      mt->push_back(new IRInstruction(*insn_ptr));
     }
     return method;
   }

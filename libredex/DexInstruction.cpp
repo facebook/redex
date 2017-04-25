@@ -1221,7 +1221,7 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
   case REF_FIELD: {
     auto this_ = static_cast<const DexOpcodeField*>(this);
     auto that_ = static_cast<const DexOpcodeField*>(&that);
-    return this_->field() == that_->field();
+    return this_->get_field() == that_->get_field();
   }
   case REF_METHOD: {
     auto this_ = static_cast<const DexOpcodeMethod*>(this);

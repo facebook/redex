@@ -87,10 +87,10 @@ class DexInstruction : public Gatherable {
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
   bool operator==(const DexInstruction&) const;
 
-  bool has_strings() const { return m_ref_type == REF_STRING; }
-  bool has_types() const { return m_ref_type == REF_TYPE; }
-  bool has_fields() const { return m_ref_type == REF_FIELD; }
-  bool has_methods() const { return m_ref_type == REF_METHOD; }
+  bool has_string() const { return m_ref_type == REF_STRING; }
+  bool has_type() const { return m_ref_type == REF_TYPE; }
+  bool has_field() const { return m_ref_type == REF_FIELD; }
+  bool has_method() const { return m_ref_type == REF_METHOD; }
 
   /*
    * Number of registers used.
@@ -156,7 +156,7 @@ class DexOpcodeString : public DexInstruction {
 
   bool jumbo() const { return opcode() == OPCODE_CONST_STRING_JUMBO; }
 
-  void rewrite_string(DexString* str) { m_string = str; }
+  void set_string(DexString* str) { m_string = str; }
 };
 
 class DexOpcodeType : public DexInstruction {
@@ -182,7 +182,7 @@ class DexOpcodeType : public DexInstruction {
 
   DexType* get_type() const { return m_type; }
 
-  void rewrite_type(DexType* type) { m_type = type; }
+  void set_type(DexType* type) { m_type = type; }
 };
 
 class DexOpcodeField : public DexInstruction {
@@ -200,8 +200,8 @@ class DexOpcodeField : public DexInstruction {
     m_ref_type = REF_FIELD;
   }
 
-  DexField* field() const { return m_field; }
-  void rewrite_field(DexField* field) { m_field = field; }
+  DexField* get_field() const { return m_field; }
+  void set_field(DexField* field) { m_field = field; }
 };
 
 class DexOpcodeMethod : public DexInstruction {
@@ -222,7 +222,7 @@ class DexOpcodeMethod : public DexInstruction {
 
   DexMethod* get_method() const { return m_method; }
 
-  void rewrite_method(DexMethod* method) { m_method = method; }
+  void set_method(DexMethod* method) { m_method = method; }
 };
 
 class DexOpcodeData : public DexInstruction {

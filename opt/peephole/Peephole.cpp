@@ -94,7 +94,7 @@ class PeepholeOptimizer {
         return insn;
       }
       auto invokep = m_dataflow_sources[m_last_call];
-      auto invoke = static_cast<IRMethodInstruction*>(invokep.first);
+      auto invoke = invokep.first;
       auto const& invoke_srcs = invokep.second;
       if (invoke->get_method() != method_Class_getSimpleName()) {
         return insn;
@@ -106,10 +106,10 @@ class PeepholeOptimizer {
       if (const_class->opcode() != OPCODE_CONST_CLASS) {
         return insn;
       }
-      auto clstype = static_cast<IRTypeInstruction*>(const_class)->get_type();
+      auto clstype = const_class->get_type();
       m_stats_simple_name++;
-      return (new IRStringInstruction(OPCODE_CONST_STRING,
-                                  get_simple_name(clstype)))
+      return (new IRInstruction(OPCODE_CONST_STRING))
+          ->set_string(get_simple_name(clstype))
           ->set_dest(insn->dest());
     }
 
@@ -134,9 +134,9 @@ class PeepholeOptimizer {
         return insn;
       }
       auto invokep = m_dataflow_sources[move_result_srcs[0]];
-      auto invoke = static_cast<IRMethodInstruction*>(invokep.first);
+      auto invoke = invokep.first;
       auto invoke_return_type = invoke->get_method()->get_proto()->get_rtype();
-      auto check_type = static_cast<IRTypeInstruction*>(insn)->get_type();
+      auto check_type = insn->get_type();
       if (check_type != invoke_return_type) {
         if (!check_cast(invoke_return_type, check_type)) {
           return insn;

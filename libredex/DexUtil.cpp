@@ -306,11 +306,12 @@ void create_runtime_exception_block(
   // const-string v1, "Exception String e.g. Too many args" // string@7a6d
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
   // throw v0
-  auto new_inst = new IRTypeInstruction(
-      OPCODE_NEW_INSTANCE, DexType::make_type("Ljava/lang/RuntimeException;"));
+  auto new_inst =
+      (new IRInstruction(OPCODE_NEW_INSTANCE))
+          ->set_type(DexType::make_type("Ljava/lang/RuntimeException;"));
   new_inst->set_dest(0);
   IRInstruction* const_inst =
-      new IRStringInstruction(OPCODE_CONST_STRING, except_str);
+      (new IRInstruction(OPCODE_CONST_STRING))->set_string(except_str);
   const_inst->set_dest(1);
   auto ret = DexType::make_type("V");
   auto arg = DexType::make_type("Ljava/lang/String;");
@@ -319,7 +320,8 @@ void create_runtime_exception_block(
   auto meth = DexMethod::make_method(
     DexType::make_type("Ljava/lang/RuntimeException;"),
     DexString::make_string("<init>"), proto);
-  auto invk = new IRMethodInstruction(OPCODE_INVOKE_DIRECT, meth);
+  auto invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
+  invk->set_method(meth);
   invk->set_arg_word_count(2);
   invk->set_src(0, 0); invk->set_src(1, 1);
   IRInstruction* throwinst = new IRInstruction(OPCODE_THROW);
@@ -329,7 +331,7 @@ void create_runtime_exception_block(
   block.emplace_back(throwinst);
 }
 
-bool passes_args_through(IRMethodInstruction* insn,
+bool passes_args_through(IRInstruction* insn,
                          const IRCode& code,
                          int ignore /* = 0 */
                          ) {

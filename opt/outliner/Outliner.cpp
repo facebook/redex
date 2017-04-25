@@ -115,10 +115,10 @@ void build_dispatcher(DexStoresVector& stores,
 }
 
 IRInstruction* make_invoke(const DexMethod* meth, uint16_t v0) {
-  auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC,
-                                        const_cast<DexMethod*>(meth));
-  invoke->set_arg_word_count(1);
-  invoke->set_src(0, v0);
+  auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+  invoke->set_method(const_cast<DexMethod*>(meth))
+      ->set_arg_word_count(1)
+      ->set_src(0, v0);
   return invoke;
 }
 
@@ -169,9 +169,9 @@ void Outliner::run_pass(DexStoresVector& stores,
           IRInstruction** insns) {
         always_assert(n == 4);
 
-        auto new_instance = static_cast<IRTypeInstruction*>(insns[0]);
-        auto const_string = static_cast<IRStringInstruction*>(insns[1]);
-        auto invoke_direct = static_cast<IRMethodInstruction*>(insns[2]);
+        auto new_instance = insns[0];
+        auto const_string = insns[1];
+        auto invoke_direct = insns[2];
         IRInstruction* throwex = insns[3];
         if (invoke_direct->srcs_size() == 2 &&
             new_instance->dest() == invoke_direct->src(0) &&
@@ -194,7 +194,7 @@ void Outliner::run_pass(DexStoresVector& stores,
               make_invoke(dispatch_method, new_instance->dest());
 
           /*
-              Nice code you got there. Be a shame if someone ever put an 
+              Nice code you got there. Be a shame if someone ever put an
 	      infinite loop into it.
 
               (We have to emit a branch of some sort here to appease the

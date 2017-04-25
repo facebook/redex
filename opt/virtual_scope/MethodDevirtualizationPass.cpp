@@ -24,7 +24,7 @@ constexpr const char* METRIC_VIRTUAL_CALLS_CONVERTED = "num_virtual_calls_conver
 constexpr const char* METRIC_DIRECT_CALLS_CONVERTED = "num_direct_calls_converted";
 constexpr const char* METRIC_SUPER_CALLS_CONVERTED = "num_super_calls_converted";
 
-using CallSiteReferences = std::map<const DexMethod*, std::vector<IRMethodInstruction*>>;
+using CallSiteReferences = std::map<const DexMethod*, std::vector<IRInstruction*>>;
 
 bool is_invoke_virtual(DexOpcode op) {
   return op == OPCODE_INVOKE_VIRTUAL || op == OPCODE_INVOKE_VIRTUAL_RANGE;
@@ -77,7 +77,7 @@ DexOpcode invoke_direct_to_static(DexOpcode op) {
 
 void patch_call_site(
   DexMethod* callee,
-  IRMethodInstruction* method_inst,
+  IRInstruction* method_inst,
   CallSiteMetrics& metrics
 ) {
   auto op = method_inst->opcode();
@@ -94,7 +94,7 @@ void patch_call_site(
     always_assert_log(false, SHOW(op));
   }
 
-  method_inst->rewrite_method(callee);
+  method_inst->set_method(callee);
 }
 
 void fix_call_sites_and_drop_this_arg(
@@ -107,33 +107,32 @@ void fix_call_sites_and_drop_this_arg(
       std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
       for (auto& mie : InstructionIterable(&code)) {
         auto inst = mie.insn;
-        if (!inst->has_methods()) {
+        if (!inst->has_method()) {
           continue;
         }
-        auto mi = static_cast<IRMethodInstruction*>(inst);
-        auto method = mi->get_method();
+        auto method = inst->get_method();
         if (!method->is_concrete()) {
           method = resolve_method(method, MethodSearch::Any);
         }
         if (!statics.count(method)) {
           continue;
         }
-        patch_call_site(method, mi, metrics);
+        patch_call_site(method, inst, metrics);
         if (is_invoke_range(inst->opcode())) {
-          if (mi->range_size() == 1) {
-            auto repl = new IRMethodInstruction(OPCODE_INVOKE_STATIC, method);
-            repl->set_arg_word_count(0);
-            replacements.emplace_back(mi, repl);
+          if (inst->range_size() == 1) {
+            auto repl = new IRInstruction(OPCODE_INVOKE_STATIC);
+            repl->set_method(method)->set_arg_word_count(0);
+            replacements.emplace_back(inst, repl);
           } else {
-            mi->set_range_base(mi->range_base() + 1);
-            mi->set_range_size(mi->range_size() - 1);
+            inst->set_range_base(inst->range_base() + 1);
+            inst->set_range_size(inst->range_size() - 1);
           }
         } else {
-          auto nargs = mi->arg_word_count();
+          auto nargs = inst->arg_word_count();
           for (uint16_t i = 0; i < nargs - 1; i++) {
-            mi->set_src(i, mi->src(i + 1));
+            inst->set_src(i, inst->src(i + 1));
           }
-          mi->set_arg_word_count(nargs - 1);
+          inst->set_arg_word_count(nargs - 1);
         }
       }
       for (auto& pair : replacements) {
@@ -151,12 +150,11 @@ void fix_call_sites(
 ) {
   const auto fixer =
     [&](DexMethod* /* unused */, IRInstruction* opcode) {
-      if (!opcode->has_methods()) {
+      if (!opcode->has_method()) {
         return;
       }
 
-      auto mop = static_cast<IRMethodInstruction*>(opcode);
-      auto method = mop->get_method();
+      auto method = opcode->get_method();
       if (!method->is_concrete()) {
         method = resolve_method(method, MethodSearch::Virtual);
       }
@@ -165,7 +163,7 @@ void fix_call_sites(
       }
 
       always_assert(!is_invoke_static(opcode->opcode()));
-      patch_call_site(method, mop, metrics);
+      patch_call_site(method, opcode, metrics);
     };
 
   walk_opcodes(scope, [](DexMethod* /* unused */) { return true; }, fixer);

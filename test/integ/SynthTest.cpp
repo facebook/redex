@@ -102,13 +102,12 @@ TEST(SynthTest1, synthetic) {
       for (const auto& method : cls->get_vmethods()) {
         const auto* code = method->get_code();
         for (auto& mie : InstructionIterable(code)) {
-          auto inst = mie.insn;
-          std::cout << SHOW(inst) << std::endl;
-          if (is_invoke(inst->opcode())) {
-            auto invoke = static_cast<IRMethodInstruction*>(inst);
+          auto insn = mie.insn;
+          std::cout << SHOW(insn) << std::endl;
+          if (is_invoke(insn->opcode())) {
             const auto clazz =
-                invoke->get_method()->get_class()->get_name()->c_str();
-            const auto n = invoke->get_method()->get_name()->c_str();
+                insn->get_method()->get_class()->get_name()->c_str();
+            const auto n = insn->get_method()->get_name()->c_str();
             auto invocation = std::string(clazz) + "." + std::string(n);
             ASSERT_STRNE("Lcom/facebook/redextest/Alpha;.access$000",
                          invocation.c_str());

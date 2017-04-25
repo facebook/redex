@@ -140,19 +140,17 @@ void find_referenced_classes(const Scope& scope) {
            InstructionIterable(meth->get_code())) {
         auto opcode = mie.insn;
         // Matches any stringref that name-aliases a type.
-        if (opcode->has_strings()) {
-          auto stringop = static_cast<IRStringInstruction*>(opcode);
-          DexString* dsclzref = stringop->get_string();
+        if (opcode->has_string()) {
+          DexString* dsclzref = opcode->get_string();
           DexType* dtexclude =
             get_dextype_from_dotname(dsclzref->c_str());
           if (dtexclude == nullptr) continue;
           TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
           referenced_classes.insert(type_class(dtexclude));
         }
-        if (opcode->has_types()) {
-          auto typeop = static_cast<IRTypeInstruction*>(opcode);
-          TRACE(PGR, 3, "type_ref: %s\n", SHOW(typeop->get_type()));
-          referenced_classes.insert(type_class(typeop->get_type()));
+        if (opcode->has_type()) {
+          TRACE(PGR, 3, "type_ref: %s\n", SHOW(opcode->get_type()));
+          referenced_classes.insert(type_class(opcode->get_type()));
         }
       }
     });
@@ -367,9 +365,8 @@ void DeadRefs::track_callers(Scope& scope) {
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
-        if (insn->has_methods()) {
-          auto methodop = static_cast<IRMethodInstruction*>(insn);
-          auto callee = methodop->get_method();
+        if (insn->has_method()) {
+          auto callee = insn->get_method();
           callee = resolve_method(callee, opcode_to_search(insn));
           if (callee == nullptr || !callee->is_concrete()) return;
           if (vmethods.count(callee) > 0) {
@@ -378,9 +375,8 @@ void DeadRefs::track_callers(Scope& scope) {
           called.insert(callee);
           return;
         }
-        if (insn->has_fields()) {
-          auto fieldop = static_cast<IRFieldInstruction*>(insn);
-          auto field = fieldop->field();
+        if (insn->has_field()) {
+          auto field = insn->get_field();
           field = resolve_field(field,
               is_ifield_op(insn->opcode()) ?
                   FieldSearch::Instance :

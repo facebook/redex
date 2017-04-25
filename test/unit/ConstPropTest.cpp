@@ -153,11 +153,11 @@ DexField* add_dependent_field(DexClass* cls,
   auto ops = init_ops[parent_type->c_str()];
   auto clinit = cls->get_clinit();
   auto code = clinit->get_code();
-  auto sget = new IRFieldInstruction(ops.first, parent);
-  sget->set_dest(0);
+  auto sget = new IRInstruction(ops.first);
+  sget->set_field(parent)->set_dest(0);
   code->push_back(sget);
-  auto sput = new IRFieldInstruction(ops.second, field);
-  sput->set_src(0, 0);
+  auto sput = new IRInstruction(ops.second);
+  sput->set_field(field)->set_src(0, 0);
   code->push_back(sput);
   return field;
 }

@@ -170,8 +170,8 @@ void remove_primary_dex_refs(
     primary_dex,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* insn) {
-      if (insn->has_methods()) {
-        auto callee = static_cast<IRMethodInstruction*>(insn)->get_method();
+      if (insn->has_method()) {
+        auto callee = insn->get_method();
         ref_set.insert(callee);
       }
     }
@@ -251,20 +251,20 @@ bool illegal_access(DexMethod* method) {
         op->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
       return true;
     }
-    if (op->has_fields()) {
-      auto field = static_cast<IRFieldInstruction*>(op)->field();
+    if (op->has_field()) {
+      auto field = op->get_field();
       if (!allow_field_access(field)) {
         return true;
       }
     }
-    if (op->has_methods()) {
-      auto meth = static_cast<IRMethodInstruction*>(op)->get_method();
+    if (op->has_method()) {
+      auto meth = op->get_method();
       if (!allow_method_access(meth)) {
         return true;
       }
     }
-    if (op->has_types()) {
-      auto type = static_cast<IRTypeInstruction*>(op)->get_type();
+    if (op->has_type()) {
+      auto type = op->get_type();
       if (!allow_type_access(type)) {
         return true;
       }
@@ -337,8 +337,8 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
       return class_set.count(cls) == 0 && is_public(cls);
     },
     [&](DexMethod* m, IRInstruction* insn) {
-      if (insn->has_methods()) {
-        auto callee = static_cast<IRMethodInstruction*>(insn)->get_method();
+      if (insn->has_method()) {
+        auto callee = insn->get_method();
         if (static_set.count(callee)) {
           statics_to_callers[callee] = type_class(m->get_class());
         }

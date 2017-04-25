@@ -31,11 +31,11 @@ namespace {
 /**
  * Rewrite all typerefs from the interfaces to the concrete type.
  */
-void rewrite_type_refs(DexType* intf, SingleImplData& data) {
+void set_type_refs(DexType* intf, SingleImplData& data) {
   for (auto opcode : data.typerefs) {
     TRACE(INTF, 3, "(TREF) %s\n", SHOW(opcode));
     assert(opcode->get_type() == intf);
-    opcode->rewrite_type(data.cls);
+    opcode->set_type(data.cls);
     TRACE(INTF, 3, "(TREF) \t=> %s\n", SHOW(opcode));
   }
 }
@@ -133,7 +133,7 @@ bool must_rewrite_annotations(const SingleImplConfig& config) {
   return config.field_anno || config.intf_anno || config.meth_anno;
 }
 
-bool must_rewrite_method_annotations(const SingleImplConfig& config) {
+bool must_set_method_annotations(const SingleImplConfig& config) {
   return config.meth_anno;
 }
 
@@ -153,10 +153,10 @@ struct OptimizationImpl {
   void drop_single_impl_collision(DexType* intf,
                                   SingleImplData& data,
                                   DexMethod* method);
-  void rewrite_field_defs(DexType* intf, SingleImplData& data);
-  void rewrite_field_refs(DexType* intf, SingleImplData& data);
-  void rewrite_method_defs(DexType* intf, SingleImplData& data);
-  void rewrite_method_refs(DexType* intf, SingleImplData& data);
+  void set_field_defs(DexType* intf, SingleImplData& data);
+  void set_field_refs(DexType* intf, SingleImplData& data);
+  void set_method_defs(DexType* intf, SingleImplData& data);
+  void set_method_refs(DexType* intf, SingleImplData& data);
   void rewrite_interface_methods(DexType* intf, SingleImplData& data);
   void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
 
@@ -177,7 +177,7 @@ struct OptimizationImpl {
  * old fields to the new ones. Remove old field and add the new one
  * to the list of fields.
  */
-void OptimizationImpl::rewrite_field_defs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     assert(!single_impls->is_escaped(field->get_class()));
     auto f = DexField::make_field(
@@ -201,7 +201,7 @@ void OptimizationImpl::rewrite_field_defs(DexType* intf, SingleImplData& data) {
 /**
  * Rewrite all fieldref.
  */
-void OptimizationImpl::rewrite_field_refs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
     assert(!single_impls->is_escaped(field->get_class()));
@@ -211,8 +211,8 @@ void OptimizationImpl::rewrite_field_refs(DexType* intf, SingleImplData& data) {
     f->rstate = field->rstate;
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
-      assert(f != opcode->field());
-      opcode->rewrite_field(f);
+      assert(f != opcode->get_field());
+      opcode->set_field(f);
       TRACE(INTF, 3, "(FREF) \t=> %s\n", SHOW(opcode));
     }
   }
@@ -222,7 +222,7 @@ void OptimizationImpl::rewrite_field_refs(DexType* intf, SingleImplData& data) {
  * Rewrite all methods sigs by creating new ones. Remove old methods and push
  * the new to the proper class method list.
  */
-void OptimizationImpl::rewrite_method_defs(DexType* intf,
+void OptimizationImpl::set_method_defs(DexType* intf,
                                            SingleImplData& data) {
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s\n", SHOW(method));
@@ -269,7 +269,7 @@ void OptimizationImpl::rewrite_method_defs(DexType* intf,
 /**
  * Rewrite all method refs.
  */
-void OptimizationImpl::rewrite_method_refs(DexType* intf,
+void OptimizationImpl::set_method_refs(DexType* intf,
                                            SingleImplData& data) {
   for (auto mrefit : data.methodrefs) {
     auto method = mrefit.first;
@@ -304,7 +304,7 @@ void OptimizationImpl::rewrite_method_refs(DexType* intf,
     for (auto opcode : mrefit.second) {
       TRACE(INTF, 3, "(MREF) %s\n", SHOW(opcode));
       assert(opcode->get_method() != new_meth);
-      opcode->rewrite_method(new_meth);
+      opcode->set_method(new_meth);
       TRACE(INTF, 3, "(MREF) \t=> %s\n", SHOW(opcode));
     }
   }
@@ -367,7 +367,7 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(new_m));
     for (auto mop : mref_it.second) {
       TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(mop));
-      mop->rewrite_method(new_m);
+      mop->set_method(new_m);
       auto op = mop->opcode();
       if (op == OPCODE_INVOKE_INTERFACE) {
         mop->set_opcode(OPCODE_INVOKE_VIRTUAL);
@@ -389,7 +389,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
   //       The infrastructure is here but the code for all cases not yet
   auto enclosingMethod = DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
   if (enclosingMethod == nullptr) return; // nothing to do
-  if (!must_rewrite_method_annotations(config)) return;
+  if (!must_set_method_annotations(config)) return;
   for (const auto& cls : scope) {
     auto anno_set = cls->get_anno_set();
     if (anno_set == nullptr) continue;
@@ -403,7 +403,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
           const auto& meth_it = new_methods.find(method_value->method());
           if (meth_it == new_methods.end()) continue;
           TRACE(INTF, 4, "REWRITE: %s\n", SHOW(anno));
-          method_value->rewrite_method(meth_it->second);
+          method_value->set_method(meth_it->second);
           TRACE(INTF, 4, "TO: %s\n", SHOW(anno));
         }
       }
@@ -496,11 +496,11 @@ EscapeReason OptimizationImpl::can_optimize(DexType* intf,
  * Perform the optimization.
  */
 void OptimizationImpl::do_optimize(DexType* intf, SingleImplData& data) {
-  rewrite_type_refs(intf, data);
-  rewrite_field_defs(intf, data);
-  rewrite_field_refs(intf, data);
-  rewrite_method_defs(intf, data);
-  rewrite_method_refs(intf, data);
+  set_type_refs(intf, data);
+  set_field_defs(intf, data);
+  set_field_refs(intf, data);
+  set_method_defs(intf, data);
+  set_method_refs(intf, data);
   rewrite_interface_methods(intf, data);
   remove_interface(intf, data);
 }

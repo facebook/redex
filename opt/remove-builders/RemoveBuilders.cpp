@@ -64,8 +64,7 @@ void transfer_object_reach(DexType* obj,
     regs[insn->dest()] = regs[regs_size];
   } else if (writes_result_register(op)) {
     if (is_invoke(op)) {
-      auto invoked =
-          static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked = insn->get_method();
       if (invoked->get_proto()->get_rtype() == obj) {
         regs[regs_size] = 1;
         return;
@@ -87,8 +86,7 @@ bool tainted_reg_escapes(
     auto tainted = it.second.bits();
     auto op = insn->opcode();
     if (is_invoke(insn->opcode())) {
-      auto invoked =
-          static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked = insn->get_method();
       invoked = resolve_method(invoked, MethodSearch::Any);
       if (!invoked) {
         TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
@@ -222,8 +220,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     return false;
   } else {
-    auto invoked =
-        static_cast<const IRMethodInstruction*>(it->insn)->get_method();
+    auto invoked = it->insn->get_method();
     if (invoked->get_name() != init) {
       return false;
     }
@@ -349,7 +346,7 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-      DexType* cls = static_cast<IRTypeInstruction*>(insn)->get_type();
+      DexType* cls = insn->get_type();
       if (m_builders.find(cls) != m_builders.end()) {
         builders.emplace_back(cls);
       }
@@ -375,7 +372,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
     auto& regs = tregs->m_reg_set;
     auto op = insn->opcode();
     if (op == OPCODE_NEW_INSTANCE) {
-      DexType* cls = static_cast<const IRTypeInstruction*>(insn)->get_type();
+      DexType* cls = insn->get_type();
       if (cls == builder) {
         regs[insn->dest()] = 1;
       }

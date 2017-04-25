@@ -51,7 +51,7 @@ DexMethod* match_pattern(DexMethod* bridge) {
     TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
     return nullptr;
   }
-  auto invoke = static_cast<IRMethodInstruction*>(it->insn);
+  auto invoke = it->insn;
   ++it;
 
   if (is_move_result(it->insn->opcode())) {
@@ -255,7 +255,7 @@ class BridgeRemover {
     for (auto& mie : InstructionIterable(&code)) {
       auto inst = mie.insn;
       if (!is_invoke(inst->opcode())) continue;
-      auto method = static_cast<IRMethodInstruction*>(inst)->get_method();
+      auto method = inst->get_method();
       auto range = m_potential_bridgee_refs.equal_range(
           MethodRef(method->get_class(), method->get_name(),
               method->get_proto()));

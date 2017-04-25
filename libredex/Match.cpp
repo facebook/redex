@@ -50,10 +50,10 @@ match_t<DexClass, std::tuple<> > is_interface() {
   };
 }
 
-match_t<IRInstruction> has_types() {
+match_t<IRInstruction> has_type() {
   return {
     [](const IRInstruction* insn) {
-      return insn->has_types();
+      return insn->has_type();
     }
   };
 }

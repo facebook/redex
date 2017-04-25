@@ -317,8 +317,7 @@ class LocalDce {
   bool is_required(IRInstruction* inst, const boost::dynamic_bitset<>& bliveness) {
     if (has_side_effects(inst->opcode())) {
       if (is_invoke(inst->opcode())) {
-        auto invoke = static_cast<IRMethodInstruction*>(inst);
-        if (!is_pure(invoke->get_method())) {
+        if (!is_pure(inst->get_method())) {
           return true;
         }
         return bliveness.test(bliveness.size() - 1);

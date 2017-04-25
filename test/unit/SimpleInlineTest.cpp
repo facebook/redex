@@ -29,7 +29,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->get_code()->set_registers_size(1);
 
-  auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, callee);
+  auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
   invoke->set_arg_word_count(2);
   invoke->set_src(0, 0);
   invoke->set_src(1, 0);

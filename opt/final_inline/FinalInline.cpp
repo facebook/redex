@@ -126,7 +126,7 @@ void remove_unused_fields(Scope& scope,
   }
 }
 
-bool check_sget(IRFieldInstruction* opfield) {
+bool check_sget(IRInstruction* opfield) {
   auto opcode = opfield->opcode();
   switch (opcode) {
   case OPCODE_SGET:
@@ -142,11 +142,11 @@ bool check_sget(IRFieldInstruction* opfield) {
   }
 }
 
-bool validate_sget(DexMethod* context, IRFieldInstruction* opfield) {
+bool validate_sget(DexMethod* context, IRInstruction* opfield) {
   if (check_sget(opfield)) {
     return true;
   } else {
-    auto field = resolve_field(opfield->field(), FieldSearch::Static);
+    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
     always_assert_log(field->is_concrete(), "Must be a concrete field");
     auto value = field->get_static_value();
     always_assert_log(
@@ -165,10 +165,10 @@ void replace_opcode(DexMethod* method, IRInstruction* from, IRInstruction* to) {
   method->get_code()->replace_opcode(from, to);
 }
 
-void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
+void inline_cheap_sget(DexMethod* method, IRInstruction* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto dest = opfield->dest();
-  auto field = resolve_field(opfield->field(), FieldSearch::Static);
+  auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
   always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
   uint32_t v = value != nullptr ? static_cast<uint32_t>(value->value()) : 0;
@@ -187,10 +187,10 @@ void inline_cheap_sget(DexMethod* method, IRFieldInstruction* opfield) {
   replace_opcode(method, opfield, newopcode);
 }
 
-void inline_sget(DexMethod* method, IRFieldInstruction* opfield) {
+void inline_sget(DexMethod* method, IRInstruction* opfield) {
   if (!validate_sget(method, opfield)) return;
   auto dest = opfield->dest();
-  auto field = resolve_field(opfield->field(), FieldSearch::Static);
+  auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
   always_assert_log(field->is_concrete(), "Must be a concrete field");
   auto value = field->get_static_value();
   auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
@@ -217,9 +217,8 @@ void get_sput_in_clinit(DexClass* clazz,
       "static constructor doesn't have the proper access bits set\n");
   for (auto& mie : InstructionIterable(clinit->get_code())) {
     auto opcode = mie.insn;
-    if (opcode->has_fields() && is_sput(opcode->opcode())) {
-      auto fieldop = static_cast<IRFieldInstruction*>(opcode);
-      auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+    if (opcode->has_field() && is_sput(opcode->opcode())) {
+      auto field = resolve_field(opcode->get_field(), FieldSearch::Static);
       if (field == nullptr || !field->is_concrete() ||
           field->get_class() != clazz->get_type()) {
         continue;
@@ -256,22 +255,21 @@ void inline_field_values(Scope& fullscope) {
       inline_field.insert(sfield);
     }
   }
-  std::vector<std::pair<DexMethod*, IRFieldInstruction*>> cheap_rewrites;
-  std::vector<std::pair<DexMethod*, IRFieldInstruction*>> simple_rewrites;
+  std::vector<std::pair<DexMethod*, IRInstruction*>> cheap_rewrites;
+  std::vector<std::pair<DexMethod*, IRInstruction*>> simple_rewrites;
   walk_opcodes(fullscope,
                [](DexMethod* method) { return true; },
                [&](DexMethod* method, IRInstruction* insn) {
-                 if (insn->has_fields() && is_sfield_op(insn->opcode())) {
-                   auto fieldop = static_cast<IRFieldInstruction*>(insn);
+                 if (insn->has_field() && is_sfield_op(insn->opcode())) {
                    auto field =
-                       resolve_field(fieldop->field(), FieldSearch::Static);
+                       resolve_field(insn->get_field(), FieldSearch::Static);
                    if (field == nullptr || !field->is_concrete()) return;
                    if (inline_field.count(field) == 0) return;
                    if (cheap_inline_field.count(field) > 0) {
-                     cheap_rewrites.push_back(std::make_pair(method, fieldop));
+                     cheap_rewrites.push_back(std::make_pair(method, insn));
                      return;
                    }
-                   simple_rewrites.push_back(std::make_pair(method, fieldop));
+                   simple_rewrites.push_back(std::make_pair(method, insn));
                  }
                });
   TRACE(FINALINLINE,
@@ -312,12 +310,11 @@ bool validate_const_for_encoded_value(IRInstruction* op) {
 /*
  * Verify that we can convert the field in the sput into an encoded value.
  */
-bool validate_sput_for_encoded_value(DexClass* clazz, IRInstruction* op) {
-  if (!(op->has_fields() && is_sput(op->opcode()))) {
+bool validate_sput_for_encoded_value(DexClass* clazz, IRInstruction* insn) {
+  if (!(insn->has_field() && is_sput(insn->opcode()))) {
     return false;
   }
-  auto fieldop = static_cast<IRFieldInstruction*>(op);
-  auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+  auto field = resolve_field(insn->get_field(), FieldSearch::Static);
   return (field != nullptr) && (field->get_class() == clazz->get_type());
 }
 
@@ -357,17 +354,15 @@ bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
   for (auto& pair : const_sputs) {
     auto const_op = pair.first;
     auto sput_op = pair.second;
-    auto fieldop = static_cast<IRFieldInstruction*>(sput_op);
-    auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+    auto field = resolve_field(sput_op->get_field(), FieldSearch::Static);
     DexEncodedValue* ev;
     if (const_op->opcode() == OPCODE_CONST_STRING) {
       TRACE(FINALINLINE,
             8,
             "- String Field: %s, \"%s\"\n",
             SHOW(field),
-            SHOW(static_cast<IRStringInstruction*>(const_op)->get_string()));
-      ev = new DexEncodedValueString(
-          static_cast<IRStringInstruction*>(const_op)->get_string());
+            SHOW(const_op->get_string()));
+      ev = new DexEncodedValueString(const_op->get_string());
     } else {
       TRACE(FINALINLINE,
             9,
@@ -485,14 +480,14 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       // Check for sget from static final
-      if (!it->insn->has_fields()) {
+      if (!it->insn->has_field()) {
         continue;
       }
-      auto sget_op = static_cast<IRFieldInstruction*>(it->insn);
+      auto sget_op = it->insn;
       if (!check_sget(sget_op)) {
         continue;
       }
-      auto src_field = resolve_field(sget_op->field(), FieldSearch::Static);
+      auto src_field = resolve_field(sget_op->get_field(), FieldSearch::Static);
       if ((src_field == nullptr) ||
           !(is_static(src_field) && is_final(src_field))) {
         continue;
@@ -503,8 +498,8 @@ size_t FinalInlinePass::propagate_constants(Scope& fullscope) {
       if (!validate_sput_for_encoded_value(clazz, next_insn)) {
         continue;
       }
-      auto sput_op = static_cast<IRFieldInstruction*>(next_insn);
-      auto dst_field = resolve_field(sput_op->field(), FieldSearch::Static);
+      auto sput_op = next_insn;
+      auto dst_field = resolve_field(sput_op->get_field(), FieldSearch::Static);
       if (!(is_static(dst_field) && is_final(dst_field))) {
         continue;
       }

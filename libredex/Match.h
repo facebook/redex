@@ -245,7 +245,7 @@ match_t<DexClass, std::tuple<> > is_interface();
  */
 
 /** Any instruction which holds a type reference */
-match_t<IRInstruction> has_types();
+match_t<IRInstruction> has_type();
 
 /** const-string flavors */
 match_t<IRInstruction> const_string();
@@ -354,9 +354,8 @@ match_t<IRInstruction, std::tuple<match_t<DexMethod, P> > >
   opcode_method(const match_t<DexMethod, P>& p) {
   return {
     [](const IRInstruction* insn, const match_t<DexMethod, P>& p) {
-      always_assert(insn->has_methods());
-      auto method_insn = static_cast<const IRMethodInstruction*>(insn);
-      return p.matches(method_insn->get_method());
+      always_assert(insn->has_method());
+      return p.matches(insn->get_method());
     },
     p
   };
@@ -367,8 +366,7 @@ match_t<IRInstruction, std::tuple<match_t<DexType, P> > >
   opcode_type(const match_t<DexType, P>& p) {
   return {
     [](const IRInstruction* insn, const match_t<DexType, P>& p) {
-      auto type_insn = static_cast<const IRTypeInstruction*>(insn);
-      return p.matches(type_insn->get_type());
+      return p.matches(insn->get_type());
     },
     p
   };

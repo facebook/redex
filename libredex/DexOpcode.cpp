@@ -15,7 +15,7 @@ namespace opcode {
 
 DexOpcodeFormat format(DexOpcode opcode) {
   switch (opcode) {
-#define OP(op, code, fmt) \
+#define OP(op, code, fmt, ...) \
   case code:              \
     return FMT_##fmt;
     OPS
@@ -25,6 +25,21 @@ DexOpcodeFormat format(DexOpcode opcode) {
     return FMT_fopcode;
   case FOPCODE_FILLED_ARRAY:
     return FMT_fopcode;
+  }
+  always_assert_log(false, "Unexpected opcode 0x%x", opcode);
+}
+
+Ref ref(DexOpcode opcode) {
+  switch (opcode) {
+#define OP(op, code, fmt, ref, ...)\
+  case code:              \
+    return ref;
+    OPS
+#undef OP
+  case FOPCODE_PACKED_SWITCH:
+  case FOPCODE_SPARSE_SWITCH:
+  case FOPCODE_FILLED_ARRAY:
+    return Ref::None;
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }

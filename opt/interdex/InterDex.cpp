@@ -325,15 +325,12 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
         for (auto& mie : InstructionIterable(meth->get_code())) {
           auto inst = mie.insn;
           DexClass* called_cls = nullptr;
-          if (inst->has_methods()) {
-            auto method_access = static_cast<IRMethodInstruction*>(inst);
-            called_cls = type_class(method_access->get_method()->get_class());
-          } else if (inst->has_fields()) {
-            auto field_access = static_cast<IRFieldInstruction*>(inst);
-            called_cls = type_class(field_access->field()->get_class());
-          } else if (inst->has_types()) {
-            auto type_access = static_cast<IRTypeInstruction*>(inst);
-            called_cls = type_class(type_access->get_type());
+          if (inst->has_method()) {
+            called_cls = type_class(inst->get_method()->get_class());
+          } else if (inst->has_field()) {
+            called_cls = type_class(inst->get_field()->get_class());
+          } else if (inst->has_type()) {
+            called_cls = type_class(inst->get_type());
           }
           if (called_cls != nullptr &&
             base_cls != called_cls &&

@@ -159,15 +159,13 @@ void build_refs(
   auto match =
     m::invoke_static()
     or m::invoke_direct()
-    or m::has_types();
+    or m::has_type();
   visit_opcodes(scope, match, [&](const DexMethod* meth, IRInstruction* insn){
-    if (insn->has_types()) {
-      const auto top = static_cast<IRTypeInstruction*>(insn);
-      const auto tref = type_class(top->get_type());
+    if (insn->has_type()) {
+      const auto tref = type_class(insn->get_type());
       if (tref) class_refs[tref].push_back(std::make_pair(meth, insn));
     } else {
-      const auto mop = static_cast<IRMethodInstruction*>(insn);
-      const auto mref = mop->get_method();
+      const auto mref = insn->get_method();
       dmethod_refs[mref].push_back(std::make_pair(meth, insn));
     }
   });
@@ -389,24 +387,21 @@ bool can_make_references_public(const DexMethod* from_meth) {
   if (!code) return false;
   for (auto const& mie : InstructionIterable(code)) {
     auto inst = mie.insn;
-    if (inst->has_types()) {
-      auto tref = static_cast<IRTypeInstruction*>(inst)->get_type();
+    if (inst->has_type()) {
+      auto tref = inst->get_type();
       auto tclass = type_class(tref);
       if (!tclass) return false;
       if (tclass->is_external() && !is_public(tclass)) return false;
-    } else if (inst->has_fields()) {
-      auto fref = resolve_field(static_cast<IRFieldInstruction*>(inst)->field());
+    } else if (inst->has_field()) {
+      auto fref = resolve_field(inst->get_field());
       if (!fref) return false;
       auto fclass = type_class(fref->get_class());
       if (!fclass) return false;
       if (fref->is_external() && (!is_public(fref) || !is_public(fclass))) {
         return false;
       }
-    } else if (inst->has_methods()) {
-      auto methodinst = static_cast<IRMethodInstruction*>(inst);
-      auto mref = resolve_method(
-        methodinst->get_method(),
-        opcode_to_search(methodinst));
+    } else if (inst->has_method()) {
+      auto mref = resolve_method(inst->get_method(), opcode_to_search(inst));
       if (!mref) return false;
       auto mclass = type_class(mref->get_class());
       if (!mclass) return false;
@@ -427,25 +422,21 @@ void make_references_public(const DexMethod* from_meth) {
   if (!code) return;
   for (auto const& mie : InstructionIterable(code)) {
     auto inst = mie.insn;
-    if (inst->has_types()) {
-      auto tref = static_cast<IRTypeInstruction*>(inst)->get_type();
+    if (inst->has_type()) {
+      auto tref = inst->get_type();
       auto tclass = type_class(tref);
       always_assert(tclass);
       if (!tclass->is_external()) set_public(tclass);
-    } else if (inst->has_fields()) {
-      auto fref = resolve_field(static_cast<IRFieldInstruction*>(inst)->field());
+    } else if (inst->has_field()) {
+      auto fref = resolve_field(inst->get_field());
       auto fclass = type_class(fref->get_class());
       always_assert(fclass);
       if (fref->is_concrete()) {
         set_public(fclass);
         set_public(fref);
       }
-    } else if (inst->has_methods()) {
-      auto methodinst = static_cast<IRMethodInstruction*>(inst);
-      auto mref = resolve_method(
-        methodinst->get_method(),
-        opcode_to_search(methodinst)
-      );
+    } else if (inst->has_method()) {
+      auto mref = resolve_method(inst->get_method(), opcode_to_search(inst));
       auto mclass = type_class(mref->get_class());
       always_assert(mclass);
       if (mref->is_concrete()) {

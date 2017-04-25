@@ -21,8 +21,7 @@ size_t delete_methods(
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
-          const auto mop = static_cast<IRMethodInstruction*>(insn);
-          auto callee = resolver(mop->get_method(), opcode_to_search(insn));
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
           if (callee != nullptr) {
             removable.erase(callee);
           }

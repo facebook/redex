@@ -211,9 +211,7 @@ private:
     m_num_trivial++;
 
     // Get invoked method
-    const IRInstruction* insn = insns[0];
-    const IRMethodInstruction* mopc = static_cast<const IRMethodInstruction*>(insn);
-    DexMethod* invoked_meth = mopc->get_method();
+    DexMethod* invoked_meth = insns[0]->get_method();
 
     // Invoked method name must match
     if (meth->get_name() != invoked_meth->get_name()) {
@@ -312,12 +310,11 @@ public:
                    [](DexMethod* meth) { return true; },
                    [&](DexMethod* meth, IRInstruction* insn) {
                      if (is_invoke(insn->opcode())) {
-                       auto mop = static_cast<IRMethodInstruction*>(insn);
-                       auto method = mop->get_method();
+                       auto method = insn->get_method();
                        while (m_delmeths.count(method)) {
                          method = m_delmeths.at(method);
                        }
-                       mop->rewrite_method(method);
+                       insn->set_method(method);
                      }
                    });
       for (const auto& pair : m_delmeths) {

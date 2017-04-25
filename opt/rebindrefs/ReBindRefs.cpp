@@ -213,8 +213,7 @@ struct Rebinder {
     }
   };
 
-  void rebind_method(IRInstruction* opcode, InvokeType invoke_type) {
-    const auto mop = static_cast<IRMethodInstruction*>(opcode);
+  void rebind_method(IRInstruction* mop, InvokeType invoke_type) {
     const auto mref = mop->get_method();
     switch (invoke_type) {
       case InvokeType::Static:
@@ -249,7 +248,7 @@ struct Rebinder {
   }
 
   void rebind_method_opcode(
-      IRMethodInstruction* mop,
+      IRInstruction* mop,
       DexMethod* mref,
       DexMethod* real_ref) {
     if (!real_ref || real_ref == mref || real_ref->is_external()) {
@@ -257,7 +256,7 @@ struct Rebinder {
     }
     TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(mref), SHOW(real_ref));
     m_mrefs.insert(mref, real_ref);
-    mop->rewrite_method(real_ref);
+    mop->set_method(real_ref);
     auto cls = type_class(real_ref->get_class());
     if (cls != nullptr && !is_public(cls)) {
       set_public(cls);
@@ -292,8 +291,7 @@ struct Rebinder {
   }
 
   void rebind_field(IRInstruction* insn, FieldSearch field_search) {
-    const auto fop = static_cast<IRFieldInstruction*>(insn);
-    const auto fref = fop->field();
+    const auto fref = insn->get_field();
     const auto real_ref = resolve_field(fref, field_search);
     if (real_ref && real_ref != fref) {
       auto cls = type_class(real_ref->get_class());
@@ -307,7 +305,7 @@ struct Rebinder {
             "Rebinding %s\n\t=>%s\n",
             SHOW(fref),
             SHOW(real_ref));
-      fop->rewrite_field(real_ref);
+      insn->set_field(real_ref);
       m_frefs.insert(fref, real_ref);
     }
   }

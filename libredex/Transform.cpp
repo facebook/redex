@@ -596,7 +596,7 @@ static void associate_try_items(FatMethod* fm,
 }
 
 bool has_aliased_arguments(IRInstruction* invoke) {
-  assert(invoke->has_methods());
+  assert(invoke->has_method());
   std::unordered_set<uint16_t> seen;
   for (size_t i = 0; i < invoke->srcs_size(); ++i) {
     auto pair = seen.emplace(invoke->src(i));
@@ -623,7 +623,7 @@ FatMethod* IRCode::balloon(DexMethod* method) {
       addr_to_data.emplace(addr, static_cast<DexOpcodeData*>(insn));
     } else if (insn->opcode() != OPCODE_NOP) {
       // NOPs are used for alignment, which FatMethod doesn't care about
-      MethodItemEntry* mei = new MethodItemEntry(IRInstruction::make(insn));
+      MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(insn));
       fmethod->push_back(*mei);
       addr_to_mei[addr] = mei;
       mei->addr = addr;
@@ -1246,7 +1246,7 @@ class MethodSplicer {
       cloned_mei->centry->next = clone(cloned_mei->centry->next);
       return cloned_mei;
     case MFLOW_OPCODE:
-      cloned_mei->insn = cloned_mei->insn->clone();
+      cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
       if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
         m_mtcaller->m_array_data.emplace(
             cloned_mei->insn, m_mtcallee->m_array_data.at(mei->insn)->clone());
@@ -1438,7 +1438,7 @@ void IRCode::inline_tail_call(DexMethod* caller,
 
 bool IRCode::inline_method(InlineContext& context,
                            DexMethod* callee,
-                           IRMethodInstruction* invoke,
+                           IRInstruction* invoke,
                            bool no_exceed_16regs) {
   auto caller_code = context.caller_code;
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
@@ -1549,7 +1549,7 @@ bool IRCode::inline_method(InlineContext& context,
   }
 
   if (move_res != fcaller->end() && ret_it != fcallee->end()) {
-    std::unique_ptr<IRInstruction> ret_insn(ret_it->insn->clone());
+    auto ret_insn = std::make_unique<IRInstruction>(*ret_it->insn);
     remap_registers(ret_insn.get(), callee_reg_map);
     IRInstruction* move = move_result(ret_insn.get(), move_res->insn);
     auto move_mei = new MethodItemEntry(move);

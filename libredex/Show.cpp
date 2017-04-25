@@ -460,88 +460,88 @@ std::string show_opcode(const DexInstruction* insn) {
     return "const-wide";
   // field opcode
   case OPCODE_IGET:
-    ss << "iget " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_WIDE:
-    ss << "iget-wide " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_OBJECT:
-    ss << "iget-object " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_BOOLEAN:
-    ss << "iget-boolean " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_BYTE:
-    ss << "iget-byte " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_CHAR:
-    ss << "iget-char " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IGET_SHORT:
-    ss << "iget-short " << show(((DexOpcodeField*)insn)->field());
+    ss << "iget-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT:
-    ss << "iput " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_WIDE:
-    ss << "iput-wide " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_OBJECT:
-    ss << "iput-object " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_BOOLEAN:
-    ss << "iput-boolean " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_BYTE:
-    ss << "iput-byte " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_CHAR:
-    ss << "iput-char " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_IPUT_SHORT:
-    ss << "iput-short " << show(((DexOpcodeField*)insn)->field());
+    ss << "iput-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET:
-    ss << "sget " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_WIDE:
-    ss << "sget-wide " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_OBJECT:
-    ss << "sget-object " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_BOOLEAN:
-    ss << "sget-boolean " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_BYTE:
-    ss << "sget-byte " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_CHAR:
-    ss << "sget-char " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SGET_SHORT:
-    ss << "sget-short " << show(((DexOpcodeField*)insn)->field());
+    ss << "sget-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT:
-    ss << "sput " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_WIDE:
-    ss << "sput-wide " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_OBJECT:
-    ss << "sput-object " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_BOOLEAN:
-    ss << "sput-boolean " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_BYTE:
-    ss << "sput-byte " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_CHAR:
-    ss << "sput-char " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_SPUT_SHORT:
-    ss << "sput-short " << show(((DexOpcodeField*)insn)->field());
+    ss << "sput-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
   case OPCODE_INVOKE_VIRTUAL:
     ss << "invoke-virtual " << show(((DexOpcodeMethod*)insn)->get_method());
@@ -872,12 +872,10 @@ std::string show(const IRInstruction* insn) {
     ss << " v" << insn->src(i);
     first = false;
   }
-  if (insn->has_methods()) {
-    ss << " "
-       << show(static_cast<const IRMethodInstruction*>(insn)->get_method());
-  } else if (insn->has_fields()) {
-    ss << " "
-       << show(static_cast<const IRFieldInstruction*>(insn)->field());
+  if (insn->has_method()) {
+    ss << " " << show(insn->get_method());
+  } else if (insn->has_field()) {
+    ss << " " << show(insn->get_field());
   }
   if (opcode::has_range(insn->opcode())) {
     ss << " range base: " << insn->range_base() << ", "

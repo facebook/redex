@@ -1078,27 +1078,21 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
   auto code = method->get_code();
   if (!code) return; // nothing to do for native methods
 
-  std::unordered_set<IRStringInstruction*> jumbo_mismatches;
+  std::unordered_set<IRInstruction*> jumbo_mismatches;
   for (auto& mie : InstructionIterable(code)) {
-    auto inst = mie.insn;
-    auto op = inst->opcode();
+    auto insn = mie.insn;
+    auto op = insn->opcode();
     if (op != OPCODE_CONST_STRING && op != OPCODE_CONST_STRING_JUMBO) continue;
 
-    auto str_opcode = static_cast<IRStringInstruction*>(inst);
-    auto str = str_opcode->get_string();
+    auto str = insn->get_string();
     uint32_t stridx = dodx->stringidx(str);
     bool jumbo = ((stridx >> 16) != 0);
 
-    if (jumbo && op == OPCODE_CONST_STRING) {
-      jumbo_mismatches.emplace(str_opcode);
-    } else if (!jumbo && op == OPCODE_CONST_STRING_JUMBO) {
-      jumbo_mismatches.emplace(str_opcode);
+    if (jumbo) {
+      insn->set_opcode(OPCODE_CONST_STRING_JUMBO);
+    } else if (!jumbo) {
+      insn->set_opcode(OPCODE_CONST_STRING);
     }
-  }
-  if (jumbo_mismatches.empty()) return;
-  for (auto str_opcode : jumbo_mismatches) {
-    str_opcode->set_opcode(
-      str_opcode->jumbo() ? OPCODE_CONST_STRING : OPCODE_CONST_STRING_JUMBO);
   }
 }
 

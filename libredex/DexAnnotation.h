@@ -144,7 +144,7 @@ class DexEncodedValueType : public DexEncodedValue {
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexType* type() const { return m_type; }
-  void rewrite_type(DexType* type) { m_type = type; }
+  void set_type(DexType* type) { m_type = type; }
   virtual std::string show() const { return ::show(m_type); }
   virtual bool operator==(const DexEncodedValue& that) {
     if (m_evtype != that.evtype()) {
@@ -172,7 +172,7 @@ class DexEncodedValueField : public DexEncodedValue {
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexField* field() const { return m_field; }
-  void rewrite_field(DexField* field) { m_field = field; }
+  void set_field(DexField* field) { m_field = field; }
   virtual std::string show() const { return ::show(m_field); }
   virtual bool operator==(const DexEncodedValue& that) {
     if (m_evtype != that.evtype()) {
@@ -199,7 +199,7 @@ class DexEncodedValueMethod : public DexEncodedValue {
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
 
   DexMethod* method() const { return m_method; }
-  void rewrite_method(DexMethod* method) { m_method = method; }
+  void set_method(DexMethod* method) { m_method = method; }
   virtual std::string show() const { return ::show(m_method); }
   virtual bool operator==(const DexEncodedValue& that) {
     if (m_evtype != that.evtype()) {
@@ -310,7 +310,7 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
   }
 
   DexType* type() const { return m_type; }
-  void rewrite_type(DexType* type) { m_type = type; }
+  void set_type(DexType* type) { m_type = type; }
   const EncodedAnnotations* annotations() { return m_annotations; }
 
   virtual void gather_types(std::vector<DexType*>& ltype) const;
@@ -356,7 +356,7 @@ class DexAnnotation : public Gatherable {
 
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
   DexType* type() const { return m_type; }
-  void rewrite_type(DexType* type) { m_type = type; }
+  void set_type(DexType* type) { m_type = type; }
   void add_element(const char* key, DexEncodedValue* value);
   const EncodedAnnotations& anno_elems() { return m_anno_elems; }
 

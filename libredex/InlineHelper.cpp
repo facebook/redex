@@ -154,10 +154,9 @@ MultiMethodInliner::MultiMethodInliner(
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* opcode) {
-        if (is_invoke(opcode->opcode())) {
-          auto mop = static_cast<IRMethodInstruction*>(opcode);
-          auto callee = resolver(mop->get_method(), opcode_to_search(opcode));
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (is_invoke(insn->opcode())) {
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
           if (callee != nullptr && callee->is_concrete() &&
               candidates.find(callee) != candidates.end()) {
             callee_caller[callee].push_back(meth);
@@ -217,19 +216,18 @@ void MultiMethodInliner::inline_callees(
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
-  std::vector<std::pair<DexMethod*, IRMethodInstruction*>> inlinables;
+  std::vector<std::pair<DexMethod*, IRInstruction*>> inlinables;
   for (auto& mie : InstructionIterable(caller->get_code())) {
     auto insn = mie.insn;
     if (!is_invoke(insn->opcode())) continue;
-    auto mop = static_cast<IRMethodInstruction*>(insn);
-    auto callee = resolver(mop->get_method(), opcode_to_search(insn));
+    auto callee = resolver(insn->get_method(), opcode_to_search(insn));
     if (callee == nullptr) continue;
     if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
       continue;
     }
     always_assert(callee->is_concrete());
     found++;
-    inlinables.push_back(std::make_pair(callee, mop));
+    inlinables.push_back(std::make_pair(callee, insn));
     if (found == callees.size()) break;
   }
   if (found != callees.size()) {
@@ -241,7 +239,7 @@ void MultiMethodInliner::inline_callees(
   InlineContext inline_context(caller, m_config.use_liveness);
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
-    auto mop = inlinable.second;
+    auto insn = inlinable.second;
 
     if (!is_inlinable(inline_context, callee, caller)) continue;
 
@@ -251,7 +249,7 @@ void MultiMethodInliner::inline_callees(
         callee->get_code()->get_registers_size() -
         callee->get_code()->get_ins_size());
     if (!IRCode::inline_method(
-            inline_context, callee, mop, m_config.no_exceed_16regs)) {
+            inline_context, callee, insn, m_config.no_exceed_16regs)) {
       info.more_than_16regs++;
       continue;
     }
@@ -382,7 +380,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
-    auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
+    auto method = insn->get_method();
     method = resolver(method, MethodSearch::Direct);
     if (method == nullptr) {
       info.need_vmethod++;
@@ -448,7 +446,7 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
   }
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
       insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
-    auto method = static_cast<IRMethodInstruction*>(insn)->get_method();
+    auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
       // if it's not known to redex but it's a common java/android API method
@@ -497,8 +495,7 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
     return false;
   }
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
-    auto fop = static_cast<IRFieldInstruction*>(insn);
-    auto field = fop->field();
+    auto field = insn->get_field();
     field = resolve_field(field, is_sfield_op(insn->opcode())
         ? FieldSearch::Static : FieldSearch::Instance);
     if (field == nullptr) {
@@ -530,14 +527,12 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
 
   for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
-    if (insn->has_types()) {
-      auto top = static_cast<IRTypeInstruction*>(insn);
-      if (!ok_from_primary(top->get_type())) {
+    if (insn->has_type()) {
+      if (!ok_from_primary(insn->get_type())) {
         return true;
       }
-    } else if (insn->has_methods()) {
-      auto mop = static_cast<IRMethodInstruction*>(insn);
-      auto meth = mop->get_method();
+    } else if (insn->has_method()) {
+      auto meth = insn->get_method();
       if (!ok_from_primary(meth->get_class())) {
         return true;
       }
@@ -552,9 +547,8 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
           return true;
         }
       }
-    } else if (insn->has_fields()) {
-      auto fop = static_cast<IRFieldInstruction*>(insn);
-      auto field = fop->field();
+    } else if (insn->has_field()) {
+      auto field = insn->get_field();
       if (!ok_from_primary(field->get_class()) ||
           !ok_from_primary(field->get_type())) {
         return true;
@@ -575,9 +569,8 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
       SHOW(callee));
   for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
-    if (insn->has_fields()) {
-      auto fop = static_cast<IRFieldInstruction*>(insn);
-      auto field = fop->field();
+    if (insn->has_field()) {
+      auto field = insn->get_field();
       auto cls = type_class(field->get_class());
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
@@ -591,13 +584,12 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
         set_public(field);
         set_public(type_class(field->get_class()));
         // FIXME no point in rewriting opcodes in the callee
-        fop->rewrite_field(field);
+        insn->set_field(field);
       }
       continue;
     }
-    if (insn->has_methods()) {
-      auto mop = static_cast<IRMethodInstruction*>(insn);
-      auto method = mop->get_method();
+    if (insn->has_method()) {
+      auto method = insn->get_method();
       auto cls = type_class(method->get_class());
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
@@ -610,12 +602,12 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
         set_public(method);
         set_public(type_class(method->get_class()));
         // FIXME no point in rewriting opcodes in the callee
-        mop->rewrite_method(method);
+        insn->set_method(method);
       }
       continue;
     }
-    if (insn->has_types()) {
-      auto type = static_cast<IRTypeInstruction*>(insn)->get_type();
+    if (insn->has_type()) {
+      auto type = insn->get_type();
       auto cls = type_class(type);
       if (cls != nullptr && !cls->is_external()) {
         TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
@@ -675,12 +667,11 @@ void MultiMethodInliner::invoke_direct_to_static() {
     mutators::make_static(method);
   }
   walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* opcode) {
-        auto op = opcode->opcode();
+      [&](DexMethod*, IRInstruction* insn) {
+        auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE) {
-          auto mop = static_cast<IRMethodInstruction*>(opcode);
-          if (m_make_static.count(mop->get_method())) {
-            opcode->set_opcode(direct_to_static_op(op));
+          if (m_make_static.count(insn->get_method())) {
+            insn->set_opcode(direct_to_static_op(op));
           }
         }
       });
@@ -699,9 +690,8 @@ void select_single_called(
   walk_opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
-          auto mop = static_cast<IRMethodInstruction*>(insn);
           auto callee = resolve_method(
-              mop->get_method(), opcode_to_search(insn), resolved_refs);
+              insn->get_method(), opcode_to_search(insn), resolved_refs);
           if (callee != nullptr && callee->is_concrete()
               && methods.count(callee) > 0) {
             calls[callee]++;

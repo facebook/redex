@@ -266,7 +266,7 @@ void sort_unique(std::vector<T>& vec, Cmp cmp = std::less<T>()) {
  * the optimization would have to re-map the input regs.  The N arguments to
  * the invoke should be the last N registers of the frame.
  */
-bool passes_args_through(IRMethodInstruction* insn,
+bool passes_args_through(IRInstruction* insn,
                          const IRCode& code,
                          int ignore = 0);
 

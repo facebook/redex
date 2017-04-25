@@ -32,30 +32,12 @@ DexOpcode convert_3to2addr(DexOpcode op) {
 
 }
 
-IRInstruction* IRInstruction::make(const DexInstruction* insn) {
-  IRInstruction* ir_insn;
-  if (insn->has_strings()) {
-    ir_insn =
-        new IRStringInstruction(static_cast<const DexOpcodeString*>(insn));
-  } else if (insn->has_types()) {
-    ir_insn = new IRTypeInstruction(static_cast<const DexOpcodeType*>(insn));
-  } else if (insn->has_fields()) {
-    ir_insn = new IRFieldInstruction(static_cast<const DexOpcodeField*>(insn));
-  } else if (insn->has_methods()) {
-    ir_insn =
-        new IRMethodInstruction(static_cast<const DexOpcodeMethod*>(insn));
-  } else {
-    ir_insn = new IRInstruction(insn);
-  }
-  return ir_insn;
-}
-
-IRInstruction::IRInstruction(DexOpcode op) : Gatherable(), m_opcode(op) {
+IRInstruction::IRInstruction(DexOpcode op) : m_opcode(op) {
   always_assert(!is_fopcode(op));
   m_srcs.resize(opcode::min_srcs_size(op));
 }
 
-IRInstruction::IRInstruction(const DexInstruction* insn) : Gatherable() {
+IRInstruction::IRInstruction(const DexInstruction* insn) {
   m_opcode = insn->opcode();
   always_assert(!is_fopcode(m_opcode));
   if (opcode::dests_size(m_opcode)) {
@@ -77,11 +59,19 @@ IRInstruction::IRInstruction(const DexInstruction* insn) : Gatherable() {
     m_range =
         std::pair<uint16_t, uint16_t>(insn->range_base(), insn->range_size());
   }
+  if (insn->has_string()) {
+    set_string(static_cast<const DexOpcodeString*>(insn)->get_string());
+  } else if (insn->has_type()) {
+    set_type(static_cast<const DexOpcodeType*>(insn)->get_type());
+  } else if (insn->has_field()) {
+    set_field(static_cast<const DexOpcodeField*>(insn)->get_field());
+  } else if (insn->has_method()) {
+    set_method(static_cast<const DexOpcodeMethod*>(insn)->get_method());
+  }
 }
 
 bool IRInstruction::operator==(const IRInstruction& that) const {
-  return m_ref_type == that.m_ref_type &&
-    m_opcode == that.m_opcode &&
+  return m_opcode == that.m_opcode &&
     m_srcs == that.m_srcs &&
     m_dest == that.m_dest &&
     m_literal == that.m_literal &&
@@ -139,7 +129,27 @@ uint16_t IRInstruction::size() const {
   return args[opcode::format(op)];
 }
 
-void IRInstruction::set_dex_instruction_args(DexInstruction* insn) const {
+DexInstruction* IRInstruction::to_dex_instruction() const {
+  auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
+  DexInstruction* insn;
+  switch (opcode::ref(opcode())) {
+    case opcode::Ref::None:
+      insn = new DexInstruction(op);
+      break;
+    case opcode::Ref::String:
+      insn = new DexOpcodeString(opcode(), m_string);
+      break;
+    case opcode::Ref::Type:
+      insn = new DexOpcodeType(opcode(), m_type);
+      break;
+    case opcode::Ref::Field:
+      insn = new DexOpcodeField(opcode(), m_field);
+      break;
+    case opcode::Ref::Method:
+      insn = new DexOpcodeMethod(opcode(), m_method);
+      break;
+  }
+
   if (insn->dests_size()) {
     insn->set_dest(dest());
   }
@@ -159,36 +169,6 @@ void IRInstruction::set_dex_instruction_args(DexInstruction* insn) const {
     insn->set_range_base(range_base());
     insn->set_range_size(range_size());
   }
-}
-
-DexInstruction* IRInstruction::to_dex_instruction() const {
-  auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
-  auto insn = new DexInstruction(op);
-  set_dex_instruction_args(insn);
-  return insn;
-}
-
-DexInstruction* IRStringInstruction::to_dex_instruction() const {
-  auto insn = new DexOpcodeString(opcode(), m_string);
-  set_dex_instruction_args(insn);
-  return insn;
-}
-
-DexInstruction* IRTypeInstruction::to_dex_instruction() const {
-  auto insn = new DexOpcodeType(opcode(), m_type);
-  set_dex_instruction_args(insn);
-  return insn;
-}
-
-DexInstruction* IRFieldInstruction::to_dex_instruction() const {
-  auto insn = new DexOpcodeField(opcode(), m_field);
-  set_dex_instruction_args(insn);
-  return insn;
-}
-
-DexInstruction* IRMethodInstruction::to_dex_instruction() const {
-  auto insn = new DexOpcodeMethod(opcode(), m_method);
-  set_dex_instruction_args(insn);
   return insn;
 }
 

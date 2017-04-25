@@ -65,13 +65,11 @@ DexOpcode opcode_range_version(DexOpcode op) {
 
 IRInstruction* create_range_equivalent(IRInstruction* insn) {
   DexOpcode op = opcode_range_version(insn->opcode());
-  if (insn->has_methods()) {
-    auto insn_ = static_cast<IRMethodInstruction*>(insn);
-    return new IRMethodInstruction(op, insn_->get_method());
+  if (insn->has_method()) {
+    return (new IRInstruction(op))->set_method(insn->get_method());
   } else {
-    always_assert(insn->has_types());
-    auto insn_ = static_cast<IRTypeInstruction*>(insn);
-    return new IRTypeInstruction(op, insn_->get_type());
+    always_assert(insn->has_type());
+    return (new IRInstruction(op))->set_type(insn->get_type());
   }
 }
 

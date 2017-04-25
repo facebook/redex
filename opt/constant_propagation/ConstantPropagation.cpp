@@ -172,19 +172,20 @@ namespace {
           if (false && // deactivate return propagation for now
               last_inst != nullptr &&
               last_inst->opcode() == OPCODE_INVOKE_STATIC &&
-              last_inst->has_methods()) {
-              IRMethodInstruction *referred_method = static_cast<IRMethodInstruction *>(last_inst);
-              if (method_returns.find(referred_method->get_method()) != method_returns.end()) {
-                auto return_val = method_returns[referred_method->get_method()];
-                TRACE(CONSTP, 2, "Find method %s return value: %d\n", SHOW(referred_method), return_val);
-                m_method_return_propagated++;
-                auto new_inst = (new IRInstruction(OPCODE_CONST_16))
-                                    ->set_dest(inst->dest())
-                                    ->set_literal(return_val);
-                replacements.emplace_back(inst, new_inst);
-                dead_instructions.push_back(referred_method);
-                propagate_constant(new_inst);
-              }
+              last_inst->has_method()) {
+            if (method_returns.find(last_inst->get_method()) !=
+                method_returns.end()) {
+              auto return_val = method_returns[last_inst->get_method()];
+              TRACE(CONSTP, 2, "Find method %s return value: %d\n",
+                    SHOW(last_inst), return_val);
+              m_method_return_propagated++;
+              auto new_inst = (new IRInstruction(OPCODE_CONST_16))
+                                  ->set_dest(inst->dest())
+                                  ->set_literal(return_val);
+              replacements.emplace_back(inst, new_inst);
+              dead_instructions.push_back(last_inst);
+              propagate_constant(new_inst);
+            }
           }
           break;
         // For move instruction, propagate known status and the value to the dest register

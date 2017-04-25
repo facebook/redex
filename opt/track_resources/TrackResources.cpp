@@ -93,9 +93,8 @@ void get_sput_in_clinit(DexClass* clazz,
           "static constructor doesn't have the proper access bits set\n");
       for (auto& mie : InstructionIterable(method->get_code())) {
         auto opcode = mie.insn;
-        if (opcode->has_fields() && is_sput(opcode->opcode())) {
-          auto fieldop = static_cast<IRFieldInstruction*>(opcode);
-          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+        if (opcode->has_field() && is_sput(opcode->opcode())) {
+          auto field = resolve_field(opcode->get_field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) continue;
           if (field->get_class() != clazz->get_type()) continue;
           blank_statics[field] = true;
@@ -140,9 +139,8 @@ void find_accessed_fields(Scope& fullscope,
       fullscope,
       [](DexMethod* method) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {
-        if (insn->has_fields() && is_sfield_op(insn->opcode())) {
-          auto fieldop = static_cast<IRFieldInstruction*>(insn);
-          auto field = resolve_field(fieldop->field(), FieldSearch::Static);
+        if (insn->has_field() && is_sfield_op(insn->opcode())) {
+          auto field = resolve_field(insn->get_field(), FieldSearch::Static);
           if (field == nullptr || !field->is_concrete()) return;
           if (inline_field.count(field) == 0) return;
           check_if_tracked_sget(method,

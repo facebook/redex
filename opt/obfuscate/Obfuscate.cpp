@@ -100,26 +100,24 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
   walk_opcodes(scope,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* instr) {
-      if (instr->has_fields()) {
-        IRFieldInstruction* field_instr = static_cast<IRFieldInstruction*>(instr);
-        DexField* field_ref = field_instr->field();
+      if (instr->has_field()) {
+        DexField* field_ref = instr->get_field();
         if (field_ref->is_def()) return;
         DexField* field_def =
             find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
         if (field_def != nullptr) {
           TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
-          field_instr->rewrite_field(field_def);
+          instr->set_field(field_def);
         }
-      } else if (instr->has_methods()) {
-        IRMethodInstruction* meth_instr = static_cast<IRMethodInstruction*>(instr);
-        DexMethod* method_ref = meth_instr->get_method();
+      } else if (instr->has_method()) {
+        DexMethod* method_ref = instr->get_method();
         if (method_ref->is_def()) return;
         DexMethod* method_def =
             find_renamable_ref(method_ref, m_ref_def_cache,
                 method_name_mapping);
         if (method_def != nullptr) {
           TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
-          meth_instr->rewrite_method(method_def);
+          instr->set_method(method_def);
         }
       }
     });

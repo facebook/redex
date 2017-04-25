@@ -95,9 +95,8 @@ std::unordered_set<DexMethod*> find_private_methods(
     scope,
     [](DexMethod*) { return true; },
     [&](DexMethod* caller, IRInstruction* inst) {
-      if (!inst->has_methods()) return;
-      auto mi = static_cast<IRMethodInstruction*>(inst);
-      auto callee = mi->get_method();
+      if (!inst->has_method()) return;
+      auto callee = inst->get_method();
       if (!callee->is_concrete()) {
         callee = resolve_method(callee, MethodSearch::Any);
         if (!callee) return;
@@ -119,17 +118,16 @@ void fix_call_sites_private(
     scope,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* inst) {
-      if (!inst->has_methods()) return;
-      auto mi = static_cast<IRMethodInstruction*>(inst);
-      auto callee = mi->get_method();
+      if (!inst->has_method()) return;
+      auto callee = inst->get_method();
       if (!callee->is_concrete()) {
         callee = resolve_method(callee, MethodSearch::Any);
       }
       if (privates.count(callee)) {
-        mi->rewrite_method(callee);
+        inst->set_method(callee);
         if (!is_static(callee)) {
-          mi->set_opcode(
-            is_invoke_range(mi->opcode())
+          inst->set_opcode(
+            is_invoke_range(inst->opcode())
             ? OPCODE_INVOKE_DIRECT_RANGE
             : OPCODE_INVOKE_DIRECT);
         }

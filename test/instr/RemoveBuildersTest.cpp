@@ -30,7 +30,7 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
       DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
     } else if (is_iget(opcode) || is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->field();
+      DexField* field = static_cast<const DexOpcodeField*>(insn)->get_field();
       EXPECT_NE(builder_type, field->get_class());
     }
   }

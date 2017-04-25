@@ -447,8 +447,8 @@ int rename_virtual_scopes(
 void collect_refs(Scope& scope, RefsMap& def_refs) {
   walk_opcodes(scope, [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* insn) {
-      if (!insn->has_methods()) return;
-      auto callee = static_cast<IRMethodInstruction*>(insn)->get_method();
+      if (!insn->has_method()) return;
+      auto callee = insn->get_method();
       if (callee->is_concrete()) return;
       auto cls = type_class(callee->get_class());
       if (cls == nullptr || cls->is_external()) return;

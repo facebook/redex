@@ -51,8 +51,8 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     auto mt = m->get_code();
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
 
-    auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_callee);
-    invoke->set_arg_word_count(2);
+    auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke->set_method(m_callee)->set_arg_word_count(2);
     // reusing the same register for two separate arguments
     invoke->set_src(0, 0);
     invoke->set_src(1, 0);
@@ -64,11 +64,11 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    IRMethodInstruction* mop = nullptr;
+    IRInstruction* mop = nullptr;
     for (const auto& mie : InstructionIterable(m->get_code())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = static_cast<IRMethodInstruction*>(insn);
+        mop = insn;
         assert(mop->get_method() == m_callee);
         break;
       }
@@ -120,8 +120,8 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     // if block
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
     mt->push_back(*branch);
-    auto invoke = new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_callee);
-    invoke->set_arg_word_count(0);
+    auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke->set_method(m_callee)->set_arg_word_count(0);
     mt->push_back(invoke);
     mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}));
     // fallthrough to main block
@@ -136,11 +136,11 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    IRMethodInstruction* mop = nullptr;
+    IRInstruction* mop = nullptr;
     for (const auto& mie : InstructionIterable(m->get_code())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = static_cast<IRMethodInstruction*>(insn);
+        mop = insn;
         assert(mop->get_method() == m_callee);
         break;
       }

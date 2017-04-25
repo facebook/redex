@@ -155,8 +155,7 @@ class RedundantMoveEliminationImpl {
     case OPCODE_CONST_STRING:
     case OPCODE_CONST_STRING_JUMBO: {
       if (m_config.eliminate_const_strings) {
-        auto str_instr = static_cast<IRStringInstruction*>(insn);
-        DexString* str = str_instr->get_string();
+        DexString* str = insn->get_string();
         return RegisterValue{str};
       } else {
         return RegisterValue::none();
@@ -164,8 +163,7 @@ class RedundantMoveEliminationImpl {
     }
     case OPCODE_CONST_CLASS: {
       if (m_config.eliminate_const_classes) {
-        auto type_instr = static_cast<IRTypeInstruction*>(insn);
-        DexType* type = type_instr->get_type();
+        DexType* type = insn->get_type();
         return RegisterValue{type};
       } else {
         return RegisterValue::none();

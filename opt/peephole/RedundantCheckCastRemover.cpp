@@ -58,9 +58,9 @@ void RedundantCheckCastRemover::run() {
 bool RedundantCheckCastRemover::can_remove_check_cast(IRInstruction** insns,
                                                       size_t size) {
   always_assert(size == 3);
-  IRMethodInstruction* invoke_op = static_cast<IRMethodInstruction*>(insns[0]);
+  IRInstruction* invoke_op = insns[0];
   IRInstruction* move_result_op = insns[1];
-  IRTypeInstruction* check_cast_op = static_cast<IRTypeInstruction*>(insns[2]);
+  IRInstruction* check_cast_op = insns[2];
 
   auto invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
   auto check_type = check_cast_op->get_type();

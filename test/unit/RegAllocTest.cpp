@@ -23,10 +23,6 @@ std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
 }
 
-std::ostream& operator<<(std::ostream& os, const IRTypeInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 std::ostream& operator<<(std::ostream& os,
                          const HighRegMoveInserter::SwapInfo& info) {
   return os << "SwapInfo(" << info.low_reg_swap << ", " << info.range_swap

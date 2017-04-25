@@ -67,9 +67,9 @@ void MethodBlock::invoke(DexOpcode opcode,
                          DexMethod* meth,
                          const std::vector<Location>& args) {
   always_assert(is_invoke(opcode));
-  auto invk = new IRMethodInstruction(opcode, meth);
+  auto invk = new IRInstruction(opcode);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
-  invk->set_arg_word_count(arg_count);
+  invk->set_method(meth)->set_arg_word_count(arg_count);
   for (uint16_t i = 0; i < arg_count; i++) {
     auto arg = args.at(i);
     invk->set_src(i, reg_num(arg));
@@ -78,8 +78,8 @@ void MethodBlock::invoke(DexOpcode opcode,
 }
 
 void MethodBlock::new_instance(DexType* type, Location& dst) {
-  auto insn = new IRTypeInstruction(OPCODE_NEW_INSTANCE, type);
-  insn->set_dest(reg_num(dst));
+  auto insn = new IRInstruction(OPCODE_NEW_INSTANCE);
+  insn->set_type(type)->set_dest(reg_num(dst));
   push_instruction(insn);
 }
 
@@ -167,13 +167,14 @@ void MethodBlock::ifield_op(DexOpcode opcode,
                             Location& src_or_dst) {
   always_assert(is_ifield_op(opcode));
   if (is_iget(opcode)) {
-    auto iget = new IRFieldInstruction(opcode, field);
-    iget->set_dest(reg_num(src_or_dst));
+    auto iget = new IRInstruction(opcode);
+    iget->set_field(field)->set_dest(reg_num(src_or_dst));
     src_or_dst.type = field->get_class();
     iget->set_src(0, reg_num(obj));
     push_instruction(iget);
   } else {
-    auto iput = new IRFieldInstruction(opcode, field);
+    auto iput = new IRInstruction(opcode);
+    iput->set_field(field);
     iput->set_src(0, reg_num(src_or_dst));
     iput->set_src(1, reg_num(obj));
     push_instruction(iput);
@@ -257,13 +258,13 @@ void MethodBlock::sfield_op(DexOpcode opcode,
                             Location& src_or_dst) {
   always_assert(is_sfield_op(opcode));
   if (is_sget(opcode)) {
-    auto sget = new IRFieldInstruction(opcode, field);
-    sget->set_dest(reg_num(src_or_dst));
+    auto sget = new IRInstruction(opcode);
+    sget->set_field(field)->set_dest(reg_num(src_or_dst));
     src_or_dst.type = field->get_class();
     push_instruction(sget);
   } else {
-    auto sput = new IRFieldInstruction(opcode, field);
-    sput->set_src(0, reg_num(src_or_dst));
+    auto sput = new IRInstruction(opcode);
+    sput->set_field(field)->set_src(0, reg_num(src_or_dst));
     push_instruction(sput);
   }
 }
@@ -342,7 +343,8 @@ void MethodBlock::load_const(Location& loc, double value) {
 
 void MethodBlock::load_const(Location& loc, DexString* value) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRStringInstruction(OPCODE_CONST_STRING, value);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
+  load->set_string(value);
   load->set_dest(reg_num(loc));
   loc.type = get_string_type();
   push_instruction(load);
@@ -350,7 +352,8 @@ void MethodBlock::load_const(Location& loc, DexString* value) {
 
 void MethodBlock::load_const(Location& loc, DexType* value) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRTypeInstruction(OPCODE_CONST_CLASS, value);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST_CLASS);
+  load->set_type(value);
   load->set_dest(reg_num(loc));
   loc.type = get_class_type();
   push_instruction(load);

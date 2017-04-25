@@ -45,28 +45,24 @@ void build_refs(
     scope,
     [](const DexMethod*) { return true; },
     [&](const DexMethod* meth, IRInstruction* insn) {
-      if (insn->has_types()) {
-        const auto top = static_cast<IRTypeInstruction*>(insn);
-        const auto tref = type_class(top->get_type());
+      if (insn->has_type()) {
+        const auto tref = type_class(insn->get_type());
         if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
         return;
       }
-      if (insn->has_fields()) {
-        const auto top = static_cast<IRFieldInstruction*>(insn);
-        const auto tref = type_class(top->field()->get_class());
+      if (insn->has_field()) {
+        const auto tref = type_class(insn->get_field()->get_class());
         if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
         return;
       }
-      if (insn->has_methods()) {
-        const auto mop = static_cast<IRMethodInstruction*>(insn);
-
+      if (insn->has_method()) {
         // log methods class type, for virtual methods, this may not actually exist and true
         // verification would require that the binding refers to a class that is valid.
-        const auto mref = type_class(mop->get_method()->get_class());
+        const auto mref = type_class(insn->get_method()->get_class());
         if (mref) class_refs[mref].emplace(type_class(meth->get_class()));
 
         // don't log return type or types of parameters for now, but this is how you might do it.
-        //const auto proto = mop->get_method()->get_proto();
+        //const auto proto = insn->get_method()->get_proto();
         // const auto rref = type_class(proto->get_rtype());
         // if (rref) class_refs[rref].emplace(type_class(meth->get_class()));
         // for (const auto arg : proto->get_args()->get_type_list()) {

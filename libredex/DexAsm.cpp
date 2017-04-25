@@ -142,34 +142,38 @@ IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
   return insn;
 }
 
-IRStringInstruction* dasm(DexOpcode opcode,
-                          DexString* string,
-                          std::initializer_list<Operand> args) {
-  auto insn = new IRStringInstruction(opcode, string);
+IRInstruction* dasm(DexOpcode opcode,
+                    DexString* string,
+                    std::initializer_list<Operand> args) {
+  auto insn = new IRInstruction(opcode);
+  insn->set_string(string);
   assemble(insn, args);
   return insn;
 }
 
-IRTypeInstruction* dasm(DexOpcode opcode,
-                        DexType* type,
-                        std::initializer_list<Operand> args) {
-  auto insn = new IRTypeInstruction(opcode, type);
+IRInstruction* dasm(DexOpcode opcode,
+                    DexType* type,
+                    std::initializer_list<Operand> args) {
+  auto insn = new IRInstruction(opcode);
+  insn->set_type(type);
   assemble(insn, args);
   return insn;
 }
 
-IRFieldInstruction* dasm(DexOpcode opcode,
-                         DexField* field,
-                         std::initializer_list<Operand> args) {
-  auto insn = new IRFieldInstruction(opcode, field);
+IRInstruction* dasm(DexOpcode opcode,
+                    DexField* field,
+                    std::initializer_list<Operand> args) {
+  auto insn = new IRInstruction(opcode);
+  insn->set_field(field);
   assemble(insn, args);
   return insn;
 }
 
-IRMethodInstruction* dasm(DexOpcode opcode,
-                          DexMethod* method,
-                          std::initializer_list<Operand> args) {
-  auto insn = new IRMethodInstruction(opcode, method);
+IRInstruction* dasm(DexOpcode opcode,
+                    DexMethod* method,
+                    std::initializer_list<Operand> args) {
+  auto insn = new IRInstruction(opcode);
+  insn->set_method(method);
   insn->set_arg_word_count(args.size());
   assemble(insn, args);
   return insn;

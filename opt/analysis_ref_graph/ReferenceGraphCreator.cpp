@@ -143,15 +143,13 @@ CreateReferenceGraphPass::instruction_ref_builder(
   return ([this, &scope, &class_refs](const DexMethod* meth, IRInstruction* insn) {
     const auto* enclosing_class = type_class(meth->get_class());
 
-    if (insn->has_types()) {
-      const auto* top = static_cast<IRTypeInstruction*>(insn);
-      const auto* tref = top->get_type();
+    if (insn->has_type()) {
+      const auto* tref = insn->get_type();
       if (tref) class_refs[enclosing_class].emplace(tref);
       return;
     }
-    if (insn->has_fields()) {
-      const auto* top = static_cast<IRFieldInstruction*>(insn);
-      auto* field = top->field();
+    if (insn->has_field()) {
+      auto* field = insn->get_field();
       if (CreateReferenceGraphPass::config.resolve_fields) {
         field = resolve_field(field);
       }
@@ -161,9 +159,8 @@ CreateReferenceGraphPass::instruction_ref_builder(
       if (field_type) class_refs[enclosing_class].emplace(field_type);
       return;
     }
-    if (insn->has_methods()) {
-      const auto* mop = static_cast<IRMethodInstruction*>(insn);
-      auto* method = mop->get_method();
+    if (insn->has_method()) {
+      auto* method = insn->get_method();
       if (CreateReferenceGraphPass::config.resolve_methods) {
         method = resolve_method(method, MethodSearch::Any);
       }

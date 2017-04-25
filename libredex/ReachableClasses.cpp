@@ -223,8 +223,8 @@ void init_permanently_reachable_classes(
       scope,
       match,
       [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
-        auto const_string = static_cast<IRStringInstruction*>(insns[0]);
-        auto invoke_static = static_cast<IRMethodInstruction*>(insns[1]);
+        auto const_string = insns[0];
+        auto invoke_static = insns[1];
         // Make sure that the registers agree
         auto src = opcode::has_range(invoke_static->opcode())
                        ? invoke_static->range_base()

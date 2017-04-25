@@ -298,24 +298,24 @@ void AnalysisImpl::collect_method_defs() {
  */
 void AnalysisImpl::analyze_opcodes() {
 
-  auto check_arg = [&](DexType* type, DexMethod* meth, IRMethodInstruction* mop) {
+  auto check_arg = [&](DexType* type, DexMethod* meth, IRInstruction* insn) {
     auto intf = get_and_check_single_impl(type);
     if (intf) {
-      single_impls[intf].methodrefs[meth].insert(mop);
+      single_impls[intf].methodrefs[meth].insert(insn);
     }
   };
 
-  auto check_sig = [&](DexMethod* meth, IRMethodInstruction* mop) {
+  auto check_sig = [&](DexMethod* meth, IRInstruction* insn) {
     // check the sig for single implemented interface
     const auto proto = meth->get_proto();
-    check_arg(proto->get_rtype(), meth, mop);
+    check_arg(proto->get_rtype(), meth, insn);
     const auto args = proto->get_args();
     for (const auto arg : args->get_type_list()) {
-      check_arg(arg, meth, mop);
+      check_arg(arg, meth, insn);
     }
   };
 
-  auto check_field = [&](DexField* field, IRFieldInstruction* fop) {
+  auto check_field = [&](DexField* field, IRInstruction* insn) {
     auto cls = field->get_class();
     cls = get_and_check_single_impl(cls);
     if (cls) {
@@ -324,7 +324,7 @@ void AnalysisImpl::analyze_opcodes() {
     const auto type = field->get_type();
     auto intf = get_and_check_single_impl(type);
     if (intf) {
-      single_impls[intf].fieldrefs[field].push_back(fop);
+      single_impls[intf].fieldrefs[field].push_back(insn);
     }
   };
 
@@ -340,8 +340,7 @@ void AnalysisImpl::analyze_opcodes() {
                    // different instances to retrieve, so we simply drop all
                    // single impl
                    // that are used with const_class
-                   auto top = static_cast<IRTypeInstruction*>(insn);
-                   const auto typeref = top->get_type();
+                   const auto typeref = insn->get_type();
                    auto intf = get_and_check_single_impl(typeref);
                    if (intf) {
                      escape_interface(intf, CONST_CLASS);
@@ -354,10 +353,9 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY:
                  case OPCODE_FILLED_NEW_ARRAY_RANGE: {
-                   auto top = static_cast<IRTypeInstruction*>(insn);
-                   auto intf = get_and_check_single_impl(top->get_type());
+                   auto intf = get_and_check_single_impl(insn->get_type());
                    if (intf) {
-                     single_impls[intf].typerefs.push_back(top);
+                     single_impls[intf].typerefs.push_back(insn);
                    }
                    return;
                  }
@@ -368,13 +366,12 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_IPUT:
                  case OPCODE_IPUT_WIDE:
                  case OPCODE_IPUT_OBJECT: {
-                   const auto fop = static_cast<IRFieldInstruction*>(insn);
                    auto field =
-                       resolve_field(fop->field(), FieldSearch::Instance);
+                       resolve_field(insn->get_field(), FieldSearch::Instance);
                    if (field == nullptr) {
-                     field = fop->field();
+                     field = insn->get_field();
                    }
-                   check_field(field, fop);
+                   check_field(field, insn);
                    return;
                  }
                  case OPCODE_SGET:
@@ -383,13 +380,12 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_SPUT:
                  case OPCODE_SPUT_WIDE:
                  case OPCODE_SPUT_OBJECT: {
-                   const auto fop = static_cast<IRFieldInstruction*>(insn);
                    auto field =
-                       resolve_field(fop->field(), FieldSearch::Static);
+                       resolve_field(insn->get_field(), FieldSearch::Static);
                    if (field == nullptr) {
-                     field = fop->field();
+                     field = insn->get_field();
                    }
-                   check_field(field, fop);
+                   check_field(field, insn);
                    return;
                  }
                  // method ref
@@ -397,8 +393,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_INTERFACE_RANGE: {
                    // if it is an invoke on the interface method, collect it as
                    // such
-                   const auto mop = static_cast<IRMethodInstruction*>(insn);
-                   const auto meth = mop->get_method();
+                   const auto meth = insn->get_method();
                    const auto owner = meth->get_class();
                    const auto intf = get_and_check_single_impl(owner);
                    if (intf) {
@@ -409,10 +404,10 @@ void AnalysisImpl::analyze_opcodes() {
                          meths.end()) {
                        escape_interface(intf, UNKNOWN_MREF);
                      } else {
-                       single_impls[intf].intf_methodrefs[meth].insert(mop);
+                       single_impls[intf].intf_methodrefs[meth].insert(insn);
                      }
                    }
-                   check_sig(meth, mop);
+                   check_sig(meth, insn);
                    return;
                  }
 
@@ -424,9 +419,8 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INVOKE_VIRTUAL_RANGE:
                  case OPCODE_INVOKE_SUPER:
                  case OPCODE_INVOKE_SUPER_RANGE: {
-                   const auto mop = static_cast<IRMethodInstruction*>(insn);
-                   const auto meth = mop->get_method();
-                   check_sig(meth, mop);
+                   const auto meth = insn->get_method();
+                   check_sig(meth, insn);
                    return;
                  }
                  default:

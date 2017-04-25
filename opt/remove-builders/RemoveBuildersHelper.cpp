@@ -55,7 +55,7 @@ void fields_mapping(const IRInstruction* insn,
 
   if ((is_setter && is_iput(insn->opcode())) ||
       (!is_setter && is_iget(insn->opcode()))) {
-    auto field = static_cast<const IRFieldInstruction*>(insn)->field();
+    auto field = insn->get_field();
 
     if (field->get_class() == builder->get_type()) {
       uint16_t current = is_setter ? insn->src(0) : insn->dest();
@@ -218,8 +218,7 @@ std::vector<DexMethod*> get_non_init_methods(IRCode* code,
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto invoked =
-          static_cast<const IRMethodInstruction*>(insn)->get_method();
+      auto invoked = insn->get_method();
       // TODO(emmasevastian): Treat constructors separately.
       if (invoked->get_class() == builder_type && !is_init(invoked)) {
         methods.emplace_back(invoked);
@@ -336,14 +335,14 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
       auto& fields_in_insn = fields_in->at(mie.insn);
 
       if (is_iput(opcode)) {
-        auto field = static_cast<const IRFieldInstruction*>(insn)->field();
+        auto field = insn->get_field();
         if (field->get_class() == builder->get_type()) {
           deletes.push_back(insn);
           continue;
         }
 
       } else if (is_iget(opcode)) {
-        auto field = static_cast<const IRFieldInstruction*>(insn)->field();
+        auto field = insn->get_field();
         if (field->get_class() == builder->get_type()) {
           DexOpcode move_opcode = get_move_opcode(insn);
           bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
@@ -435,15 +434,14 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
         }
 
       } else if (opcode == OPCODE_NEW_INSTANCE) {
-        DexType* cls = static_cast<IRTypeInstruction*>(insn)->get_type();
+        DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
           deletes.push_back(insn);
           continue;
         }
 
       } else if (is_invoke(opcode)) {
-        auto invoked =
-            static_cast<const IRMethodInstruction*>(insn)->get_method();
+        auto invoked = insn->get_method();
         if (invoked->get_class() == builder->get_type() &&
             invoked->get_name() == init) {
           deletes.push_back(insn);

@@ -52,16 +52,16 @@ TEST(IRInstruction, RoundTrip) {
     if (insn->has_arg_word_count()) {
       insn->set_arg_word_count(5);
     }
-    if (insn->has_strings()) {
-      static_cast<DexOpcodeString*>(insn)->rewrite_string(str);
-    } else if (insn->has_types()) {
-      static_cast<DexOpcodeType*>(insn)->rewrite_type(ty);
-    } else if (insn->has_fields()) {
-      static_cast<DexOpcodeField*>(insn)->rewrite_field(field);
-    } else if (insn->has_methods()) {
-      static_cast<DexOpcodeMethod*>(insn)->rewrite_method(method);
+    if (insn->has_string()) {
+      static_cast<DexOpcodeString*>(insn)->set_string(str);
+    } else if (insn->has_type()) {
+      static_cast<DexOpcodeType*>(insn)->set_type(ty);
+    } else if (insn->has_field()) {
+      static_cast<DexOpcodeField*>(insn)->set_field(field);
+    } else if (insn->has_method()) {
+      static_cast<DexOpcodeMethod*>(insn)->set_method(method);
     }
-    EXPECT_EQ(*IRInstruction::make(insn)->to_dex_instruction(), *insn)
+    EXPECT_EQ(*(new IRInstruction(insn))->to_dex_instruction(), *insn)
         << "at " << show(op);
 
     delete insn;

@@ -211,8 +211,8 @@ void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
   );
 
   walk_matching_opcodes(scope, match, [&](const DexMethod*, size_t, IRInstruction** insns){
-    IRStringInstruction* const_string = (IRStringInstruction*)insns[0];
-    IRMethodInstruction* invoke_static = (IRMethodInstruction*)insns[1];
+    IRInstruction* const_string = insns[0];
+    IRInstruction* invoke_static = insns[1];
     // Make sure that the registers agree
     auto src = opcode::has_range(invoke_static->opcode())
                    ? invoke_static->range_base()
@@ -251,9 +251,8 @@ void RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
   walk_opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
-        if (insn->has_methods()) {
-          auto methodop = static_cast<IRMethodInstruction*>(insn);
-          auto callee = methodop->get_method();
+        if (insn->has_method()) {
+          auto callee = insn->get_method();
           if (callee == nullptr || !callee->is_concrete()) return;
           auto callee_method_cls = callee->get_class();
           if (refl_map.count(callee_method_cls) == 0) return;

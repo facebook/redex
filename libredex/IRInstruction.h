@@ -9,27 +9,30 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
-
 #include "DexInstruction.h"
 
-class IRInstruction : public Gatherable {
+class IRInstruction final {
  public:
   explicit IRInstruction(DexOpcode op);
+  explicit IRInstruction(const DexInstruction* dex_insn);
 
-  static IRInstruction* make(const DexInstruction*);
-  virtual IRInstruction* clone() const { return new IRInstruction(*this); }
-  virtual DexInstruction* to_dex_instruction() const;
+  DexInstruction* to_dex_instruction() const;
   uint16_t size() const;
   bool operator==(const IRInstruction&) const;
   bool operator!=(const IRInstruction& that) const {
     return !(*this == that);
   }
 
-  bool has_strings() const { return m_ref_type == REF_STRING; }
-  bool has_types() const { return m_ref_type == REF_TYPE; }
-  bool has_fields() const { return m_ref_type == REF_FIELD; }
-  bool has_methods() const { return m_ref_type == REF_METHOD; }
+  bool has_string() const {
+    return opcode::ref(m_opcode) == opcode::Ref::String;
+  }
+  bool has_type() const { return opcode::ref(m_opcode) == opcode::Ref::Type; }
+  bool has_field() const {
+    return opcode::ref(m_opcode) == opcode::Ref::Field;
+  }
+  bool has_method() const {
+    return opcode::ref(m_opcode) == opcode::Ref::Method;
+  }
 
   /*
    * Number of registers used.
@@ -105,139 +108,86 @@ class IRInstruction : public Gatherable {
     return this;
   }
 
- protected:
-  enum {
-    REF_NONE,
-    REF_STRING,
-    REF_TYPE,
-    REF_FIELD,
-    REF_METHOD
-  } m_ref_type{REF_NONE};
+  DexString* get_string() const {
+    always_assert(has_string());
+    return m_string;
+  }
 
-  // use make()
-  explicit IRInstruction(const DexInstruction* dex_insn);
+  IRInstruction* set_string(DexString* str) {
+    always_assert(has_string());
+    m_string = str;
+    return this;
+  }
 
-  // use clone() instead
-  IRInstruction(const IRInstruction&) = default;
-  IRInstruction& operator=(const IRInstruction&) = default;
+  DexType* get_type() const {
+    always_assert(has_type());
+    return m_type;
+  }
 
-  void set_dex_instruction_args(DexInstruction*) const;
+  IRInstruction* set_type(DexType* type) {
+    always_assert(has_type());
+    m_type = type;
+    return this;
+  }
+
+  DexField* get_field() const {
+    always_assert(has_field());
+    return m_field;
+  }
+
+  IRInstruction* set_field(DexField* field) {
+    always_assert(has_field());
+    m_field = field;
+    return this;
+  }
+
+  DexMethod* get_method() const {
+    always_assert(has_method());
+    return m_method;
+  }
+
+  IRInstruction* set_method(DexMethod* method) {
+    always_assert(has_method());
+    m_method = method;
+    return this;
+  }
+
+  void gather_strings(std::vector<DexString*>& lstring) const {
+    if (has_string()) {
+      lstring.push_back(m_string);
+    }
+  }
+
+  void gather_types(std::vector<DexType*>& ltype) const {
+    if (has_type()) {
+      ltype.push_back(m_type);
+    }
+  }
+
+  void gather_fields(std::vector<DexField*>& lfield) const {
+    if (has_field()) {
+      lfield.push_back(m_field);
+    }
+  }
+
+  void gather_methods(std::vector<DexMethod*>& lmethod) const {
+    if (has_method()) {
+      lmethod.push_back(m_method);
+    }
+  }
 
  private:
   DexOpcode m_opcode;
   std::vector<uint16_t> m_srcs;
   uint16_t m_dest {0};
+  union {
+    DexString* m_string {nullptr};
+    DexType* m_type;
+    DexField* m_field;
+    DexMethod* m_method;
+  };
 
   uint64_t m_literal {0};
   int32_t m_offset {0};
   std::pair<uint16_t, uint16_t> m_range {0, 0};
-};
-
-class IRStringInstruction : public IRInstruction {
- private:
-  DexString* m_string;
-
- public:
-  IRStringInstruction(DexOpcode op, DexString* str)
-      : IRInstruction(op), m_string(str) {
-    m_ref_type = REF_STRING;
-  }
-  explicit IRStringInstruction(const DexOpcodeString* insn)
-      : IRInstruction(insn), m_string(insn->get_string()) {
-    m_ref_type = REF_STRING;
-  }
-
-  virtual void gather_strings(std::vector<DexString*>& lstring) const override {
-    lstring.push_back(m_string);
-  }
-  virtual IRStringInstruction* clone() const override {
-    return new IRStringInstruction(*this);
-  }
-  virtual DexInstruction* to_dex_instruction() const override;
-
-  DexString* get_string() const { return m_string; }
-
-  bool jumbo() const { return opcode() == OPCODE_CONST_STRING_JUMBO; }
-
-  void rewrite_string(DexString* str) { m_string = str; }
-};
-
-class IRTypeInstruction : public IRInstruction {
- private:
-  DexType* m_type;
-
- public:
-  IRTypeInstruction(DexOpcode op, DexType* ty)
-      : IRInstruction(op), m_type(ty) {
-    m_ref_type = REF_TYPE;
-  }
-  explicit IRTypeInstruction(const DexOpcodeType* insn)
-      : IRInstruction(insn), m_type(insn->get_type()) {
-    m_ref_type = REF_TYPE;
-  }
-
-  virtual void gather_types(std::vector<DexType*>& ltype) const override {
-    ltype.push_back(m_type);
-  }
-  virtual IRTypeInstruction* clone() const override {
-    return new IRTypeInstruction(*this);
-  }
-  virtual DexInstruction* to_dex_instruction() const override;
-
-  DexType* get_type() const { return m_type; }
-
-  void rewrite_type(DexType* type) { m_type = type; }
-};
-
-class IRFieldInstruction : public IRInstruction {
- private:
-  DexField* m_field;
-
- public:
-  IRFieldInstruction(DexOpcode op, DexField* field)
-      : IRInstruction(op), m_field(field) {
-    m_ref_type = REF_FIELD;
-  }
-  explicit IRFieldInstruction(const DexOpcodeField* insn)
-      : IRInstruction(insn), m_field(insn->field()) {
-    m_ref_type = REF_FIELD;
-  }
-
-  virtual void gather_fields(std::vector<DexField*>& lfield) const override {
-    lfield.push_back(m_field);
-  }
-  virtual IRFieldInstruction* clone() const override {
-    return new IRFieldInstruction(*this);
-  }
-  virtual DexInstruction* to_dex_instruction() const override;
-
-  DexField* field() const { return m_field; }
-  void rewrite_field(DexField* field) { m_field = field; }
-};
-
-class IRMethodInstruction : public IRInstruction {
- private:
-  DexMethod* m_method;
-
- public:
-  IRMethodInstruction(DexOpcode op, DexMethod* method)
-      : IRInstruction(op), m_method(method) {
-    m_ref_type = REF_METHOD;
-  }
-  explicit IRMethodInstruction(const DexOpcodeMethod* insn)
-      : IRInstruction(insn), m_method(insn->get_method()) {
-    m_ref_type = REF_METHOD;
-  }
-
-  virtual void gather_methods(std::vector<DexMethod*>& lmethod) const override {
-    lmethod.push_back(m_method);
-  }
-  virtual IRMethodInstruction* clone() const override {
-    return new IRMethodInstruction(*this);
-  }
-  virtual DexInstruction* to_dex_instruction() const override;
-
-  DexMethod* get_method() const { return m_method; }
-
-  void rewrite_method(DexMethod* method) { m_method = method; }
 };

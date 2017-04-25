@@ -32,12 +32,10 @@ using TypeMap = std::unordered_map<DexType*, DexType*>;
 using TypeToTypes = std::unordered_map<DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
 using MethodSet = std::unordered_set<DexMethod*>;
-using TypeOpcodeList = std::vector<IRTypeInstruction*>;
-using MethodOpcodeList = std::vector<IRMethodInstruction*>;
-using MethodOpcodeSet = std::unordered_set<IRMethodInstruction*>;
-using FieldOpcodeList = std::vector<IRFieldInstruction*>;
-using FieldRefToOpcodes = std::unordered_map<DexField*, FieldOpcodeList>;
-using MethodToOpcodes = std::unordered_map<DexMethod*, MethodOpcodeSet>;
+using OpcodeList = std::vector<IRInstruction*>;
+using OpcodeSet = std::unordered_set<IRInstruction*>;
+using FieldRefToOpcodes = std::unordered_map<DexField*, OpcodeList>;
+using MethodToOpcodes = std::unordered_map<DexMethod*, OpcodeSet>;
 using NewMethods = std::unordered_map<DexMethod*, DexMethod*>;
 using NewVTable = std::vector<std::pair<DexMethod*, DexMethod*>>;
 
@@ -118,7 +116,7 @@ struct SingleImplData {
   // methods with the single impl interface in the signature
   MethodSet methoddefs;
   // single impl interface typerefs
-  TypeOpcodeList typerefs;
+  OpcodeList typerefs;
   // single impl interface typed fieldref opcode
   FieldRefToOpcodes fieldrefs;
   // invoke-interface to the single impl interface methods

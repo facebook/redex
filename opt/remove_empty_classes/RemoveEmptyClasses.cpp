@@ -79,20 +79,19 @@ void process_code(std::unordered_set<const DexType*>* class_references,
   // Types referenced in code.
   for (auto const& mie : InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
-    if (opcode->has_types()) {
-      auto typeop = static_cast<IRTypeInstruction*>(opcode);
-      auto typ = array_base_type(typeop->get_type());
+    if (opcode->has_type()) {
+      auto typ = array_base_type(opcode->get_type());
       TRACE(EMPTY, 4, "Adding type from code to keep list: %s\n",
             typ->get_name()->c_str());
       class_references->insert(typ);
     }
-    if (opcode->has_fields()) {
-      auto const& field = static_cast<IRFieldInstruction*>(opcode)->field();
+    if (opcode->has_field()) {
+      auto const& field = opcode->get_field();
       class_references->insert(array_base_type(field->get_class()));
       class_references->insert(array_base_type(field->get_type()));
     }
-    if (opcode->has_methods()) {
-      auto const& m = static_cast<IRMethodInstruction*>(opcode)->get_method();
+    if (opcode->has_method()) {
+      auto const& m = opcode->get_method();
       process_proto(class_references, m);
     }
   }

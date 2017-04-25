@@ -54,13 +54,13 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   // this TRY_START is in a block that is live
   code->push_back(TRY_START, catch_start);
   // this invoke will be considered live code by the dce analysis
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(*goto_mie);
   // this TRY_END is in a block that is dead code
   code->push_back(TRY_END, catch_start);
   code->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
   code->push_back(*catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
   m_method->sync();
@@ -87,15 +87,15 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   target->src = goto_mie;
 
   code->push_back(target);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(*goto_mie);
   // everything onwards is unreachable code because of the goto
 
   code->push_back(TRY_START, catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
   m_method->sync();
@@ -124,7 +124,7 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
   m_method->sync();
@@ -147,14 +147,14 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
 
   // this try wraps an opcode which may throw, should not be removed
   code->push_back(TRY_START, catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(TRY_END, catch_start);
   // this one doesn't wrap a may-throw opcode
   code->push_back(TRY_START, catch_start);
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
-  code->push_back(new IRMethodInstruction(OPCODE_INVOKE_STATIC, m_method));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
   m_method->sync();
