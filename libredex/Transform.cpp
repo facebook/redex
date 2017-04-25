@@ -516,22 +516,16 @@ static void generate_branch_targets(
 }
 
 /*
- * Store the pseudo opcodes representing fill-array-data-payload in a separate
- * hashtable instead of in-line with the rest of the method body.
+ * Attach the pseudo opcodes representing fill-array-data-payload to the
+ * fill-array-data instructions that reference them.
  */
 void gather_array_data(
     FatMethod* fm,
-    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data,
-    std::unordered_map<IRInstruction*, DexOpcodeData*>* m_array_data) {
-  std::unordered_set<MethodItemEntry*> to_delete;
-  for (MethodItemEntry& mentry : *fm) {
-    if (mentry.type != MFLOW_OPCODE) {
-      continue;
-    }
-    auto insn = mentry.insn;
+    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data) {
+  for (MethodItemEntry& mie : InstructionIterable(fm)) {
+    auto insn = mie.insn;
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      auto fopcode = get_target(&mentry, addr_to_data);
-      m_array_data->emplace(insn, fopcode);
+      insn->set_data(get_target(&mie, addr_to_data));
     }
   }
 }
@@ -632,7 +626,7 @@ FatMethod* IRCode::balloon(DexMethod* method) {
     addr += insn->size();
   }
   generate_branch_targets(fmethod, addr_to_mei, addr_to_data);
-  gather_array_data(fmethod, addr_to_data, &m_array_data);
+  gather_array_data(fmethod, addr_to_data);
   associate_try_items(fmethod, *dex_code, addr_to_mei);
   auto debugitem = dex_code->get_debug_item();
   if (debugitem) {
@@ -1248,8 +1242,7 @@ class MethodSplicer {
     case MFLOW_OPCODE:
       cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
       if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-        m_mtcaller->m_array_data.emplace(
-            cloned_mei->insn, m_mtcallee->m_array_data.at(mei->insn)->clone());
+        cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
       }
       return cloned_mei;
     case MFLOW_TARGET:
@@ -1964,7 +1957,7 @@ bool IRCode::try_sync(DexCode* code) {
         ++addr;
       }
       insn->set_offset(addr - mentry->addr);
-      auto fopcode = m_array_data.at(mentry->insn);
+      auto fopcode = mentry->insn->get_data();
       opout.push_back(fopcode);
       addr += fopcode->size();
     }

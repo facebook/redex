@@ -72,6 +72,7 @@ IRInstruction::IRInstruction(const DexInstruction* insn) {
 
 bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_opcode == that.m_opcode &&
+    m_string == that.m_string && // just test one member of the union
     m_srcs == that.m_srcs &&
     m_dest == that.m_dest &&
     m_literal == that.m_literal &&
@@ -134,6 +135,7 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   DexInstruction* insn;
   switch (opcode::ref(opcode())) {
     case opcode::Ref::None:
+    case opcode::Ref::Data:
       insn = new DexInstruction(op);
       break;
     case opcode::Ref::String:

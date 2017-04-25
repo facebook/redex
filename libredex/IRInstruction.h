@@ -152,6 +152,21 @@ class IRInstruction final {
     return this;
   }
 
+  bool has_data() const {
+    return opcode::ref(m_opcode) == opcode::Ref::Data;
+  }
+
+  DexOpcodeData* get_data() const {
+    always_assert(has_data());
+    return m_data;
+  }
+
+  IRInstruction* set_data(DexOpcodeData* data) {
+    always_assert(has_data());
+    m_data = data;
+    return this;
+  }
+
   void gather_strings(std::vector<DexString*>& lstring) const {
     if (has_string()) {
       lstring.push_back(m_string);
@@ -185,6 +200,7 @@ class IRInstruction final {
     DexType* m_type;
     DexField* m_field;
     DexMethod* m_method;
+    DexOpcodeData* m_data;
   };
 
   uint64_t m_literal {0};

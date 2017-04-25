@@ -198,9 +198,6 @@ class IRCode {
   void clear_cfg();
 
   FatMethod* m_fmethod;
-  // mapping from fill-array-data opcodes to the pseudo opcodes containing the
-  // array contents
-  std::unordered_map<IRInstruction*, DexOpcodeData*> m_array_data;
   std::unique_ptr<ControlFlowGraph> m_cfg;
 
   uint16_t m_registers_size {0};

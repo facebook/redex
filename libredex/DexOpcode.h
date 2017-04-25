@@ -69,7 +69,8 @@ enum class Ref {
   String,
   Type,
   Field,
-  Method
+  Method,
+  Data,
 };
 
 } // namespace opcode
@@ -113,7 +114,7 @@ enum class Ref {
   OP(NEW_ARRAY                    , 0x23, f22c_d, Ref::Type)    \
   OP(FILLED_NEW_ARRAY             , 0x24, f35c, Ref::Type)      \
   OP(FILLED_NEW_ARRAY_RANGE       , 0x25, f3rc, Ref::Type)      \
-  OP(FILL_ARRAY_DATA              , 0x26, f31t, Ref::None)      \
+  OP(FILL_ARRAY_DATA              , 0x26, f31t, Ref::Data)      \
   OP(THROW                        , 0x27, f11x_s, Ref::None)    \
   OP(GOTO                         , 0x28, f10t, Ref::None)      \
   OP(GOTO_16                      , 0x29, f20t, Ref::None)      \
