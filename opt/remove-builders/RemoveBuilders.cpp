@@ -292,31 +292,10 @@ void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
                             const std::unordered_set<DexClass*>& kept_builders,
                             Scope& classes) {
 
-  std::unordered_set<DexClass*> class_references;
-  for (const auto& cls : classes) {
-    DexType* super_type = cls->get_super_class();
-    if (!super_type) {
-      continue;
-    }
-
-    DexClass* super_cls = type_class(super_type);
-    if (!super_cls) {
-      continue;
-    }
-
-    if (has_builder_name(super_cls)) {
-      class_references.insert(super_cls);
-    }
-  }
-
   classes.erase(
       remove_if(classes.begin(),
                 classes.end(),
                 [&](DexClass* cls) {
-                  if (class_references.find(cls) != class_references.end()) {
-                    return false;
-                  }
-
                   if (builder.find(cls) != builder.end() &&
                       kept_builders.find(cls) == kept_builders.end()) {
 
@@ -331,6 +310,28 @@ void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
                   return false;
                 }),
       classes.end());
+}
+
+std::unordered_set<DexClass*> get_builders_with_subclasses(Scope& classes) {
+  std::unordered_set<DexClass*> builders_with_subclasses;
+
+  for (const auto& cls : classes) {
+    DexType* super_type = cls->get_super_class();
+    if (!super_type) {
+      continue;
+    }
+
+    DexClass* super_cls = type_class(super_type);
+    if (!super_cls) {
+      continue;
+    }
+
+    if (has_builder_name(super_cls)) {
+      builders_with_subclasses.emplace(super_cls);
+    }
+  }
+
+  return builders_with_subclasses;
 }
 
 } // namespace
@@ -483,7 +484,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       get_trivial_builders(m_builders, no_escapes);
 
   std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
-  std::unordered_set<DexClass*> kept_builders;
+  std::unordered_set<DexClass*> kept_builders =
+      get_builders_with_subclasses(scope);
 
   PassConfig pc(mgr.get_config());
   BuilderTransform b_transform(pc, scope, stores[0].get_dexen()[0]);
@@ -494,6 +496,12 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
     for (DexType* builder : builders) {
       DexClass* builder_cls = type_class(builder);
+
+      // Filter out builders that we cannot remove.
+      if (kept_builders.find(builder_cls) != kept_builders.end()) {
+        continue;
+      }
+
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
         if (!b_transform.inline_builder_methods(method, builder_cls)) {
