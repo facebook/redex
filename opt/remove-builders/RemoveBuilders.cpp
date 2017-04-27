@@ -248,13 +248,13 @@ bool is_trivial_builder_constructor(DexMethod* method) {
  * TODO(emmasevastian): Extend the "definition".
  */
 std::unordered_set<DexClass*> get_trivial_builders(
-    const std::unordered_set<DexClass*>& builder_classes,
+    const std::unordered_set<DexType*>& builders,
     const std::unordered_set<DexType*>& stack_only_builders) {
 
   std::unordered_set<DexClass*> trivial_builders;
 
-  for (DexClass* builder_class : builder_classes) {
-    DexType* builder_type = builder_class->get_type();
+  for (DexType* builder_type : builders) {
+    DexClass* builder_class = type_class(builder_type);
 
     // Filter out builders that escape the stack.
     if (stack_only_builders.find(builder_type) == stack_only_builders.end()) {
@@ -395,8 +395,6 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  std::unordered_set<DexClass*> builder_classes;
-
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
     if (is_annotation(cls) || is_interface(cls)) {
@@ -405,7 +403,6 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
     if (has_builder_name(cls)) {
       m_builders.emplace(cls->get_type());
-      builder_classes.emplace(cls);
     }
   }
 
@@ -483,7 +480,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   }
 
   std::unordered_set<DexClass*> trivial_builders =
-      get_trivial_builders(builder_classes, no_escapes);
+      get_trivial_builders(m_builders, no_escapes);
 
   std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
   std::unordered_set<DexClass*> kept_builders;
