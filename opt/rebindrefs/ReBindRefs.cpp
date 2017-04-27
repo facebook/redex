@@ -128,15 +128,11 @@ struct Rebinder {
         switch (insn->opcode()) {
           case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_INTERFACE_RANGE:
-            rebind_method(insn, InvokeType::Interface);
-            break;
           case OPCODE_INVOKE_VIRTUAL:
           case OPCODE_INVOKE_VIRTUAL_RANGE:
-            rebind_method(insn, InvokeType::Virtual);
-            break;
           case OPCODE_INVOKE_STATIC:
           case OPCODE_INVOKE_STATIC_RANGE:
-            rebind_method(insn, InvokeType::Static);
+            rebind_method(insn, opcode_to_search(insn));
             break;
           case OPCODE_SGET:
           case OPCODE_SGET_WIDE:
@@ -172,12 +168,6 @@ struct Rebinder {
   }
 
  private:
-  enum class InvokeType {
-    Static,
-    Virtual,
-    Interface,
-  };
-
   template<typename T>
   struct RefStats {
     int count = 0;
@@ -213,38 +203,30 @@ struct Rebinder {
     }
   };
 
-  void rebind_method(IRInstruction* mop, InvokeType invoke_type) {
+  void rebind_method(IRInstruction* mop, MethodSearch search) {
     const auto mref = mop->get_method();
-    switch (invoke_type) {
-      case InvokeType::Static:
-        rebind_method_opcode(
-            mop, mref, resolve_method(mref, MethodSearch::Static));
+    if (search == MethodSearch::Virtual) {
+      auto mtype = mref->get_class();
+      if (is_array_clone(mref, mtype)) {
+        rebind_method_opcode(mop, mref, rebind_array_clone(mref));
         return;
-      case InvokeType::Interface:
-        rebind_method_opcode(mop, mref, resolve_intf_methodref(mref));
-        return;
-      case InvokeType::Virtual: {
-        auto mtype = mref->get_class();
-        if (is_array_clone(mref, mtype)) {
-          rebind_method_opcode(mop, mref, rebind_array_clone(mref));
-          return;
-        }
-        // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
-        // and possibly any smart handling of String
-        static auto str = DexType::make_type("Ljava/lang/String;");
-        if (mtype == str) return;
-        auto real_ref = rebind_object_methods(mref);
-        if (real_ref) {
-          rebind_method_opcode(mop, mref, real_ref);
-          return;
-        }
-        auto cls = type_class(mtype);
-        real_ref = bind_to_visible_ancestor(
-            cls, mref->get_name(), mref->get_proto());
+      }
+      // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
+      // and possibly any smart handling of String
+      static auto str = DexType::make_type("Ljava/lang/String;");
+      if (mtype == str) return;
+      auto real_ref = rebind_object_methods(mref);
+      if (real_ref) {
         rebind_method_opcode(mop, mref, real_ref);
         return;
       }
+      auto cls = type_class(mtype);
+      real_ref = bind_to_visible_ancestor(
+          cls, mref->get_name(), mref->get_proto());
+      rebind_method_opcode(mop, mref, real_ref);
+      return;
     }
+    rebind_method_opcode(mop, mref, resolve_method(mref, search));
   }
 
   void rebind_method_opcode(

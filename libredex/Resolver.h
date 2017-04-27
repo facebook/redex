@@ -27,7 +27,9 @@ enum class MethodSearch {
   Direct, // invoke-direct: private and init methods in class only
   Static, // invoke-static: dmethods in class and up the hierarchy
   Virtual, // invoke-virtual: vmethods in class and up the hierarchy
-  Any // any method (vmethods or dmethods) in class and up the hierarchy
+  Any, // any method (vmethods or dmethods) in class and up the hierarchy
+       // but not interfaces
+  Interface // invoke-interface: vmethods in interface class graph
 };
 
 /**
@@ -48,6 +50,9 @@ inline MethodSearch opcode_to_search(IRInstruction* insn) {
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_SUPER_RANGE:
     return MethodSearch::Virtual;
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_INTERFACE_RANGE:
+    return MethodSearch::Interface;
   default:
     // TODO: sort out the interface story.
     return MethodSearch::Any;
@@ -92,6 +97,28 @@ inline DexMethod* resolve_static(
 }
 
 /**
+ * Given a scope defined by DexClass, a name and a proto look for a vmethod
+ * definition in the scope defined by the interface.
+ */
+inline DexMethod* resolve_interface_method(
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
+  if (!is_interface(cls)) return nullptr;
+  return resolve_method(cls, name, proto, MethodSearch::Interface);
+}
+
+/**
+ * Resolve a method ref to its definition.
+ * The search starts from the super for a non interface search and from
+ * the super interfaces for interfaces.
+ * If the type the method belongs to is unknown return nullptr.
+ */
+DexMethod* resolve_method_ref(
+    const DexClass* cls,
+    const DexString* name,
+    const DexProto* proto,
+    MethodSearch search);
+
+/**
  * Resolve a method to its definition.
  * If the method is already a definition return itself.
  * If the type the method belongs to is unknown return nullptr.
@@ -100,7 +127,7 @@ inline DexMethod* resolve_method(DexMethod* method, MethodSearch search) {
   if (method->is_def()) return method;
   auto cls = type_class(method->get_class());
   if (cls == nullptr) return nullptr;
-  return resolve_method(cls, method->get_name(), method->get_proto(), search);
+  return resolve_method_ref(cls, method->get_name(), method->get_proto(), search);
 }
 
 /**
@@ -116,14 +143,11 @@ inline DexMethod* resolve_method(DexMethod* method, MethodSearch search) {
 inline DexMethod* resolve_method(
     DexMethod* method, MethodSearch search, MethodRefCache& ref_cache) {
   if (method->is_def()) return method;
-  auto cls = type_class(method->get_class());
-  if (cls == nullptr) return nullptr;
   auto def = ref_cache.find(method);
   if (def != ref_cache.end()) {
     return def->second;
   }
-  auto mdef = resolve_method(
-      cls, method->get_name(), method->get_proto(), search);
+  auto mdef = resolve_method(method, search);
   if (mdef != nullptr) {
     ref_cache[method] = mdef;
   }
@@ -137,20 +161,6 @@ inline DexMethod* resolve_method(
  * So effectively this returns the method on the top known ancestor.
  */
 DexMethod* find_top_impl(const DexClass*, const DexString*, const DexProto*);
-
-/**
- * Resolve an interface method ref to the real method if one exists. Return the
- * new method if one is found, the original method if the binding was
- * correct or nullptr if the method is unknown.
- * An unknown binding is to a method outside the set of methods defined in
- * the app (say, to a java library).
- * interface A { void m() {} }
- * interface B extends A {}
- * some code may have a method ref like
- * B.m()
- * though m() is not defined on B. This function will return A.m()
- */
-DexMethod* resolve_intf_methodref(DexMethod* meth);
 
 /**
  * Like find_collision, but don't report a match on `except`.

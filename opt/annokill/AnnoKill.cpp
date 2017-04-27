@@ -295,27 +295,7 @@ void referenced_annos(const Scope& scope,
           }
         } else if (insn->has_method()) {
           auto method = insn->get_method();
-          DexMethod* methdef;
-          switch (insn->opcode()) {
-            case OPCODE_INVOKE_INTERFACE:
-            case OPCODE_INVOKE_INTERFACE_RANGE:
-              methdef = resolve_intf_methodref(method);
-              break;
-            case OPCODE_INVOKE_VIRTUAL:
-            case OPCODE_INVOKE_VIRTUAL_RANGE:
-              methdef = resolve_method(method, MethodSearch::Virtual);
-              break;
-            case OPCODE_INVOKE_STATIC:
-            case OPCODE_INVOKE_STATIC_RANGE:
-              methdef = resolve_method(method, MethodSearch::Static);
-              break;
-            case OPCODE_INVOKE_DIRECT:
-            case OPCODE_INVOKE_DIRECT_RANGE:
-              methdef = resolve_method(method, MethodSearch::Direct);
-              break;
-            default:
-              methdef = resolve_method(method, MethodSearch::Any);
-          }
+          DexMethod* methdef = resolve_method(method, opcode_to_search(insn));
           if (methdef != nullptr) method = methdef;
 
           bool referenced = false;

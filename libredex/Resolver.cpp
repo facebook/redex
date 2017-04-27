@@ -31,26 +31,29 @@ DexMethod* check_dmethods(const DexString* name,
   return nullptr;
 }
 
-DexMethod* resolve_intf_methodref(DexType* intf, DexMethod* meth) {
+DexMethod* resolve_intf_method_ref(
+    const DexClass* cls,
+    const DexString* name,
+    const DexProto* proto) {
 
   auto find_method = [&](const DexClass* cls) -> DexMethod* {
     const auto& vmethods = cls->get_vmethods();
     for (const auto vmethod : vmethods) {
-      if (vmethod->get_name() == meth->get_name() &&
-          vmethod->get_proto() == meth->get_proto()) {
+      if (vmethod->get_name() == name &&
+          vmethod->get_proto() == proto) {
         return vmethod;
       }
     }
     return nullptr;
   };
 
-  const DexClass* intf_cls = type_class(intf);
-  if (intf_cls == nullptr) return nullptr;
-  auto method = find_method(intf_cls);
+  auto method = find_method(cls);
   if (method) return method;
-  const auto& super_intfs = intf_cls->get_interfaces()->get_type_list();
-  for (auto super_intf : super_intfs) {
-    method = resolve_intf_methodref(super_intf, meth);
+  const auto& super_intfs = cls->get_interfaces()->get_type_list();
+  for (const auto& super_intf : super_intfs) {
+    const auto& super_intf_cls = type_class(super_intf);
+    if (super_intf_cls == nullptr) continue;
+    method = resolve_intf_method_ref(super_intf_cls, name, proto);
     if (method) return method;
   }
   return nullptr;
@@ -61,6 +64,9 @@ DexMethod* resolve_intf_methodref(DexType* intf, DexMethod* meth) {
 DexMethod* resolve_method(
     const DexClass* cls, const DexString* name,
     const DexProto* proto, MethodSearch search) {
+  if (search == MethodSearch::Interface) {
+    return resolve_intf_method_ref(cls, name, proto);
+  }
   while (cls) {
     if (search == MethodSearch::Virtual || search == MethodSearch::Any) {
       for (auto& vmeth : cls->get_vmethods()) {
@@ -78,8 +84,30 @@ DexMethod* resolve_method(
       }
     }
     // direct methods only look up the given class
-    cls = search != MethodSearch::Direct ? type_class(cls->get_super_class())
+    cls = search != MethodSearch::Direct
+        ? type_class(cls->get_super_class())
         : nullptr;
+  }
+  return nullptr;
+}
+
+DexMethod* resolve_method_ref(
+    const DexClass* cls,
+    const DexString* name,
+    const DexProto* proto,
+    MethodSearch search) {
+  if (search != MethodSearch::Interface) {
+    const auto& super = cls->get_super_class();
+    if (super == nullptr) return nullptr;
+    const auto& super_cls = type_class(super);
+    return resolve_method(super_cls, name, proto, search);
+  }
+  const auto& super_intfs = cls->get_interfaces()->get_type_list();
+  for (const auto& super_intf : super_intfs) {
+    const auto& super_intf_cls = type_class(super_intf);
+    if (super_intf_cls == nullptr) continue;
+    auto method = resolve_intf_method_ref(super_intf_cls, name, proto);
+    if (method) return method;
   }
   return nullptr;
 }
@@ -129,11 +157,6 @@ DexMethod* find_collision_excepting(const DexMethod* except,
     }
   }
   return nullptr;
-}
-
-DexMethod* resolve_intf_methodref(DexMethod* meth) {
-  auto method = resolve_intf_methodref(meth->get_class(), meth);
-  return method;
 }
 
 DexField* resolve_field(

@@ -1197,9 +1197,8 @@ void write_method_mapping(
     // concrete names, so resolve this ref to an actual definition.
     auto resolved_method = [&] {
       if (cls) {
-        auto intf_mr = resolve_intf_methodref(method);
-        if (intf_mr) return intf_mr;
-        auto resm = resolve_method(method, MethodSearch::Any);
+        auto resm = resolve_method(method,
+            is_interface(cls) ? MethodSearch::Interface : MethodSearch::Any);
         if (resm) return resm;
       }
       return method;
