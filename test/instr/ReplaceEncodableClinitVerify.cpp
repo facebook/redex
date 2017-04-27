@@ -23,21 +23,22 @@ struct StaticValueTestCase {
   const uint64_t value;
 };
 
+void assert_class_clinit_exist(DexClasses& classes, const char* name) {
+  auto cls = find_class_named(classes, name);
+  ASSERT_NE(nullptr, cls);
+  auto clinit = cls->get_clinit();
+  ASSERT_NE(nullptr, clinit);
+}
+
 /*
  * Ensure that we are actually replacing encodable clinits by checking
  * that they exist in the pre-redexed binary.
  */
 
 TEST_F(PreVerify, ReplaceEncodableClinit) {
-  auto enc_cls = find_class_named(classes, "Lredex/Encodable;");
-  ASSERT_NE(nullptr, enc_cls);
-  auto enc_clinit = enc_cls->get_clinit();
-  ASSERT_NE(nullptr, enc_clinit);
-
-  auto unenc_cls = find_class_named(classes, "Lredex/UnEncodable;");
-  ASSERT_NE(nullptr, unenc_cls);
-  auto unenc_clinit = unenc_cls->get_clinit();
-  ASSERT_NE(nullptr, unenc_clinit);
+  assert_class_clinit_exist(classes, "Lredex/Encodable;");
+  assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
+  assert_class_clinit_exist(classes, "Lredex/HasWides;");
 }
 
 /*
@@ -69,8 +70,6 @@ TEST_F(PostVerify, ReplaceEncodableClinit) {
     ASSERT_EQ(tc.value, v->value()) << "Unexpected value for field " << tc.name;
   }
 
-  auto unenc_cls = find_class_named(classes, "Lredex/UnEncodable;");
-  ASSERT_NE(nullptr, unenc_cls);
-  auto unenc_clinit = unenc_cls->get_clinit();
-  ASSERT_NE(nullptr, unenc_clinit);
+  assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
+  assert_class_clinit_exist(classes, "Lredex/HasWides;");
 }

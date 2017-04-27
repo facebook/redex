@@ -194,7 +194,7 @@ TEST_F(ConstPropTest, simplePropagate) {
     auto child_field = add_dependent_field(child, "CONST", parent_field);
 
     Scope classes = {parent, child};
-    FinalInlinePass::propagate_constants(classes);
+    FinalInlinePass::propagate_constants_for_test(classes, true);
 
     expect_empty_clinit(child);
     expect_field_eq(child, "CONST", test_case.type, test_case.value);
@@ -242,7 +242,50 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
     add_dependent_field(child, fd.name, parent_field);
   }
   Scope classes = {parent, child};
-  FinalInlinePass::propagate_constants(classes);
+  FinalInlinePass::propagate_constants_for_test(classes, true);
+
+  expect_empty_clinit(child);
+  for (auto fd : field_descs) {
+    expect_field_eq(child, fd.name, fd.type, fd.value);
+  }
+}
+
+// Check that we can do a simple, single level propagation with multiple fields.
+// As source, this would look like:
+//
+//   class Parent {
+//     public static final int CONST_INT = 1111;
+//     public static final bool CONST_BOOL = false;
+//     public static final byte CONST_BYTE = 'b';
+//     public static final char CONST_CHAR = 'c';
+//     public static final short CONST_SHORT = 555;
+//     public static final String CONST_STRING = "foo";
+//   }
+//
+//   class Child {
+//     public static final int CONST_INT = Parent.CONST_INT;
+//     public static final bool CONST_BOOL = Parent.CONST_BOOL;
+//     public static final byte CONST_BYTE = Parent.CONST_BYTE;
+//     public static final char CONST_CHAR = Parent.CONST_CHAR;
+//     public static final short CONST_SHORT = Parent.CONST_SHORT;
+//     public static final String CONST_STRING = Parent.CONST_STRING;
+//   }
+TEST_F(ConstPropTest, simplePropagateMultiFieldNoWide) {
+  FieldDescriptor field_descs[] = {
+      {"CONST_INT", m_int_type, static_cast<uint64_t>(1111)},
+      {"CONST_BOOL", m_bool_type, static_cast<uint64_t>(0)},
+      {"CONST_BYTE", m_byte_type, static_cast<uint64_t>('b')},
+      {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
+      {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
+      {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
+  auto parent = create_class("Lcom/redex/Parent;");
+  auto child = create_class("Lcom/redex/Child;");
+  for (auto fd : field_descs) {
+    auto parent_field = add_concrete_field(parent, fd.name, fd.type, fd.value);
+    add_dependent_field(child, fd.name, parent_field);
+  }
+  Scope classes = {parent, child};
+  FinalInlinePass::propagate_constants_for_test(classes, false);
 
   expect_empty_clinit(child);
   for (auto fd : field_descs) {
@@ -304,7 +347,7 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
   }
 
   Scope classes = {parent, child, grandchild};
-  FinalInlinePass::propagate_constants(classes);
+  FinalInlinePass::propagate_constants_for_test(classes, true);
 
   std::vector<DexClass*> descendants = {child, grandchild};
   for (auto clazz : descendants) {
@@ -403,7 +446,7 @@ TEST_F(ConstPropTest, multiLevelWithSiblings) {
   add_dependent_field(grandchild2, "CONST_STRING", child2_string);
 
   Scope classes = {parent1, parent2, child1, child2, grandchild1, grandchild2};
-  FinalInlinePass::propagate_constants(classes);
+  FinalInlinePass::propagate_constants_for_test(classes, true);
 
   Scope descendents = {child1, child2, grandchild1, grandchild2};
   for (auto clazz : descendents) {

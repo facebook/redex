@@ -16,20 +16,25 @@ class FinalInlinePass : public Pass {
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("keep_class_members", {}, m_keep_class_members);
-    pc.get("remove_class_members", {}, m_remove_class_members);
-    pc.get("replace_encodable_clinits", false, m_replace_encodable_clinits);
-    pc.get("propagate_static_finals", false, m_propagate_static_finals);
+    pc.get("keep_class_members", {}, m_config.keep_class_members);
+    pc.get("remove_class_members", {}, m_config.remove_class_members);
+    pc.get(
+        "replace_encodable_clinits", false, m_config.replace_encodable_clinits);
+    pc.get("propagate_static_finals", false, m_config.propagate_static_finals);
+    pc.get("inline_wide_fields", false, m_config.inline_wide_fields);
   }
 
-  static size_t propagate_constants(Scope& scopes);
+  static size_t propagate_constants_for_test(Scope& scope,
+                                             bool inline_wide_fields);
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
- private:
-  std::vector<std::string> m_keep_class_member_annos;
-  std::vector<std::string> m_keep_class_members;
-  std::vector<std::string> m_remove_class_members;
-  bool m_replace_encodable_clinits;
-  bool m_propagate_static_finals;
+  struct Config {
+    std::vector<std::string> keep_class_member_annos;
+    std::vector<std::string> keep_class_members;
+    std::vector<std::string> remove_class_members;
+    bool replace_encodable_clinits;
+    bool propagate_static_finals;
+    bool inline_wide_fields;
+  } m_config;
 };
