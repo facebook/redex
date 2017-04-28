@@ -36,17 +36,11 @@ class WtoComponentIterator final
     : public std::iterator<std::forward_iterator_tag, WtoComponent<NodeId>> {
  public:
   WtoComponentIterator& operator++() {
-    assert(m_component != nullptr);
-    if (m_component->m_next_component_offset == 0) {
-      // All components of a WTO are stored linearly inside a vector in reverse
-      // order. The subcomponents of an SCC are stored between the head node and
-      // the next component in the WTO. Hence, if the offset of the next
-      // component is 0, it means that the SCC has no subcomponents aside from
-      // its head node.
-      m_component = nullptr;
-    } else {
-      m_component -= m_component->m_next_component_offset;
-    }
+    assert(m_component != m_end);
+    // All components of a WTO are stored linearly inside a vector in reverse
+    // order. The subcomponents of an SCC are stored between the head node and
+    // the next component in the WTO.
+    m_component -= m_component->m_next_component_offset;
     return *this;
   }
 
@@ -65,20 +59,22 @@ class WtoComponentIterator final
   }
 
   const WtoComponent<NodeId>& operator*() {
-    assert(m_component != nullptr);
+    assert(m_component != m_end);
     return *m_component;
   }
 
   const WtoComponent<NodeId>* operator->() {
-    assert(m_component != nullptr);
+    assert(m_component != m_end);
     return m_component;
   }
 
  private:
-  WtoComponentIterator(const WtoComponent<NodeId>* component)
-      : m_component(component) {}
+  WtoComponentIterator(const WtoComponent<NodeId>* component,
+                       const WtoComponent<NodeId>* end)
+      : m_component(component), m_end(end) {}
 
   const WtoComponent<NodeId>* m_component;
+  const WtoComponent<NodeId>* m_end;
 
   template <typename T>
   friend class ::WtoComponent;
@@ -110,9 +106,7 @@ class WtoComponent final {
     // recursively exploring SCCs, it's more efficient to maintain relative
     // offsets between adjacent components. An absolute position of -1 means
     // the end of an SCC or the end of the WTO.
-    m_next_component_offset = (next_component_position == -1)
-                                  ? 0
-                                  : position - next_component_position;
+    m_next_component_offset = position - next_component_position;
   }
 
   /*
@@ -127,27 +121,28 @@ class WtoComponent final {
 
   iterator begin() const {
     assert(is_scc());
-    // The offset can be zero if this is a singleton SCC that is the last
-    // component of the WTO / last subcomponent in a component
-    if (m_next_component_offset <= 1) {
-      return end();
-    }
     // All the components of a WTO are stored linearly inside a vector. A vector
     // guarantees that all its elements are stored adjacently in a contiguous
     // block of memory, which allows us to safely perform pointer arithmetic
     // based on the 'this' pointer (the vector is never resized after the WTO
     // has been constructed).
-    return iterator(this - 1);
+    return iterator(this - 1, this - m_next_component_offset);
   }
 
   iterator end() const {
     assert(is_scc());
-    return iterator(nullptr);
+    auto end_ptr = this - m_next_component_offset;
+    return iterator(end_ptr, end_ptr);
   }
 
  private:
   NodeId m_node;
   Kind m_kind;
+  // The offset to the next component (NOT subcomponent) in the m_wto_space
+  // vector. If we are at the end of the WTO, this will point to one element
+  // before the start of the vector. If we are a subcomponent at the end of
+  // the parent component, this points to one element past the end of the
+  // parent component.
   size_t m_next_component_offset;
 
   template <typename T>
@@ -185,9 +180,14 @@ class WeakTopologicalOrdering final {
     visit(root, &partition);
   }
 
-  iterator begin() const { return iterator(&m_wto_space.back()); }
+  iterator begin() const {
+    return iterator(&m_wto_space.back(), &m_wto_space.front() - 1);
+  }
 
-  iterator end() const { return iterator(nullptr); }
+  iterator end() const {
+    auto end_ptr = &m_wto_space.front() - 1;
+    return iterator(end_ptr, end_ptr);
+  }
 
  private:
   // We keep the notations used by Bourdoncle in the paper to describe the
@@ -215,7 +215,7 @@ class WeakTopologicalOrdering final {
           element = m_stack.top();
           m_stack.pop();
         }
-        push_component(vertex);
+        push_component(vertex, *partition);
       }
       auto kind = loop ? WtoComponent<NodeId>::Kind::Scc
                        : WtoComponent<NodeId>::Kind::Vertex;
@@ -225,8 +225,7 @@ class WeakTopologicalOrdering final {
     return head;
   }
 
-  void push_component(const NodeId& vertex) {
-    int32_t partition = -1;
+  void push_component(const NodeId& vertex, int32_t partition) {
     for (NodeId succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
         visit(succ, &partition);

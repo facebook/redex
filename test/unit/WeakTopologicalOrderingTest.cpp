@@ -30,7 +30,23 @@ class SimpleGraph final {
 
  private:
   std::unordered_map<std::string, std::set<std::string>> m_edges;
+  friend std::ostream& operator<<(std::ostream&, const SimpleGraph&);
 };
+
+/*
+ * Print the graph in the DOT graph description language. You can use Graphviz
+ * or a similar program to render the output.
+ */
+std::ostream& operator<<(std::ostream& o, const SimpleGraph& g) {
+  o << "digraph {\n";
+  for (auto& edge : g.m_edges) {
+    for (auto& succ : edge.second) {
+      o << edge.first << " -> " << succ << "\n";
+    }
+  }
+  o << "}\n";
+  return o;
+}
 
 /*
  * This graph and the corresponding weak topological ordering are described
@@ -113,10 +129,11 @@ TEST(WeakTopologicalOrderingTest, exampleFromThePaper) {
  */
 TEST(WeakTopologicalOrderingTest, SingletonSccAtEnd) {
   {
-    // g:
-    //        +---+
-    //        +   |
-    // 1 +--> 2 <-+
+    //             +--+
+    //             v  |
+    // +---+     +------+
+    // | 1 | --> |  2   |
+    // +---+     +------+
     SimpleGraph g;
     g.add_edge("1", "2");
     g.add_edge("2", "2");
@@ -124,7 +141,7 @@ TEST(WeakTopologicalOrderingTest, SingletonSccAtEnd) {
         "1", [&g](const std::string& n) { return g.successors(n); });
     std::ostringstream s;
     s << wto;
-    EXPECT_EQ("1 (2)", s.str());
+    EXPECT_EQ("1 (2)", s.str()) << "failed to order graph:\n" << g;
     auto it = wto.begin();
     EXPECT_EQ("1", it->head_node());
     ++it;
@@ -134,13 +151,13 @@ TEST(WeakTopologicalOrderingTest, SingletonSccAtEnd) {
   }
 
   {
-    // g:
-    //        +---+
-    //        +   |
-    // 1 +--> 2 <-+
-    // ^     + +
-    // |     | |
-    // +-----+ +----> 3
+    //             +--+
+    //             v  |
+    // +---+     +------+     +---+
+    // | 1 | <-- |  2   | --> | 3 |
+    // +---+     +------+     +---+
+    //   |         ^
+    //   +---------+
     SimpleGraph g;
     g.add_edge("1", "2");
     g.add_edge("2", "2");
@@ -150,7 +167,7 @@ TEST(WeakTopologicalOrderingTest, SingletonSccAtEnd) {
         "1", [&g](const std::string& n) { return g.successors(n); });
     std::ostringstream s;
     s << wto;
-    EXPECT_EQ("(1 (2)) 3", s.str());
+    EXPECT_EQ("(1 (2)) 3", s.str()) << "failed to order graph:\n" << g;
     auto it = wto.begin();
     EXPECT_EQ("1", it->head_node());
     auto it1 = it->begin();
@@ -158,4 +175,61 @@ TEST(WeakTopologicalOrderingTest, SingletonSccAtEnd) {
     EXPECT_TRUE(it1->is_scc());
     EXPECT_EQ(it1->begin(), it1->end());
   }
+}
+
+/*
+ * Check that we correctly handle the edge cases where we have a multi-node
+ * SCC as the last element of the top-level list of components, or as the last
+ * subcomponent in a component
+ */
+TEST(WeakTopologicalOrderingTest, SccAtEnd) {
+  {
+    //             +---------+
+    //             v         |
+    // +---+     +---+     +---+
+    // | 1 | --> | 2 | --> | 3 |
+    // +---+     +---+     +---+
+    SimpleGraph g;
+    g.add_edge("1", "2");
+    g.add_edge("2", "3");
+    g.add_edge("3", "2");
+
+    WeakTopologicalOrdering<std::string> wto(
+        "1", [&g](const std::string& n) { return g.successors(n); });
+    std::ostringstream s;
+    s << wto;
+    EXPECT_EQ("1 (2 3)", s.str()) << "failed to order graph:\n" << g;
+  }
+
+  {
+    //   +-------------------+
+    //   |                   v
+    // +---+     +---+     +---+     +---+
+    // | 2 | <-- | 1 | <-- | 3 | --> | 4 |
+    // +---+     +---+     +---+     +---+
+    //   ^                   |
+    //   +-------------------+
+    SimpleGraph g;
+    g.add_edge("1", "2");
+    g.add_edge("2", "3");
+    g.add_edge("3", "2");
+    g.add_edge("3", "1");
+    g.add_edge("3", "4");
+
+    WeakTopologicalOrdering<std::string> wto(
+        "1", [&g](const std::string& n) { return g.successors(n); });
+    std::ostringstream s;
+    s << wto;
+    EXPECT_EQ("(1 (2 3)) 4", s.str()) << "failed to order graph:\n" << g;
+  }
+}
+
+TEST(WeakTopologicalOrderingTest, InvalidIteratorDeref) {
+  SimpleGraph g;
+  g.add_edge("1", "1");
+  WeakTopologicalOrdering<std::string> wto(
+      "1", [&g](const std::string& n) { return g.successors(n); });
+  EXPECT_ANY_THROW(*wto.end());
+  EXPECT_ANY_THROW(wto.end()->head_node());
+  EXPECT_ANY_THROW(wto.end()++);
 }
