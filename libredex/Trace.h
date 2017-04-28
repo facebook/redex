@@ -64,7 +64,8 @@
   TM(UNTF)                                      \
   TM(VERIFY)                                    \
   TM(ANALYSIS_REF_GRAPH)                        \
-  TM(VIRT)
+  TM(VIRT)                                      \
+  TM(TERA)
 
 enum TraceModule : int {
 #define TM(x) x,

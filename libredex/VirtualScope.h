@@ -178,10 +178,20 @@ using SignatureMap = std::map<const DexString*, ProtoMap>;
  */
 ClassHierarchy build_type_hierarchy(const Scope& scope);
 
+/**
+ * Return the direct children of a type.
+ */
+inline const TypeSet get_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type) {
+  const auto& it = hierarchy.find(type);
+  return it != hierarchy.end() ? it->second : TypeSet();
+}
+
 void get_children(
     const ClassHierarchy& hierarchy,
     const DexType* type,
-    std::vector<const DexType*>& children);
+    TypeSet& children);
 
 /**
  * Given a ClassHierarchy walk the java.lang.Object hierarchy building
