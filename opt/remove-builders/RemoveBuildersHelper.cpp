@@ -148,6 +148,29 @@ IRInstruction* construct_move_instr(uint16_t dest_reg,
   return insn;
 }
 
+IRInstruction* construct_null_instr(uint16_t reg) {
+  IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
+  insn->set_dest(reg);
+  insn->set_literal(0);
+  return insn;
+}
+
+/**
+ * Adds instructions that initializes registers with null.
+ */
+void null_initializations(IRCode* code,
+                          const std::vector<uint16_t>& null_regs) {
+  always_assert(code != nullptr);
+
+  std::vector<IRInstruction*> insns;
+  for (uint16_t null_reg : null_regs) {
+    insns.push_back(construct_null_instr(null_reg));
+  }
+
+  // Adds the instructions at the beginnings.
+  code->insert_after(nullptr, insns);
+}
+
 void add_instr(IRCode* code,
                const IRInstruction* position,
                IRInstruction* insn) {
@@ -216,26 +239,6 @@ void method_updates(DexMethod* method,
   }
 }
 
-std::vector<DexMethod*> get_non_init_methods(IRCode* code,
-                                             DexType* builder_type) {
-  always_assert(code != nullptr);
-  always_assert(builder_type != nullptr);
-
-  std::vector<DexMethod*> methods;
-  for (auto const& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
-      auto invoked = insn->get_method();
-      // TODO(emmasevastian): Treat constructors separately.
-      if (invoked->get_class() == builder_type && !is_init(invoked)) {
-        methods.emplace_back(invoked);
-      }
-    }
-  }
-
-  return methods;
-}
-
 } // namespace
 
 ///////////////////////////////////////////////
@@ -276,10 +279,13 @@ bool FieldsRegs::operator!=(const FieldsRegs& that) const {
 
 //////////////////////////////////////////////
 
-bool BuilderTransform::inline_builder_methods(DexMethod* method,
-                                              DexClass* builder) {
+bool BuilderTransform::inline_methods(
+    DexMethod* method,
+    DexType* type,
+    std::function<std::vector<DexMethod*>(IRCode*, DexType*)>
+        get_methods_to_inline) {
   always_assert(method != nullptr);
-  always_assert(builder != nullptr);
+  always_assert(type != nullptr);
 
   auto code = method->get_code();
   if (!code) {
@@ -287,8 +293,7 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method,
   }
 
   std::vector<DexMethod*> previous_to_inline;
-  std::vector<DexMethod*> to_inline =
-      get_non_init_methods(code, builder->get_type());
+  std::vector<DexMethod*> to_inline = get_methods_to_inline(code, type);
 
   while (to_inline.size() != 0) {
 
@@ -296,7 +301,7 @@ bool BuilderTransform::inline_builder_methods(DexMethod* method,
 
     // Check all possible methods were inlined.
     previous_to_inline = to_inline;
-    to_inline = get_non_init_methods(code, builder->get_type());
+    to_inline = get_methods_to_inline(code, type);
 
     // Return false if  nothing changed / nothing got inlined though
     // there were methods to inline.

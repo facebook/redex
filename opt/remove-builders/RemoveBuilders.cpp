@@ -334,6 +334,24 @@ std::unordered_set<DexClass*> get_builders_with_subclasses(Scope& classes) {
   return builders_with_subclasses;
 }
 
+std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+  always_assert(code != nullptr);
+  always_assert(type != nullptr);
+
+  std::vector<DexMethod*> methods;
+  for (auto const& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto invoked = insn->get_method();
+      if (invoked->get_class() == type && !is_init(invoked)) {
+        methods.emplace_back(invoked);
+      }
+    }
+  }
+
+  return methods;
+}
+
 } // namespace
 
 std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
@@ -504,7 +522,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
-        if (!b_transform.inline_builder_methods(method, builder_cls)) {
+        if (!b_transform.inline_methods(
+                method, builder, &get_non_init_methods)) {
           kept_builders.emplace(builder_cls);
         } else {
           method_to_inlined_builders.emplace_back(method, builder_cls);
