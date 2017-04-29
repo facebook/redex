@@ -28,9 +28,16 @@ void fields_mapping(const IRInstruction* insn,
   always_assert(fregs != nullptr);
   always_assert(builder != nullptr);
 
-  // Set DEFAULT fields to UNDEFINED.
-  for (auto& pair : fregs->field_to_reg) {
-    if (pair.second == FieldOrRegStatus::DEFAULT) {
+  bool new_builder = false;
+  if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+    if (insn->get_type() == builder->get_type()) {
+      new_builder = true;
+    }
+  }
+
+  // Set fields to UNDEFINED if new builder instance.
+  if (new_builder) {
+    for (auto& pair : fregs->field_to_reg) {
       fregs->field_to_reg[pair.first] = FieldOrRegStatus::UNDEFINED;
       fregs->field_to_iput_insns[pair.first].clear();
     }
