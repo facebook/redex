@@ -59,7 +59,7 @@ CreateReferenceGraphPass::MethodWalkerFn
 CreateReferenceGraphPass::method_ref_builder(
     const Scope& scope,
     refs_t& class_refs) {
-  return ([this, &scope, &class_refs](const DexMethod* method) {
+  return ([this, &class_refs](const DexMethod* method) {
     const auto* enclosing_class = type_class(method->get_class());
     // do not add annotations to a method call. Only to method definition
     get_annots(method, enclosing_class, class_refs);
@@ -76,7 +76,7 @@ CreateReferenceGraphPass::FieldWalkerFn
 CreateReferenceGraphPass::field_ref_builder(
     const Scope& scope,
     refs_t& class_refs) {
-  return ([this, &scope, &class_refs](DexField* field) {
+  return ([this, &class_refs](DexField* field) {
     const auto* enclosing_class = type_class(field->get_class());
 
     const DexField* field_maybe_resolved;
@@ -125,7 +125,7 @@ CreateReferenceGraphPass::MethodWalkerFn
 CreateReferenceGraphPass::exception_ref_builder(
     const Scope& scope,
     refs_t& class_refs) {
-  return ([this, &scope, &class_refs](const DexMethod* meth) {
+  return ([&class_refs](const DexMethod* meth) {
     const auto* enclosing_class = type_class(meth->get_class());
 
     std::vector<DexType*> catch_types;
@@ -140,7 +140,7 @@ CreateReferenceGraphPass::InstructionWalkerFn
 CreateReferenceGraphPass::instruction_ref_builder(
     const Scope& scope,
     refs_t& class_refs) {
-  return ([this, &scope, &class_refs](const DexMethod* meth, IRInstruction* insn) {
+  return ([this, &class_refs](const DexMethod* meth, IRInstruction* insn) {
     const auto* enclosing_class = type_class(meth->get_class());
 
     if (insn->has_type()) {
