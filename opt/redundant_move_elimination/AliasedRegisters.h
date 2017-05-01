@@ -10,6 +10,7 @@
 #pragma once
 
 #include <boost/graph/adjacency_list.hpp>
+#include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 
 #include "DexClass.h"
@@ -17,6 +18,22 @@
 typedef uint16_t Register;
 
 struct RegisterValue {
+
+  const enum class Kind {
+    REGISTER,
+    CONST_LITERAL,
+    CONST_STRING,
+    CONST_TYPE,
+    NONE,
+  } kind;
+
+  const union {
+    Register const reg;
+    int64_t const literal;
+    DexString* const str;
+    DexType* const type;
+    std::nullptr_t const dummy;
+  };
 
   explicit RegisterValue(Register r) : kind(Kind::REGISTER), reg(r) {}
   explicit RegisterValue(int64_t l) : kind(Kind::CONST_LITERAL), literal(l) {}
@@ -53,23 +70,6 @@ struct RegisterValue {
     static const RegisterValue s_none;
     return s_none;
   }
-
- private:
-  const enum class Kind {
-    REGISTER,
-    CONST_LITERAL,
-    CONST_STRING,
-    CONST_TYPE,
-    NONE,
-  } kind;
-
-  const union {
-    Register const reg;
-    int64_t const literal;
-    DexString* const str;
-    DexType* const type;
-    std::nullptr_t const dummy;
-  };
 };
 
 class AliasedRegisters {
@@ -92,6 +92,8 @@ class AliasedRegisters {
    */
   bool are_aliases(RegisterValue r1, RegisterValue r2);
 
+  boost::optional<Register> get_representative(RegisterValue r);
+
  private:
   // an undirected graph where register values are vertices
   // and an edge means they are aliased
@@ -103,8 +105,16 @@ class AliasedRegisters {
   typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;
   Graph m_graph;
 
+  // Cache the connected component map here for speed.
+  // Computed by get_representative and cleared by any change to the graph
+  std::vector<int> m_conn_components;
+
   const boost::range_detail::integer_iterator<vertex_t> find(RegisterValue r);
   vertex_t find_or_create(RegisterValue r);
 
   bool path_exists(vertex_t v1, vertex_t v2) const;
+
+  // call when the graph is changed and things we computed on the old graph
+  // are no longer true.
+  void invalidate_cache();
 };

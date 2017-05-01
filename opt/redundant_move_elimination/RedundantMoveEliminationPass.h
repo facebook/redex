@@ -21,11 +21,15 @@ class RedundantMoveEliminationPass : public Pass {
     pc.get("eliminate_const_literals", true, m_config.eliminate_const_literals);
     pc.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
     pc.get("eliminate_const_classes", true, m_config.eliminate_const_classes);
+    pc.get("replace_with_representative",
+           true,
+           m_config.replace_with_representative);
   }
 
   struct Config {
     bool eliminate_const_literals;
     bool eliminate_const_strings;
     bool eliminate_const_classes;
+    bool replace_with_representative;
   } m_config;
 };

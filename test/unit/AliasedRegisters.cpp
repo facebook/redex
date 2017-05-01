@@ -9,13 +9,15 @@
 
 #include <gtest/gtest.h>
 
+#include <boost/optional.hpp>
 #include <unordered_map>
 #include "AliasedRegisters.h"
 
-RegisterValue zero{(uint16_t) 0};
-RegisterValue one{(uint16_t) 1};
-RegisterValue two{(uint16_t) 2};
-RegisterValue three{(uint16_t) 3};
+RegisterValue zero{(uint16_t)0};
+RegisterValue one{(uint16_t)1};
+RegisterValue one_lit{(int64_t)1};
+RegisterValue two{(uint16_t)2};
+RegisterValue three{(uint16_t)3};
 
 TEST(AliasedRegistersTest, identity) {
   AliasedRegisters a;
@@ -154,4 +156,64 @@ TEST(AliasedRegistersTest, transitiveCycleBreak) {
 
   EXPECT_TRUE(a.are_aliases(one, three));
   EXPECT_TRUE(a.are_aliases(three, one));
+}
+
+TEST(AliasedRegistersTest, getRepresentative) {
+  AliasedRegisters a;
+  a.make_aliased(zero, one);
+  boost::optional<Register> zero_rep = a.get_representative(zero);
+  boost::optional<Register> one_rep = a.get_representative(one);
+  EXPECT_TRUE(bool(zero_rep));
+  EXPECT_TRUE(bool(one_rep));
+  EXPECT_EQ(0, *zero_rep);
+  EXPECT_EQ(0, *one_rep);
+}
+
+TEST(AliasedRegistersTest, getRepresentativeTwoLinks) {
+  AliasedRegisters a;
+  a.make_aliased(zero, one);
+  a.make_aliased(one, two);
+  boost::optional<Register> zero_rep = a.get_representative(zero);
+  boost::optional<Register> one_rep = a.get_representative(one);
+  boost::optional<Register> two_rep = a.get_representative(one);
+  EXPECT_TRUE(bool(zero_rep));
+  EXPECT_TRUE(bool(one_rep));
+  EXPECT_TRUE(bool(two_rep));
+  EXPECT_EQ(0, *zero_rep);
+  EXPECT_EQ(0, *one_rep);
+  EXPECT_EQ(0, *two_rep);
+}
+
+TEST(AliasedRegistersTest, getRepresentativeNone) {
+  AliasedRegisters a;
+  boost::optional<Register> zero_rep = a.get_representative(zero);
+  EXPECT_FALSE(bool(zero_rep));
+}
+
+TEST(AliasedRegistersTest, getRepresentativeTwoComponents) {
+  AliasedRegisters a;
+  a.make_aliased(zero, one);
+  a.make_aliased(two, three);
+
+  boost::optional<Register> zero_rep = a.get_representative(zero);
+  boost::optional<Register> one_rep = a.get_representative(one);
+  EXPECT_TRUE(bool(zero_rep));
+  EXPECT_TRUE(bool(one_rep));
+  EXPECT_EQ(0, *zero_rep);
+  EXPECT_EQ(0, *one_rep);
+
+  boost::optional<Register> two_rep = a.get_representative(two);
+  boost::optional<Register> three_rep = a.get_representative(three);
+  EXPECT_TRUE(bool(two_rep));
+  EXPECT_TRUE(bool(three_rep));
+  EXPECT_EQ(2, *two_rep);
+  EXPECT_EQ(2, *three_rep);
+}
+
+TEST(AliasedRegistersTest, getRepresentativeNoLits) {
+  AliasedRegisters a;
+  a.make_aliased(two, one_lit);
+  auto two_rep = a.get_representative(two);
+  EXPECT_TRUE(bool(two_rep));
+  EXPECT_EQ(2, *two_rep);
 }

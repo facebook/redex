@@ -9,13 +9,15 @@
 
 #include "RedundantMoveEliminationPass.h"
 
+#include <boost/optional.hpp>
+
 #include "AliasedRegisters.h"
 #include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "Walkers.h"
 
 /**
- * This pass eliminates writes to registers that already hold the written value
+ * This pass eliminates writes to registers that already hold the written value.
  *
  * For example,
  *   move-object/from16 v0, v33
@@ -39,12 +41,17 @@
  * with a different value. Any move between registers that are already aliased
  * is unneccesary. Eliminate them.
  *
- * Do the same thing with constant loads
+ * It also does the same thing with constant loads
+ *
+ * This optimization also will replace source registers with a representative
+ * register (a whole alias group has a single representative) . The reason is
+ * that if we use fewer registers, DCE could clean up some more moves after
+ * us.
  *
  * Possible additions: (TODO?)
  *   wide registers
- *   replace reads of aliased register group with one representative register
- *     be careful of invoke range
+ *     I tried it, with registers only it's a tiny help. With
+ *     constants it causes spurious verify errors at install time. --jhendrick
  */
 
 namespace {
@@ -107,30 +114,66 @@ class RedundantMoveEliminationImpl {
           aliases.break_alias(dst);
           aliases.make_aliased(dst, src);
         }
-      } else if (mei.insn->dests_size() > 0) {
-        // dest is being written to but not by a simple move from another
-        // register or a constant load. Break its aliases because we don't
-        // know what its value is.
-        RegisterValue dst{mei.insn->dest()};
-        aliases.break_alias(dst);
-        if (mei.insn->dest_is_wide()) {
-          Register wide_reg = mei.insn->dest() + 1;
-          RegisterValue wide{wide_reg};
-          aliases.break_alias(wide);
+      } else {
+        if (m_config.replace_with_representative) {
+          replace_with_representative(mei.insn, aliases);
         }
-      } else if (mei.insn->opcode() == OPCODE_CHECK_CAST) {
-        // check-cast has a side effect (in the runtime verifier) when the
-        // cast succeeds. The runtime verifier updates the type in the source
-        // register to its more specific type. Later usages of this register
-        // require that type information. But the verifier doesn't know about
-        // any aliases the source register may have, so, we have to treat this
-        // instruction like it writes to the source register
-        //
-        // see this link:
-        // androidxref.com/7.1.1_r6/xref/art/
-        //   runtime/verifier/method_verifier.cc#2383
-        RegisterValue reg{mei.insn->src(0)};
-        aliases.break_alias(reg);
+        if (mei.insn->dests_size() > 0) {
+          // dest is being written to but not by a simple move from another
+          // register or a constant load. Break its aliases because we don't
+          // know what its value is.
+          RegisterValue dst{mei.insn->dest()};
+          aliases.break_alias(dst);
+          if (mei.insn->dest_is_wide()) {
+            Register wide_reg = mei.insn->dest() + 1;
+            RegisterValue wide{wide_reg};
+            aliases.break_alias(wide);
+          }
+        } else if (mei.insn->opcode() == OPCODE_CHECK_CAST) {
+          // check-cast has a side effect (in the runtime verifier) when the
+          // cast succeeds. The runtime verifier updates the type in the source
+          // register to its more specific type. Later usages of this register
+          // require that type information. But the verifier doesn't know about
+          // any aliases the source register may have, so, we have to treat this
+          // instruction like it writes to the source register. (*)
+          //
+          // see this link:
+          // androidxref.com/7.1.1_r6/xref/art/
+          //   runtime/verifier/method_verifier.cc#2383
+          RegisterValue reg{mei.insn->src(0)};
+          aliases.break_alias(reg);
+        }
+      }
+    }
+  }
+
+  // Each group of aliases has one representative register.
+  // Try to replace source registers with their representative.
+  void replace_with_representative(IRInstruction* insn,
+                                   AliasedRegisters& aliases) {
+    if (insn->srcs_size() > 0 &&
+        !opcode::has_range(insn->opcode()) && // range has to stay in order
+        insn->opcode() != OPCODE_CHECK_CAST) { // same reason as (*)
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        RegisterValue val{insn->src(i)};
+        boost::optional<Register> rep = aliases.get_representative(val);
+        if (rep) {
+          // filter out uses of wide registers where the second register isn't
+          // also aliased
+          if (insn->src_is_wide(i)) {
+            RegisterValue orig_wide{(Register)(insn->src(i) + 1)};
+            RegisterValue rep_wide{(Register)(*rep + 1)};
+            bool wides_are_aliased = aliases.are_aliases(orig_wide, rep_wide);
+            if (!wides_are_aliased) {
+              continue;
+            }
+          }
+
+          if (insn->src(i) != *rep) {
+            insn->set_src(i, *rep);
+            m_mgr.incr_metric("source_regs_replaced_with_representative", 1);
+          }
+        }
       }
     }
   }
@@ -186,6 +229,10 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
         2,
         "%d redundant moves eliminated\n",
         mgr.get_metric("redundant_moves_eliminated"));
+  TRACE(RME,
+        2,
+        "%d source_regs_replaced_with_representative\n",
+        mgr.get_metric("source_regs_replaced_with_representative"));
 }
 
 static RedundantMoveEliminationPass s_pass;
