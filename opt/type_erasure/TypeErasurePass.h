@@ -11,9 +11,9 @@
 
 #include "Pass.h"
 
-class UnreferencedInterfaceRemovalPass : public Pass {
+class TypeErasurePass : public Pass {
  public:
-  UnreferencedInterfaceRemovalPass() : Pass("UnrefInterfaceRemovalPass") {}
+  TypeErasurePass() : Pass("TypeErasurePass") {}
 
   virtual void configure_pass(const PassConfig&) override {}
 

@@ -10,20 +10,35 @@
 #include "ReferenceSet.h"
 
 ReferenceSet::ReferenceSet(
-  const Scope& scope,
-  const TypeSet& ref_set) {
+    const Scope& scope,
+    const TypeSet& ref_set) {
   // get field references
   const auto& find_field_refs = [&](const std::vector<DexField*>& fields) {
-   for (const auto& field : fields) {
-    if (ref_set.count(field->get_type()) == 0) continue;
-    field_refs[field->get_type()].push_back(field);
-   }
+    for (const auto& field : fields) {
+      if (ref_set.count(field->get_type()) == 0) continue;
+      field_refs[field->get_type()].push_back(field);
+    }
   };
 
   for (const auto cls : scope) {
-   find_field_refs(cls->get_ifields());
-   find_field_refs(cls->get_sfields());
+    find_field_refs(cls->get_ifields());
+    find_field_refs(cls->get_sfields());
   }
+
+  // get all referenced types in signatures
+  walk_methods(scope,
+      [&](DexMethod* meth) {
+        auto proto = meth->get_proto();
+        auto rtype = proto->get_rtype();
+        if (ref_set.count(rtype) > 0) {
+          sig_refs[rtype].emplace_back(proto);
+        }
+        for (const auto type : proto->get_args()->get_type_list()) {
+          if (ref_set.count(type) > 0) {
+            sig_refs[type].emplace_back(proto);
+          }
+        }
+      });
 
   // collect all vmethods in reference set
   std::unordered_set<DexMethod*> methods;
@@ -35,42 +50,31 @@ ReferenceSet::ReferenceSet(
   }
   // walk opcodes and get all the type and method references to ref_set
   walk_opcodes(scope,
-    [&](DexMethod* meth) {
-      auto proto = meth->get_proto();
-      auto rtype = proto->get_rtype();
-      if (ref_set.count(rtype) > 0) {
-        sig_refs[rtype].emplace_back(proto);
-      }
-      for (const auto type : proto->get_args()->get_type_list()) {
-        if (ref_set.count(type) > 0) {
-          sig_refs[type].emplace_back(proto);
+      [](DexMethod* meth) {
+        return true;
+      },
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (insn->has_type()) {
+          const auto& type = insn->get_type();
+          if (ref_set.count(type) > 0) {
+            code_refs[type].emplace_back(meth, insn);
+          }
+          return;
         }
-      }
-      return true;
-    },
-    [&](DexMethod* meth, IRInstruction* insn) {
-      if (insn->has_type()) {
-        const auto& type = static_cast<IRInstruction*>(insn)->get_type();
-        if (ref_set.count(type) > 0) {
-          code_refs[type].emplace_back(meth, insn);
+        if (insn->has_method()) {
+          auto method = insn->get_method();
+          DexMethod* def = resolve_method(method, opcode_to_search(insn));
+          if (def == nullptr) def = method;
+          if (ref_set.count(method->get_class()) > 0) {
+            code_refs[method->get_class()].emplace_back(meth, insn);
+          }
+          if (methods.count(def) > 0) {
+            code_refs[def->get_class()].emplace_back(meth, insn);
+          }
+          return;
         }
-        return;
-      }
-      if (insn->has_method()) {
-        auto method = static_cast<IRInstruction*>(insn)->get_method();
-        DexMethod* def = resolve_method(method, opcode_to_search(insn));
-        if (def == nullptr) def = method;
-        if (ref_set.count(method->get_class()) > 0) {
-          code_refs[method->get_class()].emplace_back(meth, insn);
-        }
-        if (methods.count(def) > 0) {
-          code_refs[def->get_class()].emplace_back(meth, insn);
-        }
-        return;
-      }
-    });
+      });
 
-  // build all references and callers map
   for (const auto& ref : field_refs) {
     all_refs.insert(ref.first);
   }
@@ -113,6 +117,6 @@ void ReferenceSet::print() const {
   TRACE(TERA, 3, "- Method References %ld\n", ref_count);
   TRACE(TERA, 3, "- Unreferenced %ld\n", unrfs.size());
   for (const auto& type : unrfs) {
-    TRACE(TERA, 3, "\t%s\n", SHOW(type));
+    TRACE(TERA, 5, "\t%s\n", SHOW(type));
   }
 }

@@ -41,21 +41,28 @@ void collect_interfaces(TypeSet& model_classes, TypeSet& interfaces) {
   }
 }
 
-TargetTypeHierarchy::TargetTypeHierarchy(const char* name, const Scope& scope, const DexType* root)
-  : name(name) {
+TargetTypeHierarchy::TargetTypeHierarchy(
+    const char* name,
+    const Scope& scope,
+    const DexType* root
+) : name(name) {
   auto class_hierarchy = build_type_hierarchy(scope);
   collect_classes(class_hierarchy, root, model_classes);
   collect_interfaces(model_classes, interfaces);
 }
 
-TargetTypeHierarchy::TargetTypeHierarchy(const char* name, const TargetTypeHierarchy& left, const TargetTypeHierarchy& right)
-  : name(name) {
+TargetTypeHierarchy::TargetTypeHierarchy(
+    const char* name,
+    const TargetTypeHierarchy& left,
+    const TargetTypeHierarchy& right)
+        : name(name) {
   model_classes.insert(left.model_classes.begin(), left.model_classes.end());
   model_classes.insert(right.model_classes.begin(), right.model_classes.end());
   collect_interfaces(model_classes, interfaces);
 }
 
-TargetTypeHierarchy TargetTypeHierarchy::build_target_type_hierarchy(const Scope& scope) {
+TargetTypeHierarchy TargetTypeHierarchy::build_target_type_hierarchy(
+    const Scope& scope) {
   TargetTypeHierarchy tree_model("Tree", scope,
     DexType::make_type("Lcom/facebook/graphservice/Tree;")
   );

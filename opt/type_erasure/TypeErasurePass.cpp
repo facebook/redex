@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "UnreferencedInterfaceRemovalPass.h"
+#include "TypeErasurePass.h"
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -20,7 +20,8 @@
 namespace {
 
 TypeSet get_gql_interfaces(const Scope& scope) {
-  auto ggql_hierarhcy = TargetTypeHierarchy::build_target_type_hierarchy(scope);
+  auto ggql_hierarhcy =
+      TargetTypeHierarchy::build_target_type_hierarchy(scope);
   auto gql_interfaces = ggql_hierarhcy.interfaces;
   TRACE(TERA, 2, " TERA collected %d interfaces \n", gql_interfaces.size());
   return gql_interfaces;
@@ -61,7 +62,10 @@ TypeSet verify_interfaces(const Scope& scope, TypeSet& candidates) {
   return itfs;
 }
 
-std::unordered_set<DexType*> removables(const TypeSet& unref, const std::deque<DexType*>& interfaces) {
+std::unordered_set<DexType*> removables(
+    const TypeSet& unref,
+    const std::deque<DexType*>& interfaces
+) {
   std::unordered_set<DexType*> res;
   for (const auto itf : interfaces) {
     if (unref.count(itf) > 0) {
@@ -121,7 +125,11 @@ void trace(
   );
 }
 
-void update_stores(const TypeSet& to_remove, Scope& scope, DexStoresVector& stores) {
+void update_stores(
+    const TypeSet& to_remove,
+    Scope& scope,
+    DexStoresVector& stores
+) {
   Scope tscope(scope);
   scope.clear();
   for (DexClass* cls : tscope) {
@@ -136,7 +144,7 @@ void update_stores(const TypeSet& to_remove, Scope& scope, DexStoresVector& stor
 
 }
 
-void UnreferencedInterfaceRemovalPass::run_pass(
+void TypeErasurePass::run_pass(
   DexStoresVector& stores, ConfigFiles&, PassManager& mgr
 ) {
   auto scope = build_class_scope(stores);
@@ -153,7 +161,8 @@ void UnreferencedInterfaceRemovalPass::run_pass(
       continue;
     }
     auto to_remove_impls = removable_impls(to_remove);
-    const auto new_itfs = get_updated_interface_list(interfaces, to_remove, to_remove_impls);
+    const auto new_itfs = get_updated_interface_list(
+        interfaces, to_remove, to_remove_impls);
     trace(cls, to_remove, new_itfs);
     cls->set_interfaces(new_itfs);
   }
@@ -162,4 +171,4 @@ void UnreferencedInterfaceRemovalPass::run_pass(
   mgr.incr_metric("interface_removed", unref.size());
 }
 
-static UnreferencedInterfaceRemovalPass s_pass;
+static TypeErasurePass s_pass;
