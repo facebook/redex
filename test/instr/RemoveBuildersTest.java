@@ -85,6 +85,22 @@ class Car {
   }
 }
 
+class Dar {
+  public int x;
+
+  public Dar(int x) {
+    this.x = x;
+  }
+
+  public static class Builder {
+    public int x;
+
+    public Dar build() {
+      return new Dar(this.x);
+    }
+  }
+}
+
 class UsingNoEscapeBuilder {
 
   public Foo initializeFoo() {
@@ -132,5 +148,28 @@ class UsingNoEscapeBuilder {
     car.model = builder.model;
 
     return car;
+  }
+
+  /**
+   * Since the builder instance is used in a conditional statement,
+   * in order to remove it, we need to keep track of what initializing it
+   * would mean in a context where the builder is removed.
+   * This case is not treated for now.
+   */
+  public Dar initializeDar_KeepBuilder() {
+    Random randomGen = new Random();
+    int value = randomGen.nextInt(10);
+
+    Dar.Builder builder = null;
+    if (value > 7) {
+      builder = new Dar.Builder();
+      builder.x = 7;
+    }
+
+    if (builder != null) {
+      return builder.build();
+    }
+
+    return new Dar(8);
   }
 }

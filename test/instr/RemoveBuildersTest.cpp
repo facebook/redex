@@ -258,3 +258,38 @@ TEST_F(PostVerify, RemoveCarBuilder) {
   std::sort(used_regs.begin(), used_regs.end());
   EXPECT_EQ(expected_regs, used_regs);
 }
+
+/*
+ * Check builder is actually defined.
+ */
+TEST_F(PreVerify, RemoveDarBuilder) {
+  auto dar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Dar;");
+  EXPECT_NE(nullptr, dar);
+
+  auto dar_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Dar$Builder;");
+  EXPECT_NE(nullptr, dar_builder);
+}
+
+/*
+ * Ensure the builder was not removed, and no methods were inlined.
+ */
+TEST_F(PostVerify, RemoveDarBuilder) {
+  auto dar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Dar;");
+  EXPECT_NE(nullptr, dar);
+
+  auto dar_builder =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Dar$Builder;");
+  EXPECT_NE(nullptr, dar_builder);
+
+  auto using_no_escape_builders = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_dar =
+      find_vmethod_named(*using_no_escape_builders, "initializeDar_KeepBuilder");
+  EXPECT_NE(nullptr, initialize_dar);
+
+  // Build call not inlined.
+  EXPECT_NE(nullptr,
+            find_invoke(
+                initialize_dar, OPCODE_INVOKE_VIRTUAL, "build"));
+}

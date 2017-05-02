@@ -108,6 +108,11 @@ bool tainted_reg_escapes(
         TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
         return true;
       }
+    } else if (is_conditional_branch(op)) {
+      if (tainted[insn->src(0)]) {
+        // TODO(emmasevastian): Treat this case separate.
+        return true;
+      }
     }
   }
   return false;
