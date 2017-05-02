@@ -9,17 +9,7 @@
 
 #include "TargetTypeHierarchy.h"
 
-void collect_classes(
-  const ClassHierarchy& ch,
-  const DexType* base,
-  TypeSet& target_classes
-) {
-  TypeSet children = get_children(ch, base);
-  for (const auto& child : children) {
-    collect_classes(ch, child, target_classes);
-    target_classes.insert(child);
-  }
-}
+namespace {
 
 void collect_interfaces_helper(const DexType* type, TypeSet& cls_intfs) {
   cls_intfs.insert(type);
@@ -41,40 +31,53 @@ void collect_interfaces(TypeSet& model_classes, TypeSet& interfaces) {
   }
 }
 
-TargetTypeHierarchy::TargetTypeHierarchy(
-    const char* name,
-    const Scope& scope,
-    const DexType* root
-) : name(name) {
-  auto class_hierarchy = build_type_hierarchy(scope);
-  collect_classes(class_hierarchy, root, model_classes);
-  collect_interfaces(model_classes, interfaces);
 }
 
-TargetTypeHierarchy::TargetTypeHierarchy(
-    const char* name,
-    const TargetTypeHierarchy& left,
-    const TargetTypeHierarchy& right)
-        : name(name) {
-  model_classes.insert(left.model_classes.begin(), left.model_classes.end());
-  model_classes.insert(right.model_classes.begin(), right.model_classes.end());
-  collect_interfaces(model_classes, interfaces);
-}
-
-TargetTypeHierarchy TargetTypeHierarchy::build_target_type_hierarchy(
-    const Scope& scope) {
-  TargetTypeHierarchy tree_model("Tree", scope,
-    DexType::make_type("Lcom/facebook/graphservice/Tree;")
-  );
-  TargetTypeHierarchy base_model("Base", scope,
-    DexType::make_type("Lcom/facebook/graphql/modelutil/BaseModel;")
-  );
-  TargetTypeHierarchy gql_model("Every", tree_model, base_model);
-
-  tree_model.print();
-  base_model.print();
+TargetTypeHierarchy TargetTypeHierarchy::build_gql_type_hierarchy(
+    const Scope& scope, const ClassHierarchy& hierarchy) {
+  TargetTypeHierarchy gql_model;
+  gql_model.name = "GQL";
+  const auto& tree = DexType::make_type("Lcom/facebook/graphservice/Tree;");
+  get_all_children(hierarchy, tree, gql_model.model_classes);
+  const auto& base =
+      DexType::make_type("Lcom/facebook/graphql/modelutil/BaseModel;");
+  get_all_children(hierarchy, base, gql_model.model_classes);
+  collect_interfaces(gql_model.model_classes, gql_model.interfaces);
   gql_model.print();
   return gql_model;
+}
+
+TargetTypeHierarchy TargetTypeHierarchy::build_cs_type_hierarchy(
+    const Scope& scope, const ClassHierarchy& hierarchy) {
+  const auto& jsr = DexType::make_type("Lcom/facebook/java2js/JSReadable;");
+  const auto& jsref = DexType::make_type(
+      "Lcomfacebook/flowtype/components/HasLocalJSRefInitializer");
+  TargetTypeHierarchy cs_model;
+  cs_model.name = "CS";
+  for (const auto& cls : scope) {
+    const auto& intfs = cls->get_interfaces()->get_type_list();
+    if (intfs.empty()) continue;
+    int match = 0;
+    for (const auto& intf : intfs) {
+      if (intf == jsr) {
+        match++;
+      } else if (intf == jsref) {
+        match++;
+      }
+    }
+    if (match == 2) {
+      cs_model.model_classes.insert(cls->get_type());
+    }
+  }
+
+  TypeSet children;
+  for (const auto& type : cs_model.model_classes) {
+    get_all_children(hierarchy, type, children);
+  }
+  cs_model.model_classes.insert(children.begin(), children.end());
+  collect_interfaces(cs_model.model_classes, cs_model.interfaces);
+  cs_model.print();
+  return cs_model;
 }
 
 void TargetTypeHierarchy::print() const {

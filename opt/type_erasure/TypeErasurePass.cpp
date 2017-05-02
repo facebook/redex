@@ -37,15 +37,28 @@ void update_stores(
   post_dexen_changes(scope, stores);
 }
 
+TypeSet erase_gql_types(const Scope& scope, const ClassHierarchy& hierarchy) {
+  auto gql_hierarchy =
+      TargetTypeHierarchy::build_gql_type_hierarchy(scope, hierarchy);
+  return check_interfaces(scope, gql_hierarchy);
+}
+
+TypeSet erase_cs_types(const Scope& scope, const ClassHierarchy& hierarchy) {
+  auto cs_hierarchy =
+      TargetTypeHierarchy::build_cs_type_hierarchy(scope, hierarchy);
+  return check_interfaces(scope, cs_hierarchy);
+}
+
 }
 
 void TypeErasurePass::run_pass(
   DexStoresVector& stores, ConfigFiles&, PassManager& mgr
 ) {
   auto scope = build_class_scope(stores);
-  auto gql_hierarchy =
-      TargetTypeHierarchy::build_target_type_hierarchy(scope);
-  TypeSet removable = check_interfaces(scope, gql_hierarchy);
+  ClassHierarchy hierarchy = build_type_hierarchy(scope);
+  TypeSet removable = erase_gql_types(scope, hierarchy);
+  TypeSet cs_removable = erase_cs_types(scope, hierarchy);
+  removable.insert(cs_removable.begin(), cs_removable.end());
   update_stores(removable, scope, stores);
   mgr.incr_metric("interface_removed", removable.size());
 }

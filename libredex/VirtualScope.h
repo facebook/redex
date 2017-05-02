@@ -188,7 +188,7 @@ inline const TypeSet get_children(
   return it != hierarchy.end() ? it->second : TypeSet();
 }
 
-void get_children(
+void get_all_children(
     const ClassHierarchy& hierarchy,
     const DexType* type,
     TypeSet& children);

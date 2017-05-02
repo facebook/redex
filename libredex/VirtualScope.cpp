@@ -743,6 +743,17 @@ ClassHierarchy build_type_hierarchy(const Scope& scope) {
   return hierarchy;
 }
 
+void get_all_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type,
+    TypeSet& children) {
+  const auto& direct = get_children(hierarchy, type);
+  for (const auto& child : direct) {
+    children.insert(child);
+    get_all_children(hierarchy, child, children);
+  }
+}
+
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
   Timer("Signature Map");
   SignatureMap signature_map;

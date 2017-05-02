@@ -16,12 +16,9 @@ struct TargetTypeHierarchy {
   TypeSet model_classes;
   TypeSet interfaces;
 
-  TargetTypeHierarchy(
-      const char* name, const Scope& scope, const DexType* root);
-  TargetTypeHierarchy(
-      const char* name,
-      const TargetTypeHierarchy& left,
-      const TargetTypeHierarchy& right);
-  static TargetTypeHierarchy build_target_type_hierarchy(const Scope& scope);
+  static TargetTypeHierarchy build_gql_type_hierarchy(
+      const Scope& scope, const ClassHierarchy& hierarchy);
+  static TargetTypeHierarchy build_cs_type_hierarchy(
+      const Scope& scope, const ClassHierarchy& hierarchy);
   void print() const;
 };
