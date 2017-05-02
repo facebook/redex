@@ -20,4 +20,6 @@
 TEST_F(PostVerify, SimpleUnusedCase) {
   auto cls_a = find_class_named(classes, "Lcom/facebook/redextest/A;");
   ASSERT_NE(cls_a, nullptr);
+  auto itfs = cls_a->get_interfaces()->get_type_list();
+  ASSERT_TRUE(itfs.empty());
 }
