@@ -1042,8 +1042,8 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
   }
 }
 
-void remap_registers(FatMethod* fmethod, const RegMap& reg_map) {
-  for (auto& mei : *fmethod) {
+void remap_registers(IRCode* code, const RegMap& reg_map) {
+  for (auto& mei : *code) {
     remap_registers(mei, reg_map);
   }
 }
@@ -1058,22 +1058,19 @@ void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
   reg_set |= mapped;
 }
 
-void enlarge_registers(IRCode* code,
-                       FatMethod* fmethod,
-                       uint16_t newregs) {
+void enlarge_registers(IRCode* code, uint16_t newregs) {
   RegMap reg_map;
   auto oldregs = code->get_registers_size();
   auto ins = code->get_ins_size();
   for (uint16_t i = 0; i < ins; ++i) {
     reg_map[oldregs - ins + i] = newregs - ins + i;
   }
-  remap_registers(fmethod, reg_map);
+  remap_registers(code, reg_map);
   code->set_registers_size(newregs);
 }
 
 void remap_callee_regs(IRInstruction* invoke,
                        DexMethod* method,
-                       FatMethod* fmethod,
                        uint16_t newregs) {
   RegMap reg_map;
   auto oldregs = method->get_code()->get_registers_size();
@@ -1083,7 +1080,7 @@ void remap_callee_regs(IRInstruction* invoke,
   for (uint16_t i = 0; i < wc; ++i) {
     reg_map[oldregs - ins + i] = invoke->src(i);
   }
-  remap_registers(fmethod, reg_map);
+  remap_registers(&*method->get_code(), reg_map);
   method->get_code()->set_registers_size(newregs);
 }
 
@@ -1401,8 +1398,8 @@ void IRCode::inline_tail_call(DexMethod* caller,
   always_assert(newregs <= 16);
 
   // Remap registers to account for possibly larger frame, more ins
-  enlarge_registers(&*caller->get_code(), fcaller, newregs);
-  remap_callee_regs(invoke, callee, fcallee, newregs);
+  enlarge_registers(&*caller->get_code(), newregs);
+  remap_callee_regs(invoke, callee, newregs);
 
   callee->get_code()->set_ins_size(bins);
 
@@ -1479,7 +1476,7 @@ bool IRCode::inline_method(InlineContext& context,
     if (no_exceed_16regs && newregs > 16) {
       return false;
     }
-    enlarge_registers(caller_code, fcaller, newregs);
+    enlarge_registers(caller_code, newregs);
     invoke_live_in.enlarge(caller_code->get_ins_size(), newregs);
     invoke_live_out.enlarge(caller_code->get_ins_size(), newregs);
   }
@@ -1586,10 +1583,7 @@ void IRCode::enlarge_regs(DexMethod* method, uint16_t newregs) {
   auto code = method->get_code();
   always_assert(code != nullptr);
   always_assert(code->get_registers_size() <= newregs);
-
-  auto fcaller = code->m_fmethod;
-
-  enlarge_registers(&*code, fcaller, newregs);
+  enlarge_registers(&*code, newregs);
 }
 
 namespace {
