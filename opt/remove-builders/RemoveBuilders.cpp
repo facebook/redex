@@ -96,6 +96,14 @@ bool tainted_reg_escapes(
         // `this` arg
         continue;
       }
+      if (opcode::has_range(insn->opcode())) {
+        for (size_t i = 0; i < insn->range_size(); ++i) {
+          if (tainted[insn->range_base() + i]) {
+            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+            return true;
+          }
+        }
+      }
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         if (tainted[insn->src(i)]) {
           TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
