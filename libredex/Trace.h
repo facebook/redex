@@ -65,7 +65,8 @@
   TM(VERIFY)                                    \
   TM(ANALYSIS_REF_GRAPH)                        \
   TM(VIRT)                                      \
-  TM(TERA)
+  TM(TERA)                                      \
+  TM(BRCR)
 
 enum TraceModule : int {
 #define TM(x) x,
