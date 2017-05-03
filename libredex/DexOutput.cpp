@@ -91,13 +91,6 @@ std::unordered_set<DexString*> GatheredTypes::index_type_names() {
   return type_names;
 }
 
-template <class T>
-std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
-  std::vector<DexString*> strlist(m_lstring);
-  std::sort(strlist.begin(), strlist.end(), std::cref(cmp));
-  return strlist;
-}
-
 std::vector<DexString*> GatheredTypes::get_cls_order_dexstring_emitlist() {
   return get_dexstring_emitlist(CustomSort<DexString, cmp_dstring>(
         m_cls_load_strings,
@@ -108,19 +101,6 @@ std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
   return get_dexstring_emitlist(CustomSort<DexString, cmp_dstring>(
         m_cls_strings,
         compare_dexstrings));
-}
-
-template <class T>
-std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
-  std::vector<DexMethod*> methlist;
-  for (auto cls : *m_classes) {
-    auto const& dmethods = cls->get_dmethods();
-    auto const& vmethods = cls->get_vmethods();
-    methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
-    methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());
-  }
-  std::sort(methlist.begin(), methlist.end(), std::cref(cmp));
-  return methlist;
 }
 
 std::vector<DexMethod*> GatheredTypes::get_cls_order_dexmethod_emitlist() {

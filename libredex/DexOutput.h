@@ -188,3 +188,23 @@ class GatheredTypes {
 
   std::unordered_set<DexString*> index_type_names();
 };
+
+template <class T>
+std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
+  std::vector<DexString*> strlist(m_lstring);
+  std::sort(strlist.begin(), strlist.end(), std::cref(cmp));
+  return strlist;
+}
+
+template <class T>
+std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
+  std::vector<DexMethod*> methlist;
+  for (auto cls : *m_classes) {
+    auto const& dmethods = cls->get_dmethods();
+    auto const& vmethods = cls->get_vmethods();
+    methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
+    methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());
+  }
+  std::sort(methlist.begin(), methlist.end(), std::cref(cmp));
+  return methlist;
+}
