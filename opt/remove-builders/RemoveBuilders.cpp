@@ -88,26 +88,36 @@ bool tainted_reg_escapes(
     if (is_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
       invoked = resolve_method(invoked, MethodSearch::Any);
+      size_t args_reg_start {0};
       if (!invoked) {
         TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
-      } else if (invoked->get_class() == ty &&
-                 !(invoked->get_access() & ACC_STATIC)) {
-        // TODO: check if we are actually passing the tainted register as the
-        // `this` arg
-        continue;
+      } else if (is_init(invoked) || (invoked->get_class() == ty &&
+                                      !is_static(invoked->get_access()))) {
+        // if a builder is passed as the first arg to a virtual function or a
+        // ctor, we can treat it as non-escaping, since we also check that
+        // those methods don't allow the builder to escape.
+        //
+        // TODO: we should be able to relax the check above to be simply
+        // `!is_static(invoked)`. We don't even need to check that the type
+        // matches -- if the builder is being passed as the first arg reg
+        // to a non-static function, it must be the `this` arg. And if the
+        // non-static function is part of a different class hierarchy, the
+        // builder cannot possibly be passed as the `this` arg.
+        args_reg_start = 1;
       }
       if (opcode::has_range(insn->opcode())) {
-        for (size_t i = 0; i < insn->range_size(); ++i) {
+        for (size_t i = args_reg_start; i < insn->range_size(); ++i) {
           if (tainted[insn->range_base() + i]) {
             TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
             return true;
           }
         }
-      }
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        if (tainted[insn->src(i)]) {
-          TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-          return true;
+      } else {
+        for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
+          if (tainted[insn->src(i)]) {
+            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+            return true;
+          }
         }
       }
     } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
@@ -134,7 +144,6 @@ bool this_arg_escapes(DexMethod* method) {
   always_assert(!(method->get_access() & ACC_STATIC));
 
   auto code = method->get_code();
-  IRInstruction* first_insn = InstructionIterable(code).begin()->insn;
   auto regs_size = code->get_registers_size();
   auto this_reg = regs_size - code->get_ins_size();
   auto this_cls = method->get_class();
@@ -143,13 +152,12 @@ bool this_arg_escapes(DexMethod* method) {
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
       const IRInstruction* insn, TaintedRegs* tregs) {
-    auto& regs = tregs->m_reg_set;
-    if (insn == first_insn) {
-      regs[this_reg] = 1;
-    }
-    transfer_object_reach(this_cls, regs_size, insn, regs);
+    transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
   };
-  auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+  auto entry_value = TaintedRegs(regs_size + 1);
+  entry_value.m_reg_set[this_reg] = 1;
+  auto taint_map =
+      forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans, entry_value);
   return tainted_reg_escapes(this_cls, *taint_map);
 }
 
