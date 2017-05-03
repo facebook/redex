@@ -313,6 +313,21 @@ bool BuilderTransform::inline_methods(
   return true;
 }
 
+bool has_builder_name(DexClass* cls) {
+  always_assert(cls != nullptr);
+
+  static boost::regex re{"\\$Builder;$"};
+  return boost::regex_search(cls->c_str(), re);
+}
+
+DexType* get_buildee(DexType* builder) {
+  always_assert(builder != nullptr);
+
+  auto builder_name = std::string(builder->c_str());
+  auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
+  return DexType::get_type(buildee_name.c_str());
+}
+
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   always_assert(method != nullptr);
   always_assert(builder != nullptr);

@@ -35,21 +35,6 @@ struct builder_counters {
 
 builder_counters b_counter;
 
-bool has_builder_name(DexClass* cls) {
-  always_assert(cls != nullptr);
-
-  static boost::regex re{"\\$Builder;$"};
-  return boost::regex_search(cls->c_str(), re);
-}
-
-DexType* get_buildee(DexType* builder) {
-  always_assert(builder != nullptr);
-
-  auto builder_name = std::string(builder->c_str());
-  auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
-  return DexType::get_type(buildee_name.c_str());
-}
-
 void transfer_object_reach(DexType* obj,
                            uint16_t regs_size,
                            const IRInstruction* insn,
@@ -584,7 +569,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
         1,
         "Stack-only builders that don't let `this` escape: %d\n",
         no_escapes.size());
-  TRACE(BUILDERS, 1, "Stats for unescaping builders:\n", dmethod_count);
+  TRACE(BUILDERS, 1, "Stats for unescaping builders:\n");
   TRACE(BUILDERS, 1, "\tdmethods: %d\n", dmethod_count);
   TRACE(BUILDERS, 1, "\tvmethods: %d\n", vmethod_count);
   TRACE(BUILDERS, 1, "\tbuild methods: %d\n", build_count);

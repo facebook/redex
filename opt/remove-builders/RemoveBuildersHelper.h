@@ -77,6 +77,10 @@ struct FieldsRegs {
  */
 bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee);
 
+bool has_builder_name(DexClass* cls);
+
+DexType* get_buildee(DexType* type);
+
 class BuilderTransform {
  public:
   BuilderTransform(const PassConfig& pc,
