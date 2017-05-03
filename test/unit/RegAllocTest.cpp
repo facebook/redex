@@ -10,6 +10,7 @@
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "LiveRange.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "Show.h"
@@ -226,4 +227,67 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
     dasm(OPCODE_RETURN_VOID)
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(mt)));
+}
+
+TEST_F(RegAllocTest, LiveRangeSingleBlock) {
+  using namespace dex_asm;
+  DexMethod* method =
+      DexMethod::make_method("Lfoo;", "LiveRangeSingleBlock", "V", {});
+  method->make_concrete(ACC_STATIC, false);
+  method->get_code()->set_registers_size(1);
+  method->get_code()->set_ins_size(0);
+  auto code = method->get_code();
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+
+  live_range::renumber_registers(code);
+
+  InstructionList expected_insns {
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_EQ(code->get_registers_size(), 2);
+}
+
+TEST_F(RegAllocTest, LiveRange) {
+  using namespace dex_asm;
+  DexMethod* method =
+      DexMethod::make_method("Lfoo;", "LiveRange", "V", {});
+  method->make_concrete(ACC_STATIC, false);
+  method->get_code()->set_registers_size(1);
+  method->get_code()->set_ins_size(0);
+  auto code = method->get_code();
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 0_v}));
+  code->push_back(*if_);
+
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  auto target = new BranchTarget();
+  target->type = BRANCH_SIMPLE;
+  target->src = if_;
+  code->push_back(target);
+
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+
+  live_range::renumber_registers(code);
+
+  InstructionList expected_insns {
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(OPCODE_IF_EQ, {1_v, 1_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {2_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_EQ(code->get_registers_size(), 3);
 }

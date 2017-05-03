@@ -424,3 +424,78 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
   AbstractValueKind m_kind;
   Value m_value;
 };
+
+/*
+ * This reverses the top / bottom elements and meet / join operations of the
+ * domain. It also switches widen / narrow, which is *only* valid for finite
+ * abstract domains, where the widening / narrowing are identical to the join /
+ * meet operations.
+ */
+template <typename Domain, typename Derived>
+class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
+ public:
+  using BaseDomain = Domain;
+
+  AbstractDomainReverseAdaptor() = default;
+  explicit AbstractDomainReverseAdaptor(Domain domain) : m_domain(domain) {}
+
+  bool is_bottom() const override {
+    return m_domain.is_top();
+  }
+
+  bool is_top() const override {
+    return m_domain.is_bottom();
+  }
+
+  bool leq(const Derived& other) const override {
+    return m_domain.equals(other.m_domain) || !m_domain.leq(other.m_domain);
+  }
+
+  bool equals(const Derived& other) const override {
+    return m_domain.equals(other.m_domain);
+  }
+
+  void set_to_bottom() override {
+    m_domain.set_to_top();
+  }
+
+  void set_to_top() override {
+    m_domain.set_to_bottom();
+  }
+
+  void join_with(const Derived& other) override {
+    m_domain.meet_with(other.m_domain);
+  }
+
+  void widen_with(const Derived& other) override {
+    m_domain.narrow_with(other.m_domain);
+  }
+
+  void meet_with(const Derived& other) override {
+    m_domain.join_with(other.m_domain);
+  }
+
+  void narrow_with(const Derived& other) override {
+    m_domain.widen_with(other.m_domain);
+  }
+
+  static Derived bottom() {
+    return Derived(Domain::top());
+  }
+
+  static Derived top() {
+    return Derived(Domain::bottom());
+  }
+
+  Domain& unwrap() { return m_domain; }
+  const Domain& unwrap() const { return m_domain; }
+ private:
+  Domain m_domain;
+};
+
+template <typename Domain, typename Derived>
+inline std::ostream& operator<<(
+    std::ostream& o, const AbstractDomainReverseAdaptor<Domain, Derived>& d) {
+  o << d.unwrap();
+  return o;
+}
