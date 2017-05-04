@@ -74,6 +74,11 @@ class DefsDomain final : public AbstractDomainReverseAdaptor<
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
 
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via using
+  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
+  // compilers fail to catch this. So we insert a redundant '= default'.
+  DefsDomain() = default;
   explicit DefsDomain(IRInstruction* insn)
       : AbstractDomainReverseAdaptor(BaseDomain(insn)) {}
 
