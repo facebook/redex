@@ -71,6 +71,11 @@ class Car {
     this.version = version;
   }
 
+  public Car(int version, String model) {
+    this.version = version;
+    this.model = model;
+  }
+
   public static class Builder {
     public @Nullable String model;
     public int version;
@@ -81,6 +86,10 @@ class Car {
 
     public void setVersion(int version) {
       this.extraCallSetVersion(version);
+    }
+
+    public Car build() {
+      return new Car(this.version, this.model);
     }
   }
 }
@@ -148,6 +157,18 @@ class UsingNoEscapeBuilder {
     car.model = builder.model;
 
     return car;
+  }
+
+  public Car initializeNullOrDefinedCarModel(int version) {
+    Car.Builder builder = new Car.Builder();
+    builder.setVersion(version);
+
+    Random randomGen = new Random();
+    int value = randomGen.nextInt(10);
+    if (value > 6) {
+      builder.model = "random_model";
+    }
+    return builder.build();
   }
 
   /**

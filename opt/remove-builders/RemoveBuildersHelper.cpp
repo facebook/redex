@@ -20,6 +20,8 @@
 
 namespace {
 
+const IRInstruction* NULL_INSN = nullptr;
+
 void fields_mapping(const IRInstruction* insn,
                     FieldsRegs* fregs,
                     DexClass* builder,
@@ -120,25 +122,6 @@ DexOpcode get_move_opcode(const IRInstruction* insn) {
   return OPCODE_MOVE;
 }
 
-/**
- * Adds an instruction that initializes a new register with null.
- */
-void add_null_instr(IRCode* code, uint16_t reg) {
-  always_assert(code != nullptr);
-
-  IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
-
-  insn->set_dest(reg);
-  insn->set_literal(0);
-
-  std::vector<IRInstruction*> insns;
-  insns.push_back(insn);
-
-  // Adds the instruction at the beginning, since it might be
-  // used in various places later.
-  code->insert_after(nullptr, insns);
-}
-
 IRInstruction* construct_move_instr(uint16_t dest_reg,
                                     uint16_t src_reg,
                                     DexOpcode move_opcode) {
@@ -159,7 +142,7 @@ IRInstruction* construct_null_instr(uint16_t reg) {
  * Adds instructions that initializes registers with null.
  */
 void null_initializations(IRCode* code,
-                          const std::vector<uint16_t>& null_regs) {
+                          const std::unordered_set<uint16_t>& null_regs) {
   always_assert(code != nullptr);
 
   std::vector<IRInstruction*> insns;
@@ -239,6 +222,32 @@ void method_updates(DexMethod* method,
   }
 }
 
+/**
+ * Giving a list of setters and a map with instruction replacements,
+ * will return an already allocated new register, in case one of the
+ * setters already has a replacement defined. Otherwise, it returns
+ * UNDEFINED.
+ */
+int get_new_reg_if_already_allocated(
+    const std::unordered_set<const IRInstruction*>& iput_insns,
+    MoveList& move_replacements) {
+
+  int new_reg = FieldOrRegStatus::UNDEFINED;
+  for (const auto& iput_insn : iput_insns) {
+    if (iput_insn != NULL_INSN) {
+      if (move_replacements.find(iput_insn) != move_replacements.end()) {
+        if (new_reg == FieldOrRegStatus::UNDEFINED) {
+          new_reg = move_replacements[iput_insn]->dest();
+        } else {
+          always_assert(new_reg == move_replacements[iput_insn]->dest());
+        }
+      }
+    }
+  }
+
+  return new_reg;
+}
+
 } // namespace
 
 ///////////////////////////////////////////////
@@ -261,6 +270,11 @@ void FieldsRegs::meet(const FieldsRegs& that) {
     } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
       continue;
     } else if (pair.second != that.field_to_reg.at(pair.first)) {
+      if (pair.second == FieldOrRegStatus::UNDEFINED ||
+          that.field_to_reg.at(pair.first) == FieldOrRegStatus::UNDEFINED) {
+        field_to_iput_insns[pair.first].insert(NULL_INSN);
+      }
+
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
       field_to_iput_insns[pair.first].insert(
           that.field_to_iput_insns.at(pair.first).begin(),
@@ -349,6 +363,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   uint16_t non_input_reg_size = regs_size - in_regs_size;
   uint16_t extra_regs = 0;
   int null_reg = FieldOrRegStatus::UNDEFINED;
+  std::unordered_set<uint16_t> extra_null_regs;
 
   std::vector<IRInstruction*> deletes;
   MoveList move_replacements;
@@ -379,44 +394,46 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
               fields_in_insn.field_to_reg[field] ==
                   FieldOrRegStatus::OVERWRITTEN) {
 
-            int new_reg = FieldOrRegStatus::UNDEFINED;
             const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
+            always_assert(iput_insns.size() > 0);
 
-            if (iput_insns.size() == 0) {
-              return false;
+            int new_reg =
+                get_new_reg_if_already_allocated(iput_insns, move_replacements);
+            if (new_reg == FieldOrRegStatus::UNDEFINED) {
+              // Allocating a new register since one was not allocated.
+              new_reg = non_input_reg_size + extra_regs;
+              extra_regs += is_wide ? 2 : 1;
             }
 
-            // Adding a move instruction for each of the setters.
-            for (const auto& iput_insn :
-                 fields_in_insn.field_to_iput_insns[field]) {
-
-              if (move_replacements.find(iput_insn) !=
-                  move_replacements.end()) {
-                if (new_reg == FieldOrRegStatus::UNDEFINED) {
-                  new_reg = move_replacements[iput_insn]->dest();
-                } else {
+            for (const auto& iput_insn : iput_insns) {
+              if (iput_insn != NULL_INSN) {
+                if (move_replacements.find(iput_insn) !=
+                    move_replacements.end()) {
                   always_assert(new_reg ==
                                 move_replacements[iput_insn]->dest());
+                } else {
+                  // Adding a move for each of the setters:
+                  //   iput v1, object // field -> move new_reg, v1
+                  move_replacements[iput_insn] = construct_move_instr(
+                      new_reg, iput_insn->src(0), move_opcode);
                 }
               } else {
-                if (new_reg == FieldOrRegStatus::UNDEFINED) {
-                  new_reg = non_input_reg_size + extra_regs;
-                  extra_regs += is_wide ? 2 : 1;
-                }
-
-                move_replacements[iput_insn] = construct_move_instr(
-                    new_reg, iput_insn->src(0), move_opcode);
+                // Initializes the register since the field might be
+                // uninitialized.
+                extra_null_regs.emplace(new_reg);
               }
             }
 
-            always_assert(new_reg != FieldOrRegStatus::UNDEFINED);
+            // Adding a move for the getter:
+            //   iget v2, object // field -> move v2, new_reg
             move_replacements[insn] =
                 construct_move_instr(insn->dest(), new_reg, move_opcode);
 
           } else if (fields_in_insn.field_to_reg[field] ==
                      FieldOrRegStatus::UNDEFINED) {
 
-            // We need to add the null one or use it.
+            // Initializing the field with null. Reusing the 'null_reg' if
+            // already defined.
             if (null_reg == FieldOrRegStatus::UNDEFINED) {
               null_reg = non_input_reg_size + extra_regs;
               extra_regs++;
@@ -483,8 +500,9 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
   }
 
   if (null_reg != FieldOrRegStatus::UNDEFINED) {
-    add_null_instr(code, null_reg);
+    extra_null_regs.emplace(null_reg);
   }
+  null_initializations(code, extra_null_regs);
 
   // Update register parameters.
   update_reg_params(
