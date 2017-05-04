@@ -15,10 +15,15 @@ ControlFlowGraph::~ControlFlowGraph() {
   }
 }
 
+Block* ControlFlowGraph::create_block() {
+  m_blocks.emplace_back(new Block(m_blocks.size()));
+  return m_blocks.back();
+}
+
 void ControlFlowGraph::add_edge(Block* p, Block* s, EdgeType type) {
   if (std::find(p->succs().begin(), p->succs().end(), s) == p->succs().end()) {
-    p->succs().push_back(s);
-    s->preds().push_back(p);
+    p->m_succs.push_back(s);
+    s->m_preds.push_back(p);
   }
   edge(p, s).set(type);
 }
@@ -32,12 +37,12 @@ void ControlFlowGraph::remove_edge(Block* p, Block* s, EdgeType type) {
 
 void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
   edge(p, s).reset();
-  p->succs().erase(std::remove_if(p->succs().begin(),
-                                  p->succs().end(),
+  p->m_succs.erase(std::remove_if(p->m_succs.begin(),
+                                  p->m_succs.end(),
                                   [&](Block* b) { return b == s; }),
                    p->succs().end());
-  s->preds().erase(std::remove_if(s->preds().begin(),
-                                  s->preds().end(),
+  s->m_preds.erase(std::remove_if(s->m_preds.begin(),
+                                  s->m_preds.end(),
                                   [&](Block* b) { return b == p; }),
                    s->preds().end());
 }

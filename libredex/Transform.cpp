@@ -1687,15 +1687,13 @@ void IRCode::build_cfg(bool end_block_before_throw) {
   std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
   std::vector<std::pair<TryEntry*, Block*>> try_ends;
   std::unordered_map<CatchEntry*, Block*> try_catches;
-  size_t id = 0;
   bool in_try = false;
-  auto& blocks = m_cfg->blocks();
-  blocks.emplace_back(new Block(id++));
-  blocks.back()->m_begin = m_fmethod->begin();
+  auto* block = m_cfg->create_block();
+  block->m_begin = m_fmethod->begin();
   // The first block can be a branch target.
   auto begin = m_fmethod->begin();
   if (begin->type == MFLOW_TARGET) {
-    branch_to_targets[begin->target->src].push_back(blocks.back());
+    branch_to_targets[begin->target->src].push_back(block);
   }
   for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
     split_may_throw(m_fmethod, it);
@@ -1713,31 +1711,27 @@ void IRCode::build_cfg(bool end_block_before_throw) {
     }
     // End the current block.
     auto next = std::next(it);
+    block->m_end = next;
     if (next == m_fmethod->end()) {
-      blocks.back()->m_end = next;
-      continue;
+      break;
     }
     // Start a new block at the next MethodItem.
-    auto next_block = new Block(id++);
-    if (next->type == MFLOW_OPCODE) {
-      next = std::next(it);
-    }
-    blocks.back()->m_end = next;
-    next_block->m_begin = next;
-    blocks.emplace_back(next_block);
+    block = m_cfg->create_block();
+    block->m_begin = next;
     // Record branch targets to add edges in the next pass.
     if (next->type == MFLOW_TARGET) {
-      branch_to_targets[next->target->src].push_back(next_block);
+      branch_to_targets[next->target->src].push_back(block);
       continue;
     }
     // Record try/catch blocks to add edges in the next pass.
     if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
-      try_ends.emplace_back(next->tentry, next_block);
+      try_ends.emplace_back(next->tentry, block);
     } else if (next->type == MFLOW_CATCH) {
-      try_catches[next->centry] = next_block;
+      try_catches[next->centry] = block;
     }
   }
   // Link the blocks together with edges
+  const auto& blocks = m_cfg->blocks();
   for (auto it = blocks.begin(); it != blocks.end(); ++it) {
     // Set outgoing edge if last MIE falls through
     auto lastmei = (*it)->rbegin();
@@ -1777,7 +1771,7 @@ void IRCode::build_cfg(bool end_block_before_throw) {
     always_assert(bid > 0);
     --bid;
     while (true) {
-      auto block = blocks[bid];
+      block = blocks.at(bid);
       if (ends_with_may_throw(block, end_block_before_throw)) {
         for (auto mei = try_end->catch_start;
              mei != nullptr;

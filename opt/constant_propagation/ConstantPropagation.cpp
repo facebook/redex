@@ -245,7 +245,7 @@ namespace {
     // this method only finds unreachable blocks without deleting any edge
     // or block
     void find_reachable_predecessors(
-        std::vector<Block*>& original_blocks,
+        const std::vector<Block*>& original_blocks,
         std::unordered_map<Block*, int>& block_to_predecessors_count) {
       std::vector<Block*> unreachable_blocks;
       for (size_t i = 1; i < original_blocks.size(); ++i) {

@@ -25,8 +25,8 @@ struct Block {
   explicit Block(size_t id) : m_id(id) {}
 
   size_t id() const { return m_id; }
-  std::vector<Block*>& preds() { return m_preds; }
-  std::vector<Block*>& succs() { return m_succs; }
+  const std::vector<Block*>& preds() const { return m_preds; }
+  const std::vector<Block*>& succs() const { return m_succs; }
   FatMethod::iterator begin() { return m_begin; }
   FatMethod::iterator end() { return m_end; }
   FatMethod::reverse_iterator rbegin() {
@@ -37,6 +37,7 @@ struct Block {
   }
 
  private:
+  friend class ControlFlowGraph;
   friend class IRCode;
 
   size_t m_id;
@@ -68,12 +69,12 @@ class ControlFlowGraph {
 
   ~ControlFlowGraph();
 
-  std::vector<Block*>& blocks() { return m_blocks; }
   const std::vector<Block*>& blocks() const { return m_blocks; }
+  Block* create_block();
+
   const EdgeFlags& edge(Block* pred, Block* succ) const {
     return m_edges.at(IdPair(pred->id(), succ->id()));
   }
-
   void add_edge(Block* pred, Block* succ, EdgeType type);
   void remove_edge(Block* pred, Block* succ, EdgeType type);
   void remove_all_edges(Block* pred, Block* succ);
