@@ -800,10 +800,10 @@ void remove_dead_methods(
   ssms.next_pass = ssms.next_pass && any_remove;
 }
 
-void transform(const std::vector<DexClass*>& classes,
-               WrapperMethods& ssms,
-               const SynthConfig& synthConfig,
-               SynthMetrics& metrics) {
+void do_transform(const std::vector<DexClass*>& classes,
+                  WrapperMethods& ssms,
+                  const SynthConfig& synthConfig,
+                  SynthMetrics& metrics) {
   // remove wrappers.  build a vector ahead of time to ensure we only visit each
   // method once, even if we mutate the class method lists such that we'd hit
   // something a second time.
@@ -884,7 +884,7 @@ bool optimize(const std::vector<DexClass*>& classes,
               SynthMetrics& metrics) {
   auto ssms = analyze(classes, synthConfig);
   assert(trace_analysis(ssms));
-  transform(classes, ssms, synthConfig, metrics);
+  do_transform(classes, ssms, synthConfig, metrics);
   return ssms.next_pass;
 }
 

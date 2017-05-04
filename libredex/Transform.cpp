@@ -880,7 +880,7 @@ void IRCode::remove_opcode(IRInstruction* insn) {
 FatMethod::iterator IRCode::main_block() { return m_fmethod->begin(); }
 
 FatMethod::iterator IRCode::insert(FatMethod::iterator cur,
-                                            IRInstruction* insn) {
+                                   IRInstruction* insn) {
   MethodItemEntry* mentry = new MethodItemEntry(insn);
   return m_fmethod->insert(cur, *mentry);
 }
@@ -958,7 +958,8 @@ FatMethod::iterator IRCode::make_switch_block(
 }
 
 namespace {
-using RegMap = std::unordered_map<uint16_t, uint16_t>;
+
+using RegMap = transform::RegMap;
 
 /*
  * If the callee has wide instructions, naive 1-to-1 remapping of registers
@@ -1042,12 +1043,6 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
   }
 }
 
-void remap_registers(IRCode* code, const RegMap& reg_map) {
-  for (auto& mei : *code) {
-    remap_registers(mei, reg_map);
-  }
-}
-
 void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
   RegSet mapped(newregs);
   for (auto pair : reg_map) {
@@ -1065,7 +1060,7 @@ void enlarge_registers(IRCode* code, uint16_t newregs) {
   for (uint16_t i = 0; i < ins; ++i) {
     reg_map[oldregs - ins + i] = newregs - ins + i;
   }
-  remap_registers(code, reg_map);
+  transform::remap_registers(code, reg_map);
   code->set_registers_size(newregs);
 }
 
@@ -1080,7 +1075,7 @@ void remap_callee_regs(IRInstruction* invoke,
   for (uint16_t i = 0; i < wc; ++i) {
     reg_map[oldregs - ins + i] = invoke->src(i);
   }
-  remap_registers(&*method->get_code(), reg_map);
+  transform::remap_registers(method->get_code(), reg_map);
   method->get_code()->set_registers_size(newregs);
 }
 
@@ -1186,7 +1181,17 @@ void cleanup_callee_debug(FatMethod* fcallee) {
   }
 }
 
+} // namespace
+
+namespace transform {
+
+void remap_registers(IRCode* code, const RegMap& reg_map) {
+  for (auto& mei : *code) {
+    ::remap_registers(mei, reg_map);
+  }
 }
+
+} // namespace transform
 
 /*
  * For splicing a callee's FatMethod into a caller.
@@ -1383,8 +1388,8 @@ RegSet ins_reg_defs(IRCode& code) {
 }
 
 void IRCode::inline_tail_call(DexMethod* caller,
-                                       DexMethod* callee,
-                                       IRInstruction* invoke) {
+                              DexMethod* callee,
+                              IRInstruction* invoke) {
   TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
   auto fcaller = caller->get_code()->m_fmethod;
   auto fcallee = callee->get_code()->m_fmethod;
@@ -1398,7 +1403,7 @@ void IRCode::inline_tail_call(DexMethod* caller,
   always_assert(newregs <= 16);
 
   // Remap registers to account for possibly larger frame, more ins
-  enlarge_registers(&*caller->get_code(), newregs);
+  enlarge_registers(caller->get_code(), newregs);
   remap_callee_regs(invoke, callee, newregs);
 
   callee->get_code()->set_ins_size(bins);
@@ -1583,7 +1588,7 @@ void IRCode::enlarge_regs(DexMethod* method, uint16_t newregs) {
   auto code = method->get_code();
   always_assert(code != nullptr);
   always_assert(code->get_registers_size() <= newregs);
-  enlarge_registers(&*code, newregs);
+  enlarge_registers(code, newregs);
 }
 
 namespace {
@@ -1809,16 +1814,21 @@ static uint16_t calc_outs_size(const IRCode* code) {
   return size;
 }
 
-std::unique_ptr<DexCode> IRCode::sync(const DexMethod*) {
+std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   // TODO: when we have load-param opcodes, check that they square with the
   // prototype of the DexMethod
   auto dex_code = std::make_unique<DexCode>();
-  dex_code->set_registers_size(m_registers_size);
-  dex_code->set_ins_size(m_ins_size);
-  dex_code->set_outs_size(calc_outs_size(this));
-  dex_code->set_debug_item(std::move(m_dbg));
-  while (try_sync(&*dex_code) == false)
-    ;
+  try {
+    dex_code->set_registers_size(m_registers_size);
+    dex_code->set_ins_size(m_ins_size);
+    dex_code->set_outs_size(calc_outs_size(this));
+    dex_code->set_debug_item(std::move(m_dbg));
+    while (try_sync(dex_code.get()) == false)
+      ;
+  } catch (std::exception&) {
+    fprintf(stderr, "Failed to sync %s\n%s\n", SHOW(method), SHOW(this));
+    throw;
+  }
   return dex_code;
 }
 

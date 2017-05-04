@@ -389,14 +389,22 @@ class InlineContext {
 class InstructionIterator {
   FatMethod::iterator m_it;
   FatMethod::iterator m_end;
+  /*
+   * If m_it doesn't point to an MIE of type MFLOW_OPCODE, increment it until
+   * it does. Otherwise do nothing.
+   */
+  void to_next_instruction() {
+    while (m_it != m_end && m_it->type != MFLOW_OPCODE) {
+      ++m_it;
+    }
+  }
  public:
+  InstructionIterator() {}
   explicit InstructionIterator(FatMethod::iterator it, FatMethod::iterator end)
       : m_it(it), m_end(end) {}
   InstructionIterator& operator++() {
     ++m_it;
-    if (m_it != m_end) {
-      while (m_it->type != MFLOW_OPCODE && ++m_it != m_end);
-    }
+    to_next_instruction();
     return *this;
   }
   InstructionIterator operator++(int) {
@@ -421,6 +429,7 @@ class InstructionIterator {
   }
   void reset(FatMethod::iterator it) {
     m_it = it;
+    to_next_instruction();
   }
 
   using difference_type = long;
@@ -457,3 +466,11 @@ class InstructionIterable {
     return InstructionIterator(m_end, m_end);
   }
 };
+
+namespace transform {
+
+using RegMap = std::unordered_map<uint16_t, uint16_t>;
+
+void remap_registers(IRCode*, const RegMap&);
+
+} // namespace transform

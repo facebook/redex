@@ -120,8 +120,7 @@ HighRegMoveInserter::SwapInfo HighRegMoveInserter::reserve_swap(
     // while enlarge_regs takes the total number of regs after the
     // transformation... should make them uniform
     increment_all_regs(&*code, low_regs_shortfall);
-    IRCode::enlarge_regs(method,
-                                  code->get_registers_size() + range_shortfall);
+    IRCode::enlarge_regs(method, code->get_registers_size() + range_shortfall);
 
     info.low_reg_swap += low_regs_shortfall;
     info.range_swap += range_shortfall;
