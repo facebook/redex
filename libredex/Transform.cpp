@@ -1687,9 +1687,12 @@ void IRCode::build_cfg(bool end_block_before_throw) {
   std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
   std::vector<std::pair<TryEntry*, Block*>> try_ends;
   std::unordered_map<CatchEntry*, Block*> try_catches;
+  std::vector<Block*> exit_blocks;
   bool in_try = false;
+
   auto* block = m_cfg->create_block();
   block->m_begin = m_fmethod->begin();
+  m_cfg->set_entry_block(block);
   // The first block can be a branch target.
   auto begin = m_fmethod->begin();
   if (begin->type == MFLOW_TARGET) {

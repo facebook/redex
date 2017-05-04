@@ -71,6 +71,15 @@ class ControlFlowGraph {
 
   const std::vector<Block*>& blocks() const { return m_blocks; }
   Block* create_block();
+  const Block* entry_block() const { return m_entry_block; }
+  const Block* exit_block() const { return m_exit_block; }
+  void set_entry_block(Block* b) { m_entry_block = b; }
+  void set_exit_block(Block* b) { m_exit_block = b; }
+  /*
+   * Determine where the exit block is. If there is more than one, create a
+   * "ghost" block that is the successor to all of them.
+   */
+  void calculate_exit_block();
 
   const EdgeFlags& edge(Block* pred, Block* succ) const {
     return m_edges.at(IdPair(pred->id(), succ->id()));
@@ -79,6 +88,11 @@ class ControlFlowGraph {
   void remove_edge(Block* pred, Block* succ, EdgeType type);
   void remove_all_edges(Block* pred, Block* succ);
 
+  /*
+   * Print the graph in the DOT graph description language.
+   */
+  std::ostream& write_dot_format(std::ostream&) const;
+
  private:
   EdgeFlags& edge(Block* pred, Block* succ) {
     return m_edges[IdPair(pred->id(), succ->id())];
@@ -86,4 +100,8 @@ class ControlFlowGraph {
 
   std::vector<Block*> m_blocks;
   std::unordered_map<IdPair, EdgeFlags, boost::hash<IdPair>> m_edges;
+  Block* m_entry_block {nullptr};
+  Block* m_exit_block {nullptr};
 };
+
+std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);

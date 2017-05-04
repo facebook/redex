@@ -140,13 +140,12 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
           auto code = method->get_code();
           code->build_cfg();
           ControlFlowGraph& cfg = code->cfg();
+          cfg.calculate_exit_block();
           std::cout << "CFG of function_1:" << std::endl
                     << SHOW(cfg) << std::endl;
-          auto it = std::find_if(cfg.blocks().begin(),
-                                 cfg.blocks().end(),
-                                 [](Block* b) { return b->id() == 2; });
-          ASSERT_TRUE(it != cfg.blocks().end());
-          IRFixpointIterator fixpoint_iterator(cfg, *it);
+          ASSERT_EQ(cfg.exit_block()->id(), 2);
+          IRFixpointIterator fixpoint_iterator(
+              cfg, const_cast<Block*>(cfg.exit_block()));
           fixpoint_iterator.run(LivenessDomain());
 
           for (Block* block : cfg.blocks()) {
