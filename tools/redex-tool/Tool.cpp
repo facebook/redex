@@ -24,7 +24,7 @@ namespace {
 void load_store_dexen(DexStore& store, const DexMetadata& store_metadata) {
   for (const auto& file_path : store_metadata.get_files()) {
     std::cout << "Loading " << file_path << std::endl;
-    DexClasses classes = load_classes_from_dex(file_path.c_str());
+    DexClasses classes = load_classes_from_dex(file_path.c_str(), true);
     store.add_classes(std::move(classes));
   }
 }
@@ -128,7 +128,7 @@ DexStoresVector Tool::init(
   DexStoresVector stores;
 
   // Load root dexen
-  load_root_dexen(root_store, dexen_dir_str);
+  load_root_dexen(root_store, dexen_dir_str, /* ballon = */ true);
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen

@@ -356,7 +356,10 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
   post_dexen_changes(v, iter);
 }
 
-void load_root_dexen(DexStore& store, const std::string& dexen_dir_str) {
+void load_root_dexen(
+  DexStore& store,
+  const std::string& dexen_dir_str,
+  bool balloon) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
   assert(fs::is_directory(dexen_dir_path));
@@ -398,7 +401,7 @@ void load_root_dexen(DexStore& store, const std::string& dexen_dir_str) {
   // Load all discovered dex files
   for (const auto& dex : dexen) {
     std::cout << "Loading " << dex.string() << std::endl;
-    DexClasses classes = load_classes_from_dex(dex.c_str(), /* balloon */ false);
+    DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);
     store.add_classes(std::move(classes));
   }
 }
