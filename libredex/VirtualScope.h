@@ -24,7 +24,7 @@ using TypeSet = std::set<const DexType*>;
  * DexType parent to children relationship
  * (child to parent is in DexClass)
  */
-using ClassHierarchy = std::map<const DexType*, TypeSet>;
+using ClassHierarchy = std::map<const DexType*, TypeSet, dextypes_comparator>;
 
 /**
  * Flags to mark virtual method state.
