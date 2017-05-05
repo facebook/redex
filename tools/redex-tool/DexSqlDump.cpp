@@ -169,7 +169,7 @@ void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
     method_name,
     method->get_name()->c_str(),
     method->get_access(),
-    method->get_dex_code() ? method->get_dex_code()->size() : 0
+    method->get_code() ? method->get_code()->sum_opcode_sizes() : 0
   );
 }
 
