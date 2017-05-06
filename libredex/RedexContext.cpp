@@ -61,7 +61,8 @@ DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   if (it == s_string_map.end()) {
     // note DexStrings are keyed by the c_str() of the underlying std::string
     // The c_str is valid until a the string is destroyed, or until a non-const
-    // function is called on the string (but note the std::string itself is const)
+    // function is called on the string (but note the std::string itself is
+    // const)
     auto rv = new DexString(nstr, utfsize);
     s_string_map.emplace(rv->c_str(), rv);
     return rv;
@@ -109,7 +110,8 @@ DexType* RedexContext::get_type(DexString* dstring) {
 
 void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
   std::lock_guard<std::mutex> lock(s_type_lock);
-  always_assert_log(!s_type_map.count(new_name),
+  always_assert_log(
+      !s_type_map.count(new_name),
       "Bailing, attempting to alias a symbol that already exists! '%s'\n",
       new_name->c_str());
   type->m_name = new_name;
@@ -127,8 +129,8 @@ DexField* RedexContext::make_field(const DexType* container,
   auto it = s_field_map.find(r);
   if (it == s_field_map.end()) {
     auto rv = new DexField(const_cast<DexType*>(container),
-                      const_cast<DexString*>(name),
-                      const_cast<DexType*>(type));
+                           const_cast<DexString*>(name),
+                           const_cast<DexType*>(type));
     s_field_map.emplace(r, rv);
     return rv;
   } else {
@@ -156,8 +158,7 @@ DexField* RedexContext::get_field(const DexType* container,
   }
 }
 
-void RedexContext::mutate_field(DexField* field,
-                                const DexFieldRef& ref) {
+void RedexContext::mutate_field(DexField* field, const DexFieldRef& ref) {
   std::lock_guard<std::mutex> lock(s_field_lock);
   DexFieldRef& r = field->m_ref;
   s_field_map.erase(r);
@@ -280,6 +281,29 @@ void RedexContext::mutate_method(DexMethod* method,
 void RedexContext::build_type_system(DexClass* cls) {
   std::lock_guard<std::mutex> l(m_type_system_mutex);
   const DexType* type = cls->get_type();
+  if (m_type_to_class.find(type) != end(m_type_to_class)) {
+    const auto& prev_loc = m_type_to_class[type]->get_dex_location();
+    const auto& cur_loc = cls->get_dex_location();
+    if (prev_loc == cur_loc) {
+      TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
+    } else {
+      TRACE(MAIN,
+            1,
+            "ABORT! Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
+            "2: %s\n",
+            SHOW(cls),
+            m_type_to_class[type]->get_dex_location().c_str(),
+            cls->get_dex_location().c_str());
+      fprintf(stderr,
+              "ABORT! Found duplicate class: %s in two dexes:\ndex 1: %s\ndex "
+              "2: %s\n",
+              SHOW(cls),
+              m_type_to_class[type]->get_dex_location().c_str(),
+              cls->get_dex_location().c_str());
+      // TODO: better error exit strategy needed for the python wrapper etc.
+      exit(EXIT_FAILURE);
+    }
+  }
   m_type_to_class.emplace(type, cls);
   const auto& super = cls->get_super_class();
   if (super) m_class_hierarchy[super].push_back(type);
@@ -291,8 +315,7 @@ DexClass* RedexContext::type_class(const DexType* t) {
 }
 
 const std::vector<const DexType*>& RedexContext::get_children(
-  const DexType* type
-) {
+    const DexType* type) {
   const auto& it = m_class_hierarchy.find(type);
   return it != m_class_hierarchy.end() ? it->second : m_empty_types;
 }

@@ -919,20 +919,23 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
   return nullptr;
 }
 
-DexClass::DexClass(DexIdx* idx, dex_class_def* cdef) {
-  m_anno = nullptr;
-  m_has_class_data = false;
-  m_external = false;
-  m_self = idx->get_typeidx(cdef->typeidx);
-  m_access_flags = (DexAccessFlags)cdef->access_flags;
-  m_super_class = idx->get_typeidx(cdef->super_idx);
-  m_interfaces = idx->get_type_list(cdef->interfaces_off);
-  m_source_file = idx->get_nullable_stringidx(cdef->source_file_idx);
+DexClass::DexClass(DexIdx* idx,
+                   dex_class_def* cdef,
+                   const std::string& dex_location)
+    : m_access_flags((DexAccessFlags)cdef->access_flags),
+      m_super_class(idx->get_typeidx(cdef->super_idx)),
+      m_self(idx->get_typeidx(cdef->typeidx)),
+      m_interfaces(idx->get_type_list(cdef->interfaces_off)),
+      m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
+      m_anno(nullptr),
+      m_has_class_data(false),
+      m_external(false),
+      m_dex_location(dex_location) {
   load_class_annotations(idx, cdef->annotations_off);
-  DexEncodedValueArray* deva = load_static_values(idx, cdef->static_values_off);
-  load_class_data_item(idx, cdef->class_data_offset, deva);
+  auto deva = std::unique_ptr<DexEncodedValueArray>(
+      load_static_values(idx, cdef->static_values_off));
+  load_class_data_item(idx, cdef->class_data_offset, deva.get());
   g_redex->build_type_system(this);
-  delete (deva);
 }
 
 void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {

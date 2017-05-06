@@ -810,13 +810,14 @@ class DexClass {
   DexTypeList* m_interfaces;
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
+  bool m_has_class_data;
+  bool m_external;
+  std::string m_deobfuscated_name;
+  const std::string m_dex_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
   std::vector<DexMethod*> m_vmethods;
-  bool m_has_class_data;
-  bool m_external;
-  std::string m_deobfuscated_name;
 
   DexClass(){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
@@ -828,7 +829,7 @@ class DexClass {
 
  public:
   ReferencedState rstate;
-  DexClass(DexIdx* idx, dex_class_def* cdef);
+  DexClass(DexIdx* idx, dex_class_def* cdef, const std::string& dex_location);
 
  public:
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
@@ -890,6 +891,9 @@ class DexClass {
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   const std::string get_deobfuscated_name() const {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  }
+  const std::string& get_dex_location() const {
+    return m_dex_location;
   }
 
   void set_access(DexAccessFlags access) {

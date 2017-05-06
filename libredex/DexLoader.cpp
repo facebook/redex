@@ -29,9 +29,10 @@ class DexLoader {
   DexClasses* m_classes;
   uint8_t* m_dexmmap;
   size_t m_dex_size;
+  std::string m_dex_location;
 
  public:
-  DexLoader() {}
+  explicit DexLoader(const char* location) : m_dex_location(location) {}
   ~DexLoader() {
     if (m_idx) delete m_idx;
     if (m_dexmmap) munmap(m_dexmmap, m_dex_size);
@@ -88,7 +89,7 @@ static void class_work(void* arg) {
 
 void DexLoader::load_dex_class(int num) {
   dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = new DexClass(m_idx, cdef);
+  DexClass* dc = new DexClass(m_idx, cdef, m_dex_location);
   m_classes->at(num) = dc;
 }
 
@@ -141,7 +142,8 @@ static void balloon_all(const Scope& scope) {
 }
 
 DexClasses load_classes_from_dex(const char* location, bool balloon) {
-  DexLoader dl;
+  TRACE(MAIN, 1, "Loading classes from dex from %s\n", location);
+  DexLoader dl(location);
   auto classes = dl.load_dex(location);
   if (balloon) {
     balloon_all(classes);
