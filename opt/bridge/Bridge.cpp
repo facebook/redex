@@ -41,6 +41,9 @@ DexMethod* match_pattern(DexMethod* bridge) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
   while (it != end) {
     if (it->insn->opcode() != OPCODE_CHECK_CAST) break;
     ++it;
@@ -75,18 +78,17 @@ bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
     TRACE(BRIDGE, 5, "Rejecting, bridgee has no code: `%s'\n", SHOW(bridge));
     return false;
   }
-  auto bins = bridge->get_code()->get_ins_size();
-  auto eins = bridgee->get_code()->get_ins_size();
+  auto bins = sum_param_sizes(bridge->get_code());
+  auto eins = sum_param_sizes(bridgee->get_code());
   auto eregs = bridgee->get_code()->get_registers_size();
   if ((eregs + bins - eins) >= 16) {
     TRACE(BRIDGE, 5, "Rejecting, too many regs to remap: `%s'\n", SHOW(bridge));
     return false;
   }
-  always_assert_log(
-      bridge->get_code()->get_ins_size() >= bridgee->get_code()->get_ins_size(),
-      "Bridge `%s' takes fewer args than bridgee `%s'",
-      SHOW(bridge),
-      SHOW(bridgee));
+  always_assert_log(bins >= eins,
+                    "Bridge `%s' takes fewer args than bridgee `%s'",
+                    SHOW(bridge),
+                    SHOW(bridgee));
   return true;
 }
 

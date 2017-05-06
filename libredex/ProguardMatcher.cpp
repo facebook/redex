@@ -363,6 +363,9 @@ void keep_clinits(DexClass* cls) {
     if (is_clinit(method) && method->get_code()) {
       auto ii = InstructionIterable(method->get_code());
       auto it = ii.begin();
+      while (opcode::is_load_param(it->insn->opcode())) {
+        ++it;
+      }
       if (!(it->insn->opcode() == OPCODE_RETURN_VOID && (++it) == ii.end())) {
         method->rstate.set_keep();
       }

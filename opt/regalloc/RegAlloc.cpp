@@ -264,9 +264,8 @@ static std::string show_register_kinds(
 }
 
 void HighRegMoveInserter::insert_moves(
-    DexMethod* method, const HighRegMoveInserter::SwapInfo& swap_info) {
-  auto reg_kind_map = analyze_register_kinds(method);
-  auto code = method->get_code();
+    IRCode* code, const HighRegMoveInserter::SwapInfo& swap_info) {
+  auto reg_kind_map = analyze_register_kinds(code);
   TRACE(REG, 5, "%s", show_register_kinds(&*code, *reg_kind_map).c_str());
   auto ii = InstructionIterable(code);
   auto end = ii.end();
@@ -276,7 +275,7 @@ void HighRegMoveInserter::insert_moves(
     TRACE(REG, 6, "Processing %s\n", SHOW(insn));
     if (is_rangeable(op)) {
       auto reg_kinds = reg_kind_map->at(insn);
-      auto range_start = code->get_registers_size() - code->get_ins_size() -
+      auto range_start = code->get_registers_size() - sum_param_sizes(code) -
                          swap_info.range_swap;
       handle_rangeable(&*code, it, reg_kinds, range_start);
       continue;
@@ -311,8 +310,8 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   walk_code(scope,
             [](DexMethod*) { return true; },
             [&](DexMethod* m, IRCode& code) {
-              TRACE(REG, 3, "Allocating %s regs: %d ins: %d\n",
-                    SHOW(m), code.get_registers_size(), code.get_ins_size());
+              TRACE(REG, 3, "Allocating %s regs: %d\n",
+                    SHOW(m), code.get_registers_size());
               try {
                 TRACE(REG, 5, "Before reservation:\n%s\n", SHOW(&code));
                 auto swap_info = HighRegMoveInserter::reserve_swap(m);
@@ -320,7 +319,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
                       swap_info.low_reg_swap,
                       swap_info.range_swap);
                 TRACE(REG, 5, "After reservation:\n%s\n", SHOW(&code));
-                move_inserter.insert_moves(m, swap_info);
+                move_inserter.insert_moves(&code, swap_info);
               } catch (std::exception&) {
                 fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
                 throw;

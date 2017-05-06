@@ -60,6 +60,7 @@ enum DexOpcodeFormat : uint8_t {
   FMT_f5rc,
   FMT_f57c,
   FMT_fopcode,
+  FMT_iopcode,
 };
 
 namespace opcode {
@@ -302,6 +303,11 @@ OPS
   FOPCODE_PACKED_SWITCH = 0x0100,
   FOPCODE_SPARSE_SWITCH = 0x0200,
   FOPCODE_FILLED_ARRAY  = 0x0300,
+
+  // used only by our IR
+  IOPCODE_LOAD_PARAM = 0xf000,
+  IOPCODE_LOAD_PARAM_OBJECT = 0xf100,
+  IOPCODE_LOAD_PARAM_WIDE = 0xf200,
 };
 
 std::string show(DexOpcode);
@@ -323,4 +329,6 @@ namespace opcode {
   bool has_range(DexOpcode);
 
   bool may_throw(DexOpcode);
+
+  bool is_load_param(DexOpcode);
 } // namespace opcode

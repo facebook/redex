@@ -104,6 +104,9 @@ class PeepholeTest : public ::testing::Test {
     DexMethod* method = DexMethod::make_method(
         dex_class->get_type(), DexString::make_string(method_name), proto);
     method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    // FIXME we should determine the actual number of temp regs used from
+    // the IRInstructionList
+    method->set_code(std::make_unique<IRCode>(method, 0));
 
     // import our instructions
     auto mt = method->get_code();

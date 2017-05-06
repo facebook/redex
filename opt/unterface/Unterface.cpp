@@ -90,7 +90,7 @@ Trait check_init(DexMethod* meth) {
     trait |= MULTIPLE_ARGS_CTOR;
   }
   if (code == nullptr) return trait;
-  if (code->get_ins_size() != 2) return trait;
+  if (sum_param_sizes(code) != 2) return trait;
   /*
   FIXME: convert to use IRCode
   auto insns = code->get_instructions();

@@ -467,7 +467,6 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   that->sync();
   m->m_dex_code.reset(new DexCode(*that->m_dex_code));
   that->balloon();
-  m->balloon();
 
   m->m_access = that->m_access;
   m->m_concrete = that->m_concrete;
@@ -477,6 +476,8 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     // note: DexAnnotation's copy ctor only does a shallow copy
     m->m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
   }
+
+  m->balloon();
   return m;
 }
 
@@ -570,7 +571,7 @@ void DexMethod::make_concrete(DexAccessFlags access,
 
 void DexMethod::make_concrete(DexAccessFlags access,
                               bool is_virtual) {
-  make_concrete(access, std::make_unique<IRCode>(), is_virtual);
+  make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
 }
 
 void DexMethod::make_non_concrete() {

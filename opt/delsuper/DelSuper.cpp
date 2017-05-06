@@ -110,7 +110,7 @@ private:
     const IRInstruction* insn) {
     assert(insn->opcode() == OPCODE_INVOKE_SUPER);
     uint16_t start_reg = meth->get_code()->get_registers_size() -
-      meth->get_code()->get_ins_size();
+      sum_param_sizes(meth->get_code());
     uint16_t end_reg = meth->get_code()->get_registers_size();
     // args to this method start at 'start_reg', so they should
     // be passed into invoke_super of insn {start_reg, ..., end_reg}
@@ -172,6 +172,9 @@ private:
     // container of instructions
     std::vector<IRInstruction*> insns;
     for (auto& mie : InstructionIterable(meth->get_code())) {
+      if (opcode::is_load_param(mie.insn->opcode())) {
+        continue;
+      }
       insns.emplace_back(mie.insn);
     }
 

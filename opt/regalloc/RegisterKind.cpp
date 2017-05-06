@@ -335,6 +335,12 @@ RegisterKind dest_kind(DexOpcode op) {
   case OPCODE_FILLED_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY_RANGE:
     return RegisterKind::OBJECT;
+  case IOPCODE_LOAD_PARAM:
+    return RegisterKind::NORMAL;
+  case IOPCODE_LOAD_PARAM_OBJECT:
+    return RegisterKind::OBJECT;
+  case IOPCODE_LOAD_PARAM_WIDE:
+    return RegisterKind::WIDE;
   default:
     always_assert_log(false, "Unknown opcode %02x\n", op);
   }
@@ -366,29 +372,8 @@ bool KindVec::operator==(const KindVec& that) const {
 }
 
 std::unique_ptr<std::unordered_map<IRInstruction*, KindVec>>
-analyze_register_kinds(DexMethod* method) {
-  auto code = method->get_code();
+analyze_register_kinds(IRCode* code) {
   KindVec entry_kinds(code->get_registers_size());
-  auto args = method->get_proto()->get_args()->get_type_list();
-  auto args_reg = code->get_registers_size() - code->get_ins_size();
-  if (!is_static(method)) {
-    entry_kinds[args_reg] = RegisterKind::OBJECT;
-    ++args_reg;
-  }
-  for (DexType* arg : args) {
-    if (is_wide_type(arg)) {
-      entry_kinds[args_reg] = RegisterKind::WIDE;
-      args_reg += 2;
-    } else {
-      if (is_primitive(arg)) {
-        entry_kinds[args_reg] = RegisterKind::NORMAL;
-      } else {
-        entry_kinds[args_reg] = RegisterKind::OBJECT;
-      }
-      ++args_reg;
-    }
-  }
-  always_assert(args_reg == code->get_registers_size());
   auto trans = [&](const IRInstruction* insn, KindVec* kinds) {
     if (insn->dests_size()) {
       (*kinds)[insn->dest()] = dest_kind(insn->opcode());

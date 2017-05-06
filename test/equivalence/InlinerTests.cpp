@@ -32,6 +32,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
                                DexString::make_string("callee_" + test_name()),
                                proto);
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_callee->set_code(std::make_unique<IRCode>(m_callee, 0));
     {
       using namespace dex_asm;
       auto mt = m_callee->get_code();
@@ -40,8 +41,6 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
       mt->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}));
       mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 0_v}));
       mt->push_back(dasm(OPCODE_RETURN, {1_v}));
-      m_callee->get_code()->set_registers_size(2);
-      m_callee->get_code()->set_ins_size(2);
     }
     cls->add_method(m_callee);
   }
@@ -94,6 +93,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
                                DexString::make_string("callee_" + test_name()),
                                proto);
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_callee->set_code(std::make_unique<IRCode>(m_callee, 1));
     using namespace dex_asm;
     auto mt = m_callee->get_code();
     // if-* opcodes store their jump offset as a 16-bit signed int. Let's
@@ -105,8 +105,6 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
       mt->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
     }
     mt->push_back(dasm(OPCODE_RETURN_VOID));
-    m_callee->get_code()->set_registers_size(1);
-    m_callee->get_code()->set_ins_size(0);
     cls->add_method(m_callee);
   }
 
@@ -132,7 +130,6 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     mt->push_back(dasm(OPCODE_SUB_INT, {1_v, 1_v, 2_v}));
     mt->push_back(dasm(OPCODE_RETURN, {1_v}));
     m->get_code()->set_registers_size(3);
-    m->get_code()->set_ins_size(0);
   }
 
   virtual void transform_method(DexMethod* m) {

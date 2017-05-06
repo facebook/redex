@@ -16,18 +16,13 @@
 TEST(SimpleInlineTest, hasAliasedArgs) {
   g_redex = new RedexContext();
   using namespace dex_asm;
-  auto args = DexTypeList::make_type_list({});
-  auto proto = DexProto::make_proto(get_void_type(), args);
-  auto callee = DexMethod::make_method(
-      get_object_type(), DexString::make_string("testCallee"), proto);
+  auto callee = DexMethod::make_method("Lfoo;", "testCallee", "V", {"I", "I"});
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  callee->get_code()->set_registers_size(2);
-  callee->get_code()->set_ins_size(2);
+  callee->set_code(std::make_unique<IRCode>(callee, 0));
 
-  auto caller = DexMethod::make_method(
-      get_object_type(), DexString::make_string("testCaller"), proto);
+  auto caller = DexMethod::make_method("Lfoo;", "testCaller", "V", {"I", "I"});
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  caller->get_code()->set_registers_size(1);
+  caller->set_code(std::make_unique<IRCode>(caller, 0));
 
   auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
   invoke->set_arg_word_count(2);

@@ -145,13 +145,10 @@ void null_initializations(IRCode* code,
                           const std::unordered_set<uint16_t>& null_regs) {
   always_assert(code != nullptr);
 
-  std::vector<IRInstruction*> insns;
+  auto params = code->get_param_instructions();
   for (uint16_t null_reg : null_regs) {
-    insns.push_back(construct_null_instr(null_reg));
+    code->insert_before(params.end(), construct_null_instr(null_reg));
   }
-
-  // Adds the instructions at the beginnings.
-  code->insert_after(nullptr, insns);
 }
 
 void add_instr(IRCode* code,
@@ -359,7 +356,7 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
   static auto init = DexString::make_string("<init>");
   uint16_t regs_size = code->get_registers_size();
-  uint16_t in_regs_size = code->get_ins_size();
+  uint16_t in_regs_size = sum_param_sizes(code);
   uint16_t non_input_reg_size = regs_size - in_regs_size;
   uint16_t extra_regs = 0;
   int null_reg = FieldOrRegStatus::UNDEFINED;

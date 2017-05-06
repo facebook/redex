@@ -336,9 +336,9 @@ bool passes_args_through(IRInstruction* insn,
                          int ignore /* = 0 */
                          ) {
   auto regs = code.get_registers_size();
-  auto ins = code.get_ins_size();
+  auto ins = sum_param_sizes(&code);
   auto wc = insn->arg_word_count();
-  if (wc != (code.get_ins_size() - ignore)) return false;
+  if (wc != ins - ignore) return false;
   for (int i = 0; i < wc; i++) {
     if (insn->src(i) != (regs - ins + i)) {
       return false;
@@ -404,4 +404,19 @@ void load_root_dexen(
     DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);
     store.add_classes(std::move(classes));
   }
+}
+
+/*
+ * This exists because in the absence of a register allocator, we need each
+ * transformation to keep the ins registers at the end of the frame. Once the
+ * register allocator is switched on this function should no longer have many
+ * use cases.
+ */
+size_t sum_param_sizes(const IRCode* code) {
+  size_t size {0};
+  auto param_ops = code->get_param_instructions();
+  for (auto& mie : InstructionIterable(&param_ops)) {
+    size += mie.insn->dest_is_wide() ? 2 : 1;
+  }
+  return size;
 }

@@ -836,6 +836,12 @@ std::string show(DexOpcode opcode) {
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:
     return "FILLED_ARRAY_DATA";
+  case IOPCODE_LOAD_PARAM:
+    return "IOPCODE_LOAD_PARAM";
+  case IOPCODE_LOAD_PARAM_OBJECT:
+    return "IOPCODE_LOAD_PARAM_OBJECT";
+  case IOPCODE_LOAD_PARAM_WIDE:
+    return "IOPCODE_LOAD_PARAM_WIDE";
   }
   always_assert_log(false, "Unknown opcode");
   return "";

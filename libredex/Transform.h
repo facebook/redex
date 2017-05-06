@@ -15,6 +15,7 @@
 #include <unordered_set>
 
 #include <boost/intrusive/list.hpp>
+#include <boost/range/sub_range.hpp>
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
@@ -201,7 +202,6 @@ class IRCode {
   std::unique_ptr<ControlFlowGraph> m_cfg;
 
   uint16_t m_registers_size {0};
-  uint16_t m_ins_size {0};
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -225,16 +225,30 @@ class IRCode {
   friend struct MethodCreator;
 
  public:
-  explicit IRCode();
   explicit IRCode(DexMethod*);
+  /*
+   * Construct an IRCode for a DexMethod that has no DexCode (that is, a new
+   * method that we are creating instead of something from an input dex file.)
+   * In the absence of a register allocator, we need the parameters to be
+   * loaded at the end of the register frame. Since we don't have a DexCode
+   * object, we need to specify the frame size ourselves, hence the extra
+   * parameter.
+   *
+   * Once we have an allocator we should be able to deprecate this.
+   */
+  explicit IRCode(DexMethod*, size_t temp_regs);
 
   ~IRCode();
 
   uint16_t get_registers_size() const { return m_registers_size; }
-  uint16_t get_ins_size() const { return m_ins_size; }
 
   void set_registers_size(uint16_t sz) { m_registers_size = sz; }
-  void set_ins_size(uint16_t sz) { m_ins_size = sz; }
+
+  /*
+   * Find the subrange of load-param instructions. These instructions should
+   * always be at the beginning of the method.
+   */
+  boost::sub_range<FatMethod> get_param_instructions() const;
 
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
   DexDebugItem* get_debug_item() { return m_dbg.get(); }
@@ -247,11 +261,6 @@ class IRCode {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
-
-  /* Create a FatMethod from a DexMethod. FatMethods are easier to manipulate.
-   * E.g. they don't require manual updating of address offsets, and they don't
-   * contain pseudo-opcodes. */
-  FatMethod* balloon(DexMethod*);
 
   /*
    * Inline tail-called `callee` into `caller` at instruction `invoke`.
@@ -445,11 +454,11 @@ class InstructionIterable {
  public:
   // TODO: make this const-correct
   template <typename T>
-  explicit InstructionIterable(const T* mentry_list)
-      : InstructionIterable(const_cast<T*>(mentry_list)) {}
+  explicit InstructionIterable(const T& mentry_list)
+      : InstructionIterable(const_cast<T&>(mentry_list)) {}
   template <typename T>
-  explicit InstructionIterable(T* mentry_list)
-      : m_begin(mentry_list->begin()), m_end(mentry_list->end()) {
+  explicit InstructionIterable(T& mentry_list)
+      : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {
     while (m_begin != m_end) {
       if (m_begin->type == MFLOW_OPCODE) {
         break;
@@ -457,13 +466,20 @@ class InstructionIterable {
       ++m_begin;
     }
   }
+  template <typename T>
+  explicit InstructionIterable(T* mentry_list)
+      : InstructionIterable(*mentry_list) {}
 
-  InstructionIterator begin() {
+  InstructionIterator begin() const {
     return InstructionIterator(m_begin, m_end);
   }
 
-  InstructionIterator end() {
+  InstructionIterator end() const {
     return InstructionIterator(m_end, m_end);
+  }
+
+  bool empty() const {
+    return begin() == end();
   }
 };
 

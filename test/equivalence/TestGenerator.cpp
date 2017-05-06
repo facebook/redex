@@ -18,6 +18,7 @@
 #include "DexOutput.h"
 #include "DexLoader.h"
 #include "TestGenerator.h"
+#include "Transform.h"
 
 void EquivalenceTest::generate(DexClass* cls) {
   setup(cls);
@@ -27,6 +28,7 @@ void EquivalenceTest::generate(DexClass* cls) {
   DexMethod* before = DexMethod::make_method(
       cls->get_type(), DexString::make_string("before_" + test_name()), proto);
   before->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  before->set_code(std::make_unique<IRCode>(before, 0));
   build_method(before);
   cls->add_method(before);
   auto after = DexMethod::make_method_from(

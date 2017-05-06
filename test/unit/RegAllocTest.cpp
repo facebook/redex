@@ -101,18 +101,17 @@ TEST_F(RegAllocTest, InsertMoveDest) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "InsertMoveDest", "V", {});
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(18);
-  method->get_code()->set_ins_size(0);
-  auto mt = method->get_code();
+  method->set_code(std::make_unique<IRCode>(method, 18));
+  auto* code = method->get_code();
   auto array_ty = DexType::make_type("[I");
-  mt->push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
-  mt->push_back(dasm(OPCODE_NEW_ARRAY, array_ty, {18_v, 1_v}));
-  mt->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
+  code->push_back(dasm(OPCODE_NEW_ARRAY, array_ty, {18_v, 1_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   HighRegMoveInserter move_inserter;
   auto swap_info = HighRegMoveInserter::reserve_swap(method);
   EXPECT_EQ(swap_info, HighRegMoveInserter::SwapInfo(1, 0));
-  move_inserter.insert_moves(method, swap_info);
+  move_inserter.insert_moves(code, swap_info);
 
   InstructionList expected_insns {
     dasm(OPCODE_CONST_4, {1_v, 1_L}),
@@ -120,7 +119,7 @@ TEST_F(RegAllocTest, InsertMoveDest) {
     dasm(OPCODE_MOVE_OBJECT_FROM16, {19_v, 0_v}),
     dasm(OPCODE_RETURN_VOID)
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(mt)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
 
 TEST_F(RegAllocTest, InsertMoveSrc) {
@@ -129,25 +128,41 @@ TEST_F(RegAllocTest, InsertMoveSrc) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "InsertMoveSrc", "V", arg_types);
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(17);
-  method->get_code()->set_ins_size(17);
-  auto mt = method->get_code();
+  method->set_code(std::make_unique<IRCode>(method, 0));
+  auto* code = method->get_code();
   auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {15_v, 16_v}));
-  mt->push_back(*if_);
-  mt->push_back(dasm(OPCODE_INSTANCE_OF, get_object_type(), {0_v, 15_v}));
-  mt->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(*if_);
+  code->push_back(dasm(OPCODE_INSTANCE_OF, get_object_type(), {0_v, 15_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
   auto target = new BranchTarget();
   target->type = BRANCH_SIMPLE;
   target->src = if_;
-  mt->push_back(target);
-  mt->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(target);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   HighRegMoveInserter move_inserter;
   auto swap_info = HighRegMoveInserter::reserve_swap(method);
   EXPECT_EQ(swap_info, HighRegMoveInserter::SwapInfo(2, 0));
-  move_inserter.insert_moves(method, swap_info);
+  move_inserter.insert_moves(code, swap_info);
 
   InstructionList expected_insns {
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {2_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {3_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {4_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {5_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {6_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {7_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {8_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {9_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {10_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {11_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {12_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {13_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {14_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {15_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {16_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {17_v}),
+    dasm(IOPCODE_LOAD_PARAM_OBJECT, {18_v}),
     dasm(OPCODE_MOVE_OBJECT_FROM16, {0_v, 17_v}),
     dasm(OPCODE_MOVE_OBJECT_FROM16, {1_v, 18_v}),
     dasm(OPCODE_IF_EQ, {0_v, 1_v}),
@@ -156,7 +171,7 @@ TEST_F(RegAllocTest, InsertMoveSrc) {
     dasm(OPCODE_RETURN_VOID),
     dasm(OPCODE_RETURN_VOID)
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(mt)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
 
 TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
@@ -164,22 +179,21 @@ TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "ConvertToRangeForOneSrc", "V", {});
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(17);
-  method->get_code()->set_ins_size(0);
-  auto mt = method->get_code();
-  mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
+  method->set_code(std::make_unique<IRCode>(method, 17));
+  auto* code = method->get_code();
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
   // can be converted to invoke-virtual/range without needing to move the
   // register
-  mt->push_back(
+  code->push_back(
       dasm(OPCODE_INVOKE_VIRTUAL,
            DexMethod::make_method("Ljava/lang/Object", "hashCode", "V", {}),
            {16_v}));
-  mt->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   HighRegMoveInserter move_inserter;
   auto swap_info = HighRegMoveInserter::reserve_swap(method);
   EXPECT_EQ(swap_info, HighRegMoveInserter::SwapInfo(0, 0));
-  move_inserter.insert_moves(method, swap_info);
+  move_inserter.insert_moves(code, swap_info);
 
   InstructionList expected_insns {
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}),
@@ -188,7 +202,7 @@ TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
       ->set_range_base(16)->set_range_size(1),
     dasm(OPCODE_RETURN_VOID)
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(mt)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
 
 TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
@@ -196,24 +210,23 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "ConvertToRangeForTwoSrc", "V", {});
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(19);
-  method->get_code()->set_ins_size(0);
-  auto mt = method->get_code();
-  mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
-  mt->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {17_v}));
+  method->set_code(std::make_unique<IRCode>(method, 19));
+  auto* code = method->get_code();
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {17_v}));
   // the register args to invoke don't map directly to a range, so we'll insert
   // move opcodes to shuffle them into place
-  mt->push_back(
+  code->push_back(
       dasm(OPCODE_INVOKE_VIRTUAL,
            DexMethod::make_method(
                "Ljava/lang/Object", "equals", "B", {"Ljava/lang/Object"}),
            {17_v, 16_v}));
-  mt->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   HighRegMoveInserter move_inserter;
   auto swap_info = HighRegMoveInserter::reserve_swap(method);
   EXPECT_EQ(swap_info, HighRegMoveInserter::SwapInfo(0, 2));
-  move_inserter.insert_moves(method, swap_info);
+  move_inserter.insert_moves(code, swap_info);
 
   InstructionList expected_insns {
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}),
@@ -226,7 +239,7 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
       ->set_range_base(19)->set_range_size(2),
     dasm(OPCODE_RETURN_VOID)
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(mt)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
 
 TEST_F(RegAllocTest, LiveRangeSingleBlock) {
@@ -234,8 +247,7 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "LiveRangeSingleBlock", "V", {});
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(1);
-  method->get_code()->set_ins_size(0);
+  method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
@@ -257,8 +269,7 @@ TEST_F(RegAllocTest, LiveRange) {
   DexMethod* method =
       DexMethod::make_method("Lfoo;", "LiveRange", "V", {});
   method->make_concrete(ACC_STATIC, false);
-  method->get_code()->set_registers_size(1);
-  method->get_code()->set_ins_size(0);
+  method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));

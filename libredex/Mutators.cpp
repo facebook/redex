@@ -16,12 +16,11 @@ void drop_this(DexMethod* method) {
   auto code = method->get_code();
   if (!code) return;
   auto nregs = code->get_registers_size();
-  auto nins = code->get_ins_size();
-  auto const this_reg = nregs - nins;
   assert_log(nregs >= 1, "Too few regs: %s\n", SHOW(method));
-  assert_log(nins >= 1, "Too few in regs: %s\n", SHOW(method));
   code->set_registers_size(nregs - 1);
-  code->set_ins_size(nins - 1);
+  auto ii = InstructionIterable(code->get_param_instructions());
+  auto const this_reg = ii.begin()->insn->dest();
+  code->remove_opcode(ii.begin().unwrap());
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {

@@ -129,20 +129,23 @@ bool this_arg_escapes(DexMethod* method) {
   always_assert(!(method->get_access() & ACC_STATIC));
 
   auto code = method->get_code();
+  auto ii = InstructionIterable(code);
+  auto this_insn = ii.begin()->insn;
+  always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto regs_size = code->get_registers_size();
-  auto this_reg = regs_size - code->get_ins_size();
   auto this_cls = method->get_class();
   code->build_cfg();
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
       const IRInstruction* insn, TaintedRegs* tregs) {
-    transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
+    if (insn == this_insn) {
+      tregs->m_reg_set[insn->dest()] = 1;
+    } else {
+      transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
+    }
   };
-  auto entry_value = TaintedRegs(regs_size + 1);
-  entry_value.m_reg_set[this_reg] = 1;
-  auto taint_map =
-      forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans, entry_value);
+  auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
   return tainted_reg_escapes(this_cls, *taint_map);
 }
 
@@ -222,7 +225,12 @@ bool is_trivial_builder_constructor(DexMethod* method) {
 
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
+  auto end = ii.end();
   static auto init = DexString::make_string("<init>");
+
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     return false;
   } else {
@@ -237,7 +245,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   }
   ++it;
-  if (it != ii.end()) {
+  if (it != end) {
     return false;
   }
 

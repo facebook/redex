@@ -331,6 +331,14 @@ void load_root_dexen(
   const std::string& dexen_dir_str,
   bool balloon = false);
 
+/*
+ * This exists because in the absence of a register allocator, we need each
+ * transformation to keep the ins registers at the end of the frame. Once the
+ * register allocator is switched on this function should no longer have many
+ * use cases.
+ */
+size_t sum_param_sizes(const IRCode*);
+
 namespace JavaNameUtil {
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"

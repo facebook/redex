@@ -94,6 +94,9 @@ static bool has_side_effects(DexOpcode opc) {
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE:
     return true;
   default:
     return false;

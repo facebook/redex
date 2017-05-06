@@ -246,8 +246,7 @@ void MultiMethodInliner::inline_callees(
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n",
         SHOW(callee), caller->get_code()->get_registers_size(),
         SHOW(caller),
-        callee->get_code()->get_registers_size() -
-        callee->get_code()->get_ins_size());
+        callee->get_code()->get_registers_size());
     if (!IRCode::inline_method(
             inline_context, callee, insn, m_config.no_exceed_16regs)) {
       info.more_than_16regs++;

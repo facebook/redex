@@ -172,7 +172,9 @@ bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
   always_assert(code != nullptr);
 
-  auto const this_reg = code->get_registers_size() - code->get_ins_size();
+  auto const this_insn = InstructionIterable(code).begin()->insn;
+  always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
+  auto const this_reg = this_insn->dest();
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (opcode::has_range(insn->opcode())) {

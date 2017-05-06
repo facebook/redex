@@ -74,6 +74,10 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
+
   if (!is_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
@@ -110,6 +114,10 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
+
   if (!is_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
@@ -147,6 +155,9 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
 
   bool is_direct = it->insn->opcode() == OPCODE_INVOKE_DIRECT;
   bool is_static = it->insn->opcode() == OPCODE_INVOKE_STATIC;
@@ -207,6 +218,10 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
+  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+    ++it;
+  }
+
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s\n", SHOW(m));
     return nullptr;

@@ -366,9 +366,10 @@ struct MethodCreator {
    * Make a new local of the given type.
    */
   Location make_local(DexType* type) {
-    Location local{type, top_reg};
+    auto next_reg = meth_code->get_registers_size();
+    Location local{type, next_reg};
     locals.push_back(std::move(local));
-    top_reg += Location::loc_size(type);
+    meth_code->set_registers_size(next_reg + Location::loc_size(type));
     return locals.back();
   }
 
@@ -416,13 +417,12 @@ struct MethodCreator {
   //
 
   void load_locals(DexMethod* meth);
-  uint16_t ins_count() const;
 
-  uint16_t get_real_reg_num(uint16_t vreg) const {
-    if (vreg < ins_count()) {
-      return static_cast<uint16_t>(top_reg - ins_count() + vreg);
-    }
-    return top_reg - vreg - 1;
+  Location make_local_at(DexType* type, int i) {
+    always_assert(i < meth_code->get_registers_size());
+    Location local{type, i};
+    locals.push_back(std::move(local));
+    return locals.back();
   }
 
   FatMethod::iterator push_instruction(FatMethod::iterator curr, IRInstruction* insn);
@@ -441,9 +441,7 @@ struct MethodCreator {
 
  private:
   DexMethod* method;
-  std::unique_ptr<IRCode> meth_code;
-  uint16_t top_reg;
-  DexAccessFlags access;
+  IRCode* meth_code;
   std::vector<Location> locals;
   MethodBlock* main_block;
 

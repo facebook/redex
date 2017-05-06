@@ -55,7 +55,7 @@ class HighRegMoveInserter {
   };
 
   static SwapInfo reserve_swap(DexMethod* method);
-  void insert_moves(DexMethod*, const SwapInfo&);
+  void insert_moves(IRCode*, const SwapInfo&);
   const Stats& get_stats() const { return m_stats; }
  private:
   void handle_rangeable(IRCode* mt,

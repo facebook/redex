@@ -136,6 +136,7 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f35mi:
   case FMT_f3rms:
   case FMT_f3rmi:
+  case FMT_iopcode:
     always_assert_log(false, "Unimplemented opcode `%s'", SHOW(this));
   }
   not_reached();
@@ -186,7 +187,7 @@ int src_bit_width(DexOpcode op, int i) {
   case FMT_f3rmi:
   case FMT_f51l:
   case FMT_fopcode:
-  default:          assert(false);
+  case FMT_iopcode: assert(false);
   }
   not_reached();
 }
@@ -235,8 +236,8 @@ int dest_bit_width(DexOpcode op) {
   case FMT_f52c_s:  assert(false);
   case FMT_f5rc:    assert(false);
   case FMT_f57c:    assert(false);
-  case FMT_fopcode:
-  default:          assert(false);
+  case FMT_fopcode: assert(false);
+  case FMT_iopcode: return 16;
   }
   not_reached();
 }
@@ -269,7 +270,7 @@ uint16_t DexInstruction::dest() const {
     return m_arg[0];
   default:
     // All other formats do not define a destination register.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    always_assert_log(false, "Unhandled opcode: %s", SHOW(opcode()));
   }
   not_reached();
 }

@@ -25,6 +25,10 @@ DexOpcodeFormat format(DexOpcode opcode) {
     return FMT_fopcode;
   case FOPCODE_FILLED_ARRAY:
     return FMT_fopcode;
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE:
+    return FMT_iopcode;
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
@@ -39,6 +43,12 @@ Ref ref(DexOpcode opcode) {
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE:
+    // TODO: The load-param opcodes should really contain a type ref. However,
+    // for that to happen, a bunch of our analyses that check if certain types
+    // are referenced need to be updated.
     return Ref::None;
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
@@ -84,6 +94,7 @@ unsigned dests_size(DexOpcode op) {
   case FMT_f51l:
   case FMT_f41c_d:
   case FMT_f52c_d:
+  case FMT_iopcode:
     return 1;
   case FMT_f20bc:
   case FMT_f22cs:
@@ -115,6 +126,7 @@ unsigned min_srcs_size(DexOpcode op) {
   case FMT_f5rc:
   case FMT_f41c_d:
   case FMT_fopcode:
+  case FMT_iopcode:
     return 0;
   case FMT_f12x:
   case FMT_f11x_s:
@@ -276,6 +288,11 @@ bool may_throw(DexOpcode op) {
   default:
     return false;
   }
+}
+
+bool is_load_param(DexOpcode op) {
+  // currently the only internal opcodes are the load param opcodes
+  return format(op) == FMT_iopcode;
 }
 
 } // namespace opcode

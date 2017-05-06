@@ -125,6 +125,7 @@ uint16_t IRInstruction::size() const {
       5, /* FMT_f5rc */
       5, /* FMT_f57c */
       0, /* FMT_fopcode   */
+      0, /* FMT_iopcode   */
   };
   auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
   return args[opcode::format(op)];
@@ -236,6 +237,12 @@ bool IRInstruction::dest_is_wide() const {
   case OPCODE_MUL_DOUBLE_2ADDR:
   case OPCODE_DIV_DOUBLE_2ADDR:
   case OPCODE_REM_DOUBLE_2ADDR:
+    return true;
+
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+    return false;
+  case IOPCODE_LOAD_PARAM_WIDE:
     return true;
 
   default:

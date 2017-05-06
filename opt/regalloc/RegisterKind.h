@@ -70,4 +70,4 @@ std::string show(RegisterKind);
 RegisterKind dest_kind(DexOpcode op);
 
 std::unique_ptr<std::unordered_map<IRInstruction*, KindVec>>
-analyze_register_kinds(DexMethod*);
+analyze_register_kinds(IRCode*);

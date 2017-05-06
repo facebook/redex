@@ -24,7 +24,7 @@ struct LocalDceTryTest : testing::Test {
     m_method = DexMethod::make_method(
         get_object_type(), DexString::make_string("testMethod"), proto);
     m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    m_method->get_code()->set_registers_size(1);
+    m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
   ~LocalDceTryTest() {

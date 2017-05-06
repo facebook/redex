@@ -228,20 +228,19 @@ Liveness InlineContext::live_out(IRInstruction* insn) {
   }
 }
 
-IRCode::IRCode()
-    : m_fmethod(new FatMethod()) {}
-
-IRCode::IRCode(DexMethod* method) {
-  m_fmethod = balloon(const_cast<DexMethod*>(method));
-  auto dc = &*method->get_dex_code();
-  m_registers_size = dc->get_registers_size();
-  m_ins_size = dc->get_ins_size();
-  m_dbg = dc->release_debug_item();
-}
-
 IRCode::~IRCode() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
   delete m_fmethod;
+}
+
+boost::sub_range<FatMethod> IRCode::get_param_instructions() const {
+  auto params_end = std::find_if_not(
+      m_fmethod->begin(), m_fmethod->end(), [&](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_FALLTHROUGH ||
+               (mie.type == MFLOW_OPCODE &&
+                opcode::is_load_param(mie.insn->opcode()));
+      });
+  return boost::sub_range<FatMethod>(m_fmethod->begin(), params_end);
 }
 
 void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
@@ -602,11 +601,44 @@ bool has_aliased_arguments(IRInstruction* invoke) {
   return false;
 }
 
+/*
+ * Populate IRCode with load-param opcodes corresponding to the method
+ * prototype. For example, a static method with proto "V(IJLfoo;)" and
+ * no temp_regs will translate to
+ *
+ *   IOPCODE_LOAD_PARAM v0
+ *   IOPCODE_LOAD_PARAM_WIDE v1
+ *   IOPCODE_LOAD_PARAM_OBJECT v3
+ */
+void generate_load_params(const DexMethod* method,
+                          size_t temp_regs,
+                          IRCode* code) {
+  auto args = method->get_proto()->get_args()->get_type_list();
+  auto param_reg = temp_regs;
+  if (!is_static(method)) {
+    auto insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
+    insn->set_dest(param_reg++);
+    code->push_back(insn);
+  }
+  for (DexType* arg : args) {
+    DexOpcode op;
+    auto prev_reg = param_reg;
+    if (is_wide_type(arg)) {
+      param_reg += 2;
+      op = IOPCODE_LOAD_PARAM_WIDE;
+    } else {
+      param_reg += 1;
+      op = is_primitive(arg) ? IOPCODE_LOAD_PARAM : IOPCODE_LOAD_PARAM_OBJECT;
+    }
+    auto insn = new IRInstruction(op);
+    insn->set_dest(prev_reg);
+    code->push_back(insn);
+  }
+  code->set_registers_size(param_reg);
 }
 
-FatMethod* IRCode::balloon(DexMethod* method) {
+void balloon(DexMethod* method, FatMethod* fmethod) {
   auto dex_code = method->get_dex_code();
-  FatMethod* fmethod = new FatMethod();
   auto instructions = dex_code->release_instructions();
   addr_mei_t addr_to_mei;
   std::unordered_map<uint32_t, DexOpcodeData*> addr_to_data;
@@ -632,7 +664,22 @@ FatMethod* IRCode::balloon(DexMethod* method) {
   if (debugitem) {
     associate_debug_entries(fmethod, *debugitem, addr_to_mei);
   }
-  return fmethod;
+}
+
+} // namespace
+
+IRCode::IRCode(DexMethod* method): m_fmethod(new FatMethod()) {
+  auto* dc = method->get_dex_code();
+  generate_load_params(
+      method, dc->get_registers_size() - dc->get_ins_size(), this);
+  balloon(const_cast<DexMethod*>(method), m_fmethod);
+  m_dbg = dc->release_debug_item();
+}
+
+IRCode::IRCode(DexMethod* method, size_t temp_regs)
+    : m_fmethod(new FatMethod()) {
+  always_assert(method->get_dex_code() == nullptr);
+  generate_load_params(method, temp_regs, this);
 }
 
 void IRCode::remove_branch_target(IRInstruction *branch_inst) {
@@ -764,10 +811,13 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
 
   TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(m_fmethod));
   // Check if we are inside switch method.
-  MethodItemEntry* switch_mei {nullptr};
-  for (auto& mei : *m_fmethod) {
-    if (mei.type != MFLOW_OPCODE) continue;
-    assert_log(is_multi_branch(mei.insn->opcode()), " Method is not a switch");
+  const MethodItemEntry* switch_mei {nullptr};
+  for (const auto& mei : InstructionIterable(this)) {
+    auto op = mei.insn->opcode();
+    if (opcode::is_load_param(op)) {
+      continue;
+    }
+    assert_log(is_multi_branch(op), " Method is not a switch");
     switch_mei = &mei;
     break;
   }
@@ -823,7 +873,8 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
 size_t IRCode::count_opcodes() const {
   size_t count {0};
   for (const auto& mie : *m_fmethod) {
-    if (mie.type == MFLOW_OPCODE) {
+    if (mie.type == MFLOW_OPCODE &&
+        !opcode::is_load_param(mie.insn->opcode())) {
       ++count;
     }
   }
@@ -877,7 +928,9 @@ void IRCode::remove_opcode(IRInstruction* insn) {
                     SHOW(insn));
 }
 
-FatMethod::iterator IRCode::main_block() { return m_fmethod->begin(); }
+FatMethod::iterator IRCode::main_block() {
+  return std::prev(get_param_instructions().end());
+}
 
 FatMethod::iterator IRCode::insert(FatMethod::iterator cur,
                                    IRInstruction* insn) {
@@ -973,7 +1026,8 @@ using RegMap = transform::RegMap;
 bool simple_reg_remap(IRCode* mt) {
   for (auto& mie : InstructionIterable(mt)) {
     auto insn = mie.insn;
-    if (insn->is_wide() || opcode::has_range(insn->opcode())) {
+    if (!opcode::is_load_param(insn->opcode()) &&
+        (insn->is_wide() || opcode::has_range(insn->opcode()))) {
       return false;
     }
   }
@@ -1056,7 +1110,7 @@ void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
 void enlarge_registers(IRCode* code, uint16_t newregs) {
   RegMap reg_map;
   auto oldregs = code->get_registers_size();
-  auto ins = code->get_ins_size();
+  size_t ins = sum_param_sizes(code);
   for (uint16_t i = 0; i < ins; ++i) {
     reg_map[oldregs - ins + i] = newregs - ins + i;
   }
@@ -1069,11 +1123,9 @@ void remap_callee_regs(IRInstruction* invoke,
                        uint16_t newregs) {
   RegMap reg_map;
   auto oldregs = method->get_code()->get_registers_size();
-  auto ins = method->get_code()->get_ins_size();
   auto wc = invoke->arg_word_count();
-  always_assert(ins == wc);
   for (uint16_t i = 0; i < wc; ++i) {
-    reg_map[oldregs - ins + i] = invoke->src(i);
+    reg_map[oldregs - wc + i] = invoke->src(i);
   }
   transform::remap_registers(method->get_code(), reg_map);
   method->get_code()->set_registers_size(newregs);
@@ -1086,19 +1138,16 @@ void remap_callee_regs(IRInstruction* invoke,
 RegMap build_callee_param_reg_map(IRInstruction* invoke, DexMethod* callee) {
   RegMap reg_map;
   auto oldregs = callee->get_code()->get_registers_size();
-  auto ins = callee->get_code()->get_ins_size();
   if (is_invoke_range(invoke->opcode())) {
     auto base = invoke->range_base();
     auto range = invoke->range_size();
-    always_assert(ins == range);
     for (uint16_t i = 0; i < range; ++i) {
-      reg_map[oldregs - ins + i] = base + i;
+      reg_map[oldregs - range + i] = base + i;
     }
   } else {
     auto wc = invoke->arg_word_count();
-    always_assert(ins == wc);
     for (uint16_t i = 0; i < wc; ++i) {
-      reg_map[oldregs - ins + i] = invoke->src(i);
+      reg_map[oldregs - wc + i] = invoke->src(i);
     }
   }
   return reg_map;
@@ -1112,7 +1161,7 @@ RegMap build_callee_reg_map(IRInstruction* invoke,
                             RegSet invoke_live_in) {
   RegMap reg_map;
   auto oldregs = callee->get_code()->get_registers_size();
-  auto ins = callee->get_code()->get_ins_size();
+  auto ins = sum_param_sizes(callee->get_code());
   // remap all local regs (not args)
   auto avail_regs = ~invoke_live_in;
   auto caller_reg = avail_regs.find_first();
@@ -1271,6 +1320,10 @@ class MethodSplicer {
       if (should_skip_debug(&*it)) {
         continue;
       }
+      if (it->type == MFLOW_OPCODE &&
+          opcode::is_load_param(it->insn->opcode())) {
+        continue;
+      }
       auto mei = clone(&*it);
       remap_registers(*mei, m_callee_reg_map);
       if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
@@ -1365,7 +1418,9 @@ RegSet ins_reg_defs(IRCode& code) {
   RegSet def_ins(code.get_registers_size());
   for (auto& mie : InstructionIterable(&code)) {
     auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_CHECK_CAST) {
+    if (opcode::is_load_param(insn->opcode())) {
+      continue;
+    } else if (insn->opcode() == OPCODE_CHECK_CAST) {
       def_ins.set(insn->src(0));
     } else if (insn->dests_size() > 0) {
       def_ins.set(insn->dest());
@@ -1379,7 +1434,7 @@ RegSet ins_reg_defs(IRCode& code) {
   // of the args).
   // So an instruction writes an ins if it has a destination and the
   // destination is bigger or equal than temp_regs.
-  auto temp_regs = code.get_registers_size() - code.get_ins_size();
+  auto temp_regs = code.get_registers_size() - sum_param_sizes(&code);
   RegSet param_filter(temp_regs);
   param_filter.resize(code.get_registers_size(), true);
   return param_filter & def_ins;
@@ -1396,8 +1451,8 @@ void IRCode::inline_tail_call(DexMethod* caller,
 
   auto bregs = caller->get_code()->get_registers_size();
   auto eregs = callee->get_code()->get_registers_size();
-  auto bins = caller->get_code()->get_ins_size();
-  auto eins = callee->get_code()->get_ins_size();
+  auto bins = sum_param_sizes(caller->get_code());
+  auto eins = sum_param_sizes(callee->get_code());
   always_assert(bins >= eins);
   auto newregs = std::max(bregs, uint16_t(eregs + bins - eins));
   always_assert(newregs <= 16);
@@ -1405,8 +1460,6 @@ void IRCode::inline_tail_call(DexMethod* caller,
   // Remap registers to account for possibly larger frame, more ins
   enlarge_registers(caller->get_code(), newregs);
   remap_callee_regs(invoke, callee, newregs);
-
-  callee->get_code()->set_ins_size(bins);
 
   auto pos = std::find_if(fcaller->begin(),
                           fcaller->end(),
@@ -1418,6 +1471,9 @@ void IRCode::inline_tail_call(DexMethod* caller,
   auto it = fcallee->begin();
   while (it != fcallee->end()) {
     auto& mei = *it++;
+    if (mei.type == MFLOW_OPCODE && opcode::is_load_param(mei.insn->opcode())) {
+      continue;
+    }
     fcallee->erase(fcallee->iterator_to(mei));
     fcaller->insert(pos, mei);
   }
@@ -1452,9 +1508,11 @@ bool IRCode::inline_method(InlineContext& context,
     rs.flip();
     invoke_live_out = Liveness(std::move(rs));
   }
+  auto caller_ins = sum_param_sizes(caller_code);
+  auto callee_ins = sum_param_sizes(callee_code);
   // the caller liveness info is cached across multiple inlinings but the caller
   // regs may have increased in the meantime, so update the liveness here
-  invoke_live_out.enlarge(caller_code->get_ins_size(), newregs);
+  invoke_live_out.enlarge(caller_ins, newregs);
 
   auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
   auto def_ins = ins_reg_defs(*callee_code);
@@ -1471,8 +1529,7 @@ bool IRCode::inline_method(InlineContext& context,
   auto fcaller = caller_code->m_fmethod;
   auto fcallee = callee_code->m_fmethod;
 
-  auto temps_needed =
-      callee_code->get_registers_size() - callee_code->get_ins_size();
+  auto temps_needed = callee_code->get_registers_size() - callee_ins;
   auto invoke_live_in = invoke_live_out;
   Liveness::trans(invoke, &invoke_live_in);
   uint16_t temps_avail = newregs - invoke_live_in.bits().count();
@@ -1482,8 +1539,8 @@ bool IRCode::inline_method(InlineContext& context,
       return false;
     }
     enlarge_registers(caller_code, newregs);
-    invoke_live_in.enlarge(caller_code->get_ins_size(), newregs);
-    invoke_live_out.enlarge(caller_code->get_ins_size(), newregs);
+    invoke_live_in.enlarge(caller_ins, newregs);
+    invoke_live_out.enlarge(caller_ins, newregs);
   }
   auto callee_reg_map =
       build_callee_reg_map(invoke, callee, invoke_live_in.bits());
@@ -1811,13 +1868,68 @@ static uint16_t calc_outs_size(const IRCode* code) {
   return size;
 }
 
+/*
+ * Check that load-param opcodes are all at the end of the register frame and
+ * match the method proto, then remove those opcodes.
+ *
+ * Set the ins_size accordingly.
+ */
+static void sync_load_params(const DexMethod* method,
+                             IRCode* code,
+                             DexCode* dex_code) {
+  auto param_ops = InstructionIterable(code->get_param_instructions());
+  if (param_ops.empty()) {
+    return;
+  }
+  auto& args_list = method->get_proto()->get_args()->get_type_list();
+  auto it = param_ops.begin();
+  auto end = param_ops.end();
+  uint16_t ins_start = it->insn->dest();
+  uint16_t next_ins = ins_start;
+  if (!is_static(method)) {
+    auto op = it->insn->opcode();
+    always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
+    it.reset(code->erase(it.unwrap()));
+    ++next_ins;
+  }
+  auto args_it = args_list.begin();
+  while (it != end) {
+    auto op = it->insn->opcode();
+    // check that the param registers are contiguous
+    always_assert(next_ins == it->insn->dest());
+    // TODO: have load param opcodes store the actual type of the param and
+    // check that they match the method prototype here
+    always_assert(args_it != args_list.end());
+    if (is_wide_type(*args_it)) {
+      always_assert(op == IOPCODE_LOAD_PARAM_WIDE);
+    } else if (is_primitive(*args_it)) {
+      always_assert(op == IOPCODE_LOAD_PARAM);
+    } else {
+      always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
+    }
+    ++args_it;
+    next_ins += it->insn->dest_is_wide() ? 2 : 1;
+    it.reset(code->erase(it.unwrap()));
+  }
+  always_assert(args_it == args_list.end());
+  // check that the params are at the end of the frame
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->dests_size()) {
+      always_assert(insn->dest() < next_ins);
+    }
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      always_assert(insn->src(i) < next_ins);
+    }
+  }
+  dex_code->set_ins_size(next_ins - ins_start);
+}
+
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
-  // TODO: when we have load-param opcodes, check that they square with the
-  // prototype of the DexMethod
   auto dex_code = std::make_unique<DexCode>();
   try {
+    sync_load_params(method, this, &*dex_code);
     dex_code->set_registers_size(m_registers_size);
-    dex_code->set_ins_size(m_ins_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
     while (try_sync(dex_code.get()) == false)
