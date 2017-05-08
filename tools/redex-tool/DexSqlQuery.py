@@ -127,6 +127,19 @@ def udf_opcode(opcode):
 def udf_is_coldstart(dex_id):
     return dex_id == "dex/0" or dex_id == "dex/1" or dex_id == "dex/2"
 
+# operates on fields.name
+class AggregateFieldShape:
+    def __init__(self):
+        self.shape = dict()
+
+    def step(self, value):
+        element = value[value.index(':') + 1]
+        self.shape[element] = self.shape[element] + 1 if element in self.shape else 1
+
+    def finalize(self):
+        return " ".join("%s:%s" % (k, v) for k, v in sorted(self.shape.items()))
+
+
 conn = sqlite3.connect(sys.argv[1])
 conn.create_function("PKG", 2, udf_pkg_2arg)
 conn.create_function("PKG", 1, udf_pkg_1arg)
@@ -144,6 +157,7 @@ conn.create_function("IS_INNER_CLASS", 1, udf_is_inner_class)
 conn.create_function("IS_ANON_CLASS", 1, udf_is_anon_class)
 conn.create_function("OPCODE", 1, udf_opcode)
 conn.create_function("IS_COLDSTART", 1, udf_is_coldstart)
+conn.create_aggregate("FIELD_SHAPE", 1, AggregateFieldShape)
 
 cursor = conn.cursor()
 
