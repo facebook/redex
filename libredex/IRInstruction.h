@@ -11,8 +11,32 @@
 
 #include "DexInstruction.h"
 
-using bit_width_t = uint8_t;
-
+/*
+ * IRInstruction is very similar to the Dalvik instruction set, but with a few
+ * tweaks to make it easier to analyze and manipulate. Key differences are:
+ *
+ * 1. Registers of arbitrary size can be addressed. For example, neg-int is no
+ *    longer limited to addressing registers < 16. The expectation is that the
+ *    register allocator will sort things out.
+ *
+ * 2. 2addr opcodes no longer exist. They are converted to the non-2addr form.
+ *
+ * 3. check-cast has both a src and a dest operand. check-cast has a side
+ *    effect in the runtime verifier when the cast succeeds. The runtime
+ *    verifier updates the type in the source register to its more specific
+ *    type. As such, for many analyses, it is semantically equivalent to
+ *    creating a new value. By representing the opcode in our IR as having a
+ *    dest field, these analyses can be simplified by not having to treat
+ *    check-cast as a special case.
+ *
+ *    See this link for the relevant verifier code:
+ *    androidxref.com/7.1.1_r6/xref/art/runtime/verifier/method_verifier.cc#2383
+ *
+ * 4. pseudo-instructions no longer exist. fill-array-data-payload is attached
+ *    directly to the fill-array-data instruction that references it.
+ *    {packed, sparse}-switch-payloads are represented by MFLOW_TARGET entries
+ *    in the IRCode instruction stream.
+ */
 class IRInstruction final {
  public:
   explicit IRInstruction(DexOpcode op);
@@ -59,7 +83,10 @@ class IRInstruction final {
   /*
    * Number of registers used.
    */
-  size_t dests_size() const { return opcode::dests_size(m_opcode); }
+  size_t dests_size() const {
+    return m_opcode == OPCODE_CHECK_CAST ? 1
+                                         : opcode_impl::dests_size(m_opcode);
+  }
   size_t srcs_size() const { return m_srcs.size(); }
 
   /*
@@ -70,13 +97,16 @@ class IRInstruction final {
   bool is_wide() const {
     return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
   }
+  bit_width_t src_bit_width(uint16_t i) const;
+  bit_width_t dest_bit_width() const;
 
   /*
    * Accessors for logical parts of the instruction.
    */
   DexOpcode opcode() const { return m_opcode; }
   uint16_t dest() const {
-    always_assert(opcode::dests_size(m_opcode));
+    always_assert(m_opcode == OPCODE_CHECK_CAST ||
+                  opcode_impl::dests_size(m_opcode));
     return m_dest;
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }

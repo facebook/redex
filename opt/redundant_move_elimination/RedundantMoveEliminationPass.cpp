@@ -129,19 +129,6 @@ class RedundantMoveEliminationImpl {
             RegisterValue wide{wide_reg};
             aliases.break_alias(wide);
           }
-        } else if (mei.insn->opcode() == OPCODE_CHECK_CAST) {
-          // check-cast has a side effect (in the runtime verifier) when the
-          // cast succeeds. The runtime verifier updates the type in the source
-          // register to its more specific type. Later usages of this register
-          // require that type information. But the verifier doesn't know about
-          // any aliases the source register may have, so, we have to treat this
-          // instruction like it writes to the source register. (*)
-          //
-          // see this link:
-          // androidxref.com/7.1.1_r6/xref/art/
-          //   runtime/verifier/method_verifier.cc#2383
-          RegisterValue reg{mei.insn->src(0)};
-          aliases.break_alias(reg);
         }
       }
     }
@@ -153,7 +140,10 @@ class RedundantMoveEliminationImpl {
                                    AliasedRegisters& aliases) {
     if (insn->srcs_size() > 0 &&
         !opcode::has_range(insn->opcode()) && // range has to stay in order
-        insn->opcode() != OPCODE_CHECK_CAST) { // same reason as (*)
+        // we need to make sure the dest and src of check-cast stay identical,
+        // because the dest is simply an alias to the src. See the comments in
+        // IRInstruction.h for details.
+        insn->opcode() != OPCODE_CHECK_CAST) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         RegisterValue val{insn->src(i)};
         boost::optional<Register> rep = aliases.get_representative(val);

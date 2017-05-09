@@ -82,7 +82,7 @@ DexInstruction* DexInstruction::set_opcode(DexOpcode op) {
 }
 
 unsigned DexInstruction::dests_size() const {
-  return opcode::dests_size(opcode());
+  return opcode_impl::dests_size(opcode());
 }
 
 unsigned DexInstruction::srcs_size() const {
@@ -138,106 +138,6 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f3rmi:
   case FMT_iopcode:
     always_assert_log(false, "Unimplemented opcode `%s'", SHOW(this));
-  }
-  not_reached();
-}
-
-int src_bit_width(DexOpcode op, int i) {
-  switch (opcode::format(op)) {
-  case FMT_f00x:    assert(false);
-  case FMT_f10x:    assert(false);
-  case FMT_f12x:    assert(i == 0); return 4;
-  case FMT_f12x_2:  assert(i <= 1); return 4;
-  case FMT_f11n:    assert(false);
-  case FMT_f11x_d:  assert(false);
-  case FMT_f11x_s:  assert(i == 0); return 8;
-  case FMT_f10t:    assert(false);
-  case FMT_f20t:    assert(false);
-  case FMT_f20bc:   assert(false);
-  case FMT_f22x:    assert(i == 0); return 16;
-  case FMT_f21t:    assert(i == 0); return 8;
-  case FMT_f21s:    assert(false);
-  case FMT_f21h:    assert(false);
-  case FMT_f21c_d:  assert(false);
-  case FMT_f21c_s:  assert(i == 0); return 8;
-  case FMT_f23x_d:  assert(i <= 1); return 8;
-  case FMT_f23x_s:  assert(i <= 2); return 8;
-  case FMT_f22b:    assert(i == 0); return 8;
-  case FMT_f22t:    assert(i <= 1); return 4;
-  case FMT_f22s:    assert(i == 0); return 4;
-  case FMT_f22c_d:  assert(i == 0); return 4;
-  case FMT_f22c_s:  assert(i <= 1); return 4;
-  case FMT_f22cs:   assert(false);
-  case FMT_f30t:    assert(false);
-  case FMT_f32x:    assert(i == 0); return 16;
-  case FMT_f31i:    assert(false);
-  case FMT_f31t:    assert(i == 0); return 8;
-  case FMT_f31c:    assert(false);
-  case FMT_f35c:    assert(i <= 4); return 4;
-  case FMT_f3rc:    assert(i == 0); return 16;
-  case FMT_f41c_d:  assert(false);
-  case FMT_f41c_s:  assert(i == 0);  return 16;
-  case FMT_f52c_d:  assert(i == 0);  return 16;
-  case FMT_f52c_s:  assert(i <= 1);  return 16;
-  case FMT_f5rc:    assert(i == 0);  return 16;
-  case FMT_f57c:    assert(i <= 6);  return 4;
-  case FMT_f35ms:
-  case FMT_f35mi:
-  case FMT_f3rms:
-  case FMT_f3rmi:
-  case FMT_f51l:
-  case FMT_fopcode:
-  case FMT_iopcode: assert(false);
-  }
-  not_reached();
-}
-
-int dest_bit_width(DexOpcode op) {
-  switch (opcode::format(op)) {
-  case FMT_f00x:    assert(false);
-  case FMT_f10x:    assert(false);
-  case FMT_f12x:    return 4;
-  case FMT_f12x_2:  return 4;
-  case FMT_f11n:    return 4;
-  case FMT_f11x_d:  return 8;
-  case FMT_f11x_s:  assert(false);
-  case FMT_f10t:    assert(false);
-  case FMT_f20t:    assert(false);
-  case FMT_f20bc:   assert(false);
-  case FMT_f22x:    return 8;
-  case FMT_f21t:    assert(false);
-  case FMT_f21s:    return 8;
-  case FMT_f21h:    return 8;
-  case FMT_f21c_d:  return 8;
-  case FMT_f21c_s:  assert(false);
-  case FMT_f23x_d:  return 8;
-  case FMT_f23x_s:  assert(false);
-  case FMT_f22b:    return 8;
-  case FMT_f22t:    assert(false);
-  case FMT_f22s:    return 4;
-  case FMT_f22c_d:  return 4;
-  case FMT_f22c_s:  assert(false);
-  case FMT_f22cs:   assert(false);
-  case FMT_f30t:    assert(false);
-  case FMT_f32x:    return 16;
-  case FMT_f31i:    return 8;
-  case FMT_f31t:    assert(false);
-  case FMT_f31c:    return 8;
-  case FMT_f35c:    assert(false);
-  case FMT_f35ms:
-  case FMT_f35mi:
-  case FMT_f3rc:
-  case FMT_f3rms:
-  case FMT_f3rmi:   assert(false);
-  case FMT_f51l:    return 8;
-  case FMT_f41c_d:  return 16;
-  case FMT_f41c_s:  assert(false);
-  case FMT_f52c_d:  return 16;
-  case FMT_f52c_s:  assert(false);
-  case FMT_f5rc:    assert(false);
-  case FMT_f57c:    assert(false);
-  case FMT_fopcode: assert(false);
-  case FMT_iopcode: return 16;
   }
   not_reached();
 }

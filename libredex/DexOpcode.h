@@ -312,29 +312,45 @@ OPS
 
 std::string show(DexOpcode);
 
+using bit_width_t = uint8_t;
+
 namespace opcode {
-  // max number of register args supported by non-range opcodes
-  const size_t NON_RANGE_MAX = 5;
 
-  DexOpcodeFormat format(DexOpcode opcode);
+// max number of register args supported by non-range opcodes
+const size_t NON_RANGE_MAX = 5;
 
-  Ref ref(DexOpcode);
+DexOpcodeFormat format(DexOpcode opcode);
 
-  unsigned dests_size(DexOpcode);
-  // we can't tell the srcs size from the opcode alone -- format 35c opcodes
-  // encode that separately. So this just returns the minimum.
-  unsigned min_srcs_size(DexOpcode);
+Ref ref(DexOpcode);
 
-  // if a source register is used as a destination too
-  bool dest_is_src(DexOpcode);
-  bool has_literal(DexOpcode);
-  bool has_offset(DexOpcode);
-  bool has_range(DexOpcode);
+// if a source register is used as a destination too
+bool dest_is_src(DexOpcode);
+bool has_literal(DexOpcode);
+bool has_offset(DexOpcode);
+bool has_range(DexOpcode);
 
-  bool may_throw(DexOpcode);
+bool may_throw(DexOpcode);
 
-  // if an opcode has a /range counterpart
-  bool has_range_form(DexOpcode);
+// if an opcode has a /range counterpart
+bool has_range_form(DexOpcode);
 
-  bool is_load_param(DexOpcode);
+bool is_load_param(DexOpcode);
+
 } // namespace opcode
+
+/*
+ * The functions below probably shouldn't be accessed directly by opt/ code.
+ * They're implementation details wrapped by IRInstruction and DexInstruction.
+ */
+namespace opcode_impl {
+
+unsigned dests_size(DexOpcode);
+// we can't tell the srcs size from the opcode alone -- format 35c opcodes
+// encode that separately. So this just returns the minimum.
+unsigned min_srcs_size(DexOpcode);
+
+// the number of bits an opcode has available to encode a given register
+bit_width_t src_bit_width(DexOpcode, uint16_t i);
+bit_width_t dest_bit_width(DexOpcode);
+
+} // namespace opcode_impl

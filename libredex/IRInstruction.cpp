@@ -75,14 +75,16 @@ DexOpcode opcode_range_version(DexOpcode op) {
 
 IRInstruction::IRInstruction(DexOpcode op) : m_opcode(op) {
   always_assert(!is_fopcode(op));
-  m_srcs.resize(opcode::min_srcs_size(op));
+  m_srcs.resize(opcode_impl::min_srcs_size(op));
 }
 
 IRInstruction::IRInstruction(const DexInstruction* insn) {
   m_opcode = insn->opcode();
   always_assert(!is_fopcode(m_opcode));
-  if (opcode::dests_size(m_opcode)) {
+  if (opcode_impl::dests_size(m_opcode)) {
     m_dest = insn->dest();
+  } else if (m_opcode == OPCODE_CHECK_CAST) {
+    m_dest = insn->src(0);
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     m_srcs.emplace_back(insn->src(i));
@@ -194,7 +196,9 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
       break;
   }
 
-  if (insn->dests_size()) {
+  if (op == OPCODE_CHECK_CAST) {
+    always_assert(dest() == src(0));
+  } else if (insn->dests_size()) {
     insn->set_dest(dest());
   }
   for (size_t i = 0; i < srcs_size(); ++i) {
@@ -361,6 +365,18 @@ bool IRInstruction::src_is_wide(size_t i) const {
   }
 }
 
+bit_width_t IRInstruction::dest_bit_width() const {
+  if (m_opcode == OPCODE_CHECK_CAST) {
+    return 4;
+  } else {
+    return opcode_impl::dest_bit_width(m_opcode);
+  }
+}
+
+bit_width_t IRInstruction::src_bit_width(uint16_t i) const {
+  return opcode_impl::src_bit_width(m_opcode, i);
+}
+
 void IRInstruction::normalize_registers() {
   if (is_invoke(opcode()) && !opcode::has_range(opcode())) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
@@ -444,7 +460,7 @@ bool needs_range_conversion(const IRInstruction* insn) {
     return true;
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
+    if (required_bit_width(insn->src(i)) > insn->src_bit_width(i)) {
       return true;
     }
   }

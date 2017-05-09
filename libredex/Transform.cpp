@@ -1420,8 +1420,6 @@ RegSet ins_reg_defs(IRCode& code) {
     auto insn = mie.insn;
     if (opcode::is_load_param(insn->opcode())) {
       continue;
-    } else if (insn->opcode() == OPCODE_CHECK_CAST) {
-      def_ins.set(insn->src(0));
     } else if (insn->dests_size() > 0) {
       def_ins.set(insn->dest());
       if (insn->dest_is_wide()) {

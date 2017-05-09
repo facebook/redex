@@ -88,7 +88,7 @@ TEST_F(RegAllocTest, MoveGen) {
 TEST_F(RegAllocTest, RegKindWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
-    if (opcode::dests_size(op) && !opcode::dest_is_src(op)) {
+    if (opcode_impl::dests_size(op) && !opcode::dest_is_src(op)) {
       EXPECT_EQ((new IRInstruction(op))->dest_is_wide(),
                 dest_kind(op) == RegisterKind::WIDE)
           << "mismatch for " << show(op);
@@ -251,17 +251,17 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   auto code = method->get_code();
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
 
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 1_v}),
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
-  EXPECT_EQ(code->get_registers_size(), 2);
+  EXPECT_EQ(code->get_registers_size(), 3);
 }
 
 TEST_F(RegAllocTest, LiveRange) {
@@ -273,32 +273,33 @@ TEST_F(RegAllocTest, LiveRange) {
   auto code = method->get_code();
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
   auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 0_v}));
   code->push_back(*if_);
 
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
   auto target = new BranchTarget();
   target->type = BRANCH_SIMPLE;
   target->src = if_;
   code->push_back(target);
 
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
 
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
-    dasm(OPCODE_IF_EQ, {1_v, 1_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {2_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 1_v}),
+    dasm(OPCODE_IF_EQ, {2_v, 2_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {3_v}),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {4_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 4_v}),
+    // target of if-eq
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {5_v, 2_v}),
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
-  EXPECT_EQ(code->get_registers_size(), 3);
+  EXPECT_EQ(code->get_registers_size(), 6);
 }

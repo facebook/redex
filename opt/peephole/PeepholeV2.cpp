@@ -234,14 +234,14 @@ struct Matcher;
 // Returns the smallest bit width of any source or destination vreg for the
 // given opcode
 // Returns 16 (no limit) if there is no source or destination (e.g. nop)
-static int8_t min_vreg_bit_width_for_opcode(uint16_t opcode) {
+static bit_width_t min_vreg_bit_width_for_opcode(uint16_t opcode) {
   IRInstruction insn((DexOpcode)opcode);
-  int result = 16;
+  bit_width_t result = 16;
   if (insn.dests_size() > 0) {
-    result = std::min(result, dest_bit_width(insn.opcode()));
+    result = std::min(result, insn.dest_bit_width());
   }
   for (unsigned i = 0; i < insn.srcs_size(); i++) {
-    result = std::min(result, src_bit_width(insn.opcode(), i));
+    result = std::min(result, insn.src_bit_width(i));
   }
   return static_cast<int8_t>(result);
 }
@@ -251,7 +251,7 @@ struct Pattern {
   const std::vector<DexPattern> match;
   const std::vector<DexPattern> replace;
   const std::function<bool(const Matcher&)> predicate;
-  std::array<int8_t, kRegisterArraySize> register_width_limits;
+  std::array<bit_width_t, kRegisterArraySize> register_width_limits;
 
  private:
   void determine_register_width_limits() {
@@ -263,7 +263,7 @@ struct Pattern {
     register_width_limits.fill(16); // default
     for (const DexPattern& pat : replace) {
       for (uint16_t opcode : pat.opcodes) { // just expect 1
-        int8_t width = min_vreg_bit_width_for_opcode(opcode);
+        auto width = min_vreg_bit_width_for_opcode(opcode);
         for (Register reg : pat.srcs) {
           int idx = static_cast<int>(reg);
           register_width_limits[idx] =
@@ -292,7 +292,7 @@ struct Pattern {
 
   // Returns whether the given vreg value is suitable for the register pattern
   bool register_can_match_vreg_value(Register pattern, uint16_t value) const {
-    int limit = register_width_limits[static_cast<int>(pattern)];
+    auto limit = register_width_limits[static_cast<int>(pattern)];
     return value < (1U << limit);
   }
 };

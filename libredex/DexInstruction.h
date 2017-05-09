@@ -395,6 +395,3 @@ inline bool is_fopcode(DexOpcode op) {
   return op == FOPCODE_PACKED_SWITCH || op == FOPCODE_SPARSE_SWITCH ||
          op == FOPCODE_FILLED_ARRAY;
 }
-
-int src_bit_width(DexOpcode, int i);
-int dest_bit_width(DexOpcode);

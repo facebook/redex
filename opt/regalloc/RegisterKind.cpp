@@ -324,10 +324,8 @@ RegisterKind dest_kind(DexOpcode op) {
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
-    return RegisterKind::OBJECT;
   case OPCODE_CHECK_CAST:
-    always_assert_log(false, "No dest");
-    not_reached();
+    return RegisterKind::OBJECT;
   case OPCODE_INSTANCE_OF:
     return RegisterKind::NORMAL;
   case OPCODE_NEW_INSTANCE:

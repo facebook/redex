@@ -82,12 +82,12 @@ size_t HighRegMoveInserter::low_reg_space_needed(
       continue;
     }
     if (insn->dests_size() &&
-        required_bit_width(insn->dest()) > dest_bit_width(op)) {
+        required_bit_width(insn->dest()) > insn->dest_bit_width()) {
       rv = std::max(rv, static_cast<size_t>(insn->dest_is_wide() ? 2  : 1));
     }
     size_t srcs_swap_needed = 0;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
+      if (required_bit_width(insn->src(i)) > insn->src_bit_width(i)) {
         srcs_swap_needed += insn->src_is_wide(i) ? 2 : 1;
       }
     }
@@ -204,7 +204,7 @@ void HighRegMoveInserter::insert_moves(
     }
     size_t swap_used {0};
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
+      if (required_bit_width(insn->src(i)) > insn->src_bit_width(i)) {
         auto reg_kind = reg_kind_map->at(insn).at(insn->src(i));
         auto mov = gen_move(reg_kind, swap_used, insn->src(i));
         code->insert_before(it.unwrap(), mov);
@@ -214,7 +214,7 @@ void HighRegMoveInserter::insert_moves(
       }
     }
     if (insn->dests_size() &&
-        required_bit_width(insn->dest()) > dest_bit_width(op)) {
+        required_bit_width(insn->dest()) > insn->dest_bit_width()) {
       auto reg_kind = dest_kind(insn->opcode());
       auto mov = gen_move(reg_kind, insn->dest(), 0);
       it.reset(code->insert_after(it.unwrap(), mov));
