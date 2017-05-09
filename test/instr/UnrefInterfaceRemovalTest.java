@@ -15,6 +15,9 @@ import org.junit.Test;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+/**
+ * Interface removal
+ */
 interface Unused {}
 
 interface A extends Unused {
@@ -34,6 +37,29 @@ class C implements Unused {
   }
 }
 
+/**
+ * Parser removal
+ */
+class EnclosingModels {
+  public static class AModel {}
+  public static class BModel {
+    public static int b() { return 0; }
+  }
+}
+
+class EnclosingParsers {
+  public static class AParser {
+    public static int doStuff() {
+      return 42;
+    }
+  }
+  public static class BParser {
+    public static int b() {
+      return 42;
+    }
+  }
+}
+
 public class UnrefInterfaceRemovalTest {
 
   @Test
@@ -42,5 +68,11 @@ public class UnrefInterfaceRemovalTest {
     assert(a.doStuff() == 42);
     C c = new C();
     assert(c.doStuff() == 42);
+  }
+
+  @Test
+  public void testParserRemoval() {
+    assert(EnclosingParsers.AParser.doStuff() == 42);
+    assert(EnclosingParsers.BParser.b() == 42);
   }
 }

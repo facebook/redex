@@ -92,7 +92,7 @@ void fix_call_sites_and_drop_this_arg(
     const std::vector<DexClass*>& scope,
     const std::unordered_set<DexMethod*>& statics,
     DevirtualizerMetrics& metrics) {
-  const auto fixer = [&](DexMethod* /* unused */, IRCode& code) {
+  const auto fixer = [&](DexMethod*, IRCode& code) {
     std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
     for (auto& mie : InstructionIterable(&code)) {
       auto inst = mie.insn;
@@ -135,7 +135,7 @@ void fix_call_sites_and_drop_this_arg(
 void fix_call_sites(const std::vector<DexClass*>& scope,
                     const std::unordered_set<DexMethod*>& target_methods,
                     DevirtualizerMetrics& metrics) {
-  const auto fixer = [&](DexMethod* /* unused */, IRInstruction* opcode) {
+  const auto fixer = [&](DexMethod*, IRInstruction* opcode) {
     if (!opcode->has_method()) {
       return;
     }
@@ -152,7 +152,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
     patch_call_site(method, opcode, metrics);
   };
 
-  walk_opcodes(scope, [](DexMethod* /* unused */) { return true; }, fixer);
+  walk_opcodes(scope, [](DexMethod*) { return true; }, fixer);
 }
 
 void make_methods_static(const std::unordered_set<DexMethod*>& methods,
