@@ -9,6 +9,7 @@
 
 #include "Show.h"
 
+#include <boost/io/detail/quoted_manip.hpp>
 #include <sstream>
 
 #include "ControlFlow.h"
@@ -866,26 +867,44 @@ std::string show(const DexInstruction* insn) {
 
 std::string show(const IRInstruction* insn) {
   if (!insn) return "";
-  std::stringstream ss;
-  ss << show(insn->opcode());
+  std::ostringstream ss;
+  ss << show(insn->opcode()) << " ";
   bool first = true;
   if (insn->dests_size()) {
-    ss << " v" << insn->dest();
+    ss << "v" << insn->dest();
     first = false;
   }
   for (unsigned i = 0; i < insn->srcs_size(); ++i) {
-    if (!first) ss << ",";
-    ss << " v" << insn->src(i);
+    if (!first) ss << ", ";
+    ss << "v" << insn->src(i);
     first = false;
   }
-  if (insn->has_method()) {
-    ss << " " << show(insn->get_method());
-  } else if (insn->has_field()) {
-    ss << " " << show(insn->get_field());
-  }
   if (opcode::has_range(insn->opcode())) {
-    ss << " range base: " << insn->range_base() << ", "
-       << "range size: " << insn->range_size();
+    if (!first) ss << ", ";
+    ss << "range_base: " << insn->range_base() << ", "
+       << "range_size: " << insn->range_size();
+  }
+  if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
+    ss << ", ";
+  }
+  switch (opcode::ref(insn->opcode())) {
+    case opcode::Ref::None:
+      break;
+    case opcode::Ref::String:
+      ss << boost::io::quoted(show(insn->get_string()));
+      break;
+    case opcode::Ref::Type:
+      ss << show(insn->get_type());
+      break;
+    case opcode::Ref::Field:
+      ss << show(insn->get_field());
+      break;
+    case opcode::Ref::Method:
+      ss << show(insn->get_method());
+      break;
+    case opcode::Ref::Data:
+      ss << "<data>"; // TODO: print something more informative
+      break;
   }
   return ss.str();
 }
@@ -974,23 +993,24 @@ std::string show(TryEntryType t) {
 
 std::string show(const MethodItemEntry& mei) {
   std::stringstream ss;
+  ss << "[" << &mei << "] ";
   switch (mei.type) {
   case MFLOW_OPCODE:
-    ss << "OPCODE: [" << mei.insn << "] " << show(mei.insn);
+    ss << "OPCODE: " << show(mei.insn);
     return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET MULTI: " << mei.target->src->insn;
+      ss << "TARGET: MULTI " << mei.target->index << " ";
     } else {
-      ss << "TARGET SIMPLE: " << mei.target->src->insn;
+      ss << "TARGET: SIMPLE ";
     }
+    ss << mei.target->src;
     return ss.str();
   case MFLOW_TRY:
-    ss << "TRY: " << show(mei.tentry->type) <<
-      " (CATCH: " << mei.tentry->catch_start << ")";
+    ss << "TRY: " << show(mei.tentry->type) << " " << mei.tentry->catch_start;
     return ss.str();
   case MFLOW_CATCH:
-    ss << "CATCH: [" << &mei << "] " << show(mei.centry->catch_type);
+    ss << "CATCH: " << show(mei.centry->catch_type);
     return ss.str();
   case MFLOW_DEBUG:
     ss << "DEBUG: " << show(mei.dbgop);
@@ -999,7 +1019,7 @@ std::string show(const MethodItemEntry& mei) {
     ss << "POSITION: " << show(mei.pos);
     return ss.str();
   case MFLOW_FALLTHROUGH:
-    ss << "FALLTHROUGH: [" << mei.throwing_mie << "]";
+    ss << "FALLTHROUGH: " << mei.throwing_mie;
     return ss.str();
   }
   not_reached();
