@@ -55,7 +55,7 @@ bool class_contains(const DexMethod* method) {
 using Fields = std::vector<const DexField*>;
 using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
-using MethodInsns = std::map<const DexMethod*, Instructions>;
+using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
 /**
  * Performs 2 kind of verifications:
@@ -69,11 +69,11 @@ using MethodInsns = std::map<const DexMethod*, Instructions>;
 class Breadcrumbs {
   const Scope& scope;
   std::unordered_set<const DexClass*> classes;
-  std::map<const DexType*, Fields> bad_fields;
-  std::map<const DexType*, Methods> bad_methods;
-  std::map<const DexType*, MethodInsns> bad_type_insns;
-  std::map<const DexField*, MethodInsns> bad_field_insns;
-  std::map<const DexMethod*, MethodInsns> bad_meth_insns;
+  std::map<const DexType*, Fields, dextypes_comparator> bad_fields;
+  std::map<const DexType*, Methods, dextypes_comparator> bad_methods;
+  std::map<const DexType*, MethodInsns, dextypes_comparator> bad_type_insns;
+  std::map<const DexField*, MethodInsns, dexfields_comparator> bad_field_insns;
+  std::map<const DexMethod*, MethodInsns, dexmethods_comparator> bad_meth_insns;
 
  public:
 

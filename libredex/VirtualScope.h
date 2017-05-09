@@ -18,7 +18,7 @@
 #include <set>
 
 
-using TypeSet = std::set<const DexType*>;
+using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
 /**
  * DexType parent to children relationship
@@ -162,9 +162,9 @@ bool is_impl_scope(const VirtualScope* scope);
  */
 using VirtualScopes = std::vector<VirtualScope>;
 // map from a proto to a list of VirtualScopes
-using ProtoMap = std::map<const DexProto*, VirtualScopes>;
+using ProtoMap = std::map<const DexProto*, VirtualScopes, dexprotos_comparator>;
 // map from a name to a map of proto with that name
-using SignatureMap = std::map<const DexString*, ProtoMap>;
+using SignatureMap = std::map<const DexString*, ProtoMap, dexstrings_comparator>;
 
 //
 // Entry points
@@ -216,7 +216,7 @@ const VirtualScope& find_virtual_scope(
  * equals to the number of vmethods (unimplemented interface aside).
  */
 using ClassScopes =
-    std::map<const DexType*, std::vector<const VirtualScope*>>;
+    std::map<const DexType*, std::vector<const VirtualScope*>, dextypes_comparator>;
 
 /*
  * Get the ClassScopes.

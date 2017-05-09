@@ -162,14 +162,14 @@ void create_object_class() {
 }
 
 // map from a proto to the set of interface implementing that sig
-using IntfProtoMap = std::map<const DexProto*, TypeSet>;
+using IntfProtoMap = std::map<const DexProto*, TypeSet, dexprotos_comparator>;
 
 // a map from name to signatures for a set of interfaces
-using BaseIntfSigs = std::map<const DexString*, IntfProtoMap>;
+using BaseIntfSigs = std::map<const DexString*, IntfProtoMap, dexstrings_comparator>;
 
 // map to track signatures as (name, sig)
 using BaseSigs = std::map<
-    const DexString*, std::set<const DexProto*>>;
+    const DexString*, std::set<const DexProto*, dexprotos_comparator>, dexstrings_comparator>;
 
 /**
  * Create a BaseSig which is the set of method definitions in a type.

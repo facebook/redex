@@ -128,6 +128,11 @@ class DexString {
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexstrings(const DexString* a, const DexString* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
   if (a->is_simple() && b->is_simple())
     return (strcmp(a->c_str(), b->c_str()) < 0);
   /*
@@ -157,6 +162,12 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
     return (cpa < cpb);
   }
 }
+
+struct dexstrings_comparator {
+  bool operator()(const DexString* a, const DexString* b) const {
+    return compare_dexstrings(a, b);
+  }
+};
 
 class DexType {
   friend struct RedexContext;
@@ -326,6 +337,11 @@ class DexField {
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexfields(const DexField* a, const DexField* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
   if (a->get_class() != b->get_class()) {
     return compare_dextypes(a->get_class(), b->get_class());
   }
@@ -334,6 +350,12 @@ inline bool compare_dexfields(const DexField* a, const DexField* b) {
   }
   return compare_dextypes(a->get_type(), b->get_type());
 }
+
+struct dexfields_comparator {
+  bool operator()(const DexField* a, const DexField* b) const {
+    return compare_dexfields(a, b);
+  }
+};
 
 class DexTypeList {
   friend struct RedexContext;
@@ -388,6 +410,11 @@ class DexTypeList {
 };
 
 inline bool compare_dextypelists(DexTypeList* a, DexTypeList* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
   return *a < *b;
 }
 
@@ -434,11 +461,22 @@ class DexProto {
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexprotos(const DexProto* a, const DexProto* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
   if (a->get_rtype() != b->get_rtype()) {
     return compare_dextypes(a->get_rtype(), b->get_rtype());
   }
   return (*(a->get_args()) < *(b->get_args()));
 }
+
+struct dexprotos_comparator {
+  bool operator()(const DexProto* a, const DexProto* b) const {
+    return compare_dexprotos(a, b);
+  }
+};
 
 /*
  * Dex files encode debug information as a series of opcodes. Internally, we
@@ -791,6 +829,11 @@ class DexMethod {
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexmethods(const DexMethod* a, const DexMethod* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
   if (a->get_class() != b->get_class()) {
     return compare_dextypes(a->get_class(), b->get_class());
   }
@@ -930,3 +973,15 @@ struct dexmethods_comparator {
     return compare_dexmethods(a, b);
   }
 };
+
+DISALLOW_DEFAULT_COMPARATOR(DexClass)
+DISALLOW_DEFAULT_COMPARATOR(DexCode)
+DISALLOW_DEFAULT_COMPARATOR(DexDebugInstruction)
+DISALLOW_DEFAULT_COMPARATOR(DexDebugItem)
+DISALLOW_DEFAULT_COMPARATOR(DexField)
+DISALLOW_DEFAULT_COMPARATOR(DexMethod)
+DISALLOW_DEFAULT_COMPARATOR(DexOutputIdx)
+DISALLOW_DEFAULT_COMPARATOR(DexProto)
+DISALLOW_DEFAULT_COMPARATOR(DexString)
+DISALLOW_DEFAULT_COMPARATOR(DexType)
+DISALLOW_DEFAULT_COMPARATOR(DexTypeList)

@@ -47,7 +47,7 @@ class CreateReferenceGraphPass : public Pass {
   // to the types each refer to
   //
   // Use the config file to decide which types of references to collect
-  using refs_t = std::unordered_map<const DexClass*, std::set<const DexType*>>;
+  using refs_t = std::unordered_map<const DexClass*, std::set<const DexType*, dextypes_comparator>>;
   using type_to_store_map_t = std::unordered_map<const DexType*, DexStore*>;
 
   using MethodWalkerFn = std::function<void(DexMethod*)>;

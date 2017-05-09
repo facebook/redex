@@ -91,9 +91,9 @@ void check_protos_2(SignatureMap& sm) {
 // - size of scope
 // - type of interfaces implemented
 using ScopeInfo = std::pair<size_t, std::vector<const DexType*>>;
-using ExpectedScope = std::map<const DexType*, std::map<const DexType*, ScopeInfo>>;
-using ExpectedProto = std::map<const DexProto*, ExpectedScope>;
-using ExpectedSig = std::map<const DexString*, ExpectedProto>;
+using ExpectedScope = std::map<const DexType*, std::map<const DexType*, ScopeInfo, dextypes_comparator>, dextypes_comparator>;
+using ExpectedProto = std::map<const DexProto*, ExpectedScope, dexprotos_comparator>;
+using ExpectedSig = std::map<const DexString*, ExpectedProto, dexstrings_comparator>;
 
 void check_expected_scopes(
     SignatureMap& sm, ExpectedSig& expected_sig) {
@@ -151,7 +151,7 @@ void check_expected_scopes(
 //
 // Helpers to check method correctness
 //
-using ExpectedMethod = std::map<const DexMethod*, VirtualFlags>;
+using ExpectedMethod = std::map<const DexMethod*, VirtualFlags, dexmethods_comparator>;
 
 // Check every method
 void check_expected_methods(

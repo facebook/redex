@@ -33,3 +33,25 @@ template <class Container, class T, class Compare>
 void insert_sorted(Container& c, const T& e, Compare comp) {
   c.insert(std::lower_bound(c.begin(), c.end(), e, comp), e);
 }
+
+template<typename T> struct fake_dependency: public std::false_type {};
+
+#define DISALLOW_DEFAULT_COMPARATOR(klass) \
+  namespace std { \
+  template <typename T, typename A> \
+  class map<const klass*, T, std::less<const klass*>, A> { \
+    static_assert(fake_dependency<T>::value, #klass " must not use default pointer comparison in std::map"); \
+  }; \
+  template <typename T, typename A> \
+  class multimap<const klass*, T, std::less<const klass*>, A> { \
+    static_assert(fake_dependency<T>::value, #klass " must not use default pointer comparison in std::multi_map"); \
+  }; \
+  template <typename A> \
+  class set<const klass*, std::less<const klass*>, A> { \
+    static_assert(fake_dependency<A>::value, #klass " must not use default pointer comparison in std::set"); \
+  }; \
+  template <typename A> \
+  class multiset<const klass*, std::less<const klass*>, A> { \
+    static_assert(fake_dependency<A>::value, #klass " must not use default pointer comparison in std::set"); \
+  }; \
+  }
