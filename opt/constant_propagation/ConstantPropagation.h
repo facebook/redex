@@ -16,10 +16,22 @@ class ConstantPropagationPass : public Pass {
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("blacklist", {}, m_blacklist);
+    std::vector<std::string> blacklist_names;
+    pc.get("blacklist", {}, blacklist_names);
+    pc.get("only_simple_branches", false, m_config.only_simple_branches);
+
+    for (auto const& name : blacklist_names) {
+      DexType* entry = DexType::get_type(name.c_str());
+      if (entry) {
+        TRACE(CONSTP, 2, "blacklist class: %s\n", SHOW(entry));
+        m_config.blacklist.insert(entry);
+      }
+    }
   }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-private:
-  std::vector<std::string> m_blacklist;
+  struct Config {
+    std::unordered_set<DexType*> blacklist;
+    bool only_simple_branches;
+  } m_config;
 };

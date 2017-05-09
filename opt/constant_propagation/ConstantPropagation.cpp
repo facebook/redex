@@ -30,16 +30,17 @@ namespace {
   // register is known and the constant value of this register
   struct AbstractRegister {
     bool known;
-    int64_t val;
+    int32_t val;
   };
 
   class ConstantPropagation {
   private:
     const Scope& m_scope;
+    const ConstantPropagationPass::Config& m_config;
     // The index of the reg_values is the index of registers
     std::vector<AbstractRegister> reg_values;
     // method_returns keeps track of constant returned by methods
-    std::unordered_map<DexMethod*, int64_t> method_returns;
+    std::unordered_map<DexMethod*, int32_t> method_returns;
     // Store dead instructions to be removed
     std::vector<IRInstruction*> dead_instructions;
     // Store pairs of intructions to be replaced
@@ -137,7 +138,12 @@ namespace {
       for (auto const& p : branch_replacements) {
         auto const& old_op = p.first;
         auto const& new_op = p.second;
-        code->replace_branch(old_op, new_op);
+        if (new_op->opcode() == OPCODE_NOP) {
+          code->remove_opcode(old_op);
+          delete new_op;
+        } else {
+          code->replace_branch(old_op, new_op);
+        }
       }
       branch_replacements.clear();
 
@@ -150,55 +156,78 @@ namespace {
     bool propagate_insn(IRInstruction *inst, IRInstruction *&last_inst, DexMethod *method) {
       bool changed = false;
       switch (inst->opcode()) {
-        case OPCODE_IF_NEZ:
-        case OPCODE_IF_EQZ:
-          if (propagate_branch(inst)) {
-            TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
-            auto new_inst = new IRInstruction(OPCODE_GOTO_16);
-            branch_replacements.emplace_back(inst, new_inst);
-            m_branch_propagated++;
-            changed = true;
+      case OPCODE_IF_EQ:
+      case OPCODE_IF_NE:
+      case OPCODE_IF_LT:
+      case OPCODE_IF_GE:
+      case OPCODE_IF_GT:
+      case OPCODE_IF_LE:
+      case OPCODE_IF_LTZ:
+      case OPCODE_IF_GEZ:
+      case OPCODE_IF_GTZ:
+      case OPCODE_IF_LEZ:
+        if (m_config.only_simple_branches) {
+          break;
+        }
+        // fallthrough
+      case OPCODE_IF_EQZ:
+      case OPCODE_IF_NEZ: {
+        IRInstruction* branch_replacement = propagate_branch(inst);
+        if (branch_replacement != nullptr) {
+          TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
+          branch_replacements.emplace_back(inst, branch_replacement);
+          m_branch_propagated++;
+          changed = true;
+        }
+        break;
+      }
+
+      // For return instruction, save the return value for future use
+      case OPCODE_RETURN:
+        if (reg_values[inst->src(0)].known)
+          method_returns[method] = reg_values[inst->src(0)].val;
+        break;
+      // For move-result instruction following a static-invoke insn
+      // Check if there is a constant returned. If so, propagate the value
+      case OPCODE_MOVE_RESULT:
+        reg_values[inst->dest()].known = false;
+        if (false && // deactivate return propagation for now
+            last_inst != nullptr &&
+            last_inst->opcode() == OPCODE_INVOKE_STATIC &&
+            last_inst->has_method()) {
+          if (method_returns.find(last_inst->get_method()) !=
+              method_returns.end()) {
+            auto return_val = method_returns[last_inst->get_method()];
+            TRACE(CONSTP,
+                  2,
+                  "Find method %s return value: %d\n",
+                  SHOW(last_inst),
+                  return_val);
+            m_method_return_propagated++;
+            auto new_inst = (new IRInstruction(OPCODE_CONST_16))
+                                ->set_dest(inst->dest())
+                                ->set_literal(return_val);
+            replacements.emplace_back(inst, new_inst);
+            dead_instructions.push_back(last_inst);
+            propagate_constant(new_inst);
           }
-          break;
-        // For return instruction, save the return value for future use
-        case OPCODE_RETURN:
-          if (reg_values[inst->src(0)].known)
-            method_returns[method] = reg_values[inst->src(0)].val;
-          break;
-        // For move-result instruction following a static-invoke insn
-        // Check if there is a constant returned. If so, propagate the value
-        case OPCODE_MOVE_RESULT:
+        }
+        break;
+      // For move instruction, propagate known status and the value to the dest
+      // register
+      case OPCODE_MOVE:
+      case OPCODE_MOVE_OBJECT:
+        reg_values[inst->dest()].known = reg_values[inst->src(0)].known;
+        reg_values[inst->dest()].val = reg_values[inst->src(0)].val;
+        break;
+      default:
+        if (inst->dests_size()) {
           reg_values[inst->dest()].known = false;
-          if (false && // deactivate return propagation for now
-              last_inst != nullptr &&
-              last_inst->opcode() == OPCODE_INVOKE_STATIC &&
-              last_inst->has_method()) {
-            if (method_returns.find(last_inst->get_method()) !=
-                method_returns.end()) {
-              auto return_val = method_returns[last_inst->get_method()];
-              TRACE(CONSTP, 2, "Find method %s return value: %d\n",
-                    SHOW(last_inst), return_val);
-              m_method_return_propagated++;
-              auto new_inst = (new IRInstruction(OPCODE_CONST_16))
-                                  ->set_dest(inst->dest())
-                                  ->set_literal(return_val);
-              replacements.emplace_back(inst, new_inst);
-              dead_instructions.push_back(last_inst);
-              propagate_constant(new_inst);
-            }
+          if (inst->dest_is_wide()) {
+            reg_values[inst->dest() + 1].known = false;
           }
-          break;
-        // For move instruction, propagate known status and the value to the dest register
-        case OPCODE_MOVE:
-        case OPCODE_MOVE_OBJECT:
-          reg_values[inst->dest()].known = reg_values[inst->src(0)].known;
-          reg_values[inst->dest()].val = reg_values[inst->src(0)].val;
-          break;
-        default:
-          if (inst->dests_size()) {
-            reg_values[inst->dest()].known = false;
-          }
-          break;
+        }
+        break;
       }
       last_inst = inst;
       return changed;
@@ -213,23 +242,77 @@ namespace {
           reg_values[inst->dest()].val = inst->literal();
       } else {
         reg_values[inst->dest()].known = false;
+        if (inst->dest_is_wide()) {
+          reg_values[inst->dest() + 1].known = false;
+        }
       }
     }
 
-    // If a branch reads the value from a register loaded in earlier step,
-    // the branch will read value from register, do the evaluation and
-    // change the conditional branch to a goto branch if possible
-    bool propagate_branch(IRInstruction *inst) {
-      auto src_reg = inst->src(0);
-      if (reg_values[src_reg].known) {
-        if (inst->opcode() == OPCODE_IF_EQZ && reg_values[src_reg].val == 0) {
-            return true;
-        }
-        if (inst->opcode() == OPCODE_IF_NEZ && reg_values[src_reg].val != 0) {
-            return true;
-        }
+    // Evaluate the guard expression of an if opcode.
+    // pass 0 as the r_val for if-*Z opcodes
+    bool eval_if(DexOpcode op, int32_t l_val, int32_t r_val) {
+      switch (op) {
+      case OPCODE_IF_EQ:
+      case OPCODE_IF_EQZ:
+        return l_val == r_val;
+      case OPCODE_IF_NE:
+      case OPCODE_IF_NEZ:
+        return l_val != r_val;
+      case OPCODE_IF_LT:
+      case OPCODE_IF_LTZ:
+        return l_val < r_val;
+      case OPCODE_IF_GE:
+      case OPCODE_IF_GEZ:
+        return l_val >= r_val;
+      case OPCODE_IF_GT:
+      case OPCODE_IF_GTZ:
+        return l_val > r_val;
+      case OPCODE_IF_LE:
+      case OPCODE_IF_LEZ:
+        return l_val <= r_val;
+      default:
+        always_assert_log(false, "opcode %s must be an if", SHOW(op));
       }
-      return false;
+    }
+
+    // Attempt to create replacements for branch instructions. Evaluate the
+    // conditional based on known register values.
+    //
+    // returns a new GOTO_16 if this branch is always true.
+    // returns a new NOP if this branch is always false. Be sure to free it.
+    // returns nullptr when this branch can't be removed
+    //
+    // precondition: inst must be a branch instruction (OPCODE_IF_*)
+    IRInstruction* propagate_branch(IRInstruction *inst) {
+      auto left = inst->src(0);
+      if (!reg_values[left].known) {
+        return nullptr;
+      }
+
+      int32_t l_val = reg_values[left].val;
+      int32_t r_val;
+      if (inst->srcs_size() == 2) {
+        AbstractRegister right = reg_values[inst->src(1)];
+        if (right.known) {
+          // if vA, vB with both values known
+          r_val = right.val;
+        } else {
+          // if vA, vB where vB isn't known
+          return nullptr;
+        }
+      } else {
+        // if-*Z vA        is the same as
+        // if-*  vA, 0
+        r_val = 0;
+      }
+
+      bool branch_result = eval_if(inst->opcode(), l_val, r_val);
+      if (branch_result) {
+        return new IRInstruction(OPCODE_GOTO_16);
+      } else if (!m_config.only_simple_branches) {
+        return new IRInstruction(OPCODE_NOP);
+      }
+      return nullptr;
     }
 
     // This function reads the vector of reg_values and marks all regs to unknown
@@ -267,10 +350,12 @@ namespace {
     }
 
   public:
-    ConstantPropagation(const Scope& scope) : m_scope(scope) {
-    }
+    ConstantPropagation(
+        const Scope& scope,
+        const ConstantPropagationPass::Config& cfg)
+      : m_scope(scope), m_config(cfg) {}
 
-    void run(const std::unordered_set<DexType*> &blacklist_classes) {
+    void run() {
       TRACE(CONSTP, 1, "Running ConstantPropagation pass\n");
       walk_methods(m_scope,
         [&](DexMethod* m) {
@@ -278,7 +363,7 @@ namespace {
             return;
           }
           // Skipping blacklisted classes
-          if (blacklist_classes.count(m->get_class()) > 0) {
+          if (m_config.blacklist.count(m->get_class()) > 0) {
             TRACE(CONSTP, 2, "Skipping %s\n", show(m->get_class()).c_str());
             return;
           }
@@ -303,27 +388,10 @@ namespace {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-std::unordered_set<DexType*> get_black_list(
-  const std::vector<std::string>& config
-) {
-  std::unordered_set<DexType*> blacklist;
-  for (auto const& config_blacklist : config) {
-    DexType* entry = DexType::get_type(config_blacklist.c_str());
-    if (entry) {
-      TRACE(CONSTP, 2, "blacklist class: %s\n", SHOW(entry));
-      blacklist.insert(entry);
-    }
-  }
-  return blacklist;
-}
-
 void ConstantPropagationPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  auto blacklist_classes = get_black_list(m_blacklist);
-  ConstantPropagation constant_prop(scope);
-  constant_prop.run(blacklist_classes);
+  ConstantPropagation constant_prop(scope, m_config);
+  constant_prop.run();
   mgr.incr_metric(
     METRIC_BRANCH_PROPAGATED,
     constant_prop.num_branch_propagated());
