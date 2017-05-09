@@ -400,7 +400,7 @@ struct SeedsParser {
     return convert_type(cls) + "." + name + ":" + convert_type(type);
   }
 
-  std::string canonicalize_field(std::string line) {
+  std::string normalize_field(std::string line) {
     auto cpos = line.find(':');
     auto cls = line.substr(0, cpos);
     auto spos = line.find(' ', cpos + 2);
@@ -410,7 +410,7 @@ struct SeedsParser {
   }
 
   bool parse_field(std::string line) {
-    auto canon_field = canonicalize_field(line);
+    auto canon_field = normalize_field(line);
     auto xlate_name = m_pgmap.translate_field(canon_field);
     auto cls_end = xlate_name.find('.');
     auto name_start = cls_end + 1;
@@ -463,7 +463,7 @@ struct SeedsParser {
       + convert_type(type);
   }
 
-  std::string canonicalize_method(std::string line) {
+  std::string normalize_method(std::string line) {
     auto cls_end = line.find(':');
     auto type_start = cls_end + 2;
     auto type_end = line.find(' ', type_start);
@@ -487,7 +487,7 @@ struct SeedsParser {
   }
 
   bool parse_method(std::string line) {
-    auto canon_method = canonicalize_method(line);
+    auto canon_method = normalize_method(line);
     auto xlate_method = m_pgmap.translate_method(canon_method);
     auto dex_method = DexMethod::get_method(xlate_method);
     TRACE(PGR, 2,

@@ -313,6 +313,9 @@ OPS
 std::string show(DexOpcode);
 
 namespace opcode {
+  // max number of register args supported by non-range opcodes
+  const size_t NON_RANGE_MAX = 5;
+
   DexOpcodeFormat format(DexOpcode opcode);
 
   Ref ref(DexOpcode);
@@ -329,6 +332,9 @@ namespace opcode {
   bool has_range(DexOpcode);
 
   bool may_throw(DexOpcode);
+
+  // if an opcode has a /range counterpart
+  bool has_range_form(DexOpcode);
 
   bool is_load_param(DexOpcode);
 } // namespace opcode

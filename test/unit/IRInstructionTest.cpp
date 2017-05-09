@@ -13,10 +13,16 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "OpcodeList.h"
+#include "RegAlloc.h"
+#include "Transform.h"
 #include "Show.h"
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
+  return os << show(&to_show);
+}
+
+std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
 }
 
@@ -92,4 +98,34 @@ TEST(IRInstruction, TwoAddr) {
   add_int_2.set_src(1, 17);
   EXPECT_EQ(*(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v})->to_dex_instruction()),
             add_int_2);
+}
+
+TEST(IRInstruction, NormalizeInvoke) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+
+  auto method = DexMethod::make_method("LFoo;", "x", "V", {"J", "I", "J"});
+  auto insn = dasm(OPCODE_INVOKE_VIRTUAL_RANGE, method);
+  insn->set_range_base(1);
+  insn->set_range_size(6);
+  auto orig = new IRInstruction(*insn);
+
+  insn->range_to_srcs();
+  EXPECT_EQ(
+      *insn,
+      *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 3_v, 4_v, 5_v, 6_v}));
+  EXPECT_TRUE(needs_range_conversion(insn));
+
+  insn->normalize_registers();
+  EXPECT_EQ(*insn, *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 4_v, 5_v}));
+
+  insn->denormalize_registers();
+  EXPECT_EQ(
+      *insn,
+      *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 3_v, 4_v, 5_v, 6_v}));
+
+  insn->srcs_to_range();
+  EXPECT_EQ(*insn, *orig);
+
+  delete g_redex;
 }

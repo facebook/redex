@@ -9,6 +9,9 @@
 
 #include "IRInstruction.h"
 
+#include "DexClass.h"
+#include "DexUtil.h"
+
 namespace {
 
 bool can_use_2addr(const IRInstruction* insn) {
@@ -28,6 +31,44 @@ DexOpcode convert_3to2addr(DexOpcode op) {
   always_assert(op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE);
   constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
   return (DexOpcode)(op + offset);
+}
+
+DexOpcode opcode_no_range_version(DexOpcode op) {
+  switch (op) {
+  case OPCODE_INVOKE_DIRECT_RANGE:
+    return OPCODE_INVOKE_DIRECT;
+  case OPCODE_INVOKE_STATIC_RANGE:
+    return OPCODE_INVOKE_STATIC;
+  case OPCODE_INVOKE_SUPER_RANGE:
+    return OPCODE_INVOKE_SUPER;
+  case OPCODE_INVOKE_VIRTUAL_RANGE:
+    return OPCODE_INVOKE_VIRTUAL;
+  case OPCODE_INVOKE_INTERFACE_RANGE:
+    return OPCODE_INVOKE_INTERFACE;
+  case OPCODE_FILLED_NEW_ARRAY_RANGE:
+    return OPCODE_FILLED_NEW_ARRAY;
+  default:
+    always_assert(false);
+  }
+}
+
+DexOpcode opcode_range_version(DexOpcode op) {
+  switch (op) {
+  case OPCODE_INVOKE_DIRECT:
+    return OPCODE_INVOKE_DIRECT_RANGE;
+  case OPCODE_INVOKE_STATIC:
+    return OPCODE_INVOKE_STATIC_RANGE;
+  case OPCODE_INVOKE_SUPER:
+    return OPCODE_INVOKE_SUPER_RANGE;
+  case OPCODE_INVOKE_VIRTUAL:
+    return OPCODE_INVOKE_VIRTUAL_RANGE;
+  case OPCODE_INVOKE_INTERFACE:
+    return OPCODE_INVOKE_INTERFACE_RANGE;
+  case OPCODE_FILLED_NEW_ARRAY:
+    return OPCODE_FILLED_NEW_ARRAY_RANGE;
+  default:
+    always_assert(false);
+  }
 }
 
 }
@@ -318,4 +359,107 @@ bool IRInstruction::src_is_wide(size_t i) const {
   default:
     return false;
   }
+}
+
+void IRInstruction::normalize_registers() {
+  if (is_invoke(opcode()) && !opcode::has_range(opcode())) {
+    auto& args = get_method()->get_proto()->get_args()->get_type_list();
+    size_t old_srcs_idx {0};
+    size_t srcs_idx {0};
+    if (m_opcode != OPCODE_INVOKE_STATIC) {
+      ++srcs_idx;
+      ++old_srcs_idx;
+    }
+    for (size_t args_idx = 0; args_idx < args.size(); ++args_idx) {
+      set_src(srcs_idx++, src(old_srcs_idx));
+      old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
+    }
+    set_arg_word_count(srcs_idx);
+  }
+}
+
+void IRInstruction::denormalize_registers() {
+  always_assert(!opcode::has_range(m_opcode));
+  if (is_invoke(m_opcode)) {
+    auto& args = get_method()->get_proto()->get_args()->get_type_list();
+    std::vector<uint16_t> srcs;
+    size_t args_idx {0};
+    size_t srcs_idx {0};
+    if (m_opcode != OPCODE_INVOKE_STATIC) {
+      srcs.push_back(src(srcs_idx++));
+    }
+    bool has_wide {false};
+    for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
+      srcs.push_back(src(srcs_idx));
+      if (is_wide_type(args.at(args_idx))) {
+        srcs.push_back(src(srcs_idx) + 1);
+        has_wide = true;
+      }
+    }
+    if (has_wide) {
+      m_srcs = srcs;
+    }
+  }
+}
+
+void IRInstruction::range_to_srcs() {
+  if (!opcode::has_range(m_opcode)) {
+    return;
+  }
+  set_arg_word_count(range_size());
+  for (size_t i = 0; i < range_size(); ++i) {
+    set_src(i, range_base() + i);
+  }
+  set_range_base(0);
+  set_range_size(0);
+  m_opcode = opcode_no_range_version(m_opcode);
+}
+
+bit_width_t required_bit_width(uint16_t v) {
+  bit_width_t result {1};
+  while (v >>= 1) {
+    ++result;
+  }
+  return result;
+}
+
+bool has_contiguous_srcs(const IRInstruction* insn) {
+  if (insn->srcs_size() == 0) {
+    return true;
+  }
+  auto last = insn->src(0);
+  for (size_t i = 1; i < insn->srcs_size(); ++i) {
+    if (insn->src(i) - last != 1) {
+      return false;
+    }
+    last = insn->src(i);
+  }
+  return true;
+}
+
+bool needs_range_conversion(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  always_assert(opcode::has_range_form(op));
+  if (insn->srcs_size() > opcode::NON_RANGE_MAX) {
+    return true;
+  }
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void IRInstruction::srcs_to_range() {
+  if (!opcode::has_range_form(m_opcode) || !needs_range_conversion(this)) {
+    return;
+  }
+  // the register allocator is responsible for ensuring that this property is
+  // true
+  always_assert(has_contiguous_srcs(this));
+  m_opcode = opcode_range_version(m_opcode);
+  set_range_base(src(0));
+  set_range_size(srcs_size());
+  set_arg_word_count(0);
 }

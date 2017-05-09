@@ -13,7 +13,6 @@
 #include "RegisterKind.h"
 
 using reg_t = uint16_t;
-using bit_width_t = uint8_t;
 
 IRInstruction* gen_move(RegisterKind kind, reg_t dest, reg_t src);
 

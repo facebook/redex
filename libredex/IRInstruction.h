@@ -11,12 +11,34 @@
 
 #include "DexInstruction.h"
 
+using bit_width_t = uint8_t;
+
 class IRInstruction final {
  public:
   explicit IRInstruction(DexOpcode op);
   explicit IRInstruction(const DexInstruction* dex_insn);
 
+  static IRInstruction* make(const DexInstruction*);
   DexInstruction* to_dex_instruction() const;
+
+  void range_to_srcs();
+  /*
+   * Converts invoke/fill-array instructions into their /range equivalents
+   * if necessary. Will throw if the conversion is necessary but the src
+   * registers are not consecutive.
+   */
+  void srcs_to_range();
+  /*
+   * Ensures that wide registers only have their first register referenced
+   * in the srcs list. This only affects invoke-* instructions.
+   */
+  void normalize_registers();
+  /*
+   * Ensures that wide registers have both registers in the pair referenced
+   * in the srcs list.
+   */
+  void denormalize_registers();
+
   uint16_t size() const;
   bool operator==(const IRInstruction&) const;
   bool operator!=(const IRInstruction& that) const {
@@ -207,3 +229,20 @@ class IRInstruction final {
   int32_t m_offset {0};
   std::pair<uint16_t, uint16_t> m_range {0, 0};
 };
+
+/*
+ * The number of bits required to encode the given value. I.e. the offset of
+ * the most significant bit.
+ */
+bit_width_t required_bit_width(uint16_t v);
+
+/*
+ * Necessary condition for an instruction to be converted to /range form
+ */
+bool has_contiguous_srcs(const IRInstruction*);
+
+/*
+ * Whether instruction must be converted to /range form in order to encode it
+ * as a DexInstruction
+ */
+bool needs_range_conversion(const IRInstruction*);

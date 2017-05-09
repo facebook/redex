@@ -195,11 +195,11 @@ TEST_F(RegAllocTest, ConvertToRangeForOneSrc) {
   EXPECT_EQ(swap_info, HighRegMoveInserter::SwapInfo(0, 0));
   move_inserter.insert_moves(code, swap_info);
 
-  InstructionList expected_insns {
+  InstructionList expected_insns{
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {16_v}),
-    dasm(OPCODE_INVOKE_VIRTUAL_RANGE,
-         DexMethod::make_method("Ljava/lang/Object", "hashCode", "V", {}))
-      ->set_range_base(16)->set_range_size(1),
+    dasm(OPCODE_INVOKE_VIRTUAL,
+         DexMethod::make_method("Ljava/lang/Object", "hashCode", "V", {}),
+         {16_v}),
     dasm(OPCODE_RETURN_VOID)
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
@@ -233,10 +233,10 @@ TEST_F(RegAllocTest, ConvertToRangeForTwoSrc) {
     dasm(OPCODE_NEW_INSTANCE, get_object_type(), {17_v}),
     dasm(OPCODE_MOVE_OBJECT_FROM16, {19_v, 17_v}),
     dasm(OPCODE_MOVE_OBJECT_FROM16, {20_v, 16_v}),
-    dasm(OPCODE_INVOKE_VIRTUAL_RANGE,
-         DexMethod::make_method("Ljava/lang/Object", "equals", "B",
-           {"Ljava/lang/Object"}))
-      ->set_range_base(19)->set_range_size(2),
+    dasm(OPCODE_INVOKE_VIRTUAL,
+         DexMethod::make_method(
+             "Ljava/lang/Object", "equals", "B", {"Ljava/lang/Object"}),
+         {19_v, 20_v}),
     dasm(OPCODE_RETURN_VOID)
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));

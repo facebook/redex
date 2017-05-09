@@ -290,6 +290,20 @@ bool may_throw(DexOpcode op) {
   }
 }
 
+bool has_range_form(DexOpcode op) {
+  switch (op) {
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_FILLED_NEW_ARRAY:
+    return true;
+  default:
+    return false;
+  }
+}
+
 bool is_load_param(DexOpcode op) {
   // currently the only internal opcodes are the load param opcodes
   return format(op) == FMT_iopcode;

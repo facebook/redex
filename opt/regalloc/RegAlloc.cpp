@@ -17,64 +17,6 @@
 #include "Transform.h"
 #include "Walkers.h"
 
-namespace {
-
-bit_width_t required_bit_width(uint16_t v) {
-  if ((v & 0xf) == v) {
-    return 4;
-  } else if ((v & 0xff) == v) {
-    return 8;
-  } else {
-    assert((v & 0xffff) == v);
-    return 16;
-  }
-}
-
-bool is_rangeable(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_FILLED_NEW_ARRAY:
-    return true;
-  default:
-    return false;
-  }
-}
-
-DexOpcode opcode_range_version(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_DIRECT:
-    return OPCODE_INVOKE_DIRECT_RANGE;
-  case OPCODE_INVOKE_STATIC:
-    return OPCODE_INVOKE_STATIC_RANGE;
-  case OPCODE_INVOKE_SUPER:
-    return OPCODE_INVOKE_SUPER_RANGE;
-  case OPCODE_INVOKE_VIRTUAL:
-    return OPCODE_INVOKE_VIRTUAL_RANGE;
-  case OPCODE_INVOKE_INTERFACE:
-    return OPCODE_INVOKE_INTERFACE_RANGE;
-  case OPCODE_FILLED_NEW_ARRAY:
-    return OPCODE_FILLED_NEW_ARRAY_RANGE;
-  default:
-    always_assert(false);
-  }
-}
-
-IRInstruction* create_range_equivalent(IRInstruction* insn) {
-  DexOpcode op = opcode_range_version(insn->opcode());
-  if (insn->has_method()) {
-    return (new IRInstruction(op))->set_method(insn->get_method());
-  } else {
-    always_assert(insn->has_type());
-    return (new IRInstruction(op))->set_type(insn->get_type());
-  }
-}
-
-} // namespace
-
 IRInstruction* gen_move(RegisterKind kind, reg_t dest, reg_t src) {
   static std::unordered_map<RegisterKind,
                             std::array<DexOpcode, 3>,
@@ -136,7 +78,7 @@ size_t HighRegMoveInserter::low_reg_space_needed(
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     auto op = insn->opcode();
-    if (is_rangeable(op)) {
+    if (opcode::has_range_form(op)) {
       continue;
     }
     if (insn->dests_size() &&
@@ -154,28 +96,16 @@ size_t HighRegMoveInserter::low_reg_space_needed(
   return rv;
 }
 
-size_t HighRegMoveInserter::range_space_needed(
-    IRCode* code) {
+size_t HighRegMoveInserter::range_space_needed(IRCode* code) {
   size_t rv = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     auto op = insn->opcode();
-    if (!is_rangeable(op)) {
+    if (!opcode::has_range_form(op)) {
       continue;
-    }
-    if (insn->srcs_size() <= 1) {
-      // we can just convert it to a /range instruction without moving any regs
-      continue;
-    }
-    bool needs_range_conversion {false};
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
-        needs_range_conversion = true;
-        break;
-      }
     }
     size_t needed = 0;
-    if (needs_range_conversion) {
+    if (needs_range_conversion(insn) && !has_contiguous_srcs(insn)) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         needed += insn->src_is_wide(i) ? 2 : 1;
       }
@@ -202,48 +132,40 @@ void HighRegMoveInserter::increment_all_regs(IRCode* code,
   code->set_registers_size(code->get_registers_size() + size);
 }
 
+/*
+ * Ensure that all invoke/fill-array instructions have either =< 5 reg args, or
+ * have > 5 args that are consecutive registers. The latter case will have
+ * their opcodes converted to the /range version later.
+ */
 void HighRegMoveInserter::handle_rangeable(IRCode* code,
                                            InstructionIterator& it,
                                            const KindVec& reg_kinds,
                                            reg_t range_start) {
   auto insn = it->insn;
-  auto op = insn->opcode();
-  bool needs_range_conversion {false};
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    if (required_bit_width(insn->src(i)) > src_bit_width(op, i)) {
-      needs_range_conversion = true;
-      break;
-    }
-  }
-  if (!needs_range_conversion) {
+  if (!needs_range_conversion(insn)) {
     return;
   }
 
-  TRACE(REG, 5, "Converting %s to /range\n", SHOW(insn));
-  ++m_stats.range_conversions;
-  it->insn = create_range_equivalent(insn);
-  if (insn->srcs_size() == 1) {
-    it->insn->set_range_base(insn->src(0));
-    it->insn->set_range_size(1);
-    delete insn;
+  TRACE(REG, 5, "%s needs to be converted to /range\n", SHOW(insn));
+  if (has_contiguous_srcs(insn)) {
     return;
   }
-  it->insn->set_range_base(range_start);
-  it->insn->set_range_size(insn->srcs_size());
+  ++m_stats.range_conversions;
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     auto reg_kind = reg_kinds.at(insn->src(i));
     auto mov = gen_move(reg_kind, range_start + i, insn->src(i));
     code->insert_before(it.unwrap(), mov);
     m_stats.add_move(mov);
+    auto old_src = insn->src(i);
+    insn->set_src(i, range_start + i);
 
     // methods taking wide arguments have each register in the pair specified
     // as consecutive operands
     if (reg_kind == RegisterKind::WIDE) {
-      auto old_src = insn->src(i);
       always_assert(insn->src(++i) == old_src + 1);
+      insn->set_src(i, range_start + i);
     }
   }
-  delete insn;
 }
 
 static std::string show_register_kinds(
@@ -273,7 +195,7 @@ void HighRegMoveInserter::insert_moves(
     auto insn = it->insn;
     auto op = insn->opcode();
     TRACE(REG, 6, "Processing %s\n", SHOW(insn));
-    if (is_rangeable(op)) {
+    if (opcode::has_range_form(op)) {
       auto reg_kinds = reg_kind_map->at(insn);
       auto range_start = code->get_registers_size() - sum_param_sizes(code) -
                          swap_info.range_swap;
@@ -313,6 +235,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
               TRACE(REG, 3, "Allocating %s regs: %d\n",
                     SHOW(m), code.get_registers_size());
               try {
+                for (auto& mie : InstructionIterable(&code)) {
+                  mie.insn->range_to_srcs();
+                }
+
                 TRACE(REG, 5, "Before reservation:\n%s\n", SHOW(&code));
                 auto swap_info = HighRegMoveInserter::reserve_swap(m);
                 TRACE(REG, 3, "Swap info: %d %d\n",
@@ -320,6 +246,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
                       swap_info.range_swap);
                 TRACE(REG, 5, "After reservation:\n%s\n", SHOW(&code));
                 move_inserter.insert_moves(&code, swap_info);
+
+                for (auto& mie : InstructionIterable(&code)) {
+                  mie.insn->srcs_to_range();
+                }
               } catch (std::exception&) {
                 fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
                 throw;
