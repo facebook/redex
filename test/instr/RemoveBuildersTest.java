@@ -22,6 +22,10 @@ class Foo {
   public static class Builder {
     public int x;
 
+    public Builder() {
+      x = 4;
+    }
+
     public Foo build() {
       return new Foo(this.x);
     }

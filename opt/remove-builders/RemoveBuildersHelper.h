@@ -72,15 +72,6 @@ struct FieldsRegs {
   bool operator!=(const FieldsRegs& that) const;
 };
 
-/**
- * Given a method that calls the builder, it will remove it completely.
- */
-bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee);
-
-bool has_builder_name(DexClass* cls);
-
-DexType* get_buildee(DexType* type);
-
 class BuilderTransform {
  public:
   BuilderTransform(const PassConfig& pc,
@@ -91,6 +82,7 @@ class BuilderTransform {
     m_inliner_config.super_same_class_inline = true;
     m_inliner_config.use_liveness = true;
     m_inliner_config.no_exceed_16regs = true;
+    m_inliner_config.throws_inline = false;
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {
       return resolve_method(method, search, m_resolved_refs);
@@ -111,3 +103,20 @@ class BuilderTransform {
   MultiMethodInliner::Config m_inliner_config;
   MethodRefCache m_resolved_refs;
 };
+
+std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
+
+bool has_builder_name(DexType* cls);
+
+/**
+ * Given a builder, returns the enclosing class type.
+ */
+DexType* get_buildee(DexType* builder);
+
+/**
+ * Given a method and a builder, it will try to remove the builder completely.
+ * - It expects that no builder methods are called.
+ */
+bool remove_builder_from(DexMethod* method,
+                         DexClass* builder,
+                         BuilderTransform& b_transform);

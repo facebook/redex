@@ -245,104 +245,115 @@ int get_new_reg_if_already_allocated(
   return new_reg;
 }
 
-} // namespace
-
-///////////////////////////////////////////////
-
-void TaintedRegs::meet(const TaintedRegs& that) { m_reg_set |= that.m_reg_set; }
-
-bool TaintedRegs::operator==(const TaintedRegs& that) const {
-  return m_reg_set == that.m_reg_set;
-}
-
-bool TaintedRegs::operator!=(const TaintedRegs& that) const {
-  return !(*this == that);
-}
-
-void FieldsRegs::meet(const FieldsRegs& that) {
-  for (const auto& pair : field_to_reg) {
-    if (pair.second == FieldOrRegStatus::DEFAULT) {
-      field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
-      field_to_iput_insns[pair.first] = that.field_to_iput_insns.at(pair.first);
-    } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
-      continue;
-    } else if (pair.second != that.field_to_reg.at(pair.first)) {
-      if (pair.second == FieldOrRegStatus::UNDEFINED ||
-          that.field_to_reg.at(pair.first) == FieldOrRegStatus::UNDEFINED) {
-        field_to_iput_insns[pair.first].insert(NULL_INSN);
-      }
-
-      field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
-      field_to_iput_insns[pair.first].insert(
-          that.field_to_iput_insns.at(pair.first).begin(),
-          that.field_to_iput_insns.at(pair.first).end());
-    }
-  }
-}
-
-bool FieldsRegs::operator==(const FieldsRegs& that) const {
-  return field_to_reg == that.field_to_reg;
-}
-
-bool FieldsRegs::operator!=(const FieldsRegs& that) const {
-  return !(*this == that);
-}
-
-//////////////////////////////////////////////
-
-bool BuilderTransform::inline_methods(
-    DexMethod* method,
-    DexType* type,
-    std::function<std::vector<DexMethod*>(IRCode*, DexType*)>
-        get_methods_to_inline) {
+/**
+ * Check builder's constructor does a small amount of work
+ *  - instantiates the parent class (Object)
+ *  - returns
+ */
+bool is_trivial_builder_constructor(DexMethod* method) {
   always_assert(method != nullptr);
-  always_assert(type != nullptr);
 
   auto code = method->get_code();
   if (!code) {
     return false;
   }
 
-  std::vector<DexMethod*> previous_to_inline;
-  std::vector<DexMethod*> to_inline = get_methods_to_inline(code, type);
+  if (!is_constructor(method)) {
+    return false;
+  }
 
-  while (to_inline.size() != 0) {
+  auto ii = InstructionIterable(code);
+  auto it = ii.begin();
+  if (it->insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+    return false;
+  }
+  ++it;
 
-    m_inliner->inline_callees(method, to_inline);
-
-    // Check all possible methods were inlined.
-    previous_to_inline = to_inline;
-    to_inline = get_methods_to_inline(code, type);
-
-    // Return false if  nothing changed / nothing got inlined though
-    // there were methods to inline.
-    if (previous_to_inline == to_inline) {
+  if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
+    return false;
+  } else {
+    auto invoked = it->insn->get_method();
+    if (!is_constructor(invoked)) {
       return false;
     }
   }
 
-  return true;
+  ++it;
+  if (it->insn->opcode() != OPCODE_RETURN_VOID) {
+    return false;
+  }
+
+  ++it;
+  return it == ii.end();
 }
 
-bool has_builder_name(DexClass* cls) {
-  always_assert(cls != nullptr);
+std::vector<DexMethod*> get_non_trivial_init_methods(IRCode* code,
+                                                     DexType* type) {
+  always_assert(code != nullptr);
+  always_assert(type != nullptr);
 
-  static boost::regex re{"\\$Builder;$"};
-  return boost::regex_search(cls->c_str(), re);
+  std::vector<DexMethod*> methods;
+  for (auto const& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto invoked = insn->get_method();
+      if (invoked->get_class() == type) {
+        if (is_constructor(invoked) &&
+            !is_trivial_builder_constructor(invoked)) {
+          methods.emplace_back(invoked);
+        }
+      }
+    }
+  }
+
+  return methods;
 }
 
-DexType* get_buildee(DexType* builder) {
-  always_assert(builder != nullptr);
-
-  auto builder_name = std::string(builder->c_str());
-  auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
-  return DexType::get_type(buildee_name.c_str());
-}
-
-bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
+std::unordered_set<IRInstruction*> get_super_class_initializations(
+    DexMethod* method, DexClass* builder) {
   always_assert(method != nullptr);
   always_assert(builder != nullptr);
-  always_assert(buildee != nullptr);
+
+  std::unordered_set<IRInstruction*> insns;
+  auto code = method->get_code();
+  if (!code) {
+    return insns;
+  }
+
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto invoked = insn->get_method();
+      if (invoked->get_class() == builder->get_super_class() &&
+          is_init(invoked)) {
+        insns.emplace(insn);
+      }
+    }
+  }
+
+  return insns;
+}
+
+bool has_super_class_initializations(DexMethod* method, DexClass* builder) {
+  return get_super_class_initializations(method, builder).size() != 0;
+}
+
+void remove_super_class_calls(DexMethod* method, DexClass* builder) {
+  std::unordered_set<IRInstruction*> to_delete =
+      get_super_class_initializations(method, builder);
+  auto code = method->get_code();
+  if (!code) {
+    return;
+  }
+
+  for (const auto& insn : to_delete) {
+    code->remove_opcode(insn);
+  }
+}
+
+bool remove_builder(DexMethod* method, DexClass* builder) {
+  always_assert(method != nullptr);
+  always_assert(builder != nullptr);
 
   auto code = method->get_code();
   if (!code) {
@@ -507,4 +518,175 @@ bool remove_builder(DexMethod* method, DexClass* builder, DexClass* buildee) {
 
   method_updates(method, deletes, move_replacements);
   return true;
+}
+
+} // namespace
+
+///////////////////////////////////////////////
+
+void TaintedRegs::meet(const TaintedRegs& that) { m_reg_set |= that.m_reg_set; }
+
+bool TaintedRegs::operator==(const TaintedRegs& that) const {
+  return m_reg_set == that.m_reg_set;
+}
+
+bool TaintedRegs::operator!=(const TaintedRegs& that) const {
+  return !(*this == that);
+}
+
+void FieldsRegs::meet(const FieldsRegs& that) {
+  for (const auto& pair : field_to_reg) {
+    if (pair.second == FieldOrRegStatus::DEFAULT) {
+      field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
+      field_to_iput_insns[pair.first] = that.field_to_iput_insns.at(pair.first);
+    } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
+      continue;
+    } else if (pair.second != that.field_to_reg.at(pair.first)) {
+      if (pair.second == FieldOrRegStatus::UNDEFINED ||
+          that.field_to_reg.at(pair.first) == FieldOrRegStatus::UNDEFINED) {
+        field_to_iput_insns[pair.first].insert(NULL_INSN);
+      }
+
+      field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
+      field_to_iput_insns[pair.first].insert(
+          that.field_to_iput_insns.at(pair.first).begin(),
+          that.field_to_iput_insns.at(pair.first).end());
+    }
+  }
+}
+
+bool FieldsRegs::operator==(const FieldsRegs& that) const {
+  return field_to_reg == that.field_to_reg;
+}
+
+bool FieldsRegs::operator!=(const FieldsRegs& that) const {
+  return !(*this == that);
+}
+
+//////////////////////////////////////////////
+
+bool has_builder_name(DexType* cls) {
+  always_assert(cls != nullptr);
+
+  static boost::regex re{"\\$Builder;$"};
+  return boost::regex_search(cls->c_str(), re);
+}
+
+DexType* get_buildee(DexType* builder) {
+  always_assert(builder != nullptr);
+
+  auto builder_name = std::string(builder->c_str());
+  auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
+  return DexType::get_type(buildee_name.c_str());
+}
+
+std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+  always_assert(code != nullptr);
+  always_assert(type != nullptr);
+
+  std::vector<DexMethod*> methods;
+  for (auto const& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto invoked = insn->get_method();
+      if (invoked->get_class() == type && !is_init(invoked)) {
+        methods.emplace_back(invoked);
+      }
+    }
+  }
+
+  return methods;
+}
+
+bool BuilderTransform::inline_methods(
+    DexMethod* method,
+    DexType* type,
+    std::function<std::vector<DexMethod*>(IRCode*, DexType*)>
+        get_methods_to_inline) {
+  always_assert(method != nullptr);
+  always_assert(type != nullptr);
+
+  auto code = method->get_code();
+  if (!code) {
+    return false;
+  }
+
+  std::vector<DexMethod*> previous_to_inline;
+  std::vector<DexMethod*> to_inline = get_methods_to_inline(code, type);
+
+  while (to_inline.size() != 0) {
+
+    m_inliner->inline_callees(method, to_inline);
+
+    // Check all possible methods were inlined.
+    previous_to_inline = to_inline;
+    to_inline = get_methods_to_inline(code, type);
+
+    // Return false if  nothing changed / nothing got inlined though
+    // there were methods to inline.
+    if (previous_to_inline == to_inline) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool remove_builder_from(DexMethod* method,
+                         DexClass* builder,
+                         BuilderTransform& b_transform) {
+  DexType* buildee = get_buildee(builder->get_type());
+  always_assert(buildee != nullptr);
+
+  DexMethod* method_copy = nullptr;
+  bool remove_failed = false;
+
+  while (!remove_failed &&
+         get_non_trivial_init_methods(method->get_code(), builder->get_type())
+                 .size() > 0) {
+
+    // Filter out builders for which the method contains super class invokes.
+    if (has_super_class_initializations(method, builder)) {
+      return false;
+    }
+
+    // Keeping a copy of the method in case we need to restore it.
+    if (!method_copy) {
+      method_copy = DexMethod::make_method_from(
+          method,
+          method->get_class(),
+          DexString::make_string(std::string(method->get_name()->c_str()) +
+                                 "$redex"));
+    }
+
+    if (!b_transform.inline_methods(
+            method, builder->get_type(), &get_non_trivial_init_methods)) {
+      remove_failed = true;
+    } else {
+      // Inline remaining calls.
+      if (!b_transform.inline_methods(
+              method, builder->get_type(), &get_non_init_methods)) {
+        remove_failed = true;
+      }
+    }
+  }
+
+  if (remove_failed || !remove_builder(method, builder)) {
+    remove_failed = true;
+  }
+
+  if (method_copy) {
+    if (remove_failed) {
+      // Restore method, since without removing the builder we need the
+      // initializations.
+      method->set_code(method_copy->release_code());
+    } else {
+      // Cleanup after constructor inlining.
+      remove_super_class_calls(method, builder);
+    }
+
+    DexMethod::erase_method(method_copy);
+  }
+
+  return !remove_failed;
 }

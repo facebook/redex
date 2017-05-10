@@ -73,7 +73,7 @@ bool tainted_reg_escapes(
     if (is_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
       invoked = resolve_method(invoked, MethodSearch::Any);
-      size_t args_reg_start {0};
+      size_t args_reg_start{0};
       if (!invoked) {
         TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
       } else if (is_init(invoked) || (invoked->get_class() == ty &&
@@ -180,19 +180,6 @@ bool this_arg_escapes(DexClass* cls) {
   return result;
 }
 
-std::vector<DexMethod*> get_constructors(
-    const std::vector<DexMethod*>& dmethods) {
-  std::vector<DexMethod*> constructors;
-
-  for (const auto& dmethod : dmethods) {
-    if (is_init(dmethod)) {
-      constructors.emplace_back(dmethod);
-    }
-  }
-
-  return constructors;
-}
-
 std::vector<DexMethod*> get_static_methods(
     const std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> static_methods;
@@ -207,68 +194,26 @@ std::vector<DexMethod*> get_static_methods(
 }
 
 /**
- * Check builder's constructor does a small amount of work
- *  - instantiates the parent class (Object)
- *  - returns
- */
-bool is_trivial_builder_constructor(DexMethod* method) {
-  always_assert(method != nullptr);
-
-  const auto* code = method->get_code();
-  if (!code) {
-    return false;
-  }
-
-  if (!is_constructor(method)) {
-    return false;
-  }
-
-  auto ii = InstructionIterable(code);
-  auto it = ii.begin();
-  auto end = ii.end();
-  static auto init = DexString::make_string("<init>");
-
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
-    ++it;
-  }
-  if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
-    return false;
-  } else {
-    auto invoked = it->insn->get_method();
-    if (invoked->get_name() != init) {
-      return false;
-    }
-  }
-
-  ++it;
-  if (it->insn->opcode() != OPCODE_RETURN_VOID) {
-    return false;
-  }
-  ++it;
-  if (it != end) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
  * First pass through what "trivial builder" means:
  *  - is a builder
  *  - it doesn't escape stack
  *  - has no static methods
  *  - has no static fields
- *
- * TODO(emmasevastian): Extend the "definition".
  */
 std::unordered_set<DexClass*> get_trivial_builders(
     const std::unordered_set<DexType*>& builders,
     const std::unordered_set<DexType*>& stack_only_builders) {
 
   std::unordered_set<DexClass*> trivial_builders;
+  static DexType* obj_type = get_object_type();
 
   for (DexType* builder_type : builders) {
     DexClass* builder_class = type_class(builder_type);
+
+    // Filter out builders that don't extend Object.
+    if (builder_class->get_super_class() != obj_type) {
+      continue;
+    }
 
     // Filter out builders that escape the stack.
     if (stack_only_builders.find(builder_type) == stack_only_builders.end()) {
@@ -285,14 +230,6 @@ std::unordered_set<DexClass*> get_trivial_builders(
 
     DexType* buildee_type = get_buildee(builder_class->get_type());
     if (!buildee_type) {
-      continue;
-    }
-
-    // Filter out builders that do extra work in the constructor.
-    std::vector<DexMethod*> builder_constructors =
-        get_constructors(builder_class->get_dmethods());
-    if (builder_constructors.size() != 1 ||
-        !is_trivial_builder_constructor(builder_constructors[0])) {
       continue;
     }
 
@@ -340,30 +277,12 @@ std::unordered_set<DexClass*> get_builders_with_subclasses(Scope& classes) {
       continue;
     }
 
-    if (has_builder_name(super_cls)) {
+    if (has_builder_name(super_type)) {
       builders_with_subclasses.emplace(super_cls);
     }
   }
 
   return builders_with_subclasses;
-}
-
-std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
-  always_assert(code != nullptr);
-  always_assert(type != nullptr);
-
-  std::vector<DexMethod*> methods;
-  for (auto const& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
-      auto invoked = insn->get_method();
-      if (invoked->get_class() == type && !is_init(invoked)) {
-        methods.emplace_back(invoked);
-      }
-    }
-  }
-
-  return methods;
 }
 
 } // namespace
@@ -434,7 +353,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       continue;
     }
 
-    if (has_builder_name(cls)) {
+    if (has_builder_name(cls->get_type())) {
       m_builders.emplace(cls->get_type());
     }
   }
@@ -522,7 +441,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   PassConfig pc(mgr.get_config());
   BuilderTransform b_transform(pc, scope, stores[0].get_dexen()[0]);
 
-  // Inline build methods.
+  // Inline non init methods.
   walk_methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
 
@@ -550,10 +469,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     DexMethod* method = std::get<0>(pair);
     DexClass* builder = std::get<1>(pair);
 
-    DexType* buildee = get_buildee(builder->get_type());
-    always_assert(buildee != nullptr);
-
-    if (!remove_builder(method, builder, type_class(buildee))) {
+    if (!remove_builder_from(method, builder, b_transform)) {
       kept_builders.emplace(builder);
     } else {
       b_counter.methods_cleared++;
