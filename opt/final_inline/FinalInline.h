@@ -21,10 +21,12 @@ class FinalInlinePass : public Pass {
     pc.get(
         "replace_encodable_clinits", false, m_config.replace_encodable_clinits);
     pc.get("propagate_static_finals", false, m_config.propagate_static_finals);
+    pc.get("inline_string_fields", false, m_config.inline_string_fields);
     pc.get("inline_wide_fields", false, m_config.inline_wide_fields);
   }
 
   static size_t propagate_constants_for_test(Scope& scope,
+                                             bool inline_string_fields,
                                              bool inline_wide_fields);
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -35,6 +37,7 @@ class FinalInlinePass : public Pass {
     std::vector<std::string> remove_class_members;
     bool replace_encodable_clinits;
     bool propagate_static_finals;
+    bool inline_string_fields;
     bool inline_wide_fields;
   } m_config;
 };

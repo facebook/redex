@@ -20,6 +20,7 @@ public class ReplaceEncodableClinitTest {
     assertThat(Encodable.S_CHAR).isEqualTo('c');
     assertThat(Encodable.S_SHORT).isEqualTo((short) 128);
     assertThat(Encodable.S_INT).isEqualTo(12345);
+    assertThat(Encodable.S_STRING).isEqualTo("string");
   }
 }
 
@@ -29,7 +30,7 @@ class Encodable {
   public static char S_CHAR = 'c';
   public static short S_SHORT = 128;
   public static int S_INT = 12345;
-  public static String S_STR = "string";
+  public static String S_STRING = "string";
 }
 
 class UnEncodable {
@@ -39,4 +40,9 @@ class UnEncodable {
 class HasWides {
   public static long S_LONG = 0x1000200030004000L;
   public static double S_DOUBLE = 1.0000000000000002;
+}
+
+class HasCharSequence {
+  // CharSequence must not be processed because DalvikVM can't handle it.
+  public static CharSequence S_CHARSEQ = "SEQ";
 }

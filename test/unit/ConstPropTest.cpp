@@ -194,7 +194,8 @@ TEST_F(ConstPropTest, simplePropagate) {
     auto child_field = add_dependent_field(child, "CONST", parent_field);
 
     Scope classes = {parent, child};
-    FinalInlinePass::propagate_constants_for_test(classes, true);
+    FinalInlinePass::propagate_constants_for_test(
+        classes, /*string*/ true, /*wide*/ true);
 
     expect_empty_clinit(child);
     expect_field_eq(child, "CONST", test_case.type, test_case.value);
@@ -242,7 +243,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
     add_dependent_field(child, fd.name, parent_field);
   }
   Scope classes = {parent, child};
-  FinalInlinePass::propagate_constants_for_test(classes, true);
+  FinalInlinePass::propagate_constants_for_test(
+      classes, /*string*/ true, /*wide*/ true);
 
   expect_empty_clinit(child);
   for (auto fd : field_descs) {
@@ -285,7 +287,8 @@ TEST_F(ConstPropTest, simplePropagateMultiFieldNoWide) {
     add_dependent_field(child, fd.name, parent_field);
   }
   Scope classes = {parent, child};
-  FinalInlinePass::propagate_constants_for_test(classes, false);
+  FinalInlinePass::propagate_constants_for_test(
+      classes, /*string*/ true, /*wide*/ false);
 
   expect_empty_clinit(child);
   for (auto fd : field_descs) {
@@ -347,7 +350,8 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
   }
 
   Scope classes = {parent, child, grandchild};
-  FinalInlinePass::propagate_constants_for_test(classes, true);
+  FinalInlinePass::propagate_constants_for_test(
+      classes, /*string*/ true, /*wide*/ true);
 
   std::vector<DexClass*> descendants = {child, grandchild};
   for (auto clazz : descendants) {
@@ -446,7 +450,8 @@ TEST_F(ConstPropTest, multiLevelWithSiblings) {
   add_dependent_field(grandchild2, "CONST_STRING", child2_string);
 
   Scope classes = {parent1, parent2, child1, child2, grandchild1, grandchild2};
-  FinalInlinePass::propagate_constants_for_test(classes, true);
+  FinalInlinePass::propagate_constants_for_test(
+      classes, /*string*/ true, /*wide*/ true);
 
   Scope descendents = {child1, child2, grandchild1, grandchild2};
   for (auto clazz : descendents) {

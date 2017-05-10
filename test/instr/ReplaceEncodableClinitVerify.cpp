@@ -8,6 +8,7 @@
  */
 
 #include <algorithm>
+#include <boost/any.hpp>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
@@ -20,7 +21,7 @@
 struct StaticValueTestCase {
   const char* name;
   const char* type;
-  const uint64_t value;
+  const boost::any value;
 };
 
 void assert_class_clinit_exist(DexClasses& classes, const char* name) {
@@ -39,6 +40,7 @@ TEST_F(PreVerify, ReplaceEncodableClinit) {
   assert_class_clinit_exist(classes, "Lredex/Encodable;");
   assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
   assert_class_clinit_exist(classes, "Lredex/HasWides;");
+  assert_class_clinit_exist(classes, "Lredex/HasCharSequence;");
 }
 
 /*
@@ -54,22 +56,32 @@ TEST_F(PostVerify, ReplaceEncodableClinit) {
   ASSERT_NE(nullptr, enc_type);
 
   StaticValueTestCase test_cases[] = {
-    {"S_BOOL", "Z", 1},
-    {"S_BYTE", "B", 'b'},
-    {"S_CHAR", "C", 'c'},
-    {"S_INT", "I", 12345},
-    {"S_SHORT", "S", 128}
-  };
-  for (auto tc : test_cases) {
+      {"S_BOOL", "Z", static_cast<uint64_t>(1)},
+      {"S_BYTE", "B", static_cast<uint64_t>('b')},
+      {"S_CHAR", "C", static_cast<uint64_t>('c')},
+      {"S_INT", "I", static_cast<uint64_t>(12345)},
+      {"S_SHORT", "S", static_cast<uint64_t>(128)},
+      {"S_STRING", "Ljava/lang/String;", static_cast<std::string>("string")}};
+  for (const auto& tc : test_cases) {
     auto name = DexString::get_string(tc.name);
     auto type = DexType::get_type(tc.type);
     auto f = resolve_field(enc_type, name, type);
     ASSERT_NE(nullptr, f) << "Failed resolving field " << tc.name;
-    auto v = f->get_static_value();
-    ASSERT_NE(nullptr, v) << "Failed getting value for field " << tc.name;
-    ASSERT_EQ(tc.value, v->value()) << "Unexpected value for field " << tc.name;
+    auto ev = f->get_static_value();
+    ASSERT_NE(nullptr, ev) << "Failed getting value for field " << tc.name;
+    if (tc.value.type() == typeid(uint64_t)) {
+      ASSERT_EQ(boost::any_cast<uint64_t>(tc.value), ev->value())
+          << "Unexpected value for field " << tc.name;
+    } else if (tc.value.type() == typeid(std::string)) {
+      ASSERT_EQ(boost::any_cast<std::string>(tc.value),
+                show(static_cast<DexEncodedValueString*>(ev)->string()))
+          << "Unexpected value for field " << tc.name;
+    } else {
+      ASSERT_FALSE(true);
+    }
   }
 
   assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
   assert_class_clinit_exist(classes, "Lredex/HasWides;");
+  assert_class_clinit_exist(classes, "Lredex/HasCharSequence;");
 }

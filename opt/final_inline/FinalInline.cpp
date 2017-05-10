@@ -154,8 +154,9 @@ class FinalInlineImpl {
     case OPCODE_SGET_BYTE:
     case OPCODE_SGET_CHAR:
     case OPCODE_SGET_SHORT:
-    case OPCODE_SGET_OBJECT:
       return true;
+    case OPCODE_SGET_OBJECT:
+      return m_config.inline_string_fields;
     case OPCODE_SGET_WIDE:
       return m_config.inline_wide_fields;
     default:
@@ -166,7 +167,11 @@ class FinalInlineImpl {
   bool validate_sget(DexMethod* context, IRInstruction* opfield) {
     if (check_sget(opfield)) {
       return true;
-    } else if (opfield->opcode() == OPCODE_SGET_WIDE && !m_config.inline_wide_fields) {
+    } else if (opfield->opcode() == OPCODE_SGET_OBJECT &&
+               !m_config.inline_string_fields) {
+      return false;
+    } else if (opfield->opcode() == OPCODE_SGET_WIDE &&
+               !m_config.inline_wide_fields) {
       return false;
     } else {
       auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
@@ -286,21 +291,22 @@ class FinalInlineImpl {
     }
     std::vector<std::pair<DexMethod*, IRInstruction*>> cheap_rewrites;
     std::vector<std::pair<DexMethod*, IRInstruction*>> simple_rewrites;
+
+    auto opcode_worker = [&](DexMethod* method, IRInstruction* insn) {
+      if (insn->has_field() && is_sfield_op(insn->opcode())) {
+        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        if (field == nullptr || !field->is_concrete()) return;
+        if (inline_field.count(field) == 0) return;
+        if (cheap_inline_field.count(field) > 0) {
+          cheap_rewrites.push_back(std::make_pair(method, insn));
+          return;
+        }
+        simple_rewrites.push_back(std::make_pair(method, insn));
+      }
+    };
     walk_opcodes(m_full_scope,
                  [](DexMethod* /* unused */) { return true; },
-                 [&](DexMethod* method, IRInstruction* insn) {
-                   if (insn->has_field() && is_sfield_op(insn->opcode())) {
-                     auto field =
-                         resolve_field(insn->get_field(), FieldSearch::Static);
-                     if (field == nullptr || !field->is_concrete()) return;
-                     if (inline_field.count(field) == 0) return;
-                     if (cheap_inline_field.count(field) > 0) {
-                       cheap_rewrites.push_back(std::make_pair(method, insn));
-                       return;
-                     }
-                     simple_rewrites.push_back(std::make_pair(method, insn));
-                   }
-                 });
+                 opcode_worker);
     TRACE(FINALINLINE,
           1,
           "Method Re-writes Cheap %lu  Simple %lu\n",
@@ -326,8 +332,10 @@ class FinalInlineImpl {
     case OPCODE_CONST_4:
     case OPCODE_CONST_16:
     case OPCODE_CONST:
-    case OPCODE_CONST_STRING:
       return true;
+    case OPCODE_CONST_STRING:
+    case OPCODE_CONST_STRING_JUMBO:
+      return m_config.inline_string_fields;
     case OPCODE_CONST_WIDE_16:
     case OPCODE_CONST_WIDE_32:
     case OPCODE_CONST_WIDE:
@@ -345,7 +353,24 @@ class FinalInlineImpl {
       return false;
     }
     auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-    return (field != nullptr) && (field->get_class() == clazz->get_type());
+    if (field == nullptr || field->get_class() != clazz->get_type()) {
+      return false;
+    }
+    // Older DalvikVM handles only two types of classes:
+    // https://android.googlesource.com/platform/dalvik.git/+/android-4.3_r3/vm/oo/Class.cpp#3846
+    // Without this checking, we may mistakenly accept a "const-string" and
+    // "sput-object Ljava/lang/CharSequence;" pair. Such pair can cause a
+    // libdvm.so abort with "Bogus static initialization".
+    if (insn->opcode() == OPCODE_SPUT_OBJECT &&
+        field->get_type() != DexType::get_type("Ljava/lang/String;") &&
+        field->get_type() != DexType::get_type("Ljava/lang/Class;")) {
+      TRACE(FINALINLINE,
+            8,
+            "Validating: reject SPUT_OBJECT with %s\n",
+            SHOW(field));
+      return false;
+    }
+    return true;
   }
 
   /*
@@ -356,8 +381,7 @@ class FinalInlineImpl {
     auto ii = InstructionIterable(clinit->get_code());
     auto end = ii.end();
     // Verify the entire opcodes in this clinit are (const, sput)* pairs
-    // followed
-    // by return-void.
+    // followed by return-void.
     for (auto it = ii.begin(); it != end; ++it) {
       auto first_op = it->insn;
       ++it;
@@ -387,7 +411,8 @@ class FinalInlineImpl {
       auto sput_op = pair.second;
       auto field = resolve_field(sput_op->get_field(), FieldSearch::Static);
       DexEncodedValue* ev;
-      if (const_op->opcode() == OPCODE_CONST_STRING) {
+      if (const_op->opcode() == OPCODE_CONST_STRING ||
+          const_op->opcode() == OPCODE_CONST_STRING_JUMBO) {
         TRACE(FINALINLINE,
               8,
               "- String Field: %s, \"%s\"\n",
@@ -594,8 +619,11 @@ class FinalInlineImpl {
 };
 }
 
-size_t FinalInlinePass::propagate_constants_for_test(Scope& scope, bool inline_wide_fields) {
+size_t FinalInlinePass::propagate_constants_for_test(Scope& scope,
+                                                     bool inline_string_fields,
+                                                     bool inline_wide_fields) {
   FinalInlinePass::Config config{};
+  config.inline_string_fields = inline_string_fields;
   config.inline_wide_fields = inline_wide_fields;
 
   FinalInlineImpl impl(scope, config);
