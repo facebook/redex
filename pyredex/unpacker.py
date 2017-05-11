@@ -188,9 +188,6 @@ class Api21DexMode(BaseDexMode):
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
-        jar_meta_path = join(metadata_dir, 'metadata.txt')
-        if os.path.exists(jar_meta_path):
-            os.remove(jar_meta_path)
         if self._is_root_relative:
             extracted_dex_dir = extracted_apk_dir
         else:
