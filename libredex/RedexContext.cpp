@@ -265,9 +265,10 @@ void RedexContext::mutate_method(DexMethod* method,
   r.proto = ref.proto != nullptr ? ref.proto : method->m_ref.proto;
   if (s_method_map.find(r) != s_method_map.end() && rename_on_collision) {
     std::string original_name(r.name->c_str());
-    for (uint16_t i = 0; i < 1000; ++i) {
+    uint32_t i = 0;
+    while (true) {
       r.name = DexString::make_string(
-          (original_name + "$redex" + std::to_string(i)).c_str());
+          ("r$" + std::to_string(i++)).c_str());
       if (s_method_map.find(r) == s_method_map.end()) {
         break;
       }
