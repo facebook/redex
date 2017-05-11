@@ -267,7 +267,8 @@ CREATE TABLE method_string_refs (
         boost::replace_all(esc, "'", "''");
         fprintf(fdout, "INSERT INTO strings VALUES(%d, '%s');\n", id, esc.c_str());
       }
-      const char* dex_id = (store_name + "/" + std::to_string(dex_idx)).c_str();
+      std::string dex_id_str(store_name + "/" + std::to_string(dex_idx));
+      const char* dex_id = dex_id_str.c_str();
       for (const auto& cls : dex) {
         int class_id = next_class_id++;
         dump_class(fdout, dex_id, cls, class_id);

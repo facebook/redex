@@ -10,6 +10,7 @@
 #include "DexUtil.h"
 
 #include <boost/filesystem.hpp>
+#include <boost/regex.hpp>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -376,22 +377,29 @@ void load_root_dexen(
 
   /*
    * Comparator for dexen filename. 'classes.dex' should sort first,
-   * followed by secondary-[N].dex ordered by N numerically.
+   * followed by [^\d]*[\d]+.dex ordered by N numerically.
    */
   auto dex_comparator = [](const fs::path& a, const fs::path& b){
-    auto as = a.stem().string();
-    auto bs = b.stem().string();
-    bool adashed = as.rfind("-") != std::string::npos;
-    bool bdashed = bs.rfind("-") != std::string::npos;
-    if (!adashed && bdashed) {
+    boost::regex s_dex_regex("[^0-9]*([0-9]+)\\.dex");
+
+    auto as = a.filename().string();
+    auto bs = b.filename().string();
+    boost::smatch amatch;
+    boost::smatch bmatch;
+    bool amatched = boost::regex_match(as, amatch, s_dex_regex);
+    bool bmatched = boost::regex_match(bs, bmatch, s_dex_regex);
+
+    if (!amatched && bmatched) {
       return true;
-    } else if (adashed && !bdashed) {
+    } else if (amatched && !bmatched) {
       return false;
-    } else if (!adashed && !bdashed) {
-      return strcmp(as.c_str(), bs.c_str()) > 1;
+    } else if (!amatched && !bmatched) {
+      // Compare strings, probably the same
+      return strcmp(as.c_str(), bs.c_str()) > 0;
     } else {
-      auto anum = atoi(as.substr(as.rfind("-") + 1).c_str());
-      auto bnum = atoi(bs.substr(bs.rfind("-") + 1).c_str());
+      // Compare captures as integers
+      auto anum = std::stoi(amatch[1]);
+      auto bnum = std::stoi(bmatch[1]);
       return bnum > anum ;
     }
   };
