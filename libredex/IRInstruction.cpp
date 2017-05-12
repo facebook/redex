@@ -14,25 +14,6 @@
 
 namespace {
 
-bool can_use_2addr(const IRInstruction* insn) {
-  auto op = insn->opcode();
-  return op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE &&
-         insn->dest() == insn->src(0) && insn->dest() <= 0xf &&
-         insn->src(1) <= 0xf;
-}
-
-DexOpcode convert_2to3addr(DexOpcode op) {
-  always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
-  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
-  return (DexOpcode)(op - offset);
-}
-
-DexOpcode convert_3to2addr(DexOpcode op) {
-  always_assert(op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE);
-  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
-  return (DexOpcode)(op + offset);
-}
-
 DexOpcode opcode_no_range_version(DexOpcode op) {
   switch (op) {
   case OPCODE_INVOKE_DIRECT_RANGE:
@@ -71,6 +52,25 @@ DexOpcode opcode_range_version(DexOpcode op) {
   }
 }
 
+} // namespace
+
+bool can_use_2addr(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  return op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE &&
+         insn->dest() == insn->src(0) && insn->dest() <= 0xf &&
+         insn->src(1) <= 0xf;
+}
+
+DexOpcode convert_2to3addr(DexOpcode op) {
+  always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
+  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
+  return (DexOpcode)(op - offset);
+}
+
+DexOpcode convert_3to2addr(DexOpcode op) {
+  always_assert(op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE);
+  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
+  return (DexOpcode)(op + offset);
 }
 
 IRInstruction::IRInstruction(DexOpcode op) : m_opcode(op) {
@@ -175,12 +175,11 @@ uint16_t IRInstruction::size() const {
 }
 
 DexInstruction* IRInstruction::to_dex_instruction() const {
-  auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
   DexInstruction* insn;
   switch (opcode::ref(opcode())) {
     case opcode::Ref::None:
     case opcode::Ref::Data:
-      insn = new DexInstruction(op);
+      insn = new DexInstruction(opcode());
       break;
     case opcode::Ref::String:
       insn = new DexOpcodeString(opcode(), m_string);
@@ -196,7 +195,7 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
       break;
   }
 
-  if (op == OPCODE_CHECK_CAST) {
+  if (opcode() == OPCODE_CHECK_CAST || opcode::dest_is_src(opcode())) {
     always_assert(dest() == src(0));
   } else if (insn->dests_size()) {
     insn->set_dest(dest());

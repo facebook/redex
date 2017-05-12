@@ -490,3 +490,13 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
 void remap_registers(IRCode*, const RegMap&);
 
 } // namespace transform
+
+namespace ir_code_impl {
+
+DexOpcode select_move_opcode(const IRInstruction* insn);
+
+DexOpcode select_const_opcode(const IRInstruction* insn);
+
+void select_instructions(IRCode* code);
+
+} // ir_code_impl

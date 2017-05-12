@@ -81,6 +81,15 @@ struct RedexContext {
   DexClass* type_class(const DexType* t);
   const std::vector<const DexType*>& get_children(const DexType* type);
 
+  /*
+   * This returns true if we want to enable features that will only go out
+   * in the next quarterly release.
+   */
+  static bool next_release_gate() { return g_redex->m_next_release_gate; }
+  static void set_next_release_gate(bool v) {
+    g_redex->m_next_release_gate = v;
+  }
+
  private:
   struct carray_cmp {
     bool operator()(const char* a, const char* b) const {
@@ -120,4 +129,6 @@ struct RedexContext {
     const DexType*, std::vector<const DexType*>> m_class_hierarchy;
 
   const std::vector<const DexType*> m_empty_types;
+
+  bool m_next_release_gate {false};
 };

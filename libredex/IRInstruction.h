@@ -276,3 +276,9 @@ bool has_contiguous_srcs(const IRInstruction*);
  * as a DexInstruction
  */
 bool needs_range_conversion(const IRInstruction*);
+
+bool can_use_2addr(const IRInstruction*);
+
+DexOpcode convert_2to3addr(DexOpcode op);
+
+DexOpcode convert_3to2addr(DexOpcode op);

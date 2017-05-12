@@ -1853,6 +1853,8 @@ void IRCode::build_cfg(bool end_block_before_throw) {
   TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
 
+namespace ir_code_impl {
+
 static uint16_t calc_outs_size(const IRCode* code) {
   uint16_t size {0};
   for (auto& mie : InstructionIterable(code)) {
@@ -1923,10 +1925,165 @@ static void sync_load_params(const DexMethod* method,
   dex_code->set_ins_size(next_ins - ins_start);
 }
 
+/*
+ * Helpers for select_instructions
+ */
+
+/*
+ * Returns an array of move opcodes of the appropriate type, sorted by
+ * increasing size.
+ */
+static std::array<DexOpcode, 3> move_opcode_tuple(DexOpcode op) {
+  switch (op) {
+  case OPCODE_MOVE:
+  case OPCODE_MOVE_FROM16:
+  case OPCODE_MOVE_16:
+    return {{OPCODE_MOVE, OPCODE_MOVE_FROM16, OPCODE_MOVE_16}};
+  case OPCODE_MOVE_WIDE:
+  case OPCODE_MOVE_WIDE_FROM16:
+  case OPCODE_MOVE_WIDE_16:
+    return {{OPCODE_MOVE_WIDE, OPCODE_MOVE_WIDE_FROM16, OPCODE_MOVE_WIDE_16}};
+  case OPCODE_MOVE_OBJECT:
+  case OPCODE_MOVE_OBJECT_FROM16:
+  case OPCODE_MOVE_OBJECT_16:
+    return {
+        {OPCODE_MOVE_OBJECT, OPCODE_MOVE_OBJECT_FROM16, OPCODE_MOVE_OBJECT_16}};
+  default:
+    not_reached();
+  }
+}
+
+DexOpcode select_move_opcode(const IRInstruction* insn) {
+  auto move_tuple = move_opcode_tuple(insn->opcode());
+  auto dest_width = required_bit_width(insn->dest());
+  auto src_width = required_bit_width(insn->src(0));
+  if (dest_width <= 4 && src_width <= 4) {
+    return move_tuple.at(0);
+  } else if (dest_width <= 8) {
+    return move_tuple.at(1);
+  } else {
+    return move_tuple.at(2);
+  }
+}
+
+/*
+ * Returns whether the given value can fit in an integer of :width bits.
+ */
+template <int width>
+static bool signed_int_fits(int64_t v) {
+  auto shift = 64 - width;
+  return (v << shift >> shift) == v;
+}
+
+/*
+ * Returns whether the given value's significant bits can fit in the top 16
+ * bits of an integer of :total_width bits. For example, since v is a signed
+ * 64-bit int, a value v that can fit into the top 16 bits of a 32-bit int
+ * would have the form 0xffffffffrrrr0000, where rrrr are the significant bits.
+ */
+template <int total_width>
+static bool signed_int_fits_high16(int64_t v) {
+  auto right_zeros = total_width - 16;
+  auto left_ones = 64 - total_width;
+  return v >> right_zeros << (64 - 16) >> left_ones == v;
+}
+
+DexOpcode select_const_opcode(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  auto dest_width = required_bit_width(insn->dest());
+  always_assert(dest_width <= 8);
+  auto literal = insn->literal();
+  switch (op) {
+  case OPCODE_CONST_4:
+  case OPCODE_CONST_16:
+  case OPCODE_CONST_HIGH16:
+  case OPCODE_CONST:
+    if (dest_width <= 4 && signed_int_fits<4>(literal)) {
+      return OPCODE_CONST_4;
+    } else if (signed_int_fits<16>(literal)) {
+      return OPCODE_CONST_16;
+    } else if (signed_int_fits_high16<32>(literal)) {
+      return OPCODE_CONST_HIGH16;
+    } else {
+      return OPCODE_CONST;
+    }
+  case OPCODE_CONST_WIDE_16:
+  case OPCODE_CONST_WIDE_32:
+  case OPCODE_CONST_WIDE_HIGH16:
+  case OPCODE_CONST_WIDE:
+    if (signed_int_fits<16>(literal)) {
+      return OPCODE_CONST_WIDE_16;
+    } else if (signed_int_fits<32>(literal)) {
+      return OPCODE_CONST_WIDE_32;
+    } else if (signed_int_fits_high16<64>(literal)) {
+      return OPCODE_CONST_WIDE_HIGH16;
+    } else {
+      return OPCODE_CONST_WIDE;
+    }
+  default:
+    not_reached();
+  }
+}
+
+/*
+ * Pick the smallest opcode that can address its operands.
+ *
+ * Also insert move instructions as necessary for check-cast instructions that
+ * have different src and dest registers. Note that if we insert a move, we
+ * should insert it after, not before, the check-cast. This matters when the
+ * check-cast is in a try region. For example, if we had a method like
+ *
+ *   load-param v1 Ljava/lang/Object;
+ *   TRY_START
+ *   const/4 v0 123
+ *   check-cast v0, v1 LFoo;
+ *   return v0
+ *   TRY_END
+ *   CATCH
+ *   // handle failure of check-cast
+ *   // Note that v0 has the value of 123 here because the check-cast failed
+ *
+ * Inserting the move after the check-cast would preserve semantics; inserting
+ * it before the check-cast would cause v0 to have an object (instead of
+ * integer) type inside the exception handler.
+ */
+void select_instructions(IRCode* code) {
+  auto ii = InstructionIterable(code);
+  auto end = ii.end();
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto* insn = it->insn;
+    auto op = insn->opcode();
+    if (can_use_2addr(insn)) {
+      insn->set_opcode(convert_3to2addr(op));
+    }
+    if (!RedexContext::next_release_gate()) {
+      continue;
+    }
+    if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
+      auto* mov = new IRInstruction(OPCODE_MOVE_OBJECT_16);
+      mov->set_dest(insn->dest());
+      mov->set_src(0, insn->src(0));
+      mov->set_opcode(select_move_opcode(mov));
+      insn->set_dest(insn->src(0));
+      it.reset(code->insert_after(it.unwrap(), mov));
+    } else if (is_move(op)) {
+      insn->set_opcode(select_move_opcode(insn));
+    } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
+      insn->set_opcode(select_const_opcode(insn));
+    }
+    // TODO: /lit8 and /lit16 instructions
+  }
+}
+
+} // namespace ir_code_impl
+
+using namespace ir_code_impl;
+
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   auto dex_code = std::make_unique<DexCode>();
   try {
     sync_load_params(method, this, &*dex_code);
+    select_instructions(this);
     dex_code->set_registers_size(m_registers_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
@@ -1941,7 +2098,6 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
 
 bool IRCode::try_sync(DexCode* code) {
   uint32_t addr = 0;
-  addr_mei_t addr_to_mei;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
   TRACE(MTRANS, 5, "Emitting opcodes\n");
@@ -1950,7 +2106,6 @@ bool IRCode::try_sync(DexCode* code) {
     TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
     mentry->addr = addr;
     if (mentry->type == MFLOW_OPCODE) {
-      addr_to_mei[addr] = mentry;
       TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
       addr += mentry->insn->size();
     }

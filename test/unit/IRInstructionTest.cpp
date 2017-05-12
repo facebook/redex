@@ -11,11 +11,14 @@
 
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "Transform.h"
 #include "Show.h"
+
+using namespace ir_code_impl;
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
@@ -24,6 +27,10 @@ std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
+}
+
+std::ostream& operator<<(std::ostream& os, const DexOpcode& to_show) {
+  return os << show(to_show);
 }
 
 TEST(IRInstruction, RoundTrip) {
@@ -67,37 +74,17 @@ TEST(IRInstruction, RoundTrip) {
     } else if (insn->has_method()) {
       static_cast<DexOpcodeMethod*>(insn)->set_method(method);
     }
-    EXPECT_EQ(*(new IRInstruction(insn))->to_dex_instruction(), *insn)
-        << "at " << show(op);
+
+    auto ir_insn = new IRInstruction(insn);
+    if (can_use_2addr(ir_insn)) {
+      ir_insn->set_opcode(convert_3to2addr(ir_insn->opcode()));
+    }
+    EXPECT_EQ(*ir_insn->to_dex_instruction(), *insn) << "at " << show(op);
 
     delete insn;
   }
 
   delete g_redex;
-}
-
-TEST(IRInstruction, TwoAddr) {
-  using namespace dex_asm;
-  // check that we recognize IRInstructions that can be converted to 2addr
-  // from
-  DexInstruction add_int_2addr(OPCODE_ADD_INT_2ADDR);
-  add_int_2addr.set_dest(0);
-  add_int_2addr.set_src(1, 1);
-  EXPECT_EQ(*(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v})->to_dex_instruction()),
-            add_int_2addr);
-  // IRInstructions that have registers beyond 4 bits can't benefit, however
-  DexInstruction add_int_1(OPCODE_ADD_INT);
-  add_int_1.set_dest(17);
-  add_int_1.set_src(0, 17);
-  add_int_1.set_src(1, 1);
-  EXPECT_EQ(*(dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v})->to_dex_instruction()),
-            add_int_1);
-  DexInstruction add_int_2(OPCODE_ADD_INT);
-  add_int_2.set_dest(0);
-  add_int_2.set_src(0, 0);
-  add_int_2.set_src(1, 17);
-  EXPECT_EQ(*(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v})->to_dex_instruction()),
-            add_int_2);
 }
 
 TEST(IRInstruction, NormalizeInvoke) {
@@ -126,6 +113,113 @@ TEST(IRInstruction, NormalizeInvoke) {
 
   insn->srcs_to_range();
   EXPECT_EQ(*insn, *orig);
+
+  delete g_redex;
+}
+
+/*
+ * Helper function to run select and then extract the resulting instruction
+ * from the instruction list. The only reason it's a list is that const-cast
+ * IRInstructions can expand into two instructions due to select. Everything
+ * else is a simple one-to-one instruction mapping, and that's the case that
+ * this makes easy to test.
+ */
+IRInstruction* select_instruction(IRInstruction* insn) {
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
+  method->make_concrete(ACC_STATIC, 0);
+  auto code = std::make_unique<IRCode>(method, 0);
+  code->push_back(insn);
+  select_instructions(code.get());
+  return code->begin()->insn;
+}
+
+TEST(IRInstruction, TwoAddr) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+
+  // check that we recognize IRInstructions that can be converted to 2addr form
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v})),
+            *dasm(OPCODE_ADD_INT_2ADDR, {0_v, 1_v}));
+  // IRInstructions that have registers beyond 4 bits can't benefit, however
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v})),
+            *dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v}));
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v})),
+            *dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v}));
+
+  delete g_redex;
+}
+
+TEST(IRInstruction, SelectCheckCast) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+  RedexContext::set_next_release_gate(true);
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
+  method->make_concrete(ACC_STATIC, 0);
+  auto code = std::make_unique<IRCode>(method, 0);
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));
+  select_instructions(code.get());
+
+  // check that we inserted a move opcode before the check-cast
+  auto it = InstructionIterable(code.get()).begin();
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v, 1_v}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE_OBJECT, {0_v, 1_v}));
+
+  delete g_redex;
+}
+
+TEST(IRInstruction, SelectMove) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+
+  EXPECT_EQ(OPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
+  EXPECT_EQ(OPCODE_MOVE_FROM16,
+            select_move_opcode(dasm(OPCODE_MOVE_16, {255_v, 65535_v})));
+  EXPECT_EQ(OPCODE_MOVE_16,
+            select_move_opcode(dasm(OPCODE_MOVE_16, {65535_v, 65535_v})));
+  EXPECT_EQ(OPCODE_MOVE_OBJECT,
+            select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {0_v, 0_v})));
+  EXPECT_EQ(OPCODE_MOVE_OBJECT_FROM16,
+            select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {255_v, 65535_v})));
+  EXPECT_EQ(
+      OPCODE_MOVE_OBJECT_16,
+      select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {65535_v, 65535_v})));
+
+  delete g_redex;
+}
+
+TEST(IRInstruction, SelectConst) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+
+  auto insn = dasm(OPCODE_CONST, {0_v});
+
+  EXPECT_EQ(OPCODE_CONST_4, select_const_opcode(insn));
+
+  insn->set_literal(std::numeric_limits<int16_t>::max());
+  EXPECT_EQ(OPCODE_CONST_16, select_const_opcode(insn));
+  insn->set_literal(std::numeric_limits<int16_t>::min());
+  EXPECT_EQ(OPCODE_CONST_16, select_const_opcode(insn));
+
+  insn->set_literal(static_cast<int32_t>(0xffff0000));
+  EXPECT_EQ(OPCODE_CONST_HIGH16, select_const_opcode(insn));
+
+  insn->set_literal(static_cast<int32_t>(0xffff0001));
+  EXPECT_EQ(OPCODE_CONST, select_const_opcode(insn));
+
+  auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
+
+  EXPECT_EQ(OPCODE_CONST_WIDE_16, select_const_opcode(wide_insn));
+
+  wide_insn->set_literal(static_cast<int32_t>(0xffff0001));
+  EXPECT_EQ(OPCODE_CONST_WIDE_32, select_const_opcode(wide_insn));
+
+  wide_insn->set_literal(0xffff000000000000);
+  EXPECT_EQ(OPCODE_CONST_WIDE_HIGH16, select_const_opcode(wide_insn));
+
+  wide_insn->set_literal(0xffff000000000001);
+  EXPECT_EQ(OPCODE_CONST_WIDE, select_const_opcode(wide_insn));
 
   delete g_redex;
 }
