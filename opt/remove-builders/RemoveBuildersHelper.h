@@ -76,13 +76,14 @@ class BuilderTransform {
  public:
   BuilderTransform(const PassConfig& pc,
                    const Scope& scope,
-                   const DexClasses& primary_dex) {
+                   const DexClasses& primary_dex,
+                   bool throws_inline) {
     m_inliner_config.callee_direct_invoke_inline = true;
     m_inliner_config.virtual_same_class_inline = true;
     m_inliner_config.super_same_class_inline = true;
     m_inliner_config.use_liveness = true;
     m_inliner_config.no_exceed_16regs = true;
-    m_inliner_config.throws_inline = false;
+    m_inliner_config.throws_inline = throws_inline;
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {
       return resolve_method(method, search, m_resolved_refs);

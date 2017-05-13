@@ -439,7 +439,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       get_builders_with_subclasses(scope);
 
   PassConfig pc(mgr.get_config());
-  BuilderTransform b_transform(pc, scope, stores[0].get_dexen()[0]);
+  BuilderTransform b_transform(pc, scope, stores[0].get_dexen()[0], false);
 
   // Inline non init methods.
   walk_methods(scope, [&](DexMethod* method) {
