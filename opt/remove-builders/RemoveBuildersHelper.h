@@ -105,6 +105,8 @@ class BuilderTransform {
   MethodRefCache m_resolved_refs;
 };
 
+std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type);
+
 std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
 
 bool has_builder_name(DexType* cls);

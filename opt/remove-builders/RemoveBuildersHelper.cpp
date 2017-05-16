@@ -580,7 +580,7 @@ DexType* get_buildee(DexType* builder) {
   return DexType::get_type(buildee_name.c_str());
 }
 
-std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
   always_assert(code != nullptr);
   always_assert(type != nullptr);
 
@@ -589,11 +589,22 @@ std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
-      if (invoked->get_class() == type && !is_init(invoked)) {
+      if (invoked->get_class() == type) {
         methods.emplace_back(invoked);
       }
     }
   }
+
+  return methods;
+}
+
+std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+  std::vector<DexMethod*> methods = get_all_methods(code, type);
+  methods.erase(
+      remove_if(methods.begin(),
+                methods.end(),
+                [&](DexMethod* m) { return is_init(m); }),
+      methods.end());
 
   return methods;
 }
