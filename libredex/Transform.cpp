@@ -1778,11 +1778,19 @@ void IRCode::build_cfg(bool end_block_before_throw) {
     block->m_begin = next;
     // Record branch targets to add edges in the next pass.
     if (next->type == MFLOW_TARGET) {
-      branch_to_targets[next->target->src].push_back(block);
-      continue;
-    }
+      // If there are a consecutive list of MFLOW_TARGETs, put them all in the
+      // same basic block. Being parsimonious in the number of BBs we generate
+      // is a significant performance win for our analyses.
+      do {
+        branch_to_targets[next->target->src].push_back(block);
+      } while (++next != m_fmethod->end() && next->type == MFLOW_TARGET);
+      // for the next iteration of the for loop, we want `it` to point to the
+      // last of the series of MFLOW_TARGET mies. Since `next` is currently
+      // pointing to the mie *after* that element, and since `it` will be
+      // incremented on every iteration, we need to decrement by 2 here.
+      it = std::prev(next, 2);
     // Record try/catch blocks to add edges in the next pass.
-    if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
+    } else if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
       try_ends.emplace_back(next->tentry, block);
     } else if (next->type == MFLOW_CATCH) {
       try_catches[next->centry] = block;
