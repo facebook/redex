@@ -8,6 +8,13 @@ set -o pipefail
 
 INPUT=$1
 REDEXOUT=$2
+
+IGNORE_RENAME=false
+if [[ "$3" == '--ignore-rename' ]]
+then
+  IGNORE_RENAME=true
+fi
+
 TEMPDIR=`mktemp -d 2>/dev/null || mktemp -d -t 'extractdexdump'`
 OUTA=$TEMPDIR/alpha.filt.dexdump
 OUTB=$TEMPDIR/beta.filt.dexdump
@@ -31,6 +38,13 @@ export LC_ALL=C
 function strip_cruft() {
     local GET_DUMP_CMD="$1"
     local OUT="$2"
+    local RENAME_CLASS=''
+    local RENAME_CLASS_DEFINITION=''
+    if [ $IGNORE_RENAME == true ]
+    then
+        RENAME_CLASS='s/LX\/...;/LX\/xxx;/g'
+        RENAME_CLASS_DEFINITION='s/X\..../X\.xxx/g'
+    fi
     echo Running $GET_DUMP_CMD
     time $GET_DUMP_CMD | \
         sed 's/^Processing .*dex//' | \
@@ -43,6 +57,8 @@ function strip_cruft() {
         sed 's/string@[0-9a-f]*/string@/' | \
         sed 's/method@[0-9a-f]*/method@/' | \
         sed 's/field@[0-9a-f]*/field@/' | \
+        sed $RENAME_CLASS | \
+        sed $RENAME_CLASS_DEFINITION | \
         sed 's/0x[0-9a-f]* line=[0-9]*//' | \
         sed 's/^|[0-9a-f]*:/|:/' | \
         sed '/^\s*$/d' \
@@ -57,7 +73,7 @@ if [ $? == 0 ]; then
 	echo "The dexes are equivalent"
 	exit 0;
 else
-	echo "FAILURE, the dexes have a significant difference"
+	echo "The dexes have significant differences"
 	echo "The differences are recorded in $OUTDIFF"
 	exit 1;
 fi
