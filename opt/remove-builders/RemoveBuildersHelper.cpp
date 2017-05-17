@@ -351,6 +351,47 @@ void remove_super_class_calls(DexMethod* method, DexClass* builder) {
   }
 }
 
+/**
+ * Gathers all `MOVE` instructions that operate on a builder.
+ */
+std::vector<IRInstruction*> gather_move_builders_insn(
+    IRCode* code, const std::vector<Block*>& blocks, DexType* builder) {
+  std::vector<IRInstruction*> insns;
+
+  uint16_t regs_size = code->get_registers_size();
+  std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
+      const IRInstruction* insn, TaintedRegs* tregs) {
+    auto& regs = tregs->m_reg_set;
+    auto op = insn->opcode();
+    if (op == OPCODE_NEW_INSTANCE) {
+      DexType* cls = insn->get_type();
+      if (cls == builder) {
+        regs[insn->dest()] = 1;
+      }
+    } else {
+      transfer_object_reach(builder, regs_size, insn, tregs->m_reg_set);
+    }
+  };
+
+  // Keep track, per instruction, what register(s) holds a builder.
+  // The extra register is used to keep track of return values.
+  auto tainted_map =
+      forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+
+  for (auto it : *tainted_map) {
+    auto insn = it.first;
+    auto tainted = it.second.bits();
+
+    if (is_move(insn->opcode())) {
+      if (tainted[insn->src(0)]) {
+        insns.push_back(insn);
+      }
+    }
+  }
+
+  return insns;
+}
+
 bool remove_builder(DexMethod* method, DexClass* builder) {
   always_assert(method != nullptr);
   always_assert(builder != nullptr);
@@ -373,7 +414,10 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   int null_reg = FieldOrRegStatus::UNDEFINED;
   std::unordered_set<uint16_t> extra_null_regs;
 
-  std::vector<IRInstruction*> deletes;
+  // Instructions where the builder gets moved to a different
+  // register need to be also removed (at the end).
+  std::vector<IRInstruction*> deletes =
+      gather_move_builders_insn(code, blocks, builder->get_type());
   MoveList move_replacements;
   std::unordered_set<IRInstruction*> update_list;
 
@@ -561,6 +605,38 @@ bool FieldsRegs::operator==(const FieldsRegs& that) const {
 
 bool FieldsRegs::operator!=(const FieldsRegs& that) const {
   return !(*this == that);
+}
+
+void transfer_object_reach(DexType* obj,
+                           uint16_t regs_size,
+                           const IRInstruction* insn,
+                           RegSet& regs) {
+  always_assert(obj != nullptr);
+  always_assert(insn != nullptr);
+
+  auto op = insn->opcode();
+  if (is_move(op)) {
+    regs[insn->dest()] = regs[insn->src(0)];
+    if (insn->src_is_wide(0)) {
+      regs[insn->dest() + 1] = regs[insn->src(0)];
+    }
+  } else if (is_move_result(op)) {
+    regs[insn->dest()] = regs[regs_size];
+  } else if (writes_result_register(op)) {
+    if (is_invoke(op)) {
+      auto invoked = insn->get_method();
+      if (invoked->get_proto()->get_rtype() == obj) {
+        regs[regs_size] = 1;
+        return;
+      }
+    }
+    regs[regs_size] = 0;
+  } else if (insn->dests_size() != 0) {
+    regs[insn->dest()] = 0;
+    if (insn->dest_is_wide()) {
+      regs[insn->dest() + 1] = 0;
+    }
+  }
 }
 
 //////////////////////////////////////////////

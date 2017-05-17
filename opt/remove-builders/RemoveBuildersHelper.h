@@ -72,6 +72,11 @@ struct FieldsRegs {
   bool operator!=(const FieldsRegs& that) const;
 };
 
+void transfer_object_reach(DexType* object,
+                           uint16_t regs_size,
+                           const IRInstruction* insn,
+                           RegSet& regs);
+
 class BuilderTransform {
  public:
   BuilderTransform(const PassConfig& pc,

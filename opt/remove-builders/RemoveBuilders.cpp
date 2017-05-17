@@ -35,32 +35,6 @@ struct builder_counters {
 
 builder_counters b_counter;
 
-void transfer_object_reach(DexType* obj,
-                           uint16_t regs_size,
-                           const IRInstruction* insn,
-                           RegSet& regs) {
-  always_assert(obj != nullptr);
-  always_assert(insn != nullptr);
-
-  auto op = insn->opcode();
-  if (op == OPCODE_MOVE_OBJECT) {
-    regs[insn->dest()] = regs[insn->src(0)];
-  } else if (op == OPCODE_MOVE_RESULT) {
-    regs[insn->dest()] = regs[regs_size];
-  } else if (writes_result_register(op)) {
-    if (is_invoke(op)) {
-      auto invoked = insn->get_method();
-      if (invoked->get_proto()->get_rtype() == obj) {
-        regs[regs_size] = 1;
-        return;
-      }
-    }
-    regs[regs_size] = 0;
-  } else if (insn->dests_size() != 0) {
-    regs[insn->dest()] = 0;
-  }
-}
-
 bool tainted_reg_escapes(
     DexType* ty,
     const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
