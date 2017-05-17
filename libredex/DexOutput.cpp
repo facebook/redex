@@ -592,7 +592,6 @@ void DexOutput::generate_field_data() {
     fieldids[idx].classidx = dodx->typeidx(field->get_class());
     fieldids[idx].typeidx = dodx->typeidx(field->get_type());
     fieldids[idx].nameidx = dodx->stringidx(field->get_name());
-    if (field->is_concrete()) m_stats.num_fields++;
     m_stats.num_field_refs++;
 
   }
@@ -618,7 +617,6 @@ void DexOutput::generate_method_data() {
     methodids[idx].classidx = dodx->typeidx(method->get_class());
     methodids[idx].protoidx = dodx->protoidx(method->get_proto());
     methodids[idx].nameidx = dodx->stringidx(method->get_name());
-    if (method->is_concrete()) m_stats.num_methods++;
     m_stats.num_method_refs++;
   }
 }
@@ -657,6 +655,10 @@ void DexOutput::generate_class_data() {
     } else {
       cdefs[i].static_values_off = 0;
     }
+    m_stats.num_fields +=
+        clz->get_ifields().size() + clz->get_sfields().size();
+    m_stats.num_methods +=
+        clz->get_vmethods().size() + clz->get_dmethods().size();
   }
 }
 
