@@ -46,6 +46,30 @@ sudo apt-get install \
     libjsoncpp-dev
 ```
 
+### Fedora 24 (64-bit)
+```
+sudo dnf install \
+gcc-c++ \
+automake \
+autoconf \
+autoconf-archive \
+libtool \
+boost-devel \
+libevent-devel \
+double-conversion-devel \
+glog-devel \
+gflags-devel \
+lz4-devel \
+lzma-devel \
+snappy-devel \
+make \
+binutils-devel \
+jemalloc-devel \
+openssl-devel \
+jsoncpp-devel
+
+```
+
 ## Download, Build and Install
 
 Get ReDex from GitHub:
