@@ -149,25 +149,6 @@ static int s_ren_strings_size = 0;
 static int s_sequence = 0;
 static int s_padding = 0;
 
-/**
- * Determine if the given dex item has the given annotation
- *
- * @param t The dex item whose annotations we'll examine
- * @param anno_type The annotatin we're looking for, expressed as DexType
- * @return true IFF dex item t is annotated with anno_type
- */
-template<typename T>
-bool has_anno(const T* t, const DexType* anno_type) {
-  if (anno_type == nullptr) return false;
-  if (t->get_anno_set() == nullptr) return false;
-  for (const auto& anno : t->get_anno_set()->get_annotations()) {
-    if (anno->type() == anno_type) {
-      return true;
-    }
-  }
-  return false;
-}
-
 }
 
 void RenameClassesPassV2::build_dont_rename_resources(PassManager& mgr, std::set<std::string>& dont_rename_resources) {

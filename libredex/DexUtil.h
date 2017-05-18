@@ -202,6 +202,11 @@ const DexType* get_array_type_or_self(const DexType*);
 DexType* get_array_type(const DexType*);
 
 /**
+ * Return the array type of a given type.
+ */
+DexType* make_array_type(const DexType*);
+
+/**
  * Retrieves all the children of a type and pushes them in the provided vector.
  * Effectively everything that derives from a given type.
  * There is no guaranteed or known order in which children are returned.
@@ -338,6 +343,25 @@ void load_root_dexen(
  * use cases.
  */
 size_t sum_param_sizes(const IRCode*);
+
+/**
+ * Determine if the given dex item has the given annotation
+ *
+ * @param t The dex item whose annotations we'll examine
+ * @param anno_type The annotation we're looking for, expressed as DexType
+ * @return true IFF dex item t is annotated with anno_type
+ */
+template <typename T>
+bool has_anno(const T* t, const DexType* anno_type) {
+  if (anno_type == nullptr) return false;
+  if (t->get_anno_set() == nullptr) return false;
+  for (const auto& anno : t->get_anno_set()->get_annotations()) {
+    if (anno->type() == anno_type) {
+      return true;
+    }
+  }
+  return false;
+}
 
 namespace JavaNameUtil {
 

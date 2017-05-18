@@ -301,6 +301,11 @@ DexType* get_array_type(const DexType* type) {
   return DexType::make_type(name);
 }
 
+DexType* make_array_type(const DexType* type) {
+  always_assert(type != nullptr);
+  return DexType::make_type(DexString::make_string("[" + std::string(type->get_name()->c_str())));
+}
+
 void create_runtime_exception_block(
     DexString* except_str, std::vector<IRInstruction*>& block) {
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852
