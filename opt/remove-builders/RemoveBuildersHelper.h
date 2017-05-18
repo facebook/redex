@@ -123,8 +123,12 @@ DexType* get_buildee(DexType* builder);
 
 /**
  * Given a method and a builder, it will try to remove the builder completely.
- * - It expects that no builder methods are called.
+ * - It expects that no builder methods are called and that the constructor
+ *   doesn't call other super types constructors, except `Object` one.
+ * - If super_class_holder is defined (!= nullptr), it will be used instead of
+ *   the super_class
  */
 bool remove_builder_from(DexMethod* method,
                          DexClass* builder,
-                         BuilderTransform& b_transform);
+                         BuilderTransform& b_transform,
+                         DexType* super_class_holder = nullptr);

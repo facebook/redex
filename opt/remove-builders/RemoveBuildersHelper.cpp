@@ -310,9 +310,9 @@ std::vector<DexMethod*> get_non_trivial_init_methods(IRCode* code,
 }
 
 std::unordered_set<IRInstruction*> get_super_class_initializations(
-    DexMethod* method, DexClass* builder) {
+    DexMethod* method, DexType* parent_type) {
   always_assert(method != nullptr);
-  always_assert(builder != nullptr);
+  always_assert(parent_type != nullptr);
 
   std::unordered_set<IRInstruction*> insns;
   auto code = method->get_code();
@@ -324,7 +324,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
-      if (invoked->get_class() == builder->get_super_class() &&
+      if (invoked->get_class() == parent_type &&
           is_init(invoked)) {
         insns.emplace(insn);
       }
@@ -334,13 +334,13 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
   return insns;
 }
 
-bool has_super_class_initializations(DexMethod* method, DexClass* builder) {
-  return get_super_class_initializations(method, builder).size() != 0;
+bool has_super_class_initializations(DexMethod* method, DexType* parent_type) {
+  return get_super_class_initializations(method, parent_type).size() != 0;
 }
 
-void remove_super_class_calls(DexMethod* method, DexClass* builder) {
+void remove_super_class_calls(DexMethod* method, DexType* parent_type) {
   std::unordered_set<IRInstruction*> to_delete =
-      get_super_class_initializations(method, builder);
+      get_super_class_initializations(method, parent_type);
   auto code = method->get_code();
   if (!code) {
     return;
@@ -721,19 +721,30 @@ bool BuilderTransform::inline_methods(
 
 bool remove_builder_from(DexMethod* method,
                          DexClass* builder,
-                         BuilderTransform& b_transform) {
+                         BuilderTransform& b_transform,
+                         DexType* super_class_holder) {
   DexType* buildee = get_buildee(builder->get_type());
   always_assert(buildee != nullptr);
 
   DexMethod* method_copy = nullptr;
   bool remove_failed = false;
 
+  DexType* super_class = super_class_holder != nullptr
+    ? super_class_holder
+    : builder->get_super_class();
+
+  // TODO(emmasevastian): extend it.
+  static DexType* object_type = get_object_type();
+  if (super_class != object_type) {
+    return false;
+  }
+
   while (!remove_failed &&
          get_non_trivial_init_methods(method->get_code(), builder->get_type())
                  .size() > 0) {
 
     // Filter out builders for which the method contains super class invokes.
-    if (has_super_class_initializations(method, builder)) {
+    if (has_super_class_initializations(method, super_class)) {
       return false;
     }
 
@@ -769,7 +780,7 @@ bool remove_builder_from(DexMethod* method,
       method->set_code(method_copy->release_code());
     } else {
       // Cleanup after constructor inlining.
-      remove_super_class_calls(method, builder);
+      remove_super_class_calls(method, super_class);
     }
 
     DexMethod::erase_method(method_copy);
