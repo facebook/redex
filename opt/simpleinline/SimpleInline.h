@@ -36,6 +36,7 @@ public:
     pc.get("no_exceed_16regs", true, m_inliner_config.no_exceed_16regs);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
     pc.get("force_inline_annos", {}, m_force_inline_annos);
+    pc.get("multiple_callers", false, m_multiple_callers);
 
     std::vector<std::string> black_list;
     pc.get("black_list", {}, black_list);
@@ -58,6 +59,8 @@ private:
 
   // inline virtual methods
   bool m_virtual_inline;
+  // inline methods with multiple callers
+  bool m_multiple_callers;
 
   MultiMethodInliner::Config m_inliner_config;
 

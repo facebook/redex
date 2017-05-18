@@ -83,7 +83,8 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   auto scope = build_class_scope(stores);
   // gather all inlinable candidates
   auto methods = gather_non_virtual_methods(scope, no_inline, force_inline);
-  select_single_called(scope, methods, resolved_refs, &inlinable);
+  select_inlinable(
+      scope, methods, resolved_refs, &inlinable, m_multiple_callers);
 
   auto resolver = [&](DexMethod* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);

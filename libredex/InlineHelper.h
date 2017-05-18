@@ -237,8 +237,9 @@ class MultiMethodInliner {
 /**
  * Add the single-callsite methods to the inlinable set.
  */
-void select_single_called(
+void select_inlinable(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& methods,
     MethodRefCache& resolved_refs,
-    std::unordered_set<DexMethod*>* inlinable);
+    std::unordered_set<DexMethod*>* inlinable,
+    bool multiple_callee = false);

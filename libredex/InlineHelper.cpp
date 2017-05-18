@@ -16,6 +16,9 @@
 
 namespace {
 
+const size_t CODE_SIZE_2_CALLERS = 7;
+const size_t CODE_SIZE_3_CALLERS = 5;
+
 // the max number of callers we care to track explicitly, after that we
 // group all callees/callers count in the same bucket
 const int MAX_COUNT = 10;
@@ -676,11 +679,12 @@ void MultiMethodInliner::invoke_direct_to_static() {
       });
 }
 
-void select_single_called(
+void select_inlinable(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& methods,
     MethodRefCache& resolved_refs,
-    std::unordered_set<DexMethod*>* inlinable) {
+    std::unordered_set<DexMethod*>* inlinable,
+    bool multiple_callers) {
   std::unordered_map<DexMethod*, int> calls;
   for (const auto& method : methods) {
     calls[method] = 0;
@@ -712,5 +716,17 @@ void select_single_called(
   assert(method_breakup(calls_group));
   for (auto callee : calls_group[1]) {
     inlinable->insert(callee);
+  }
+  if (multiple_callers) {
+    for (auto callee : calls_group[2]) {
+      if (callee->get_code()->count_opcodes() <= CODE_SIZE_2_CALLERS) {
+        inlinable->insert(callee);
+      }
+    }
+    for (auto callee : calls_group[3]) {
+      if (callee->get_code()->count_opcodes() <= CODE_SIZE_3_CALLERS) {
+        inlinable->insert(callee);
+      }
+    }
   }
 }
