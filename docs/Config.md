@@ -1,4 +1,4 @@
-Configuring ReDex
+# Configuring ReDex
 -----------------
 
 ReDex can be configured to run different optimizations or to alter the behavior
@@ -36,7 +36,7 @@ Name this file default.config, and invoke `redex` with it:
 % redex -c default.config -o tmp/output.apk input.apk
 ```
 
-This will do... exactly what redex does without the config.  Not so exciting, is
+This will do exactly what redex does without the config.  Not so exciting, is
 it?  Let's move on to something more advanced.
 
 # Selecting Optimization Passes
@@ -73,7 +73,7 @@ optimized (for whitelists).
 A simple example is ShortenSrcStrings.  This pass removes filenames indicating
 what source code produced each class.  It's a waste to ship those source strings
 to production, but it's useful to be able to map the shortened names back to the
-original names (e.g., for solving user bug reports).  You can tell
+original names (e.g. for solving user bug reports).  You can tell
 ShortenSrcStrings to produce this map by adding a config entry:
 
 ```
