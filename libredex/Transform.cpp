@@ -643,16 +643,27 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
   addr_mei_t addr_to_mei;
   std::unordered_map<uint32_t, DexOpcodeData*> addr_to_data;
 
+  std::vector<uint32_t> old_nop_addrs;
   uint32_t addr = 0;
   for (auto insn : *instructions) {
     if (is_fopcode(insn->opcode())) {
       addr_to_data.emplace(addr, static_cast<DexOpcodeData*>(insn));
-    } else if (insn->opcode() != OPCODE_NOP) {
+    } else if (insn->opcode() == OPCODE_NOP) {
+      old_nop_addrs.push_back(addr);
+    } else {
       // NOPs are used for alignment, which FatMethod doesn't care about
       MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(insn));
       fmethod->push_back(*mei);
       addr_to_mei[addr] = mei;
       mei->addr = addr;
+
+      // but, anything that refers to a NOP's address should redirect to the
+      // next real address
+      for (const auto& nop_addr : old_nop_addrs) {
+        addr_to_mei[nop_addr] = mei;
+      }
+      old_nop_addrs.clear();
+
       TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     }
     addr += insn->size();
