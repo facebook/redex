@@ -1,0 +1,17 @@
+// to generate code (C++ *and* Python) from this schema, run:
+//
+// buck run //xplat/third-party/flatbuffers:flatc_osx -- -c -p --scoped-enums --no-prefix -o  native/redex/opt/outliner native/redex/opt/outliner/NativeOutliner.fbs
+
+namespace facebook.redex.outliner;
+
+table OutlinedThrow {
+  location:int;
+  type:string;
+  msg:string;
+}
+
+table OutlinedThrows {
+  outlined_throws:[OutlinedThrow];
+}
+
+root_type OutlinedThrows;
