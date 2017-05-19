@@ -1,13 +1,14 @@
 // Copyright 2004-present Facebook. All Rights Reserved.
 
-#ifndef FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_H_
-#define FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_H_
+#ifndef FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_OUTLINER_H_
+#define FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_OUTLINER_H_
 
 #include "flatbuffers/flatbuffers.h"
 
 
 namespace facebook {
 namespace redex {
+namespace outliner {
 
 struct OutlinedThrow;
 struct OutlinedThrows;
@@ -82,13 +83,14 @@ inline flatbuffers::Offset<OutlinedThrows> CreateOutlinedThrows(flatbuffers::Fla
   return builder_.Finish();
 }
 
-inline const facebook::redex::OutlinedThrows *GetOutlinedThrows(const void *buf) { return flatbuffers::GetRoot<facebook::redex::OutlinedThrows>(buf); }
+inline const facebook::redex::outliner::OutlinedThrows *GetOutlinedThrows(const void *buf) { return flatbuffers::GetRoot<facebook::redex::outliner::OutlinedThrows>(buf); }
 
-inline bool VerifyOutlinedThrowsBuffer(flatbuffers::Verifier &verifier) { return verifier.VerifyBuffer<facebook::redex::OutlinedThrows>(); }
+inline bool VerifyOutlinedThrowsBuffer(flatbuffers::Verifier &verifier) { return verifier.VerifyBuffer<facebook::redex::outliner::OutlinedThrows>(); }
 
-inline void FinishOutlinedThrowsBuffer(flatbuffers::FlatBufferBuilder &fbb, flatbuffers::Offset<facebook::redex::OutlinedThrows> root) { fbb.Finish(root); }
+inline void FinishOutlinedThrowsBuffer(flatbuffers::FlatBufferBuilder &fbb, flatbuffers::Offset<facebook::redex::outliner::OutlinedThrows> root) { fbb.Finish(root); }
 
+}  // namespace outliner
 }  // namespace redex
 }  // namespace facebook
 
-#endif  // FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_H_
+#endif  // FLATBUFFERS_GENERATED_NATIVEOUTLINER_FACEBOOK_REDEX_OUTLINER_H_

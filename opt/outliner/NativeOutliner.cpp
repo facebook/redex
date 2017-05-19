@@ -40,7 +40,7 @@ constexpr const char* DISPATCH_METHOD_NAME = "$dispatch$throws";
 
 using outlined_t = std::tuple<DexType*, DexString*>;
 using namespace dex_asm;
-using namespace facebook::redex;
+using namespace facebook::redex::outliner;
 
 DexMethod* get_dispatch_method() {
   auto throwable_type = DexType::get_type(THROWABLE_TYPE_NAME);
@@ -170,8 +170,10 @@ void NativeOutliner::run_pass(DexStoresVector& stores,
   std::vector<flatbuffers::Offset<OutlinedThrow>> outlined_throw_vec;
   for (size_t i = 0 ; i < outlined_throws.size() ; ++i) {
     auto out = outlined_throws[i];
-    auto type_loc = fbb.CreateString(std::get<0>(out)->get_name()->c_str());
-    auto msg_loc = fbb.CreateString(std::get<1>(out)->c_str());
+    auto cls = JavaNameUtil::internal_to_external(std::get<0>(out)->get_name()->str());
+    auto msg = std::get<1>(out);
+    auto type_loc = fbb.CreateString(cls.c_str());
+    auto msg_loc = fbb.CreateString(msg->c_str());
     auto outlined_throw_loc = CreateOutlinedThrow(fbb, i, type_loc, msg_loc);
     outlined_throw_vec.emplace_back(outlined_throw_loc);
   }

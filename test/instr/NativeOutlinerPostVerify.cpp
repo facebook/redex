@@ -21,7 +21,7 @@
 #include "NativeOutliner.h"
 #include "NativeOutliner_generated.h"
 
-using namespace facebook::redex;
+using namespace facebook::redex::outliner;
 namespace fs = boost::filesystem;
 
 constexpr static const char ARTIFACTS_FILENAME[] = "redex-outliner-artifacts.bin";
@@ -50,9 +50,9 @@ TEST(PostVerify, native_outliner) {
   bool foundOutlinedRuntimeException = false;
   bool foundOutlinedError = false;
   for (auto outlined_throw : *(outlined_throws->outlined_throws())) {
-    if ("Ljava/lang/RuntimeException;" == outlined_throw->type()->str()) {
+    if ("java.lang.RuntimeException" == outlined_throw->type()->str()) {
       foundOutlinedRuntimeException |= outlined_throw->msg()->str() == "Outlined RuntimeException __TEST__";
-    } else if ("Ljava/lang/Error;" == outlined_throw->type()->str()) {
+    } else if ("java.lang.Error" == outlined_throw->type()->str()) {
       foundOutlinedError |= outlined_throw->msg()->str() == "Outlined Error __TEST__";
     }
   }

@@ -39,7 +39,7 @@ void show_help(const po::options_description& od) {
       return a->name() < b->name();
     });
   for (const auto& tool : sorted_tools) {
-    printf("  %-20s %s\n", tool->name().c_str(), tool->desc().c_str());
+    printf("  %-30s %s\n", tool->name().c_str(), tool->desc().c_str());
   }
   std::cout << usage_footer << std::endl << od << std::endl;
 }

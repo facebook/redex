@@ -112,6 +112,7 @@ class DexString {
   }
 
   const char* c_str() const { return m_storage.c_str(); }
+  const std::string& str() const { return m_storage; }
 
   uint32_t get_entry_size() const {
     uint32_t len = uleb128_encoding_size(m_utfsize);
