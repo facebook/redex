@@ -226,10 +226,18 @@ class LocalDce {
       m_instructions_eliminated++;
     }
 
-    remove_unreachable_blocks(method, &*code, cfg);
+    // if we deleted an instruction that may throw, we'll need to remove any
+    // EDGE_THROW edges in the CFG... ideally we would just prune that edge,
+    // but we can do a conservative and inefficient hack for now and just
+    // rebuild the entire graph
+    if (dead_instructions.size() > 0) {
+      code->build_cfg();
+    }
+
+    remove_unreachable_blocks(method, &*code);
 
     TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
-    TRACE(DCE, 5, "%s", SHOW(cfg));
+    TRACE(DCE, 5, "%s", SHOW(code->cfg()));
   }
 
  private:
@@ -239,9 +247,8 @@ class LocalDce {
     }
   }
 
-  void remove_unreachable_blocks(DexMethod* method,
-                                 IRCode* code,
-                                 ControlFlowGraph& cfg) {
+  void remove_unreachable_blocks(DexMethod* method, IRCode* code) {
+    auto& cfg = code->cfg();
     auto& blocks = cfg.blocks();
     // Remove edges to catch blocks that no longer exist.
     std::vector<std::pair<Block*, Block*>> remove_edges;
