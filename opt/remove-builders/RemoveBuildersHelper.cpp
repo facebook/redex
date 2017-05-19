@@ -324,8 +324,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
-      if (invoked->get_class() == parent_type &&
-          is_init(invoked)) {
+      if (invoked->get_class() == parent_type && is_init(invoked)) {
         insns.emplace(insn);
       }
     }
@@ -359,24 +358,7 @@ std::vector<IRInstruction*> gather_move_builders_insn(
   std::vector<IRInstruction*> insns;
 
   uint16_t regs_size = code->get_registers_size();
-  std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
-      const IRInstruction* insn, TaintedRegs* tregs) {
-    auto& regs = tregs->m_reg_set;
-    auto op = insn->opcode();
-    if (op == OPCODE_NEW_INSTANCE) {
-      DexType* cls = insn->get_type();
-      if (cls == builder) {
-        regs[insn->dest()] = 1;
-      }
-    } else {
-      transfer_object_reach(builder, regs_size, insn, tregs->m_reg_set);
-    }
-  };
-
-  // Keep track, per instruction, what register(s) holds a builder.
-  // The extra register is used to keep track of return values.
-  auto tainted_map =
-      forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+  auto tainted_map = get_tainted_regs(regs_size, blocks, builder);
 
   for (auto it : *tainted_map) {
     auto insn = it.first;
@@ -639,6 +621,93 @@ void transfer_object_reach(DexType* obj,
   }
 }
 
+bool tainted_reg_escapes(
+    DexType* ty,
+    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
+  always_assert(ty != nullptr);
+
+  for (auto it : taint_map) {
+    auto insn = it.first;
+    auto tainted = it.second.bits();
+    auto op = insn->opcode();
+    if (is_invoke(insn->opcode())) {
+      auto invoked = insn->get_method();
+      invoked = resolve_method(invoked, MethodSearch::Any);
+      size_t args_reg_start{0};
+      if (!invoked) {
+        TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
+      } else if (is_init(invoked) || (invoked->get_class() == ty &&
+                                      !is_static(invoked->get_access()))) {
+        // if a builder is passed as the first arg to a virtual function or a
+        // ctor, we can treat it as non-escaping, since we also check that
+        // those methods don't allow the builder to escape.
+        //
+        // TODO: we should be able to relax the check above to be simply
+        // `!is_static(invoked)`. We don't even need to check that the type
+        // matches -- if the builder is being passed as the first arg reg
+        // to a non-static function, it must be the `this` arg. And if the
+        // non-static function is part of a different class hierarchy, the
+        // builder cannot possibly be passed as the `this` arg.
+        args_reg_start = 1;
+      }
+      if (opcode::has_range(insn->opcode())) {
+        for (size_t i = args_reg_start; i < insn->range_size(); ++i) {
+          if (tainted[insn->range_base() + i]) {
+            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+            return true;
+          }
+        }
+      } else {
+        for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
+          if (tainted[insn->src(i)]) {
+            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+            return true;
+          }
+        }
+      }
+    } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
+               op == OPCODE_APUT_OBJECT || op == OPCODE_RETURN_OBJECT) {
+      if (tainted[insn->src(0)]) {
+        TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+        return true;
+      }
+    } else if (is_conditional_branch(op)) {
+      if (tainted[insn->src(0)]) {
+        // TODO(emmasevastian): Treat this case separate.
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Keep track, per instruction, what register(s) holds
+ * an instance of the `type`.
+ */
+std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
+get_tainted_regs(uint16_t regs_size,
+                 const std::vector<Block*>& blocks,
+                 DexType* type) {
+
+  std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
+      const IRInstruction* insn, TaintedRegs* tregs) {
+    auto& regs = tregs->m_reg_set;
+    auto op = insn->opcode();
+    if (op == OPCODE_NEW_INSTANCE) {
+      DexType* cls = insn->get_type();
+      if (cls == type) {
+        regs[insn->dest()] = 1;
+      }
+    } else {
+      transfer_object_reach(type, regs_size, insn, tregs->m_reg_set);
+    }
+  };
+
+  // The extra register is used to keep track of the return values.
+  return forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+}
+
 //////////////////////////////////////////////
 
 bool has_builder_name(DexType* cls) {
@@ -676,11 +745,10 @@ std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
 
 std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
   std::vector<DexMethod*> methods = get_all_methods(code, type);
-  methods.erase(
-      remove_if(methods.begin(),
-                methods.end(),
-                [&](DexMethod* m) { return is_init(m); }),
-      methods.end());
+  methods.erase(remove_if(methods.begin(),
+                          methods.end(),
+                          [&](DexMethod* m) { return is_init(m); }),
+                methods.end());
 
   return methods;
 }
@@ -730,8 +798,8 @@ bool remove_builder_from(DexMethod* method,
   bool remove_failed = false;
 
   DexType* super_class = super_class_holder != nullptr
-    ? super_class_holder
-    : builder->get_super_class();
+                             ? super_class_holder
+                             : builder->get_super_class();
 
   // TODO(emmasevastian): extend it.
   static DexType* object_type = get_object_type();

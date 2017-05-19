@@ -35,66 +35,6 @@ struct builder_counters {
 
 builder_counters b_counter;
 
-bool tainted_reg_escapes(
-    DexType* ty,
-    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
-  always_assert(ty != nullptr);
-
-  for (auto it : taint_map) {
-    auto insn = it.first;
-    auto tainted = it.second.bits();
-    auto op = insn->opcode();
-    if (is_invoke(insn->opcode())) {
-      auto invoked = insn->get_method();
-      invoked = resolve_method(invoked, MethodSearch::Any);
-      size_t args_reg_start{0};
-      if (!invoked) {
-        TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
-      } else if (is_init(invoked) || (invoked->get_class() == ty &&
-                                      !is_static(invoked->get_access()))) {
-        // if a builder is passed as the first arg to a virtual function or a
-        // ctor, we can treat it as non-escaping, since we also check that
-        // those methods don't allow the builder to escape.
-        //
-        // TODO: we should be able to relax the check above to be simply
-        // `!is_static(invoked)`. We don't even need to check that the type
-        // matches -- if the builder is being passed as the first arg reg
-        // to a non-static function, it must be the `this` arg. And if the
-        // non-static function is part of a different class hierarchy, the
-        // builder cannot possibly be passed as the `this` arg.
-        args_reg_start = 1;
-      }
-      if (opcode::has_range(insn->opcode())) {
-        for (size_t i = args_reg_start; i < insn->range_size(); ++i) {
-          if (tainted[insn->range_base() + i]) {
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
-          }
-        }
-      } else {
-        for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
-          if (tainted[insn->src(i)]) {
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
-          }
-        }
-      }
-    } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
-               op == OPCODE_APUT_OBJECT || op == OPCODE_RETURN_OBJECT) {
-      if (tainted[insn->src(0)]) {
-        TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-        return true;
-      }
-    } else if (is_conditional_branch(op)) {
-      if (tainted[insn->src(0)]) {
-        // TODO(emmasevastian): Treat this case separate.
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 // checks if the `this` argument on an instance method ever gets passed to
 // a method that doesn't belong to the same instance, or if it gets stored
 // in a field, or if it escapes as a return value.

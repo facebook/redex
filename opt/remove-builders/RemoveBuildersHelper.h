@@ -72,10 +72,19 @@ struct FieldsRegs {
   bool operator!=(const FieldsRegs& that) const;
 };
 
+bool tainted_reg_escapes(
+    DexType* type,
+    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map);
+
 void transfer_object_reach(DexType* object,
                            uint16_t regs_size,
                            const IRInstruction* insn,
                            RegSet& regs);
+
+std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
+get_tainted_regs(uint16_t regs_size,
+                 const std::vector<Block*>& blocks,
+                 DexType* type);
 
 class BuilderTransform {
  public:
