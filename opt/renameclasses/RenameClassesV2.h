@@ -18,7 +18,7 @@ enum class DontRenameReasonCode {
   Packages,
   Hierarchy,
   Resources,
-  ClassForNameLiterals,
+  ClassNameLiterals,
   Canaries,
   NativeBindings,
   SerdeRelationships,
@@ -52,7 +52,7 @@ class RenameClassesPassV2 : public Pass {
  private:
 
   void build_dont_rename_resources(PassManager& mgr, std::set<std::string>& dont_rename_resources);
-  void build_dont_rename_class_for_name_literals(Scope& scope, std::set<std::string>& dont_rename_class_for_name_literals);
+  void build_dont_rename_class_name_literals(Scope& scope, std::set<std::string>& dont_rename_class_name_literals);
   void build_dont_rename_for_types_with_reflection(
       Scope& scope,
       const ProguardMap& pg_map,

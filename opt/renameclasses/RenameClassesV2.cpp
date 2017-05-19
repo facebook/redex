@@ -53,8 +53,8 @@ const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
       return "num_dont_rename_hierarchy";
     case DontRenameReasonCode::Resources:
       return "num_dont_rename_resources";
-    case DontRenameReasonCode::ClassForNameLiterals:
-      return "num_dont_rename_class_for_name_literals";
+    case DontRenameReasonCode::ClassNameLiterals:
+      return "num_dont_rename_class_name_literals";
     case DontRenameReasonCode::Canaries:
       return "num_dont_rename_canaries";
     case DontRenameReasonCode::NativeBindings:
@@ -181,30 +181,20 @@ void RenameClassesPassV2::build_dont_rename_resources(PassManager& mgr, std::set
   }
 }
 
-void RenameClassesPassV2::build_dont_rename_class_for_name_literals(
-    Scope& scope, std::set<std::string>& dont_rename_class_for_name_literals) {
-  // Gather Class.forName literals
+void RenameClassesPassV2::build_dont_rename_class_name_literals(
+    Scope& scope, std::set<std::string>& dont_rename_class_name_literals) {
+  // Gather strings from const-string opcodes
   auto match = std::make_tuple(
-    m::const_string(/* const-string {vX}, <any string> */),
-    m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
-      m::opcode_method(m::named<DexMethod>("forName") && m::on_class<DexMethod>("Ljava/lang/Class;"))
-      && m::has_n_args(1))
+    m::const_string(/* const-string {vX}, <any string> */)
   );
 
   walk_matching_opcodes(scope, match, [&](const DexMethod*, size_t, IRInstruction** insns){
     IRInstruction* const_string = insns[0];
-    IRInstruction* invoke_static = insns[1];
-    // Make sure that the registers agree
-    auto src = opcode::has_range(invoke_static->opcode())
-                   ? invoke_static->range_base()
-                   : invoke_static->src(0);
-    if (const_string->dest() == src) {
-      auto classname = JavaNameUtil::external_to_internal(
-          const_string->get_string()->c_str());
-      TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
-        const_string->get_string()->c_str(), classname.c_str());
-      dont_rename_class_for_name_literals.insert(classname);
-    }
+    auto classname = JavaNameUtil::external_to_internal(
+      const_string->get_string()->c_str());
+    TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
+          const_string->get_string()->c_str(), classname.c_str());
+    dont_rename_class_name_literals.insert(classname);
   });
 }
 
@@ -459,7 +449,7 @@ void RenameClassesPassV2::eval_classes(
     ConfigFiles& cfg,
     bool rename_annotations,
     PassManager& mgr) {
-  std::set<std::string> dont_rename_class_for_name_literals;
+  std::set<std::string> dont_rename_class_name_literals;
   std::set<std::string> dont_rename_class_for_types_with_reflection;
   std::set<std::string> dont_rename_canaries;
   std::set<std::string> dont_rename_resources;
@@ -470,7 +460,7 @@ void RenameClassesPassV2::eval_classes(
 
   build_dont_rename_serde_relationships(scope, dont_rename_serde_relationships);
   build_dont_rename_resources(mgr, dont_rename_resources);
-  build_dont_rename_class_for_name_literals(scope, dont_rename_class_for_name_literals);
+  build_dont_rename_class_name_literals(scope, dont_rename_class_name_literals);
   build_dont_rename_for_types_with_reflection(scope, cfg.get_proguard_map(),
     dont_rename_class_for_types_with_reflection);
   build_dont_rename_canaries(scope, dont_rename_canaries);
@@ -525,8 +515,8 @@ void RenameClassesPassV2::eval_classes(
     }
     if (package_blacklisted) continue;
 
-    if (dont_rename_class_for_name_literals.count(clsname) > 0) {
-      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ClassForNameLiterals, norule };
+    if (dont_rename_class_name_literals.count(clsname) > 0) {
+      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::ClassNameLiterals, norule };
       continue;
     }
 
