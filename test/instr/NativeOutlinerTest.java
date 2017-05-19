@@ -9,23 +9,82 @@
 
 package com.facebook.redex.test.instr;
 
+import static org.fest.assertions.api.Assertions.*;
+
+import android.content.Context;
+import android.support.test.InstrumentationRegistry;
+import com.facebook.soloader.SoLoader;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+import org.junit.Before;
 import org.junit.Test;
 
 public class NativeOutlinerTest {
+  @Before
+  public void setup() throws Exception {
+    Context context = InstrumentationRegistry.getTargetContext();
+    SoLoader.init(context, 0);
+  }
 
+  /**
+   * Most basic smoke test.
+   */
+  @Test(expected = RuntimeException.class)
+  public void testThrow() {
+    throw new RuntimeException("this is a test");
+  }
+
+  /**
+   * Make sure the "right exception" is being thrown
+   */
   @Test
-  public void test() {
+  public void testThrowMessage() {
+    try {
+      thrower();
+    } catch (IllegalArgumentException e) {
+      // probably redundant w/ check-cast, but no harm
+      assertThat(e).isInstanceOf(IllegalArgumentException.class);
+      // derpy way of comparing the string without keeping the string around
+      assertThat(e.getMessage()).startsWith("this is ");
+      assertThat(e.getMessage()).endsWith(" another test");
+    }
   }
 
-  public void outlinedError() {
-    throw new Error("Outlined Error __TEST__");
+  /**
+   * Make sure the dispatcher was actually generated
+   */
+  @Test
+  public void testDispatcherExists() throws Exception {
+    // N.B. names need to stay in sync with NativeOutliner.cpp
+    Class outlined = Class.forName("com.facebook.redex.NativeOutlined");
+    assertThat(outlined).isNotNull();
   }
 
-  public void outlinedRuntimeException() {
-    throw new RuntimeException("Outlined RuntimeException __TEST__");
+  /**
+   * Poke at the dispatcher in a good way
+   */
+  @Test(expected = Throwable.class)
+  public void testDispatcherValidInvoke() throws Exception {
+    // N.B. names need to stay in sync with NativeOutliner.cpp
+    Class outlined = Class.forName("com.facebook.redex.NativeOutlined");
+    Method dispatch = outlined.getMethod("$dispatch$throws", int.class);
+    dispatch.invoke(null, 0);
   }
 
-  public void notOutlined() {
-    throw new RuntimeException("Not Outlined" + System.currentTimeMillis());
+  /**
+   * Poke at the dispatcher in a bad way
+   */
+  @Test(expected = InvocationTargetException.class)
+  public void testDispatcherInvalidInvoke() throws Exception {
+    // N.B. names need to stay in sync with Outliner.cpp
+    Class outlined = Class.forName("com.facebook.redex.NativeOutlined");
+    Method dispatch = outlined.getMethod("$dispatch$throws", int.class);
+    dispatch.invoke(null, Integer.MAX_VALUE);
+  }
+
+  public void thrower() {
+    throw new IllegalArgumentException("this is another test");
   }
 }

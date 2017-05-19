@@ -46,7 +46,6 @@ struct JThrowable : public jni::JavaClass<JThrowable, jni::JThrowable> {
 };
 
 static jni::local_ref<JThrowable> dispatchThrows(alias_ref<jobject>, jint idx) {
-  JNIEnv* env = Environment::current();
   const char* cls = nullptr;
   const char* msg = nullptr;
   switch (idx) {
@@ -57,8 +56,7 @@ static jni::local_ref<JThrowable> dispatchThrows(alias_ref<jobject>, jint idx) {
       break;
   }
 
-  auto clazz = env->FindClass(cls);
-  env->ThrowNew(clazz, msg);
+  throwNewJavaException(cls, msg);
 
   /* unreachable */
   return jni::local_ref<JThrowable>(nullptr);

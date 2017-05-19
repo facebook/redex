@@ -170,7 +170,9 @@ void NativeOutliner::run_pass(DexStoresVector& stores,
   std::vector<flatbuffers::Offset<OutlinedThrow>> outlined_throw_vec;
   for (size_t i = 0 ; i < outlined_throws.size() ; ++i) {
     auto out = outlined_throws[i];
-    auto cls = JavaNameUtil::internal_to_external(std::get<0>(out)->get_name()->str());
+    // Encode "Lfoo/bar/Baz;" as "foo/bar/Baz"
+    auto cls = std::get<0>(out)->get_name()->str();
+    cls = cls.substr(1, cls.size() - 2);
     auto msg = std::get<1>(out);
     auto type_loc = fbb.CreateString(cls.c_str());
     auto msg_loc = fbb.CreateString(msg->c_str());
