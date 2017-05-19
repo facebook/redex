@@ -37,6 +37,7 @@ class RenameClassesPassV2 : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("rename_annotations", false, m_rename_annotations);
+    pc.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
     pc.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
     pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
     std::vector<std::string> dont_rename_specific;
@@ -50,6 +51,11 @@ class RenameClassesPassV2 : public Pass {
   virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) override;
 
  private:
+
+  void build_force_rename_hierarchies(
+      PassManager& mgr,
+      Scope& scope,
+      std::unordered_map<const DexType*, std::string>& force_rename_hierarchies);
 
   void build_dont_rename_resources(PassManager& mgr, std::set<std::string>& dont_rename_resources);
   void build_dont_rename_class_name_literals(Scope& scope, std::set<std::string>& dont_rename_class_name_literals);
@@ -77,6 +83,7 @@ class RenameClassesPassV2 : public Pass {
 
   // Config and rules
   bool m_rename_annotations;
+  std::vector<std::string> m_force_rename_hierarchies;
   std::vector<std::string> m_dont_rename_hierarchies;
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
@@ -84,5 +91,6 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_set<std::string> m_dont_rename_specific;
 
   // Decisions we made in the eval_classes pass
+  std::unordered_set<const DexClass*> m_force_rename_classes;
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 };

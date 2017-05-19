@@ -32,6 +32,8 @@
 
 static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
 static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
+static const char* METRIC_FORCE_RENAMED_CLASSES = "num_force_renamed";
+static const char* METRIC_REWRITTEN_CONST_STRINGS = "num_rewritten_const_strings";
 static const char* METRIC_MISSING_HIERARCHY_TYPES = "num_missing_hierarchy_types";
 static const char* METRIC_MISSING_HIERARCHY_CLASSES = "num_missing_hierarchy_classes";
 
@@ -192,9 +194,11 @@ void RenameClassesPassV2::build_dont_rename_class_name_literals(
     IRInstruction* const_string = insns[0];
     auto classname = JavaNameUtil::external_to_internal(
       const_string->get_string()->c_str());
-    TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
-          const_string->get_string()->c_str(), classname.c_str());
-    dont_rename_class_name_literals.insert(classname);
+    if (DexType::get_type(classname.c_str())) {
+      TRACE(RENAME, 4, "Found const-string of: %s, marking %s unrenameable\n",
+            const_string->get_string()->c_str(), classname.c_str());
+      dont_rename_class_name_literals.insert(classname);
+    }
   });
 }
 
@@ -241,6 +245,43 @@ void RenameClassesPassV2::build_dont_rename_canaries(Scope& scope,std::set<std::
   for(auto clazz: scope) {
     if(strstr(clazz->get_name()->c_str(), "/Canary")) {
       dont_rename_canaries.insert(std::string(clazz->get_name()->c_str()));
+    }
+  }
+}
+
+
+void RenameClassesPassV2::build_force_rename_hierarchies(
+    PassManager& mgr,
+    Scope& scope,
+    std::unordered_map<const DexType*, std::string>& force_rename_hierarchies) {
+  std::vector<DexClass*> base_classes;
+  for (const auto& base : m_force_rename_hierarchies) {
+    // skip comments
+    if (base.c_str()[0] == '#') continue;
+    auto base_type = DexType::get_type(base.c_str());
+    if (base_type != nullptr) {
+      DexClass* base_class = type_class(base_type);
+      if (!base_class) {
+        TRACE(RENAME, 2, "Can't find class for force_rename_hierachy rule %s\n",
+              base.c_str());
+        mgr.incr_metric(METRIC_MISSING_HIERARCHY_CLASSES, 1);
+      } else {
+        base_classes.emplace_back(base_class);
+      }
+    } else {
+      TRACE(RENAME, 2, "Can't find type for force_rename_hierachy rule %s\n",
+            base.c_str());
+      mgr.incr_metric(METRIC_MISSING_HIERARCHY_TYPES, 1);
+    }
+  }
+  for (const auto& base_class : base_classes) {
+    auto base_name = base_class->get_name()->c_str();
+    force_rename_hierarchies[base_class->get_type()] = base_name;
+    std::unordered_set<const DexType*> children_and_implementors;
+    get_all_children_and_implementors(
+        scope, base_class, &children_and_implementors);
+    for (const auto& cls : children_and_implementors) {
+      force_rename_hierarchies[cls] = base_name;
     }
   }
 }
@@ -449,6 +490,7 @@ void RenameClassesPassV2::eval_classes(
     ConfigFiles& cfg,
     bool rename_annotations,
     PassManager& mgr) {
+  std::unordered_map<const DexType*, std::string> force_rename_hierarchies;
   std::set<std::string> dont_rename_class_name_literals;
   std::set<std::string> dont_rename_class_for_types_with_reflection;
   std::set<std::string> dont_rename_canaries;
@@ -457,6 +499,8 @@ void RenameClassesPassV2::eval_classes(
   std::set<DexType*> dont_rename_native_bindings;
   std::set<DexType*> dont_rename_serde_relationships;
   std::set<DexType*, dextypes_comparator> dont_rename_annotated;
+
+  build_force_rename_hierarchies(mgr, scope, force_rename_hierarchies);
 
   build_dont_rename_serde_relationships(scope, dont_rename_serde_relationships);
   build_dont_rename_resources(mgr, dont_rename_resources);
@@ -471,6 +515,12 @@ void RenameClassesPassV2::eval_classes(
   std::string norule = "";
 
   for(auto clazz: scope) {
+    // Short circuit force renames
+    if (force_rename_hierarchies.count(clazz->get_type()) > 0) {
+      m_force_rename_classes.insert(clazz);
+      continue;
+    }
+
     // Don't rename annotations
     if (!rename_annotations && is_annotation(clazz)) {
       m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Annotations, norule };
@@ -573,7 +623,10 @@ void RenameClassesPassV2::rename_classes(
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
 
-    if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
+    if (m_force_rename_classes.count(clazz) > 0) {
+      mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
+      TRACE(RENAME, 2, "Forced renamed: '%s'\n", oldname->c_str());
+    } else if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       auto reason = m_dont_rename_reasons[clazz];
       std::string metric = dont_rename_reason_to_metric(reason.code);
       mgr.incr_metric(metric, 1);
@@ -636,6 +689,45 @@ void RenameClassesPassV2::rename_classes(
       arraytype->assign_name_alias(dstring);
     }
   }
+
+
+  /* Now rewrite all const-string strings for force renamed classes. */
+  auto match = std::make_tuple(
+    m::const_string()
+  );
+
+  walk_matching_opcodes(scope, match, [&](const DexMethod*, size_t, IRInstruction** insns){
+      IRInstruction* insn = insns[0];
+      DexString* str = insn->get_string();
+      // get_string instead of make_string here because if the string doesn't
+      // already exist, then there's no way it can match a class that was renamed
+      DexString* internal_str = DexString::get_string(
+        JavaNameUtil::external_to_internal(str->c_str()).c_str());
+      // Look up both str and intternal_str in the map; maybe str was internal to begin with?
+      DexString* alias_from = nullptr;
+      DexString* alias_to = nullptr;
+      if (aliases.has(internal_str)) {
+        alias_from = internal_str;
+        alias_to = aliases.at(internal_str);
+        // Since we matched on external form, we need to map internal alias back.
+        // make_string here because the external form of the name may not be
+        // present in the string table
+        alias_to = DexString::make_string(
+          JavaNameUtil::internal_to_external(std::string(alias_to->c_str())));
+      } else if (aliases.has(str)) {
+        alias_from = str;
+        alias_to = aliases.at(str);
+      }
+      if (alias_to) {
+        DexType* alias_from_type = DexType::get_type(alias_from);
+        DexClass* alias_from_cls = type_class(alias_from_type);
+        if (m_force_rename_classes.count(alias_from_cls) > 0) {
+          mgr.incr_metric(METRIC_REWRITTEN_CONST_STRINGS, 1);
+          insn->set_string(alias_to);
+          TRACE(RENAME, 3, "Rewrote const-string \"%s\" to \"%s\"\n", str->c_str(), alias_to->c_str());
+        }
+      }
+    });
 
   /* Now we need to re-write the Signature annotations.  They use
    * Strings rather than Type's, so they have to be explicitly

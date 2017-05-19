@@ -232,7 +232,7 @@ void init_permanently_reachable_classes(
         if (const_string->dest() == src) {
           auto classname = JavaNameUtil::external_to_internal(
               const_string->get_string()->c_str());
-          TRACE(RENAME, 4, "Found Class.forName of: %s, marking %s reachable\n",
+          TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
                 const_string->get_string()->c_str(),
                 classname.c_str());
           mark_reachable_by_classname(classname, true);
