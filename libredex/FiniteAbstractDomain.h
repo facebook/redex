@@ -30,6 +30,8 @@
 template <typename Element, typename Encoding>
 class LatticeEncoding {
  public:
+  virtual ~LatticeEncoding() {}
+
   virtual Encoding encode(const Element& element) const = 0;
 
   virtual Element decode(const Encoding& encoding) const = 0;
@@ -55,13 +57,13 @@ class LatticeEncoding {
  * Example usage:
  *
  *   Encoding the following lattice using bit vectors:
- *   
+ *
  *              TOP
  *             /   \
  *            A     B
  *             \   /
  *             BOTTOM
- *   
+ *
  *   enum Elements {BOTTOM, A, B, TOP};
  *   using Lattice = BitVectorLattice<Elements, 4, std::hash<int>>;
  *   Lattice lattice({BOTTOM, A, B, TOP},

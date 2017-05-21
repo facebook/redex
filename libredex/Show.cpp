@@ -884,6 +884,10 @@ std::string show(const IRInstruction* insn) {
     ss << "range_base: " << insn->range_base() << ", "
        << "range_size: " << insn->range_size();
   }
+  if (opcode::has_literal(insn->opcode())) {
+    if (!first) ss << ", ";
+    ss << insn->literal();
+  }
   if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
     ss << ", ";
   }

@@ -13,11 +13,14 @@
 #include "LiveRange.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
+#include "RegisterType.h"
 #include "Show.h"
 #include "Transform.h"
 #include "Util.h"
 
 #include <gtest/gtest.h>
+
+using namespace regalloc;
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
@@ -69,31 +72,49 @@ class InstructionList {
   }
 };
 
+/*
+ * Check that we pick the most pessimistic move instruction (of the right type)
+ * that can address arbitrarily large registers -- we will shrink it down later
+ * as necessary when syncing the IRCode.
+ */
 TEST_F(RegAllocTest, MoveGen) {
   using namespace dex_asm;
-  // check that we pick the smallest possible instruction
-  EXPECT_EQ(*gen_move(RegisterKind::OBJECT, 15, 15),
-            *dasm(OPCODE_MOVE_OBJECT, {15_v, 15_v}));
-  EXPECT_EQ(*gen_move(RegisterKind::OBJECT, 254, 65535),
-            *dasm(OPCODE_MOVE_OBJECT_FROM16, {254_v, 65535_v}));
-  EXPECT_EQ(*gen_move(RegisterKind::OBJECT, 65535, 65535),
-            *dasm(OPCODE_MOVE_OBJECT_16, {65535_v, 65535_v}));
-  // check that we pick the right type too
-  EXPECT_EQ(*gen_move(RegisterKind::NORMAL, 15, 15),
-            *dasm(OPCODE_MOVE, {15_v, 15_v}));
-  EXPECT_EQ(*gen_move(RegisterKind::WIDE, 254, 65535),
-            *dasm(OPCODE_MOVE_WIDE_FROM16, {254_v, 65535_v}));
+  EXPECT_EQ(*gen_move(RegisterType::NORMAL, 1, 2),
+            *dasm(OPCODE_MOVE_16, {1_v, 2_v}));
+  EXPECT_EQ(*gen_move(RegisterType::ZERO, 1, 2),
+            *dasm(OPCODE_MOVE_16, {1_v, 2_v}));
+  EXPECT_EQ(*gen_move(RegisterType::OBJECT, 1, 2),
+            *dasm(OPCODE_MOVE_OBJECT_16, {1_v, 2_v}));
+  EXPECT_EQ(*gen_move(RegisterType::WIDE, 1, 2),
+            *dasm(OPCODE_MOVE_WIDE_16, {1_v, 2_v}));
 }
 
-TEST_F(RegAllocTest, RegKindWide) {
+TEST_F(RegAllocTest, RegTypeDestWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
     if (opcode_impl::dests_size(op) && !opcode::dest_is_src(op)) {
-      EXPECT_EQ((new IRInstruction(op))->dest_is_wide(),
-                dest_kind(op) == RegisterKind::WIDE)
+      auto insn = std::make_unique<IRInstruction>(op);
+      EXPECT_EQ(insn->dest_is_wide(),
+                regalloc::dest_reg_type(insn.get()) == RegisterType::WIDE)
           << "mismatch for " << show(op);
     }
   }
+}
+
+/*
+ * Check that we infer the correct register type for static and non-static
+ * invoke instructions.
+ */
+TEST_F(RegAllocTest, RegTypeInvoke) {
+  using namespace dex_asm;
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
+
+  auto insn = dasm(OPCODE_INVOKE_DIRECT, method, {0_v, 1_v});
+  EXPECT_EQ(regalloc::src_reg_type(insn, 0), RegisterType::OBJECT);
+  EXPECT_EQ(regalloc::src_reg_type(insn, 1), RegisterType::NORMAL);
+
+  auto static_insn = dasm(OPCODE_INVOKE_STATIC, method, {0_v});
+  EXPECT_EQ(regalloc::src_reg_type(static_insn, 0), RegisterType::NORMAL);
 }
 
 TEST_F(RegAllocTest, InsertMoveDest) {
