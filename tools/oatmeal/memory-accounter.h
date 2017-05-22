@@ -13,6 +13,19 @@
 
 #include <memory>
 
+class MemoryAccounter;
+
+class MemoryAccounterScope {
+friend class MemoryAccounter;
+public:
+  UNCOPYABLE(MemoryAccounterScope);
+  MOVABLE(MemoryAccounterScope);
+
+  ~MemoryAccounterScope();
+private:
+  explicit MemoryAccounterScope(ConstBuffer buf);
+};
+
 // Tracks which ranges of memory have been consumed during parsing,
 // so that we can easily identify sections that may have data we don't
 // yet understand.
@@ -20,9 +33,12 @@ class MemoryAccounter {
  public:
   MemoryAccounter() = default;
   UNCOPYABLE(MemoryAccounter);
+  MOVABLE(MemoryAccounter);
+
   virtual ~MemoryAccounter();
 
-  static std::unique_ptr<MemoryAccounter> New(ConstBuffer buf);
+  static MemoryAccounter* Cur();
+  static MemoryAccounterScope NewScope(ConstBuffer buf);
 
   // Print a report of any memory in buf_ that has either never
   // been consumed, or has been consumed more than once.
@@ -40,3 +56,5 @@ class MemoryAccounter {
   virtual void markRangeConsumed(const char* ptr, uint32_t count) = 0;
   virtual void markBufferConsumed(ConstBuffer subBuffer) = 0;
 };
+
+inline MemoryAccounter* cur_ma() { return MemoryAccounter::Cur(); }

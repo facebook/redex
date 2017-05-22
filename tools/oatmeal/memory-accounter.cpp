@@ -17,6 +17,7 @@
 namespace {
 
 class MemoryAccounterImpl : public MemoryAccounter {
+ friend class ::MemoryAccounterScope;
  public:
   UNCOPYABLE(MemoryAccounterImpl);
 
@@ -79,6 +80,11 @@ class MemoryAccounterImpl : public MemoryAccounter {
     markRangeConsumed(subBuffer.ptr - buf_.ptr, subBuffer.len);
   }
 
+  static MemoryAccounter* Cur() {
+    CHECK(accounter_stack_.size() > 0);
+    return accounter_stack_.back().get();
+  }
+
  private:
   struct Range {
     Range(size_t b, size_t e) : begin(b), end(e) {}
@@ -88,11 +94,31 @@ class MemoryAccounterImpl : public MemoryAccounter {
 
   ConstBuffer buf_;
   std::vector<Range> consumed_ranges_;
+
+  static std::vector<std::unique_ptr<MemoryAccounter>> accounter_stack_;
 };
+
+std::vector<std::unique_ptr<MemoryAccounter>> MemoryAccounterImpl::accounter_stack_;
+
 }
 
 MemoryAccounter::~MemoryAccounter() = default;
 
-std::unique_ptr<MemoryAccounter> MemoryAccounter::New(ConstBuffer buf) {
-  return std::unique_ptr<MemoryAccounter>(new MemoryAccounterImpl(buf));
+MemoryAccounterScope MemoryAccounter::NewScope(ConstBuffer buf) {
+  return MemoryAccounterScope(buf);
+}
+
+MemoryAccounter* MemoryAccounter::Cur() {
+  return MemoryAccounterImpl::Cur();
+}
+
+MemoryAccounterScope::MemoryAccounterScope(ConstBuffer buf) {
+  MemoryAccounterImpl::accounter_stack_.push_back(
+    std::unique_ptr<MemoryAccounterImpl>(new MemoryAccounterImpl(buf))
+  );
+}
+
+MemoryAccounterScope::~MemoryAccounterScope() {
+  CHECK(MemoryAccounterImpl::accounter_stack_.size() > 0);
+  MemoryAccounterImpl::accounter_stack_.pop_back();
 }

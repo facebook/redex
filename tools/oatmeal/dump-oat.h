@@ -13,8 +13,6 @@
 
 #include <memory>
 
-class MemoryAccounter;
-
 class OatFile {
  public:
   UNCOPYABLE(OatFile);
@@ -25,11 +23,4 @@ class OatFile {
 
   virtual void print(bool dump_classes, bool dump_tables) = 0;
 
-  MemoryAccounter* memory_accounter() { return memory_accounter_.get(); }
-
- protected:
-  explicit OatFile(std::unique_ptr<MemoryAccounter> ma);
-
- private:
-  std::unique_ptr<MemoryAccounter> memory_accounter_;
 };

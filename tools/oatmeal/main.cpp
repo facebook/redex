@@ -151,12 +151,13 @@ int dump(const Arguments& args) {
   }
 
   ConstBuffer buf{file_contents.get(), file_size};
+  auto ma_scope = MemoryAccounter::NewScope(buf);
 
   auto oatfile = OatFile::parse(buf);
   oatfile->print(args.dump_classes, args.dump_tables);
 
   if (args.dump_memory_usage) {
-    oatfile->memory_accounter()->print();
+    cur_ma()->print();
   }
 
   return 0;

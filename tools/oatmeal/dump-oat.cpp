@@ -25,13 +25,11 @@
 
 #define READ_WORD(dest, ptr)               \
   do {                                     \
-    cur_ma->memcpyAndMark((dest), ptr, 4); \
+    cur_ma()->memcpyAndMark((dest), ptr, 4); \
     ptr += 4;                              \
   } while (false);
 
 namespace {
-
-std::unique_ptr<MemoryAccounter> cur_ma;
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
 constexpr uint32_t kOatVersion079 = 0x00393730;
@@ -77,8 +75,7 @@ struct PACKED OatHeader_Common {
   static OatHeader_Common parse(ConstBuffer buf) {
     OatHeader_Common header;
     CHECK(buf.len >= sizeof(OatHeader_Common));
-    cur_ma->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_Common));
-
+    cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_Common));
     return header;
   }
 
@@ -124,7 +121,7 @@ struct PACKED OatHeader_079 {
   static OatHeader_079 parse(ConstBuffer buf) {
     OatHeader_079 header;
     CHECK(buf.len >= sizeof(OatHeader_079));
-    cur_ma->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_079));
+    cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_079));
 
     CHECK(header.common.magic == kOatMagicNum);
     CHECK(header.common.version == kOatVersion079);
@@ -175,7 +172,7 @@ struct PACKED OatHeader_079 {
 class KeyValueStore {
  public:
   explicit KeyValueStore(ConstBuffer buf) : buf_(buf) {
-    cur_ma->markBufferConsumed(buf_);
+    cur_ma()->markBufferConsumed(buf_);
   }
 
   void print() {
@@ -254,7 +251,7 @@ class DexFileListing {
       READ_WORD(&location_len, ptr);
 
       file.location = std::string(ptr, location_len);
-      cur_ma->markRangeConsumed(ptr, location_len);
+      cur_ma()->markRangeConsumed(ptr, location_len);
       ptr += location_len;
 
       READ_WORD(&file.location_checksum, ptr);
@@ -319,7 +316,7 @@ struct PACKED DexFileHeader {
     memcpy(&header, buf.ptr, sizeof(DexFileHeader));
 
     // Mark the whole file consumed.
-    cur_ma->markRangeConsumed(buf.ptr, header.file_size);
+    cur_ma()->markRangeConsumed(buf.ptr, header.file_size);
 
     return header;
   }
@@ -408,7 +405,7 @@ class LookupTables {
 
       auto ptr = oat_buf.slice(table_offset).ptr;
 
-      cur_ma->markRangeConsumed(ptr, num_entries * sizeof(LookupTableEntry));
+      cur_ma()->markRangeConsumed(ptr, num_entries * sizeof(LookupTableEntry));
 
       tables_.push_back(
           LookupTable{listing_it->file_offset,
@@ -569,11 +566,11 @@ class OatClasses {
           for (unsigned int i = 0; i < header.class_defs_size; i++) {
             ClassInfo info;
             uint32_t info_offset;
-            cur_ma->memcpyAndMark(
+            cur_ma()->memcpyAndMark(
                 &info_offset,
                 oat_buf.slice(classes_offset + i * sizeof(uint32_t)).ptr,
                 sizeof(uint32_t));
-            cur_ma->memcpyAndMark(
+            cur_ma()->memcpyAndMark(
                 &info, oat_buf.slice(info_offset).ptr, sizeof(ClassInfo));
 
             // TODO: Handle compiled classes. Need to read method bitmap size,
@@ -632,15 +629,13 @@ class OatFile_079 : public OatFile {
   }
 
  private:
-  OatFile_079(std::unique_ptr<MemoryAccounter> ma,
-              OatHeader_079 h,
+  OatFile_079(OatHeader_079 h,
               KeyValueStore kv,
               DexFileListing dfl,
               DexFiles dex_files,
               LookupTables lt,
               OatClasses oat_classes)
-      : OatFile(std::move(ma)),
-        header_(h),
+      : header_(h),
         key_value_store_(kv),
         dex_file_listing_(std::move(dfl)),
         dex_files_(std::move(dex_files)),
@@ -670,8 +665,7 @@ std::unique_ptr<OatFile> OatFile_079::parse(ConstBuffer buf) {
 
   OatClasses oat_classes(dfl, dex_files, buf);
 
-  return std::unique_ptr<OatFile>(new OatFile_079(std::move(cur_ma),
-                                                  header,
+  return std::unique_ptr<OatFile>(new OatFile_079(header,
                                                   key_value_store,
                                                   std::move(dfl),
                                                   std::move(dex_files),
@@ -680,13 +674,9 @@ std::unique_ptr<OatFile> OatFile_079::parse(ConstBuffer buf) {
 }
 }
 
-OatFile::OatFile(std::unique_ptr<MemoryAccounter> ma)
-    : memory_accounter_(std::move(ma)) {}
 OatFile::~OatFile() = default;
 
 std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
-  CHECK(cur_ma.get() == nullptr);
-  cur_ma = MemoryAccounter::New(buf);
 
   auto header = OatHeader_Common::parse(buf);
 
