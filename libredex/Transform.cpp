@@ -2157,8 +2157,14 @@ bool IRCode::try_sync(DexCode* code) {
         // the fopcode, which comes later.
       } else if (bt->type == BRANCH_SIMPLE) {
         MethodItemEntry* branch_op_mie = bt->src;
-        int32_t branchoffset = mentry->addr - branch_op_mie->addr;
-        needs_resync |= !encode_offset(m_fmethod, branch_op_mie, branchoffset);
+        int32_t branch_offset = mentry->addr - branch_op_mie->addr;
+        if (branch_offset == 1) {
+          needs_resync = true;
+          remove_opcode(branch_op_mie->insn);
+        } else {
+          needs_resync |=
+              !encode_offset(m_fmethod, branch_op_mie, branch_offset);
+        }
       }
     }
   }
