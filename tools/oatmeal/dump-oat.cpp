@@ -628,6 +628,8 @@ class OatFile_079 : public OatFile {
     }
   }
 
+  Status status() override { return Status::PARSE_SUCCESS; }
+
  private:
   OatFile_079(OatHeader_079 h,
               KeyValueStore kv,
@@ -672,6 +674,49 @@ std::unique_ptr<OatFile> OatFile_079::parse(ConstBuffer buf) {
                                                   std::move(lookup_tables),
                                                   std::move(oat_classes)));
 }
+
+class OatFile_Unknown : public OatFile {
+public:
+  void print(bool dump_classes, bool dump_tables) override {
+    printf("Unknown OAT file version!\n");
+    header_.print();
+  }
+
+  Status status() override { return Status::PARSE_UNKNOWN_VERSION; }
+
+  static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
+    return std::unique_ptr<OatFile>(new OatFile_Unknown(buf));
+  }
+
+private:
+  explicit OatFile_Unknown(ConstBuffer buf) {
+    header_ = OatHeader_Common::parse(buf);
+  }
+
+  OatHeader_Common header_;
+};
+
+class OatFile_Bad : public OatFile {
+public:
+  void print(bool dump_classes, bool dump_tables) override {
+    printf("Bad magic number:\n");
+    header_.print();
+  }
+
+  Status status() override { return Status::PARSE_BAD_MAGIC_NUMBER; }
+
+  static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
+    return std::unique_ptr<OatFile>(new OatFile_Bad(buf));
+  }
+
+private:
+  explicit OatFile_Bad(ConstBuffer buf) {
+    header_ = OatHeader_Common::parse(buf);
+  }
+
+  OatHeader_Common header_;
+};
+
 }
 
 OatFile::~OatFile() = default;
@@ -683,13 +728,13 @@ std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
   // TODO: do we need to handle endian-ness? I think all platforms we
   // care about are little-endian.
   if (header.magic != kOatMagicNum) {
-    return std::unique_ptr<OatFile>(nullptr);
+    return OatFile_Bad::parse(buf);
   }
 
   switch (header.version) {
   case kOatVersion079:
     return OatFile_079::parse(buf);
   default:
-    return std::unique_ptr<OatFile>(nullptr);
+    return OatFile_Unknown::parse(buf);
   }
 }

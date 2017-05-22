@@ -15,6 +15,15 @@
 
 class OatFile {
  public:
+  enum class Status {
+    PARSE_SUCCESS,
+    PARSE_UNKNOWN_VERSION,
+    PARSE_BAD_MAGIC_NUMBER,
+    PARSE_FAILURE
+  };
+
+  OatFile() = default;
+
   UNCOPYABLE(OatFile);
   virtual ~OatFile();
 
@@ -23,4 +32,5 @@ class OatFile {
 
   virtual void print(bool dump_classes, bool dump_tables) = 0;
 
+  virtual Status status() = 0;
 };

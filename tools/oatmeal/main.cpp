@@ -160,7 +160,7 @@ int dump(const Arguments& args) {
     cur_ma()->print();
   }
 
-  return 0;
+  return oatfile->status() == OatFile::Status::PARSE_SUCCESS ? 0 : 1;
 }
 }
 
