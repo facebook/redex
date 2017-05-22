@@ -163,7 +163,7 @@ void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
   auto method_name = strchr(method->get_deobfuscated_name().c_str(), ';');
   fprintf(
     fdout,
-    "INSERT INTO methods VALUES (%d,%d,'%s','%s',%u,%d);\n",
+    "INSERT INTO methods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
     method_id,
     class_id,
     method_name,
