@@ -1789,7 +1789,7 @@ void IRCode::build_cfg(bool end_block_before_throw) {
     block->m_begin = next;
     // Record branch targets to add edges in the next pass.
     if (next->type == MFLOW_TARGET) {
-      // If there are a consecutive list of MFLOW_TARGETs, put them all in the
+      // If there is a consecutive list of MFLOW_TARGETs, put them all in the
       // same basic block. Being parsimonious in the number of BBs we generate
       // is a significant performance win for our analyses.
       do {
@@ -1804,7 +1804,12 @@ void IRCode::build_cfg(bool end_block_before_throw) {
     } else if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
       try_ends.emplace_back(next->tentry, block);
     } else if (next->type == MFLOW_CATCH) {
-      try_catches[next->centry] = block;
+      // If there is a consecutive list of MFLOW_CATCHes, put them all in the
+      // same basic block.
+      do {
+        try_catches[next->centry] = block;
+      } while (++next != m_fmethod->end() && next->type == MFLOW_CATCH);
+      it = std::prev(next, 2);
     }
   }
   // Link the blocks together with edges
