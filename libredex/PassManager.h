@@ -47,7 +47,7 @@ class PassManager {
     return m_pg_config.keep_rules.empty() && !m_testing_mode;;
   }
   // Cal set_testing_mode() in tests that need passes to run which
-  // do not use ProGuard configuratoion keep rules.
+  // do not use ProGuard configuration keep rules.
   void set_testing_mode() { m_testing_mode = true; }
 
  private:

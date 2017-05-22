@@ -30,7 +30,7 @@ from the Java source file:
 which is specified in Buck tests via an environment variable in the
 BUCK file. Before optimization, the code for the propagate method is:
 
-dmethod: propagation_1
+dmethod: if_false
 dmethod: regs: 4, ins: 0, outs: 2
 const/4 v1
 if-eqz v1
@@ -43,7 +43,7 @@ return v2
 const/16 v2
 goto
 
-dmethod: propagation_2
+dmethod: if_true
 dmethod: regs: 2, ins: 0, outs: 0
 const/4 v0
 if-eqz v0
@@ -53,35 +53,18 @@ invoke-static public static com.facebook.redextest.Alpha.theAnswer()I
 move-result v1
 goto
 
-dmethod: propagation_3
-dmethod: regs: 2, ins: 0, outs: 0
-invoke-static public static com.facebook.redextest.Gamma.getConfig()Z
-move-result v1
-if-eqz v1
-const/16 v0
-return v0
-invoke-static public static com.facebook.redextest.Alpha.theAnswer()I
-move-result v0
-goto
 
+After optimization with ConstantPropagationPass, the code should be:
 
-After optimization with LocalDcePass, DelInitPass, RemoveEmptyClassesPass
-and ConstantPropagationPass, the code should be:
-
-dmethod: propagation_1
+dmethod: if_false
 dmethod: regs: 2, ins: 0, outs: 0
 const/16 v1
 return v1
 
-dmethod: propagation_2
+dmethod: if_true
 dmethod: regs: 2, ins: 0, outs: 0
 const/16 v1
 return v1
-
-dmethod: propagation_3
-dmethod: regs: 1, ins: 0, outs: 0
-const/16 v0
-return v0
 
 This test mainly checks whether the constant propagation is fired. It does
 this by checking to make sure there are no OPCODE_IF_EQZ and OPCODE_NEW_INSTANCE
@@ -103,11 +86,11 @@ ClassType filter_test_classes(const DexString *cls_name) {
   return OTHERCLASS;
 }
 
-TEST(ConstantPropagationTest1, constantpropagation) {
+void test(bool old_version) {
   g_redex = new RedexContext();
 
   const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+  EXPECT_NE(nullptr, dexfile);
 
   std::vector<DexStore> stores;
   DexMetadata dm;
@@ -118,27 +101,26 @@ TEST(ConstantPropagationTest1, constantpropagation) {
   stores.emplace_back(std::move(root_store));
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
-  TRACE(CONSTP, 2, "Code before:\n");
+  TRACE(CONSTP, 1, "Code before:\n");
   for(const auto& cls : classes) {
-    TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
+    TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) < 2) {
-      TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
+      TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-        if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0 ||
-            strcmp(dm->get_name()->c_str(), "propagation_2") == 0 ||
-            strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
-          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        TRACE(CONSTP, 1, "dmethod: %s\n",  dm->get_name()->c_str());
+        if (strcmp(dm->get_name()->c_str(), "if_false") == 0 ||
+            strcmp(dm->get_name()->c_str(), "if_true") == 0 ||
+            strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
+          TRACE(CONSTP, 1, "%s\n", SHOW(InstructionIterable(dm->get_code())));
         }
       }
     }
   }
 
+  ConstantPropagationPass* constp = new ConstantPropagationPass();
+  constp->m_config.old_version = old_version;
   std::vector<Pass*> passes = {
-    new ConstantPropagationPass(),
-    new LocalDcePass(),
-    new DelInitPass(),
-    new RemoveEmptyClassesPass()
+    constp
   };
 
   PassManager manager(passes);
@@ -146,42 +128,50 @@ TEST(ConstantPropagationTest1, constantpropagation) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  dummy_cfg.using_seeds = true;
   manager.run_passes(stores, dummy_cfg);
 
-  TRACE(CONSTP, 2, "Code after:\n");
+  TRACE(CONSTP, 1, "Code after:\n");
   for(const auto& cls : classes) {
-    TRACE(CONSTP, 2, "Class %s\n", SHOW(cls));
-// Disabled due to return prop being disabled
-//    ASSERT_NE(filter_test_classes(cls->get_name()), REMOVEDCLASS);
+    TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 2, "dmethod: %s\n",  dm->get_name()->c_str());
-        if (strcmp(dm->get_name()->c_str(), "propagation_1") == 0) {
-          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code())) {
-            auto instruction = mie.insn;
-            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
-            ASSERT_NE(instruction->opcode(), OPCODE_NEW_INSTANCE);
+        TRACE(CONSTP, 1, "dmethod: %s\n",  dm->get_name()->c_str());
+        if (strcmp(dm->get_name()->c_str(), "if_false") == 0) {
+          const InstructionIterable& it = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(it));
+          for (auto& mie : it) {
+            DexOpcode op = mie.insn->opcode();
+            EXPECT_NE(op, OPCODE_IF_EQZ);
           }
-        } else if (strcmp(dm->get_name()->c_str(), "propagation_2") == 0) {
-          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code())) {
-            auto instruction = mie.insn;
-            ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
-// Disabled due to return prop being disabled
-//          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
+        } else if (!old_version &&
+                   strcmp(dm->get_name()->c_str(), "if_true") == 0) {
+          const InstructionIterable& it = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(it));
+          for (auto& mie : it) {
+            DexOpcode op = mie.insn->opcode();
+            EXPECT_NE(op, OPCODE_IF_EQZ);
           }
-        } else if(strcmp(dm->get_name()->c_str(), "propagation_3") == 0) {
-          TRACE(CONSTP, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-          for (auto& mie : InstructionIterable(dm->get_code())) {
-// Disabled due to return prop being disabled
-//          auto instruction = mie.insn;
-//          ASSERT_NE(instruction->opcode(), OPCODE_IF_EQZ);
-//          ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_STATIC);
+        } else if (strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
+          const InstructionIterable& it = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(it));
+          bool has_if = false;
+          for (auto& mie : it) {
+            DexOpcode op = mie.insn->opcode();
+            if (is_conditional_branch(op)) {
+              has_if = true;
+            }
           }
+          EXPECT_TRUE(has_if);
         }
       }
     }
   }
+}
+
+TEST(ConstantPropagationTest1, constantPropagationOld) {
+  test(true);
+}
+
+TEST(ConstantPropagationTest1, constantPropagationNew) {
+  test(false);
 }

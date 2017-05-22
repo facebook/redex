@@ -15,61 +15,36 @@
 
 package com.facebook.redextest;
 
-class Alpha {
-  public static int theAnswer() {
+class Propagation {
+  public static int if_false() {
+    int y;
     boolean x = false;
     if (x) {
-      return 42;
-    } else {
-      return 32;
-    }
-  }
-}
-
-class Beta {
-  private static final boolean gammaConfig = false;
-  public static boolean getConfig() {
-    return gammaConfig;
-  }
-}
-
-class Propagation {
-  // Senario 1: Constant in if statement
-  // Test whether class Alpha is removed
-  public static int propagation_1() {
-    int y;
-    boolean x;
-    x = false;
-    if (x) {
-      y = Alpha.theAnswer();
+      y = 0;
     } else {
       y = 42;
     }
     return y;
   }
 
-  // Senario 2: Method returning a constant
-  // Test whether class Alpha is removed
-  public static int propagation_2() {
+  public static int if_true() {
     int y;
-    boolean x;
-    x = false;
+    boolean x = true;
     if (x) {
       y = 32;
     } else {
-      y = Alpha.theAnswer();
+      y = 0;
     }
     return y;
   }
 
-  // Senario 3: Constant from field, propagate across parameters and return value
-  // Test whether class Gamma and Alpha are removed
-  public static int propagation_3() {
+  public static int if_unknown() {
     int y;
-    if (Beta.getConfig()) {
-      y = Alpha.theAnswer();
+    boolean x = Math.random() > 0.5? true : false;
+    if (x) {
+      y = 32;
     } else {
-      y = 35;
+      y = 0;
     }
     return y;
   }
@@ -78,8 +53,7 @@ class Propagation {
 public class ConstantPropagation {
   public static void main(String[] args) {
     Propagation p = new Propagation();
-    System.out.println(p.propagation_1());
-    System.out.println(p.propagation_2());
-    System.out.println(p.propagation_3());
+    System.out.println(p.if_false());
+    System.out.println(p.if_true());
   }
 }

@@ -17,6 +17,7 @@
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
 #include "DexDebugInstruction.h"
+#include "DexOpcode.h"
 #include "DexIdx.h"
 #include "DexUtil.h"
 #include "Creators.h"
@@ -276,15 +277,15 @@ std::string show_opcode(const DexInstruction* insn) {
   case OPCODE_GOTO_16:
     return "goto/16";
   case OPCODE_CMPL_FLOAT:
-    return "cpml-float";
+    return "cmpl-float";
   case OPCODE_CMPG_FLOAT:
-    return "cpmg-float";
+    return "cmpg-float";
   case OPCODE_CMPL_DOUBLE:
-    return "cpml-double";
+    return "cmpl-double";
   case OPCODE_CMPG_DOUBLE:
-    return "cpmg-double";
+    return "cmpg-double";
   case OPCODE_CMP_LONG:
-    return "cpm-long";
+    return "cmp-long";
   case OPCODE_IF_EQ:
     return "if-eq";
   case OPCODE_IF_NE:
@@ -862,6 +863,11 @@ std::string show(const DexInstruction* insn) {
     ss << " v" << insn->src(i);
     first = false;
   }
+  if (opcode::has_literal(insn->opcode())) {
+    if (!first) ss << ",";
+    ss << " " << insn->literal();
+    first = false;
+  }
   return ss.str();
 }
 
@@ -1122,4 +1128,12 @@ std::string show(const Liveness& analysis) {
 
 std::string show(const IRCode* mt) {
   return show(mt->m_fmethod);
+}
+
+std::string show(const InstructionIterable& it) {
+  std::stringstream ss;
+  for (auto& mei : it) {
+    ss << show(mei.insn) << "\n";
+  }
+  return ss.str();
 }

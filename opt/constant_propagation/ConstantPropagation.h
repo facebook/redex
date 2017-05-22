@@ -18,7 +18,7 @@ class ConstantPropagationPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     std::vector<std::string> blacklist_names;
     pc.get("blacklist", {}, blacklist_names);
-    pc.get("only_simple_branches", false, m_config.only_simple_branches);
+    pc.get("old_version", false, m_config.old_version);
 
     for (auto const& name : blacklist_names) {
       DexType* entry = DexType::get_type(name.c_str());
@@ -32,6 +32,6 @@ class ConstantPropagationPass : public Pass {
 
   struct Config {
     std::unordered_set<DexType*> blacklist;
-    bool only_simple_branches;
+    bool old_version;
   } m_config;
 };

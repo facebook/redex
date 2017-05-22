@@ -41,6 +41,7 @@ struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
 class Liveness;
+class InstructionIterable;
 
 std::string show(const DexString*);
 std::string show(const DexType*);
@@ -64,6 +65,7 @@ std::string show(const ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
 std::string show(const Liveness&);
+std::string show(const InstructionIterable&);
 
 template <typename T>
 std::string show(const std::unique_ptr<T>& ptr) {
