@@ -21,6 +21,7 @@
 #include "DelInit.h"
 #include "RemoveEmptyClasses.h"
 #include "ConstantPropagation.h"
+#include "ConstantPropagationV2.h"
 
 /*
 
@@ -117,8 +118,12 @@ void test(bool old_version) {
     }
   }
 
-  ConstantPropagationPass* constp = new ConstantPropagationPass();
-  constp->m_config.old_version = old_version;
+  Pass* constp = nullptr;
+  if (old_version) {
+    constp = new ConstantPropagationPass();
+  } else {
+    constp = new ConstantPropagationPassV2();
+  }
   std::vector<Pass*> passes = {
     constp
   };
