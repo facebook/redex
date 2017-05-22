@@ -33,6 +33,7 @@ namespace {
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
 constexpr uint32_t kOatVersion079 = 0x00393730;
+constexpr uint32_t kOatVersion088 = 0x00383830;
 
 enum class InstructionSet {
   kNone = 0,
@@ -85,12 +86,12 @@ struct PACKED OatHeader_Common {
     memcpy(magic_str, &magic, 3); // magic has a newline character at idx 4.
     memcpy(version_str, &version, 4);
 
-    printf("  magic: %s\n", magic_str);
-    printf("  version: %s\n", version_str);
+    printf("  magic:   0x%08x '%s'\n", magic, magic_str);
+    printf("  version: 0x%08x '%s'\n", version, version_str);
   }
 };
 
-// Oat header for version 79.
+// Oat header for versions 079 and 088.
 struct PACKED OatHeader_079 {
   OatHeader_Common common;
 
@@ -124,7 +125,8 @@ struct PACKED OatHeader_079 {
     cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_079));
 
     CHECK(header.common.magic == kOatMagicNum);
-    CHECK(header.common.version == kOatVersion079);
+    CHECK(header.common.version == kOatVersion079 ||
+          header.common.version == kOatVersion088);
 
     return header;
   }
@@ -601,12 +603,34 @@ class OatClasses {
   std::vector<DexClasses> classes_;
 };
 
+// OatFile format for 079 and 088. (088 may have changes that don't
+// show up with verify-none. So far it appears to be identical.)
 class OatFile_079 : public OatFile {
  public:
   UNCOPYABLE(OatFile_079);
   MOVABLE(OatFile_079);
 
-  static std::unique_ptr<OatFile> parse(ConstBuffer buf);
+  static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
+    auto header = OatHeader_079::parse(buf);
+    auto key_value_store = KeyValueStore(
+        buf.slice(sizeof(header)).truncate(header.key_value_store_size));
+
+    auto rest = buf.slice(sizeof(header) + header.key_value_store_size);
+    DexFileListing dfl(header.dex_file_count, rest);
+
+    DexFiles dex_files(dfl, buf);
+
+    LookupTables lookup_tables(dfl, dex_files, buf);
+
+    OatClasses oat_classes(dfl, dex_files, buf);
+
+    return std::unique_ptr<OatFile>(new OatFile_079(header,
+                                                    key_value_store,
+                                                    std::move(dfl),
+                                                    std::move(dex_files),
+                                                    std::move(lookup_tables),
+                                                    std::move(oat_classes)));
+  }
 
   void print(bool dump_classes, bool dump_tables) override {
     printf("Header:\n");
@@ -651,29 +675,6 @@ class OatFile_079 : public OatFile {
   LookupTables lookup_tables_;
   OatClasses oat_classes_;
 };
-
-std::unique_ptr<OatFile> OatFile_079::parse(ConstBuffer buf) {
-
-  auto header = OatHeader_079::parse(buf);
-  auto key_value_store = KeyValueStore(
-      buf.slice(sizeof(header)).truncate(header.key_value_store_size));
-
-  auto rest = buf.slice(sizeof(header) + header.key_value_store_size);
-  DexFileListing dfl(header.dex_file_count, rest);
-
-  DexFiles dex_files(dfl, buf);
-
-  LookupTables lookup_tables(dfl, dex_files, buf);
-
-  OatClasses oat_classes(dfl, dex_files, buf);
-
-  return std::unique_ptr<OatFile>(new OatFile_079(header,
-                                                  key_value_store,
-                                                  std::move(dfl),
-                                                  std::move(dex_files),
-                                                  std::move(lookup_tables),
-                                                  std::move(oat_classes)));
-}
 
 class OatFile_Unknown : public OatFile {
 public:
@@ -733,6 +734,8 @@ std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
 
   switch (header.version) {
   case kOatVersion079:
+  case kOatVersion088:
+    // 079 and 088 are the same as far as I can tell.
     return OatFile_079::parse(buf);
   default:
     return OatFile_Unknown::parse(buf);
