@@ -51,7 +51,7 @@ for f in $files; do
   expected=$f.expected
   mkdir -p `dirname $actual`
   if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
-    $oatmeal_binary -m -t -d -o $f > $actual || \
+    $oatmeal_binary -c -m -t -d -o $f > $actual || \
       echo -e "==============\nExit status $?" >> $actual
     if ! diff $actual $f.expected > /dev/null; then
       echo "Output differed for expected for $f"
@@ -61,7 +61,7 @@ for f in $files; do
   else
     echo "Updating expected output for $f"
     new_output=`mktemp`
-    $oatmeal_binary -m -t -d -o $f > $new_output || \
+    $oatmeal_binary -c -m -t -d -o $f > $new_output || \
       echo -e "==============\nExit status $?" >> $new_output
     if [ -f $expected ] && ! diff $expected $new_output > /dev/null; then
       echo "\$ diff $expected $new_output"

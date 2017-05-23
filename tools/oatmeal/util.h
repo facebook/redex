@@ -12,8 +12,6 @@
 #include <cassert>
 #include <cstdio>
 
-#define PACKED __attribute__((packed))
-
 #define CHECK(cond, ...)                        \
   do {                                          \
     auto cond_eval = (cond);                    \

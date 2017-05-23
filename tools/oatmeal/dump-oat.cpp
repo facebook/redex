@@ -324,6 +324,26 @@ class OatClasses {
     }
   }
 
+  static const char* shortStatusStr(Status status) {
+    switch (status) {
+    case Status::kStatusRetired: return "O";
+    case Status::kStatusError: return "E";
+    case Status::kStatusNotReady: return "N";
+    case Status::kStatusIdx: return "I";
+    case Status::kStatusLoaded: return "L";
+    case Status::kStatusResolving: return "r";
+    case Status::kStatusResolved: return "R";
+    case Status::kStatusVerifying: return "v";
+    case Status::kStatusRetryVerificationAtRuntime: return "v";
+    case Status::kStatusVerifyingAtRuntime: return "v";
+    case Status::kStatusVerified: return "V";
+    case Status::kStatusInitializing: return "i";
+    case Status::kStatusInitialized: return "I";
+    case Status::kStatusMax: return "M";
+    default: return "?";
+    }
+  }
+
   static const char* typeStr(Type type) {
     switch (type) {
     case Type::kOatClassAllCompiled:
@@ -336,6 +356,21 @@ class OatClasses {
       return "kOatClassMax";
     default:
       return "<UKNOWN>";
+    }
+  }
+
+  static const char* shortTypeStr(Type type) {
+    switch (type) {
+    case Type::kOatClassAllCompiled:
+      return "C";
+    case Type::kOatClassSomeCompiled:
+      return "c";
+    case Type::kOatClassNoneCompiled:
+      return "n";
+    case Type::kOatClassMax:
+      return "M";
+    default:
+      return "?";
     }
   }
 
@@ -547,10 +582,19 @@ class DexFileListing_064 : public DexFileListing {
   void print_classes() {
     for (const auto& e : dex_files_) {
       printf("  { Classes for dex %s\n", e.location.c_str());
+      int count = 0;
       for (const auto& info : e.class_info) {
-        printf("    { status: %s type %s }\n",
-               OatClasses::statusStr(static_cast<OatClasses::Status>(info.status)),
-               OatClasses::typeStr(static_cast<OatClasses::Type>(info.type)));
+        if (count == 0) {
+          printf("    ");
+        }
+        printf("%s%s ",
+               OatClasses::shortStatusStr(static_cast<OatClasses::Status>(info.status)),
+               OatClasses::shortTypeStr(static_cast<OatClasses::Type>(info.type)));
+        count++;
+        if (count >= 32) {
+          printf("\n");
+          count = 0;
+        }
       }
       printf("  }\n");
     }
@@ -639,10 +683,20 @@ OatClasses_079::OatClasses_079(const DexFileListing_079& dex_file_listing,
 void OatClasses_079::print() {
   for (const auto& e : classes_) {
     printf("  { Classes for dex %s\n", e.dex_file.c_str());
+
+    int count = 0;
     for (const auto& info : e.class_info) {
-      printf("    { status: %s type %s }\n",
-             statusStr(static_cast<Status>(info.status)),
-             typeStr(static_cast<Type>(info.type)));
+        if (count == 0) {
+          printf("    ");
+        }
+        printf("%s%s ",
+               shortStatusStr(static_cast<Status>(info.status)),
+               shortTypeStr(static_cast<Type>(info.type)));
+        count++;
+        if (count >= 32) {
+          printf("\n");
+          count = 0;
+        }
     }
     printf("  }\n");
   }
