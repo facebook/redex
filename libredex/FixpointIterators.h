@@ -111,13 +111,20 @@ class MonotonicFixpointIterator {
 
   /*
    * The control-flow graph is specified by its root node together with the
-   * successors and predecessors functions.
+   * successors and predecessors functions. When the number of nodes in the CFG
+   * is known, it's better to provide it to the constructor, so as to prevent
+   * unnecessary resizing of the underlying hashtables during the iteration.
    */
   MonotonicFixpointIterator(
       NodeId root,
       std::function<std::vector<NodeId>(const NodeId&)> successors,
-      std::function<std::vector<NodeId>(const NodeId&)> predecessors)
-      : m_root(root), m_predecessors(predecessors), m_wto(root, successors) {}
+      std::function<std::vector<NodeId>(const NodeId&)> predecessors,
+      size_t cfg_size_hint = 4)
+      : m_root(root),
+        m_predecessors(predecessors),
+        m_wto(root, successors),
+        m_entry_states(cfg_size_hint),
+        m_exit_states(cfg_size_hint) {}
 
   /*
    * This method implements the semantic transformer for each node in the

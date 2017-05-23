@@ -49,7 +49,8 @@ class IRFixpointIterator final
   IRFixpointIterator(const ControlFlowGraph& cfg, NodeId exit_block)
       : MonotonicFixpointIterator(exit_block,
                                   std::bind(&Block::preds, _1),
-                                  std::bind(&Block::succs, _1)),
+                                  std::bind(&Block::succs, _1),
+                                  cfg.blocks().size()),
         m_cfg(cfg) {}
 
   void analyze_node(const NodeId& block,
