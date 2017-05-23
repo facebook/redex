@@ -42,7 +42,7 @@ fi
 
 test_output_dir=`mktemp -d`
 
-pushd $test_data_dir
+pushd $test_data_dir > /dev/null
 
 files=`find test-data -type f -name '*.oat.rodata'`
 
