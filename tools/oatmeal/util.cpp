@@ -34,8 +34,8 @@ bool FileHandle::ferror() {
   return ::ferror(fh_) != 0;
 }
 
-bool FileHandle::seek_begin() {
-  return ::fseek(fh_, 0, SEEK_SET) == 0;
+bool FileHandle::seek_set(long offset) {
+  return ::fseek(fh_, offset, SEEK_SET) == 0;
 }
 
 size_t ChecksummingFileHandle::fwrite(const void* p, size_t size, size_t count) {

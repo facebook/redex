@@ -273,6 +273,19 @@ class KeyValueStore {
   std::vector<KeyValue> kv_pairs_;
 };
 
+struct PACKED DexClassDef {
+  uint16_t class_idx;
+  uint16_t pad1;
+  uint32_t access_flags;
+  uint16_t superclass_idx;
+  uint16_t pad2;
+  uint32_t interfaces_off;
+  uint32_t source_file_idx;
+  uint32_t annotations_off;
+  uint32_t class_data_off;
+  uint32_t static_values_off;
+};
+
 // Header for dex files. Note that this currently consumes the entire
 // contents of the dex file (in addition to the header proper) for the
 // purposes of memory-accounting.
@@ -931,14 +944,168 @@ class LookupTables {
     for (const auto& dex_file : dex_files) {
       CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
       const auto num_classes = dex_file.num_classes;
-      auto lookup_table_size =
-        LookupTables::numEntries(num_classes) * sizeof(LookupTables::LookupTableEntry);
-      // TODO: for now we just fill it with junk.
-      write_padding(cksum_fh, 0xcd, lookup_table_size);
+
+      const auto lookup_table_size = numEntries(num_classes);
+      const auto lookup_table_byte_size = lookup_table_size * sizeof(LookupTableEntry);
+
+      auto lookup_table_buf = build_lookup_table(dex_file.location, lookup_table_size);
+      auto buf = ConstBuffer { reinterpret_cast<const char*>(lookup_table_buf.get()),
+                               lookup_table_byte_size };
+      write_buf(cksum_fh, buf);
     }
   }
 
  private:
+  static uint32_t hash_str(const std::string& str) {
+    uint32_t hash = 0;
+    const char* chars = str.c_str();
+    while (*chars != '\0') {
+      hash = hash * 31 + *chars;
+      chars++;
+    }
+    return hash;
+  }
+
+  static uint16_t make_lt_data(uint16_t class_def_idx, uint32_t hash, uint32_t mask) {
+    uint16_t hash_mask = static_cast<uint16_t>(~mask);
+    return (static_cast<uint16_t>(hash) & hash_mask) | class_def_idx;
+  }
+
+  static bool insert_no_probe(
+      LookupTableEntry* table,
+      const LookupTableEntry& entry,
+      uint32_t hash,
+      uint32_t mask) {
+    const uint32_t pos = hash & mask;
+    if (table[pos].str_offset != 0) {
+      return false;
+    }
+    table[pos] = entry;
+    table[pos].next_pos_delta = 0;
+    return true;
+  }
+
+  static void insert(
+      LookupTableEntry* table,
+      const LookupTableEntry& entry,
+      uint32_t hash,
+      uint32_t mask) {
+
+    // find the last entry in this chain.
+    uint32_t pos = hash & mask;
+    while (table[pos].next_pos_delta != 0) {
+      pos = (pos + table[pos].next_pos_delta) & mask;
+    }
+
+    // find the next empty entry
+    uint32_t delta = 1;
+    while (table[(pos + delta) & mask].str_offset != 0) {
+      delta++;
+    }
+    uint32_t next_pos = (pos + delta) & mask;
+    table[pos].next_pos_delta = delta;
+    table[next_pos] = entry;
+    table[next_pos].next_pos_delta = 0;
+  }
+
+  static std::unique_ptr<LookupTableEntry[]>
+  build_lookup_table(const std::string& filename, uint32_t lookup_table_size) {
+
+    std::unique_ptr<LookupTableEntry[]>
+      table_buf(new LookupTableEntry[lookup_table_size]);
+    memset(table_buf.get(), 0, lookup_table_size * sizeof(LookupTableEntry));
+
+    auto dex_fh = FileHandle(fopen(filename.c_str(), "r"));
+
+    DexFileHeader header = {};
+    CHECK(dex_fh.fread(&header, sizeof(DexFileHeader), 1) == 1);
+
+    const auto num_classes = header.class_defs_size;
+    const auto mask = lookup_table_size - 1;
+
+    // TODO: This is probably the most memory hungry part of the whole building
+    // process, but total usage should still be <1MB for all the class strings.
+    // if this proves to be a problem we can build the lookup table with redex
+    // and ship it to the phone.
+
+    // Read type ids array.
+    const auto num_type_ids = header.type_ids_size;
+    std::unique_ptr<uint32_t[]> typeid_buf(new uint32_t[num_type_ids]);
+    CHECK(dex_fh.seek_set(header.type_ids_off));
+    CHECK(dex_fh.fread(typeid_buf.get(), sizeof(uint32_t), num_type_ids)
+        == num_type_ids);
+
+    // Read the string ids array.
+    const auto num_string_ids = header.string_ids_size;
+    std::unique_ptr<uint32_t[]> stringid_buf(new uint32_t[num_string_ids]);
+    CHECK(dex_fh.seek_set(header.string_ids_off));
+    CHECK(dex_fh.fread(stringid_buf.get(), sizeof(uint32_t), num_string_ids)
+        == num_string_ids);
+
+    CHECK(dex_fh.seek_set(header.class_defs_off));
+
+    std::unique_ptr<DexClassDef[]> class_defs_buf(new DexClassDef[num_classes]);
+    CHECK(dex_fh.fread(class_defs_buf.get(), sizeof(DexClassDef), num_classes)
+        == num_classes);
+
+    constexpr int kClassNameBufSize = 256;
+
+    char class_name_buf[kClassNameBufSize] = {};
+
+    struct Retry {
+      uint32_t string_offset;
+      uint16_t data;
+      uint32_t hash;
+    };
+
+    std::vector<Retry> retry_indices;
+
+    for (unsigned int i = 0; i < num_classes; i++) {
+      const auto class_idx = class_defs_buf[i].class_idx;
+      CHECK(class_idx < num_type_ids);
+      const auto string_id = typeid_buf[class_idx];
+      CHECK(string_id < num_string_ids);
+      const auto string_offset = stringid_buf[string_id];
+
+      dex_fh.seek_set(string_offset);
+      auto read_size = dex_fh.fread(class_name_buf, sizeof(char), kClassNameBufSize);
+      CHECK(read_size > 0);
+
+      auto ptr = class_name_buf;
+      const auto str_size = read_uleb128(&ptr) + 1;
+      const auto str_start = ptr - class_name_buf;
+      const auto buf_remaining = kClassNameBufSize - str_start;
+
+      std::string class_name;
+
+      if (str_size > buf_remaining) {
+        std::unique_ptr<char[]> large_class_name_buf(new char[str_size]);
+        dex_fh.seek_set(string_offset + str_start);
+        CHECK(dex_fh.fread(large_class_name_buf.get(), sizeof(char), str_size)
+            == str_size);
+        class_name = std::string(large_class_name_buf.get(), str_size);
+      } else {
+        class_name = std::string(ptr, str_size);
+      }
+
+      const auto hash = hash_str(class_name);
+      const auto data = make_lt_data(i, hash, mask);
+
+      if (!insert_no_probe(table_buf.get(),
+            LookupTableEntry { string_offset, data, 0 }, hash, mask)) {
+        retry_indices.emplace_back(Retry { string_offset, data, hash });
+      }
+    }
+
+    for (const auto& retry : retry_indices) {
+      insert(table_buf.get(),
+             LookupTableEntry { retry.string_offset, retry.data, 0 },
+             retry.hash, mask);
+    }
+
+    return table_buf;
+  }
+
   static bool supportedSize(uint32_t num_class_defs) {
     return num_class_defs != 0u &&
            num_class_defs <= std::numeric_limits<uint16_t>::max();

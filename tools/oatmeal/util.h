@@ -111,7 +111,8 @@ public:
   bool feof();
   bool ferror();
 
-  bool seek_begin();
+  bool seek_set(long offset);
+  bool seek_begin() { return seek_set(0); }
 
 protected:
   size_t fwrite_impl(const void* p, size_t size, size_t count);
@@ -183,3 +184,27 @@ void write_str(FileHandle& fh, const std::string& str);
 void stream_file(FileHandle& in, FileHandle& out);
 
 size_t get_filesize(FileHandle& fh);
+
+inline uint32_t read_uleb128(char** _ptr) {
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(*_ptr);
+  uint32_t result = *(ptr++);
+
+  if (result > 0x7f) {
+    int cur = *(ptr++);
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur > 0x7f) {
+      cur = *(ptr++);
+      result |= (cur & 0x7f) << 14;
+      if (cur > 0x7f) {
+        cur = *(ptr++);
+        result |= (cur & 0x7f) << 21;
+        if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= cur << 28;
+        }
+      }
+    }
+  }
+  *_ptr = reinterpret_cast<char*>(ptr);
+  return result;
+}
