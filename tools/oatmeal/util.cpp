@@ -14,12 +14,13 @@
 
 size_t FileHandle::fwrite_impl(const void* p, size_t size, size_t count) {
   auto ret = ::fwrite(p, size, count, fh_);
-  bytes_written_ += ret * size;
   return ret;
 }
 
 size_t FileHandle::fwrite(const void* p, size_t size, size_t count) {
-  return fwrite_impl(p, size, count);
+  auto ret = fwrite_impl(p, size, count);
+  bytes_written_ += ret * size;
+  return ret;
 }
 
 size_t FileHandle::fread(void* p, size_t size, size_t count) {
@@ -35,11 +36,41 @@ bool FileHandle::ferror() {
 }
 
 bool FileHandle::seek_set(long offset) {
+  flush();
   return ::fseek(fh_, offset, SEEK_SET) == 0;
 }
 
 size_t ChecksummingFileHandle::fwrite(const void* p, size_t size, size_t count) {
-  cksum_.update(reinterpret_cast<const char*>(p), size * count);
+  const auto bytes = size * count;
+
+  if (buf_pos_ + bytes >= kBufSize) {
+    flush();
+  }
+
+  if (bytes >= kBufSize) {
+    // we've already flushed here.
+    auto ret = flush_write(reinterpret_cast<const char*>(p), size, count);
+    bytes_written_ += bytes;
+    return ret;
+  }
+
+  CHECK(buf_pos_ + bytes < kBufSize);
+  memcpy(&buffer_[buf_pos_], p, bytes);
+  buf_pos_ += bytes;
+  bytes_written_ += bytes;
+  return count;
+}
+
+void ChecksummingFileHandle::flush() {
+  if (buf_pos_ == 0) {
+    return;
+  }
+  CHECK(flush_write(buffer_.get(), 1, buf_pos_) == buf_pos_);
+  buf_pos_ = 0;
+}
+
+size_t ChecksummingFileHandle::flush_write(const char* p, size_t size, size_t count) {
+  cksum_.update(p, size * count);
   return fwrite_impl(p, size, count);
 }
 
@@ -74,14 +105,14 @@ size_t get_filesize(FileHandle& fh) {
 }
 
 void stream_file(FileHandle& in, FileHandle& out) {
-  constexpr int kBufSize = 0x1000;
-  char buf[kBufSize];
+  constexpr int kBufSize = 0x80000;
+  std::unique_ptr<char[]> buf(new char[kBufSize]);
 
   do {
-    auto num_read = in.fread(buf, 1, kBufSize);
+    auto num_read = in.fread(buf.get(), 1, kBufSize);
     CHECK(!in.ferror());
     if (num_read > 0) {
-      write_buf(out, ConstBuffer { buf, num_read });
+      write_buf(out, ConstBuffer { buf.get(), num_read });
     }
   } while (!in.feof());
 }

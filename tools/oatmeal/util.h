@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -91,12 +92,17 @@ struct ConstBuffer {
 
 class FileHandle {
 public:
-  explicit FileHandle(FILE* fh) : fh_(fh), bytes_written_(0) {}
+  explicit FileHandle(FILE* fh) : bytes_written_(0), fh_(fh) {}
   UNCOPYABLE(FileHandle);
 
   FILE* get() const { return fh_; }
 
-  virtual ~FileHandle() { if (fh_ != nullptr) { fclose(fh_); fh_ = nullptr; } }
+  virtual ~FileHandle() {
+    if (fh_ != nullptr) {
+      fclose(fh_);
+      fh_ = nullptr;
+    }
+  }
 
   FileHandle& operator=(FileHandle&& other) {
     bytes_written_ = other.bytes_written_;
@@ -124,10 +130,11 @@ public:
 
 protected:
   size_t fwrite_impl(const void* p, size_t size, size_t count);
+  virtual void flush() {}
+  size_t bytes_written_;
 
 private:
   FILE* fh_;
-  size_t bytes_written_;
 };
 
 class Adler32 {
@@ -163,18 +170,36 @@ private:
 
 class ChecksummingFileHandle : public FileHandle {
 public:
+  static constexpr size_t kBufSize = 50 * 1024;
+
   ChecksummingFileHandle(FILE* fh, Adler32 cksum)
-    : FileHandle(fh), cksum_(std::move(cksum)) {}
+    : FileHandle(fh), cksum_(std::move(cksum)),
+    buffer_(new char[kBufSize]), buf_pos_(0) {}
 
   ChecksummingFileHandle(FileHandle fh, Adler32 cksum)
-    : FileHandle(std::move(fh)), cksum_(std::move(cksum)) {}
+    : FileHandle(std::move(fh)), cksum_(std::move(cksum)),
+    buffer_(new char[kBufSize]), buf_pos_(0) {}
+
+  virtual ~ChecksummingFileHandle() {
+    if (buffer_.get() != nullptr) {
+      flush();
+    }
+  }
 
   size_t fwrite(const void* p, size_t size, size_t count) override;
 
-  const Adler32& cksum() const { return cksum_; }
+  const Adler32& cksum() {
+    flush();
+    return cksum_;
+  }
 
 private:
+  void flush() override;
+  size_t flush_write(const char* p, size_t size, size_t count);
+
   Adler32 cksum_;
+  std::unique_ptr<char[]> buffer_;
+  size_t buf_pos_;
 };
 
 void write_word(FileHandle& fh, uint32_t value);

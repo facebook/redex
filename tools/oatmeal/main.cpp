@@ -7,10 +7,6 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-
-
-
-
 #include "dump-oat.h"
 #include "memory-accounter.h"
 #include "util.h"

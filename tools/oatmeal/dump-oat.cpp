@@ -1069,11 +1069,10 @@ class LookupTables {
       auto ptr = class_name_buf;
       const auto str_size = read_uleb128(&ptr) + 1;
       const auto str_start = ptr - class_name_buf;
-      const auto buf_remaining = kClassNameBufSize - str_start;
 
       std::string class_name;
 
-      if (str_size > buf_remaining) {
+      if (str_start + str_size >= kClassNameBufSize) {
         std::unique_ptr<char[]> large_class_name_buf(new char[str_size]);
         dex_fh.seek_set(string_offset + str_start);
         CHECK(dex_fh.fread(large_class_name_buf.get(), sizeof(char), str_size)
