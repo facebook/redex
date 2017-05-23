@@ -43,6 +43,15 @@ public:
     for (const auto& type_s : black_list) {
       m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
     }
+
+    // use_liveness is unnecessary if we are going to run the register
+    // allocator afterward
+    if (m_inliner_config.no_exceed_16regs && m_inliner_config.use_liveness) {
+      fprintf(stderr,
+              "WARNING: SimpleInline: no_exceed_16regs = true implies "
+              "use_liveness = false\n");
+      m_inliner_config.use_liveness = false;
+    }
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

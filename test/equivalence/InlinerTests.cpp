@@ -63,17 +63,20 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    IRInstruction* mop = nullptr;
-    for (const auto& mie : InstructionIterable(m->get_code())) {
-      auto insn = mie.insn;
+    FatMethod::iterator invoke_it;
+    auto ii = InstructionIterable(m->get_code());
+    auto end = ii.end();
+    for (auto it = ii.begin(); it != end; ++it) {
+      auto insn = it->insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = insn;
-        assert(mop->get_method() == m_callee);
+        assert(insn->get_method() == m_callee);
+        invoke_it = it.unwrap();
         break;
       }
     }
     InlineContext context(m, true /* use_liveness */);
-    IRCode::inline_method(context, m_callee, mop, /* no_exceed_16regs */ true);
+    IRCode::inline_method(
+        context, m_callee, invoke_it, /* no_exceed_16regs */ true);
   }
 };
 
@@ -133,18 +136,20 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
   }
 
   virtual void transform_method(DexMethod* m) {
-    IRInstruction* mop = nullptr;
-    for (const auto& mie : InstructionIterable(m->get_code())) {
-      auto insn = mie.insn;
+    FatMethod::iterator invoke_it;
+    auto ii = InstructionIterable(m->get_code());
+    auto end = ii.end();
+    for (auto it = ii.begin(); it != end; ++it) {
+      auto insn = it->insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        mop = insn;
-        assert(mop->get_method() == m_callee);
+        assert(insn->get_method() == m_callee);
+        invoke_it = it.unwrap();
         break;
       }
     }
-    assert(mop != nullptr);
     InlineContext context(m, true /* use_liveness */);
-    IRCode::inline_method(context, m_callee, mop, /* no_exceed_16regs */ true);
+    IRCode::inline_method(
+        context, m_callee, invoke_it, /* no_exceed_16regs */ true);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }

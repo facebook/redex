@@ -1496,15 +1496,18 @@ void IRCode::inline_tail_call(DexMethod* caller,
   }
 }
 
-bool IRCode::inline_method(InlineContext& context,
-                           DexMethod* callee,
-                           IRInstruction* invoke,
-                           bool no_exceed_16regs) {
+/*
+ * This function maps the callee registers to the caller's register file. It
+ * assumes that there is no register allocation pass that will run afterward,
+ * so it does a bunch of clever stuff to maximize usage of registers.
+ */
+std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
+    InlineContext& context, DexMethod* callee, FatMethod::iterator invoke_it) {
   auto caller_code = context.caller_code;
-  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
+  auto invoke = invoke_it->insn;
   uint16_t newregs = caller_code->get_registers_size();
-  if (no_exceed_16regs && newregs > 16) {
-    return false;
+  if (newregs > 16) {
+    return nullptr;
   }
 
   auto callee_code = callee->get_code();
@@ -1528,15 +1531,12 @@ bool IRCode::inline_method(InlineContext& context,
   // if we map two callee registers v0 and v1 to the same caller register v2,
   // and v1 gets written to in the callee, we're gonna have a bad time
   if (def_ins.any() && has_aliased_arguments(invoke)) {
-    return false;
+    return nullptr;
   }
   remap_reg_set(def_ins, callee_param_reg_map, newregs);
   if (def_ins.intersects(invoke_live_out.bits())) {
-    return false;
+    return nullptr;
   }
-
-  auto fcaller = caller_code->m_fmethod;
-  auto fcallee = callee_code->m_fmethod;
 
   auto temps_needed = callee_code->get_registers_size() - callee_ins;
   auto invoke_live_in = invoke_live_out;
@@ -1544,8 +1544,8 @@ bool IRCode::inline_method(InlineContext& context,
   uint16_t temps_avail = newregs - invoke_live_in.bits().count();
   if (temps_avail < temps_needed) {
     newregs += temps_needed - temps_avail;
-    if (no_exceed_16regs && newregs > 16) {
-      return false;
+    if (newregs > 16) {
+      return nullptr;
     }
     enlarge_registers(caller_code, newregs);
     invoke_live_in.enlarge(caller_ins, newregs);
@@ -1556,11 +1556,88 @@ bool IRCode::inline_method(InlineContext& context,
   TRACE(INL, 5, "Callee reg map\n");
   TRACE(INL, 5, "%s", show_reg_map(callee_reg_map));
 
-  auto pos = std::find_if(
-    fcaller->begin(), fcaller->end(),
-    [invoke](const MethodItemEntry& mei) {
-      return mei.type == MFLOW_OPCODE && mei.insn == invoke;
-    });
+  // adjust method header
+  caller_code->set_registers_size(newregs);
+  return std::make_unique<RegMap>(callee_reg_map);
+}
+
+/*
+ * Expands the caller register file by the size of the callee register file,
+ * and allocates the high registers to the callee. E.g. if we have a caller
+ * with registers_size of M and a callee with registers_size N, this function
+ * will resize the caller's register file to M + N and map register k in the
+ * callee to M + k in the caller. It also inserts move instructions to map the
+ * callee arguments to the newly allocated registers.
+ */
+std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
+    InlineContext& context,
+    const DexMethod* callee,
+    FatMethod::iterator invoke_it) {
+  auto caller_code = context.caller_code;
+  const auto* callee_code = callee->get_code();
+  auto callee_reg_start = caller_code->get_registers_size();
+  auto insn = invoke_it->insn;
+  auto reg_map = std::make_unique<RegMap>();
+
+  // generate the callee register map
+  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
+    reg_map->emplace(i, callee_reg_start + i);
+  }
+
+  // generate and insert the move instructions
+  auto param_insns =
+      InstructionIterable(callee->get_code()->get_param_instructions());
+  auto param_it = param_insns.begin();
+  auto param_end = param_insns.end();
+  insn->range_to_srcs();
+  insn->normalize_registers();
+  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
+    always_assert(param_it != param_end);
+    auto param_op = param_it->insn->opcode();
+    DexOpcode op;
+    switch (param_op) {
+      case IOPCODE_LOAD_PARAM:
+        op = OPCODE_MOVE;
+        break;
+      case IOPCODE_LOAD_PARAM_OBJECT:
+        op = OPCODE_MOVE_OBJECT;
+        break;
+      case IOPCODE_LOAD_PARAM_WIDE:
+        op = OPCODE_MOVE_WIDE;
+        break;
+      default:
+        always_assert_log("Expected param op, got %s", SHOW(param_op));
+        not_reached();
+    }
+    auto mov =
+        (new IRInstruction(op))
+            ->set_src(0, insn->src(i))
+            ->set_dest(callee_reg_start + param_it->insn->dest());
+    caller_code->insert_before(invoke_it, mov);
+  }
+  caller_code->set_registers_size(callee_reg_start +
+                                  callee_code->get_registers_size());
+  return reg_map;
+}
+
+bool IRCode::inline_method(InlineContext& context,
+                           DexMethod* callee,
+                           FatMethod::iterator pos,
+                           bool no_exceed_16regs) {
+  TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller_code));
+  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
+  auto callee_reg_map =
+      no_exceed_16regs ? gen_callee_reg_map_no_alloc(context, callee, pos)
+                       : gen_callee_reg_map_with_alloc(context, callee, pos);
+  if (!callee_reg_map) {
+    return false;
+  }
+
+  auto caller_code = context.caller_code;
+  auto callee_code = callee->get_code();
+  auto fcaller = caller_code->m_fmethod;
+  auto fcallee = callee_code->m_fmethod;
+
   // find the move-result after the invoke, if any. Must be the first
   // instruction after the invoke
   auto move_res = pos;
@@ -1591,7 +1668,7 @@ bool IRCode::inline_method(InlineContext& context,
   // of the caller
   auto splice = MethodSplicer(&*caller_code,
                               &*callee_code,
-                              callee_reg_map,
+                              *callee_reg_map,
                               invoke_position.get(),
                               caller_catch);
   auto ret_it = std::find_if(
@@ -1611,7 +1688,7 @@ bool IRCode::inline_method(InlineContext& context,
 
   if (move_res != fcaller->end() && ret_it != fcallee->end()) {
     auto ret_insn = std::make_unique<IRInstruction>(*ret_it->insn);
-    remap_registers(ret_insn.get(), callee_reg_map);
+    remap_registers(ret_insn.get(), *callee_reg_map);
     IRInstruction* move = move_result(ret_insn.get(), move_res->insn);
     auto move_mei = new MethodItemEntry(move);
     fcaller->insert(pos, *move_mei);
@@ -1644,9 +1721,7 @@ bool IRCode::inline_method(InlineContext& context,
       fcaller->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }
   }
-
-  // adjust method header
-  caller_code->set_registers_size(newregs);
+  TRACE(INL, 5, "post-inline caller code:\n%s\n", SHOW(context.caller_code));
   return true;
 }
 

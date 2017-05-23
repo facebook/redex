@@ -13,6 +13,10 @@
 #include "DexUtil.h"
 #include "Transform.h"
 
+std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
+  return os << show(&to_show);
+}
+
 TEST(SimpleInlineTest, hasAliasedArgs) {
   g_redex = new RedexContext();
   using namespace dex_asm;
@@ -31,6 +35,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
 
   auto mtcaller = caller->get_code();
   mtcaller->push_back(invoke);
+  auto invoke_it = std::prev(mtcaller->end());
   mtcaller->push_back(dasm(OPCODE_RETURN_VOID));
 
   auto mtcallee = callee->get_code();
@@ -39,6 +44,60 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
 
   InlineContext inline_context(caller, /* use_liveness */ true);
   EXPECT_FALSE(IRCode::inline_method(
-      inline_context, callee, invoke, /* no_exceed_16regs */ true));
+      inline_context, callee, invoke_it, /* no_exceed_16regs */ true));
+  delete g_redex;
+}
+
+/*
+ * Test that we correctly insert move instructions that map caller args to
+ * callee params.
+ */
+TEST(SimpleInlineTest, insertMoves) {
+  g_redex = new RedexContext();
+  using namespace dex_asm;
+  auto callee = DexMethod::make_method(
+      "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"});
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  callee->set_code(std::make_unique<IRCode>(callee, 0));
+
+  auto caller = DexMethod::make_method("Lfoo;", "testCaller", "V", {});
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  caller->set_code(std::make_unique<IRCode>(caller, 0));
+
+  auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
+  invoke->set_arg_word_count(2);
+  invoke->set_src(0, 1);
+  invoke->set_src(1, 2);
+
+  auto caller_code = caller->get_code();
+  caller_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  caller_code->push_back(dasm(OPCODE_CONST_4, {2_v, 0_L})); // load null ref
+  caller_code->push_back(invoke);
+  auto invoke_it = std::prev(caller_code->end());
+  caller_code->push_back(dasm(OPCODE_RETURN_VOID));
+  caller_code->set_registers_size(3);
+
+  auto callee_code = callee->get_code();
+  callee_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  callee_code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  InlineContext inline_context(caller, /* use_liveness */ false);
+  EXPECT_TRUE(IRCode::inline_method(
+      inline_context, callee, invoke_it, /* no_exceed_16regs */ false));
+
+  auto it = InstructionIterable(caller_code).begin();
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {2_v, 0_L}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE, {3_v, 1_v}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE_OBJECT, {4_v, 2_v}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {4_v, 1_L}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_RETURN_VOID));
+
+  EXPECT_EQ(caller_code->get_registers_size(), 5);
   delete g_redex;
 }

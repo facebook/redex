@@ -175,6 +175,7 @@ void MultiMethodInliner::inline_methods() {
   // hit a leaf and we start inlining from there
   for (auto it : caller_callee) {
     auto caller = it.first;
+    TraceContext context(caller->get_deobfuscated_name());
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
@@ -219,9 +220,11 @@ void MultiMethodInliner::inline_callees(
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
-  std::vector<std::pair<DexMethod*, IRInstruction*>> inlinables;
-  for (auto& mie : InstructionIterable(caller->get_code())) {
-    auto insn = mie.insn;
+  std::vector<std::pair<DexMethod*, FatMethod::iterator>> inlinables;
+  InstructionIterable ii(caller->get_code());
+  auto end = ii.end();
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto insn = it->insn;
     if (!is_invoke(insn->opcode())) continue;
     auto callee = resolver(insn->get_method(), opcode_to_search(insn));
     if (callee == nullptr) continue;
@@ -230,7 +233,7 @@ void MultiMethodInliner::inline_callees(
     }
     always_assert(callee->is_concrete());
     found++;
-    inlinables.push_back(std::make_pair(callee, insn));
+    inlinables.push_back(std::make_pair(callee, it.unwrap()));
     if (found == callees.size()) break;
   }
   if (found != callees.size()) {
