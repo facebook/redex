@@ -442,7 +442,7 @@ class XZSDexMode(BaseDexMode):
                 for x in abs_glob(dex_dir, self._store_name + '-*.dex.jar'))
 
         # XZ-compress the result
-        subprocess.check_call(['xz', '-z6', '--check=crc32', '--threads=6',
+        subprocess.check_call(['xz', '-z9', '--check=crc32', '--threads=6',
                 concat_jar_path])
 
         # Copy all the archive and metadata back to the apk directory
