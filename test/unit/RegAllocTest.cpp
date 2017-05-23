@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <gtest/gtest.h>
+
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -17,8 +19,9 @@
 #include "Show.h"
 #include "Transform.h"
 #include "Util.h"
+#include "VirtualRegistersFile.h"
 
-#include <gtest/gtest.h>
+using namespace regalloc;
 
 using namespace regalloc;
 
@@ -323,4 +326,58 @@ TEST_F(RegAllocTest, LiveRange) {
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
   EXPECT_EQ(code->get_registers_size(), 6);
+}
+
+TEST_F(RegAllocTest, VirtualRegistersFile) {
+  VirtualRegistersFile vreg_file;
+  auto to_string = [](const VirtualRegistersFile& vreg_file) {
+    std::ostringstream ss;
+    ss << vreg_file;
+    return ss.str();
+  };
+
+  // check edge case where the register file is empty
+  EXPECT_EQ(to_string(vreg_file), "");
+  EXPECT_TRUE(vreg_file.is_free(0, 2));
+  EXPECT_TRUE(vreg_file.is_free(1, 2));
+
+  EXPECT_EQ(vreg_file.alloc(1), 0);
+  EXPECT_EQ(vreg_file.alloc(2), 1);
+  EXPECT_EQ(vreg_file.alloc(1), 3);
+  // Current state (`!` means allocated):
+  EXPECT_EQ(to_string(vreg_file), "!0 !1 !2 !3");
+
+  // check that we take advantage of "holes" in the register file
+  vreg_file.free(1, 2);
+  EXPECT_EQ(to_string(vreg_file), "!0  1  2 !3");
+  EXPECT_TRUE(vreg_file.is_free(1, 1));
+
+  EXPECT_EQ(vreg_file.alloc(1), 1);
+  EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3");
+  EXPECT_FALSE(vreg_file.is_free(1, 2));
+
+  // check that we correctly skip over the free register "hole" because it is
+  // not large enough for the requested allocation size.
+  EXPECT_EQ(vreg_file.alloc(2), 4);
+  EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4 !5");
+  EXPECT_EQ(vreg_file.size(), 6);
+
+  // check that we handle edge case correctly -- when some free space is at the
+  // end of the file, but insufficient for the full width requested
+  vreg_file.free(5, 1);
+  EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4  5");
+  // half of the register pair is past the end of the frame, but it should not
+  // matter
+  EXPECT_TRUE(vreg_file.is_free(5, 2));
+  EXPECT_EQ(vreg_file.alloc(2), 5);
+  EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4 !5 !6");
+  EXPECT_EQ(vreg_file.size(), 7);
+
+  // check the case where there is no free space at all at the end of the file
+
+  // 7 is beyond the end of the current frame, but it should not matter
+  EXPECT_TRUE(vreg_file.is_free(7, 2));
+  vreg_file.alloc_at(7, 2);
+  EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4 !5 !6 !7 !8");
+  EXPECT_EQ(vreg_file.size(), 9);
 }
