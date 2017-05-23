@@ -44,16 +44,16 @@ test_output_dir=`mktemp -d`
 
 pushd $test_data_dir > /dev/null
 
-files=`find test-data -type f -name '*.oat.rodata'`
+oat_files=`find test-data -type f -name '*.oat.rodata'`
 
-for f in $files; do
+for f in $oat_files; do
   actual=$test_output_dir/$f.actual
   expected=$f.expected
   mkdir -p `dirname $actual`
   if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
     $oatmeal_binary -c -m -t -d -o $f > $actual || \
       echo -e "==============\nExit status $?" >> $actual
-    if ! diff $actual $f.expected > /dev/null; then
+    if ! diff $actual $expected > /dev/null; then
       echo "Output differed for expected for $f"
       echo "Delta:"
       diff $actual $expected
@@ -77,6 +77,56 @@ for f in $files; do
       mv $new_output $expected
     fi
   fi
+done
+
+dex_dirs=`find test-data -type d -name '*.dexdir'`
+
+for d in $dex_dirs; do
+  dex_files=`find $d -type f -name '*.dex'`
+  dex_files_arg=`echo $dex_files | xargs -n1 | sed 's/^/-x /' | xargs`
+
+  for version in 064 079 088; do
+
+    actual=$test_output_dir/$d.$version.actual.oat.rodata.out
+    expected=$d.$version.expected.oat.rodata.out
+    mkdir -p `dirname $actual`
+
+    if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
+      tmp_oat=`mktemp`
+      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
+        echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
+      xxd $tmp_oat > $actual
+      cat $tmp_oat.output >> $actual
+      if ! diff $actual $expected > /dev/null; then
+        echo "Output differed for expected for $f"
+        echo "Delta:"
+        diff $actual $expected
+      fi
+    else
+      echo "Updating expected output for $f"
+
+      new_output=`mktemp`
+      tmp_oat=`mktemp`
+      $oatmeal_binary -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
+        echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
+      xxd $tmp_oat > $new_output
+      cat $tmp_oat.output >> $new_output
+
+      if [ -f $expected ] && ! diff $expected $new_output > /dev/null; then
+        echo "\$ diff $expected $new_output"
+        diff $expected $new_output | head -50
+        echo "Accept these changes?"
+        select yn in "Yes" "No"; do
+            case $yn in
+                Yes ) mv $new_output $expected; break;;
+                No ) break;;
+            esac
+        done
+      else
+        mv $new_output $expected
+      fi
+    fi
+  done
 done
 
 if [ -n "$UPDATE_OATMEAL_TESTDATA" ]; then

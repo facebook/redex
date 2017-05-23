@@ -34,6 +34,8 @@ struct Arguments {
   std::string oat_file;
   std::vector<std::string> dex_files;
 
+  std::string oat_version;
+
   bool dump_classes = false;
   bool dump_tables = false;
   bool dump_memory_usage = false;
@@ -57,6 +59,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"build", no_argument, nullptr, 'b'},
                              {"dex", required_argument, nullptr, 'x'},
                              {"oat", required_argument, nullptr, 'o'},
+                             {"oat-version", required_argument, nullptr, 'v'},
                              {"dump-classes", no_argument, nullptr, 'c'},
                              {"dump-tables", no_argument, nullptr, 't'},
                              {"dump-memory-usage", no_argument, nullptr, 'm'},
@@ -106,6 +109,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 'm':
       ret.dump_memory_usage = true;
+      break;
+
+    case 'v':
+      ret.oat_version = optarg;
       break;
 
     case ':':
