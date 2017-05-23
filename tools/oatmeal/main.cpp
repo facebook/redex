@@ -7,8 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+
+
+
+
 #include "dump-oat.h"
 #include "memory-accounter.h"
+#include "util.h"
 
 #include <getopt.h>
 #include <wordexp.h>
@@ -39,6 +44,8 @@ struct Arguments {
   bool dump_classes = false;
   bool dump_tables = false;
   bool dump_memory_usage = false;
+
+  std::string arch;
 };
 
 std::string expand(const std::string& path) {
@@ -63,12 +70,13 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"dump-classes", no_argument, nullptr, 'c'},
                              {"dump-tables", no_argument, nullptr, 't'},
                              {"dump-memory-usage", no_argument, nullptr, 'm'},
+                             {"arch", required_argument, nullptr, 'a'},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
 
   char c;
-  while ((c = getopt_long(argc, argv, "ctmdbx:o:", &options[0], nullptr)) !=
+  while ((c = getopt_long(argc, argv, "ctmdbx:o:v:", &options[0], nullptr)) !=
          -1) {
     switch (c) {
     case 'd':
@@ -85,6 +93,10 @@ Arguments parse_args(int argc, char* argv[]) {
         exit(1);
       }
       ret.action = Action::BUILD;
+      break;
+
+    case 'a':
+      ret.arch = optarg;
       break;
 
     case 'o':
@@ -130,9 +142,13 @@ Arguments parse_args(int argc, char* argv[]) {
 }
 
 int dump(const Arguments& args) {
+  if (args.oat_file.empty()) {
+    fprintf(stderr, "-o/--oat required\n");
+    return 1;
+  }
 
-  auto file = fopen(args.oat_file.c_str(), "r");
-  if (file == nullptr) {
+  auto file = FileHandle(fopen(args.oat_file.c_str(), "r"));
+  if (file.get() == nullptr) {
     fprintf(stderr,
             "failed to open file %s %s\n",
             args.oat_file.c_str(),
@@ -140,15 +156,13 @@ int dump(const Arguments& args) {
     return 1;
   }
 
-  fseek(file, 0, SEEK_END);
-  size_t file_size = ftell(file);
-  fseek(file, 0, SEEK_SET);
+  auto file_size = get_filesize(file);
 
   // We don't run dumping during install on device, so it is allowed to consume
   // lots
   // of memory.
   std::unique_ptr<char[]> file_contents(new char[file_size]);
-  auto bytesRead = fread(file_contents.get(), 1, file_size, file);
+  auto bytesRead = fread(file_contents.get(), 1, file_size, file.get());
   if (bytesRead != file_size) {
     fprintf(stderr,
             "Failed to read file %s (%lu)\n",
@@ -169,6 +183,31 @@ int dump(const Arguments& args) {
 
   return oatfile->status() == OatFile::Status::PARSE_SUCCESS ? 0 : 1;
 }
+
+int build(const Arguments& args) {
+  if (args.oat_file.empty()) {
+    fprintf(stderr, "-o/--oat required\n");
+    return 1;
+  }
+
+  if (args.dex_files.empty()) {
+    fprintf(stderr, "one or more `-x dexfile` args required.\n");
+    return 1;
+  }
+
+  if (args.oat_version.empty()) {
+    fprintf(stderr, "-v is required. valid versions: 079\n");
+    return 1;
+  }
+
+  OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch);
+
+  for (const auto& f : args.dex_files) {
+    printf(" got dex %s\n", f.c_str());
+  }
+  return 0;
+}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -177,14 +216,8 @@ int main(int argc, char* argv[]) {
 
   switch (args.action) {
   case Action::BUILD:
-    fprintf(stderr, "BUILD still TODO\n");
-    return 1;
-    break;
+    return build(args);
   case Action::DUMP:
-    if (args.oat_file.empty()) {
-      fprintf(stderr, "-o/--oat required\n");
-      return 1;
-    }
     return dump(args);
   case Action::NONE:
     fprintf(stderr, "Please specify --dump or --build\n");

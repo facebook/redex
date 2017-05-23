@@ -79,7 +79,7 @@ for f in $oat_files; do
   fi
 done
 
-dex_dirs=`find test-data -type d -name '*.dexdir'`
+dex_dirs=`find $test_data_dir/test-data -type d -name '*.dexdir'`
 
 for d in $dex_dirs; do
   dex_files=`find $d -type f -name '*.dex'`
@@ -107,7 +107,7 @@ for d in $dex_dirs; do
 
       new_output=`mktemp`
       tmp_oat=`mktemp`
-      $oatmeal_binary -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat > $new_output
       cat $tmp_oat.output >> $new_output

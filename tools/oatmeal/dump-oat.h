@@ -12,6 +12,8 @@
 #include "util.h"
 
 #include <memory>
+#include <vector>
+#include <string>
 
 class OatFile {
  public:
@@ -19,7 +21,11 @@ class OatFile {
     PARSE_SUCCESS,
     PARSE_UNKNOWN_VERSION,
     PARSE_BAD_MAGIC_NUMBER,
-    PARSE_FAILURE
+    PARSE_FAILURE,
+
+    BUILD_SUCCESS,
+    BUILD_UNSUPPORTED_VERSION,
+    BUILD_IO_ERROR,
   };
 
   OatFile() = default;
@@ -33,4 +39,9 @@ class OatFile {
   virtual void print(bool dump_classes, bool dump_tables) = 0;
 
   virtual Status status() = 0;
+
+  static Status build(const std::string& oat_file,
+                      const std::vector<std::string>& dex_files,
+                      const std::string& oat_version,
+                      const std::string& arch);
 };
