@@ -37,7 +37,7 @@ enum class Action {
 struct Arguments {
   Action action = Action::NONE;
   std::string oat_file;
-  std::vector<std::string> dex_files;
+  std::vector<DexInput> dex_files;
 
   std::string oat_version;
 
@@ -65,6 +65,7 @@ Arguments parse_args(int argc, char* argv[]) {
   struct option options[] = {{"dump", no_argument, nullptr, 'd'},
                              {"build", no_argument, nullptr, 'b'},
                              {"dex", required_argument, nullptr, 'x'},
+                             {"dex-location", required_argument, nullptr, 'l'},
                              {"oat", required_argument, nullptr, 'o'},
                              {"oat-version", required_argument, nullptr, 'v'},
                              {"dump-classes", no_argument, nullptr, 'c'},
@@ -74,9 +75,11 @@ Arguments parse_args(int argc, char* argv[]) {
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
+  std::vector<std::string> dex_files;
+  std::vector<std::string> dex_locations;
 
   char c;
-  while ((c = getopt_long(argc, argv, "ctmdbx:o:v:", &options[0], nullptr)) !=
+  while ((c = getopt_long(argc, argv, "ctmdbx:l:o:v:", &options[0], nullptr)) !=
          -1) {
     switch (c) {
     case 'd':
@@ -108,7 +111,11 @@ Arguments parse_args(int argc, char* argv[]) {
       break;
 
     case 'x':
-      ret.dex_files.push_back(expand(optarg));
+      dex_files.push_back(expand(optarg));
+      break;
+
+    case 'l':
+      dex_locations.push_back(optarg);
       break;
 
     case 'c':
@@ -138,6 +145,25 @@ Arguments parse_args(int argc, char* argv[]) {
       break;
     }
   }
+
+  if (dex_locations.size() > 0) {
+    if (dex_locations.size() != dex_files.size()) {
+      fprintf(stderr,
+          "ERROR: number of -l arguments must match number of -x arguments.\n");
+      exit(1);
+    }
+
+    foreach_pair(dex_files, dex_locations,
+      [&](const std::string& file, const std::string& loc) {
+        ret.dex_files.push_back(DexInput{file, loc});
+      }
+    );
+  } else {
+    for (const auto& f : dex_files) {
+      ret.dex_files.push_back(DexInput{f, f});
+    }
+  }
+
   return ret;
 }
 
@@ -202,9 +228,6 @@ int build(const Arguments& args) {
 
   OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch);
 
-  for (const auto& f : args.dex_files) {
-    printf(" got dex %s\n", f.c_str());
-  }
   return 0;
 }
 

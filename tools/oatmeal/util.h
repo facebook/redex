@@ -38,6 +38,14 @@
   klass(klass&&) = default; \
   klass& operator=(klass&&) = default;
 
+template <typename T1, typename T2, typename L>
+static void foreach_pair(const T1& t1, const T2& t2, const L& fn) {
+  CHECK(t1.size() == t2.size());
+  for (typename T1::size_type i = 0; i < t1.size(); i++) {
+    fn(t1[i], t2[i]);
+  }
+}
+
 template <uint32_t Width>
 uint32_t align(uint32_t in) {
   return (in + (Width - 1)) & -Width;

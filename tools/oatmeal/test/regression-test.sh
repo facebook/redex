@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 # Regression test for oatmeal.
 #
@@ -56,7 +56,7 @@ for f in $oat_files; do
     if ! diff $actual $expected > /dev/null; then
       echo "Output differed for expected for $f"
       echo "Delta:"
-      diff $actual $expected
+      diff $actual $expected | head -50
     fi
   else
     echo "Updating expected output for $f"
@@ -82,8 +82,9 @@ done
 dex_dirs=`find $test_data_dir/test-data -type d -name '*.dexdir'`
 
 for d in $dex_dirs; do
-  dex_files=`find $d -type f -name '*.dex'`
+  dex_files=`find $d -type f -name '*.dex' | sort`
   dex_files_arg=`echo $dex_files | xargs -n1 | sed 's/^/-x /' | xargs`
+  dex_locations_args=`echo $dex_files | xargs -n1 | sed 's/^.*\//-l /' | xargs`
 
   for version in 064 079 088; do
 
@@ -93,21 +94,21 @@ for d in $dex_dirs; do
 
     if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat > $actual
       cat $tmp_oat.output >> $actual
       if ! diff $actual $expected > /dev/null; then
         echo "Output differed for expected for $f"
         echo "Delta:"
-        diff $actual $expected
+        diff $actual $expected | head -50
       fi
     else
       echo "Updating expected output for $f"
 
       new_output=`mktemp`
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat > $new_output
       cat $tmp_oat.output >> $new_output

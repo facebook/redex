@@ -15,6 +15,11 @@
 #include <vector>
 #include <string>
 
+struct DexInput {
+  std::string filename; // the location on disk.
+  std::string location; // the name to store in the OAT file.
+};
+
 class OatFile {
  public:
   enum class Status {
@@ -41,7 +46,7 @@ class OatFile {
   virtual Status status() = 0;
 
   static Status build(const std::string& oat_file,
-                      const std::vector<std::string>& dex_files,
+                      const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,
                       const std::string& arch);
 };

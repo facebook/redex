@@ -327,14 +327,6 @@ struct PACKED DexFileHeader {
   }
 };
 
-template <typename T1, typename T2, typename L>
-static void foreachPair(const T1& t1, const T2& t2, const L& fn) {
-  CHECK(t1.size() == t2.size());
-  for (typename T1::size_type i = 0; i < t1.size(); i++) {
-    fn(t1[i], t2[i]);
-  }
-}
-
 // Class meta data for all the classes that appear in the dex files.
 // - DexFileListing specifies the beginning of the class listing for
 //   each dex file.
@@ -570,13 +562,13 @@ class DexFileListing_079 : public DexFileListing {
     return ret;
   }
 
-  static uint32_t compute_size(const std::vector<std::string>& filenames) {
+  static uint32_t compute_size(const std::vector<DexInput>& dex_input) {
 
     // Locations are *not* null terminated.
-    const auto num_files = filenames.size();
+    const auto num_files = dex_input.size();
     uint32_t total_file_location_size = 0;
-    for (const auto& e : filenames) {
-      total_file_location_size += e.size();
+    for (const auto& e : dex_input) {
+      total_file_location_size += e.location.size();
     }
     return total_file_location_size
          + num_files * sizeof(uint32_t)  // location len
@@ -587,7 +579,7 @@ class DexFileListing_079 : public DexFileListing {
   }
 
   static std::vector<DexFile_079> build(
-      const std::vector<std::string>& dex_filenames, uint32_t& next_offset);
+      const std::vector<DexInput>& dexes, uint32_t& next_offset);
 
   static void write(FileHandle& fh,
                     const std::vector<DexFileListing_079::DexFile_079>& dex_files) {
@@ -774,7 +766,7 @@ private:
 OatClasses_079::OatClasses_079(const DexFileListing_079& dex_file_listing,
            const DexFiles& dex_files,
            ConstBuffer oat_buf) {
-  foreachPair(
+  foreach_pair(
       dex_file_listing.dex_files(),
       dex_files.headers(),
       [&](const DexFileListing_079::DexFile_079& listing,
@@ -939,20 +931,23 @@ class LookupTables {
     return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
   }
 
-  static void write(const std::vector<DexFileListing_079::DexFile_079>& dex_files,
+  static void write(const std::vector<DexInput>& dex_input,
+                    const std::vector<DexFileListing_079::DexFile_079>& dex_files,
                     ChecksummingFileHandle& cksum_fh) {
-    for (const auto& dex_file : dex_files) {
-      CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
-      const auto num_classes = dex_file.num_classes;
+    foreach_pair(dex_input, dex_files,
+      [&](const DexInput& dex_input, const DexFileListing_079::DexFile_079& dex_file) {
+        CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
+        const auto num_classes = dex_file.num_classes;
 
-      const auto lookup_table_size = numEntries(num_classes);
-      const auto lookup_table_byte_size = lookup_table_size * sizeof(LookupTableEntry);
+        const auto lookup_table_size = numEntries(num_classes);
+        const auto lookup_table_byte_size = lookup_table_size * sizeof(LookupTableEntry);
 
-      auto lookup_table_buf = build_lookup_table(dex_file.location, lookup_table_size);
-      auto buf = ConstBuffer { reinterpret_cast<const char*>(lookup_table_buf.get()),
-                               lookup_table_byte_size };
-      write_buf(cksum_fh, buf);
-    }
+        auto lookup_table_buf = build_lookup_table(dex_input.filename, lookup_table_size);
+        auto buf = ConstBuffer { reinterpret_cast<const char*>(lookup_table_buf.get()),
+                                 lookup_table_byte_size };
+        write_buf(cksum_fh, buf);
+      }
+    );
   }
 
  private:
@@ -1222,7 +1217,7 @@ class OatFile_079 : public OatFile {
   Status status() override { return Status::PARSE_SUCCESS; }
 
   static Status build(const std::string& oat_file_name,
-                      const std::vector<std::string>& dex_filenames,
+                      const std::vector<DexInput>& dex_input,
                       const uint32_t oat_version,
                       InstructionSet isa);
 
@@ -1318,7 +1313,7 @@ std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
 
 ////////// building
 
-OatHeader_064 build_header(const std::vector<std::string>& dex_filenames,
+OatHeader_064 build_header(const std::vector<DexInput>& dex_input,
                            InstructionSet isa,
                            uint32_t keyvalue_size,
                            uint32_t oat_size) {
@@ -1338,7 +1333,7 @@ OatHeader_064 build_header(const std::vector<std::string>& dex_filenames,
   // ever a case where we need to parameterize this.
   header.instruction_set_features_bitmap = 1;
 
-  header.dex_file_count = dex_filenames.size();
+  header.dex_file_count = dex_input.size();
 
   header.executable_offset = oat_size;
 
@@ -1349,17 +1344,18 @@ OatHeader_064 build_header(const std::vector<std::string>& dex_filenames,
 }
 
 std::vector<DexFileListing_079::DexFile_079>
-DexFileListing_079::build(const std::vector<std::string>& dex_filenames,
+DexFileListing_079::build(const std::vector<DexInput>& dex_input,
                           uint32_t& next_offset) {
   uint32_t total_dex_size = 0;
 
   std::vector<DexFileListing_079::DexFile_079> dex_files;
-  dex_files.reserve(dex_filenames.size());
+  dex_files.reserve(dex_input.size());
 
-  for (const auto file : dex_filenames) {
+  for (const auto dex : dex_input) {
     auto dex_offset = next_offset + total_dex_size;
 
-    auto dex_fh = FileHandle(fopen(file.c_str(), "r"));
+    auto dex_fh = FileHandle(fopen(dex.filename.c_str(), "r"));
+    CHECK(dex_fh.get() != nullptr);
 
     auto file_size = get_filesize(dex_fh);
 
@@ -1382,7 +1378,7 @@ DexFileListing_079::build(const std::vector<std::string>& dex_filenames,
       LookupTables::numEntries(num_classes) * sizeof(LookupTables::LookupTableEntry);
 
     dex_files.push_back(DexFileListing_079::DexFile_079(
-      file,
+      dex.location,
       header.checksum,
       dex_offset,
       // temporarily store sizes instead of offsets here.
@@ -1412,17 +1408,20 @@ DexFileListing_079::build(const std::vector<std::string>& dex_filenames,
   return dex_files;
 }
 
-void write_dex_files(const std::vector<DexFileListing_079::DexFile_079>& dex_files,
+void write_dex_files(const std::vector<DexInput>& dex_input,
+                     const std::vector<DexFileListing_079::DexFile_079>& dex_files,
                      ChecksummingFileHandle& cksum_fh) {
-  for (const auto& dex_file : dex_files) {
-    CHECK(dex_file.file_offset == cksum_fh.bytes_written());
-    auto dex_fh = FileHandle(fopen(dex_file.location.c_str(), "r"));
-    stream_file(dex_fh, cksum_fh);
-  }
+  foreach_pair(dex_input, dex_files,
+    [&](const DexInput& input, const DexFileListing_079::DexFile_079& dex_file) {
+      CHECK(dex_file.file_offset == cksum_fh.bytes_written());
+      auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
+      stream_file(dex_fh, cksum_fh);
+    }
+  );
 }
 
 OatFile::Status OatFile_079::build(const std::string& oat_file_name,
-                                   const std::vector<std::string>& dex_filenames,
+                                   const std::vector<DexInput>& dex_input,
                                    const uint32_t oat_version,
                                    InstructionSet isa) {
 
@@ -1441,18 +1440,18 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
   ////////// Compute sizes and offsets.
 
   const auto keyvalue_size = KeyValueStore::compute_size(key_value);
-  const auto dex_file_listing_size = DexFileListing_079::compute_size(dex_filenames);
+  const auto dex_file_listing_size = DexFileListing_079::compute_size(dex_input);
 
   // Neither the keyvalue store or the DexFileListing require alignment.
   uint32_t next_offset = align<4>(sizeof(OatHeader_064)
                                  + keyvalue_size
                                  + dex_file_listing_size);
 
-  auto dex_files = DexFileListing_079::build(dex_filenames, next_offset);
+  auto dex_files = DexFileListing_079::build(dex_input, next_offset);
   auto oat_size = align<0x1000>(next_offset);
 
   Adler32 cksum;
-  auto header = build_header(dex_filenames, isa, keyvalue_size, oat_size);
+  auto header = build_header(dex_input, isa, keyvalue_size, oat_size);
   header.update_checksum(cksum);
 
   ////////// Write the file.
@@ -1480,9 +1479,9 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
   char buf[4] = {};
   write_buf(cksum_fh, ConstBuffer { buf, padding });
 
-  write_dex_files(dex_files, cksum_fh);
+  write_dex_files(dex_input, dex_files, cksum_fh);
   OatClasses_079::write(dex_files, cksum_fh);
-  LookupTables::write(dex_files, cksum_fh);
+  LookupTables::write(dex_input, dex_files, cksum_fh);
 
   // Pad with 0s up to oat_size
   // TODO: is the padding part of the checksum?
@@ -1510,7 +1509,7 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
 }
 
 OatFile::Status OatFile::build(const std::string& oat_file_name,
-                               const std::vector<std::string>& dex_files,
+                               const std::vector<DexInput>& dex_files,
                                const std::string& oat_version,
                                const std::string& arch) {
   auto version = versionInt(oat_version);
