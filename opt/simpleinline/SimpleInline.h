@@ -33,7 +33,6 @@ public:
     pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
     pc.get("throws", false, m_inliner_config.throws_inline);
     pc.get("use_liveness", false, m_inliner_config.use_liveness);
-    pc.get("no_exceed_16regs", true, m_inliner_config.no_exceed_16regs);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
     pc.get("force_inline_annos", {}, m_force_inline_annos);
     pc.get("multiple_callers", false, m_multiple_callers);
@@ -46,10 +45,9 @@ public:
 
     // use_liveness is unnecessary if we are going to run the register
     // allocator afterward
-    if (m_inliner_config.no_exceed_16regs && m_inliner_config.use_liveness) {
+    if (RedexContext::assume_regalloc() && m_inliner_config.use_liveness) {
       fprintf(stderr,
-              "WARNING: SimpleInline: no_exceed_16regs = true implies "
-              "use_liveness = false\n");
+              "WARNING: assume_regalloc = true implies use_liveness = false\n");
       m_inliner_config.use_liveness = false;
     }
   }

@@ -1622,13 +1622,13 @@ std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
 
 bool IRCode::inline_method(InlineContext& context,
                            DexMethod* callee,
-                           FatMethod::iterator pos,
-                           bool no_exceed_16regs) {
+                           FatMethod::iterator pos) {
   TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller_code));
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
   auto callee_reg_map =
-      no_exceed_16regs ? gen_callee_reg_map_no_alloc(context, callee, pos)
-                       : gen_callee_reg_map_with_alloc(context, callee, pos);
+      RedexContext::assume_regalloc()
+          ? gen_callee_reg_map_with_alloc(context, callee, pos)
+          : gen_callee_reg_map_no_alloc(context, callee, pos);
   if (!callee_reg_map) {
     return false;
   }

@@ -71,6 +71,12 @@ class HighRegMoveInserter {
 class RegAllocPass : public Pass {
 public:
   RegAllocPass() : Pass("RegAllocPass") {}
-  virtual void configure_pass(const PassConfig&) override {}
+  virtual void configure_pass(const PassConfig&) override {
+    if (!RedexContext::assume_regalloc()) {
+      fprintf(stderr,
+              "WARNING: you probably want to set `\"assume_regalloc\" : true` "
+              "in the redex config\n");
+    }
+  }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

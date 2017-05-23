@@ -337,7 +337,9 @@ struct Matcher {
       }
 
       // Refuse to match if the register exceeds the instruction's width limit
-      if (!pattern.register_can_match_vreg_value(pattern_reg, insn_reg)) {
+      // Only necessary if regalloc is not turned on
+      if (!RedexContext::assume_regalloc() &&
+          !pattern.register_can_match_vreg_value(pattern_reg, insn_reg)) {
         return false;
       }
 

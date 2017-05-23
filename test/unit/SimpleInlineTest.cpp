@@ -43,8 +43,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ true);
-  EXPECT_FALSE(IRCode::inline_method(
-      inline_context, callee, invoke_it, /* no_exceed_16regs */ true));
+  EXPECT_FALSE(IRCode::inline_method(inline_context, callee, invoke_it));
   delete g_redex;
 }
 
@@ -54,6 +53,8 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
  */
 TEST(SimpleInlineTest, insertMoves) {
   g_redex = new RedexContext();
+  RedexContext::set_assume_regalloc(true);
+
   using namespace dex_asm;
   auto callee = DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"});
@@ -82,8 +83,7 @@ TEST(SimpleInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ false);
-  EXPECT_TRUE(IRCode::inline_method(
-      inline_context, callee, invoke_it, /* no_exceed_16regs */ false));
+  EXPECT_TRUE(IRCode::inline_method(inline_context, callee, invoke_it));
 
   auto it = InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {1_v, 1_L}));

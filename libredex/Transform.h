@@ -276,8 +276,7 @@ class IRCode {
   static bool inline_method(
       InlineContext& context,
       DexMethod *callee,
-      FatMethod::iterator pos,
-      bool no_exceed_16regs);
+      FatMethod::iterator pos);
 
   /*
    * Simple register allocator.
