@@ -115,9 +115,6 @@ class IRFixpointIterator final
   const ControlFlowGraph& m_cfg;
 };
 
-/*
- *
- */
 TEST(MonotonicFixpointTest, livenessAnalysis) {
   g_redex = new RedexContext();
 
