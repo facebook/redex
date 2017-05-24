@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-package redex;
+package com.facebook.redex.test.instr;
 
 import static org.fest.assertions.api.Assertions.*;
 import java.lang.reflect.*;
@@ -24,6 +24,7 @@ class ExtendsParameterized extends Parameterized<RenameClassesTest> {}
 
 public class RenameClassesTest {
 
+  @Test
   public void testIAmRenamed() {
     assertThat(this.getClass().getName().startsWith("X.")).isTrue();
   }
@@ -35,10 +36,12 @@ public class RenameClassesTest {
     assertThat(ptype.getActualTypeArguments()[0]).isEqualTo(this.getClass());
   }
 
+  @Test
   public void testOriginalNameAnnotation() throws Exception {
     assertThat((String) this.getClass()
                    .getDeclaredField("__redex_internal_original_name")
                    .get(this))
-        .isEqualTo("redex.RenameClassesTest");
+      .isEqualTo(
+        Utils.demangle("com_facebook_redex_test_instr_RenameClassesTest"));
   }
 }

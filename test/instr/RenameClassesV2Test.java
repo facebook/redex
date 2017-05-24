@@ -35,10 +35,10 @@ public class RenameClassesV2Test {
   public void testRenames() {
     // Make sure CantRename's name is not changed
     assertThat(CantRename.class.getName()).isEqualTo(
-        "com_facebook_redex_test_instr_CantRename".replace('_', '.'));
+        Utils.demangle("com_facebook_redex_test_instr_CantRename"));
     // Make sure ForceRename's name /is/ changed
     assertThat(ForceRename.class.getName()).isNotEqualTo(
-        "com_facebook_redex_test_instr_ForceRename".replace('_', '.'));
+        Utils.demangle("com_facebook_redex_test_instr_ForceRename"));
     // Make sure, specifically, that it seems to abide the renamer's conventions
     assertThat(ForceRename.class.getPackage().getName()).isEqualTo("X");
   }
