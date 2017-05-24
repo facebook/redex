@@ -77,7 +77,7 @@ size_t ChecksummingFileHandle::flush_write(const char* p, size_t size, size_t co
 void write_word(FileHandle& fh, uint32_t value) {
   auto bytes_written = fh.fwrite(&value, sizeof(value), 1) * sizeof(value);
   if (bytes_written != sizeof(value)) {
-    fprintf(stderr, "fwrite wrote %lu, not %lu\n", bytes_written, sizeof(value));
+    fprintf(stderr, "fwrite wrote %zd, not %zd\n", bytes_written, sizeof(value));
   }
   CHECK(bytes_written == sizeof(value));
 }

@@ -14,19 +14,18 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #define CHECK(cond, ...)                        \
   do {                                          \
     auto cond_eval = (cond);                    \
     if (!cond_eval) {                           \
-      char buf[512];                            \
-      snprintf(buf, 511, "" __VA_ARGS__); \
-      fprintf(stderr,                           \
-              "%s:%d CHECK(%s) failed. %s\n",   \
+      fprintf(stderr, "%s:%d CHECK(%s) failed.",\
               __FILE__,                         \
               __LINE__,                         \
-              #cond,                            \
-              buf);                             \
+              #cond);                           \
+      fprintf(stderr, " " __VA_ARGS__);         \
+      fprintf(stderr, "\n");                    \
     }                                           \
     assert(cond_eval);                          \
   } while (0)

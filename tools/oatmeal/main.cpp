@@ -12,10 +12,14 @@
 #include "util.h"
 
 #include <getopt.h>
+
+#ifndef ANDROID
 #include <wordexp.h>
+#endif
 
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 
@@ -44,6 +48,7 @@ struct Arguments {
   std::string arch;
 };
 
+#ifndef ANDROID
 std::string expand(const std::string& path) {
   wordexp_t exp_result;
   std::string ret;
@@ -55,6 +60,12 @@ std::string expand(const std::string& path) {
   wordfree(&exp_result);
   return ret;
 }
+#else
+// We don't expand ~ in paths on android
+std::string expand(const std::string& path) {
+  return path;
+}
+#endif
 
 Arguments parse_args(int argc, char* argv[]) {
 
@@ -74,7 +85,7 @@ Arguments parse_args(int argc, char* argv[]) {
   std::vector<std::string> dex_files;
   std::vector<std::string> dex_locations;
 
-  char c;
+  int c;
   while ((c = getopt_long(argc, argv, "ctmdbx:l:o:v:", &options[0], nullptr)) !=
          -1) {
     switch (c) {
@@ -187,7 +198,7 @@ int dump(const Arguments& args) {
   auto bytesRead = fread(file_contents.get(), 1, file_size, file.get());
   if (bytesRead != file_size) {
     fprintf(stderr,
-            "Failed to read file %s (%lu)\n",
+            "Failed to read file %s (%zd)\n",
             std::strerror(errno),
             bytesRead);
     return 1;
