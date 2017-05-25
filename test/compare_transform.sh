@@ -57,8 +57,8 @@ function strip_cruft() {
         sed 's/string@[0-9a-f]*/string@/' | \
         sed 's/method@[0-9a-f]*/method@/' | \
         sed 's/field@[0-9a-f]*/field@/' | \
-        sed $RENAME_CLASS | \
-        sed $RENAME_CLASS_DEFINITION | \
+        sed "$RENAME_CLASS" | \
+        sed "$RENAME_CLASS_DEFINITION" | \
         sed 's/0x[0-9a-f]* line=[0-9]*//' | \
         sed 's/^|[0-9a-f]*:/|:/' | \
         sed '/^\s*$/d' \
