@@ -352,8 +352,10 @@ public:
   std::string m_method_mapping_filename;
   std::string m_class_mapping_filename;
   std::string m_pg_mapping_filename;
+  std::string m_bytecode_offset_filename;
   std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
+  std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::map<DexClass*, uint32_t> m_cdi_offsets;
   std::map<DexClass*, uint32_t> m_static_values;
   dex_header hdr;
@@ -411,7 +413,8 @@ public:
     PositionMapper* pos_mapper,
     const std::string& method_mapping_path,
     const std::string& class_mapping_path,
-    const std::string& pg_mapping_path);
+    const std::string& pg_mapping_path,
+    const std::string& bytecode_offset_path);
   ~DexOutput();
   void prepare(SortMode string_mode, const std::vector<SortMode>& code_mode);
   void write();
@@ -426,7 +429,8 @@ DexOutput::DexOutput(
   PositionMapper* pos_mapper,
   const std::string& method_mapping_filename,
   const std::string& class_mapping_filename,
-  const std::string& pg_mapping_filename)
+  const std::string& pg_mapping_filename,
+  const std::string& bytecode_offset_filename)
     : m_config_files(config_files)
 {
   m_classes = classes;
@@ -440,6 +444,7 @@ DexOutput::DexOutput(
   m_method_mapping_filename = method_mapping_filename;
   m_class_mapping_filename = class_mapping_filename;
   m_pg_mapping_filename = pg_mapping_filename;
+  m_bytecode_offset_filename = bytecode_offset_filename;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
 }
@@ -787,6 +792,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
+    m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(code,
                                    (dex_code_item*)(m_output + m_offset));
     m_offset += size;
@@ -1252,6 +1258,24 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   fclose(fd);
 }
 
+void write_bytecode_offset_mapping(
+  const std::string& filename,
+  const std::vector<std::pair<std::string, uint32_t>>& method_offsets
+) {
+  if (filename.empty()) { return; }
+
+  auto fd = fopen(filename.c_str(), "a");
+  assert_log(fd, "Can't open bytecode offset file %s: %s\n",
+             filename.c_str(),
+             strerror(errno));
+
+  for (const auto& item : method_offsets) {
+    fprintf(fd, "%u %s\n", item.second, item.first.c_str());
+  }
+
+  fclose(fd);
+}
+
 } // namespace
 
 void DexOutput::write_symbol_files() {
@@ -1269,6 +1293,10 @@ void DexOutput::write_symbol_files() {
   write_pg_mapping(
     m_pg_mapping_filename,
     m_classes
+  );
+  write_bytecode_offset_mapping(
+    m_bytecode_offset_filename,
+    m_method_bytecode_offsets
   );
 }
 
@@ -1334,6 +1362,9 @@ write_classes_to_dex(
     json_cfg.get("class_mapping", "").asString());
   auto pg_mapping_filename = cfg.metafile(
     json_cfg.get("proguard_map_output", "").asString());
+  auto bytecode_offset_filename = cfg.metafile(
+    json_cfg.get("bytecode_offset_map", "").asString());
+
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
@@ -1365,7 +1396,9 @@ write_classes_to_dex(
     pos_mapper,
     method_mapping_filename,
     class_mapping_filename,
-    pg_mapping_filename);
+    pg_mapping_filename,
+    bytecode_offset_filename);
+
   dout.prepare(string_sort_mode, code_sort_mode);
   dout.write();
   return dout.m_stats;
