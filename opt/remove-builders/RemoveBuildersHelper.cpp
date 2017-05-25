@@ -698,6 +698,8 @@ get_tainted_regs(uint16_t regs_size,
       DexType* cls = insn->get_type();
       if (cls == type) {
         regs[insn->dest()] = 1;
+      } else {
+        regs[insn->dest()] = 0;
       }
     } else {
       transfer_object_reach(type, regs_size, insn, tregs->m_reg_set);
