@@ -29,10 +29,11 @@ typedef std::unordered_map<DexMethod*, uint32_t> dexmethod_to_idx;
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores);
 
-enum SortMode {
-  CLASS_ORDER = 1,
-  CLASS_STRINGS = 2,
-  DEFAULT = 100
+enum class SortMode {
+  CLASS_ORDER,
+  CLASS_STRINGS,
+  CLINIT_FIRST,
+  DEFAULT
 };
 
 class DexOutputIdx {
@@ -181,10 +182,13 @@ class GatheredTypes {
   std::vector<DexString*> get_dexstring_emitlist(T cmp = compare_dexstrings);
   std::vector<DexString*> get_cls_order_dexstring_emitlist();
   std::vector<DexString*> keep_cls_strings_together_emitlist();
-  template <class T = decltype(compare_dexmethods)>
-  std::vector<DexMethod*> get_dexmethod_emitlist(T cmp = compare_dexmethods);
-  std::vector<DexMethod*> get_cls_order_dexmethod_emitlist();
+  std::vector<DexMethod*> get_dexmethod_emitlist();
+
   void gather_class(int num);
+
+  void sort_dexmethod_emitlist_default_order(std::vector<DexMethod*>& lmeth);
+  void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
+  void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
 
   std::unordered_set<DexString*> index_type_names();
 };
@@ -194,17 +198,4 @@ std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   std::vector<DexString*> strlist(m_lstring);
   std::sort(strlist.begin(), strlist.end(), std::cref(cmp));
   return strlist;
-}
-
-template <class T>
-std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist(T cmp) {
-  std::vector<DexMethod*> methlist;
-  for (auto cls : *m_classes) {
-    auto const& dmethods = cls->get_dmethods();
-    auto const& vmethods = cls->get_vmethods();
-    methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
-    methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());
-  }
-  std::sort(methlist.begin(), methlist.end(), std::cref(cmp));
-  return methlist;
 }
