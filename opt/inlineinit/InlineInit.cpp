@@ -63,7 +63,7 @@ void InlineInitPass::run_pass(DexStoresVector& stores,
   }
 
   MultiMethodInliner inliner(
-      scope, primary_dex, inlinable, resolver, m_inliner_config);
+      scope, stores, inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
   auto inlined = inliner.get_inlined();

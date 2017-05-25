@@ -42,7 +42,7 @@ class MultiMethodInliner {
 
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
-      const DexClasses& primary_dex,
+      DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
       const Config& config);
@@ -148,10 +148,10 @@ class MultiMethodInliner {
                      DexMethod* caller);
 
   /**
-   * If caller is in the primary DEX and any opcode in callee refers to a
-   * DexMember of some kind make sure all references live in the primary DEX.
+   * Return true if a caller is in a DEX in a store and any opcode in callee
+   * refers to a DexMember in a different store .
    */
-  bool refs_not_in_primary(DexMethod* context);
+  bool cross_store_reference(DexMethod* context);
 
   /**
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
@@ -178,9 +178,10 @@ class MultiMethodInliner {
   std::function<DexMethod*(DexMethod*, MethodSearch)> resolver;
 
   /**
-   * Set of classes in primary DEX.
+   * Set of classes in each logical store that must not be touched
+   * when creating crossreferences across stores.
    */
-  std::unordered_set<DexType*> primary;
+  std::vector<std::unordered_set<DexType*>> xstores;
 
   /**
    * Inlined methods.
@@ -217,7 +218,7 @@ class MultiMethodInliner {
     size_t escaped_field{0};
     size_t non_pub_field{0};
     size_t non_pub_ctor{0};
-    size_t not_in_primary{0};
+    size_t cross_store{0};
     size_t caller_too_large{0};
   };
   InliningInfo info;

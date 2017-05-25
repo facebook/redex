@@ -92,7 +92,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
 
   // inline candidates
   MultiMethodInliner inliner(
-      scope, stores[0].get_dexen()[0], inlinable, resolver, m_inliner_config);
+      scope, stores, inlinable, resolver, m_inliner_config);
   inliner.inline_methods();
 
   // delete all methods that can be deleted
@@ -115,8 +115,8 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   TRACE(SINL, 3, "non public field %ld\n", inliner.get_info().non_pub_field);
   TRACE(SINL, 3, "throws %ld\n", inliner.get_info().throws);
   TRACE(SINL, 3, "multiple returns %ld\n", inliner.get_info().multi_ret);
-  TRACE(SINL, 3, "reference outside of primary %ld\n",
-      inliner.get_info().not_in_primary);
+  TRACE(SINL, 3, "references cross stores %ld\n",
+      inliner.get_info().cross_store);
   TRACE(SINL, 3, "not found %ld\n", inliner.get_info().not_found);
   TRACE(SINL, 3, "caller too large %ld\n", inliner.get_info().caller_too_large);
   TRACE(SINL, 1,

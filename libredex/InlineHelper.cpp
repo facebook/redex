@@ -146,13 +146,33 @@ bool method_ok(DexType* type, DexMethod* meth) {
 
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
-    const DexClasses& primary_dex,
+    DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
     const Config& config)
     : resolver(resolver), m_scope(scope), m_config(config) {
-  for (const auto& cls : primary_dex) {
-    primary.insert(cls->get_type());
+  // build the xstores array
+  xstores.push_back(std::unordered_set<DexType*>());
+  for (const auto& cls : stores[0].get_dexen()[0]) {
+    xstores.back().insert(cls->get_type());
+  }
+  if (stores[0].get_dexen().size() > 1) {
+    xstores.push_back(std::unordered_set<DexType*>());
+    for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {
+      for (const auto& cls : stores[0].get_dexen()[i]) {
+        xstores.back().insert(cls->get_type());
+      }
+    }
+  }
+  if (stores.size() > 1) {
+    for (size_t i = 1; i < stores.size(); i++) {
+      xstores.push_back(std::unordered_set<DexType*>());
+      for (const auto& classes : stores[i].get_dexen()) {
+        for (const auto& cls : classes) {
+          xstores.back().insert(cls->get_type());
+        }
+      }
+    }
   }
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
@@ -272,8 +292,8 @@ void MultiMethodInliner::inline_callees(
 bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
                                       DexMethod* callee,
                                       DexMethod* caller) {
-  // don't bring anything into primary that is not in primary
-  if (primary.count(caller->get_class()) != 0 && refs_not_in_primary(callee)) {
+  // don't inline cross store references
+  if (cross_store_reference(callee)) {
     return false;
   }
   if (is_blacklisted(callee)) return false;
@@ -514,16 +534,21 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
   return false;
 }
 
-/**
- * If the caller is in the primary DEX we want to make sure there are no
- * references in other DEXes that may cause a verification error.
- * Don't inline if so.
- */
-bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
+bool MultiMethodInliner::cross_store_reference(DexMethod* callee) {
+  size_t store_idx = 0;
+  for (; store_idx < xstores.size(); store_idx++) {
+    if (xstores[store_idx].count(callee->get_class()) > 0) break;
+  }
+  always_assert(store_idx < xstores.size());
 
-  const auto ok_from_primary = [&](DexType* type) {
-    if (primary.count(type) == 0 && type_class_internal(type) != nullptr) {
-      info.not_in_primary++;
+  const auto ok_to_inline = [&](DexType* type) {
+    if (type_class_internal(type) == nullptr) return true;
+    size_t type_store_idx = 0;
+    for (; type_store_idx < xstores.size(); type_store_idx++) {
+      if (xstores[type_store_idx].count(type) > 0) break;
+    }
+    if (type_store_idx > store_idx) {
+      info.cross_store++;
       return false;
     }
     return true;
@@ -532,29 +557,29 @@ bool MultiMethodInliner::refs_not_in_primary(DexMethod* callee) {
   for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (insn->has_type()) {
-      if (!ok_from_primary(insn->get_type())) {
+      if (!ok_to_inline(insn->get_type())) {
         return true;
       }
     } else if (insn->has_method()) {
       auto meth = insn->get_method();
-      if (!ok_from_primary(meth->get_class())) {
+      if (!ok_to_inline(meth->get_class())) {
         return true;
       }
       auto proto = meth->get_proto();
-      if (!ok_from_primary(proto->get_rtype())) {
+      if (!ok_to_inline(proto->get_rtype())) {
         return true;
       }
       auto args = proto->get_args();
       if (args == nullptr) continue;
       for (const auto& arg : args->get_type_list()) {
-        if (!ok_from_primary(arg)) {
+        if (!ok_to_inline(arg)) {
           return true;
         }
       }
     } else if (insn->has_field()) {
       auto field = insn->get_field();
-      if (!ok_from_primary(field->get_class()) ||
-          !ok_from_primary(field->get_type())) {
+      if (!ok_to_inline(field->get_class()) ||
+          !ok_to_inline(field->get_type())) {
         return true;
       }
     }

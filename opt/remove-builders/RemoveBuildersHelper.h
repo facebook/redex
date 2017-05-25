@@ -90,7 +90,7 @@ class BuilderTransform {
  public:
   BuilderTransform(const PassConfig& pc,
                    const Scope& scope,
-                   const DexClasses& primary_dex,
+                   DexStoresVector& stores,
                    bool throws_inline) {
     m_inliner_config.callee_direct_invoke_inline = true;
     m_inliner_config.virtual_same_class_inline = true;
@@ -104,7 +104,7 @@ class BuilderTransform {
 
     std::unordered_set<DexMethod*> no_default_inlinables;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-        scope, primary_dex, no_default_inlinables, resolver, m_inliner_config));
+        scope, stores, no_default_inlinables, resolver, m_inliner_config));
   }
 
   bool inline_methods(DexMethod* method,
