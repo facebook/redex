@@ -238,6 +238,8 @@ class IRCode {
    */
   explicit IRCode(DexMethod*, size_t temp_regs);
 
+  IRCode(const IRCode& code);
+
   ~IRCode();
 
   uint16_t get_registers_size() const { return m_registers_size; }

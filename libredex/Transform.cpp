@@ -677,6 +677,118 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
   }
 }
 
+/**
+ * Map the `DexPositions` to a newly created clone. At the same time, it
+ * preserves the relationship between a position and it's parent.
+ */
+std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
+get_old_to_new_position_copies(FatMethod* fmethod) {
+  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
+      old_position_to_new;
+  for (auto& mie : *fmethod) {
+    if (mie.type == MFLOW_POSITION) {
+      old_position_to_new[mie.pos.get()] =
+          std::make_unique<DexPosition>(*mie.pos);
+    }
+  }
+
+  for (auto& old_to_new : old_position_to_new) {
+    DexPosition* old_position = old_to_new.first;
+    auto new_pos = old_to_new.second.get();
+
+    new_pos->parent = old_position->parent
+                          ? old_position_to_new[old_position->parent].get()
+                          : nullptr;
+  }
+
+  return old_position_to_new;
+}
+
+// TODO: merge this and MethodSplicer.
+FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
+  FatMethod* fmethod = new FatMethod();
+
+  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
+      old_position_to_new = get_old_to_new_position_copies(old_fmethod);
+
+  // Create a clone for each of the entries.
+  std::unordered_map<MethodItemEntry*, MethodItemEntry*> old_mentry_to_new;
+  for (auto& mie : *old_fmethod) {
+
+    // Since fallthorough entries are recomputed for the cfg, we can
+    // skip those for now.
+    if (mie.type == MFLOW_FALLTHROUGH) {
+      continue;
+    }
+
+    MethodItemEntry* copy_item_entry = new MethodItemEntry();
+    copy_item_entry->type = mie.type;
+    copy_item_entry->addr = mie.addr;
+
+    switch (mie.type) {
+      case MFLOW_TRY:
+        copy_item_entry->tentry =
+            new TryEntry(mie.tentry->type, mie.tentry->catch_start);
+        break;
+      case MFLOW_CATCH:
+        copy_item_entry->centry = new CatchEntry(mie.centry->catch_type);
+        break;
+      case MFLOW_TARGET:
+        copy_item_entry->target = new BranchTarget();
+        copy_item_entry->target->type = mie.target->type;
+        copy_item_entry->target->index = mie.target->index;
+        break;
+      case MFLOW_OPCODE:
+        copy_item_entry->insn = new IRInstruction(*mie.insn);
+        break;
+      case MFLOW_DEBUG:
+        new (&copy_item_entry->dbgop)
+            std::unique_ptr<DexDebugInstruction>(mie.dbgop->clone());
+        break;
+      case MFLOW_POSITION:
+        copy_item_entry->pos = std::move(old_position_to_new[mie.pos.get()]);
+        break;
+      default:
+        not_reached();
+    }
+
+    old_mentry_to_new[&mie] = copy_item_entry;
+  }
+
+  // Preserve mapping between entries.
+  for (auto& mie : *old_fmethod) {
+    if (mie.type == MFLOW_FALLTHROUGH) {
+      continue;
+    }
+
+    MethodItemEntry* copy_item_entry = old_mentry_to_new[&mie];
+    switch (mie.type) {
+      case MFLOW_TRY:
+        copy_item_entry->tentry->catch_start =
+           mie.tentry->catch_start ? old_mentry_to_new[mie.tentry->catch_start]
+                                   : nullptr;
+        break;
+      case MFLOW_CATCH:
+        copy_item_entry->centry->next =
+          mie.centry->next ? old_mentry_to_new[mie.centry->next] : nullptr;
+        break;
+      case MFLOW_TARGET:
+        copy_item_entry->target->src = old_mentry_to_new[mie.target->src];
+        break;
+      case MFLOW_OPCODE:
+      case MFLOW_DEBUG:
+      case MFLOW_POSITION:
+        break;
+      default:
+        not_reached();
+    }
+
+    fmethod->push_back(*copy_item_entry);
+  }
+
+  return fmethod;
+}
+
 } // namespace
 
 IRCode::IRCode(DexMethod* method): m_fmethod(new FatMethod()) {
@@ -691,6 +803,15 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs)
     : m_fmethod(new FatMethod()) {
   always_assert(method->get_dex_code() == nullptr);
   generate_load_params(method, temp_regs, this);
+}
+
+IRCode::IRCode(const IRCode& code) {
+  FatMethod* old_fmethod = code.m_fmethod;
+  m_fmethod = deep_copy_fmethod(old_fmethod);
+  m_registers_size = code.m_registers_size;
+  if (code.m_dbg) {
+    m_dbg = std::make_unique<DexDebugItem>(*code.m_dbg);
+  }
 }
 
 void IRCode::remove_branch_target(IRInstruction *branch_inst) {
