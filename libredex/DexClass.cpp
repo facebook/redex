@@ -463,10 +463,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     m->m_anno = new DexAnnotationSet(*that->m_anno);
   }
 
-  // TODO: have method cloning work for FatMethods so this sync is unnecessary
-  that->sync();
-  m->m_dex_code.reset(new DexCode(*that->m_dex_code));
-  that->balloon();
+  m->set_code(std::make_unique<IRCode>(*that->get_code()));
 
   m->m_access = that->m_access;
   m->m_concrete = that->m_concrete;
@@ -477,7 +474,6 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     m->m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
   }
 
-  m->balloon();
   return m;
 }
 
