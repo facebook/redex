@@ -36,6 +36,9 @@ enum class Action {
 
 struct Arguments {
   Action action = Action::NONE;
+
+  // if true, write elf file, else write bare oat file.
+  bool write_elf = false;
   std::string oat_file;
   std::vector<DexInput> dex_files;
 
@@ -71,6 +74,7 @@ Arguments parse_args(int argc, char* argv[]) {
 
   struct option options[] = {{"dump", no_argument, nullptr, 'd'},
                              {"build", no_argument, nullptr, 'b'},
+                             {"write-elf", no_argument, nullptr, 'e'},
                              {"dex", required_argument, nullptr, 'x'},
                              {"dex-location", required_argument, nullptr, 'l'},
                              {"oat", required_argument, nullptr, 'o'},
@@ -86,7 +90,7 @@ Arguments parse_args(int argc, char* argv[]) {
   std::vector<std::string> dex_locations;
 
   int c;
-  while ((c = getopt_long(argc, argv, "ctmdbx:l:o:v:", &options[0], nullptr)) !=
+  while ((c = getopt_long(argc, argv, "cetmdbx:l:o:v:a:", &options[0], nullptr)) !=
          -1) {
     switch (c) {
     case 'd':
@@ -95,6 +99,10 @@ Arguments parse_args(int argc, char* argv[]) {
         exit(1);
       }
       ret.action = Action::DUMP;
+      break;
+
+    case 'e':
+      ret.write_elf = true;
       break;
 
     case 'b':
@@ -233,7 +241,8 @@ int build(const Arguments& args) {
     return 1;
   }
 
-  OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch);
+  OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch,
+      args.write_elf);
 
   return 0;
 }

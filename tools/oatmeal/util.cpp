@@ -37,7 +37,20 @@ bool FileHandle::ferror() {
 
 bool FileHandle::seek_set(long offset) {
   flush();
-  return ::fseek(fh_, offset, SEEK_SET) == 0;
+  return ::fseek(fh_, offset + seek_ref_, SEEK_SET) == 0;
+}
+
+bool FileHandle::seek_end() {
+  flush();
+  return ::fseek(fh_, 0, SEEK_END) == 0;
+}
+
+void FileHandle::set_seek_reference_to_fpos() {
+  set_seek_reference(::ftell(fh_));
+}
+
+void FileHandle::set_seek_reference(long offset) {
+  seek_ref_ = offset;
 }
 
 size_t ChecksummingFileHandle::fwrite(const void* p, size_t size, size_t count) {

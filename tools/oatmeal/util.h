@@ -91,7 +91,7 @@ struct ConstBuffer {
 
 class FileHandle {
 public:
-  explicit FileHandle(FILE* fh) : bytes_written_(0), fh_(fh) {}
+  explicit FileHandle(FILE* fh) : bytes_written_(0), seek_ref_(0), fh_(fh) {}
   UNCOPYABLE(FileHandle);
 
   FILE* get() const { return fh_; }
@@ -105,6 +105,7 @@ public:
 
   FileHandle& operator=(FileHandle&& other) {
     bytes_written_ = other.bytes_written_;
+    seek_ref_ = other.seek_ref_;
     fh_ = other.fh_;
     other.fh_ = nullptr;
     return *this;
@@ -112,11 +113,13 @@ public:
 
   FileHandle(FileHandle&& other) {
     bytes_written_ = other.bytes_written_;
+    seek_ref_ = other.seek_ref_;
     fh_ = other.fh_;
     other.fh_ = nullptr;
   }
 
   size_t bytes_written() const { return bytes_written_; }
+  void reset_bytes_written() { bytes_written_ = 0; }
 
   virtual size_t fwrite(const void* p, size_t size, size_t count);
   size_t fread(void* ptr, size_t size, size_t count);
@@ -126,11 +129,20 @@ public:
 
   bool seek_set(long offset);
   bool seek_begin() { return seek_set(0); }
+  bool seek_end();
+
+  // Adjust the offset from which seek_set(N) is computed. Keeps oat-writing
+  // code much cleaner by hiding the elf file .rodata offset from the oat code.
+  void set_seek_reference_to_fpos();
+  void set_seek_reference(long offset);
 
 protected:
   size_t fwrite_impl(const void* p, size_t size, size_t count);
   virtual void flush() {}
   size_t bytes_written_;
+
+  // seek_set() operates relative to this point.
+  long seek_ref_;
 
 private:
   FILE* fh_;
@@ -148,6 +160,10 @@ public:
       a = (a + data[i]) % kModAdler;
       b = (b + a) % kModAdler;
     }
+  }
+
+  void update(ConstBuffer buf) {
+    update(buf.ptr, buf.len);
   }
 
   uint32_t get() const {
@@ -209,6 +225,12 @@ void write_padding(FileHandle& fh, char byte, size_t num);
 template <typename T>
 void write_obj(FileHandle& fh, const T& obj) {
   write_buf(fh, ConstBuffer { reinterpret_cast<const char*>(&obj), sizeof(T) });
+}
+
+template <typename T>
+void write_vec(FileHandle& fh, const std::vector<T>& obj) {
+  write_buf(fh, ConstBuffer { reinterpret_cast<const char*>(obj.data()),
+                              obj.size() * sizeof(T) });
 }
 
 void write_str_and_null(FileHandle& fh, const std::string& str);

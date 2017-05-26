@@ -8,6 +8,7 @@
  */
 
 #include "dump-oat.h"
+#include "elf-writer.h"
 #include "memory-accounter.h"
 #include "util.h"
 
@@ -49,57 +50,6 @@ uint32_t versionInt(const std::string& version_str) {
     CHECK(false, "Bad version %s", version_str.c_str());
   }
   return kOatVersionUnknown;
-}
-
-enum class InstructionSet {
-  kNone = 0,
-  kArm = 1,
-  kArm64 = 2,
-  kThumb2 = 3,
-  kX86 = 4,
-  kX86_64 = 5,
-  kMips = 6,
-  kMips64 = 7,
-  kMax
-};
-
-struct ArchStrings {
-  InstructionSet i;
-  const char* s;
-};
-
-ArchStrings arch_strings[] = {
-  { InstructionSet::kNone, "NONE" },
-  { InstructionSet::kArm, "arm" },
-  { InstructionSet::kArm64, "arm64" },
-  { InstructionSet::kThumb2, "thumb2" },
-  { InstructionSet::kX86, "x86" },
-  { InstructionSet::kX86_64, "x86_64" },
-  { InstructionSet::kMips, "mips" },
-  { InstructionSet::kMips64, "mips64" },
-  { InstructionSet::kMax, nullptr }
-};
-
-const char* instruction_set_str(InstructionSet isa) {
-  int i = 0;
-  while (arch_strings[i].i != InstructionSet::kMax) {
-    if (arch_strings[i].i == isa) {
-      return arch_strings[i].s;
-    }
-    i++;
-  }
-  return "<UNKNOWN>";
-}
-
-InstructionSet instruction_set(const std::string& isa) {
-  int i = 0;
-  while (arch_strings[i].i != InstructionSet::kMax) {
-    if (isa == arch_strings[i].s) {
-      return arch_strings[i].i;
-    }
-    i++;
-  }
-  return InstructionSet::kMax;
 }
 
 struct PACKED OatHeader_Common {
@@ -1218,7 +1168,8 @@ class OatFile_079 : public OatFile {
   static Status build(const std::string& oat_file_name,
                       const std::vector<DexInput>& dex_input,
                       const uint32_t oat_version,
-                      InstructionSet isa);
+                      InstructionSet isa,
+                      bool write_elf);
 
  private:
   OatFile_079(OatHeader_064 h,
@@ -1419,10 +1370,48 @@ void write_dex_files(const std::vector<DexInput>& dex_input,
   );
 }
 
+// We only ship to 32 bit platforms so this is always 4.
+static constexpr size_t pointer_size = 4;
+
+static size_t types_size(size_t num_elements) {
+  return std::max(num_elements * pointer_size, pointer_size);
+}
+
+static size_t methods_size(size_t num_elements) {
+  return std::max(pointer_size * num_elements, pointer_size);
+}
+
+static size_t strings_size(size_t num_elements) {
+  return pointer_size * num_elements;
+}
+
+static size_t fields_size(size_t num_elements) {
+  return pointer_size * num_elements;
+}
+
+static size_t compute_bss_size_079(const std::vector<DexInput>& dex_files) {
+  size_t ret = 0;
+
+  for (const auto& e : dex_files) {
+    auto dex_fh = FileHandle(fopen(e.filename.c_str(), "r"));
+    DexFileHeader header = {};
+    CHECK(dex_fh.fread(&header, sizeof(DexFileHeader), 1) == 1);
+
+    auto meth_offset = align<pointer_size>(types_size(header.type_ids_size));
+    auto strings_offset = align<pointer_size>(meth_offset + methods_size(header.method_ids_size));
+    auto fields_offset = align<pointer_size>(strings_offset + strings_size(header.string_ids_size));
+    auto size = align<pointer_size>(fields_offset + fields_size(header.field_ids_size));
+    ret += size;
+  }
+  return ret;
+}
+
+
 OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                    const std::vector<DexInput>& dex_input,
                                    const uint32_t oat_version,
-                                   InstructionSet isa) {
+                                   InstructionSet isa,
+                                   bool write_elf) {
 
   const std::vector<KeyValueStore::KeyValue> key_value = {
     { "classpath", "" },
@@ -1458,6 +1447,12 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
   auto oat_fh = FileHandle(fopen(oat_file_name.c_str(), "w"));
   if (oat_fh.get() == nullptr) {
     return Status::BUILD_IO_ERROR;
+  }
+
+  if (write_elf) {
+    write_padding(oat_fh, 0, 0x1000);
+    oat_fh.set_seek_reference_to_fpos();
+    oat_fh.reset_bytes_written();
   }
 
   // Write header. Can't use ChecksummingFileHandle because the OatHeader_Common
@@ -1504,19 +1499,29 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
 
   write_obj(cksum_fh, common_header);
 
+  if (write_elf) {
+    cksum_fh.set_seek_reference(0);
+    cksum_fh.seek_begin();
+
+    ElfWriter section_headers;
+    section_headers.build(isa, oat_size, compute_bss_size_079(dex_input));
+    section_headers.write(cksum_fh);
+  }
+
   return Status::BUILD_SUCCESS;
 }
 
 OatFile::Status OatFile::build(const std::string& oat_file_name,
                                const std::vector<DexInput>& dex_files,
                                const std::string& oat_version,
-                               const std::string& arch) {
+                               const std::string& arch,
+                               bool write_elf) {
   auto version = versionInt(oat_version);
   auto isa = instruction_set(arch);
   switch (version) {
     case kOatVersion079:
     case kOatVersion088:
-        return OatFile_079::build(oat_file_name, dex_files, version, isa);
+        return OatFile_079::build(oat_file_name, dex_files, version, isa, write_elf);
 
     case kOatVersion064:
       fprintf(stderr, "version 064 not supported\n");
