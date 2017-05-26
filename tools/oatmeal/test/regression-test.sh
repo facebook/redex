@@ -97,7 +97,7 @@ for d in $dex_dirs; do
       tmp_oat=`mktemp`
       $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
-      xxd $tmp_oat > $actual
+      xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $actual
       cat $tmp_oat.output >> $actual
       if ! diff $actual $expected > /dev/null; then
         echo "Output differed for expected for $f"
@@ -112,7 +112,7 @@ for d in $dex_dirs; do
       tmp_oat=`mktemp`
       $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
-      xxd $tmp_oat > $new_output
+      xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $new_output
       cat $tmp_oat.output >> $new_output
 
       if [ -f $expected ] && ! diff $expected $new_output > /dev/null; then
