@@ -57,6 +57,7 @@ for f in $oat_files; do
       echo "Output differed for expected for $f"
       echo "Delta:"
       diff $actual $expected | head -50
+      exit 1
     fi
   else
     echo "Updating expected output for $f"
@@ -102,6 +103,7 @@ for d in $dex_dirs; do
         echo "Output differed for expected for $f"
         echo "Delta:"
         diff $actual $expected | head -50
+        exit 1
       fi
     else
       echo "Updating expected output for $f"
