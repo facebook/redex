@@ -96,6 +96,7 @@ class BuilderTransform {
     m_inliner_config.virtual_same_class_inline = true;
     m_inliner_config.super_same_class_inline = true;
     m_inliner_config.use_liveness = true;
+    m_inliner_config.use_liveness = !RedexContext::assume_regalloc();
     m_inliner_config.throws_inline = throws_inline;
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {

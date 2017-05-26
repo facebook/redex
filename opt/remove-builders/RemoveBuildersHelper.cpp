@@ -168,9 +168,23 @@ using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
 
 /**
  * Updates parameter registers to account for the extra registers.
+ *
+ * Based on the type of the instruction that we try to remove,
+ * we update the parameter registers to account for the extra registers
+ * in the new move instructions.
+ * Basically, we update the registers that were previously param regs
+ * to the correct param registers after the allocation of extra regs.
+ *
+ * Example:
+ *   4 regs, 2 ins (-> v2, v3 are param regs)
+ *   extra regs = 3 (-> v5, v6 are param reg after the pass)
+ *
+ *   For an: `iput-object v2, obj`
+ *   we created a move replacement: `move <new_reg>, v2`
+ *   which needs to be updated to `move <new_reg>, v5`
  */
 void update_reg_params(const std::unordered_set<IRInstruction*>& update_list,
-                       uint16_t non_input_reg_size,
+                       uint16_t next_available_reg,
                        uint16_t extra_regs,
                        MoveList& move_list) {
 
@@ -184,11 +198,11 @@ void update_reg_params(const std::unordered_set<IRInstruction*>& update_list,
     IRInstruction* new_insn = move_elem.second;
 
     if (is_iput(old_insn->opcode())) {
-      if (old_insn->src(0) >= non_input_reg_size) {
+      if (old_insn->src(0) >= next_available_reg) {
         new_insn->set_src(0, new_insn->src(0) + extra_regs);
       }
     } else if (is_iget(old_insn->opcode())) {
-      if (old_insn->dest() >= non_input_reg_size) {
+      if (old_insn->dest() >= next_available_reg) {
         new_insn->set_dest(new_insn->dest() + extra_regs);
       }
     }
@@ -391,7 +405,9 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   static auto init = DexString::make_string("<init>");
   uint16_t regs_size = code->get_registers_size();
   uint16_t in_regs_size = sum_param_sizes(code);
-  uint16_t non_input_reg_size = regs_size - in_regs_size;
+  uint16_t next_available_reg = RedexContext::assume_regalloc()
+    ? regs_size
+    : regs_size - in_regs_size;
   uint16_t extra_regs = 0;
   int null_reg = FieldOrRegStatus::UNDEFINED;
   std::unordered_set<uint16_t> extra_null_regs;
@@ -435,7 +451,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
                 get_new_reg_if_already_allocated(iput_insns, move_replacements);
             if (new_reg == FieldOrRegStatus::UNDEFINED) {
               // Allocating a new register since one was not allocated.
-              new_reg = non_input_reg_size + extra_regs;
+              new_reg = next_available_reg + extra_regs;
               extra_regs += is_wide ? 2 : 1;
             }
 
@@ -454,6 +470,11 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
               } else {
                 // Initializes the register since the field might be
                 // uninitialized.
+                if (RedexContext::assume_regalloc()) {
+                  // TODO(emmasevastian): make this work with
+                  //                      the reg allocator.
+                  return false;
+                }
                 extra_null_regs.emplace(new_reg);
               }
             }
@@ -466,10 +487,16 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           } else if (fields_in_insn.field_to_reg[field] ==
                      FieldOrRegStatus::UNDEFINED) {
 
+            if (RedexContext::assume_regalloc()) {
+              // TODO(emmasevastian): make this work with
+              //                      the reg allocator.
+              return false;
+            }
+
             // Initializing the field with null. Reusing the 'null_reg' if
             // already defined.
             if (null_reg == FieldOrRegStatus::UNDEFINED) {
-              null_reg = non_input_reg_size + extra_regs;
+              null_reg = next_available_reg + extra_regs;
               extra_regs++;
             }
 
@@ -499,7 +526,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
               // We can reuse the existing reg, so will have only 1 move.
               //
               // In case this is a parameter reg, it needs to be updated.
-              if (iput_insn->src(0) >= non_input_reg_size) {
+              if (iput_insn->src(0) >= next_available_reg) {
                 update_list.emplace(insn);
               }
               move_replacements[insn] = construct_move_instr(
@@ -529,7 +556,9 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     }
   }
 
-  if (!enlarge_register_frame(method, extra_regs)) {
+  if (RedexContext::assume_regalloc()) {
+    code->set_registers_size(next_available_reg + extra_regs);
+  } else if (!enlarge_register_frame(method, extra_regs)) {
     return false;
   }
 
@@ -539,8 +568,10 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   null_initializations(code, extra_null_regs);
 
   // Update register parameters.
-  update_reg_params(
-      update_list, non_input_reg_size, extra_regs, move_replacements);
+  if (!RedexContext::assume_regalloc()) {
+    update_reg_params(
+      update_list, next_available_reg, extra_regs, move_replacements);
+  }
 
   method_updates(method, deletes, move_replacements);
   return true;
