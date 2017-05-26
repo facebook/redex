@@ -43,6 +43,20 @@ static std::unordered_map<DexMethod*, int> method_ids;
 static std::unordered_map<DexField*, int> field_ids;
 static std::unordered_map<DexString*, int> string_ids;
 
+void dump_field_refs(FILE* fdout, DexField* field, int field_id) {
+  static int next_string_ref = 0;
+  auto* static_value = field->get_static_value();
+  if (!static_value || (static_value->evtype() != DEVT_STRING)) return;
+  auto* static_string_value = static_cast<DexEncodedValueString*>(static_value);
+  auto string_id = string_ids[static_string_value->string()];
+  fprintf(
+    fdout,
+    "INSERT INTO field_string_refs VALUES (%d, %d, %d);\n",
+    next_string_ref++,
+    field_id,
+    string_id);
+}
+
 void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
   auto code = method->get_code();
   if (!code) return;
@@ -177,6 +191,7 @@ void dump_sql(FILE* fdout, DexStoresVector& stores, ProguardMap& pg_map) {
   fprintf(
     fdout,
 R"___(
+DROP TABLE IF EXISTS field_string_refs;
 DROP TABLE IF EXISTS method_string_refs;
 DROP TABLE IF EXISTS method_field_refs;
 DROP TABLE IF EXISTS method_method_refs;
@@ -217,6 +232,11 @@ CREATE TABLE fields (
   name TEXT NOT NULL,
   obfuscated_name TEXT NOT NULL,
   access INTEGER NOT NULL
+);
+CREATE TABLE field_string_refs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  field_id INTEGER NOT NULL, -- fk:fields.id
+  ref_string_id INTEGER NOT NULL -- fk:strings.id
 );
 CREATE TABLE method_class_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -312,6 +332,14 @@ CREATE TABLE method_string_refs (
         for (auto& meth : cls->get_vmethods()) {
           int meth_id = method_ids[meth];
           dump_method_refs(fdout, meth, meth_id);
+        }
+        for (const auto& field : cls->get_sfields()) {
+          int field_id = field_ids[field];
+          dump_field_refs(fdout, field, field_id);
+        }
+        for (const auto& field : cls->get_ifields()) {
+          int field_id = field_ids[field];
+          dump_field_refs(fdout, field, field_id);
         }
       }
     }
