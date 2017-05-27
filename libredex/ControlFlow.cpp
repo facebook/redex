@@ -116,6 +116,9 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
 }
 
 void ControlFlowGraph::calculate_exit_block() {
+  if (m_exit_block != nullptr) {
+    return;
+  }
   auto exit_blocks = find_exit_blocks(*this);
   if (exit_blocks.size() == 1) {
     m_exit_block = exit_blocks.at(0);

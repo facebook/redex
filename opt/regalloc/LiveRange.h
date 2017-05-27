@@ -21,6 +21,8 @@
  * details.
  */
 
+namespace regalloc {
+
 namespace live_range {
 
 using reg_t = uint16_t;
@@ -37,18 +39,21 @@ struct Use {
 
 } // namespace live_range
 
+} // namespace regalloc
+
 namespace std {
 
 template <>
-struct hash<live_range::Use> {
-  size_t operator()(const live_range::Use& use) const {
+struct hash<regalloc::live_range::Use> {
+  size_t operator()(const regalloc::live_range::Use& use) const {
     size_t seed = boost::hash<IRInstruction*>()(use.insn);
     boost::hash_combine(seed, use.reg);
     return seed;
   }
 };
-
 }
+
+namespace regalloc {
 
 namespace live_range {
 
@@ -57,3 +62,5 @@ using UDChains = std::unordered_map<Use, std::unordered_set<Def>>;
 void renumber_registers(IRCode*);
 
 } // namespace live_range
+
+} // namespace regalloc

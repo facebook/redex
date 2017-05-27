@@ -110,6 +110,7 @@ class IRInstruction final {
     return m_dest;
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }
+  const std::vector<uint16_t>& srcs() const { return m_srcs; }
   uint16_t arg_word_count() const { return m_srcs.size(); }
   uint16_t range_base() const {
     always_assert(opcode::has_range(m_opcode));
@@ -265,6 +266,8 @@ class IRInstruction final {
  * the most significant bit.
  */
 bit_width_t required_bit_width(uint16_t v);
+
+inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
 
 /*
  * Necessary condition for an instruction to be converted to /range form

@@ -16,6 +16,13 @@ using reg_t = uint16_t;
 /*
  * This class tracks which registers are available over the course of register
  * allocation.
+ *
+ * Note that the naming may be kind of confusing: virtual registers are
+ * "virtual" because they run on the Dalvik / ART virtual machine. However they
+ * are subject to "physical" constraints like having wide data take up two
+ * virtual registers. Registers that don't have these constraints -- e.g. the
+ * instruction operands after live range numbering has been done -- are
+ * referred to as "symbolic registers" or "symregs".
  */
 class VirtualRegistersFile {
  public:

@@ -162,9 +162,9 @@ TEST(IRInstruction, SelectCheckCast) {
 
   // check that we inserted a move opcode before the check-cast
   auto it = InstructionIterable(code.get()).begin();
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v, 1_v}));
-  ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE_OBJECT, {0_v, 1_v}));
+  ++it;
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
 
   delete g_redex;
 }

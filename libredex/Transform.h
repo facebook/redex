@@ -246,6 +246,8 @@ class IRCode {
 
   void set_registers_size(uint16_t sz) { m_registers_size = sz; }
 
+  uint16_t allocate_temp() { return m_registers_size++; }
+
   /*
    * Find the subrange of load-param instructions. These instructions should
    * always be at the beginning of the method.

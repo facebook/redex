@@ -2249,23 +2249,7 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
  * Pick the smallest opcode that can address its operands.
  *
  * Also insert move instructions as necessary for check-cast instructions that
- * have different src and dest registers. Note that if we insert a move, we
- * should insert it after, not before, the check-cast. This matters when the
- * check-cast is in a try region. For example, if we had a method like
- *
- *   load-param v1 Ljava/lang/Object;
- *   TRY_START
- *   const/4 v0 123
- *   check-cast v0, v1 LFoo;
- *   return v0
- *   TRY_END
- *   CATCH
- *   // handle failure of check-cast
- *   // Note that v0 has the value of 123 here because the check-cast failed
- *
- * Inserting the move after the check-cast would preserve semantics; inserting
- * it before the check-cast would cause v0 to have an object (instead of
- * integer) type inside the exception handler.
+ * have different src and dest registers.
  */
 void select_instructions(IRCode* code) {
   auto ii = InstructionIterable(code);
@@ -2280,12 +2264,16 @@ void select_instructions(IRCode* code) {
       continue;
     }
     if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
+      // convert check-cast v0, v1 into
+      //
+      //   move v0, v1
+      //   check-cast v0
       auto* mov = new IRInstruction(OPCODE_MOVE_OBJECT_16);
       mov->set_dest(insn->dest());
       mov->set_src(0, insn->src(0));
       mov->set_opcode(select_move_opcode(mov));
-      insn->set_dest(insn->src(0));
-      it.reset(code->insert_after(it.unwrap(), mov));
+      insn->set_src(0, insn->dest());
+      code->insert_before(it.unwrap(), mov);
     } else if (is_move(op)) {
       insn->set_opcode(select_move_opcode(insn));
     } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {

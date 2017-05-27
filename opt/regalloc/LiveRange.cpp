@@ -20,7 +20,7 @@
 
 namespace {
 
-using namespace live_range;
+using namespace regalloc::live_range;
 using namespace std::placeholders;
 
 /*
@@ -153,11 +153,11 @@ UDChains calculate_ud_chains(IRCode* code) {
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
-        Use use {insn, src};
+        Use use{insn, src};
         auto defs = defs_in.get(src);
-        always_assert_log(defs.size() > 0,
-                          "Found use without def when processing %s",
-                          SHOW(insn));
+        always_assert_log(!defs.is_top() && defs.size() > 0,
+                          "Found use without def when processing [0x%lx]%s",
+                          &mie, SHOW(insn));
         chains[use] = defs.elements();
       }
       fixpoint_iter.analyze_instruction(insn, &defs_in);
@@ -167,6 +167,8 @@ UDChains calculate_ud_chains(IRCode* code) {
 }
 
 } // namespace
+
+namespace regalloc {
 
 namespace live_range {
 
@@ -205,3 +207,5 @@ void renumber_registers(IRCode* code) {
 }
 
 } // namespace live_range
+
+} // namespace regalloc

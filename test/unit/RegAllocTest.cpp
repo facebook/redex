@@ -7,11 +7,14 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "GraphColoring.h"
 #include "IRInstruction.h"
+#include "Interference.h"
 #include "LiveRange.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
@@ -380,4 +383,241 @@ TEST_F(RegAllocTest, VirtualRegistersFile) {
   vreg_file.alloc_at(7, 2);
   EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4 !5 !6 !7 !8");
   EXPECT_EQ(vreg_file.size(), 9);
+}
+
+TEST_F(RegAllocTest, BuildInterferenceGraph) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
+  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
+  code.push_back(dasm(OPCODE_CONST_4, {2_v}));
+  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}));
+  code.push_back(dasm(OPCODE_RETURN, {3_v}));
+  code.set_registers_size(4);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  // +---+
+  // | 1 |
+  // +---+
+  //   |
+  // +---+     +---+  +---+
+  // | 0 | --- | 2 |  | 3 |
+  // +---+     +---+  +---+
+  EXPECT_EQ(ig.nodes().size(), 4);
+  EXPECT_EQ(ig.get_node(0).max_vreg(), 255);
+  EXPECT_THAT(ig.get_node(0).adjacent(), ::testing::UnorderedElementsAre(1, 2));
+  EXPECT_EQ(ig.get_node(0).type(), RegisterType::NORMAL);
+  EXPECT_EQ(ig.get_node(1).max_vreg(), 65535);
+  EXPECT_EQ(ig.get_node(1).adjacent(), std::vector<reg_t>{0});
+  EXPECT_EQ(ig.get_node(1).type(), RegisterType::NORMAL);
+  EXPECT_EQ(ig.get_node(2).max_vreg(), 15);
+  EXPECT_EQ(ig.get_node(2).adjacent(), std::vector<reg_t>{0});
+  EXPECT_EQ(ig.get_node(2).type(), RegisterType::NORMAL);
+  EXPECT_EQ(ig.get_node(3).max_vreg(), 255);
+  EXPECT_EQ(ig.get_node(3).adjacent(), std::vector<reg_t>{});
+  EXPECT_EQ(ig.get_node(3).type(), RegisterType::NORMAL);
+}
+
+TEST_F(RegAllocTest, Coalesce) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
+  code.push_back(dasm(OPCODE_MOVE, {1_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN, {1_v}));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  graph_coloring::Allocator allocator;
+  allocator.coalesce(&ig, &code);
+  InstructionList expected_insns {
+    dasm(OPCODE_CONST_4, {0_v, 0_L}),
+    // move opcode was coalesced
+    dasm(OPCODE_RETURN, {0_v})
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}
+
+static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
+  std::vector<reg_t> vec;
+  while (!stack.empty()) {
+    vec.push_back(stack.top());
+    stack.pop();
+  }
+  return vec;
+}
+
+TEST_F(RegAllocTest, Simplify) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  // allocate in a 3-register-wide frame
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 2);
+  GraphBuilder::make_node(&ig, 1, RegisterType::WIDE, /* max_vreg */ 2);
+  GraphBuilder::make_node(&ig, 2, RegisterType::NORMAL, /* max_vreg */ 2);
+  GraphBuilder::add_edge(&ig, 0, 1);
+  GraphBuilder::add_edge(&ig, 0, 2);
+
+  EXPECT_EQ(ig.get_node(0).weight(), 3);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(2).weight(), 1);
+  EXPECT_EQ(ig.get_node(0).colorable_limit(), 3);
+  EXPECT_EQ(ig.get_node(1).colorable_limit(), 1);
+  EXPECT_EQ(ig.get_node(2).colorable_limit(), 3);
+  EXPECT_FALSE(ig.get_node(0).definitely_colorable());
+  EXPECT_FALSE(ig.get_node(1).definitely_colorable());
+  EXPECT_TRUE(ig.get_node(2).definitely_colorable());
+  // +-------+
+  // |   1   |
+  // +-------+
+  //   |
+  // +---+     +---+
+  // | 0 | --- | 2 |
+  // +---+     +---+
+  //
+  // At first, only node 2 is colorable. After removing it, node 0 has weight
+  // 1, so it is colorable too. Only after node 0 is removed is node 1
+  // colorable. We color in reverse order of removal -- 1 0 2. To see why it
+  // is necessary, suppose we colored 0 before 1 and put it in the middle:
+  //
+  //   [ ][0][ ]
+  //
+  // Now we cannot color 1.
+  //
+  // If we colored 1 and 2 before 0, we could end up like so:
+  //
+  //   [1][1][2]
+  //
+  // now we cannot color 0.
+  graph_coloring::Allocator allocator;
+  std::stack<reg_t> select_stack;
+  allocator.simplify(&ig, &select_stack);
+  auto selected = stack_to_vec(select_stack);
+  EXPECT_EQ(selected, std::vector<reg_t>({1, 0, 2}));
+}
+
+TEST_F(RegAllocTest, SelectRange) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method(
+      "Lfoo;", "bar", "I", {"I", "I", "I", "I", "I", "I"});
+  DexMethod* many_args_method = DexMethod::make_method(
+      "Lfoo;", "baz", "V", {"I", "I", "I", "I", "I", "I"});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  // the invoke instruction references the param registers in order; make sure
+  // we map them 1:1 without any spills, and map v6 to the start of the frame
+  // (since the params must be at the end)
+  code.push_back(dasm(OPCODE_CONST_4, {6_v}));
+  code.push_back(dasm(
+      OPCODE_INVOKE_STATIC, many_args_method, {0_v, 1_v, 2_v, 3_v, 4_v, 5_v}));
+  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 6_v}));
+  code.push_back(dasm(OPCODE_RETURN, {3_v}));
+  code.set_registers_size(6);
+  code.build_cfg();
+
+  RangeSet range_set = init_range_set(&code);
+  EXPECT_EQ(range_set.size(), 1);
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  for (size_t i = 0; i < 6; ++i) {
+    auto& node = ig.get_node(i);
+    EXPECT_TRUE(node.is_range() && node.is_param());
+  }
+  EXPECT_FALSE(ig.get_node(6).is_range());
+
+  graph_coloring::SpillPlan spill_plan;
+  graph_coloring::RegisterTransform reg_transform;
+  graph_coloring::Allocator allocator;
+  std::stack<reg_t> select_stack;
+  allocator.simplify(&ig, &select_stack);
+  allocator.select(&code, ig, &select_stack, &reg_transform, &spill_plan);
+  // v3 is referenced by both range and non-range instructions. We should not
+  // allocate it in select() but leave it to select_ranges()
+  EXPECT_EQ(reg_transform.map, (transform::RegMap{{6, 0}}));
+  allocator.select_ranges(&code, ig, range_set, &reg_transform, &spill_plan);
+  EXPECT_EQ(reg_transform.map,
+            (transform::RegMap{
+                {0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 0}}));
+  EXPECT_EQ(reg_transform.size, 7);
+  EXPECT_TRUE(spill_plan.empty());
+}
+
+TEST_F(RegAllocTest, SelectAliasedRange) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
+  DexMethod* range_callee =
+      DexMethod::make_method("Lfoo;", "baz", "V", {"I", "I"});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_4, {0_v}));
+  auto* invoke = dasm(OPCODE_INVOKE_STATIC, range_callee, {0_v, 0_v});
+  code.push_back(invoke);
+  code.push_back(dasm(OPCODE_RETURN_VOID));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  range_set.emplace(invoke);
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  graph_coloring::SpillPlan spill_plan;
+  graph_coloring::RegisterTransform reg_transform;
+  graph_coloring::Allocator allocator;
+  allocator.select_ranges(&code, ig, range_set, &reg_transform, &spill_plan);
+
+  EXPECT_EQ(spill_plan.range_spills.at(invoke), std::unordered_set<reg_t>{0});
+}
+
+TEST_F(RegAllocTest, Spill) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
+  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  code.push_back(dasm(OPCODE_ADD_INT, {2_v, 0_v, 1_v}));
+  code.push_back(dasm(OPCODE_RETURN, {2_v}));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  graph_coloring::SpillPlan spill_plan;
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
+    {0, 16},
+    {1, 16},
+    {2, 256},
+  };
+  graph_coloring::Allocator allocator;
+  allocator.spill(ig, spill_plan, range_set, &code);
+
+  InstructionList expected_insns {
+    dasm(OPCODE_CONST_4, {2_v, 1_L}),
+    dasm(OPCODE_MOVE_16, {0_v, 2_v}),
+    dasm(OPCODE_CONST_4, {3_v, 1_L}),
+    dasm(OPCODE_MOVE_16, {1_v, 3_v}),
+
+    // srcs not spilled -- add-int can address up to 8-bit-sized operands
+    dasm(OPCODE_ADD_INT, {4_v, 0_v, 1_v}),
+    dasm(OPCODE_MOVE_16, {2_v, 4_v}),
+
+    dasm(OPCODE_MOVE_16, {5_v, 2_v}),
+    dasm(OPCODE_RETURN, {5_v})
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
