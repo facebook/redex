@@ -24,6 +24,7 @@
 #include "ReachableClasses.h"
 #include "Walkers.h"
 #include "Warning.h"
+#include "TypeSystem.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -274,6 +275,7 @@ bool illegal_access(DexMethod* method) {
 }
 
 DexClass* move_statics_out(
+    const ClassHierarchy& ch,
     const std::vector<DexMethod*>& statics,
     const std::unordered_map<DexMethod*, DexClass*>& sink_map) {
   auto holder_type = DexType::make_type("Lredex/Static$Holder;");
@@ -290,7 +292,7 @@ DexClass* move_statics_out(
     auto it = sink_map.find(meth);
     auto sink_class = it == sink_map.end() ? holder : it->second;
     if (find_collision(
-        meth->get_name(), meth->get_proto(), sink_class, false)) {
+            ch, meth->get_name(), meth->get_proto(), sink_class, false)) {
       collision_count++;
       continue;
     }
@@ -373,6 +375,7 @@ void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     TRACE(SINK, 1, "StaticSinkPass not run because no ProGuard configuration was provided.");
     return;
   }
+  ClassHierarchy ch = build_type_hierarchy(build_class_scope(stores));
   DexClassesVector& root_store = stores[0].get_dexen();
   auto method_list = cfg.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);
@@ -385,7 +388,7 @@ void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   TRACE(SINK, 1, "statics after removing primary dex: %lu\n", statics.size());
   auto sink_map = get_sink_map(stores, coldstart_classes, statics);
   TRACE(SINK, 1, "statics with sinkable callsite: %lu\n", sink_map.size());
-  auto holder = move_statics_out(statics, sink_map);
+  auto holder = move_statics_out(ch, statics, sink_map);
   TRACE(SINK, 1, "methods in static holder: %lu\n",
           holder->get_dmethods().size());
   DexClasses dc(1);

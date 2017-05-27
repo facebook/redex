@@ -17,7 +17,7 @@
 #include "Transform.h"
 #include "Walkers.h"
 #include "Resolver.h"
-#include "VirtualScope.h"
+#include "TypeSystem.h"
 #include "VirtualRenamer.h"
 #include <list>
 
@@ -136,6 +136,7 @@ void get_totals(Scope& scope, RenameStats& stats) {
 
 void obfuscate(Scope& scope, RenameStats& stats) {
   get_totals(scope, stats);
+  ClassHierarchy ch = build_type_hierarchy(scope);
 
   DexFieldManager field_name_manager(new_dex_field_manager());
   DexMethodManager method_name_manager = new_dex_method_manager();
@@ -161,7 +162,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
       TRACE(OBFUSCATE, 3, "Renaming the fields of class %s\n",
           SHOW(cls->get_name()));
 
-      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, true);
+      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, true, ch);
 
       // Keep this for all public ids in the class (they shouldn't conflict)
       if (operate_on_ifields) {
@@ -181,7 +182,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
 
       // Obfu private fields
       f_ob_state.ids_to_avoid.clear();
-      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, false);
+      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, false, ch);
 
       // Keep this for all public ids in the class (they shouldn't conflict)
       if (operate_on_ifields) {
@@ -212,7 +213,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
 
       TRACE(OBFUSCATE, 3, "Renaming the methods of class %s\n",
                 SHOW(cls->get_name()));
-      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, true);
+      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, true, ch);
 
       // Keep this for all public ids in the class (they shouldn't conflict)
       obfuscate_elems(
@@ -225,7 +226,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
 
       // Obfu private methods
       m_ob_state.ids_to_avoid.clear();
-      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false);
+      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false, ch);
 
       obfuscate_elems(
           MethodRenamingContext(cls->get_dmethods(),

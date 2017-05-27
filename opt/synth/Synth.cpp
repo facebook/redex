@@ -29,6 +29,7 @@
 #include "PassManager.h"
 #include "Transform.h"
 #include "ReachableClasses.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 #include "SynthConfig.h"
@@ -149,7 +150,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
  *      return-TYPE v0
  *    | return-void )
  */
-DexMethod* trivial_method_wrapper(DexMethod* m) {
+DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
   auto ii = InstructionIterable(code);
@@ -172,7 +173,8 @@ DexMethod* trivial_method_wrapper(DexMethod* m) {
   if (!method) return nullptr;
   if (!method->is_concrete()) return nullptr;
 
-  auto collision = find_collision_excepting(method,
+  auto collision = find_collision_excepting(ch,
+                                            method,
                                             method->get_name(),
                                             method->get_proto(),
                                             type_class(method->get_class()),
@@ -282,7 +284,8 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
   ssms.next_pass = ssms.next_pass || remove.size() > 0;
 }
 
-WrapperMethods analyze(const std::vector<DexClass*>& classes,
+WrapperMethods analyze(const ClassHierarchy& ch,
+                       const std::vector<DexClass*>& classes,
                        const SynthConfig& synthConfig) {
   WrapperMethods ssms;
   for (auto cls : classes) {
@@ -318,7 +321,7 @@ WrapperMethods analyze(const std::vector<DexClass*>& classes,
       }
 
       if (can_optimize(dmethod, synthConfig)) {
-        auto method = trivial_method_wrapper(dmethod);
+        auto method = trivial_method_wrapper(dmethod, ch);
         if (method) {
           // this is not strictly needed but to avoid changing visibility of
           // virtuals we are skipping a wrapper to a virtual.
@@ -465,7 +468,8 @@ void update_invoke(IRCode* transform,
   transform->replace_opcode(insn, new_invoke);
 }
 
-bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
+bool can_update_wrappee(
+    const ClassHierarchy& ch, DexMethod* wrappee, DexMethod* wrapper) {
   if (is_native(wrappee)) {
     // Can't change the signature of native methods.
     return false;
@@ -478,8 +482,9 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
     DexTypeList::make_type_list(std::move(new_args)));
   auto new_name = wrappee->get_name();
   auto new_class = type_class(wrappee->get_class());
-  if (find_collision(new_name, new_proto, new_class, false)) {
+  if (find_collision(ch, new_name, new_proto, new_class, false)) {
     if (find_collision_excepting(
+          ch,
           wrapper,
           new_name,
           new_proto,
@@ -493,7 +498,8 @@ bool can_update_wrappee(DexMethod* wrappee, DexMethod* wrapper) {
   return true;
 }
 
-bool replace_method_wrapper(IRCode* transform,
+bool replace_method_wrapper(const ClassHierarchy& ch,
+                            IRCode* transform,
                             IRInstruction* insn,
                             DexMethod* wrapper,
                             DexMethod* wrappee,
@@ -505,7 +511,7 @@ bool replace_method_wrapper(IRCode* transform,
   assert(wrappee->is_concrete() && wrapper->is_concrete());
 
   if (is_static(wrapper) && !is_static(wrappee)) {
-    assert(can_update_wrappee(wrappee, wrapper));
+    assert(can_update_wrappee(ch, wrappee, wrapper));
     mutators::make_static(wrappee);
     ssms.promoted_to_static.insert(wrappee);
   }
@@ -551,7 +557,8 @@ void replace_ctor_wrapper(IRCode* transform,
   transform->replace_opcode(ctor_insn, new_ctor_call);
 }
 
-void replace_wrappers(DexMethod* caller_method,
+void replace_wrappers(const ClassHierarchy& ch,
+                      DexMethod* caller_method,
                       WrapperMethods& ssms) {
   std::vector<std::tuple<IRInstruction*, IRInstruction*, DexField*>> getter_calls;
   std::vector<std::pair<IRInstruction*, DexMethod*>> wrapper_calls;
@@ -648,7 +655,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrapper = call_inst->get_method();
     auto wrappee = wpair.second;
     wrappees_to_wrappers.emplace(wrappee, wrapper);
-    if (!can_update_wrappee(wrappee, wrapper)) {
+    if (!can_update_wrappee(ch, wrappee, wrapper)) {
       bad_wrappees.emplace(wrappee);
     }
   }
@@ -657,7 +664,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrapper = wpair.second;
     auto wrappee = call_inst->get_method();
     wrappees_to_wrappers.emplace(wrappee, wrapper);
-    if (!can_update_wrappee(wrappee, wrapper)) {
+    if (!can_update_wrappee(ch, wrappee, wrapper)) {
       bad_wrappees.emplace(wrappee);
     }
   }
@@ -701,6 +708,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrappee = wpair.second;
     auto success =
       replace_method_wrapper(
+        ch,
         &*code,
         call_inst,
         wrapper,
@@ -716,6 +724,7 @@ void replace_wrappers(DexMethod* caller_method,
     auto wrappee = call_inst->get_method();
     auto success =
       replace_method_wrapper(
+        ch,
         &*code,
         call_inst,
         wrapper,
@@ -815,7 +824,8 @@ void remove_dead_methods(
   ssms.next_pass = ssms.next_pass && any_remove;
 }
 
-void do_transform(const std::vector<DexClass*>& classes,
+void do_transform(const ClassHierarchy& ch,
+                  const std::vector<DexClass*>& classes,
                   WrapperMethods& ssms,
                   const SynthConfig& synthConfig,
                   SynthMetrics& metrics) {
@@ -833,7 +843,7 @@ void do_transform(const std::vector<DexClass*>& classes,
   }
   for (auto const& m : methods) {
     if (m->get_code()) {
-      replace_wrappers(m, ssms);
+      replace_wrappers(ch, m, ssms);
     }
   }
   // check that invokes to promoted static method is correct
@@ -894,12 +904,13 @@ bool trace_analysis(WrapperMethods& ssms) {
   return true;
 }
 
-bool optimize(const std::vector<DexClass*>& classes,
+bool optimize(const ClassHierarchy& ch,
+              const std::vector<DexClass*>& classes,
               const SynthConfig& synthConfig,
               SynthMetrics& metrics) {
-  auto ssms = analyze(classes, synthConfig);
+  auto ssms = analyze(ch, classes, synthConfig);
   assert(trace_analysis(ssms));
-  do_transform(classes, ssms, synthConfig, metrics);
+  do_transform(ch, classes, ssms, synthConfig, metrics);
   return ssms.next_pass;
 }
 
@@ -909,11 +920,12 @@ void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager&
     return;
   }
   Scope scope = build_class_scope(stores);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   SynthMetrics metrics;
   int passes = 0;
   do {
     TRACE(SYNT, 1, "Synth removal, pass %d\n", passes);
-    bool more_opt_needed = optimize(scope, m_pass_config, metrics);
+    bool more_opt_needed = optimize(ch, scope, m_pass_config, metrics);
     if (!more_opt_needed) break;
   } while (++passes < m_pass_config.max_passes);
 

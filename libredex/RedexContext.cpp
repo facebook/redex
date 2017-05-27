@@ -279,7 +279,7 @@ void RedexContext::mutate_method(DexMethod* method,
   s_method_map.emplace(r, method);
 }
 
-void RedexContext::build_type_system(DexClass* cls) {
+void RedexContext::publish_class(DexClass* cls) {
   std::lock_guard<std::mutex> l(m_type_system_mutex);
   const DexType* type = cls->get_type();
   if (m_type_to_class.find(type) != end(m_type_to_class)) {
@@ -306,17 +306,9 @@ void RedexContext::build_type_system(DexClass* cls) {
     }
   }
   m_type_to_class.emplace(type, cls);
-  const auto& super = cls->get_super_class();
-  if (super) m_class_hierarchy[super].push_back(type);
 }
 
 DexClass* RedexContext::type_class(const DexType* t) {
   auto it = m_type_to_class.find(t);
   return it != m_type_to_class.end() ? it->second : nullptr;
-}
-
-const std::vector<const DexType*>& RedexContext::get_children(
-    const DexType* type) {
-  const auto& it = m_class_hierarchy.find(type);
-  return it != m_class_hierarchy.end() ? it->second : m_empty_types;
 }

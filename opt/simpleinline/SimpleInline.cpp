@@ -18,6 +18,7 @@
 #include "Walkers.h"
 #include "ReachableClasses.h"
 #include "VirtualScope.h"
+#include "TypeSystem.h"
 
 #include <algorithm>
 #include <string>

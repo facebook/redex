@@ -92,6 +92,7 @@ libredex_la_SOURCES = \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
+	libredex/TypeSystem.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \

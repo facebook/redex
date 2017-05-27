@@ -21,6 +21,7 @@
 #include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "TypeSystem.h"
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (52)
@@ -251,15 +252,17 @@ void rename_classes(
   }
 }
 
-void RenameClassesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RenameClassesPass::run_pass(
+    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   std::unordered_set<const DexType*> untouchables;
   for (const auto& base : m_untouchable_hierarchies) {
     auto base_type = DexType::get_type(base.c_str());
     if (base_type != nullptr) {
       untouchables.insert(base_type);
-      TypeVector children;
-      get_all_children(base_type, children);
+      TypeSet children;
+      get_all_children(ch, base_type, children);
       untouchables.insert(children.begin(), children.end());
     }
   }

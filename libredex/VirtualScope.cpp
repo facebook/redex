@@ -644,33 +644,6 @@ bool build_signature_map(
 }
 
 /**
- * Given a class, walks up the hierarchy and creates entries from parent to
- * children.
- * If no super is found the type is considered a child of java.lang.Object.
- * If the type is unknown (no DexClass) the walk stops and the hierarchy is
- * formed up to the first unknown type.
- */
-void build_class_hierarchy(ClassHierarchy& hierarchy, DexClass* cls) {
-  // ensure an entry for the DexClass is created
-  hierarchy[cls->get_type()];
-  while (cls != nullptr) {
-    auto type = cls->get_type();
-    const auto super = cls->get_super_class();
-    if (super != nullptr) {
-      hierarchy[super].insert(type);
-    } else {
-      if (type != get_object_type()) {
-        // if the type in question is not java.lang.Object and it has
-        // no super make it a subclass of java.lang.Object
-        hierarchy[get_object_type()].insert(type);
-        TRACE(VIRT, 4, "[no super on %s]\n", SHOW(type));
-      }
-    }
-    cls = type_class(super);
-  }
-}
-
-/**
  * Subclass check.
  * We can make this much faster in time.
  */
@@ -730,28 +703,6 @@ bool walk_hierarchy(
   return true;
 }
 
-}
-
-ClassHierarchy build_type_hierarchy(const Scope& scope) {
-  Timer("Class Hierarchy");
-  ClassHierarchy hierarchy;
-  // build the type hierarchy
-  for (const auto& cls : scope) {
-    if (is_interface(cls) || is_annotation(cls)) continue;
-    build_class_hierarchy(hierarchy, cls);
-  }
-  return hierarchy;
-}
-
-void get_all_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    TypeSet& children) {
-  const auto& direct = get_children(hierarchy, type);
-  for (const auto& child : direct) {
-    children.insert(child);
-    get_all_children(hierarchy, child, children);
-  }
 }
 
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {

@@ -167,13 +167,6 @@ inline DexClass* type_class_internal(const DexType* t) {
 bool check_cast(DexType* type, DexType* base_type);
 
 /**
- * Return the direct children of a type.
- */
-inline const TypeVector& get_children(const DexType* type) {
-  return g_redex->get_children(type);
-}
-
-/**
  * Return true if the type is an array type.
  */
 bool is_array(const DexType* type);
@@ -207,26 +200,6 @@ DexType* get_array_type(const DexType*);
 DexType* make_array_type(const DexType*);
 
 /**
- * Retrieves all the children of a type and pushes them in the provided vector.
- * Effectively everything that derives from a given type.
- * There is no guaranteed or known order in which children are returned.
- */
-void get_all_children(const DexType*, TypeVector&);
-
-/**
- * Retrieves all the implementors of an interface and pushes them in the
- * provided vector.
- */
-void get_all_implementors(const Scope& scope,
-                          const DexType* intf,
-                          std::unordered_set<const DexType*>& impls);
-
-void get_all_children_and_implementors(
-    const Scope& scope,
-    const DexClass* base_class,
-    std::unordered_set<const DexType*>* result);
-
-/**
  * True if the method is a constructor (matches the "<init>" name)
  */
 bool is_init(const DexMethod* method);
@@ -247,13 +220,6 @@ inline bool is_any_init(const DexMethod* method) {
  * Merge the 2 visibility access flags. Return the most permissive visibility.
  */
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2);
-
-/**
- * This is a private implementation to build the type system.
- * Please do not randomly call this function if you are not sure what you
- * are doing.
- */
-void build_type_system(DexClass* cls);
 
 /**
  * Sorts and unique-ifies the given vector.

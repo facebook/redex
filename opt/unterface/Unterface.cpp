@@ -24,6 +24,7 @@
 #include "DexUtil.h"
 #include "Walkers.h"
 #include "UnterfaceOpt.h"
+#include "TypeSystem.h"
 
 namespace {
 
@@ -202,6 +203,7 @@ public:
 
 private:
   Scope& scope;
+  ClassHierarchy ch;
   ClassSet ifset;
   ClassTraits intf_traits;
   TypeRelationship intf_to_impls;
@@ -235,6 +237,7 @@ TypeRelationship InterfaceImplementations::match(
 
 InterfaceImplementations::InterfaceImplementations(Scope& scope)
     : scope(scope) {
+  ch = build_type_hierarchy(scope);
   load_interfaces();
   for (auto intf : ifset) {
     intf_traits[intf] = NO_TRAIT;
@@ -310,7 +313,7 @@ void InterfaceImplementations::compute_implementor_traits() {
     if (impl->get_access() & DexAccessFlags::ACC_ABSTRACT) {
       trait |= IS_ABSTRACT;
     }
-    if (get_children(impl->get_type()).size() > 0) trait |= HAS_CHILDREN;
+    if (get_children(ch, impl->get_type()).size() > 0) trait |= HAS_CHILDREN;
     if (impl->get_super_class() != get_object_type()) trait |= HAS_SUPER;
     trait |= check_dmethods(impl->get_dmethods());
     trait |= check_vmethods(impl->get_vmethods());

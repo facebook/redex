@@ -9,8 +9,7 @@
 
 #include "MethodDevirtualizationPass.h"
 #include "MethodDevirtualizer.h"
-
-#include "VirtualScope.h"
+#include "DexUtil.h"
 
 void MethodDevirtualizationPass::run_pass(DexStoresVector& stores,
                                           ConfigFiles&,

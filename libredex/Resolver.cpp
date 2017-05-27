@@ -11,26 +11,6 @@ inline bool match(const DexString* name,
   return name == cls_meth->get_name() && proto == cls_meth->get_proto();
 }
 
-DexMethod* check_vmethods(const DexString* name,
-                          const DexProto* proto,
-                          const DexType* type) {
-  const DexClass* cls = type_class(type);
-  for (const auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method)) return method;
-  }
-  return nullptr;
-}
-
-DexMethod* check_dmethods(const DexString* name,
-                          const DexProto* proto,
-                          const DexType* type) {
-  const DexClass* cls = type_class(type);
-  for (const auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method)) return method;
-  }
-  return nullptr;
-}
-
 DexMethod* resolve_intf_method_ref(
     const DexClass* cls,
     const DexString* name,
@@ -112,53 +92,6 @@ DexMethod* resolve_method_ref(
   return nullptr;
 }
 
-DexMethod* find_top_impl(
-    const DexClass* cls, const DexString* name, const DexProto* proto) {
-  DexMethod* top_impl = nullptr;
-  while (cls) {
-    for (const auto& vmeth : cls->get_vmethods()) {
-      if (match(name, proto, vmeth)) {
-        top_impl = vmeth;
-      }
-    }
-    cls = type_class(cls->get_super_class());
-  }
-  return top_impl;
-}
-
-DexMethod* find_collision_excepting(const DexMethod* except,
-                                    const DexString* name,
-                                    const DexProto* proto,
-                                    const DexClass* cls,
-                                    bool is_virtual,
-                                    bool check_direct) {
-  for (auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method) && method != except) return method;
-  }
-  for (auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method) && method != except) return method;
-  }
-  if (!is_virtual) return nullptr;
-
-  auto super = type_class(cls->get_super_class());
-  if (super) {
-    auto method = resolve_virtual(super, name, proto);
-    if (method && method != except) return method;
-  }
-
-  TypeVector children;
-  get_all_children(cls->get_type(), children);
-  for (const auto& child : children) {
-    auto vmethod = check_vmethods(name, proto, child);
-    if (vmethod && vmethod != except) return vmethod;
-    if (check_direct) {
-      auto dmethod = check_dmethods(name, proto, child);
-      if (dmethod && dmethod != except) return dmethod;
-    }
-  }
-  return nullptr;
-}
-
 DexField* resolve_field(
     const DexType* owner,
     const DexString* name,
@@ -194,4 +127,18 @@ DexField* resolve_field(
     cls = type_class(cls->get_super_class());
   }
   return nullptr;
+}
+
+DexMethod* find_top_impl(
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
+  DexMethod* top_impl = nullptr;
+  while (cls) {
+    for (const auto& vmeth : cls->get_vmethods()) {
+      if (match(name, proto, vmeth)) {
+        top_impl = vmeth;
+      }
+    }
+    cls = type_class(cls->get_super_class());
+  }
+  return top_impl;
 }

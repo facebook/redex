@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "OriginalNamePass.h"
+#include "TypeSystem.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_SET_CLASS_DATA "num_set_class_data"
@@ -20,6 +21,7 @@ static const char* redex_field_name = "__redex_internal_original_name";
 
 void OriginalNamePass::build_hierarchies(
     PassManager& mgr,
+    const ClassHierarchy& ch,
     Scope& scope,
     std::unordered_map<const DexType*, std::string>* hierarchies) {
   std::vector<DexClass*> base_classes;
@@ -40,9 +42,9 @@ void OriginalNamePass::build_hierarchies(
   for (const auto& base_class : base_classes) {
     auto base_name = base_class->get_deobfuscated_name();
     hierarchies->emplace(base_class->get_type(), base_name);
-    std::unordered_set<const DexType*> children_and_implementors;
-    get_all_children_and_implementors(
-        scope, base_class, &children_and_implementors);
+    TypeSet children_and_implementors;
+    get_all_children_or_implementors(
+        ch, scope, base_class, children_and_implementors);
     for (const auto& cls : children_and_implementors) {
       hierarchies->emplace(cls, base_name);
     }
@@ -53,8 +55,9 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
                                 ConfigFiles&,
                                 PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   std::unordered_map<const DexType*, std::string> to_annotate;
-  build_hierarchies(mgr, scope, &to_annotate);
+  build_hierarchies(mgr, ch, scope, &to_annotate);
   DexString* field_name = DexString::make_string(redex_field_name);
   DexType* string_type = get_string_type();
   for (auto it : to_annotate) {

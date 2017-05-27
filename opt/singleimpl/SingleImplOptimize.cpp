@@ -25,6 +25,7 @@
 #include "SingleImplDefs.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "TypeSystem.h"
 
 namespace {
 
@@ -96,7 +97,7 @@ void remove_interface(DexType* intf, SingleImplData& data) {
   set_public(cls);
   // removing interfaces may bring the same parent interface down to the
   // concrete class, so use a set to guarantee uniqueness
-  TypeSet new_intfs;
+  std::unordered_set<DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
     auto intfs = impl->get_interfaces();
     auto intf_types = intfs->get_type_list();
@@ -140,8 +141,11 @@ bool must_set_method_annotations(const SingleImplConfig& config) {
 }
 
 struct OptimizationImpl {
-  OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis)
-      : single_impls(std::move(analysis)) {}
+  OptimizationImpl(
+      std::unique_ptr<SingleImplAnalysis> analysis,
+      const ClassHierarchy& ch)
+          : single_impls(std::move(analysis))
+          , ch(ch) {}
 
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 
@@ -169,7 +173,8 @@ struct OptimizationImpl {
   // So the optimizer access this map and grabs the latest updated method
   NewMethods new_methods;
   // list of optimized types
-  TypeSet optimized;
+  std::unordered_set<DexType*> optimized;
+  const ClassHierarchy& ch;
 };
 
 /**
@@ -435,7 +440,8 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
     if (meth_it != new_methods.end()) method = meth_it->second;
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     assert(proto != method->get_proto());
-    DexMethod* collision = find_collision(method->get_name(),
+    DexMethod* collision = find_collision(ch,
+                                          method->get_name(),
                                           proto,
                                           type_class(method->get_class()),
                                           method->is_virtual());
@@ -508,7 +514,8 @@ void OptimizationImpl::do_optimize(DexType* intf, SingleImplData& data) {
 /**
  * Run an optimization step.
  */
-size_t OptimizationImpl::optimize(Scope& scope, const SingleImplConfig& config) {
+size_t OptimizationImpl::optimize(
+    Scope& scope, const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   for (auto intf : to_optimize) {
@@ -543,7 +550,9 @@ size_t OptimizationImpl::optimize(Scope& scope, const SingleImplConfig& config) 
  * Entry point for an optimization pass.
  */
 size_t optimize(
-    std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope, const SingleImplConfig& config) {
-  OptimizationImpl optimizer(std::move(analysis));
+    std::unique_ptr<SingleImplAnalysis> analysis,
+    const ClassHierarchy& ch,
+    Scope& scope, const SingleImplConfig& config) {
+  OptimizationImpl optimizer(std::move(analysis), ch);
   return optimizer.optimize(scope, config);
 }

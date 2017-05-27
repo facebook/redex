@@ -11,6 +11,7 @@
 
 #include <unordered_map>
 
+#include "TypeSystem.h"
 #include "VirtualScope.h"
 #include "DexUtil.h"
 #include "Mutators.h"
@@ -20,25 +21,24 @@
 #include "Walkers.h"
 
 namespace {
-size_t mark_classes_final(const DexStoresVector& stores) {
+size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
   size_t n_classes_finalized = 0;
-  for (auto const& dex : DexStoreClassesIterator(stores)) {
-    for (auto const& cls : dex) {
-      if (keep(cls) || is_abstract(cls) || is_final(cls)) continue;
-      auto const& children = get_children(cls->get_type());
-      if (children.empty()) {
-        TRACE(ACCESS, 2, "Finalizing class: %s\n", SHOW(cls));
-        set_final(cls);
-        ++n_classes_finalized;
-      }
+  for (auto const& cls : scope) {
+    if (keep(cls) || is_abstract(cls) || is_final(cls)) continue;
+    auto const& children = get_children(ch, cls->get_type());
+    if (children.empty()) {
+      TRACE(ACCESS, 2, "Finalizing class: %s\n", SHOW(cls));
+      set_final(cls);
+      ++n_classes_finalized;
     }
   }
   return n_classes_finalized;
 }
 
-const DexMethod* find_override(const DexMethod* method, const DexClass* cls) {
-  std::vector<const DexType*> children;
-  get_all_children(cls->get_type(), children);
+const DexMethod* find_override(
+    const DexMethod* method, const DexClass* cls, const ClassHierarchy& ch) {
+  TypeSet children;
+  get_all_children(ch, cls->get_type(), children);
   for (auto const& childtype : children) {
     auto const& child = type_class(childtype);
     assert(child);
@@ -51,19 +51,17 @@ const DexMethod* find_override(const DexMethod* method, const DexClass* cls) {
   return nullptr;
 }
 
-size_t mark_methods_final(const DexStoresVector& stores) {
+size_t mark_methods_final(const Scope& scope, const ClassHierarchy& ch) {
   size_t n_methods_finalized = 0;
-  for (auto const& dex : DexStoreClassesIterator(stores)) {
-    for (auto const& cls : dex) {
-      for (auto const& method : cls->get_vmethods()) {
-        if (keep(method) || is_abstract(method) || is_final(method)) {
-          continue;
-        }
-        if (!find_override(method, cls)) {
-          TRACE(ACCESS, 2, "Finalizing method: %s\n", SHOW(method));
-          set_final(method);
-          ++n_methods_finalized;
-        }
+  for (auto const& cls : scope) {
+    for (auto const& method : cls->get_vmethods()) {
+      if (keep(method) || is_abstract(method) || is_final(method)) {
+        continue;
+      }
+      if (!find_override(method, cls, ch)) {
+        TRACE(ACCESS, 2, "Finalizing method: %s\n", SHOW(method));
+        set_final(method);
+        ++n_methods_finalized;
       }
     }
   }
@@ -153,18 +151,20 @@ void AccessMarkingPass::run_pass(
   ConfigFiles& cfg,
   PassManager& pm
 ) {
+  auto scope = build_class_scope(stores);
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  SignatureMap sm = build_signature_map(ch);
   if (m_finalize_classes) {
-    auto n_classes_final = mark_classes_final(stores);
+    auto n_classes_final = mark_classes_final(scope, ch);
     pm.incr_metric("finalized_classes", n_classes_final);
     TRACE(ACCESS, 1, "Finalized %lu classes\n", n_classes_final);
   }
   if (m_finalize_methods) {
-    auto n_methods_final = mark_methods_final(stores);
+    auto n_methods_final = mark_methods_final(scope, ch);
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
   }
-  auto scope = build_class_scope(stores);
-  auto candidates = devirtualize(scope);
+  auto candidates = devirtualize(sm);
   auto dmethods = direct_methods(scope);
   candidates.insert(candidates.end(), dmethods.begin(), dmethods.end());
   if (m_privatize_methods) {

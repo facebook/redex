@@ -18,6 +18,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "SingleImpl.h"
+#include "TypeSystem.h"
 
 /**
  * Analyze and optimize data structures.
@@ -26,7 +27,6 @@
 
 using Scope = std::vector<DexClass*>;
 
-using TypeSet = std::unordered_set<DexType*>;
 using TypeList = std::vector<DexType*>;
 using TypeMap = std::unordered_map<DexType*, DexType*>;
 using TypeToTypes = std::unordered_map<DexType*, TypeList>;
@@ -177,4 +177,7 @@ struct SingleImplAnalysis {
  * Run an optimization pass over a SingleImplAnalysis.
  */
 size_t optimize(
-    std::unique_ptr<SingleImplAnalysis> analysis, Scope& scope, const SingleImplConfig& config);
+    std::unique_ptr<SingleImplAnalysis> analysis,
+    const ClassHierarchy& ch,
+    Scope& scope,
+    const SingleImplConfig& config);

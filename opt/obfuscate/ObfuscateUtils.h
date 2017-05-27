@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "DexAccess.h"
 #include "ReachableClasses.h"
+#include "TypeSystem.h"
 #include <list>
 
 constexpr int kMaxIdentChar (52);
@@ -656,14 +657,16 @@ public:
   virtual ~ObfuscationState() = default;
 
   virtual void populate_ids_to_avoid(DexClass* base,
-      DexElemManager<T, R, K>& name_manager, bool visitSubclasses) = 0;
+      DexElemManager<T, R, K>& name_manager, bool visitSubclasses,
+      const ClassHierarchy& ch) = 0;
 };
 
 class FieldObfuscationState :
     public ObfuscationState<DexField*, DexFieldRef, DexType*> {
 public:
   void populate_ids_to_avoid(DexClass* base,
-      DexFieldManager& name_manager, bool /* unused */) override {
+      DexFieldManager& name_manager, bool /* unused */,
+      const ClassHierarchy& ch) override {
     for (auto f : base->get_ifields())
       ids_to_avoid.insert(name_manager[f]->get_name());
     for (auto f : base->get_sfields())
@@ -688,7 +691,8 @@ void walk_hierarchy(
     DexClass* cls,
     Visitor on_member,
     bool visit_private,
-    HierarchyDirection h_dir) {
+    HierarchyDirection h_dir,
+    const ClassHierarchy& ch) {
   if (!cls) return;
   auto visit = [&](DexClass* cls) {
     for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
@@ -716,9 +720,9 @@ void walk_hierarchy(
   }
 
   if (h_dir & HierarchyDirection::VisitSubClasses) {
-    for (auto subcls_type : get_children(cls->get_type())) {
+    for (auto subcls_type : get_children(ch, cls->get_type())) {
       walk_hierarchy(type_class(subcls_type), on_member, visit_private,
-          HierarchyDirection::VisitSubClasses);
+          HierarchyDirection::VisitSubClasses, ch);
     }
   }
 }
@@ -730,7 +734,8 @@ public:
   // public methods in superclasses and any methods in this class (and
   // subclasses if visitSubclasses is specified)
   void populate_ids_to_avoid(DexClass* base,
-      DexMethodManager& name_manager, bool visitSubclasses) override {
+      DexMethodManager& name_manager, bool visitSubclasses,
+      const ClassHierarchy& ch) override {
     auto visit_member =
         [&](DexMethod* m) {
           auto wrap(name_manager[m]);
@@ -738,9 +743,9 @@ public:
             ids_to_avoid.insert(SHOW(wrap->get()->get_name()));
           ids_to_avoid.insert(wrap->get_name()); };
     walk_hierarchy(
-        base, visit_member, false, HierarchyDirection::VisitSuperClasses);
+        base, visit_member, false, HierarchyDirection::VisitSuperClasses, ch);
     walk_hierarchy(base, visit_member, true,
         visitSubclasses ? HierarchyDirection::VisitSubClasses :
-          HierarchyDirection::VisitNeither);
+          HierarchyDirection::VisitNeither, ch);
   }
 };

@@ -28,6 +28,7 @@
 #include "ReachableClasses.h"
 #include "Trace.h"
 #include "Transform.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -156,6 +157,7 @@ class BridgeRemover {
   };
 
   const std::vector<DexClass*>* m_scope;
+  ClassHierarchy m_ch;
   PassManager& m_mgr;
   std::unordered_map<DexMethod*, DexMethod*> m_bridges_to_bridgees;
   std::unordered_multimap<MethodRef, DexMethod*, MethodRefHash>
@@ -228,8 +230,8 @@ class BridgeRemover {
      *
      *   Easy.  Any subclass can refer to the bridgee.
      */
-    TypeVector subclasses;
-    get_all_children(clstype, subclasses);
+    TypeSet subclasses;
+    get_all_children(m_ch, clstype, subclasses);
     for (auto subclass : subclasses) {
       m_potential_bridgee_refs.emplace(MethodRef(subclass, name, proto),
                                        bridge);
@@ -355,7 +357,9 @@ class BridgeRemover {
 
  public:
   BridgeRemover(const std::vector<DexClass*>& scope, PassManager& mgr)
-      : m_scope(&scope), m_mgr(mgr) {}
+      : m_scope(&scope), m_mgr(mgr) {
+    m_ch = build_type_hierarchy(scope);
+  }
 
   void run() {
     find_bridges();

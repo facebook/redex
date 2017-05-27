@@ -29,6 +29,7 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 #include "Show.h"
 #include "Tool.h"
 #include "Transform.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 #include <boost/algorithm/string/replace.hpp>
@@ -348,11 +349,12 @@ CREATE TABLE method_string_refs (
 
   // Dump hierarchy
   auto scope = build_class_scope(stores);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   int next_is_a_id = 0;
   fprintf(fdout, "BEGIN TRANSACTION;\n");
   for (auto& cls : scope) {
-    std::unordered_set<const DexType*> results;
-    get_all_children_and_implementors(scope, cls, &results);
+    TypeSet results;
+    get_all_children_or_implementors(ch, scope, cls, results);
     for(auto type : results) {
       auto type_cls = type_class(type);
       if (type_cls) {

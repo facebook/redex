@@ -17,6 +17,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <unordered_map>
+#include <functional>
 
 #include "DexMemberRefs.h"
 
@@ -77,9 +78,14 @@ struct RedexContext {
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);
 
-  void build_type_system(DexClass*);
+  void publish_class(DexClass*);
   DexClass* type_class(const DexType* t);
-  const std::vector<const DexType*>& get_children(const DexType* type);
+  template <class TypeClassWalkerFn = void(const DexType*, const DexClass*)>
+  void walk_type_class(TypeClassWalkerFn walker) {
+    for (const auto& type_cls : m_type_to_class) {
+      walker(type_cls.first, type_cls.second);
+    }
+  }
 
   /*
    * This returns true if we want to enable features that will only go out
@@ -131,8 +137,6 @@ struct RedexContext {
   // Type-to-class map and class hierarchy
   std::mutex m_type_system_mutex;
   std::unordered_map<const DexType*, DexClass*> m_type_to_class;
-  std::unordered_map<
-    const DexType*, std::vector<const DexType*>> m_class_hierarchy;
 
   const std::vector<const DexType*> m_empty_types;
 

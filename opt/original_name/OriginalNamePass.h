@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "TypeSystem.h"
 
 class OriginalNamePass : public Pass {
  public:
@@ -26,6 +27,7 @@ class OriginalNamePass : public Pass {
  private:
   void build_hierarchies(
       PassManager& mgr,
+      const ClassHierarchy& ch,
       Scope& scope,
       std::unordered_map<const DexType*, std::string>* hierarchies);
 

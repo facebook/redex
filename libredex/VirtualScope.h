@@ -12,19 +12,11 @@
 #include "Pass.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "TypeSystem.h"
 #include "Timer.h"
 #include <vector>
 #include <map>
-#include <set>
 
-
-using TypeSet = std::set<const DexType*, dextypes_comparator>;
-
-/**
- * DexType parent to children relationship
- * (child to parent is in DexClass)
- */
-using ClassHierarchy = std::map<const DexType*, TypeSet, dextypes_comparator>;
 
 /**
  * Flags to mark virtual method state.
@@ -65,7 +57,7 @@ enum VirtualFlags : uint16_t {
   // where the interface is defined. Effectively at the 'implements' class
   MIRANDA =         0x8,
   // the method may escape context/scope. This happens when a class
-  // implements an unknown interface in which case the entir branch
+  // implements an unknown interface in which case the entire branch
   // up to object will have to escape
   ESCAPED =         0x100,
 };
@@ -164,34 +156,12 @@ using VirtualScopes = std::vector<VirtualScope>;
 // map from a proto to a list of VirtualScopes
 using ProtoMap = std::map<const DexProto*, VirtualScopes, dexprotos_comparator>;
 // map from a name to a map of proto with that name
-using SignatureMap = std::map<const DexString*, ProtoMap, dexstrings_comparator>;
+using SignatureMap =
+    std::map<const DexString*, ProtoMap, dexstrings_comparator>;
 
 //
 // Entry points
 //
-
-/**
- * Given a scope it builds all the parent-children relationship known.
- * The walk stops once a DexClass is not found.
- * If all the code is known all classes will root to java.lang.Object.
- * If not some hierarcies will be "unknonw" (not completed)
- */
-ClassHierarchy build_type_hierarchy(const Scope& scope);
-
-/**
- * Return the direct children of a type.
- */
-inline const TypeSet get_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type) {
-  const auto& it = hierarchy.find(type);
-  return it != hierarchy.end() ? it->second : TypeSet();
-}
-
-void get_all_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    TypeSet& children);
 
 /**
  * Given a ClassHierarchy walk the java.lang.Object hierarchy building
@@ -215,8 +185,8 @@ const VirtualScope& find_virtual_scope(
  * the type. So the number of VirtualScope is always smaller or
  * equals to the number of vmethods (unimplemented interface aside).
  */
-using ClassScopes =
-    std::map<const DexType*, std::vector<const VirtualScope*>, dextypes_comparator>;
+using ClassScopes = std::map<
+    const DexType*, std::vector<const VirtualScope*>, dextypes_comparator>;
 
 /*
  * Get the ClassScopes.
@@ -253,7 +223,8 @@ void walk_virtual_scopes(
   }
 }
 
-template <class VirtualScopeWalkerFn = void(const DexType*, const VirtualScope&)>
+template <
+    class VirtualScopeWalkerFn = void(const DexType*, const VirtualScope&)>
 void walk_virtual_scopes(
     const ClassScopes& class_scopes,
     const ClassHierarchy& cls_hierarchy,

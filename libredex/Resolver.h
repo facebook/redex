@@ -1,4 +1,11 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 #pragma once
 
@@ -161,31 +168,6 @@ inline DexMethod* resolve_method(
  * So effectively this returns the method on the top known ancestor.
  */
 DexMethod* find_top_impl(const DexClass*, const DexString*, const DexProto*);
-
-/**
- * Like find_collision, but don't report a match on `except`.
- */
-DexMethod* find_collision_excepting(const DexMethod* except,
-                                    const DexString* name,
-                                    const DexProto* proto,
-                                    const DexClass* cls,
-                                    bool is_virtual,
-                                    bool check_direct);
-
-/**
- * Given a name and a proto find a possible collision with methods with
- * the same name and proto.
- * The search is performed in the vmethods or dmethods space according to
- * the is_virtual argument.
- * When searching in the virtual methods space the search is performed up and
- * down the hierarchy chain. When in the direct method space only the current
- * class is searched.
- */
-inline DexMethod* find_collision(
-    const DexString* name, const DexProto* proto,
-    const DexClass* cls, bool is_virtual) {
-  return find_collision_excepting(nullptr, name, proto, cls, is_virtual, false);
-}
 
 /**
  * Type of fields to resolve.
