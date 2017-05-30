@@ -233,20 +233,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
-  std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
-      const IRInstruction* insn, TaintedRegs* tregs) {
-    auto& regs = tregs->m_reg_set;
-    auto op = insn->opcode();
-    if (op == OPCODE_NEW_INSTANCE) {
-      DexType* cls = insn->get_type();
-      if (cls == builder) {
-        regs[insn->dest()] = 1;
-      }
-    } else {
-      transfer_object_reach(builder, regs_size, insn, regs);
-    }
-  };
-  auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
+  auto taint_map = get_tainted_regs(regs_size, blocks, builder);
   return tainted_reg_escapes(builder, *taint_map);
 }
 
