@@ -334,7 +334,11 @@ class LocalDce {
       }
       return true;
     } else if (inst->dests_size()) {
-      return bliveness.test(inst->dest());
+      bool result = bliveness.test(inst->dest());
+      if (inst->dest_is_wide()) {
+        result |= bliveness.test(inst->dest() + 1);
+      }
+      return result;
     } else if (is_filled_new_array(inst->opcode())) {
       // filled-new-array passes its dest via the return-value slot, but isn't
       // inherently live like the invoke-* instructions.
@@ -359,6 +363,9 @@ class LocalDce {
     // The destination register is killed, so it isn't live before this.
     if (inst->dests_size()) {
       bliveness.reset(inst->dest());
+      if (inst->dest_is_wide()) {
+        bliveness.reset(inst->dest() + 1);
+      }
     }
     // The destination of an `invoke` is its return value, which is encoded as
     // the max position in the bitvector.
@@ -385,7 +392,6 @@ class LocalDce {
 
  public:
   void run(const Scope& scope) {
-	  TRACE(DCE, 1, "Running LocalDCE pass\n");
     walk_methods(scope,
                  [&](DexMethod* m) {
                    if (!m->get_code()) {
