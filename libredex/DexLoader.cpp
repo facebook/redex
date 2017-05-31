@@ -150,3 +150,5 @@ DexClasses load_classes_from_dex(const char* location, bool balloon) {
   }
   return classes;
 }
+
+void balloon_for_test(const Scope& scope) { balloon_all(scope); }

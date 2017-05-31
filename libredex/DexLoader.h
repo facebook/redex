@@ -14,3 +14,5 @@
 #include "DexDefs.h"
 
 DexClasses load_classes_from_dex(const char* location, bool balloon = true);
+
+void balloon_for_test(const Scope& scope);
