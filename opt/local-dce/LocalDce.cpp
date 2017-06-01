@@ -25,8 +25,9 @@
 
 namespace {
 
-constexpr const char* METRIC_INSTRS_ELIMINATED = "num_instrs_eliminated";
-constexpr const char* METRIC_TOTAL_INSTRS = "num_total_instrs";
+constexpr const char* METRIC_DEAD_INSTRUCTIONS = "num_dead_instructions";
+constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
+    "num_unreachable_instructions";
 
 /*
  * These instructions have observable side effects so must always be considered
@@ -114,9 +115,11 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
 ////////////////////////////////////////////////////////////////////////////////
 
 class LocalDce {
-  size_t m_instructions_eliminated{0};
-  size_t m_total_instructions{0};
-  std::unordered_set<DexMethod*> m_pure_methods;
+ public:
+  struct Stats {
+    size_t dead_instruction_count{0};
+    size_t unreachable_instruction_count{0};
+  };
 
   /*
    * Eliminate dead code using a standard backward dataflow analysis for
@@ -199,7 +202,6 @@ class LocalDce {
           if (it->type != MFLOW_OPCODE) {
             continue;
           }
-          m_total_instructions++;
           bool required = is_required(it->insn, bliveness);
           if (required) {
             update_liveness(it->insn, bliveness);
@@ -223,8 +225,8 @@ class LocalDce {
     for (auto dead : dead_instructions) {
       TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
       code->remove_opcode(dead);
-      m_instructions_eliminated++;
     }
+    m_stats.dead_instruction_count += dead_instructions.size();
 
     // if we deleted an instruction that may throw, we'll need to remove any
     // EDGE_THROW edges in the CFG... ideally we would just prune that edge,
@@ -240,10 +242,15 @@ class LocalDce {
     TRACE(DCE, 5, "%s", SHOW(code->cfg()));
   }
 
+  const Stats& get_stats() const {
+    return m_stats;
+  }
+
  private:
   void remove_block(IRCode* code, Block* b) {
     for (auto& mei : InstructionIterable(b)) {
       code->remove_opcode(mei.insn);
+      ++m_stats.unreachable_instruction_count;
     }
   }
 
@@ -399,41 +406,37 @@ class LocalDce {
                    }
                    dce(m);
                  });
-    TRACE(DCE, 1,
-            "Dead instructions eliminated: %lu\n",
-            m_instructions_eliminated);
-    TRACE(DCE, 1,
-            "Total instructions: %lu\n",
-            m_total_instructions);
-    TRACE(DCE, 1,
-            "Percentage of instructions identified as dead code: %f%%\n",
-            m_instructions_eliminated * 100 / double(m_total_instructions));
+    TRACE(DCE, 1, "Dead instructions: %lu\n", m_stats.dead_instruction_count);
+    TRACE(DCE, 1, "Unreachable instructions: %lu\n",
+          m_stats.unreachable_instruction_count);
   }
 
-  size_t num_instrs_eliminated() const {
-    return m_instructions_eliminated;
-  }
-
-  size_t num_total_instrs() const {
-    return m_total_instructions;
-  }
+ private:
+  std::unordered_set<DexMethod*> m_pure_methods;
+  Stats m_stats;
 };
-}
+
+} // namespace
 
 void LocalDcePass::run(DexMethod* m) {
   LocalDce().dce(m);
 }
 
-void LocalDcePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void LocalDcePass::run_pass(DexStoresVector& stores,
+                            ConfigFiles& cfg,
+                            PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(DCE, 1, "LocalDcePass not run because no ProGuard configuration was provided.");
+    TRACE(DCE, 1,
+        "LocalDcePass not run because no ProGuard configuration was provided.");
     return;
   }
   auto scope = build_class_scope(stores);
   LocalDce ldce;
   ldce.run(scope);
-  mgr.incr_metric(METRIC_INSTRS_ELIMINATED, ldce.num_instrs_eliminated());
-  mgr.incr_metric(METRIC_TOTAL_INSTRS, ldce.num_total_instrs());
+  const auto& stats = ldce.get_stats();
+  mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
+  mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
+                  stats.unreachable_instruction_count);
 }
 
 static LocalDcePass s_pass;
