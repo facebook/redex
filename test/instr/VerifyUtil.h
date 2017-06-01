@@ -41,6 +41,7 @@ struct PostVerify : public Verify {
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
+DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 /* Find the first invoke instruction that calls a particular method name */
 DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
     const char* mname);

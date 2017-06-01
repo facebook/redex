@@ -21,10 +21,20 @@ DexClass* find_class_named(const DexClasses& classes, const char* name) {
 
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
   auto vmethods = cls.get_vmethods();
-  auto it = std::find_if(vmethods.begin(), vmethods.end(), [&name](DexMethod* m){
-    return !strcmp(name, m->get_name()->c_str());
-  });
+  auto it =
+      std::find_if(vmethods.begin(), vmethods.end(), [&name](DexMethod* m) {
+        return strcmp(name, m->get_name()->c_str()) == 0;
+      });
   return it == vmethods.end() ? nullptr : *it;
+}
+
+DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
+  auto dmethods = cls.get_dmethods();
+  auto it =
+      std::find_if(dmethods.begin(), dmethods.end(), [&name](DexMethod* m) {
+        return strcmp(name, m->get_name()->c_str()) == 0;
+      });
+  return it == dmethods.end() ? nullptr : *it;
 }
 
 DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
