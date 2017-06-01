@@ -2,9 +2,8 @@
 -dontshrink
 -dontoptimize
 
--keep @com.facebook.redex.test.instr.UsingNoEscapeBuilder class *
--keepclassmembers class * {
-  @com.facebook.redex.test.instr.UsingNoEscapeBuilder *;
+-keep class com.facebook.redex.test.instr.UsingNoEscapeBuilder {
+  *;
 }
 
 # Don't muck with test infra

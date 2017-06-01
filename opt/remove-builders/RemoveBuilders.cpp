@@ -153,28 +153,18 @@ std::unordered_set<DexClass*> get_trivial_builders(
   return trivial_builders;
 }
 
-void remove_builder_classes(const std::unordered_set<DexClass*>& builder,
-                            const std::unordered_set<DexClass*>& kept_builders,
-                            Scope& classes) {
+void gather_removal_builder_stats(
+    const std::unordered_set<DexClass*>& builders,
+    const std::unordered_set<DexClass*>& kept_builders) {
 
-  classes.erase(
-      remove_if(classes.begin(),
-                classes.end(),
-                [&](DexClass* cls) {
-                  if (builder.find(cls) != builder.end() &&
-                      kept_builders.find(cls) == kept_builders.end()) {
-
-                    b_counter.classes_removed++;
-                    b_counter.methods_removed +=
-                        cls->get_vmethods().size() + cls->get_dmethods().size();
-                    b_counter.fields_removed += cls->get_ifields().size();
-
-                    return true;
-                  }
-
-                  return false;
-                }),
-      classes.end());
+  for (DexClass* builder : builders) {
+    if (kept_builders.find(builder) == kept_builders.end()) {
+      b_counter.classes_removed++;
+      b_counter.methods_removed +=
+          builder->get_vmethods().size() + builder->get_dmethods().size();
+      b_counter.fields_removed += builder->get_ifields().size();
+    }
+  }
 }
 
 std::unordered_set<DexClass*> get_builders_with_subclasses(Scope& classes) {
@@ -377,8 +367,9 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  remove_builder_classes(trivial_builders, kept_builders, scope);
-  post_dexen_changes(scope, stores);
+  // No need to remove the builders here, since `RemoveUnreachable` will
+  // take care of it.
+  gather_removal_builder_stats(trivial_builders, kept_builders);
 
   mgr.set_metric("total_builders", m_builders.size());
   mgr.set_metric("stack_only_builders", stack_only_builders.size());
