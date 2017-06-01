@@ -270,7 +270,7 @@ class GlobalConstantPropagationTest : public ::testing::Test {
   void build_program1() {
     auto b0 = new SimpleBlock;
     b0->stmts.push_back(Statement(0, 2));
-    b0->stmts.push_back(Statement(1, 0x1234567890ABCDEFL));
+    b0->stmts.push_back(Statement(1, int64_t(0x1234567890ABCDEFL)));
     m_program1.add(b0);
 
     auto b1 = new SimpleBlock;
@@ -315,7 +315,7 @@ class GlobalConstantPropagationTest : public ::testing::Test {
     auto b0 = new SimpleBlock;
     b0->stmts.push_back(Statement(0, 0));
     b0->stmts.push_back(Statement(1, uint16_t(0)));
-    b0->stmts.push_back(Statement(2, 10L));
+    b0->stmts.push_back(Statement(2, int64_t(10L)));
     m_program2.add(b0);
 
     auto b1 = new SimpleBlock;
@@ -323,11 +323,11 @@ class GlobalConstantPropagationTest : public ::testing::Test {
     m_program2.add(b1);
 
     auto b2 = new SimpleBlock;
-    b2->stmts.push_back(Statement(2, 10L));
+    b2->stmts.push_back(Statement(2, int64_t(10L)));
     m_program2.add(b2);
 
     auto b3 = new SimpleBlock;
-    b3->stmts.push_back(Statement(2, 10L));
+    b3->stmts.push_back(Statement(2, int64_t(10L)));
     m_program2.add(b3);
 
     auto b4 = new SimpleBlock;
@@ -387,17 +387,17 @@ class GlobalConstantPropagationTest : public ::testing::Test {
     m_program3.add(b0);
 
     auto b1 = new SimpleBlock;
-    b1->stmts.push_back(Statement(1, 2L));
-    b1->stmts.push_back(Statement(0, 1L));
+    b1->stmts.push_back(Statement(1, int64_t(2L)));
+    b1->stmts.push_back(Statement(0, int64_t(1L)));
     b1->stmts.push_back(Statement(2, 5));
     m_program3.add(b1);
 
     auto b2 = new SimpleBlock;
-    b2->stmts.push_back(Statement(1, 3L));
+    b2->stmts.push_back(Statement(1, int64_t(3L)));
     m_program3.add(b2);
 
     auto b3 = new SimpleBlock;
-    b3->stmts.push_back(Statement(1, 2L));
+    b3->stmts.push_back(Statement(1, int64_t(2L)));
     m_program3.add(b3);
 
     auto b4 = new SimpleBlock;
