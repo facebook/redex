@@ -1267,9 +1267,9 @@ void remap_callee_regs(IRInstruction* invoke,
  * Maps the callee param registers to the argument registers of the caller's
  * invoke instruction.
  */
-RegMap build_callee_param_reg_map(IRInstruction* invoke, DexMethod* callee) {
+RegMap build_callee_param_reg_map(IRInstruction* invoke, IRCode* callee) {
   RegMap reg_map;
-  auto oldregs = callee->get_code()->get_registers_size();
+  auto oldregs = callee->get_registers_size();
   if (is_invoke_range(invoke->opcode())) {
     auto base = invoke->range_base();
     auto range = invoke->range_size();
@@ -1289,11 +1289,11 @@ RegMap build_callee_param_reg_map(IRInstruction* invoke, DexMethod* callee) {
  * Builds a register map for a callee.
  */
 RegMap build_callee_reg_map(IRInstruction* invoke,
-                            DexMethod* callee,
+                            IRCode* callee,
                             RegSet invoke_live_in) {
   RegMap reg_map;
-  auto oldregs = callee->get_code()->get_registers_size();
-  auto ins = sum_param_sizes(callee->get_code());
+  auto oldregs = callee->get_registers_size();
+  auto ins = sum_param_sizes(callee);
   // remap all local regs (not args)
   auto avail_regs = ~invoke_live_in;
   auto caller_reg = avail_regs.find_first();
@@ -1623,7 +1623,9 @@ void IRCode::inline_tail_call(DexMethod* caller,
  * so it does a bunch of clever stuff to maximize usage of registers.
  */
 std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
-    InlineContext& context, DexMethod* callee, FatMethod::iterator invoke_it) {
+    InlineContext& context,
+    IRCode* callee_code,
+    FatMethod::iterator invoke_it) {
   auto caller_code = context.caller_code;
   auto invoke = invoke_it->insn;
   uint16_t newregs = caller_code->get_registers_size();
@@ -1631,7 +1633,6 @@ std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
     return nullptr;
   }
 
-  auto callee_code = callee->get_code();
   bool simple_remap_ok = simple_reg_remap(&*callee_code);
   // if the simple approach won't work, just be conservative and assume all
   // caller temp regs are live
@@ -1647,7 +1648,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
   // regs may have increased in the meantime, so update the liveness here
   invoke_live_out.enlarge(caller_ins, newregs);
 
-  auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee);
+  auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee_code);
   auto def_ins = ins_reg_defs(*callee_code);
   // if we map two callee registers v0 and v1 to the same caller register v2,
   // and v1 gets written to in the callee, we're gonna have a bad time
@@ -1673,7 +1674,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
     invoke_live_out.enlarge(caller_ins, newregs);
   }
   auto callee_reg_map =
-      build_callee_reg_map(invoke, callee, invoke_live_in.bits());
+      build_callee_reg_map(invoke, callee_code, invoke_live_in.bits());
   TRACE(INL, 5, "Callee reg map\n");
   TRACE(INL, 5, "%s", show_reg_map(callee_reg_map));
 
@@ -1692,10 +1693,9 @@ std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
  */
 std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
     InlineContext& context,
-    const DexMethod* callee,
+    const IRCode* callee_code,
     FatMethod::iterator invoke_it) {
   auto caller_code = context.caller_code;
-  const auto* callee_code = callee->get_code();
   auto callee_reg_start = caller_code->get_registers_size();
   auto insn = invoke_it->insn;
   auto reg_map = std::make_unique<RegMap>();
@@ -1706,8 +1706,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
   }
 
   // generate and insert the move instructions
-  auto param_insns =
-      InstructionIterable(callee->get_code()->get_param_instructions());
+  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
   insn->range_to_srcs();
@@ -1742,20 +1741,19 @@ std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
 }
 
 bool IRCode::inline_method(InlineContext& context,
-                           DexMethod* callee,
+                           IRCode* callee_code,
                            FatMethod::iterator pos) {
   TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller_code));
-  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee->get_code()));
+  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee_code));
   auto callee_reg_map =
       RedexContext::assume_regalloc()
-          ? gen_callee_reg_map_with_alloc(context, callee, pos)
-          : gen_callee_reg_map_no_alloc(context, callee, pos);
+          ? gen_callee_reg_map_with_alloc(context, callee_code, pos)
+          : gen_callee_reg_map_no_alloc(context, callee_code, pos);
   if (!callee_reg_map) {
     return false;
   }
 
   auto caller_code = context.caller_code;
-  auto callee_code = callee->get_code();
   auto fcaller = caller_code->m_fmethod;
   auto fcallee = callee_code->m_fmethod;
 

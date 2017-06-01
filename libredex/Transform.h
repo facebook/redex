@@ -277,10 +277,9 @@ class IRCode {
                                DexMethod* callee,
                                IRInstruction* invoke);
 
-  static bool inline_method(
-      InlineContext& context,
-      DexMethod *callee,
-      FatMethod::iterator pos);
+  static bool inline_method(InlineContext& context,
+                            IRCode* callee,
+                            FatMethod::iterator pos);
 
   /*
    * Simple register allocator.

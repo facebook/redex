@@ -43,7 +43,7 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
   mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ true);
-  EXPECT_FALSE(IRCode::inline_method(inline_context, callee, invoke_it));
+  EXPECT_FALSE(IRCode::inline_method(inline_context, callee->get_code(), invoke_it));
   delete g_redex;
 }
 
@@ -83,7 +83,7 @@ TEST(SimpleInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
   InlineContext inline_context(caller, /* use_liveness */ false);
-  EXPECT_TRUE(IRCode::inline_method(inline_context, callee, invoke_it));
+  EXPECT_TRUE(IRCode::inline_method(inline_context, callee->get_code(), invoke_it));
 
   auto it = InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {1_v, 1_L}));

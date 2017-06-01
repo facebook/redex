@@ -68,6 +68,7 @@
   TM(VIRT)               \
   TM(TERA)               \
   TM(BRCR)               \
+  TM(SWIN)               \
   TM(SW)
 
 enum TraceModule : int {
