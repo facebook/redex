@@ -56,6 +56,28 @@ def pgize(name):
     return name.strip()[1:][:-1].replace("/", ".")
 
 
+def write_debugger_commands(args):
+    """
+    Write out a shell script that allows us to rerun redex-all under gdb.
+    """
+    fd, gdb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-gdb-')
+    with os.fdopen(fd, 'w') as f:
+        f.write('gdb --args ')
+        f.write(' '.join(args))
+        os.fchmod(fd, 0775)
+
+    fd, lldb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-lldb-')
+    with os.fdopen(fd, 'w') as f:
+        f.write('lldb -- ')
+        f.write(' '.join(args))
+        os.fchmod(fd, 0775)
+
+    return {
+        'gdb_script_name': gdb_script_name,
+        'lldb_script_name': lldb_script_name,
+    }
+
+
 def run_pass(
         executable_path,
         script_args,
@@ -130,8 +152,12 @@ def run_pass(
                     continue
             raise err
         except subprocess.CalledProcessError as err:
-            err.cmd = ' '.join(args)
-            raise err
+            script_filenames = write_debugger_commands(args)
+            raise RuntimeError(
+                ('redex-all crashed with exit code %s! ' % err.returncode) +
+                ('You can re-run it '
+                 'under gdb by running %(gdb_script_name)s or under lldb '
+                 'by running %(lldb_script_name)s') % script_filenames)
         break
     log('Dex processing finished in {:.2f} seconds'.format(timer() - start))
 
