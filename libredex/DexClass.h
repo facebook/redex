@@ -302,7 +302,7 @@ class DexField {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const {
+  std::string get_deobfuscated_name() const {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
@@ -750,7 +750,7 @@ class DexMethod {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const {
+  std::string get_deobfuscated_name() const {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
@@ -933,7 +933,7 @@ class DexClass {
   void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  const std::string get_deobfuscated_name() const {
+  std::string get_deobfuscated_name() const {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
   const std::string& get_dex_location() const {

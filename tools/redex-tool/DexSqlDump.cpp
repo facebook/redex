@@ -140,12 +140,13 @@ void dump_class(FILE* fdout, const char* dex_id, DexClass* cls, int class_id) {
   // TODO: inheritance?
   // TODO: string usage
   // TODO: size estimate
+  auto deobfuscated_name = cls->get_deobfuscated_name();
   fprintf(
     fdout,
     "INSERT INTO classes VALUES (%d,'%s','%s','%s',%u);\n",
     class_id,
     dex_id,
-    cls->get_deobfuscated_name().c_str(),
+    deobfuscated_name.c_str(),
     cls->get_name()->c_str(),
     cls->get_access()
   );
@@ -156,7 +157,8 @@ void dump_field(FILE* fdout, int class_id, DexField* field, int field_id) {
   // TODO: break down signature
   // TODO: annotations?
   // TODO: string usage (encoded_value for static fields)
-  auto field_name = strchr(field->get_deobfuscated_name().c_str(), ';');
+  auto deobfuscated_name = field->get_deobfuscated_name();
+  auto field_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(
     fdout,
     "INSERT INTO fields VALUES(%d, %d, '%s', '%s', %u);\n",
@@ -175,7 +177,8 @@ void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
   // TODO: annotations?
   // TODO: string usage
   // TODO: size estimate
-  auto method_name = strchr(method->get_deobfuscated_name().c_str(), ';');
+  auto deobfuscated_name = method->get_deobfuscated_name();
+  auto method_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(
     fdout,
     "INSERT INTO methods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
