@@ -64,13 +64,13 @@ def write_debugger_commands(args):
     with os.fdopen(fd, 'w') as f:
         f.write('gdb --args ')
         f.write(' '.join(args))
-        os.fchmod(fd, 0775)
+        os.fchmod(fd, 0o775)
 
     fd, lldb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-lldb-')
     with os.fdopen(fd, 'w') as f:
         f.write('lldb -- ')
         f.write(' '.join(args))
-        os.fchmod(fd, 0775)
+        os.fchmod(fd, 0o775)
 
     return {
         'gdb_script_name': gdb_script_name,
