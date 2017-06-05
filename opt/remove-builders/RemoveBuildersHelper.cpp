@@ -131,8 +131,13 @@ IRInstruction* construct_move_instr(uint16_t dest_reg,
   return insn;
 }
 
-IRInstruction* construct_null_instr(uint16_t reg) {
-  IRInstruction* insn = new IRInstruction(OPCODE_CONST_4);
+IRInstruction* construct_null_instr(uint16_t reg, DexOpcode move_opcode) {
+  IRInstruction* insn;
+  if (move_opcode == OPCODE_MOVE_WIDE) {
+    insn = new IRInstruction(OPCODE_CONST_WIDE);
+  } else {
+    insn = new IRInstruction(OPCODE_CONST);
+  }
   insn->set_dest(reg);
   insn->set_literal(0);
   return insn;
@@ -141,13 +146,17 @@ IRInstruction* construct_null_instr(uint16_t reg) {
 /**
  * Adds instructions that initializes registers with null.
  */
-void null_initializations(IRCode* code,
-                          const std::unordered_set<uint16_t>& null_regs) {
+void null_initializations(
+    IRCode* code,
+    const std::vector<std::pair<uint16_t, DexOpcode>>& null_regs) {
   always_assert(code != nullptr);
 
   auto params = code->get_param_instructions();
-  for (uint16_t null_reg : null_regs) {
-    code->insert_before(params.end(), construct_null_instr(null_reg));
+  for (auto& null_reg_info : null_regs) {
+    uint16_t null_reg = null_reg_info.first;
+    DexOpcode move_opcode = null_reg_info.second;
+    code->insert_before(params.end(),
+                        construct_null_instr(null_reg, move_opcode));
   }
 }
 
@@ -405,12 +414,10 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   static auto init = DexString::make_string("<init>");
   uint16_t regs_size = code->get_registers_size();
   uint16_t in_regs_size = sum_param_sizes(code);
-  uint16_t next_available_reg = RedexContext::assume_regalloc()
-    ? regs_size
-    : regs_size - in_regs_size;
+  uint16_t next_available_reg =
+      RedexContext::assume_regalloc() ? regs_size : regs_size - in_regs_size;
   uint16_t extra_regs = 0;
-  int null_reg = FieldOrRegStatus::UNDEFINED;
-  std::unordered_set<uint16_t> extra_null_regs;
+  std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
 
   // Instructions where the builder gets moved to a different
   // register need to be also removed (at the end).
@@ -470,12 +477,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
               } else {
                 // Initializes the register since the field might be
                 // uninitialized.
-                if (RedexContext::assume_regalloc()) {
-                  // TODO(emmasevastian): make this work with
-                  //                      the reg allocator.
-                  return false;
-                }
-                extra_null_regs.emplace(new_reg);
+                extra_null_regs.push_back(std::make_pair(new_reg, move_opcode));
               }
             }
 
@@ -487,21 +489,13 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           } else if (fields_in_insn.field_to_reg[field] ==
                      FieldOrRegStatus::UNDEFINED) {
 
-            if (RedexContext::assume_regalloc()) {
-              // TODO(emmasevastian): make this work with
-              //                      the reg allocator.
-              return false;
-            }
-
-            // Initializing the field with null. Reusing the 'null_reg' if
-            // already defined.
-            if (null_reg == FieldOrRegStatus::UNDEFINED) {
-              null_reg = next_available_reg + extra_regs;
-              extra_regs++;
-            }
+            // Initializing the field with null.
+            uint16_t new_null_reg = next_available_reg + extra_regs;
+            extra_regs += is_wide ? 2 : 1;
 
             move_replacements[insn] =
-                construct_move_instr(insn->dest(), null_reg, OPCODE_MOVE);
+                construct_move_instr(insn->dest(), new_null_reg, move_opcode);
+            extra_null_regs.emplace_back(new_null_reg, move_opcode);
           } else {
             // If we got here, the field is held in a register.
 
@@ -562,15 +556,12 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     return false;
   }
 
-  if (null_reg != FieldOrRegStatus::UNDEFINED) {
-    extra_null_regs.emplace(null_reg);
-  }
   null_initializations(code, extra_null_regs);
 
   // Update register parameters.
   if (!RedexContext::assume_regalloc()) {
     update_reg_params(
-      update_list, next_available_reg, extra_regs, move_replacements);
+        update_list, next_available_reg, extra_regs, move_replacements);
   }
 
   method_updates(method, deletes, move_replacements);

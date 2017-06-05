@@ -248,7 +248,7 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   auto insns = initialize_null_model->get_dex_code()->get_instructions();
 
   // First instruction should hold the null value.
-  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
+  EXPECT_EQ(OPCODE_CONST, insns[0]->opcode());
   uint16_t null_reg = insns[0]->dest();
 
   // While removing the builders 2 moves are added:
@@ -261,7 +261,7 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
-    if (opcode == OPCODE_MOVE) {
+    if (is_move(opcode)) {
       used_regs.emplace_back(insn->src(0));
     }
   }
@@ -320,7 +320,7 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
 
   // First instruction should hold the null value, since 'model' can be
   // undefined.
-  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
+  EXPECT_EQ(OPCODE_CONST, insns[0]->opcode());
   uint16_t different_reg = insns[0]->dest();
 
   // While removing the builders 2 moves are added for the 'model' field
