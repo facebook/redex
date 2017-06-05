@@ -277,6 +277,45 @@ struct PACKED DexFileHeader {
   }
 };
 
+// DexIdBufs handles looking up class names in dex files within in-memory oat files.
+class DexIdBufs {
+public:
+  // Note: DexIdBufs must not outlive the memory wrapped by oat_buf.
+  DexIdBufs(ConstBuffer oat_buf, uint32_t dex_offset, const DexFileHeader& header) {
+    dex_buf_ = oat_buf.slice(dex_offset);
+    auto class_defs_buf = dex_buf_.slice(header.class_defs_off);
+    auto type_ids_buf = dex_buf_.slice(header.type_ids_off);
+    auto string_ids_buf = dex_buf_.slice(header.string_ids_off);
+
+    // We memcpy into new buffers since the data in the dex may not be aligned.
+    class_defs_.reset(new DexClassDef[header.class_defs_size]);
+    type_ids_.reset(new uint32_t[header.type_ids_size]);
+    string_ids_.reset(new uint32_t[header.string_ids_size]);
+
+    memcpy(class_defs_.get(), class_defs_buf.ptr, header.class_defs_size * sizeof(DexClassDef));
+    memcpy(type_ids_.get(), type_ids_buf.ptr, header.type_ids_size * sizeof(uint32_t));
+    memcpy(string_ids_.get(), string_ids_buf.ptr, header.string_ids_size * sizeof(uint32_t));
+  }
+
+  std::string get_class_name(int i) {
+    const auto class_idx = class_defs_[i].class_idx;
+    const auto string_id = type_ids_[class_idx];
+    const auto string_offset = string_ids_[string_id];
+
+    auto string_buf = dex_buf_.slice(string_offset);
+    char* ptr = const_cast<char*>(string_buf.ptr);
+    const auto str_size = read_uleb128(&ptr) + 1;
+
+    return std::string(ptr, str_size);
+  }
+
+private:
+  ConstBuffer dex_buf_;
+  std::unique_ptr<DexClassDef[]> class_defs_;
+  std::unique_ptr<uint32_t[]> type_ids_;
+  std::unique_ptr<uint32_t[]> string_ids_;
+};
+
 // Class meta data for all the classes that appear in the dex files.
 // - DexFileListing specifies the beginning of the class listing for
 //   each dex file.
@@ -343,6 +382,10 @@ class OatClasses {
     default:
       return "<UNKNOWN>";
     }
+  }
+
+  static const char* statusStr(int status) {
+    return statusStr(static_cast<Status>(status));
   }
 
   static const char* shortStatusStr(Status status) {
@@ -503,7 +546,6 @@ class DexFileListing_079 : public DexFileListing {
 
   const std::vector<DexFile_079>& dex_files() const { return dex_files_; }
 
-
   std::vector<uint32_t> dex_file_offsets() const override {
     std::vector<uint32_t> ret;
     for (const auto& f : dex_files_) {
@@ -581,6 +623,7 @@ class DexFileListing_064 : public DexFileListing {
 
   struct DexFile_064 : public DexFile {
     std::vector<ClassInfo> class_info;
+    std::vector<std::string> class_names;
   };
 
   DexFileListing_064(int numDexFiles, ConstBuffer buf, ConstBuffer oat_buf) {
@@ -603,6 +646,8 @@ class DexFileListing_064 : public DexFileListing {
       const auto num_classes = dex_header.class_defs_size;
       file.class_info.reserve(num_classes);
 
+      DexIdBufs id_bufs(oat_buf, file.file_offset, dex_header);
+
       for (unsigned int i = 0; i < num_classes; i++) {
         uint32_t class_info_offset;
         READ_WORD(&class_info_offset, ptr);
@@ -611,6 +656,7 @@ class DexFileListing_064 : public DexFileListing {
         cur_ma()->memcpyAndMark(&class_info, oat_buf.ptr + class_info_offset,
                                 sizeof(ClassInfo));
         file.class_info.push_back(class_info);
+        file.class_names.push_back(id_bufs.get_class_name(i));
       }
 
       dex_files_.push_back(file);
@@ -645,6 +691,21 @@ class DexFileListing_064 : public DexFileListing {
         }
       }
       printf("  }\n");
+    }
+  }
+
+  void print_unverified_classes() {
+    printf("unverified classes:\n");
+    for (const auto& e : dex_files_) {
+      printf("  %s\n", e.location.c_str());
+      foreach_pair(e.class_info, e.class_names,
+        [&](const ClassInfo& info, const std::string& name) {
+          if (info.status < static_cast<int>(OatClasses::Status::kStatusVerified)) {
+            printf("    %s unverified (status: %s)\n",
+                   name.c_str(), OatClasses::statusStr(info.status));
+          }
+        }
+      );
     }
   }
 
@@ -696,6 +757,7 @@ public:
   struct DexClasses {
     std::string dex_file;
     std::vector<ClassInfo> class_info;
+    std::vector<std::string> class_names;
   };
 
   OatClasses_079(const DexFileListing_079& dex_file_listing,
@@ -705,6 +767,8 @@ public:
   MOVABLE(OatClasses_079);
 
   void print();
+
+  void print_unverified_classes();
 
   static void write(const std::vector<DexFileListing_079::DexFile_079>& dex_files,
                     ChecksummingFileHandle& cksum_fh);
@@ -727,9 +791,12 @@ OatClasses_079::OatClasses_079(const DexFileListing_079& dex_file_listing,
         DexClasses dex_classes;
         dex_classes.dex_file = listing.location;
 
+        DexIdBufs id_bufs(oat_buf, listing.file_offset, header);
+
         // classes_offset points to an array of pointers (offsets) to
         // ClassInfo
         for (unsigned int i = 0; i < header.class_defs_size; i++) {
+
           ClassInfo info;
           uint32_t info_offset;
           cur_ma()->memcpyAndMark(
@@ -746,6 +813,7 @@ OatClasses_079::OatClasses_079(const DexFileListing_079& dex_file_listing,
                 "Parsing for compiled classes not implemented");
 
           dex_classes.class_info.push_back(info);
+          dex_classes.class_names.push_back(id_bufs.get_class_name(i));
         }
         classes_.push_back(dex_classes);
       });
@@ -770,6 +838,21 @@ void OatClasses_079::print() {
         }
     }
     printf("  }\n");
+  }
+}
+
+void OatClasses_079::print_unverified_classes() {
+  printf("unverified classes:\n");
+  for (const auto& e : classes_) {
+    printf("  %s\n", e.dex_file.c_str());
+    foreach_pair(e.class_info, e.class_names,
+      [&](const ClassInfo& info, const std::string& name) {
+        if (info.status < static_cast<int>(Status::kStatusVerified)) {
+          printf("    %s unverified (status: %s)\n",
+                 name.c_str(), statusStr(info.status));
+        }
+      }
+    );
   }
 }
 
@@ -1080,7 +1163,7 @@ class OatFile_064 : public OatFile {
                                                     std::move(dex_files)));
   }
 
-  void print(bool dump_classes, bool dump_tables) override {
+  void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
     printf("Header:\n");
     header_.print();
     printf("Key/Value store:\n");
@@ -1092,6 +1175,9 @@ class OatFile_064 : public OatFile {
     if (dump_classes) {
       printf("Classes:\n");
       dex_file_listing_.print_classes();
+    }
+    if (print_unverified_classes) {
+      dex_file_listing_.print_unverified_classes();
     }
   }
 
@@ -1143,7 +1229,7 @@ class OatFile_079 : public OatFile {
                                                     std::move(oat_classes)));
   }
 
-  void print(bool dump_classes, bool dump_tables) override {
+  void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
     printf("Header:\n");
     header_.print();
     printf("Key/Value store:\n");
@@ -1160,6 +1246,9 @@ class OatFile_079 : public OatFile {
     if (dump_classes) {
       printf("Classes:\n");
       oat_classes_.print();
+    }
+    if (print_unverified_classes) {
+      oat_classes_.print_unverified_classes();
     }
   }
 
@@ -1195,7 +1284,7 @@ class OatFile_079 : public OatFile {
 
 class OatFile_Unknown : public OatFile {
 public:
-  void print(bool dump_classes, bool dump_tables) override {
+  void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
     printf("Unknown OAT file version!\n");
     header_.print();
   }
@@ -1216,7 +1305,7 @@ private:
 
 class OatFile_Bad : public OatFile {
 public:
-  void print(bool dump_classes, bool dump_tables) override {
+  void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
     printf("Bad magic number:\n");
     header_.print();
   }

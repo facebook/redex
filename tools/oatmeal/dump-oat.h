@@ -41,7 +41,7 @@ class OatFile {
   // reads magic number, returns correct oat file implementation.
   static std::unique_ptr<OatFile> parse(ConstBuffer buf);
 
-  virtual void print(bool dump_classes, bool dump_tables) = 0;
+  virtual void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) = 0;
 
   virtual Status status() = 0;
 

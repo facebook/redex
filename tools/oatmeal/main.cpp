@@ -48,6 +48,8 @@ struct Arguments {
   bool dump_tables = false;
   bool dump_memory_usage = false;
 
+  bool print_unverified_classes = false;
+
   std::string arch;
 };
 
@@ -82,6 +84,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"dump-classes", no_argument, nullptr, 'c'},
                              {"dump-tables", no_argument, nullptr, 't'},
                              {"dump-memory-usage", no_argument, nullptr, 'm'},
+                             {"print-unverified-classes", no_argument, nullptr, 'p'},
                              {"arch", required_argument, nullptr, 'a'},
                              {nullptr, 0, nullptr, 0}};
 
@@ -90,7 +93,7 @@ Arguments parse_args(int argc, char* argv[]) {
   std::vector<std::string> dex_locations;
 
   int c;
-  while ((c = getopt_long(argc, argv, "cetmdbx:l:o:v:a:", &options[0], nullptr)) !=
+  while ((c = getopt_long(argc, argv, "cetmpdbx:l:o:v:a:", &options[0], nullptr)) !=
          -1) {
     switch (c) {
     case 'd':
@@ -103,6 +106,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 'e':
       ret.write_elf = true;
+      break;
+
+    case 'p':
+      ret.print_unverified_classes = true;
       break;
 
     case 'b':
@@ -161,6 +168,11 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
+  if (ret.action != Action::DUMP && ret.print_unverified_classes) {
+    fprintf(stderr, "-p/--print-unverified-classes can only be used with -d/--dump\n");
+    exit(1);
+  }
+
   if (dex_locations.size() > 0) {
     if (dex_locations.size() != dex_files.size()) {
       fprintf(stderr,
@@ -216,7 +228,7 @@ int dump(const Arguments& args) {
   auto ma_scope = MemoryAccounter::NewScope(buf);
 
   auto oatfile = OatFile::parse(buf);
-  oatfile->print(args.dump_classes, args.dump_tables);
+  oatfile->print(args.dump_classes, args.dump_tables, args.print_unverified_classes);
 
   if (args.dump_memory_usage) {
     cur_ma()->print();
