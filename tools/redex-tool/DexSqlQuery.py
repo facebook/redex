@@ -127,6 +127,9 @@ def udf_opcode(opcode):
 def udf_is_coldstart(dex_id):
     return dex_id == "dex/0" or dex_id == "dex/1" or dex_id == "dex/2"
 
+def udf_is_default_ctor(name):
+    return name == ';.<init>:()V'
+
 # operates on fields.name
 class AggregateFieldShape:
     def __init__(self):
@@ -152,6 +155,7 @@ conn.create_function("IS_SYNTHETIC", 1, udf_is_synthetic)
 conn.create_function("IS_ANNOTATION", 1, udf_is_annotation)
 conn.create_function("IS_ENUM", 1, udf_is_enum)
 conn.create_function("IS_CONSTRUCTOR", 1, udf_is_constructor)
+conn.create_function("IS_DEFAULT_CONSTRUCTOR", 1, udf_is_default_ctor)
 conn.create_function("IS_VOLTRON_DEX", 1, udf_is_voltron_dex)
 conn.create_function("IS_INNER_CLASS", 1, udf_is_inner_class)
 conn.create_function("IS_ANON_CLASS", 1, udf_is_anon_class)
