@@ -203,8 +203,6 @@ void MultiMethodInliner::inline_methods() {
     visited.insert(caller);
     caller_inline(caller, it.second, visited);
   }
-
-  invoke_direct_to_static();
 }
 
 void MultiMethodInliner::caller_inline(

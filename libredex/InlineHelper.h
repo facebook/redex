@@ -47,6 +47,10 @@ class MultiMethodInliner {
       std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
       const Config& config);
 
+  ~MultiMethodInliner() {
+    invoke_direct_to_static();
+  }
+
   /**
    * attempt inlining for all candidates.
    */
@@ -169,6 +173,13 @@ class MultiMethodInliner {
    */
   void change_visibility(DexMethod* callee);
 
+  /**
+   * Staticize required methods (stored in `m_make_static`) and update
+   * opcodes accordingly.
+   *
+   * NOTE: It only needs to be called once after inlining. Since it is called
+   *       from the destructor, there is no need to manually call it.
+   */
   void invoke_direct_to_static();
 
  private:
