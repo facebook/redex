@@ -119,15 +119,9 @@ std::unordered_set<DexClass*> get_trivial_builders(
     const std::unordered_set<DexType*>& stack_only_builders) {
 
   std::unordered_set<DexClass*> trivial_builders;
-  static DexType* obj_type = get_object_type();
 
   for (DexType* builder_type : builders) {
     DexClass* builder_class = type_class(builder_type);
-
-    // Filter out builders that don't extend Object.
-    if (builder_class->get_super_class() != obj_type) {
-      continue;
-    }
 
     // Filter out builders that escape the stack.
     if (stack_only_builders.find(builder_type) == stack_only_builders.end()) {
@@ -238,9 +232,11 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  auto obj_type = get_object_type();
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
-    if (is_annotation(cls) || is_interface(cls)) {
+    if (is_annotation(cls) || is_interface(cls) ||
+        cls->get_super_class() != obj_type) {
       continue;
     }
 
@@ -272,7 +268,6 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   }
 
   std::unordered_set<DexType*> builders_and_supers;
-  auto obj_type = get_object_type();
   for (DexType* builder : stack_only_builders) {
     DexType* cls = builder;
     while (cls != nullptr && cls != obj_type) {
