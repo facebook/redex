@@ -826,9 +826,6 @@ bool remove_builder_from(DexMethod* method,
   DexType* buildee = get_buildee(builder->get_type());
   always_assert(buildee != nullptr);
 
-  DexMethod* method_copy = nullptr;
-  bool remove_failed = false;
-
   DexType* super_class = super_class_holder != nullptr
                              ? super_class_holder
                              : builder->get_super_class();
@@ -839,8 +836,7 @@ bool remove_builder_from(DexMethod* method,
     return false;
   }
 
-  while (!remove_failed &&
-         get_non_trivial_init_methods(method->get_code(), builder->get_type())
+  while (get_non_trivial_init_methods(method->get_code(), builder->get_type())
                  .size() > 0) {
 
     // Filter out builders for which the method contains super class invokes.
@@ -848,43 +844,19 @@ bool remove_builder_from(DexMethod* method,
       return false;
     }
 
-    // Keeping a copy of the method in case we need to restore it.
-    if (!method_copy) {
-      method_copy = DexMethod::make_method_from(
-          method,
-          method->get_class(),
-          DexString::make_string(std::string(method->get_name()->c_str()) +
-                                 "$redex"));
-    }
-
     if (!b_transform.inline_methods(
-            method, builder->get_type(), &get_non_trivial_init_methods)) {
-      remove_failed = true;
-    } else {
-      // Inline remaining calls.
-      if (!b_transform.inline_methods(
-              method, builder->get_type(), &get_non_init_methods)) {
-        remove_failed = true;
-      }
+            method, builder->get_type(), &get_non_trivial_init_methods) ||
+        !b_transform.inline_methods(
+            method, builder->get_type(), &get_non_init_methods)) {
+      return false;
     }
   }
 
-  if (remove_failed || !remove_builder(method, builder)) {
-    remove_failed = true;
+  if (!remove_builder(method, builder)) {
+    return false;
   }
 
-  if (method_copy) {
-    if (remove_failed) {
-      // Restore method, since without removing the builder we need the
-      // initializations.
-      method->set_code(method_copy->release_code());
-    } else {
-      // Cleanup after constructor inlining.
-      remove_super_class_calls(method, super_class);
-    }
-
-    DexMethod::erase_method(method_copy);
-  }
-
-  return !remove_failed;
+  // Cleanup after constructor inlining.
+  remove_super_class_calls(method, super_class);
+  return true;
 }
