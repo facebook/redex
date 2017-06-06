@@ -76,9 +76,7 @@ TEST(IRInstruction, RoundTrip) {
     }
 
     auto ir_insn = new IRInstruction(insn);
-    if (can_use_2addr(ir_insn)) {
-      ir_insn->set_opcode(convert_3to2addr(ir_insn->opcode()));
-    }
+    try_2addr_conversion(ir_insn);
     EXPECT_EQ(*ir_insn->to_dex_instruction(), *insn) << "at " << show(op);
 
     delete insn;
@@ -145,7 +143,16 @@ TEST(IRInstruction, TwoAddr) {
             *dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v}));
   EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v})),
             *dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v}));
-
+  // check converting to 2addr form work for add-int v1,v0,v1
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {1_v, 0_v, 1_v})),
+            *dasm(OPCODE_ADD_INT_2ADDR, {1_v, 0_v}));
+  // check only commutative instruction can be converted to 2addr
+  // for form OPCODE v1,v0,v1
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v})),
+            *dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v}));
+  // check registers beyond 4 bits can't benefit
+  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v})),
+            *dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v}));
   delete g_redex;
 }
 

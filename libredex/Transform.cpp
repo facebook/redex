@@ -2255,9 +2255,7 @@ void select_instructions(IRCode* code) {
   for (auto it = ii.begin(); it != end; ++it) {
     auto* insn = it->insn;
     auto op = insn->opcode();
-    if (can_use_2addr(insn)) {
-      insn->set_opcode(convert_3to2addr(op));
-    }
+    try_2addr_conversion(insn);
     if (!RedexContext::next_release_gate()) {
       continue;
     }

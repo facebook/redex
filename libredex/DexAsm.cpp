@@ -72,10 +72,12 @@ bool unsupported(DexOpcode opcode) {
 
 void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
   auto arg = args.begin();
-  if (insn->dests_size() && !opcode::dest_is_src(insn->opcode())) {
+  if (insn->dests_size()) {
     always_assert(arg->tag == VREG);
     insn->set_dest(arg->v);
-    arg = std::next(arg);
+    if (!opcode::dest_is_src(insn->opcode())) {
+      arg = std::next(arg);
+    }
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     always_assert(arg->tag == VREG);
