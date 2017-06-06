@@ -60,7 +60,7 @@ bool this_arg_escapes(DexMethod* method) {
     }
   };
   auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
-  return tainted_reg_escapes(this_cls, *taint_map);
+  return tainted_reg_escapes(this_cls, method, *taint_map);
 }
 
 bool this_arg_escapes(DexClass* cls) {
@@ -224,7 +224,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);
-  return tainted_reg_escapes(builder, *taint_map);
+  return tainted_reg_escapes(builder, method, *taint_map);
 }
 
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
@@ -337,6 +337,10 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     auto builders = created_builders(method);
 
     for (DexType* builder : builders) {
+      if (method->get_class() == builder) {
+        continue;
+      }
+
       DexClass* builder_cls = type_class(builder);
 
       // Filter out builders that we cannot remove.

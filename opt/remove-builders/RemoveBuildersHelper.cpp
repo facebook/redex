@@ -645,6 +645,7 @@ void transfer_object_reach(DexType* obj,
 
 bool tainted_reg_escapes(
     DexType* ty,
+    DexMethod* method,
     const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
   always_assert(ty != nullptr);
 
@@ -694,6 +695,9 @@ bool tainted_reg_escapes(
     } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
                op == OPCODE_APUT_OBJECT || op == OPCODE_RETURN_OBJECT) {
       if (tainted[insn->src(0)]) {
+        if (op == OPCODE_RETURN_OBJECT && method->get_class() == ty) {
+          continue;
+        }
         TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
         return true;
       }

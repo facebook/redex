@@ -74,6 +74,7 @@ struct FieldsRegs {
 
 bool tainted_reg_escapes(
     DexType* type,
+    DexMethod* method,
     const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map);
 
 void transfer_object_reach(DexType* object,
