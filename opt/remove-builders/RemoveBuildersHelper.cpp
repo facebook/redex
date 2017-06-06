@@ -836,8 +836,10 @@ bool remove_builder_from(DexMethod* method,
     return false;
   }
 
+  bool tried_constructor_inlining = false;
   while (get_non_trivial_init_methods(method->get_code(), builder->get_type())
                  .size() > 0) {
+    tried_constructor_inlining = true;
 
     // Filter out builders for which the method contains super class invokes.
     if (has_super_class_initializations(method, super_class)) {
@@ -857,6 +859,8 @@ bool remove_builder_from(DexMethod* method,
   }
 
   // Cleanup after constructor inlining.
-  remove_super_class_calls(method, super_class);
+  if (tried_constructor_inlining) {
+    remove_super_class_calls(method, super_class);
+  }
   return true;
 }
