@@ -325,7 +325,6 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexClass*> trivial_builders =
       get_trivial_builders(m_builders, no_escapes);
 
-  std::vector<std::tuple<DexMethod*, DexClass*>> method_to_inlined_builders;
   std::unordered_set<DexClass*> kept_builders =
       get_builders_with_subclasses(scope);
 
@@ -350,26 +349,28 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
-        if (!b_transform.inline_methods(
-                method, builder, &get_non_init_methods)) {
+
+        DexMethod* method_copy = DexMethod::make_method_from(
+            method,
+            method->get_class(),
+            DexString::make_string(std::string(method->get_name()->c_str()) +
+                                   "$redex_builders"));
+        bool was_not_removed =
+            !b_transform.inline_methods(
+                method, builder, &get_non_init_methods) ||
+            !remove_builder_from(method, builder_cls, b_transform);
+
+        if (was_not_removed) {
           kept_builders.emplace(builder_cls);
+          method->set_code(method_copy->release_code());
         } else {
-          method_to_inlined_builders.emplace_back(method, builder_cls);
+          b_counter.methods_cleared++;
         }
+
+        DexMethod::erase_method(method_copy);
       }
     }
   });
-
-  for (const auto& pair : method_to_inlined_builders) {
-    DexMethod* method = std::get<0>(pair);
-    DexClass* builder = std::get<1>(pair);
-
-    if (!remove_builder_from(method, builder, b_transform)) {
-      kept_builders.emplace(builder);
-    } else {
-      b_counter.methods_cleared++;
-    }
-  }
 
   // No need to remove the builders here, since `RemoveUnreachable` will
   // take care of it.
