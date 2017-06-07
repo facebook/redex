@@ -55,6 +55,7 @@ struct ClassMatcher {
   explicit ClassMatcher(const KeepSpec& ks)
       : setFlags_(ks.class_spec.setAccessFlags),
         unsetFlags_(ks.class_spec.unsetAccessFlags),
+        m_class_name(ks.class_spec.className),
         m_cls(make_rx(ks.class_spec.className)),
         m_anno(make_rx(ks.class_spec.annotationType, false)),
         m_extends(make_rx(ks.class_spec.extendsClassName)),
@@ -62,7 +63,9 @@ struct ClassMatcher {
 
   bool match(const DexClass* cls) {
     // Check for class name match
-    if (!match_name(cls)) {
+    // `match_name` is really slow; let's short-circuit it for wildcard-only
+    // matches
+    if (m_class_name != "*" && m_class_name != "**" && !match_name(cls)) {
       return false;
     }
     // Check for access match
@@ -156,6 +159,7 @@ struct ClassMatcher {
 
   DexAccessFlags setFlags_;
   DexAccessFlags unsetFlags_;
+  std::string m_class_name;
   std::unique_ptr<boost::regex> m_cls;
   std::unique_ptr<boost::regex> m_anno;
   std::unique_ptr<boost::regex> m_extends;
@@ -165,7 +169,7 @@ struct ClassMatcher {
 };
 }
 
-// Updatea a class, field or method to add keep modifiers.
+// Updates a class, field or method to add keep modifiers.
 template <class DexMember>
 void apply_keep_modifiers(KeepSpec& k, DexMember* member) {
   if (k.includedescriptorclasses) {
@@ -184,7 +188,7 @@ void apply_keep_modifiers(KeepSpec& k, DexMember* member) {
     // Otherwise reset it.
     member->rstate.unset_allowshrinking();
   }
-  // Only set allowobfuscation when no other keep has bee applied to this
+  // Only set allowobfuscation when no other keep has been applied to this
   // class or member.
   if (k.allowobfuscation) {
     if (!keep(member) && strcmp(member->get_name()->c_str(), "<init>") != 0) {
@@ -341,7 +345,7 @@ bool method_level_match(
     redex::MemberSpecification& methodSpecification,
     DexMethod* method,
     const boost::regex* method_regex) {
-  // Check to see if the method match is guarded by an annotaiton match.
+  // Check to see if the method match is guarded by an annotation match.
   if (!(methodSpecification.annotationType.empty())) {
     if (!has_annotation(
             regex_map, method, methodSpecification.annotationType)) {
@@ -638,7 +642,7 @@ void mark_class_and_members_for_keep(
     // Mark non-empty <clinit> methods as seeds.
     keep_clinits(cls);
   }
-  // Walk up the hierarhcy performig seed marking.
+  // Walk up the hierarchy performing seed marking.
   DexClass* class_to_mark = cls;
   bool apply_modifiers = true;
   while (class_to_mark != nullptr && !class_to_mark->is_external()) {
