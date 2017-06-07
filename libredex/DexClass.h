@@ -828,22 +828,6 @@ class DexMethod {
   void sync();
 };
 
-/* Non-optimizing DexSpec compliant ordering */
-inline bool compare_dexmethods(const DexMethod* a, const DexMethod* b) {
-  if (a == nullptr) {
-    return b != nullptr;
-  } else if (b == nullptr) {
-    return false;
-  }
-  if (a->get_class() != b->get_class()) {
-    return compare_dextypes(a->get_class(), b->get_class());
-  }
-  if (a->get_name() != b->get_name()) {
-    return compare_dexstrings(a->get_name(), b->get_name());
-  }
-  return compare_dexprotos(a->get_proto(), b->get_proto());
-}
-
 typedef std::map<DexCode*, uint32_t> dexcode_to_offset;
 
 class DexClass {
@@ -967,7 +951,33 @@ class DexClass {
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
 };
 
+inline bool compare_dexclasses(const DexClass* a, const DexClass* b) {
+  return compare_dextypes(a->get_type(), b->get_type());
+}
+
+struct dexclasses_comparator {
+  bool operator()(const DexClass* a, const DexClass* b) const {
+    return compare_dexclasses(a, b);
+  }
+};
+
 using DexClasses = std::vector<DexClass*>;
+
+/* Non-optimizing DexSpec compliant ordering */
+inline bool compare_dexmethods(const DexMethod* a, const DexMethod* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
+  if (a->get_class() != b->get_class()) {
+    return compare_dextypes(a->get_class(), b->get_class());
+  }
+  if (a->get_name() != b->get_name()) {
+    return compare_dexstrings(a->get_name(), b->get_name());
+  }
+  return compare_dexprotos(a->get_proto(), b->get_proto());
+}
 
 struct dexmethods_comparator {
   bool operator()(const DexMethod* a, const DexMethod* b) const {

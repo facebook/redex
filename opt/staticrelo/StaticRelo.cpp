@@ -50,13 +50,8 @@ template <typename T>
 using refs_t = std::unordered_map<
   const T*, std::vector<std::pair<const DexMethod*, IRInstruction*> > >;
 
-struct compare_dexclasses {
-  bool operator()(const DexClass* a, const DexClass* b) const {
-    return compare_dextypes(a->get_type(), b->get_type());
-  }
-};
 /** all relocation candidate classes */
-using candidates_t = std::set<DexClass*, compare_dexclasses>;
+using candidates_t = std::set<DexClass*, dexclasses_comparator>;
 
 /**
  * Helper to visit all classes which match the given criteria.
