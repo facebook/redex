@@ -9,9 +9,9 @@
 
 #pragma once
 
+#include "DexClass.h"
 #include "InlineHelper.h"
 #include "Pass.h"
-#include "DexClass.h"
 #include "Resolver.h"
 #include "Transform.h"
 
@@ -19,7 +19,7 @@
 #include <set>
 
 class SimpleInlinePass : public Pass {
-public:
+ public:
   SimpleInlinePass() : Pass("SimpleInlinePass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
@@ -43,6 +43,13 @@ public:
       m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
     }
 
+    std::vector<std::string> caller_black_list;
+    pc.get("caller_black_list", {}, caller_black_list);
+    for (const auto& type_s : caller_black_list) {
+      m_inliner_config.caller_black_list.emplace(
+          DexType::make_type(type_s.c_str()));
+    }
+
     // use_liveness is unnecessary if we are going to run the register
     // allocator afterward
     if (RedexContext::assume_regalloc() && m_inliner_config.use_liveness) {
@@ -54,13 +61,13 @@ public:
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-private:
+ private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(
-    Scope& scope,
-    const std::unordered_set<DexType*>& no_inline,
-    const std::unordered_set<DexType*>& force_inline);
+      Scope& scope,
+      const std::unordered_set<DexType*>& no_inline,
+      const std::unordered_set<DexType*>& force_inline);
 
-private:
+ private:
   // count of instructions that define a method as inlinable always
   static const size_t SMALL_CODE_SIZE = 3;
 
