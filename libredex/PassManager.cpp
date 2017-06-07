@@ -132,9 +132,14 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
-    Timer t(pass->name() + " (run)");
     m_current_pass_metrics = &m_pass_metrics[i].metrics;
-    pass->run_pass(stores, cfg, *this);
+    const std::string& pass_name = pass->name();
+    {
+      Timer t(pass_name + " (run)", [this, &pass_name](double seconds) {
+        set_metric(pass_name + " time (seconds)", std::round(seconds));
+      });
+      pass->run_pass(stores, cfg, *this);
+    }
     m_current_pass_metrics = nullptr;
   }
 

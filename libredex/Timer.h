@@ -9,15 +9,18 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <chrono>
 
 struct Timer {
   Timer(std::string msg);
+  Timer(std::string msg, std::function<void(double)> on_destruct);
   ~Timer();
 
  private:
   static unsigned s_indent;
   std::string m_msg;
+  std::function<void(double)> m_on_destruct;
   std::chrono::high_resolution_clock::time_point m_start;
 };

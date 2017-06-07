@@ -9,12 +9,23 @@
 
 #include "Timer.h"
 
+#include <functional>
+
 #include "Trace.h"
 
 unsigned Timer::s_indent = 0;
 
 Timer::Timer(std::string msg)
   : m_msg(msg),
+    m_on_destruct{[](double){}},
+    m_start(std::chrono::high_resolution_clock::now())
+{
+  ++s_indent;
+}
+
+Timer::Timer(std::string msg, std::function<void(double)> on_destruct)
+  : m_msg(msg),
+    m_on_destruct{on_destruct},
     m_start(std::chrono::high_resolution_clock::now())
 {
   ++s_indent;
@@ -23,8 +34,10 @@ Timer::Timer(std::string msg)
 Timer::~Timer() {
   --s_indent;
   auto end = std::chrono::high_resolution_clock::now();
+  auto duration_s = std::chrono::duration<double>(end - m_start).count();
   TRACE(TIME, 1, "%*s%s completed in %.1lf seconds\n",
         4 * s_indent, "",
         m_msg.c_str(),
-        std::chrono::duration<double>(end - m_start).count());
+        duration_s);
+  m_on_destruct(duration_s);
 }
