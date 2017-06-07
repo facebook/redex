@@ -276,6 +276,24 @@ inline std::vector<DexMethod*> devirtualize(
   return devirtualize(signature_map);
 }
 
+inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {
+  always_assert(meth->is_virtual());
+  auto& proto_map = sig_map[meth->get_name()];
+  auto& scopes = proto_map[meth->get_proto()];
+  for (const auto& scope : scopes) {
+    if (scope.type != meth->get_class()) {
+      continue;
+    }
+
+    if (scope.interfaces.size() == 0 &&
+        scope.methods.size() == 1) {
+      always_assert(scope.methods[0].second == FINAL);
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Return the list of virtual methods for a given type.
  * If the type is java.lang.Object and it is not known (no DexClass for it)

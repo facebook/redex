@@ -170,7 +170,7 @@ void make_methods_static(const std::unordered_set<DexMethod*>& methods,
 
 bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
-  always_assert(code != nullptr);
+  always_assert(!is_static(method) && code != nullptr);
 
   auto const this_insn = InstructionIterable(code).begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
@@ -208,6 +208,23 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
   return ret;
 }
 
+std::vector<DexMethod*> get_devirtualizable_vmethods(
+    const std::vector<DexClass*>& scope,
+    const std::vector<DexMethod*>& targets) {
+  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
+  auto signature_map = build_signature_map(class_hierarchy);
+
+  std::vector<DexMethod*> res;
+  for (const auto m : targets) {
+    always_assert(!is_static(m) && !is_private(m) && !is_any_init(m));
+    if (can_devirtualize(signature_map, m)) {
+      res.push_back(m);
+    }
+  }
+
+  return res;
+}
+
 std::vector<DexMethod*> get_devirtualizable_dmethods(
     const std::vector<DexClass*>& scope,
     const std::vector<DexClass*>& targets) {
@@ -228,28 +245,19 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
   return ret;
 }
 
-std::unordered_set<DexMethod*> devirtualizable_methods(
-    const std::vector<DexMethod*>& candidates) {
-  std::unordered_set<DexMethod*> found;
-  for (auto const& method : candidates) {
-    if (keep(method) || method->is_external() || is_abstract(method)) {
+void verify_and_split(const std::vector<DexMethod*>& candidates,
+                      std::unordered_set<DexMethod*>& using_this,
+                      std::unordered_set<DexMethod*>& not_using_this) {
+  for (const auto m : candidates) {
+    if (keep(m) || m->is_external() || is_abstract(m)) {
       continue;
     }
-    found.emplace(method);
-  }
-  return found;
-}
-
-std::unordered_set<DexMethod*> devirtualizable_methods_not_using_this(
-    const std::vector<DexMethod*>& candidates) {
-  std::unordered_set<DexMethod*> found;
-  for (auto const& method : devirtualizable_methods(candidates)) {
-    if (uses_this(method)) {
-      continue;
+    if (uses_this(m)) {
+      using_this.insert(m);
+    } else {
+      not_using_this.insert(m);
     }
-    found.emplace(method);
   }
-  return found;
 }
 
 } // namespace
@@ -280,30 +288,60 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
 
 DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
     DexStoresVector& stores, const std::vector<DexClass*>& target_classes) {
+  reset_metrics();
   auto scope = build_class_scope(stores);
+  auto vmethods = get_devirtualizable_vmethods(scope, target_classes);
+  std::unordered_set<DexMethod*> using_this, not_using_this;
+  verify_and_split(vmethods, using_this, not_using_this);
+  TRACE(VIRT,
+        2,
+        " VIRT to devirt vmethods using this %lu, not using this %lu\n",
+        using_this.size(),
+        not_using_this.size());
 
   if (m_config.vmethods_not_using_this) {
-    auto candidates = get_devirtualizable_vmethods(scope, target_classes);
-    auto vmethods = devirtualizable_methods_not_using_this(candidates);
-    staticize_methods_not_using_this(scope, vmethods);
-  }
-
-  if (m_config.dmethods_not_using_this) {
-    auto candidates = get_devirtualizable_dmethods(scope, target_classes);
-    auto dmethods = devirtualizable_methods_not_using_this(candidates);
-    staticize_methods_not_using_this(scope, dmethods);
+    staticize_methods_not_using_this(scope, not_using_this);
   }
 
   if (m_config.vmethods_using_this) {
-    const auto candidates = get_devirtualizable_vmethods(scope, target_classes);
-    const auto vmethods = devirtualizable_methods(candidates);
-    staticize_methods_using_this(scope, vmethods);
+    staticize_methods_using_this(scope, using_this);
+  }
+
+  auto dmethods = get_devirtualizable_dmethods(scope, target_classes);
+  using_this.clear();
+  not_using_this.clear();
+  verify_and_split(dmethods, using_this, not_using_this);
+  TRACE(VIRT,
+        2,
+        " VIRT to devirt dmethods using this %lu, not using this %lu\n",
+        using_this.size(),
+        not_using_this.size());
+
+  if (m_config.dmethods_not_using_this) {
+    staticize_methods_not_using_this(scope, not_using_this);
   }
 
   if (m_config.dmethods_using_this) {
-    auto candidates = get_devirtualizable_dmethods(scope, target_classes);
-    const auto dmethods = devirtualizable_methods(candidates);
-    staticize_methods_using_this(scope, dmethods);
+    staticize_methods_using_this(scope, using_this);
+  }
+
+  return m_metrics;
+}
+
+DevirtualizerMetrics MethodDevirtualizer::devirtualize_vmethods(
+    DexStoresVector& stores, const std::vector<DexMethod*>& methods) {
+  reset_metrics();
+  auto scope = build_class_scope(stores);
+  const auto candidates = get_devirtualizable_vmethods(scope, methods);
+  std::unordered_set<DexMethod*> using_this, not_using_this;
+  verify_and_split(candidates, using_this, not_using_this);
+
+  if (m_config.vmethods_using_this) {
+    staticize_methods_using_this(scope, using_this);
+  }
+
+  if (m_config.vmethods_not_using_this) {
+    staticize_methods_not_using_this(scope, not_using_this);
   }
 
   return m_metrics;

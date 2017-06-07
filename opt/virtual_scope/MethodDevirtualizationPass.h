@@ -19,12 +19,12 @@ class MethodDevirtualizationPass : public Pass {
     pc.get("staticize_vmethods_not_using_this",
            true,
            m_staticize_vmethods_not_using_this);
-    pc.get("staticize_dmethods_not_using_this",
-           true,
-           m_staticize_dmethods_not_using_this);
     pc.get("staticize_vmethods_using_this",
            false,
            m_staticize_vmethods_using_this);
+    pc.get("staticize_dmethods_not_using_this",
+           true,
+           m_staticize_dmethods_not_using_this);
     pc.get("staticize_dmethods_using_this",
            false,
            m_staticize_dmethods_using_this);
@@ -34,7 +34,7 @@ class MethodDevirtualizationPass : public Pass {
 
  private:
   bool m_staticize_vmethods_not_using_this;
-  bool m_staticize_dmethods_not_using_this;
   bool m_staticize_vmethods_using_this;
+  bool m_staticize_dmethods_not_using_this;
   bool m_staticize_dmethods_using_this;
 };

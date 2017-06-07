@@ -8,16 +8,16 @@
  */
 
 #include "MethodDevirtualizationPass.h"
-#include "MethodDevirtualizer.h"
 #include "DexUtil.h"
+#include "MethodDevirtualizer.h"
 
 void MethodDevirtualizationPass::run_pass(DexStoresVector& stores,
                                           ConfigFiles&,
                                           PassManager& manager) {
   MethodDevirtualizer devirt(m_staticize_vmethods_not_using_this,
-                             m_staticize_dmethods_not_using_this,
                              m_staticize_vmethods_using_this,
-                             m_staticize_vmethods_using_this);
+                             m_staticize_dmethods_not_using_this,
+                             m_staticize_dmethods_using_this);
   const auto scope = build_class_scope(stores);
   const auto metrics = devirt.devirtualize_methods(stores);
   manager.incr_metric("num_staticized_methods_drop_this",
