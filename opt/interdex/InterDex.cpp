@@ -462,7 +462,10 @@ static DexClassesVector run_interdex(
   }
 
   det.la_size = 0;
-
+  // If we have end-markers, we use them to demarcate the end of the
+  // cold-start set.  Otherwise, we calculate it on the basis of the
+  // whole list.
+  bool end_markers_present = false;
   for (auto& entry : interdexorder) {
     auto it = det.clookup.find(entry);
     if (it == det.clookup.end()) {
@@ -470,6 +473,8 @@ static DexClassesVector run_interdex(
       if (entry.find("DexEndMarker") != std::string::npos) {
         TRACE(IDEX, 1, "Terminating dex due to DexEndMarker\n");
         flush_out_secondary(det, outdex);
+        cold_start_set_dex_count = outdex.size();
+        end_markers_present = true;
       }
       continue;
     }
@@ -497,8 +502,10 @@ static DexClassesVector run_interdex(
     }
   }
 
-  // -1 because we're not counting the primary dex
-  cold_start_set_dex_count = outdex.size();
+  if(!end_markers_present) {
+    // -1 because we're not counting the primary dex
+    cold_start_set_dex_count = outdex.size();
+  }
 
   /* Now emit the kerf that wasn't specified in the head
    * or primary list.
