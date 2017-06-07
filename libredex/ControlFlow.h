@@ -73,6 +73,8 @@ class ControlFlowGraph {
   Block* create_block();
   const Block* entry_block() const { return m_entry_block; }
   const Block* exit_block() const { return m_exit_block; }
+  Block* entry_block() { return m_entry_block; }
+  Block* exit_block() { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
   /*

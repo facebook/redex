@@ -54,6 +54,7 @@
   TM(RELO)               \
   TM(RENAME)             \
   TM(RME)                \
+  TM(RMGOTO)             \
   TM(RMU)                \
   TM(SHORTEN)            \
   TM(SINK)               \
