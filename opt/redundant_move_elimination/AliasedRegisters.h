@@ -13,6 +13,7 @@
 #include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 
+#include "AbstractDomain.h"
 #include "DexClass.h"
 
 typedef uint16_t Register;
@@ -72,7 +73,7 @@ struct RegisterValue {
   }
 };
 
-class AliasedRegisters {
+class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
@@ -80,28 +81,46 @@ class AliasedRegisters {
    * declare that r1 and r2 are aliases of each other.
    * This also means r1 is aliased to all of r2's aliases and vice versa.
    */
-  void make_aliased(RegisterValue r1, RegisterValue r2);
+  void make_aliased(const RegisterValue& r1, const RegisterValue& r2);
 
   /**
    * break every alias that any register has to `r`
    */
-  void break_alias(RegisterValue r);
+  void break_alias(const RegisterValue& r);
 
   /**
    * Including transitive aliases
    */
-  bool are_aliases(RegisterValue r1, RegisterValue r2);
+  bool are_aliases(const RegisterValue& r1, const RegisterValue& r2);
 
-  boost::optional<Register> get_representative(RegisterValue r);
+  boost::optional<Register> get_representative(const RegisterValue& r);
+
+  // ---- extends AbstractValue ----
+
+  void clear() override;
+
+  Kind kind() const override;
+
+  bool leq(const AliasedRegisters& other) const override;
+
+  bool equals(const AliasedRegisters& other) const override;
+
+  Kind join_with(const AliasedRegisters& other) override;
+
+  Kind widen_with(const AliasedRegisters& other) override;
+
+  Kind meet_with(const AliasedRegisters& other) override;
+
+  Kind narrow_with(const AliasedRegisters& other) override;
 
  private:
-  // an undirected graph where register values are vertices
-  // and an edge means they are aliased
-  typedef boost::adjacency_list<boost::vecS,
-                                boost::vecS,
-                                boost::undirectedS,
-                                RegisterValue>
-      Graph;
+  // An undirected graph where register values are vertices
+  // and an edge means they are aliased.
+  // Using a set for the edge container makes sure we can't have parallel edges
+  using Graph = boost::adjacency_list<boost::setS, // out edge container
+                                      boost::vecS, // vertex container
+                                      boost::undirectedS, // undirected graph
+                                      RegisterValue>; // node property
   typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;
   Graph m_graph;
 
@@ -109,12 +128,19 @@ class AliasedRegisters {
   // Computed by get_representative and cleared by any change to the graph
   std::vector<int> m_conn_components;
 
-  const boost::range_detail::integer_iterator<vertex_t> find(RegisterValue r);
-  vertex_t find_or_create(RegisterValue r);
+  const boost::range_detail::integer_iterator<vertex_t> find(
+      const RegisterValue& r) const;
+
+  vertex_t find_or_create(const RegisterValue& r);
 
   bool path_exists(vertex_t v1, vertex_t v2) const;
+
+  bool has_edge_between(const RegisterValue& r1, const RegisterValue& r2) const;
 
   // call when the graph is changed and things we computed on the old graph
   // are no longer true.
   void invalidate_cache();
 };
+
+class AliasDomain final
+    : public AbstractDomainScaffolding<AliasedRegisters, AliasDomain> {};

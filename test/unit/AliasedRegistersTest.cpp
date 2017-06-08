@@ -217,3 +217,119 @@ TEST(AliasedRegistersTest, getRepresentativeNoLits) {
   EXPECT_TRUE(bool(two_rep));
   EXPECT_EQ(2, *two_rep);
 }
+
+TEST(AliasedRegistersTest, AbstractValueLeq) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+  EXPECT_TRUE(a.leq(b));
+  EXPECT_TRUE(b.leq(a));
+
+  a.make_aliased(zero, one);
+  b.make_aliased(zero, one);
+
+  EXPECT_TRUE(a.leq(b));
+
+  b.make_aliased(zero, two);
+  EXPECT_TRUE(a.leq(b));
+  EXPECT_FALSE(b.leq(a));
+}
+
+TEST(AliasedRegistersTest, AbstractValueLeqAndNotEqual) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+
+  a.make_aliased(zero, one);
+  b.make_aliased(two, three);
+
+  EXPECT_FALSE(a.leq(b));
+  EXPECT_FALSE(b.leq(a));
+  EXPECT_FALSE(a.equals(b));
+  EXPECT_FALSE(b.equals(a));
+}
+
+TEST(AliasedRegistersTest, AbstractValueEquals) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+  EXPECT_TRUE(a.equals(b));
+  EXPECT_TRUE(b.equals(a));
+
+  a.make_aliased(zero, one);
+  b.make_aliased(zero, one);
+
+  EXPECT_TRUE(a.equals(b));
+  EXPECT_TRUE(b.equals(a));
+
+  b.make_aliased(zero, two);
+  EXPECT_FALSE(a.equals(b));
+  EXPECT_FALSE(b.equals(a));
+}
+
+TEST(AliasedRegistersTest, AbstractValueEqualsAndClear) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+  EXPECT_TRUE(a.equals(b));
+
+  a.make_aliased(zero, one);
+  b.make_aliased(zero, one);
+
+  EXPECT_TRUE(a.equals(b));
+
+  b.clear();
+  EXPECT_TRUE(a.equals(a));
+  EXPECT_TRUE(b.equals(b));
+  EXPECT_FALSE(a.equals(b));
+}
+
+TEST(AliasedRegistersTest, AbstractValueJoin) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+
+  a.make_aliased(zero, one);
+  b.make_aliased(one, two);
+
+  a.join_with(b);
+
+  EXPECT_TRUE(a.are_aliases(zero, two));
+  EXPECT_FALSE(a.are_aliases(zero, three));
+
+  EXPECT_FALSE(b.are_aliases(zero, one));
+  EXPECT_TRUE(b.are_aliases(one, two));
+  EXPECT_FALSE(b.are_aliases(zero, two));
+  EXPECT_FALSE(b.are_aliases(zero, three));
+}
+
+TEST(AliasedRegistersTest, AbstractValueMeetNone) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+
+  a.make_aliased(zero, one);
+  b.make_aliased(one, two);
+
+  a.meet_with(b);
+
+  EXPECT_FALSE(a.are_aliases(zero, one));
+  EXPECT_FALSE(a.are_aliases(one, two));
+  EXPECT_FALSE(a.are_aliases(zero, two));
+  EXPECT_FALSE(a.are_aliases(zero, three));
+}
+
+TEST(AliasedRegistersTest, AbstractValueMeetSome) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+
+  a.make_aliased(zero, one);
+  b.make_aliased(zero, one);
+  b.make_aliased(one, two);
+
+  a.meet_with(b);
+
+  EXPECT_TRUE(a.are_aliases(zero, one));
+  EXPECT_FALSE(a.are_aliases(one, two));
+  EXPECT_FALSE(a.are_aliases(zero, two));
+  EXPECT_FALSE(a.are_aliases(zero, three));
+
+  EXPECT_TRUE(b.are_aliases(zero, one));
+  EXPECT_TRUE(b.are_aliases(one, two));
+  EXPECT_TRUE(b.are_aliases(zero, two));
+  EXPECT_FALSE(b.are_aliases(zero, three));
+}
