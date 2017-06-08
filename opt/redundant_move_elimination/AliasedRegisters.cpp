@@ -184,22 +184,38 @@ void AliasedRegisters::clear() {
 }
 
 AliasedRegisters::Kind AliasedRegisters::kind() const {
-  return AliasedRegisters::Kind::Value;
+  return (boost::num_edges(m_graph) > 0) ? AliasedRegisters::Kind::Value
+                                         : AliasedRegisters::Kind::Top;
 }
 
+/**
+ * The lattice looks like this:
+ *
+ *             T (graphs with no edges)
+ *      graphs with 1 edge                  ^  join moves up (edge intersection)
+ *      graphs with 2 edges                 |
+ *            ...                           v  meet moves down (edge union)
+ *      graphs with n edges
+ *            ...
+ *            _|_
+ *
+ * So, leq is the superset relation on the edge set
+ */
 bool AliasedRegisters::leq(const AliasedRegisters& other) const {
-  if (boost::num_edges(m_graph) > boost::num_edges(other.m_graph)) {
+  if (boost::num_edges(m_graph) < boost::num_edges(other.m_graph)) {
+    // this cannot be a superset of other if this has fewer edges
     return false;
   }
 
-  // for all edges, make sure other contains that edge
-  const auto& iters = boost::edges(m_graph);
+  // for all edges in other (the potential subset), make sure this contains that
+  // edge.
+  const auto& iters = boost::edges(other.m_graph);
   const auto& begin = iters.first;
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
-    const RegisterValue& r1 = m_graph[boost::source(*it, m_graph)];
-    const RegisterValue& r2 = m_graph[boost::target(*it, m_graph)];
-    if (!other.has_edge_between(r1, r2)) {
+    const RegisterValue& r1 = other.m_graph[boost::source(*it, other.m_graph)];
+    const RegisterValue& r2 = other.m_graph[boost::target(*it, other.m_graph)];
+    if (!has_edge_between(r1, r2)) {
       return false;
     }
   }
@@ -216,7 +232,7 @@ bool AliasedRegisters::equals(const AliasedRegisters& other) const {
 }
 
 // edge union
-AliasedRegisters::Kind AliasedRegisters::join_with(
+AliasedRegisters::Kind AliasedRegisters::meet_with(
     const AliasedRegisters& other) {
   const auto& iters = boost::edges(other.m_graph);
   const auto& begin = iters.first;
@@ -230,13 +246,13 @@ AliasedRegisters::Kind AliasedRegisters::join_with(
   return AliasedRegisters::Kind::Value;
 }
 
-AliasedRegisters::Kind AliasedRegisters::widen_with(
+AliasedRegisters::Kind AliasedRegisters::narrow_with(
     const AliasedRegisters& other) {
   return join_with(other);
 }
 
 // edge intersection
-AliasedRegisters::Kind AliasedRegisters::meet_with(
+AliasedRegisters::Kind AliasedRegisters::join_with(
     const AliasedRegisters& other) {
 
   // fill `deletes` with edges that aren't in `other`
@@ -262,7 +278,7 @@ AliasedRegisters::Kind AliasedRegisters::meet_with(
   return AliasedRegisters::Kind::Value;
 }
 
-AliasedRegisters::Kind AliasedRegisters::narrow_with(
+AliasedRegisters::Kind AliasedRegisters::widen_with(
     const AliasedRegisters& other) {
   return meet_with(other);
 }

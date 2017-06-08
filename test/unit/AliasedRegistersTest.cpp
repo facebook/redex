@@ -230,8 +230,8 @@ TEST(AliasedRegistersTest, AbstractValueLeq) {
   EXPECT_TRUE(a.leq(b));
 
   b.make_aliased(zero, two);
-  EXPECT_TRUE(a.leq(b));
-  EXPECT_FALSE(b.leq(a));
+  EXPECT_FALSE(a.leq(b));
+  EXPECT_TRUE(b.leq(a));
 }
 
 TEST(AliasedRegistersTest, AbstractValueLeqAndNotEqual) {
@@ -280,14 +280,14 @@ TEST(AliasedRegistersTest, AbstractValueEqualsAndClear) {
   EXPECT_FALSE(a.equals(b));
 }
 
-TEST(AliasedRegistersTest, AbstractValueJoin) {
+TEST(AliasedRegistersTest, AbstractValueMeet) {
   AliasedRegisters a;
   AliasedRegisters b;
 
   a.make_aliased(zero, one);
   b.make_aliased(one, two);
 
-  a.join_with(b);
+  a.meet_with(b);
 
   EXPECT_TRUE(a.are_aliases(zero, two));
   EXPECT_FALSE(a.are_aliases(zero, three));
@@ -298,14 +298,14 @@ TEST(AliasedRegistersTest, AbstractValueJoin) {
   EXPECT_FALSE(b.are_aliases(zero, three));
 }
 
-TEST(AliasedRegistersTest, AbstractValueMeetNone) {
+TEST(AliasedRegistersTest, AbstractValueJoinNone) {
   AliasedRegisters a;
   AliasedRegisters b;
 
   a.make_aliased(zero, one);
   b.make_aliased(one, two);
 
-  a.meet_with(b);
+  a.join_with(b);
 
   EXPECT_FALSE(a.are_aliases(zero, one));
   EXPECT_FALSE(a.are_aliases(one, two));
@@ -313,7 +313,7 @@ TEST(AliasedRegistersTest, AbstractValueMeetNone) {
   EXPECT_FALSE(a.are_aliases(zero, three));
 }
 
-TEST(AliasedRegistersTest, AbstractValueMeetSome) {
+TEST(AliasedRegistersTest, AbstractValueJoinSome) {
   AliasedRegisters a;
   AliasedRegisters b;
 
@@ -321,7 +321,7 @@ TEST(AliasedRegistersTest, AbstractValueMeetSome) {
   b.make_aliased(zero, one);
   b.make_aliased(one, two);
 
-  a.meet_with(b);
+  a.join_with(b);
 
   EXPECT_TRUE(a.are_aliases(zero, one));
   EXPECT_FALSE(a.are_aliases(one, two));

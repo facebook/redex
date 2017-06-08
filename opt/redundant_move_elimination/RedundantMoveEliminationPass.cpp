@@ -13,11 +13,14 @@
 
 #include "AliasedRegisters.h"
 #include "ControlFlow.h"
+#include "FixpointIterators.h"
 #include "IRInstruction.h"
 #include "Walkers.h"
 
 /**
  * This pass eliminates writes to registers that already hold the written value.
+ *
+ * It's more commonly known as Copy Propagation.
  *
  * For example,
  *   move-object/from16 v0, v33
@@ -41,10 +44,10 @@
  * with a different value. Any move between registers that are already aliased
  * is unneccesary. Eliminate them.
  *
- * It also does the same thing with constant loads
+ * It can also do the same thing with constant loads, if enabled by the config.
  *
  * This optimization also will replace source registers with a representative
- * register (a whole alias group has a single representative) . The reason is
+ * register (a whole alias group has a single representative). The reason is
  * that if we use fewer registers, DCE could clean up some more moves after
  * us.
  *
@@ -56,66 +59,53 @@
 
 namespace {
 
-class RedundantMoveEliminationImpl {
+class AliasFixpointIterator final
+  : public MonotonicFixpointIterator<Block*, AliasDomain> {
  public:
-  RedundantMoveEliminationImpl(
-      const std::vector<DexClass*>& scope,
-      PassManager& mgr,
-      const RedundantMoveEliminationPass::Config& config)
-      : m_scope(scope), m_mgr(mgr), m_config(config) {}
-
-  void run() {
-    walk_methods(m_scope, [this](DexMethod* m) {
-      if (m->get_code()) {
-        run_on_method(m);
-      }
-    });
-  }
-
- private:
-  const std::vector<DexClass*>& m_scope;
-  PassManager& m_mgr;
   const RedundantMoveEliminationPass::Config& m_config;
+  PassManager& m_mgr;
 
-  void run_on_method(DexMethod* method) {
-    std::vector<IRInstruction*> deletes;
+  using BlockToListFunc =
+      std::function<std::vector<Block*>(Block* const&)>;
 
-    auto code = method->get_code();
-    code->build_cfg();
-    const auto& blocks = code->cfg().blocks();
-
-    for (auto block : blocks) {
-      run_on_block(block, deletes);
-    }
-
-    m_mgr.incr_metric("redundant_moves_eliminated", deletes.size());
-    for (auto insn : deletes) {
-      code->remove_opcode(insn);
-    }
-  }
+  AliasFixpointIterator(Block* start_block,
+                        BlockToListFunc succ,
+                        BlockToListFunc pred,
+                        const RedundantMoveEliminationPass::Config& config,
+                        PassManager& mgr)
+      : MonotonicFixpointIterator<Block*, AliasDomain>(
+            start_block, succ, pred),
+        m_config(config),
+        m_mgr(mgr) {}
 
   /*
+   * if deletes is not null, this time is for real.
    * fill the `deletes` vector with redundant instructions
+   *
+   * if deletes is null, analyze only. make no changes.
    *
    * An instruction can be removed if we know the source and destination are
    * aliases
    */
-  void run_on_block(Block* block, std::vector<IRInstruction*>& deletes) {
+  void run_on_block(Block* const& block,
+                    AliasedRegisters& aliases,
+                    std::vector<IRInstruction*>* deletes) const {
 
-    AliasedRegisters aliases;
     for (auto& mei : InstructionIterable(block)) {
-      RegisterValue src = get_src_value(mei.insn);
+      const RegisterValue& src = get_src_value(mei.insn);
       if (src != RegisterValue::none()) {
         // either a move or a constant load into `dst`
         RegisterValue dst{mei.insn->dest()};
         if (aliases.are_aliases(dst, src)) {
-          deletes.push_back(mei.insn);
+          if (deletes != nullptr) {
+            deletes->push_back(mei.insn);
+          }
         } else {
           aliases.break_alias(dst);
           aliases.make_aliased(dst, src);
         }
       } else {
-        if (m_config.replace_with_representative) {
+        if (m_config.replace_with_representative && deletes != nullptr) {
           replace_with_representative(mei.insn, aliases);
         }
         if (mei.insn->dests_size() > 0) {
@@ -137,7 +127,7 @@ class RedundantMoveEliminationImpl {
   // Each group of aliases has one representative register.
   // Try to replace source registers with their representative.
   void replace_with_representative(IRInstruction* insn,
-                                   AliasedRegisters& aliases) {
+                                   AliasedRegisters& aliases) const {
     if (insn->srcs_size() > 0 &&
         !opcode::has_range(insn->opcode()) && // range has to stay in order
         // we need to make sure the dest and src of check-cast stay identical,
@@ -168,7 +158,7 @@ class RedundantMoveEliminationImpl {
     }
   }
 
-  RegisterValue get_src_value(IRInstruction* insn) {
+  const RegisterValue get_src_value(IRInstruction* insn) const {
     switch (insn->opcode()) {
     case OPCODE_MOVE:
     case OPCODE_MOVE_FROM16:
@@ -206,6 +196,78 @@ class RedundantMoveEliminationImpl {
       return RegisterValue::none();
     }
   }
+
+  void analyze_node(Block* const& node,
+                    AliasDomain* current_state) const override {
+    current_state->update([&](AliasedRegisters& aliases) {
+      run_on_block(node, aliases, nullptr);
+    });
+  }
+
+  AliasDomain analyze_edge(
+      Block* const& /* source */,
+      Block* const& /* target */,
+      const AliasDomain& exit_state_at_source) const override {
+    return exit_state_at_source;
+  }
+};
+
+class RedundantMoveEliminationImpl final {
+ public:
+  RedundantMoveEliminationImpl(
+      const std::vector<DexClass*>& scope,
+      PassManager& mgr,
+      const RedundantMoveEliminationPass::Config& config)
+      : m_scope(scope), m_mgr(mgr), m_config(config) {}
+
+  void run() {
+    walk_methods(m_scope, [this](DexMethod* m) {
+      if (m->get_code()) {
+        run_on_method(m);
+      }
+    });
+  }
+
+ private:
+  const std::vector<DexClass*>& m_scope;
+  PassManager& m_mgr;
+  const RedundantMoveEliminationPass::Config& m_config;
+
+  void run_on_method(DexMethod* method) {
+    std::vector<IRInstruction*> deletes;
+
+    auto code = method->get_code();
+    code->build_cfg();
+    const auto& blocks = code->cfg().blocks();
+
+    AliasFixpointIterator fixpoint(
+        code->cfg().entry_block(),
+        [](Block* const& block) { return block->succs(); },
+        [](Block* const& block) { return block->preds(); },
+        m_config,
+        m_mgr);
+
+    if (m_config.full_method_analysis) {
+      fixpoint.run(AliasDomain());
+      for (auto block : blocks) {
+        AliasDomain domain = fixpoint.get_entry_state_at(block);
+        domain.update(
+            [&fixpoint, block, &deletes](AliasedRegisters& aliases) {
+              fixpoint.run_on_block(block, aliases, &deletes);
+            });
+      }
+    } else {
+      for (auto block : blocks) {
+        AliasedRegisters aliases;
+        fixpoint.run_on_block(block, aliases, &deletes);
+      }
+    }
+
+    m_mgr.incr_metric("redundant_moves_eliminated", deletes.size());
+    for (auto insn : deletes) {
+      code->remove_opcode(insn);
+    }
+  }
 };
 }
 
@@ -216,12 +278,12 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
   RedundantMoveEliminationImpl impl(scope, mgr, m_config);
   impl.run();
   TRACE(RME,
-        2,
+        1,
         "%d redundant moves eliminated\n",
         mgr.get_metric("redundant_moves_eliminated"));
   TRACE(RME,
-        2,
-        "%d source_regs_replaced_with_representative\n",
+        1,
+        "%d source registers replaced with representative\n",
         mgr.get_metric("source_regs_replaced_with_representative"));
 }
 

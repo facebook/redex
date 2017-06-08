@@ -24,6 +24,7 @@ class RedundantMoveEliminationPass : public Pass {
     pc.get("replace_with_representative",
            true,
            m_config.replace_with_representative);
+    pc.get("full_method_analysis", true, m_config.full_method_analysis);
   }
 
   struct Config {
@@ -31,5 +32,6 @@ class RedundantMoveEliminationPass : public Pass {
     bool eliminate_const_strings;
     bool eliminate_const_classes;
     bool replace_with_representative;
+    bool full_method_analysis;
   } m_config;
 };

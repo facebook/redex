@@ -20,7 +20,7 @@ typedef uint16_t Register;
 
 struct RegisterValue {
 
-  const enum class Kind {
+  enum class Kind {
     REGISTER,
     CONST_LITERAL,
     CONST_STRING,
@@ -142,5 +142,26 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   void invalidate_cache();
 };
 
-class AliasDomain final
-    : public AbstractDomainScaffolding<AliasedRegisters, AliasDomain> {};
+class AliasDomain
+    : public AbstractDomainScaffolding<AliasedRegisters, AliasDomain> {
+ public:
+
+  explicit AliasDomain(AbstractValueKind kind = AbstractValueKind::Top)
+      : AbstractDomainScaffolding<AliasedRegisters, AliasDomain>(kind) {}
+
+  static AliasDomain bottom() {
+    return AliasDomain(AliasDomain::AbstractValueKind::Bottom);
+  }
+
+  static AliasDomain top() {
+    return AliasDomain(AbstractValueKind::Top);
+  }
+
+  void update(std::function<void(AliasedRegisters&)> operation) {
+    if (is_bottom()) {
+      return;
+    }
+    operation(*this->get_value());
+    normalize();
+  }
+};
