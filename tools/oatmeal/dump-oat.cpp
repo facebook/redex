@@ -1330,6 +1330,20 @@ OatFile::~OatFile() = default;
 
 std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
 
+  if (buf.len >= sizeof(Elf32_Ehdr)) {
+    Elf32_Ehdr header;
+    memcpy(&header, buf.ptr, sizeof(Elf32_Ehdr));
+    if (header.e_ident[0] == 0x7f &&
+        header.e_ident[1] == 'E' &&
+        header.e_ident[2] == 'L' &&
+        header.e_ident[3] == 'F') {
+      // .rodata starts at 0x1000 in every version of ART that i've seen.
+      // If there are any where this isn't true, we'll have to actually read
+      // out the offset of .rodata.
+      buf = buf.slice(0x1000);
+    }
+  }
+
   auto header = OatHeader_Common::parse(buf);
 
   // TODO: do we need to handle endian-ness? I think all platforms we
