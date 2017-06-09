@@ -9,18 +9,26 @@
 
 #pragma once
 
-#include <functional>
-#include <string>
 #include <chrono>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
 
 struct Timer {
-  Timer(std::string msg);
-  Timer(std::string msg, std::function<void(double)> on_destruct);
+  Timer(const std::string& msg);
   ~Timer();
 
+  using times_t = std::vector<std::pair<std::string, double>>;
+  // there should be no currently running Timers when this function is called
+  static const times_t& get_times() {
+    return s_times;
+  }
+
  private:
+  static std::mutex s_lock;
+  static times_t s_times;
   static unsigned s_indent;
   std::string m_msg;
-  std::function<void(double)> m_on_destruct;
   std::chrono::high_resolution_clock::time_point m_start;
 };

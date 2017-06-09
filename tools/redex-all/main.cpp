@@ -309,18 +309,24 @@ Json::Value get_detailed_stats(
   return dexes;
 }
 
-void output_stats(const char* path,
-                  const dex_output_stats_t& stats,
-                  const std::vector<dex_output_stats_t>& dexes_stats,
-                  PassManager& mgr) {
+Json::Value get_times() {
+  Json::Value list(Json::arrayValue);
+  for (auto t : Timer::get_times()) {
+    Json::Value element;
+    element[t.first] = std::round(t.second * 10) / 10.0;
+    list.append(element);
+  }
+  return list;
+}
+
+Json::Value get_full_stats(const dex_output_stats_t& stats,
+                           const std::vector<dex_output_stats_t>& dexes_stats,
+                           PassManager& mgr) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
-  Json::StyledStreamWriter writer;
-  std::ofstream out(path);
-  writer.write(out, d);
-  out.close();
+  return d;
 }
 
 void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
@@ -363,191 +369,203 @@ int main(int argc, char* argv[]) {
   signal(SIGABRT, crash_backtrace_handler);
   signal(SIGBUS, crash_backtrace_handler);
 
-  Timer t("redex-all main()");
-
-  g_redex = new RedexContext();
-
-  Arguments args;
-  // Currently there are two sources that specify the library jars:
-  // 1. The jar_path argument, which may specify one library jar.
-  // 2. The library_jars vector, which lists the library jars specified in
-  //    the ProGuard configuration.
-  // If -jarpath specified a library jar it is appended to the
-  // library_jars vector so this vector can be used to iterate over
-  // all the library jars regardless of whether they were specified
-  // on the command line or ProGuard file.
-  // TODO: Make the command line -jarpath option like a colon separated
-  //       list of library JARS.
-  std::set<std::string> library_jars;
-  auto start = parse_args(argc, argv, args);
-  if (!dir_is_writable(args.out_dir)) {
-    fprintf(stderr,
-            "outdir %s is not a writable directory\n",
-            args.out_dir.c_str());
-    exit(1);
-  }
-
-  RedexContext::set_next_release_gate(
-      args.config.get("next_release_gate", false).asBool());
-  RedexContext::set_assume_regalloc(
-      args.config.get("assume_regalloc", false).asBool());
-
-  redex::ProguardConfiguration pg_config;
-  for (const auto pg_config_path : args.proguard_config_paths) {
-    Timer time_pg_parsing("Parsed ProGuard config file " + pg_config_path);
-    redex::proguard_parser::parse_file(pg_config_path, &pg_config);
-  }
-
-  auto const& pg_libs = pg_config.libraryjars;
-  args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
-
-  for (const auto jar_path : args.jar_paths) {
-    std::stringstream jar_stream(jar_path);
-    std::string dependent_jar_path;
-    while (std::getline(jar_stream, dependent_jar_path, ':')) {
-      TRACE(MAIN,
-            2,
-            "Dependent JAR specified on command-line: %s\n",
-            dependent_jar_path.c_str());
-      library_jars.emplace(dependent_jar_path);
-    }
-  }
-
-  if (start == 0 || start == argc) {
-    usage();
-    exit(1);
-  }
-
-  DexStore root_store("classes");
-  DexStoresVector stores;
-  stores.emplace_back(std::move(root_store));
-
+  std::string stats_output_path;
+  Json::Value stats;
   {
-    Timer t("Load classes from dexes");
-    for (int i = start; i < argc; i++) {
-      const std::string filename(argv[i]);
-      if (filename.compare(filename.size() - 3, 3, "dex") == 0) {
-        DexClasses classes = load_classes_from_dex(filename.c_str());
-        stores[0].add_classes(std::move(classes));
-      } else {
-        DexMetadata store_metadata;
-        store_metadata.parse(filename);
-        DexStore store(store_metadata);
-        for (auto file_path : store_metadata.get_files()) {
-          DexClasses classes = load_classes_from_dex(file_path.c_str());
-          store.add_classes(std::move(classes));
-        }
-        stores.emplace_back(std::move(store));
+    Timer t("redex-all main()");
+
+    g_redex = new RedexContext();
+
+    Arguments args;
+    // Currently there are two sources that specify the library jars:
+    // 1. The jar_path argument, which may specify one library jar.
+    // 2. The library_jars vector, which lists the library jars specified in
+    //    the ProGuard configuration.
+    // If -jarpath specified a library jar it is appended to the
+    // library_jars vector so this vector can be used to iterate over
+    // all the library jars regardless of whether they were specified
+    // on the command line or ProGuard file.
+    // TODO: Make the command line -jarpath option like a colon separated
+    //       list of library JARS.
+    std::set<std::string> library_jars;
+    auto start = parse_args(argc, argv, args);
+    if (!dir_is_writable(args.out_dir)) {
+      fprintf(stderr,
+              "outdir %s is not a writable directory\n",
+              args.out_dir.c_str());
+      exit(1);
+    }
+
+    RedexContext::set_next_release_gate(
+        args.config.get("next_release_gate", false).asBool());
+    RedexContext::set_assume_regalloc(
+        args.config.get("assume_regalloc", false).asBool());
+
+    redex::ProguardConfiguration pg_config;
+    for (const auto pg_config_path : args.proguard_config_paths) {
+      Timer time_pg_parsing("Parsed ProGuard config file " + pg_config_path);
+      redex::proguard_parser::parse_file(pg_config_path, &pg_config);
+    }
+
+    auto const& pg_libs = pg_config.libraryjars;
+    args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
+
+    for (const auto jar_path : args.jar_paths) {
+      std::stringstream jar_stream(jar_path);
+      std::string dependent_jar_path;
+      while (std::getline(jar_stream, dependent_jar_path, ':')) {
+        TRACE(MAIN,
+              2,
+              "Dependent JAR specified on command-line: %s\n",
+              dependent_jar_path.c_str());
+        library_jars.emplace(dependent_jar_path);
       }
     }
-  }
 
-  if (!library_jars.empty()) {
-    Timer t("Load library jars");
-    for (const auto& library_jar : library_jars) {
-      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
-      if (!load_jar_file(library_jar.c_str())) {
-        // Try again with the basedir
-        std::string basedir_path =
-            pg_config.basedirectory + "/" + library_jar.c_str();
-        if (!load_jar_file(basedir_path.c_str())) {
-          fprintf(stderr,
-                  "ERROR: Library jar could not be loaded: %s\n",
-                  library_jar.c_str());
-          exit(1);
+    if (start == 0 || start == argc) {
+      usage();
+      exit(1);
+    }
+
+    DexStore root_store("classes");
+    DexStoresVector stores;
+    stores.emplace_back(std::move(root_store));
+
+    {
+      Timer t("Load classes from dexes");
+      for (int i = start; i < argc; i++) {
+        const std::string filename(argv[i]);
+        if (filename.compare(filename.size() - 3, 3, "dex") == 0) {
+          DexClasses classes = load_classes_from_dex(filename.c_str());
+          stores[0].add_classes(std::move(classes));
+        } else {
+          DexMetadata store_metadata;
+          store_metadata.parse(filename);
+          DexStore store(store_metadata);
+          for (auto file_path : store_metadata.get_files()) {
+            DexClasses classes = load_classes_from_dex(file_path.c_str());
+            store.add_classes(std::move(classes));
+          }
+          stores.emplace_back(std::move(store));
         }
       }
     }
-  }
 
-  ConfigFiles cfg(args.config);
-  {
-    Timer t("Deobfuscating dex elements");
+    if (!library_jars.empty()) {
+      Timer t("Load library jars");
+      for (const auto& library_jar : library_jars) {
+        TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+        if (!load_jar_file(library_jar.c_str())) {
+          // Try again with the basedir
+          std::string basedir_path =
+              pg_config.basedirectory + "/" + library_jar.c_str();
+          if (!load_jar_file(basedir_path.c_str())) {
+            fprintf(stderr,
+                    "ERROR: Library jar could not be loaded: %s\n",
+                    library_jar.c_str());
+            exit(1);
+          }
+        }
+      }
+    }
+
+    ConfigFiles cfg(args.config);
+    {
+      Timer t("Deobfuscating dex elements");
+      for (auto& store : stores) {
+        apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
+      }
+    }
+    cfg.using_seeds = false;
+    cfg.outdir = args.out_dir;
+    if (!args.seeds_filename.empty()) {
+      Timer t("Initialized seed classes from incoming seeds file " +
+              args.seeds_filename);
+      auto nseeds =
+          init_seed_classes(args.seeds_filename, cfg.get_proguard_map());
+      cfg.using_seeds = nseeds > 0;
+    }
+
+    auto const& passes = PassRegistry::get().get_passes();
+    PassManager manager(passes, pg_config, args.config);
+    {
+      Timer t("Running optimization passes");
+      manager.run_passes(stores, cfg);
+    }
+
+    TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+
+    LocatorIndex* locator_index = nullptr;
+    if (args.config.get("emit_locator_strings", false).asBool()) {
+      TRACE(LOC,
+            1,
+            "Will emit class-locator strings for classloader optimization\n");
+      locator_index = new LocatorIndex(make_locator_index(stores));
+    }
+
+    dex_output_stats_t totals;
+    std::vector<dex_output_stats_t> dexes_stats;
+
+    auto pos_output =
+        cfg.metafile(args.config.get("line_number_map", "").asString());
+    auto pos_output_v2 =
+        cfg.metafile(args.config.get("line_number_map_v2", "").asString());
+    std::unique_ptr<PositionMapper> pos_mapper(
+        PositionMapper::make(pos_output, pos_output_v2));
     for (auto& store : stores) {
-      apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
-    }
-  }
-  cfg.using_seeds = false;
-  cfg.outdir = args.out_dir;
-  if (!args.seeds_filename.empty()) {
-    Timer t("Initialized seed classes from incoming seeds file " +
-            args.seeds_filename);
-    auto nseeds =
-        init_seed_classes(args.seeds_filename, cfg.get_proguard_map());
-    cfg.using_seeds = nseeds > 0;
-  }
-
-  auto const& passes = PassRegistry::get().get_passes();
-  PassManager manager(passes, pg_config, args.config);
-  {
-    Timer t("Running optimization passes");
-    manager.run_passes(stores, cfg);
-  }
-
-  TRACE(MAIN, 1, "Writing out new DexClasses...\n");
-
-  LocatorIndex* locator_index = nullptr;
-  if (args.config.get("emit_locator_strings", false).asBool()) {
-    TRACE(LOC,
-          1,
-          "Will emit class-locator strings for classloader optimization\n");
-    locator_index = new LocatorIndex(make_locator_index(stores));
-  }
-
-  dex_output_stats_t totals;
-  std::vector<dex_output_stats_t> dexes_stats;
-
-  auto pos_output =
-      cfg.metafile(args.config.get("line_number_map", "").asString());
-  auto pos_output_v2 =
-      cfg.metafile(args.config.get("line_number_map_v2", "").asString());
-  std::unique_ptr<PositionMapper> pos_mapper(
-      PositionMapper::make(pos_output, pos_output_v2));
-  for (auto& store : stores) {
-    Timer t("Writing optimized dexes");
-    for (size_t i = 0; i < store.get_dexen().size(); i++) {
-      std::stringstream ss;
-      ss << args.out_dir << "/" << store.get_name();
-      if (store.get_name().compare("classes") == 0) {
-        // primary/secondary dex store, primary has no numeral and secondaries
-        // start at 2
-        if (i > 0) {
-          ss << (i + 1);
+      Timer t("Writing optimized dexes");
+      for (size_t i = 0; i < store.get_dexen().size(); i++) {
+        std::stringstream ss;
+        ss << args.out_dir << "/" << store.get_name();
+        if (store.get_name().compare("classes") == 0) {
+          // primary/secondary dex store, primary has no numeral and secondaries
+          // start at 2
+          if (i > 0) {
+            ss << (i + 1);
+          }
+        } else {
+          // other dex stores do not have a primary,
+          // so it makes sense to start at 2
+          ss << (i + 2);
         }
-      } else {
-        // other dex stores do not have a primary,
-        // so it makes sense to start at 2
-        ss << (i + 2);
+        ss << ".dex";
+        auto stats = write_classes_to_dex(ss.str(),
+                                          &store.get_dexen()[i],
+                                          locator_index,
+                                          i,
+                                          cfg,
+                                          args.config,
+                                          pos_mapper.get());
+        totals += stats;
+        dexes_stats.push_back(stats);
       }
-      ss << ".dex";
-      auto stats = write_classes_to_dex(ss.str(),
-                                        &store.get_dexen()[i],
-                                        locator_index,
-                                        i,
-                                        cfg,
-                                        args.config,
-                                        pos_mapper.get());
-      totals += stats;
-      dexes_stats.push_back(stats);
     }
+
+    {
+      Timer t("Writing stats");
+      stats_output_path =
+          cfg.metafile(args.config.get("stats_output", "").asString());
+      auto method_move_map =
+          cfg.metafile(args.config.get("method_move_map", "").asString());
+      pos_mapper->write_map();
+      stats = get_full_stats(totals, dexes_stats, manager);
+      output_moved_methods_map(method_move_map.c_str(), cfg);
+      print_warning_summary();
+    }
+    {
+      Timer t("Freeing global memory");
+      delete g_redex;
+    }
+    TRACE(MAIN, 1, "Done.\n");
   }
 
+  // now that all the timers are done running, we can collect the data
+  stats["time_stats"] = get_times();
+  Json::StyledStreamWriter writer;
   {
-    Timer t("Writing stats");
-    auto stats_output =
-        cfg.metafile(args.config.get("stats_output", "").asString());
-    auto method_move_map =
-        cfg.metafile(args.config.get("method_move_map", "").asString());
-    pos_mapper->write_map();
-    output_stats(stats_output.c_str(), totals, dexes_stats, manager);
-    output_moved_methods_map(method_move_map.c_str(), cfg);
-    print_warning_summary();
+    std::ofstream out(stats_output_path.c_str());
+    writer.write(out, stats);
   }
-  {
-    Timer t("Freeing global memory");
-    delete g_redex;
-  }
-  TRACE(MAIN, 1, "Done.\n");
 
   return 0;
 }

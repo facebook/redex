@@ -9,23 +9,14 @@
 
 #include "Timer.h"
 
-#include <functional>
-
 #include "Trace.h"
 
 unsigned Timer::s_indent = 0;
+std::mutex Timer::s_lock;
+Timer::times_t Timer::s_times;
 
-Timer::Timer(std::string msg)
+Timer::Timer(const std::string& msg)
   : m_msg(msg),
-    m_on_destruct{[](double){}},
-    m_start(std::chrono::high_resolution_clock::now())
-{
-  ++s_indent;
-}
-
-Timer::Timer(std::string msg, std::function<void(double)> on_destruct)
-  : m_msg(msg),
-    m_on_destruct{on_destruct},
     m_start(std::chrono::high_resolution_clock::now())
 {
   ++s_indent;
@@ -39,5 +30,9 @@ Timer::~Timer() {
         4 * s_indent, "",
         m_msg.c_str(),
         duration_s);
-  m_on_destruct(duration_s);
+
+  {
+    std::lock_guard<std::mutex> guard(s_lock);
+    s_times.push_back({std::move(m_msg), duration_s});
+  }
 }
