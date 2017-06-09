@@ -74,6 +74,7 @@ libredex_la_SOURCES = \
 	libredex/JarLoader.cpp \
 	libredex/Liveness.cpp \
 	libredex/Match.cpp \
+	libredex/MethodDevirtualizer.cpp \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \

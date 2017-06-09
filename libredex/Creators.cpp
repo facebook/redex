@@ -296,6 +296,13 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   push_instruction(mov_res);
 }
 
+void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
+  IRInstruction* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+  auto reg = src_and_dst.get_reg();
+  check_cast->set_type(type)->set_src(0, reg)->set_dest(reg);
+  push_instruction(check_cast);
+}
+
 void MethodBlock::ret(Location loc) {
   auto ch = type_shorty(loc.type);
   assert(ch != 'V');

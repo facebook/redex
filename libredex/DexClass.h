@@ -754,6 +754,13 @@ class DexMethod {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
+  std::string get_simple_deobfuscated_name() const {
+    auto full_name = get_deobfuscated_name();
+    auto pos = full_name.find(".");
+    always_assert(pos != std::string::npos);
+    return full_name.substr(pos + 1);
+  }
+
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
         "Unexpected external method %s\n", SHOW(this));

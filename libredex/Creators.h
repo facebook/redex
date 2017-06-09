@@ -175,6 +175,11 @@ struct MethodBlock {
   void move_result(Location& dst, DexType* type);
 
   /**
+   * Check-cast a location to a given type.
+   */
+  void check_cast(Location& src_and_dst, DexType* type);
+
+  /**
    * Return the given location.
    */
   void ret(Location loc);

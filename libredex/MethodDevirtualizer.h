@@ -49,14 +49,16 @@ class MethodDevirtualizer {
                 dmethods_using_this};
   }
 
+  DevirtualizerMetrics devirtualize_methods(const Scope& scope) {
+    return devirtualize_methods(scope, scope);
+  }
+  
   DevirtualizerMetrics devirtualize_methods(
-      DexStoresVector& stores, const std::vector<DexClass*>& target_classes);
-
-  DevirtualizerMetrics devirtualize_methods(DexStoresVector& stores);
+      const Scope& scope, const std::vector<DexClass*>& target_classes);
 
   // Assuming vmethods.
   DevirtualizerMetrics devirtualize_vmethods(
-      DexStoresVector& stores, const std::vector<DexMethod*>& methods);
+      const Scope& scope, const std::vector<DexMethod*>& methods);
 
  private:
   DevirtualizerConfigs m_config;

@@ -281,15 +281,8 @@ void MethodDevirtualizer::staticize_methods_using_this(
 }
 
 DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
-    DexStoresVector& stores) {
-  auto scope = build_class_scope(stores);
-  return devirtualize_methods(stores, scope);
-}
-
-DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
-    DexStoresVector& stores, const std::vector<DexClass*>& target_classes) {
+    const Scope& scope, const std::vector<DexClass*>& target_classes) {
   reset_metrics();
-  auto scope = build_class_scope(stores);
   auto vmethods = get_devirtualizable_vmethods(scope, target_classes);
   std::unordered_set<DexMethod*> using_this, not_using_this;
   verify_and_split(vmethods, using_this, not_using_this);
@@ -329,9 +322,8 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
 }
 
 DevirtualizerMetrics MethodDevirtualizer::devirtualize_vmethods(
-    DexStoresVector& stores, const std::vector<DexMethod*>& methods) {
+    const Scope& scope, const std::vector<DexMethod*>& methods) {
   reset_metrics();
-  auto scope = build_class_scope(stores);
   const auto candidates = get_devirtualizable_vmethods(scope, methods);
   std::unordered_set<DexMethod*> using_this, not_using_this;
   verify_and_split(candidates, using_this, not_using_this);
