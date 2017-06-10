@@ -653,7 +653,7 @@ bool tainted_reg_escapes(
     auto insn = it.first;
     auto tainted = it.second.bits();
     auto op = insn->opcode();
-    if (is_invoke(insn->opcode())) {
+    if (is_invoke(op)) {
       auto invoked = insn->get_method();
       auto def = resolve_method(invoked, MethodSearch::Any);
       size_t args_reg_start{0};
@@ -663,8 +663,8 @@ bool tainted_reg_escapes(
         invoked = def;
       }
 
-      if (is_init(invoked) || (invoked->get_class() == ty &&
-                                      !is_static(invoked->get_access()))) {
+      if (is_init(invoked) ||
+          (invoked->get_class() == ty && !is_invoke_static(op))) {
         // if a builder is passed as the first arg to a virtual function or a
         // ctor, we can treat it as non-escaping, since we also check that
         // those methods don't allow the builder to escape.

@@ -314,6 +314,22 @@ inline bool is_invoke(DexOpcode op) {
   return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE_RANGE;
 }
 
+inline bool is_invoke_virtual(DexOpcode op) {
+  return op == OPCODE_INVOKE_VIRTUAL || op == OPCODE_INVOKE_VIRTUAL_RANGE;
+}
+
+inline bool is_invoke_super(DexOpcode op) {
+  return op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_SUPER_RANGE;
+}
+
+inline bool is_invoke_direct(DexOpcode op) {
+  return op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE;
+}
+
+inline bool is_invoke_static(DexOpcode op) {
+  return op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_STATIC_RANGE;
+}
+
 inline bool is_invoke_range(DexOpcode op) {
   return op >= OPCODE_INVOKE_VIRTUAL_RANGE &&
       op <= OPCODE_INVOKE_INTERFACE_RANGE;

@@ -19,22 +19,6 @@ namespace {
 using CallSiteReferences =
     std::map<const DexMethod*, std::vector<IRInstruction*>>;
 
-bool is_invoke_virtual(DexOpcode op) {
-  return op == OPCODE_INVOKE_VIRTUAL || op == OPCODE_INVOKE_VIRTUAL_RANGE;
-}
-
-bool is_invoke_super(DexOpcode op) {
-  return op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_SUPER_RANGE;
-}
-
-bool is_invoke_direct(DexOpcode op) {
-  return op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE;
-}
-
-bool is_invoke_static(DexOpcode op) {
-  return op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_STATIC_RANGE;
-}
-
 DexOpcode invoke_virtual_to_static(DexOpcode op) {
   switch (op) {
   case OPCODE_INVOKE_VIRTUAL:
