@@ -58,22 +58,23 @@ std::string get_string_attribute_value(
   return std::string("");
 }
 
-android::Res_value get_raw_attribute_value(
+bool has_raw_attribute_value(
     const android::ResXMLTree& parser,
-    const android::String16& attribute_name) {
+    const android::String16& attribute_name,
+    android::Res_value& outValue
+  ) {
   const size_t attr_count = parser.getAttributeCount();
-  android::Res_value outValue;
 
   for (size_t i = 0; i < attr_count; ++i) {
     size_t len;
     android::String16 key(parser.getAttributeName(i, &len));
     if (key == attribute_name) {
-
       parser.getAttributeValue(i, &outValue);
-      return outValue;
+      return true;
     }
   }
-  return outValue;
+
+  return false;
 }
 
 std::string dotname_to_dexname(const std::string& classname) {
