@@ -10,25 +10,28 @@
 #pragma once
 
 #include <iostream>
-#include <queue>
 
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
 #include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
 
-class ReachableBlocksAdapter {
- public:
-  explicit ReachableBlocksAdapter(const ControlFlowGraph&);
-  std::vector<Block*>& succ(const Block* b) const;
-  std::vector<Block*>& pred(const Block* b) const;
-
- private:
-  const ControlFlowGraph& cfg;
-  std::vector<Block*> m_succ;
-  std::vector<Block*> m_pred;
-};
-
+/**
+ *This class represents constant values living in the following lattice:
+ *                           T
+ *
+ *                  /        |         \
+ *
+ * [Narrow (32 bit) and wide (64 bit) width integral constants]
+ *
+ *                  \        |        /
+ *
+ *                          _|_
+ *
+ * NOTE: ConstantValue is unaware of type (integral vs floating point) it just
+ *       knows about width (one 32 bit register or a register pair representing
+ *       64 bit values.
+ */
 class ConstantValue final : public AbstractValue<ConstantValue> {
  public:
   friend class ConstantDomain;
@@ -81,29 +84,7 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
   ConstantType m_type;
 };
 
-std::ostream& operator<<(std::ostream& o, const ConstantValue& cv) {
-  o << "ConstantValue[ Type:";
-  switch (cv.type()) {
-  case ConstantValue::ConstantType::NARROW: {
-    o << "NARROW";
-    break;
-  }
-  case ConstantValue::ConstantType::WIDE_A: {
-    o << "WIDE_A";
-    break;
-  }
-  case ConstantValue::ConstantType::WIDE_B: {
-    o << "WIDE_B";
-    break;
-  }
-  case ConstantValue::ConstantType::INVALID: {
-    o << "<INVALID>";
-    break;
-  }
-  }
-  o << ", Value: " << cv.constant() << "]";
-  return o;
-}
+std::ostream& operator<<(std::ostream& o, const ConstantValue& cv);
 
 class ConstantDomain final
     : public AbstractDomainScaffolding<ConstantValue, ConstantDomain> {
@@ -130,16 +111,7 @@ class ConstantDomain final
   friend class ConstPropEnvUtil;
 };
 
-std::ostream& operator<<(std::ostream& o, const ConstantDomain& cd) {
-  if (cd.is_bottom()) {
-    o << "_|_";
-  } else if (cd.is_top()) {
-    o << "T";
-  } else {
-    o << cd.value();
-  }
-  return o;
-}
+std::ostream& operator<<(std::ostream& o, const ConstantDomain& cd);
 
 using ConstPropEnvironment =
     HashedAbstractEnvironment<uint16_t, ConstantDomain>;
@@ -148,71 +120,35 @@ class ConstPropEnvUtil {
  public:
   static ConstPropEnvironment& set_narrow(ConstPropEnvironment& env,
                                           uint16_t reg,
-                                          int32_t value) {
-    env.set(reg,
-            ConstantDomain::value(value, ConstantValue::ConstantType::NARROW));
-    return env;
-  }
-
+                                          int32_t value);
   static ConstPropEnvironment& set_wide(ConstPropEnvironment& env,
                                         uint16_t first_reg,
-                                        int64_t value) {
-    int32_t first_half = (int32_t)((value >> 32) & 0xFFFFFFFFL);
-    int32_t second_half = (int32_t)(value & 0xFFFFFFFFL);
-    env.set(
-        first_reg,
-        ConstantDomain::value(first_half, ConstantValue::ConstantType::WIDE_A));
-    env.set(first_reg + 1,
-            ConstantDomain::value(second_half,
-                                  ConstantValue::ConstantType::WIDE_B));
-    return env;
-  }
-
+                                        int64_t value);
   static ConstPropEnvironment& set_top(ConstPropEnvironment& env,
                                        uint16_t first_reg,
-                                       bool is_wide = false) {
-    env.set(first_reg, ConstantDomain::top());
-    if (is_wide) {
-      env.set(first_reg + 1, ConstantDomain::top());
-    }
-    return env;
-  }
-
-  static bool is_narrow_constant(const ConstPropEnvironment& env, int16_t reg) {
-    const auto& domain = env.get(reg);
-    return domain.is_value() &&
-           domain.value().type() == ConstantValue::ConstantType::NARROW;
-  }
-
+                                       bool is_wide = false);
+  static bool is_narrow_constant(const ConstPropEnvironment& env, int16_t reg);
   static bool is_wide_constant(const ConstPropEnvironment& env,
-                               int16_t first_reg) {
-    const auto& domain1 = env.get(first_reg);
-    const auto& domain2 = env.get(first_reg + 1);
-    return domain1.is_value() && domain2.is_value() &&
-           domain1.value().type() == ConstantValue::ConstantType::WIDE_A &&
-           domain2.value().type() == ConstantValue::ConstantType::WIDE_B;
-  }
-
-  static int32_t get_narrow(const ConstPropEnvironment& env, int16_t reg) {
-    assert(is_narrow_constant(env, reg));
-    return env.get(reg).value().constant();
-  }
-
-  static int64_t get_wide(const ConstPropEnvironment& env, int16_t first_reg) {
-    assert(is_wide_constant(env, first_reg));
-    const auto& domain1 = env.get(first_reg);
-    const auto& domain2 = env.get(first_reg + 1);
-
-    int64_t result =
-        static_cast<int64_t>(env.get(first_reg).value().constant()) &
-        0xFFFFFFFFL;
-    result <<= 32;
-    result |= static_cast<int64_t>(env.get(first_reg + 1).value().constant()) &
-              0xFFFFFFFFL;
-    return result;
-  }
+                               int16_t first_reg);
+  static int32_t get_narrow(const ConstPropEnvironment& env, int16_t reg);
+  static int64_t get_wide(const ConstPropEnvironment& env, int16_t first_reg);
 };
 
+/**
+ * Implements intraprocedural constant-propagation dataflow by using
+ * the abstract interpretation framework.
+ *
+ * This code works in two phases:
+ * Phase 1:  First gather all the facts about constant and model them inside the
+ *           constants lattice (described above).  Run the fixpoint analysis and
+ *           propagate all facts throughout the CFG.  In code these are all the
+ *           analyze_*() functions.
+ *
+ * Phase 2:  Once we reached a fix point, then replay the analysis but this time
+ *           use the previously gathered facts about constant and use them to
+ *           replace instructions.  In code; these are all the simplify_*
+ *           functions.
+ */
 template <typename BlockType,
           typename InstructionType,
           typename BlockIterable,
