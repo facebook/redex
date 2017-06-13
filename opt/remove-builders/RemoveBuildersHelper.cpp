@@ -397,6 +397,45 @@ std::vector<IRInstruction*> gather_move_builders_insn(
   return insns;
 }
 
+/**
+ * Keeps tracks of registers that are going to be used for undefined fields
+ * depending on the type of field: wide, primitive etc.
+ */
+class NullRegs {
+ public:
+  bool has(DexType* type) { return get(type) != FieldOrRegStatus::UNDEFINED; }
+
+  uint16_t get(DexType* type, uint16_t default_value) {
+    if (!has(type)) {
+      set(type, default_value);
+    }
+    return get(type);
+  }
+
+ private:
+  int null_reg{FieldOrRegStatus::UNDEFINED};
+  int null_reg_prim{FieldOrRegStatus::UNDEFINED};
+  int null_reg_prim_wide{FieldOrRegStatus::UNDEFINED};
+
+  int get(DexType* type) {
+    if (is_wide_type(type)) {
+      return null_reg_prim_wide;
+    } else {
+      return is_primitive(type) ? null_reg_prim : null_reg;
+    }
+  }
+
+  void set(DexType* type, uint16_t value) {
+    int* current_null_reg;
+    if (is_wide_type(type)) {
+      current_null_reg = &null_reg_prim_wide;
+    } else {
+      current_null_reg = is_primitive(type) ? &null_reg_prim : &null_reg;
+    }
+    *current_null_reg = value;
+  }
+};
+
 bool remove_builder(DexMethod* method, DexClass* builder) {
   always_assert(method != nullptr);
   always_assert(builder != nullptr);
@@ -418,6 +457,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
       RedexContext::assume_regalloc() ? regs_size : regs_size - in_regs_size;
   uint16_t extra_regs = 0;
   std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
+  NullRegs undef_fields_regs;
 
   // Instructions where the builder gets moved to a different
   // register need to be also removed (at the end).
@@ -490,12 +530,17 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
                      FieldOrRegStatus::UNDEFINED) {
 
             // Initializing the field with null.
-            uint16_t new_null_reg = next_available_reg + extra_regs;
-            extra_regs += is_wide ? 2 : 1;
+            bool has_null_reg = undef_fields_regs.has(field->get_type());
+            uint16_t new_null_reg = undef_fields_regs.get(
+                field->get_type(), next_available_reg + extra_regs);
 
             move_replacements[insn] =
                 construct_move_instr(insn->dest(), new_null_reg, move_opcode);
-            extra_null_regs.emplace_back(new_null_reg, move_opcode);
+
+            if (!has_null_reg) {
+              extra_null_regs.emplace_back(new_null_reg, move_opcode);
+              extra_regs += is_wide ? 2 : 1;
+            }
           } else {
             // If we got here, the field is held in a register.
 
