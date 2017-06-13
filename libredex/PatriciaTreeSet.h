@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -85,20 +86,24 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> intersect(
  * represented as Patricia trees share some structure, their union and
  * intersection can often be computed in sublinear time.
  *
- * Patricia-tree sets can only contain unsigned integers. Arbitrary objects can
- * be accommodated as long as they are represented as pointers and the type
- * uintptr_t is used to instantiate the class.
+ * Patricia trees can only handle unsigned integers. Arbitrary objects can be
+ * accommodated as long as they are represented as pointers. Our implementation
+ * of Patricia-tree sets can transparently operate on either unsigned integers
+ * or pointers to objects.
  */
-template <typename IntegerType>
+template <typename Element>
 class PatriciaTreeSet final {
  public:
-  using iterator = pt_impl::PatriciaTreeIterator<IntegerType>;
+  using IntegerType = typename std::
+      conditional<std::is_pointer<Element>::value, uintptr_t, Element>::type;
+
+  using iterator = pt_impl::PatriciaTreeIterator<Element>;
 
   PatriciaTreeSet() = default;
 
-  explicit PatriciaTreeSet(std::initializer_list<IntegerType> l) {
-    for (IntegerType x : l) {
-      insert(x);
+  explicit PatriciaTreeSet(std::initializer_list<Element> l) {
+    for (Element x : l) {
+      insert(encode(x));
     }
   }
 
@@ -111,13 +116,9 @@ class PatriciaTreeSet final {
 
   bool is_empty() const { return m_tree == nullptr; }
 
-  /*
-   * Note: the complexity of this operation is linear in the size of the
-   * underlying Patricia tree.
-   */
   size_t size() const {
     size_t s = 0;
-    for (IntegerType x : *this) {
+    for (Element x : *this) {
       ++s;
     }
     return s;
@@ -127,11 +128,11 @@ class PatriciaTreeSet final {
 
   iterator end() const { return iterator(); }
 
-  bool contains(IntegerType key) const {
+  bool contains(Element key) const {
     if (m_tree == nullptr) {
       return false;
     }
-    return pt_impl::contains(key, m_tree);
+    return pt_impl::contains<IntegerType>(encode(key), m_tree);
   }
 
   bool is_subset_of(const PatriciaTreeSet& other) const {
@@ -142,44 +143,32 @@ class PatriciaTreeSet final {
     return pt_impl::equals<IntegerType>(m_tree, other.m_tree);
   }
 
-  PatriciaTreeSet& insert(IntegerType key) {
-    m_tree = pt_impl::insert<IntegerType>(key, m_tree);
+  PatriciaTreeSet& insert(Element key) {
+    m_tree = pt_impl::insert<IntegerType>(encode(key), m_tree);
     return *this;
   }
 
-  PatriciaTreeSet& remove(IntegerType key) {
-    m_tree = pt_impl::remove<IntegerType>(key, m_tree);
+  PatriciaTreeSet& remove(Element key) {
+    m_tree = pt_impl::remove<IntegerType>(encode(key), m_tree);
     return *this;
   }
 
-  /*
-   * This operation modifies the set.
-   */
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
     m_tree = pt_impl::merge<IntegerType>(m_tree, other.m_tree);
     return *this;
   }
 
-  /*
-   * This operation modifies the set.
-   */
   PatriciaTreeSet& intersection_with(const PatriciaTreeSet& other) {
     m_tree = pt_impl::intersect<IntegerType>(m_tree, other.m_tree);
     return *this;
   }
 
-  /*
-   * This operation leaves the set unchanged.
-   */
   PatriciaTreeSet get_union_with(const PatriciaTreeSet& other) const {
     auto result = *this;
     result.union_with(other);
     return result;
   }
 
-  /*
-   * This operation leaves the set unchanged.
-   */
   PatriciaTreeSet get_intersection_with(const PatriciaTreeSet& other) const {
     auto result = *this;
     result.intersection_with(other);
@@ -188,27 +177,56 @@ class PatriciaTreeSet final {
 
   void clear() { m_tree.reset(); }
 
-  /*
-   * For whitebox testing.
-   */
   std::shared_ptr<pt_impl::PatriciaTree<IntegerType>> get_patricia_tree()
       const {
     return m_tree;
   }
 
  private:
-  // Given the vast amount of sharing induced by this data structure, using
-  // reference counting is the only reasonable way of managing the lifetime of
-  // Patricia tree nodes.
+  // These functions are used to handle the type conversions required when
+  // manipulating sets of pointers. The first parameter is necessary to make
+  // template deduction work.
+  template <typename T = Element,
+            typename = typename std::enable_if<std::is_pointer<T>::value>::type>
+  static uintptr_t encode(Element x) {
+    return reinterpret_cast<uintptr_t>(x);
+  }
+
+  template <
+      typename T = Element,
+      typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
+  static Element encode(Element x) {
+    return x;
+  }
+
+  template <typename T = Element,
+            typename = typename std::enable_if<std::is_pointer<T>::value>::type>
+  static Element decode(uintptr_t x) {
+    return reinterpret_cast<Element>(x);
+  }
+
+  template <
+      typename T = Element,
+      typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
+  static Element decode(Element x) {
+    return x;
+  }
+
   std::shared_ptr<pt_impl::PatriciaTree<IntegerType>> m_tree;
+
+  template <typename T>
+  friend std::ostream& operator<<(std::ostream&, const PatriciaTreeSet<T>&);
+
+  template <typename T>
+  friend class pt_impl::PatriciaTreeIterator;
 };
 
-template <typename IntegerType>
+template <typename Element>
 inline std::ostream& operator<<(std::ostream& o,
-                                const PatriciaTreeSet<IntegerType>& s) {
+                                const PatriciaTreeSet<Element>& s) {
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << *it;
+    o << PatriciaTreeSet<Element>::decode(*it);
     if (std::next(it) != s.end()) {
       o << ", ";
     }
@@ -672,10 +690,12 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> intersect(
 
 // The iterator basically performs a post-order traversal of the tree, pausing
 // at each leaf.
-template <typename IntegerType>
+template <typename Element>
 class PatriciaTreeIterator final
-    : public std::iterator<std::forward_iterator_tag, IntegerType> {
+    : public std::iterator<std::forward_iterator_tag, Element> {
  public:
+  using IntegerType = typename PatriciaTreeSet<Element>::IntegerType;
+
   PatriciaTreeIterator() {}
 
   explicit PatriciaTreeIterator(
@@ -719,7 +739,9 @@ class PatriciaTreeIterator final
     return !(*this == other);
   }
 
-  const IntegerType& operator*() { return m_leaf->key(); }
+  Element operator*() {
+    return PatriciaTreeSet<Element>::decode(m_leaf->key());
+  }
 
  private:
   // The argument is never null.

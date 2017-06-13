@@ -215,3 +215,30 @@ TEST_F(PatriciaTreeSetTest, whiteBox) {
     EXPECT_EQ(ist.get_patricia_tree(), ist_tree);
   }
 }
+
+TEST_F(PatriciaTreeSetTest, setsOfPointers) {
+  using string_set = PatriciaTreeSet<std::string*>;
+  std::string a = "a";
+  std::string b = "b";
+  std::string c = "c";
+  std::string d = "d";
+
+  string_set s;
+  s.insert(&a).insert(&b).insert(&c).insert(&d);
+  {
+    std::vector<std::string> v;
+    for (std::string* p : s) {
+      v.push_back(*p);
+    }
+    EXPECT_THAT(v, ::testing::UnorderedElementsAre("a", "b", "c", "d"));
+  }
+
+  s.remove(&a).remove(&d);
+  {
+    std::vector<std::string> v;
+    for (std::string* p : s) {
+      v.push_back(*p);
+    }
+    EXPECT_THAT(v, ::testing::UnorderedElementsAre("b", "c"));
+  }
+}
