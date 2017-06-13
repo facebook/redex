@@ -411,3 +411,7 @@ inline bool is_fopcode(DexOpcode op) {
   return op == FOPCODE_PACKED_SWITCH || op == FOPCODE_SPARSE_SWITCH ||
          op == FOPCODE_FILLED_ARRAY;
 }
+
+inline bool is_monitor(DexOpcode op) {
+  return op == OPCODE_MONITOR_ENTER || op == OPCODE_MONITOR_EXIT;
+}

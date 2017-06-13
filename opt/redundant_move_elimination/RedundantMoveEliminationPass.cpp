@@ -133,7 +133,8 @@ class AliasFixpointIterator final
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
-        insn->opcode() != OPCODE_CHECK_CAST) {
+        insn->opcode() != OPCODE_CHECK_CAST &&
+        !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         RegisterValue val{insn->src(i)};
         boost::optional<Register> rep = aliases.get_representative(val);
