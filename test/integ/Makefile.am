@@ -1,4 +1,4 @@
-AM_CXXFLAGS = --std=gnu++11
+AM_CXXFLAGS = --std=gnu++14
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/test/gtest-1.7.0/include \
 	-I$(top_srcdir)/liblocator \

@@ -152,7 +152,11 @@ class BridgeRemover {
 
   struct MethodRefHash {
     size_t operator()(const MethodRef& m) const {
-      return boost::hash_value<MethodRef>(m);
+      size_t seed = 0;
+      boost::hash_combine(seed, std::get<0>(m));
+      boost::hash_combine(seed, std::get<1>(m));
+      boost::hash_combine(seed, std::get<2>(m));
+      return seed;
     }
   };
 
