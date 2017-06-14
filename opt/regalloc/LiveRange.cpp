@@ -101,7 +101,7 @@ class DefsEnvironment final : public AbstractDomainReverseAdaptor<
     return unwrap().get(reg);
   }
 
-  DefsEnvironment set(reg_t reg, const DefsDomain& value) {
+  DefsEnvironment& set(reg_t reg, const DefsDomain& value) {
     unwrap().set(reg, value);
     return *this;
   }
