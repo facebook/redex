@@ -35,6 +35,7 @@
   TM(DRAC)               \
   TM(EMPTY)              \
   TM(FINALINLINE)        \
+  TM(HOTNESS)            \
   TM(IDEX)               \
   TM(INL)                \
   TM(INTF)               \
