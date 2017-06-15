@@ -353,7 +353,8 @@ class FinalInlineImpl {
       return false;
     }
     auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-    if (field == nullptr || field->get_class() != clazz->get_type()) {
+    if (field == nullptr || field->get_class() != clazz->get_type() ||
+        !is_final(field)) {
       return false;
     }
     // Older DalvikVM handles only two types of classes:

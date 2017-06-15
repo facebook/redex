@@ -46,42 +46,24 @@ TEST_F(PreVerify, ReplaceEncodableClinit) {
 /*
  * Ensure that we've removed the appropriate clinit and that the corresponding
  * static values are still correct.
+ *
+ * TODO: Note that Encodable class in ReplaceEncodableClinitTest.java don't have
+ * finals. It has just static fields. If you place finals, javac will do the
+ * constant propagation and won't generate clinit. That's why our testing class
+ * doesn't have final properties. Meanwhile, FinalInline's removing clinit logic
+ * has been broken. It mistakely removed non-final fields. It should have
+ * removed const-sput pairs with *final* and *static* fields. D5252471 fixes
+ * this bug. Unfortunately this diff makes it harder to test with Java source.
+ * Hence, we remove the testing for now. We need to write a new unit test
+ * instead of instrumentation test.
  */
 TEST_F(PostVerify, ReplaceEncodableClinit) {
-  auto enc_cls = find_class_named(classes, "Lredex/Encodable;");
-  ASSERT_NE(nullptr, enc_cls);
-  auto enc_clinit = enc_cls->get_clinit();
-  ASSERT_EQ(nullptr, enc_clinit);
-  auto enc_type = enc_cls->get_type();
-  ASSERT_NE(nullptr, enc_type);
-
-  StaticValueTestCase test_cases[] = {
-      {"S_BOOL", "Z", static_cast<uint64_t>(1)},
-      {"S_BYTE", "B", static_cast<uint64_t>('b')},
-      {"S_CHAR", "C", static_cast<uint64_t>('c')},
-      {"S_INT", "I", static_cast<uint64_t>(12345)},
-      {"S_SHORT", "S", static_cast<uint64_t>(128)},
-      {"S_STRING", "Ljava/lang/String;", static_cast<std::string>("string")}};
-  for (const auto& tc : test_cases) {
-    auto name = DexString::get_string(tc.name);
-    auto type = DexType::get_type(tc.type);
-    auto f = resolve_field(enc_type, name, type);
-    ASSERT_NE(nullptr, f) << "Failed resolving field " << tc.name;
-    auto ev = f->get_static_value();
-    ASSERT_NE(nullptr, ev) << "Failed getting value for field " << tc.name;
-    if (tc.value.type() == typeid(uint64_t)) {
-      ASSERT_EQ(boost::any_cast<uint64_t>(tc.value), ev->value())
-          << "Unexpected value for field " << tc.name;
-    } else if (tc.value.type() == typeid(std::string)) {
-      ASSERT_EQ(boost::any_cast<std::string>(tc.value),
-                show(static_cast<DexEncodedValueString*>(ev)->string()))
-          << "Unexpected value for field " << tc.name;
-    } else {
-      ASSERT_FALSE(true);
-    }
-  }
+  // The fixed FinalInline should not remove clinits with non-final fields.
+  assert_class_clinit_exist(classes, "Lredex/Encodable;");
 
   assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
-  assert_class_clinit_exist(classes, "Lredex/HasWides;");
   assert_class_clinit_exist(classes, "Lredex/HasCharSequence;");
+
+  // "inline_wide_fields": false
+  assert_class_clinit_exist(classes, "Lredex/HasWides;");
 }
