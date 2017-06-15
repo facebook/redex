@@ -208,7 +208,7 @@ def unzip_apk(apk, destination_directory):
         z.extractall(destination_directory)
 
 
-def zipalign(unaligned_apk_path, output_apk_path):
+def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign):
     # Align zip and optionally perform good compression.
     try:
         zipalign = [join(find_android_build_tools(), 'zipalign')]
@@ -220,12 +220,14 @@ def zipalign(unaligned_apk_path, output_apk_path):
                               ['4', unaligned_apk_path, output_apk_path])
     except:
         print("Couldn't find zipalign. See README.md to resolve this.")
+        if not ignore_zipalign:
+            raise Exception('No zipalign executable found')
         shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 
 
 def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
-        key_alias, key_password):
+        key_alias, key_password, ignore_zipalign):
 
     # Remove old signature files
     for f in abs_glob(extracted_apk_dir, 'META-INF/*'):
@@ -266,7 +268,7 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
-    zipalign(unaligned_apk_path, output_apk_path)
+    zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign)
 
 
 def merge_proguard_maps(
@@ -411,6 +413,7 @@ Given an APK, produce a better APK!
 
     parser.add_argument('--lldb', action='store_true', help='Run redex binary in lldb')
     parser.add_argument('--gdb', action='store_true', help='Run redex binary in gdb')
+    parser.add_argument('--ignore-zipalign', action='store_true', help='Ignore if zipalign is not found')
 
     return parser
 
@@ -531,7 +534,7 @@ def run_redex(args):
 
     log('Creating output apk')
     create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
-            args.keyalias, args.keypass)
+            args.keyalias, args.keypass, args.ignore_zipalign)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
     copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
