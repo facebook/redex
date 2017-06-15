@@ -102,7 +102,7 @@ def run_pass(
         executable_path = join(dir_name, 'redex-all')
     if not isfile(executable_path) or not os.access(executable_path, os.X_OK):
         sys.exit('redex-all is not found or is not executable')
-    log('Running redex binary at ' + executable_path)
+    log('Running redex binary at ' + str(executable_path))
 
     args = [executable_path] + [
         '--apkdir', apk_dir,
