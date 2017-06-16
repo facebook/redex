@@ -617,6 +617,62 @@ std::string show_opcode(const DexInstruction* insn) {
   }
 }
 
+std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
+  if (!insn) return "";
+  std::ostringstream ss;
+  ss << show(insn->opcode()) << " ";
+  bool first = true;
+  if (insn->dests_size()) {
+    ss << "v" << insn->dest();
+    first = false;
+  }
+  for (unsigned i = 0; i < insn->srcs_size(); ++i) {
+    if (!first) ss << ", ";
+    ss << "v" << insn->src(i);
+    first = false;
+  }
+  if (opcode::has_range(insn->opcode())) {
+    if (!first) ss << ", ";
+    ss << "range_base: " << insn->range_base() << ", "
+       << "range_size: " << insn->range_size();
+  }
+  if (opcode::has_literal(insn->opcode())) {
+    if (!first) ss << ", ";
+    ss << insn->literal();
+  }
+  if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
+    ss << ", ";
+  }
+  switch (opcode::ref(insn->opcode())) {
+    case opcode::Ref::None:
+      break;
+    case opcode::Ref::String:
+      ss << boost::io::quoted(show(insn->get_string()));
+      break;
+    case opcode::Ref::Type:
+      ss << show(insn->get_type());
+      break;
+    case opcode::Ref::Field:
+      if (deobfuscated) {
+        ss << show_deobfuscated(insn->get_field());
+      } else {
+        ss << show(insn->get_field());
+      }
+      break;
+    case opcode::Ref::Method:
+      if (deobfuscated) {
+        ss << show_deobfuscated(insn->get_method());
+      } else {
+        ss << show(insn->get_method());
+      }
+      break;
+    case opcode::Ref::Data:
+      ss << "<data>"; // TODO: print something more informative
+      break;
+  }
+  return ss.str();
+}
+
 }
 
 std::string show(const DexString* p) {
@@ -872,51 +928,7 @@ std::string show(const DexInstruction* insn) {
 }
 
 std::string show(const IRInstruction* insn) {
-  if (!insn) return "";
-  std::ostringstream ss;
-  ss << show(insn->opcode()) << " ";
-  bool first = true;
-  if (insn->dests_size()) {
-    ss << "v" << insn->dest();
-    first = false;
-  }
-  for (unsigned i = 0; i < insn->srcs_size(); ++i) {
-    if (!first) ss << ", ";
-    ss << "v" << insn->src(i);
-    first = false;
-  }
-  if (opcode::has_range(insn->opcode())) {
-    if (!first) ss << ", ";
-    ss << "range_base: " << insn->range_base() << ", "
-       << "range_size: " << insn->range_size();
-  }
-  if (opcode::has_literal(insn->opcode())) {
-    if (!first) ss << ", ";
-    ss << insn->literal();
-  }
-  if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
-    ss << ", ";
-  }
-  switch (opcode::ref(insn->opcode())) {
-    case opcode::Ref::None:
-      break;
-    case opcode::Ref::String:
-      ss << boost::io::quoted(show(insn->get_string()));
-      break;
-    case opcode::Ref::Type:
-      ss << show(insn->get_type());
-      break;
-    case opcode::Ref::Field:
-      ss << show(insn->get_field());
-      break;
-    case opcode::Ref::Method:
-      ss << show(insn->get_method());
-      break;
-    case opcode::Ref::Data:
-      ss << "<data>"; // TODO: print something more informative
-      break;
-  }
-  return ss.str();
+  return show_insn(insn, false);
 }
 
 std::string show(const DexDebugInstruction* insn) {
@@ -1136,4 +1148,24 @@ std::string show(const InstructionIterable& it) {
     ss << show(mei.insn) << "\n";
   }
   return ss.str();
+}
+
+std::string show_deobfuscated(const DexField* field) {
+  const auto& name = field->get_deobfuscated_name();
+  if (name.empty()) {
+    return show(field);
+  }
+  return name;
+}
+
+std::string show_deobfuscated(const DexMethod* method) {
+  const auto& name = method->get_deobfuscated_name();
+  if (name.empty()) {
+    return show(method);
+  }
+  return name;
+}
+
+std::string show_deobfuscated(const IRInstruction* insn) {
+  return show_insn(insn, true);
 }
