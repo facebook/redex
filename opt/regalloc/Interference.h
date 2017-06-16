@@ -15,8 +15,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "HashedSetAbstractDomain.h"
 #include "RegisterType.h"
+#include "SparseSetAbstractDomain.h"
 #include "Transform.h"
 
 class IRCode;
@@ -24,7 +24,7 @@ class IRCode;
 namespace regalloc {
 
 using reg_t = uint16_t;
-using LivenessDomain = HashedSetAbstractDomain<reg_t>;
+using LivenessDomain = SparseSetAbstractDomain;
 
 /*
  * Tracks which instructions that can be encoded in range form should take

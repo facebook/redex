@@ -380,7 +380,7 @@ TEST_F(RegAllocTest, SelectRange) {
       OPCODE_INVOKE_STATIC, many_args_method, {0_v, 1_v, 2_v, 3_v, 4_v, 5_v}));
   code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 6_v}));
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(6);
+  code.set_registers_size(7);
   code.build_cfg();
 
   RangeSet range_set = init_range_set(&code);
@@ -447,7 +447,7 @@ TEST_F(RegAllocTest, Spill) {
   code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
   code.push_back(dasm(OPCODE_ADD_INT, {2_v, 0_v, 1_v}));
   code.push_back(dasm(OPCODE_RETURN, {2_v}));
-  code.set_registers_size(2);
+  code.set_registers_size(3);
   code.build_cfg();
 
   RangeSet range_set;
@@ -464,17 +464,17 @@ TEST_F(RegAllocTest, Spill) {
   allocator.spill(ig, spill_plan, range_set, &code);
 
   InstructionList expected_insns {
-    dasm(OPCODE_CONST_4, {2_v, 1_L}),
-    dasm(OPCODE_MOVE_16, {0_v, 2_v}),
     dasm(OPCODE_CONST_4, {3_v, 1_L}),
-    dasm(OPCODE_MOVE_16, {1_v, 3_v}),
+    dasm(OPCODE_MOVE_16, {0_v, 3_v}),
+    dasm(OPCODE_CONST_4, {4_v, 1_L}),
+    dasm(OPCODE_MOVE_16, {1_v, 4_v}),
 
     // srcs not spilled -- add-int can address up to 8-bit-sized operands
-    dasm(OPCODE_ADD_INT, {4_v, 0_v, 1_v}),
-    dasm(OPCODE_MOVE_16, {2_v, 4_v}),
+    dasm(OPCODE_ADD_INT, {5_v, 0_v, 1_v}),
+    dasm(OPCODE_MOVE_16, {2_v, 5_v}),
 
-    dasm(OPCODE_MOVE_16, {5_v, 2_v}),
-    dasm(OPCODE_RETURN, {5_v})
+    dasm(OPCODE_MOVE_16, {6_v, 2_v}),
+    dasm(OPCODE_RETURN, {6_v})
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
