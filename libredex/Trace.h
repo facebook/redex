@@ -96,11 +96,9 @@ void trace(TraceModule module, int level, const char* fmt, ...);
 
 struct TraceContext {
   explicit TraceContext(const std::string& current_method) {
-    s_current_method = std::make_unique<std::string>(current_method);
+    s_current_method = current_method;
   }
-  ~TraceContext() {
-    s_current_method = nullptr;
-  }
+  ~TraceContext() { s_current_method.clear(); }
 
-  static std::unique_ptr<std::string> s_current_method;
+  thread_local static std::string s_current_method;
 };

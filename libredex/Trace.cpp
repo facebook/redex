@@ -62,8 +62,8 @@ struct Tracer {
   }
 
   void trace(TraceModule module, int level, const char* fmt, va_list ap) {
-    if (m_method_filter && TraceContext::s_current_method) {
-      if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
+    if (m_method_filter && !TraceContext::s_current_method.empty()) {
+      if (strstr(TraceContext::s_current_method.c_str(), m_method_filter) ==
           nullptr) {
         return;
       }
@@ -156,4 +156,4 @@ void trace(TraceModule module, int level, const char* fmt, ...) {
   va_end(ap);
 }
 
-std::unique_ptr<std::string> TraceContext::s_current_method;
+thread_local std::string TraceContext::s_current_method;
