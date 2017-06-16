@@ -74,9 +74,6 @@ namespace interference {
 
 using namespace impl;
 
-/* Returns ⌈a/b⌉ */
-static uint8_t div_ceil(uint8_t a, uint8_t b) { return (a + b - 1) / b; }
-
 /*
  * We determine a node's colorability using equation E.3 in [Smith00] for
  * registers of varying width in an unaligned architecture.

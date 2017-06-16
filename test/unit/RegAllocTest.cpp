@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <cmath>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -227,6 +228,18 @@ TEST_F(RegAllocTest, VirtualRegistersFile) {
   vreg_file.alloc_at(7, 2);
   EXPECT_EQ(to_string(vreg_file), "!0 !1  2 !3 !4 !5 !6 !7 !8");
   EXPECT_EQ(vreg_file.size(), 9);
+}
+
+TEST_F(RegAllocTest, InterferenceWeights) {
+  using namespace interference::impl;
+  // Check that our div_ceil implementation is consistent with the more
+  // obviously correct alternative of converting to a double before dividing
+  auto fp_div_ceil = [](double x, double y) -> uint32_t { return ceil(x / y); };
+  for (uint8_t width = 1; width < 2; ++width) {
+    // This is the calculation for colorable_limit()
+    EXPECT_EQ(div_ceil(max_unsigned_value(16) + 1, 2 * width - 1),
+              fp_div_ceil(max_unsigned_value(16) + 1, 2 * width - 1));
+  }
 }
 
 TEST_F(RegAllocTest, BuildInterferenceGraph) {

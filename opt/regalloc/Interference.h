@@ -205,6 +205,9 @@ class Graph {
 
 namespace impl {
 
+/* Returns ⌈a/b⌉ */
+inline uint32_t div_ceil(uint32_t a, uint32_t b) { return (a + b - 1) / b; }
+
 /*
  * This class is a friend of Graph and Node. It allows them to expose a more
  * limited public interface.
