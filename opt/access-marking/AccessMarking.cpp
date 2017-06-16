@@ -11,7 +11,7 @@
 
 #include <unordered_map>
 
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include "VirtualScope.h"
 #include "DexUtil.h"
 #include "Mutators.h"

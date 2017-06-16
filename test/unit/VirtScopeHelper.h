@@ -13,6 +13,7 @@
 #include "DexAccess.h"
 
 const int OBJ_METH_NAMES = 9;
+const int OBJ_METHS = 11;
 
 using Scope = std::vector<DexClass*>;
 

@@ -13,7 +13,7 @@
 #include "DexUtil.h"
 #include "DexAccess.h"
 #include "ReachableClasses.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include <list>
 
 constexpr int kMaxIdentChar (52);

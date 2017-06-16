@@ -25,7 +25,7 @@
 #include "SingleImplDefs.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 namespace {
 

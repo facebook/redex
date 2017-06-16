@@ -10,7 +10,7 @@
 #pragma once
 
 #include "Pass.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 class OriginalNamePass : public Pass {
  public:

@@ -9,13 +9,13 @@
 
 #pragma once
 
-#include "Pass.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include "Timer.h"
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 
 /**
@@ -94,11 +94,24 @@ using VirtualMethod = std::pair<DexMethod*, VirtualFlags>;
  * equals(java.lang.Object)
  * you are guaranteed to find the VirtualScope starting from
  * Object.equals(Object) which includes all overrides in any class
- * and possibly any interface that exposes bool equals(Object)
+ * and possibly any interface that exposes bool equals(Object).
+ *
+ * IMPORTANT: A top method in the list of methods for a VirtualScope may not
+ * be a definition when the method is a pure miranda, that is, when the method
+ * is a missing implementation of an interface for that VirtualScope. e.g.:
+ * interface I { void m(); }
+ * abstract class A implements I {}
+ * class B extends A { void m(); }
+ * a VirtualScope exists for A.m() in which a DexMethod (A.m()) is at
+ * the top of the VirtualScope method list and that DexMethod is not
+ * a definition.
  */
 struct VirtualScope {
+  // root type for the VirtualScope
   const DexType* type;
+  // list of methods in scope methods[0].first->get_class() == type
   std::vector<VirtualMethod> methods;
+  // interface set the VirtualScope contributes to
   TypeSet interfaces;
 };
 
@@ -170,11 +183,28 @@ using SignatureMap =
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy);
 
 /**
- * Given a concrete DexMethod (must be a definition in a DexClass)
- * return the scope the method is in.
+ * Given a DexMethod return the scope the method is in.
  */
 const VirtualScope& find_virtual_scope(
     const SignatureMap& sig_map, const DexMethod* meth);
+
+/**
+ * Given a VirtualScope and a type, return the list of methods that
+ * could bind for that type in that scope.
+ * There is no specific order to the methods returned.
+ * Consider
+ * class A { void m() {} }
+ * class B extends A { void m() {} }
+ * class C extends B { void m() {} }
+ * class D extends C { void m() {} }
+ * class E extends A { void m() {} }
+ * The Virtual scope for m() starts in A.m() and contains all the m()
+ * in the A hierarchy.
+ * A call to select_from() with C with return only C.m() and D.m() which
+ * are the only 2 methods in scope for C.
+ */
+std::vector<const DexMethod*> select_from(
+    const VirtualScope* scope, const DexType* type);
 
 /*
  * Map from a class to the virtual scopes introduced by that class.
@@ -185,53 +215,188 @@ const VirtualScope& find_virtual_scope(
  * the type. So the number of VirtualScope is always smaller or
  * equals to the number of vmethods (unimplemented interface aside).
  */
-using ClassScopes = std::map<
-    const DexType*, std::vector<const VirtualScope*>, dextypes_comparator>;
+using Scopes = std::unordered_map<
+    const DexType*, std::vector<const VirtualScope*>>;
+using InterfaceScopes = std::unordered_map<
+    const DexType*, std::vector<std::vector<const VirtualScope*>>>;
 
-/*
- * Get the ClassScopes.
- */
-ClassScopes get_class_scopes(
-    const ClassHierarchy& hierarchy,
-    const SignatureMap& sig_map);
+class ClassScopes {
+ private:
+  static const std::vector<const VirtualScope*> empty_scope;
+  static const std::vector<std::vector<const VirtualScope*>>
+      empty_interface_scope;
 
-/**
- * Walk a VirtualScope and calls the walker function for each scope.
- * The walk is top down the class hierarchy.
- */
-template <class VirtualScopeWalkerFn =
-    void(const DexType*, const VirtualScope&)>
-void walk_virtual_scopes(
-    const ClassScopes& class_scopes,
-    const DexType* type,
-    const ClassHierarchy& cls_hierarchy,
-    VirtualScopeWalkerFn walker
-) {
-  const auto& scopes_it = class_scopes.find(type);
-  // first walk all scopes in type
-  if (scopes_it != class_scopes.end()) {
-    for (const auto& scope : scopes_it->second) {
-      walker(type, scope);
+  Scopes m_scopes;
+  InterfaceScopes m_interface_scopes;
+  ClassHierarchy m_hierarchy;
+  InterfaceMap m_interface_map;
+  SignatureMap m_sig_map;
+
+ public:
+  explicit ClassScopes(const Scope& scope);
+
+  /**
+   * Return the vector of VirtualScope for the given type.
+   * The vector lifetime is tied to that of the ClassScope as such it should
+   * not exceed it.
+   */
+  const std::vector<const VirtualScope*>& get(const DexType* type) const {
+    const auto& scopes_it = m_scopes.find(type);
+    if (scopes_it == m_scopes.end()) {
+      return empty_scope;
+    }
+    return scopes_it->second;
+  }
+
+  /**
+   * Return all the interface scopes across the class hierarchy.
+   * Each vector is effectively the scope of each branch where the
+   * interface is implemented.
+   * The vector lifetime is tied to that of the ClassScope as such it should
+   * not exceed it.
+   */
+  const std::vector<std::vector<const VirtualScope*>>& get_interface_scopes(
+      const DexType* type) const {
+    const auto& scopes_it = m_interface_scopes.find(type);
+    if (scopes_it == m_interface_scopes.end()) {
+      return empty_interface_scope;
+    }
+    return scopes_it->second;
+  }
+
+  /**
+   * Walk all interface scopes calling the walker with a list of
+   * scopes and an interface set for each pair of (method_name, method_sig).
+   */
+  template <class AllInterfaceScopesWalkerFn =
+      void(const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&)>
+  void walk_all_intf_scopes(AllInterfaceScopesWalkerFn walker) const {
+    for (const auto& names_it : m_sig_map) {
+      for (const auto sig_it : names_it.second) {
+        std::vector<const VirtualScope*> intf_scopes;
+        TypeSet intfs;
+        for (auto& scope : sig_it.second) {
+          assert(type_class(scope.type) != nullptr);
+          if (scope.interfaces.empty()) continue;
+          intf_scopes.emplace_back(&scope);
+          intfs.insert(scope.interfaces.begin(), scope.interfaces.end());
+        }
+        if (intf_scopes.empty()) continue;
+        walker(names_it.first, sig_it.first, intf_scopes, intfs);
+      }
     }
   }
-  always_assert_log(
-      cls_hierarchy.find(type) != cls_hierarchy.end(),
-      "no entry in ClassHierarchy for type %s\n", SHOW(type));
-  // recursively call for each child
-  for (const auto& child : cls_hierarchy.at(type)) {
-    walk_virtual_scopes(class_scopes, child, cls_hierarchy, walker);
-  }
-}
 
-template <
-    class VirtualScopeWalkerFn = void(const DexType*, const VirtualScope&)>
-void walk_virtual_scopes(
-    const ClassScopes& class_scopes,
-    const ClassHierarchy& cls_hierarchy,
-    VirtualScopeWalkerFn walker
-) {
-  walk_virtual_scopes(class_scopes, get_object_type(), cls_hierarchy, walker);
-}
+  /**
+   * Walk all VirtualScope and call the walker function for each scope.
+   * The walk is top down the class hierarchy starting from the
+   * specified type.
+   */
+  template <class VirtualScopeWalkerFn =
+      void(const DexType*, const VirtualScope*)>
+  void walk_virtual_scopes(
+      const DexType* type,
+      VirtualScopeWalkerFn walker) const {
+    const auto& scopes_it = m_scopes.find(type);
+    // first walk all scopes in type
+    if (scopes_it != m_scopes.end()) {
+      for (const auto& scope : scopes_it->second) {
+        walker(type, scope);
+      }
+    }
+    always_assert_log(
+        m_hierarchy.find(type) != m_hierarchy.end(),
+        "no entry in ClassHierarchy for type %s\n", SHOW(type));
+    // recursively call for each child
+    for (const auto& child : m_hierarchy.at(type)) {
+      walk_virtual_scopes(child, walker);
+    }
+  }
+
+  /**
+   * Walk every VirtualScope starting from java.lang.Object and call the walker
+   * function for each scope.
+   */
+  template <class VirtualScopeWalkerFn =
+      void(const DexType*, const VirtualScope*)>
+  void walk_virtual_scopes(VirtualScopeWalkerFn walker) const {
+    walk_virtual_scopes(get_object_type(), walker);
+  }
+
+  /**
+   * Walk every class scope calling the walker function for each class.
+   * The walk is top down the class hierarchy starting from the given type.
+   */
+  template <class VirtualScopesWalkerFn =
+      void(const DexType*, const std::vector<const VirtualScope*>&)>
+  void walk_class_scopes(
+      const DexType* type,
+      VirtualScopesWalkerFn walker) const {
+    const auto& scopes_it = m_scopes.find(type);
+    // first walk all scopes in type
+    if (scopes_it != m_scopes.end()) {
+      walker(type, scopes_it->second);
+    }
+    always_assert_log(
+        m_hierarchy.find(type) != m_hierarchy.end(),
+        "no entry in ClassHierarchy for type %s\n", SHOW(type));
+    // recursively call for each child
+    for (const auto& child : m_hierarchy.at(type)) {
+      walk_class_scopes(child, walker);
+    }
+  }
+
+  /**
+   * Walk every class scope calling the walker function for each class.
+   * The walk is top down the class hierarchy starting from java.lang.Object.
+   */
+  template <class VirtualScopesWalkerFn =
+      void(const DexType*, const std::vector<const VirtualScope*>&)>
+  void walk_class_scopes(VirtualScopesWalkerFn walker) const {
+    walk_class_scopes(get_object_type(), walker);
+  }
+
+  /**
+   * Given a DexMethod return the scope the method is in.
+   */
+  const VirtualScope& find_virtual_scope(const DexMethod* meth) const {
+    return ::find_virtual_scope(m_sig_map, meth);
+  }
+
+  /**
+   * Return the ClassHierarchy known when building the scopes.
+   * The ClassHierarchy lifetime is tied to that of the ClassScopes, as
+   * such it should not exceed it.
+   */
+  const ClassHierarchy& get_class_hierarchy() const {
+    return m_hierarchy;
+  }
+
+  /**
+   * Return the InterfaceMap known when building the scopes.
+   * The InterfaceMap lifetime is tied to that of the ClassScopes, as
+   * such it should not exceed it.
+   */
+  const InterfaceMap& get_interface_map() const {
+    return m_interface_map;
+  }
+
+  /**
+   * Return the SignatureMap known when building the scopes.
+   * The SignatureMap lifetime is tied to that of the ClassScopes, as
+   * such it should not exceed it.
+   */
+  const SignatureMap& get_signature_map() const {
+    return m_sig_map;
+  }
+
+ private:
+  void build_class_scopes(const DexType* type);
+  void build_interface_scopes();
+};
 
 //
 // Helpers

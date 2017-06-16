@@ -9,7 +9,7 @@
 
 #include "DexUtil.h"
 #include "OriginalNamePass.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_SET_CLASS_DATA "num_set_class_data"

@@ -15,174 +15,141 @@
 
 namespace {
 
-inline bool match(const DexString* name,
-                  const DexProto* proto,
-                  const DexMethod* cls_meth) {
-  return name == cls_meth->get_name() && proto == cls_meth->get_proto();
-}
-
-DexMethod* check_vmethods(const DexString* name,
-                          const DexProto* proto,
-                          const DexType* type) {
-  const DexClass* cls = type_class(type);
-  for (const auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method)) return method;
+void make_instanceof_table(
+    InstanceOfTable& instance_of_table,
+    const ClassHierarchy& hierarchy,
+    const DexType* type,
+    size_t depth = 1) {
+  auto& parent_chain = instance_of_table[type];
+  const auto cls = type_class(type);
+  if (cls != nullptr) {
+    const auto super = cls->get_super_class();
+    if (super != nullptr) {
+      const auto& super_chain = instance_of_table.find(super);
+      always_assert(super_chain != instance_of_table.end());
+      for (const auto& base : super_chain->second) {
+        parent_chain.emplace_back(base);
+      }
+    }
   }
-  return nullptr;
-}
+  parent_chain.emplace_back(type);
+  always_assert(parent_chain.size() == depth);
 
-DexMethod* check_dmethods(const DexString* name,
-                          const DexProto* proto,
-                          const DexType* type) {
-  const DexClass* cls = type_class(type);
-  for (const auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method)) return method;
+  const auto& children = hierarchy.find(type);
+  if (children == hierarchy.end()) return;
+  for (const auto& child : children->second) {
+    make_instanceof_table(instance_of_table, hierarchy, child, depth + 1);
   }
-  return nullptr;
 }
 
-/**
- * Given a class, walks up the hierarchy and creates entries from parent to
- * children.
- * If no super is found the type is considered a child of java.lang.Object.
- * If the type is unknown (no DexClass) the walk stops and the hierarchy is
- * formed up to the first unknown type.
- */
-void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
-  // ensure an entry for the DexClass is created
-  hierarchy[cls->get_type()];
-  auto type = cls->get_type();
-  const auto super = cls->get_super_class();
-  if (super != nullptr) {
-    hierarchy[super].insert(type);
-  } else {
-    if (type != get_object_type()) {
-      // if the type in question is not java.lang.Object and it has
-      // no super make it a subclass of java.lang.Object
-      hierarchy[get_object_type()].insert(type);
-      TRACE(VIRT, 4, "[no super on %s]\n", SHOW(type));
+void make_instanceof_table(
+    InstanceOfTable& instance_of_table, const ClassHierarchy& hierarchy) {
+  TypeVector no_parents;
+  for (const auto& children_it : hierarchy) {
+    const auto parent = children_it.first;
+    const auto parent_cls = type_class(parent);
+    if (parent_cls != nullptr) continue;
+    no_parents.emplace_back(parent);
+  }
+  no_parents.emplace_back(get_object_type());
+  for (const auto& root : no_parents) {
+    make_instanceof_table(instance_of_table, hierarchy, root);
+  }
+}
+
+void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
+  for (const auto& super_intf : intf->get_interfaces()->get_type_list()) {
+    children[super_intf].insert(intf->get_type());
+    const auto super_intf_cls = type_class(super_intf);
+    if (super_intf_cls != nullptr) {
+      load_interface_children(children, super_intf_cls);
     }
   }
 }
 
-void build_external_hierarchy(ClassHierarchy& hierarchy) {
+void load_interface_children(ClassHierarchy& children) {
   g_redex->walk_type_class(
       [&](const DexType* type, const DexClass* cls) {
-        if (cls->is_external()) {
-          build_class_hierarchy(hierarchy, cls);
-        }
+        if (!cls->is_external() || !is_interface(cls)) return;
+        load_interface_children(children, cls);
       });
 }
 
-// Find all the interfaces that extend 'intf'
-bool gather_intf_extenders(const DexType* extender,
-                           const DexType* intf,
-                           std::unordered_set<const DexType*>& intf_extenders) {
-  bool extends = false;
-  const DexClass* extender_cls = type_class(extender);
-  if (!extender_cls) return extends;
-  if (is_interface(extender_cls)) {
-    for (const auto& extends_intf :
-         extender_cls->get_interfaces()->get_type_list()) {
-      if (extends_intf == intf ||
-          gather_intf_extenders(extends_intf, intf, intf_extenders)) {
-        intf_extenders.insert(extender);
-        extends = true;
-      }
-    }
-  }
-  return extends;
-}
-
-void gather_intf_extenders(const Scope& scope,
-                           const DexType* intf,
-                           std::unordered_set<const DexType*>& intf_extenders) {
+void load_interface_children(const Scope& scope, ClassHierarchy& children) {
   for (const auto& cls : scope) {
-    gather_intf_extenders(cls->get_type(), intf, intf_extenders);
+    if (!is_interface(cls)) continue;
+    load_interface_children(children, cls);
+  }
+  load_interface_children(children);
+}
+
+}
+
+const TypeSet TypeSystem::empty_set = TypeSet();
+const TypeVector TypeSystem::empty_vec = TypeVector();
+
+TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
+  Timer("TypeSystem");
+  load_interface_children(scope, m_intf_children);
+  make_instanceof_table(
+      m_instanceof_table, m_class_scopes.get_class_hierarchy());
+}
+
+void TypeSystem::get_all_super_interfaces(
+    const DexType* intf, TypeSet& supers) const {
+  const auto cls = type_class(intf);
+  if (cls == nullptr) return;
+  for (const auto& super : cls->get_interfaces()->get_type_list()) {
+    supers.insert(super);
+    get_all_super_interfaces(super, supers);
   }
 }
 
-}
+const VirtualScope* TypeSystem::find_virtual_scope(
+    const DexMethod* meth) const {
 
-ClassHierarchy build_type_hierarchy(const Scope& scope) {
-  Timer("Class Hierarchy");
-  ClassHierarchy hierarchy;
-  // build the type hierarchy
-  for (const auto& cls : scope) {
-    if (is_interface(cls) || is_annotation(cls)) continue;
-    build_class_hierarchy(hierarchy, cls);
-  }
-  build_external_hierarchy(hierarchy);
-  return hierarchy;
-}
+  const auto match = [](const DexMethod* meth1, const DexMethod* meth2) {
+    return meth1->get_name() == meth2->get_name() &&
+        meth1->get_proto() == meth2->get_proto();
+  };
 
-void get_all_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    TypeSet& children) {
-  const auto& direct = get_children(hierarchy, type);
-  for (const auto& child : direct) {
-    children.insert(child);
-    get_all_children(hierarchy, child, children);
-  }
-}
-
-void get_all_implementors(const Scope& scope,
-                          const DexType* intf,
-                          TypeSet& impls) {
-  std::unordered_set<const DexType*> intf_extenders;
-  gather_intf_extenders(scope, intf, intf_extenders);
-
-  std::unordered_set<const DexType*> intfs;
-  intfs.insert(intf);
-  intfs.insert(intf_extenders.begin(), intf_extenders.end());
-
-  for (auto cls : scope) {
-    auto cur = cls;
-    bool found = false;
-    while (!found && cur != nullptr) {
-      for (auto impl : cur->get_interfaces()->get_type_list()) {
-        if (intfs.count(impl) > 0) {
-          impls.insert(cls->get_type());
-          found = true;
-          break;
-        }
-      }
-      cur = type_class(cur->get_super_class());
+  auto type = meth->get_class();
+  while (type != nullptr) {
+    for (const auto& scope : m_class_scopes.get(type)) {
+      if (match(scope->methods[0].first, meth)) return scope;
     }
-  }
-}
-
-DexMethod* find_collision_excepting(const ClassHierarchy& ch,
-                                    const DexMethod* except,
-                                    const DexString* name,
-                                    const DexProto* proto,
-                                    const DexClass* cls,
-                                    bool is_virtual,
-                                    bool check_direct) {
-  for (auto& method : cls->get_dmethods()) {
-    if (match(name, proto, method) && method != except) return method;
-  }
-  for (auto& method : cls->get_vmethods()) {
-    if (match(name, proto, method) && method != except) return method;
-  }
-  if (!is_virtual) return nullptr;
-
-  auto super = type_class(cls->get_super_class());
-  if (super) {
-    auto method = resolve_virtual(super, name, proto);
-    if (method && method != except) return method;
+    const auto cls = type_class(type);
+    if (cls == nullptr) break;
+    type = cls->get_super_class();
   }
 
-  TypeSet children;
-  get_all_children(ch, cls->get_type(), children);
-  for (const auto& child : children) {
-    auto vmethod = check_vmethods(name, proto, child);
-    if (vmethod && vmethod != except) return vmethod;
-    if (check_direct) {
-      auto dmethod = check_dmethods(name, proto, child);
-      if (dmethod && dmethod != except) return dmethod;
-    }
-  }
   return nullptr;
+}
+
+std::vector<const DexMethod*> TypeSystem::select_from(
+    const VirtualScope* scope, const DexType* type) const {
+  std::vector<const DexMethod*> refined_scope;
+  std::unordered_map<const DexType*, DexMethod*> non_child_methods;
+  bool found_root_method = false;
+  for (const auto& method : scope->methods) {
+    if (is_subtype(type, method.first->get_class())) {
+      found_root_method =
+          found_root_method || type == method.first->get_class();
+      refined_scope.emplace_back(method.first);
+    } else {
+      non_child_methods[method.first->get_class()] = method.first;
+    }
+  }
+  if (!found_root_method) {
+    const auto& parents = parent_chain(type);
+    for (auto parent = parents.rbegin();
+        parent != parents.rend();
+        ++parent) {
+      const auto& meth = non_child_methods.find(*parent);
+      if (meth == non_child_methods.end()) continue;
+      refined_scope.emplace_back(meth->second);
+      break;
+    }
+  }
+  return refined_scope;
 }

@@ -24,7 +24,7 @@
 #include "DexUtil.h"
 #include "Walkers.h"
 #include "UnterfaceOpt.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 namespace {
 

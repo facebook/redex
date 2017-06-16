@@ -18,7 +18,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "SingleImpl.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 /**
  * Analyze and optimize data structures.

@@ -11,7 +11,7 @@
 
 #include "Pass.h"
 
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 enum class DontRenameReasonCode {
   Annotated,

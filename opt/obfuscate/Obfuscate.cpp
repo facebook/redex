@@ -17,7 +17,7 @@
 #include "Transform.h"
 #include "Walkers.h"
 #include "Resolver.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include "VirtualRenamer.h"
 #include <list>
 

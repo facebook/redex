@@ -24,7 +24,7 @@
 #include "ReachableClasses.h"
 #include "Walkers.h"
 #include "Warning.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 

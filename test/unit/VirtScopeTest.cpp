@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "DexClass.h"
 #include "Creators.h"
@@ -225,6 +226,37 @@ TEST(NoOverload, empty) {
           ASSERT_TRUE(meth.first->is_external());
         }
       });
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  size_t a_count = 0;
+  size_t b_count = 0;
+  const auto a_t = DexType::get_type("LA;");
+  const auto b_t = DexType::get_type("LB;");
+  cs.walk_virtual_scopes(
+      [&](const DexType* type, const VirtualScope* scope) {
+        count++;
+        if (type == a_t) {
+          a_count++;
+        } else if (type == b_t) {
+          b_count++;
+        }
+        ASSERT_EQ(scope->methods.size(), 1);
+      });
+  ASSERT_EQ(count, OBJ_METHS + 2);
+  ASSERT_EQ(a_count, 1);
+  ASSERT_EQ(b_count, 1);
+  count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&) {
+        count++;
+      });
+  ASSERT_EQ(count, 0);
+
   delete g_redex;
 }
 
@@ -272,6 +304,63 @@ TEST(Override, empty) {
   expected_methods[DexMethod::get_method(d_t, f, void_void)] = OVERRIDE | FINAL;
   expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
   check_expected_methods(sm, expected_methods);
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  size_t a_count = 0;
+  size_t b_count = 0;
+  cs.walk_virtual_scopes(
+      [&](const DexType* type, const VirtualScope* scope) {
+        count++;
+        if (type == a_t) {
+          ASSERT_EQ(scope->methods.size(), 1);
+          a_count++;
+        } else if (type == b_t) {
+          ASSERT_EQ(scope->methods.size(), 2);
+          b_count++;
+        } else {
+          ASSERT_EQ(scope->methods.size(), 1);
+        }
+      });
+  ASSERT_EQ(count, OBJ_METHS + 3);
+  ASSERT_EQ(a_count, 1);
+  ASSERT_EQ(b_count, 2);
+  count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&) {
+        count++;
+      });
+  ASSERT_EQ(count, 0);
+  const auto& a_scopes = cs.get(a_t);
+  ASSERT_EQ(a_scopes.size(), 1);
+  ASSERT_EQ(a_scopes[0]->methods[0].first,
+      DexMethod::get_method(a_t, f, void_void));
+  const auto& b_scopes = cs.get(b_t);
+  ASSERT_EQ(b_scopes.size(), 2);
+  if (b_scopes[0]->methods[0].first ==
+      DexMethod::get_method(b_t, g, void_void)) {
+    ASSERT_EQ(b_scopes[0]->methods[1].first,
+        DexMethod::get_method(e_t, g, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[0].first,
+        DexMethod::get_method(b_t, f, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[1].first,
+        DexMethod::get_method(d_t, f, void_void));
+  } else if (b_scopes[0]->methods[1].first ==
+      DexMethod::get_method(b_t, f, void_void)) {
+    ASSERT_EQ(b_scopes[0]->methods[1].first,
+        DexMethod::get_method(d_t, f, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[0].first,
+        DexMethod::get_method(b_t, g, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[1].first,
+        DexMethod::get_method(e_t, g, void_void));
+  } else {
+    ASSERT_FALSE(false); // cannot be
+  }
+
   delete g_redex;
 }
 
@@ -337,6 +426,79 @@ TEST(OverrideOverload, empty) {
   expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
   expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | FINAL;
   check_expected_methods(sm, expected_methods);
+
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  size_t a_count = 0;
+  size_t f_count = 0;
+  size_t b_count = 0;
+  size_t c_count = 0;
+  cs.walk_virtual_scopes(
+      [&](const DexType* type, const VirtualScope* scope) {
+        count++;
+        if (type == a_t) {
+          ASSERT_EQ(scope->methods.size(), 1);
+          a_count++;
+        } else if (type == f_t) {
+          ASSERT_EQ(scope->methods.size(), 1);
+          f_count++;
+        } else if (type == b_t) {
+          ASSERT_EQ(scope->methods.size(), 2);
+          b_count++;
+        } else if (type == c_t) {
+          ASSERT_EQ(scope->methods.size(), 3);
+          c_count++;
+        }
+      });
+  ASSERT_EQ(count, OBJ_METHS + 5);
+  ASSERT_EQ(a_count, 1);
+  ASSERT_EQ(f_count, 1);
+  ASSERT_EQ(b_count, 2);
+  ASSERT_EQ(c_count, 1);
+  count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&) {
+        count++;
+      });
+  ASSERT_EQ(count, 0);
+  const auto& a_scopes = cs.get(a_t);
+  ASSERT_EQ(a_scopes.size(), 1);
+  ASSERT_EQ(a_scopes[0]->methods[0].first,
+      DexMethod::get_method(a_t, f, void_void));
+  const auto& b_scopes = cs.get(b_t);
+  ASSERT_EQ(b_scopes.size(), 2);
+  if (b_scopes[0]->methods[0].first ==
+      DexMethod::get_method(b_t, g, void_void)) {
+    ASSERT_EQ(b_scopes[0]->methods[1].first,
+        DexMethod::get_method(e_t, g, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[0].first,
+        DexMethod::get_method(b_t, f, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[1].first,
+        DexMethod::get_method(d_t, f, void_void));
+  } else if (b_scopes[0]->methods[1].first ==
+      DexMethod::get_method(b_t, f, void_void)) {
+    ASSERT_EQ(b_scopes[0]->methods[1].first,
+        DexMethod::get_method(d_t, f, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[0].first,
+        DexMethod::get_method(b_t, g, void_void));
+    ASSERT_EQ(b_scopes[1]->methods[1].first,
+        DexMethod::get_method(e_t, g, void_void));
+  }
+  const auto& c_scopes = cs.get(c_t);
+  ASSERT_EQ(c_scopes.size(), 1);
+  ASSERT_EQ(c_scopes[0]->methods.size(), 3);
+  const auto& d_scopes = cs.get(d_t);
+  ASSERT_EQ(d_scopes.size(), 0);
+  const auto& e_scopes = cs.get(e_t);
+  ASSERT_EQ(e_scopes.size(), 0);
+  const auto& found_scope =
+      cs.find_virtual_scope(DexMethod::get_method(e_t, g, void_int));
+  ASSERT_EQ(c_scopes[0]->type, found_scope.type);
 
   delete g_redex;
 }
@@ -405,6 +567,20 @@ TEST(Interface, empty) {
   expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
   expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | FINAL;
   check_expected_methods_only(sm, expected_methods);
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet& intfs) {
+        ASSERT_EQ(intfs.size(), 1);
+        ASSERT_TRUE(intfs.count(intf1_t) > 0);
+        count++;
+      });
+  ASSERT_EQ(count, 1);
 
   delete g_redex;
 }
@@ -497,6 +673,33 @@ TEST(Interface1, empty) {
   expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
 
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&) {
+        count++;
+      });
+  ASSERT_EQ(count, 2);
+  const auto& intf1_scopes = cs.get_interface_scopes(intf1_t);
+  ASSERT_EQ(intf1_scopes.size(), 1);
+  ASSERT_EQ(intf1_scopes[0].size(), 1);
+  ASSERT_EQ(intf1_scopes[0][0]->methods.size(), 2);
+  ASSERT_EQ(intf1_scopes[0][0]->type, b_t);
+  const auto& intf2_scopes = cs.get_interface_scopes(intf2_t);
+  ASSERT_EQ(intf2_scopes.size(), 1);
+  ASSERT_EQ(intf2_scopes[0].size(), 2);
+  if (intf2_scopes[0][0]->type == c_t) {
+    ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 3);
+    ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 4);
+  } else {
+    ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 4);
+    ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 3);
+  }
+
   delete g_redex;
 }
 
@@ -588,6 +791,33 @@ TEST(Interface2, empty) {
   expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
   expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  cs.walk_all_intf_scopes(
+      [&](const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&) {
+        count++;
+      });
+  ASSERT_EQ(count, 2);
+  const auto& intf1_scopes = cs.get_interface_scopes(intf1_t);
+  ASSERT_EQ(intf1_scopes.size(), 1);
+  ASSERT_EQ(intf1_scopes[0].size(), 1);
+  ASSERT_EQ(intf1_scopes[0][0]->methods.size(), 2);
+  ASSERT_EQ(intf1_scopes[0][0]->type, b_t);
+  const auto& intf2_scopes = cs.get_interface_scopes(intf2_t);
+  ASSERT_EQ(intf2_scopes.size(), 1);
+  ASSERT_EQ(intf2_scopes[0].size(), 2);
+  if (intf2_scopes[0][0]->type == c_t) {
+    ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 3);
+    ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 4);
+  } else {
+    ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 4);
+    ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 3);
+  }
 
   delete g_redex;
 }
@@ -973,8 +1203,8 @@ TEST(Interface3IntfOverride, empty) {
 /**
  * interface Intf1 implements Intf2 { void f(); }
  * interface Intf2 { void g(int); }
- * interface Intf3 implements Intf4 { void f()); }
- * interface Intf4 { void f()); }
+ * interface Intf3 implements Intf4 { void f(); }
+ * interface Intf4 { void f(); }
  * class java.lang.Object { // Object methods ... }
  * class A { void f() {} }
  *   class F extends A { void f(int) {} boolean equals(Object) {} void g(int); }
@@ -992,85 +1222,138 @@ TEST(Interface3IntfOverride, empty) {
  *   class N externds M implements EscIntf { void h(int) {}}
  */
 TEST(Interface3IntfOverEscape, empty) {
-   g_redex = new RedexContext();
-   std::vector<DexClass*> scope = create_scope_11();
-   ClassHierarchy ch = build_type_hierarchy(scope);
-   SignatureMap sm = build_signature_map(ch);
+  g_redex = new RedexContext();
+  std::vector<DexClass*> scope = create_scope_11();
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  SignatureMap sm = build_signature_map(ch);
 
-   // check expected name and proto
-   ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 3);
-   check_protos_2(sm);
+  // check expected name and proto
+  ASSERT_EQ(sm.size(), OBJ_METH_NAMES + 3);
+  check_protos_2(sm);
 
-   auto eq = DexString::get_string("equals");
-   auto f = DexString::get_string("f");
-   auto g = DexString::get_string("g");
-   auto h = DexString::get_string("h");
-   auto obj_t = get_object_type();
-   auto a_t = DexType::get_type("LA;");
-   auto b_t = DexType::get_type("LB;");
-   auto c_t = DexType::get_type("LC;");
-   auto d_t = DexType::get_type("LD;");
-   auto e_t = DexType::get_type("LE;");
-   auto f_t = DexType::get_type("LF;");
-   auto g_t = DexType::get_type("LG;");
-   auto h_t = DexType::get_type("LH;");
-   auto k_t = DexType::get_type("LK;");
-   auto i_t = DexType::get_type("LI;");
-   auto l_t = DexType::get_type("LL;");
-   auto m_t = DexType::get_type("LM;");
-   auto n_t = DexType::get_type("LN;");
-   auto intf1_t = DexType::get_type("LIntf1;");
-   auto intf2_t = DexType::get_type("LIntf2;");
-   auto intf3_t = DexType::get_type("LIntf3;");
-   auto intf4_t = DexType::get_type("LIntf4;");
-   auto void_void = DexProto::make_proto(
-       get_void_type(), DexTypeList::make_type_list({}));
-   auto void_int = DexProto::make_proto(
-       get_void_type(), DexTypeList::make_type_list({get_int_type()}));
-   auto bool_obj = DexProto::make_proto(
-       get_boolean_type(), DexTypeList::make_type_list({obj_t}));
+  auto eq = DexString::get_string("equals");
+  auto f = DexString::get_string("f");
+  auto g = DexString::get_string("g");
+  auto h = DexString::get_string("h");
+  auto obj_t = get_object_type();
+  auto a_t = DexType::get_type("LA;");
+  auto b_t = DexType::get_type("LB;");
+  auto c_t = DexType::get_type("LC;");
+  auto d_t = DexType::get_type("LD;");
+  auto e_t = DexType::get_type("LE;");
+  auto f_t = DexType::get_type("LF;");
+  auto g_t = DexType::get_type("LG;");
+  auto h_t = DexType::get_type("LH;");
+  auto k_t = DexType::get_type("LK;");
+  auto i_t = DexType::get_type("LI;");
+  auto l_t = DexType::get_type("LL;");
+  auto m_t = DexType::get_type("LM;");
+  auto n_t = DexType::get_type("LN;");
+  auto intf1_t = DexType::get_type("LIntf1;");
+  auto intf2_t = DexType::get_type("LIntf2;");
+  auto intf3_t = DexType::get_type("LIntf3;");
+  auto intf4_t = DexType::get_type("LIntf4;");
+  auto void_void = DexProto::make_proto(
+     get_void_type(), DexTypeList::make_type_list({}));
+  auto void_int = DexProto::make_proto(
+     get_void_type(), DexTypeList::make_type_list({get_int_type()}));
+  auto bool_obj = DexProto::make_proto(
+     get_boolean_type(), DexTypeList::make_type_list({obj_t}));
 
-   // check expected scopes
-   ExpectedSig expected_sig;
-   expected_sig[f][void_void][b_t][b_t] = ScopeInfo(2, {intf1_t, intf3_t, intf4_t});
-   expected_sig[f][void_void][a_t][a_t] = ScopeInfo(1, {});
-   expected_sig[f][void_void][intf1_t][b_t] = ScopeInfo(2, {});
-   expected_sig[f][void_void][intf3_t][d_t] = ScopeInfo(1, {});
-   expected_sig[f][void_void][intf4_t][d_t] = ScopeInfo(1, {});
-   expected_sig[f][void_int][f_t][f_t] = ScopeInfo(1, {});
-   expected_sig[f][void_int][m_t][m_t] = ScopeInfo(1, {});
-   expected_sig[g][void_void][b_t][b_t] = ScopeInfo(2, {});
-   expected_sig[g][void_int][n_t][n_t] = ScopeInfo(1, {});
-   expected_sig[g][void_int][b_t][b_t] = ScopeInfo(4, {intf2_t});
-   expected_sig[g][void_int][f_t][f_t] = ScopeInfo(6, {intf2_t});
-   expected_sig[g][void_int][intf2_t][b_t] = ScopeInfo(4, {});
-   expected_sig[g][void_int][intf2_t][h_t] = ScopeInfo(2, {});
-   expected_sig[eq][bool_obj][obj_t][obj_t] = ScopeInfo(2, {});
-   check_expected_scopes(sm, expected_sig);
+  // check expected scopes
+  ExpectedSig expected_sig;
+  expected_sig[f][void_void][b_t][b_t] = ScopeInfo(2, {intf1_t, intf3_t, intf4_t});
+  expected_sig[f][void_void][a_t][a_t] = ScopeInfo(1, {});
+  expected_sig[f][void_void][intf1_t][b_t] = ScopeInfo(2, {});
+  expected_sig[f][void_void][intf3_t][d_t] = ScopeInfo(1, {});
+  expected_sig[f][void_void][intf4_t][d_t] = ScopeInfo(1, {});
+  expected_sig[f][void_int][f_t][f_t] = ScopeInfo(1, {});
+  expected_sig[f][void_int][m_t][m_t] = ScopeInfo(1, {});
+  expected_sig[g][void_void][b_t][b_t] = ScopeInfo(2, {});
+  expected_sig[g][void_int][n_t][n_t] = ScopeInfo(1, {});
+  expected_sig[g][void_int][b_t][b_t] = ScopeInfo(4, {intf2_t});
+  expected_sig[g][void_int][f_t][f_t] = ScopeInfo(6, {intf2_t});
+  expected_sig[g][void_int][intf2_t][b_t] = ScopeInfo(4, {});
+  expected_sig[g][void_int][intf2_t][h_t] = ScopeInfo(2, {});
+  expected_sig[eq][bool_obj][obj_t][obj_t] = ScopeInfo(2, {});
+  check_expected_scopes(sm, expected_sig);
 
-   // check expected methods
-   ExpectedMethod expected_methods;
-   expected_methods[DexMethod::get_method(obj_t, eq, bool_obj)] = TOP_DEF | ESCAPED;
-   expected_methods[DexMethod::get_method(f_t, eq, bool_obj)] = OVERRIDE | FINAL | ESCAPED;
-   expected_methods[DexMethod::get_method(a_t, f, void_void)] = TOP_DEF | FINAL;
-   expected_methods[DexMethod::get_method(b_t, f, void_void)] = TOP_DEF | IMPL | MIRANDA;
-   expected_methods[DexMethod::get_method(d_t, f, void_void)] = OVERRIDE | IMPL | FINAL | MIRANDA;
-   expected_methods[DexMethod::get_method(f_t, f, void_int)] = TOP_DEF | FINAL;
-   expected_methods[DexMethod::get_method(m_t, f, void_int)] = TOP_DEF | FINAL | ESCAPED;
-   expected_methods[DexMethod::get_method(b_t, g, void_void)] = TOP_DEF;
-   expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
-   expected_methods[DexMethod::get_method(f_t, g, void_int)] = TOP_DEF;
-   expected_methods[DexMethod::get_method(g_t, g, void_int)] = OVERRIDE;
-   expected_methods[DexMethod::get_method(i_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
-   expected_methods[DexMethod::get_method(k_t, g, void_int)] = OVERRIDE | FINAL;
-   expected_methods[DexMethod::get_method(l_t, g, void_int)] = OVERRIDE | FINAL;
-   expected_methods[DexMethod::get_method(b_t, g, void_int)] = TOP_DEF | IMPL | MIRANDA;
-   expected_methods[DexMethod::get_method(c_t, g, void_int)] = OVERRIDE | MIRANDA | IMPL;
-   expected_methods[DexMethod::get_method(d_t, g, void_int)] = OVERRIDE | IMPL | FINAL | MIRANDA;
-   expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
-   expected_methods[DexMethod::get_method(h_t, g, void_int)] = OVERRIDE | IMPL | MIRANDA;
-   expected_methods[DexMethod::get_method(m_t, f, void_int)] = TOP_DEF | FINAL | ESCAPED;
-   expected_methods[DexMethod::get_method(n_t, h, void_int)] = TOP_DEF | FINAL | ESCAPED;
-   check_expected_methods(sm, expected_methods, TOP_DEF | FINAL | ESCAPED);
-   delete g_redex;
- }
+  // check expected methods
+  ExpectedMethod expected_methods;
+  expected_methods[DexMethod::get_method(obj_t, eq, bool_obj)] = TOP_DEF | ESCAPED;
+  expected_methods[DexMethod::get_method(f_t, eq, bool_obj)] = OVERRIDE | FINAL | ESCAPED;
+  expected_methods[DexMethod::get_method(a_t, f, void_void)] = TOP_DEF | FINAL;
+  expected_methods[DexMethod::get_method(b_t, f, void_void)] = TOP_DEF | IMPL | MIRANDA;
+  expected_methods[DexMethod::get_method(d_t, f, void_void)] = OVERRIDE | IMPL | FINAL | MIRANDA;
+  expected_methods[DexMethod::get_method(f_t, f, void_int)] = TOP_DEF | FINAL;
+  expected_methods[DexMethod::get_method(m_t, f, void_int)] = TOP_DEF | FINAL | ESCAPED;
+  expected_methods[DexMethod::get_method(b_t, g, void_void)] = TOP_DEF;
+  expected_methods[DexMethod::get_method(e_t, g, void_void)] = OVERRIDE | FINAL;
+  expected_methods[DexMethod::get_method(f_t, g, void_int)] = TOP_DEF;
+  expected_methods[DexMethod::get_method(g_t, g, void_int)] = OVERRIDE;
+  expected_methods[DexMethod::get_method(i_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
+  expected_methods[DexMethod::get_method(k_t, g, void_int)] = OVERRIDE | FINAL;
+  expected_methods[DexMethod::get_method(l_t, g, void_int)] = OVERRIDE | FINAL;
+  expected_methods[DexMethod::get_method(b_t, g, void_int)] = TOP_DEF | IMPL | MIRANDA;
+  expected_methods[DexMethod::get_method(c_t, g, void_int)] = OVERRIDE | MIRANDA | IMPL;
+  expected_methods[DexMethod::get_method(d_t, g, void_int)] = OVERRIDE | IMPL | FINAL | MIRANDA;
+  expected_methods[DexMethod::get_method(e_t, g, void_int)] = OVERRIDE | IMPL | FINAL;
+  expected_methods[DexMethod::get_method(h_t, g, void_int)] = OVERRIDE | IMPL | MIRANDA;
+  expected_methods[DexMethod::get_method(m_t, f, void_int)] = TOP_DEF | FINAL | ESCAPED;
+  expected_methods[DexMethod::get_method(n_t, h, void_int)] = TOP_DEF | FINAL | ESCAPED;
+  check_expected_methods(sm, expected_methods, TOP_DEF | FINAL | ESCAPED);
+
+  // check ClassScopes
+  ClassScopes cs(scope);
+  size_t count = 0;
+  cs.walk_all_intf_scopes(
+     [&](const DexString* name,
+         const DexProto*,
+         const std::vector<const VirtualScope*>& scopes,
+         const TypeSet& intfs) {
+       if (name == f) {
+         ASSERT_EQ(intfs.size(), 3);
+       } else {
+         ASSERT_EQ(intfs.size(), 1);
+         ASSERT_EQ(scopes.size(), 2);
+         if (scopes[0]->type == f_t) {
+           ASSERT_EQ(scopes[1]->type, b_t);
+           ASSERT_EQ(scopes[0]->methods.size(), 6);
+           ASSERT_EQ(scopes[1]->methods.size(), 4);
+         } else {
+           ASSERT_EQ(scopes[0]->type, b_t);
+           ASSERT_EQ(scopes[1]->type, f_t);
+           ASSERT_EQ(scopes[0]->methods.size(), 4);
+           ASSERT_EQ(scopes[1]->methods.size(), 6);
+         }
+       }
+       count++;
+     });
+  ASSERT_EQ(count, 2);
+  const auto& scopes = cs.get_interface_scopes(intf2_t);
+  ASSERT_EQ(scopes.size(), 1);
+  ASSERT_EQ(scopes[0].size(), 2);
+  if (scopes[0][0]->type == f_t) {
+   ASSERT_EQ(scopes[0][1]->type, b_t);
+   ASSERT_EQ(scopes[0][0]->methods.size(), 6);
+   ASSERT_EQ(scopes[0][1]->methods.size(), 4);
+  } else {
+   ASSERT_EQ(scopes[0][0]->type, b_t);
+   ASSERT_EQ(scopes[0][1]->type, f_t);
+   ASSERT_EQ(scopes[0][0]->methods.size(), 4);
+   ASSERT_EQ(scopes[0][1]->methods.size(), 6);
+  }
+  const auto& g_scope = cs.find_virtual_scope(
+      DexMethod::make_method(h_t, g, void_int));
+  ASSERT_EQ(g_scope.type, f_t);
+  ASSERT_EQ(g_scope.methods.size(), 6);
+  const auto methods = select_from(&g_scope, g_t);
+  ASSERT_EQ(methods.size(), 4);
+  EXPECT_THAT(methods, ::testing::UnorderedElementsAre(
+      DexMethod::get_method(g_t, g, void_int),
+      DexMethod::get_method(h_t, g, void_int),
+      DexMethod::get_method(i_t, g, void_int),
+      DexMethod::get_method(k_t, g, void_int)));
+
+  delete g_redex;
+}

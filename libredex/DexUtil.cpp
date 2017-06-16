@@ -151,7 +151,7 @@ char type_shorty(DexType* type) {
   not_reached();
 }
 
-bool check_cast(DexType* type, DexType* base_type) {
+bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
   const auto cls = type_class(type);
   if (cls == nullptr) return false;

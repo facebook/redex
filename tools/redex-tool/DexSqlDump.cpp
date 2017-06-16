@@ -29,7 +29,7 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 #include "Show.h"
 #include "Tool.h"
 #include "Transform.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include "Walkers.h"
 
 #include <boost/algorithm/string/replace.hpp>

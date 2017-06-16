@@ -165,11 +165,14 @@ void create_object_class() {
 using IntfProtoMap = std::map<const DexProto*, TypeSet, dexprotos_comparator>;
 
 // a map from name to signatures for a set of interfaces
-using BaseIntfSigs = std::map<const DexString*, IntfProtoMap, dexstrings_comparator>;
+using BaseIntfSigs =
+    std::map<const DexString*, IntfProtoMap, dexstrings_comparator>;
 
 // map to track signatures as (name, sig)
 using BaseSigs = std::map<
-    const DexString*, std::set<const DexProto*, dexprotos_comparator>, dexstrings_comparator>;
+    const DexString*,
+    std::set<const DexProto*, dexprotos_comparator>,
+    dexstrings_comparator>;
 
 /**
  * Create a BaseSig which is the set of method definitions in a type.
@@ -306,7 +309,8 @@ void build_interface_scope(
 }
 
 /**
- * Merge 2 signatures map. The map from derived_sig_map is copied in base_sig_map.
+ * Merge 2 signatures map. The map from derived_sig_map is copied in
+ * base_sig_map.
  * Interface methods in base don't have an entry yet, that will be build later
  * because it's a straight copy of the class virtual scope.
  */
@@ -382,7 +386,8 @@ void merge(
         TRACE(VIRT, 3, "-- checking scope type %s(%ld)\n",
             SHOW(scope.type), scope.methods.size());
         TRACE(VIRT, 3, "-- is interface 0x%X %d\n", scope.type,
-            scope.type != get_object_type() && is_interface(type_class(scope.type)));
+            scope.type != get_object_type() &&
+            is_interface(type_class(scope.type)));
         if (scope.type == get_object_type() ||
             !is_interface(type_class(scope.type))) {
           TRACE(VIRT, 3, "-- merging with base scopes %s(%ld) : %s\n",
@@ -445,7 +450,8 @@ bool load_interface_methods(
     }
   }
   for (const auto& meth : intf_cls->get_vmethods()) {
-    intf_methods[meth->get_name()][meth->get_proto()].insert(intf_cls->get_type());
+    intf_methods[meth->get_name()][meth->get_proto()].insert(
+        intf_cls->get_type());
   }
   return escaped;
 }
@@ -665,7 +671,7 @@ bool is_subclass(const DexType* parent, const DexType* child) {
 void get_root_scopes(
     const SignatureMap& sig_map,
     const DexType* type,
-    ClassScopes& cls_scopes) {
+    Scopes& cls_scopes) {
   const std::vector<DexMethod*>& methods = get_vmethods(type);
   for (const auto meth : methods) {
     const auto& protos = sig_map.find(meth->get_name());
@@ -678,29 +684,6 @@ void get_root_scopes(
       }
     }
   }
-}
-
-/**
- * Builds the ClassScope for type and children.
- * Calling with get_object_type() builds the ClassScope
- * for the entire system as redex knows it.
- */
-bool walk_hierarchy(
-    const DexType* type,
-    const ClassHierarchy& hierarchy,
-    const SignatureMap& sig_map,
-    ClassScopes& class_scopes) {
-  auto cls = type_class(type);
-  always_assert(cls != nullptr || type == get_object_type());
-  get_root_scopes(sig_map, type, class_scopes);
-
-  const auto& children_it = hierarchy.find(type);
-  if (children_it != hierarchy.end()) {
-    for (const auto& child : children_it->second) {
-      walk_hierarchy(child, hierarchy, sig_map, class_scopes);
-    }
-  }
-  return true;
 }
 
 }
@@ -738,15 +721,6 @@ const VirtualScope& find_virtual_scope(
       "unreachable. Scope not found for %s\n", SHOW(meth));
 }
 
-ClassScopes get_class_scopes(
-    const ClassHierarchy& hierarchy,
-    const SignatureMap& sig_map) {
-  ClassScopes class_scopes;
-  const auto& obj_t = get_object_type();
-  walk_hierarchy(obj_t, hierarchy, sig_map, class_scopes);
-  return class_scopes;
-}
-
 bool can_rename_scope(const VirtualScope* scope) {
   for (const auto& vmeth : scope->methods) {
     if (!can_rename(vmeth.first) || (vmeth.second & ESCAPED) != 0) {
@@ -758,4 +732,82 @@ bool can_rename_scope(const VirtualScope* scope) {
 
 bool is_impl_scope(const VirtualScope* scope) {
   return scope->interfaces.size() > 0;
+}
+
+std::vector<const DexMethod*> select_from(
+    const VirtualScope* scope, const DexType* type) {
+  std::vector<const DexMethod*> refined_scope;
+  std::unordered_map<const DexType*, DexMethod*> non_child_methods;
+  bool found_root_method = false;
+  for (const auto& method : scope->methods) {
+    if (check_cast(method.first->get_class(), type)) {
+      found_root_method =
+          found_root_method || type == method.first->get_class();
+      refined_scope.emplace_back(method.first);
+    } else {
+      non_child_methods[method.first->get_class()] = method.first;
+    }
+  }
+  if (!found_root_method) {
+    auto cls = type_class(type);
+    while (cls != nullptr) {
+      const auto super = cls->get_super_class();
+      const auto& meth = non_child_methods.find(super);
+      if (meth != non_child_methods.end()) {
+        refined_scope.emplace_back(meth->second);
+        return refined_scope;
+      }
+      cls = type_class(super);
+    }
+  }
+  return refined_scope;
+}
+
+const std::vector<const VirtualScope*> ClassScopes::empty_scope =
+    std::vector<const VirtualScope*>();
+const std::vector<std::vector<const VirtualScope*>>
+    ClassScopes::empty_interface_scope =
+        std::vector<std::vector<const VirtualScope*>>();
+
+ClassScopes::ClassScopes(const Scope& scope) {
+  m_hierarchy = build_type_hierarchy(scope);
+  m_interface_map = build_interface_map(m_hierarchy);
+  m_sig_map = build_signature_map(m_hierarchy);
+  build_class_scopes(get_object_type());
+  build_interface_scopes();
+}
+
+/**
+ * Builds the ClassScope for type and children.
+ * Calling with get_object_type() builds the ClassScope
+ * for the entire system as redex knows it.
+ */
+void ClassScopes::build_class_scopes(const DexType* type) {
+  auto cls = type_class(type);
+  always_assert(cls != nullptr || type == get_object_type());
+  get_root_scopes(m_sig_map, type, m_scopes);
+
+  const auto& children_it = m_hierarchy.find(type);
+  if (children_it != m_hierarchy.end()) {
+    for (const auto& child : children_it->second) {
+      build_class_scopes(child);
+    }
+  }
+}
+
+void ClassScopes::build_interface_scopes() {
+  for (const auto& intf_it : m_interface_map) {
+    const DexClass* intf_cls = type_class(intf_it.first);
+    if (intf_cls == nullptr) continue;
+    for (const auto& meth : intf_cls->get_vmethods()) {
+      const auto& scopes = m_sig_map[meth->get_name()][meth->get_proto()];
+      always_assert(scopes.size() > 0); // at least the method itself
+      auto& intf_scope = m_interface_scopes[intf_it.first];
+      intf_scope.push_back({});
+      for (const auto& scope : scopes) {
+        if (scope.interfaces.count(intf_it.first) == 0) continue;
+        intf_scope.back().push_back(&scope);
+      }
+    }
+  }
 }

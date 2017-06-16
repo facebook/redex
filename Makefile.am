@@ -54,6 +54,7 @@ noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
+	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
 	libredex/ControlFlow.cpp \

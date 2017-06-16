@@ -164,7 +164,7 @@ inline DexClass* type_class_internal(const DexType* t) {
  * you may effectively get false for a check_cast that would succeed at
  * runtime. Otherwise 'true' implies the type can cast.
  */
-bool check_cast(DexType* type, DexType* base_type);
+bool check_cast(const DexType* type, const DexType* base_type);
 
 /**
  * Return true if the type is an array type.

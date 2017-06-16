@@ -10,92 +10,172 @@
 #pragma once
 
 #include "DexClass.h"
-#include <set>
+#include "ClassHierarchy.h"
+#include "VirtualScope.h"
 
-using TypeSet = std::set<const DexType*, dextypes_comparator>;
+#include <unordered_map>
 
-/**
- * DexType parent to children relationship
- * (child to parent is in DexClass)
- */
-using ClassHierarchy = std::map<const DexType*, TypeSet, dextypes_comparator>;
+using TypeVector = std::vector<const DexType*>;
+using InstanceOfTable = std::unordered_map<const DexType*, TypeVector>;
 
 /**
- * Given a scope it builds all the parent-children relationship known.
- * The walk stops once a DexClass is not found.
- * If all the code is known all classes will root to java.lang.Object.
- * If not some hierarcies will be "unknonw" (not completed)
+ * TypeSystem
+ * A class that computes information and caches on the current known state
+ * of the universe given a Scope.
+ * It provides common API to an object-oriented type system: inheritance
+ * relationships, interface relationships, virtual scopes.
+ * It's a one-stop class for everything related to the type system with
+ * hopefully decent performance.
  */
-ClassHierarchy build_type_hierarchy(const Scope& scope);
+class TypeSystem {
+ private:
+  static const TypeSet empty_set;
+  static const TypeVector empty_vec;
 
-/**
- * Return the direct children of a type.
- */
-inline const TypeSet get_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type) {
-  const auto& it = hierarchy.find(type);
-  return it != hierarchy.end() ? it->second : TypeSet();
-}
+  ClassScopes m_class_scopes;
+  ClassHierarchy m_intf_parents;
+  ClassHierarchy m_intf_children;
+  InstanceOfTable m_instanceof_table;
 
-/**
- * Return all children down the hierarchy of a given type.
- */
-void get_all_children(
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    TypeSet& children);
+ public:
+  explicit TypeSystem(const Scope& scope);
 
-/**
- * Retrieve all the implementors of an interface and push them in the
- * provided set.
- */
-void get_all_implementors(const Scope& scope,
-                          const DexType* intf,
-                          TypeSet& impls);
-
-/**
- * Helper to retrieve either the children of a concrete type or
- * all implementors of an interface.
- */
-inline void get_all_children_or_implementors(
-    const ClassHierarchy& ch,
-    const Scope& scope,
-    const DexClass* base_class,
-    TypeSet& children_or_implementors) {
-  if (is_interface(base_class)) {
-    get_all_implementors(
-        scope, base_class->get_type(), children_or_implementors);
-  } else {
-    get_all_children(ch, base_class->get_type(), children_or_implementors);
+  /**
+   * Get the direct children of a given type.
+   * The type must be a class (not an interface).
+   */
+  const TypeSet& get_children(const DexType* type) const {
+    const auto& children = m_class_scopes.get_class_hierarchy().find(type);
+    return children != m_class_scopes.get_class_hierarchy().end()
+        ? children->second : empty_set;
   }
-}
 
-/**
- * Like find_collision, but don't report a match on `except`.
- */
-DexMethod* find_collision_excepting(
-    const ClassHierarchy& ch,
-    const DexMethod* except,
-    const DexString* name,
-    const DexProto* proto,
-    const DexClass* cls,
-    bool is_virtual,
-    bool check_direct);
+  /**
+   * Get all the children of a given type.
+   * The type must be a class (not an interface).
+   */
+  void get_all_children(const DexType* type, TypeSet& children) const {
+    return ::get_all_children(
+        m_class_scopes.get_class_hierarchy(), type, children);
+  }
 
-/**
- * Given a name and a proto find a possible collision with methods with
- * the same name and proto.
- * The search is performed in the vmethods or dmethods space according to
- * the is_virtual argument.
- * When searching in the virtual methods space the search is performed up and
- * down the hierarchy chain. When in the direct method space only the current
- * class is searched.
- */
-inline DexMethod* find_collision(
-    const ClassHierarchy& ch,
-    const DexString* name, const DexProto* proto,
-    const DexClass* cls, bool is_virtual) {
-  return find_collision_excepting(
-      ch, nullptr, name, proto, cls, is_virtual, false);
-}
+  /**
+   * Return the chain of parents for a given type.
+   * The type in question is included in the parent chain and it's
+   * the last element in the returned vector.
+   * The vector is ordered starting from the top type (java.lang.Object)
+   * The type must be a class (not an interface).
+   */
+  const TypeVector& parent_chain(const DexType* type) const {
+    const auto& parents = m_instanceof_table.find(type);
+    if (parents == m_instanceof_table.end()) return empty_vec;
+    return parents->second;
+  }
+
+  /**
+   * Return true if child is a subclass or equal to parent.
+   * The type must be a class (not an interface).
+   */
+  bool is_subtype(const DexType* parent, const DexType* child) const {
+    const auto& parent_it = m_instanceof_table.find(parent);
+    const auto& child_it = m_instanceof_table.find(child);
+    if (parent_it == m_instanceof_table.end() ||
+        child_it == m_instanceof_table.end()) {
+      return false;
+    }
+    const auto& p_chain = parent_it->second;
+    const auto& c_chain = child_it->second;
+    if (p_chain.size() > c_chain.size()) return false;
+    return c_chain.at(p_chain.size() - 1) == parent;
+  }
+
+  /**
+   * Return true if a given class implements a given interface.
+   * The interface may be implemented via some parent of the class
+   * or an interface DAG.
+   */
+  bool implements(const DexType* cls, const DexType* intf) const {
+    const auto& implementors = m_class_scopes.get_interface_map().find(intf);
+    if (implementors == m_class_scopes.get_interface_map().end()) return false;
+    return implementors->second.count(cls) > 0;
+  }
+
+  /**
+   * Return all classes that implement an interface.
+   * The interface may be implemented via some parent of the class
+   * or an interface DAG.
+   * The implication is that all children of a type implementing an
+   * interface will be included in the returning set.
+   */
+  const TypeSet& get_implementors(const DexType* intf) const {
+    const auto& implementors = m_class_scopes.get_interface_map().find(intf);
+    if (implementors == m_class_scopes.get_interface_map().end()) {
+      return empty_set;
+    }
+    return implementors->second;
+  }
+
+  /**
+   * Return the set of every parent interface of a given interface.
+   * The type must be an interface (not a class).
+   * The direct list of interfaces implemented can be retrived in the
+   * DexClass.
+   */
+  void get_all_super_interfaces(const DexType* intf, TypeSet& supers) const;
+
+  /**
+   * Return the direct children of a given interface.
+   * The type must be an interface (not a class).
+   */
+  const TypeSet& get_interface_children(const DexType* intf) const {
+    const auto& children = m_intf_children.find(intf);
+    if (children == m_intf_children.end()) return empty_set;
+    return children->second;
+  }
+
+  /**
+   * Return all the children of a given interface.
+   * The type must be an interface (not a class).
+   */
+  void get_all_interface_children(
+      const DexType* intf, TypeSet& children) const {
+    const auto& direct_children = get_interface_children(intf);
+    children.insert(direct_children.begin(), direct_children.end());
+    for (const auto& child : direct_children) {
+      get_all_interface_children(child, children);
+    }
+  }
+
+  /**
+   * Return the ClassScopes known when building the type system.
+   * The ClassScopes lifetime is tied to that of the TypeSystem, as
+   * such it should not exceed it.
+   */
+  const ClassScopes& get_class_scopes() const {
+    return m_class_scopes;
+  }
+
+  /**
+   * Given a DexMethod return the scope the method is in.
+   */
+  const VirtualScope* find_virtual_scope(const DexMethod* meth) const;
+
+  /**
+   * Given a VirtualScope and a type return the list of methods that
+   * could bind for that type in that scope.
+   * There is no specific order to the methods returned.
+   * Consider
+   * class A { void m() {} }
+   * class B extends A { void m() {} }
+   * class C extends B { void m() {} }
+   * class D extends C { void m() {} }
+   * class E extends A { void m() {} }
+   * The Virtual scope for m() starts in A.m() and contains all the m()
+   * in the A hierarchy.
+   * A call to select_from() with C with return only C.m() and D.m() which
+   * are the only 2 methods in scope for C.
+   */
+  std::vector<const DexMethod*> select_from(
+      const VirtualScope* scope, const DexType* type) const;
+
+};

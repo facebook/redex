@@ -21,7 +21,7 @@
 #include "IRInstruction.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (52)

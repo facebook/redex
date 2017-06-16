@@ -23,7 +23,7 @@
 #include "SingleImplDefs.h"
 #include "SingleImplUtil.h"
 #include "Trace.h"
-#include "TypeSystem.h"
+#include "ClassHierarchy.h"
 #include "Walkers.h"
 
 size_t SingleImplPass::s_invoke_intf_count = 0;
