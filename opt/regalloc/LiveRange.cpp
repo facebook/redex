@@ -15,7 +15,7 @@
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
 #include "HashedAbstractEnvironment.h"
-#include "HashedSetAbstractDomain.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 #include "Transform.h"
 
 namespace {
@@ -53,6 +53,8 @@ class SymRegMapper {
    }
 };
 
+using UDChains = std::unordered_map<Use, PatriciaTreeSet<Def>>;
+
 /*
  * Put all defs with a use in common into the same set.
  */
@@ -69,7 +71,7 @@ void unify_defs(const UDChains& chains, DefSets* def_sets) {
 }
 
 class DefsDomain final : public AbstractDomainReverseAdaptor<
-                             HashedSetAbstractDomain<IRInstruction*>,
+                             PatriciaTreeSetAbstractDomain<IRInstruction*>,
                              DefsDomain> {
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
@@ -86,7 +88,7 @@ class DefsDomain final : public AbstractDomainReverseAdaptor<
     return unwrap().size();
   }
 
-  const std::unordered_set<IRInstruction*>& elements() const {
+  const PatriciaTreeSet<IRInstruction*>& elements() const {
     return unwrap().elements();
   }
 };

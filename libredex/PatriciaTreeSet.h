@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "Debug.h"
+#include "Util.h"
 
 // Forward declarations.
 namespace pt_impl {
@@ -118,7 +119,7 @@ class PatriciaTreeSet final {
 
   size_t size() const {
     size_t s = 0;
-    for (Element x : *this) {
+    for (Element UNUSED x : *this) {
       ++s;
     }
     return s;

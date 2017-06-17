@@ -13,6 +13,7 @@
 #include <memory>
 #include <utility>
 
+#define UNUSED __attribute__((unused))
 
 /**
  * Insert into the proper location in a sorted container.

@@ -57,8 +57,6 @@ namespace regalloc {
 
 namespace live_range {
 
-using UDChains = std::unordered_map<Use, std::unordered_set<Def>>;
-
 void renumber_registers(IRCode*);
 
 } // namespace live_range
