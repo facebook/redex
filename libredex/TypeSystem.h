@@ -17,6 +17,7 @@
 
 using TypeVector = std::vector<const DexType*>;
 using InstanceOfTable = std::unordered_map<const DexType*, TypeVector>;
+using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
 
 /**
  * TypeSystem
@@ -36,6 +37,7 @@ class TypeSystem {
   ClassHierarchy m_intf_parents;
   ClassHierarchy m_intf_children;
   InstanceOfTable m_instanceof_table;
+  TypeToTypeSet m_interfaces;
 
  public:
   explicit TypeSystem(const Scope& scope);
@@ -70,6 +72,15 @@ class TypeSystem {
     const auto& parents = m_instanceof_table.find(type);
     if (parents == m_instanceof_table.end()) return empty_vec;
     return parents->second;
+  }
+
+  /**
+   * Return all interfaces imlemented by a given type.
+   * A type must be a class (not an interface)
+   */
+  const TypeSet& get_implemented_interfaces(const DexType* type) const {
+    const auto& intfs = m_interfaces.find(type);
+    return intfs != m_interfaces.end() ? intfs->second : empty_set;
   }
 
   /**
@@ -178,4 +189,7 @@ class TypeSystem {
   std::vector<const DexMethod*> select_from(
       const VirtualScope* scope, const DexType* type) const;
 
+ private:
+  void make_instanceof_interfaces_table();
+  void make_interfaces_table(const DexType* type);
 };

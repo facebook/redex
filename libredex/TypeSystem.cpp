@@ -42,21 +42,6 @@ void make_instanceof_table(
   }
 }
 
-void make_instanceof_table(
-    InstanceOfTable& instance_of_table, const ClassHierarchy& hierarchy) {
-  TypeVector no_parents;
-  for (const auto& children_it : hierarchy) {
-    const auto parent = children_it.first;
-    const auto parent_cls = type_class(parent);
-    if (parent_cls != nullptr) continue;
-    no_parents.emplace_back(parent);
-  }
-  no_parents.emplace_back(get_object_type());
-  for (const auto& root : no_parents) {
-    make_instanceof_table(instance_of_table, hierarchy, root);
-  }
-}
-
 void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
   for (const auto& super_intf : intf->get_interfaces()->get_type_list()) {
     children[super_intf].insert(intf->get_type());
@@ -91,8 +76,7 @@ const TypeVector TypeSystem::empty_vec = TypeVector();
 TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
   Timer("TypeSystem");
   load_interface_children(scope, m_intf_children);
-  make_instanceof_table(
-      m_instanceof_table, m_class_scopes.get_class_hierarchy());
+  make_instanceof_interfaces_table();
 }
 
 void TypeSystem::get_all_super_interfaces(
@@ -152,4 +136,47 @@ std::vector<const DexMethod*> TypeSystem::select_from(
     }
   }
   return refined_scope;
+}
+
+void TypeSystem::make_instanceof_interfaces_table() {
+  TypeVector no_parents;
+  const auto& hierarchy = m_class_scopes.get_class_hierarchy();
+  for (const auto& children_it : hierarchy) {
+    const auto parent = children_it.first;
+    const auto parent_cls = type_class(parent);
+    if (parent_cls != nullptr) continue;
+    no_parents.emplace_back(parent);
+  }
+  no_parents.emplace_back(get_object_type());
+  for (const auto& root : no_parents) {
+    make_instanceof_table(m_instanceof_table, hierarchy, root);
+  }
+  for (const auto& root : no_parents) {
+    make_interfaces_table(root);
+  }
+}
+
+void TypeSystem::make_interfaces_table(const DexType* type) {
+  const auto cls = type_class(type);
+  if (cls != nullptr) {
+    const auto super = cls->get_super_class();
+    if (super != nullptr) {
+      const auto& parent_intfs = m_interfaces.find(super);
+      if (parent_intfs != m_interfaces.end()) {
+        m_interfaces[type].insert(
+            parent_intfs->second.begin(), parent_intfs->second.end());
+      }
+    }
+    for (const auto& intf : cls->get_interfaces()->get_type_list()) {
+      m_interfaces[type].insert(intf);
+      get_all_super_interfaces(intf, m_interfaces[type]);
+    }
+  }
+
+  const auto& hierarchy = m_class_scopes.get_class_hierarchy();
+  const auto& children = hierarchy.find(type);
+  if (children == hierarchy.end()) return;
+  for (const auto& child : children->second) {
+    make_interfaces_table(child);
+  }
 }
