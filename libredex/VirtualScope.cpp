@@ -730,10 +730,6 @@ bool can_rename_scope(const VirtualScope* scope) {
   return true;
 }
 
-bool is_impl_scope(const VirtualScope* scope) {
-  return scope->interfaces.size() > 0;
-}
-
 std::vector<const DexMethod*> select_from(
     const VirtualScope* scope, const DexType* type) {
   std::vector<const DexMethod*> refined_scope;

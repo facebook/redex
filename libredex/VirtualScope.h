@@ -123,7 +123,22 @@ bool can_rename_scope(const VirtualScope* scope);
 /**
  * Return true if a VirtualScope contributes to interface resolution.
  */
-bool is_impl_scope(const VirtualScope* scope);
+inline bool is_impl_scope(const VirtualScope* scope) {
+  return scope->interfaces.size() > 0;
+}
+
+/**
+ * Return true if a VirtualScope is composed by a single non impl method.
+ * Effectively if themethod is devirtualizable.
+ */
+inline bool is_non_virtual_scope(const VirtualScope* scope) {
+  if (scope->methods[0].second ==
+      (VirtualFlags::FINAL | VirtualFlags::TOP_DEF)) {
+    always_assert(scope->methods.size() == 1);
+    return true;
+  }
+  return false;
+}
 
 /**
  * A SignatureMap is the following
