@@ -20,6 +20,16 @@ struct DexInput {
   std::string location; // the name to store in the OAT file.
 };
 
+struct OatDexFile {
+  OatDexFile() = default;
+  OatDexFile(std::string location_, uint32_t file_offset_, uint32_t file_size_)
+    : location(location_), file_offset(file_offset_), file_size(file_size_) {}
+
+  std::string location;
+  uint32_t file_offset;
+  uint32_t file_size;
+};
+
 class OatFile {
  public:
   enum class Status {
@@ -41,9 +51,20 @@ class OatFile {
   // reads magic number, returns correct oat file implementation.
   static std::unique_ptr<OatFile> parse(ConstBuffer buf);
 
+  // Like parse, but stops after parsing the dex file listing and dex headers.
+  static std::unique_ptr<OatFile> parse_dex_files_only(ConstBuffer buf);
+  static std::unique_ptr<OatFile> parse_dex_files_only(void* ptr, size_t len);
+
+  virtual std::vector<OatDexFile> get_oat_dexfiles() = 0;
+
   virtual void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) = 0;
 
   virtual Status status() = 0;
+
+  // In an OatFile created with parse or parse_dex_files_only, the buffer may have been an
+  // ELF file, in which case the parsing starts at the offset of the ELF file's .rodata
+  // section. This returns the offset to that data. (Or zero if the buffer was not an elf file.)
+  virtual size_t oat_offset() const = 0;
 
   static Status build(const std::string& oat_file,
                       const std::vector<DexInput>& dex_files,

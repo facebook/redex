@@ -626,7 +626,8 @@ class DexFileListing_064 : public DexFileListing {
     std::vector<std::string> class_names;
   };
 
-  DexFileListing_064(int numDexFiles, ConstBuffer buf, ConstBuffer oat_buf) {
+  DexFileListing_064(bool dex_files_only, int numDexFiles, ConstBuffer buf,
+                     ConstBuffer oat_buf) {
     auto ptr = buf.ptr;
     while (numDexFiles > 0) {
       numDexFiles--;
@@ -644,19 +645,28 @@ class DexFileListing_064 : public DexFileListing {
 
       auto dex_header = DexFileHeader::parse(oat_buf.slice(file.file_offset));
       const auto num_classes = dex_header.class_defs_size;
-      file.class_info.reserve(num_classes);
 
-      DexIdBufs id_bufs(oat_buf, file.file_offset, dex_header);
+      if (!dex_files_only) {
+        file.class_info.reserve(num_classes);
 
-      for (unsigned int i = 0; i < num_classes; i++) {
-        uint32_t class_info_offset;
-        READ_WORD(&class_info_offset, ptr);
+        DexIdBufs id_bufs(oat_buf, file.file_offset, dex_header);
 
-        ClassInfo class_info;
-        cur_ma()->memcpyAndMark(&class_info, oat_buf.ptr + class_info_offset,
-                                sizeof(ClassInfo));
-        file.class_info.push_back(class_info);
-        file.class_names.push_back(id_bufs.get_class_name(i));
+        for (unsigned int i = 0; i < num_classes; i++) {
+          uint32_t class_info_offset;
+          READ_WORD(&class_info_offset, ptr);
+
+          ClassInfo class_info;
+          cur_ma()->memcpyAndMark(&class_info, oat_buf.ptr + class_info_offset,
+                                  sizeof(ClassInfo));
+          file.class_info.push_back(class_info);
+          file.class_names.push_back(id_bufs.get_class_name(i));
+        }
+      } else {
+        // must consume the class info.
+        for (unsigned int i = 0; i < num_classes; i++) {
+          uint32_t class_info_offset;
+          READ_WORD(&class_info_offset, ptr);
+        }
       }
 
       dex_files_.push_back(file);
@@ -717,6 +727,8 @@ class DexFileListing_064 : public DexFileListing {
     return ret;
   }
 
+  const std::vector<DexFile_064>& dex_files() const { return dex_files_; }
+
  private:
   std::vector<DexFile_064> dex_files_;
 };
@@ -759,6 +771,8 @@ public:
     std::vector<ClassInfo> class_info;
     std::vector<std::string> class_names;
   };
+
+  OatClasses_079() = default;
 
   OatClasses_079(const DexFileListing_079& dex_file_listing,
                  const DexFiles& dex_files,
@@ -909,6 +923,8 @@ class LookupTables {
     const LookupTableEntry* entries;
     uint32_t num_entries;
   };
+
+  LookupTables() = default;
 
   LookupTables(const DexFileListing_079& dex_file_listing,
                const DexFiles& dex_files,
@@ -1147,20 +1163,22 @@ class OatFile_064 : public OatFile {
   UNCOPYABLE(OatFile_064);
   MOVABLE(OatFile_064);
 
-  static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
+  static std::unique_ptr<OatFile> parse(bool dex_files_only, ConstBuffer buf,
+                                        size_t oat_offset) {
     auto header = OatHeader_064::parse(buf);
     auto key_value_store = KeyValueStore(
         buf.slice(sizeof(header)).truncate(header.key_value_store_size));
 
     auto rest = buf.slice(sizeof(header) + header.key_value_store_size);
-    DexFileListing_064 dfl(header.dex_file_count, rest, buf);
+    DexFileListing_064 dfl(dex_files_only, header.dex_file_count, rest, buf);
 
     DexFiles dex_files(dfl, buf);
 
     return std::unique_ptr<OatFile>(new OatFile_064(header,
                                                     key_value_store,
                                                     std::move(dfl),
-                                                    std::move(dex_files)));
+                                                    std::move(dex_files),
+                                                    oat_offset));
   }
 
   void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
@@ -1183,20 +1201,37 @@ class OatFile_064 : public OatFile {
 
   Status status() override { return Status::PARSE_SUCCESS; }
 
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    std::vector<OatDexFile> ret;
+    ret.reserve(dex_file_listing_.dex_files().size());
+    foreach_pair(dex_file_listing_.dex_files(), dex_files_.headers(),
+      [&](const DexFileListing_064::DexFile_064& dex_file,
+          const DexFileHeader& header) {
+        ret.emplace_back(dex_file.location, dex_file.file_offset, header.file_size);
+      }
+    );
+    return ret;
+  }
+
+  size_t oat_offset() const override { return oat_offset_; }
+
  private:
   OatFile_064(OatHeader_064 h,
               KeyValueStore kv,
               DexFileListing_064 dfl,
-              DexFiles dex_files)
+              DexFiles dex_files,
+              size_t oat_offset)
       : header_(h),
         key_value_store_(kv),
         dex_file_listing_(std::move(dfl)),
-        dex_files_(std::move(dex_files)) {}
+        dex_files_(std::move(dex_files)),
+        oat_offset_(oat_offset) {}
 
   OatHeader_064 header_;
   KeyValueStore key_value_store_;
   DexFileListing_064 dex_file_listing_;
   DexFiles dex_files_;
+  size_t oat_offset_;
 };
 
 // OatFile format for 079 and 088. (088 may have changes that don't
@@ -1206,7 +1241,8 @@ class OatFile_079 : public OatFile {
   UNCOPYABLE(OatFile_079);
   MOVABLE(OatFile_079);
 
-  static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
+  static std::unique_ptr<OatFile> parse(bool dex_files_only, ConstBuffer buf,
+                                        size_t oat_offset) {
 
     auto header = OatHeader_064::parse(buf);
     auto key_value_store = KeyValueStore(
@@ -1217,6 +1253,14 @@ class OatFile_079 : public OatFile {
 
     DexFiles dex_files(dfl, buf);
 
+    if (dex_files_only) {
+      return std::unique_ptr<OatFile>(new OatFile_079(header,
+                                                      key_value_store,
+                                                      std::move(dfl),
+                                                      std::move(dex_files),
+                                                      oat_offset));
+    }
+
     LookupTables lookup_tables(dfl, dex_files, buf);
 
     OatClasses_079 oat_classes(dfl, dex_files, buf);
@@ -1226,7 +1270,8 @@ class OatFile_079 : public OatFile {
                                                     std::move(dfl),
                                                     std::move(dex_files),
                                                     std::move(lookup_tables),
-                                                    std::move(oat_classes)));
+                                                    std::move(oat_classes),
+                                                    oat_offset));
   }
 
   void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
@@ -1260,19 +1305,43 @@ class OatFile_079 : public OatFile {
                       InstructionSet isa,
                       bool write_elf);
 
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    std::vector<OatDexFile> ret;
+    ret.reserve(dex_file_listing_.dex_files().size());
+    for (const auto& dex : dex_file_listing_.dex_files()) {
+      ret.emplace_back(dex.location, dex.location_checksum, dex.file_offset);
+    }
+    return ret;
+  }
+
+  size_t oat_offset() const override { return oat_offset_; }
+
  private:
   OatFile_079(OatHeader_064 h,
               KeyValueStore kv,
               DexFileListing_079 dfl,
               DexFiles dex_files,
+              size_t oat_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_file_listing_(std::move(dfl)),
+        dex_files_(std::move(dex_files)),
+        oat_offset_(oat_offset) {}
+
+  OatFile_079(OatHeader_064 h,
+              KeyValueStore kv,
+              DexFileListing_079 dfl,
+              DexFiles dex_files,
               LookupTables lt,
-              OatClasses_079 oat_classes)
+              OatClasses_079 oat_classes,
+              size_t oat_offset)
       : header_(h),
         key_value_store_(kv),
         dex_file_listing_(std::move(dfl)),
         dex_files_(std::move(dex_files)),
         lookup_tables_(std::move(lt)),
-        oat_classes_(std::move(oat_classes)) {}
+        oat_classes_(std::move(oat_classes)),
+        oat_offset_(oat_offset) {}
 
   OatHeader_064 header_;
   KeyValueStore key_value_store_;
@@ -1280,6 +1349,7 @@ class OatFile_079 : public OatFile {
   DexFiles dex_files_;
   LookupTables lookup_tables_;
   OatClasses_079 oat_classes_;
+  size_t oat_offset_;
 };
 
 class OatFile_Unknown : public OatFile {
@@ -1291,8 +1361,14 @@ public:
 
   Status status() override { return Status::PARSE_UNKNOWN_VERSION; }
 
+  size_t oat_offset() const override { return 0; }
+
   static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
     return std::unique_ptr<OatFile>(new OatFile_Unknown(buf));
+  }
+
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    return std::vector<OatDexFile>();
   }
 
 private:
@@ -1312,8 +1388,14 @@ public:
 
   Status status() override { return Status::PARSE_BAD_MAGIC_NUMBER; }
 
+  size_t oat_offset() const override { return 0; }
+
   static std::unique_ptr<OatFile> parse(ConstBuffer buf) {
     return std::unique_ptr<OatFile>(new OatFile_Bad(buf));
+  }
+
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    return std::vector<OatDexFile>();
   }
 
 private:
@@ -1328,8 +1410,9 @@ private:
 
 OatFile::~OatFile() = default;
 
-std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
-
+static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
+                                                   ConstBuffer buf) {
+  size_t oat_offset = 0;
   if (buf.len >= sizeof(Elf32_Ehdr)) {
     Elf32_Ehdr header;
     memcpy(&header, buf.ptr, sizeof(Elf32_Ehdr));
@@ -1340,6 +1423,7 @@ std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
       // .rodata starts at 0x1000 in every version of ART that i've seen.
       // If there are any where this isn't true, we'll have to actually read
       // out the offset of .rodata.
+      oat_offset = 0x1000;
       buf = buf.slice(0x1000);
     }
   }
@@ -1354,14 +1438,26 @@ std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
 
   switch (header.version) {
   case kOatVersion064:
-    return OatFile_064::parse(buf);
+    return OatFile_064::parse(dex_files_only, buf, oat_offset);
   case kOatVersion079:
   case kOatVersion088:
     // 079 and 088 are the same as far as I can tell.
-    return OatFile_079::parse(buf);
+    return OatFile_079::parse(dex_files_only, buf, oat_offset);
   default:
     return OatFile_Unknown::parse(buf);
   }
+}
+
+std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
+  return parse_oatfile_impl(false, buf);
+}
+
+std::unique_ptr<OatFile> OatFile::parse_dex_files_only(ConstBuffer buf) {
+  return parse_oatfile_impl(true, buf);
+}
+
+std::unique_ptr<OatFile> OatFile::parse_dex_files_only(void* ptr, size_t len) {
+  return parse_dex_files_only(ConstBuffer { reinterpret_cast<char*>(ptr), len });
 }
 
 ////////// building
