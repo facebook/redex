@@ -70,7 +70,7 @@ DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
 }
 
-bool is_primitive(DexType* type) {
+bool is_primitive(const DexType* type) {
   auto const name = type->get_name()->c_str();
   switch (name[0]) {
   case 'Z':
@@ -90,7 +90,7 @@ bool is_primitive(DexType* type) {
   not_reached();
 }
 
-bool is_wide_type(DexType* type) {
+bool is_wide_type(const DexType* type) {
   auto const name = type->get_name()->c_str();
   switch (name[0]) {
   case 'J':
@@ -131,7 +131,7 @@ DataType type_to_datatype(const DexType* t) {
   not_reached();
 }
 
-char type_shorty(DexType* type) {
+char type_shorty(const DexType* type) {
   auto const name = type->get_name()->c_str();
   switch (name[0]) {
   case '[':

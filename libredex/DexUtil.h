@@ -87,12 +87,12 @@ DexType* get_enum_type();
 /**
  * Return true if the type is a primitive.
  */
-bool is_primitive(DexType* type);
+bool is_primitive(const DexType* type);
 
 /**
  * Return true if the type is either a long or a double
  */
-bool is_wide_type(DexType* type);
+bool is_wide_type(const DexType* type);
 
 /**
  * Return true if method signatures (name and proto) match.
@@ -108,7 +108,7 @@ inline bool signatures_match(const DexMethod* a, const DexMethod* b) {
  * ... primitive etc.
  * any reference -> L
  */
-char type_shorty(DexType* type);
+char type_shorty(const DexType* type);
 
 /**
  * Return true if the parent chain leads to known classes.
