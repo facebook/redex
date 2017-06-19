@@ -43,13 +43,27 @@ struct FieldDependency {
 
 class FinalInlineImpl {
  public:
-  FinalInlineImpl(Scope& full_scope, FinalInlinePass::Config& config)
+  FinalInlineImpl(const Scope& full_scope, FinalInlinePass::Config& config)
       : m_full_scope(full_scope), m_config(config) {}
 
-  Scope& m_full_scope;
+  const Scope& m_full_scope;
   FinalInlinePass::Config& m_config;
 
-  std::unordered_set<DexField*> get_called_field_defs(Scope& scope) {
+  bool is_cls_blacklisted(DexClass* clazz) {
+    for (auto& type : m_config.black_list_types) {
+      if (clazz->get_type() == type) {
+        return true;
+      }
+    }
+    for (auto& anno_type : m_config.black_list_annos) {
+      if (has_anno(clazz, anno_type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
     std::vector<DexField*> field_refs;
     walk_methods(scope,
                  [&](DexMethod* method) { method->gather_fields(field_refs); });
@@ -67,7 +81,7 @@ class FinalInlineImpl {
   }
 
   std::unordered_set<DexField*> get_field_target(
-      Scope& scope, const std::vector<DexField*>& fields) {
+      const Scope& scope, const std::vector<DexField*>& fields) {
     std::unordered_set<DexField*> field_defs = get_called_field_defs(scope);
     std::unordered_set<DexField*> ftarget;
     for (auto field : fields) {
@@ -93,6 +107,9 @@ class FinalInlineImpl {
     std::vector<DexClass*> smallscope;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
+      if (is_cls_blacklisted(clazz)) {
+        continue;
+      }
       bool found = can_delete(clazz);
       if (!found) {
         auto name = clazz->get_name()->c_str();
@@ -265,6 +282,9 @@ class FinalInlineImpl {
     std::unordered_set<DexField*> cheap_inline_field;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
+      if (is_cls_blacklisted(clazz)) {
+        continue;
+      }
       std::unordered_map<DexField*, bool> blank_statics;
       get_sput_in_clinit(clazz, blank_statics);
       auto sfields = clazz->get_sfields();
@@ -440,6 +460,9 @@ class FinalInlineImpl {
     size_t nreplaced = 0;
     size_t ntotal = 0;
     for (auto clazz : m_full_scope) {
+      if (is_cls_blacklisted(clazz)) {
+        continue;
+      }
       auto clinit = clazz->get_clinit();
       if (clinit == nullptr) {
         continue;
@@ -514,6 +537,9 @@ class FinalInlineImpl {
     TRACE(FINALINLINE, 2, "Building dependency map\n");
     std::unordered_map<DexField*, std::vector<FieldDependency>> deps;
     for (auto clazz : m_full_scope) {
+      if (is_cls_blacklisted(clazz)) {
+        continue;
+      }
       auto clinit = clazz->get_clinit();
       if (clinit == nullptr) {
         continue;
@@ -661,6 +687,14 @@ void FinalInlinePass::run_pass(DexStoresVector& stores,
     mgr.incr_metric("encodable_clinits_replaced", nreplaced);
   }
 
+  impl.inline_field_values();
+  impl.remove_unused_fields();
+}
+
+void FinalInlinePass::inline_fields(const Scope& scope) {
+  FinalInlinePass::Config config{};
+
+  FinalInlineImpl impl(scope, config);
   impl.inline_field_values();
   impl.remove_unused_fields();
 }

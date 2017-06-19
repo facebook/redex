@@ -16,6 +16,33 @@ class FinalInlinePass : public Pass {
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
+    std::vector<std::string> temp_config_list;
+    pc.get("black_list_annos", {}, temp_config_list);
+    for (const auto& type_s : temp_config_list) {
+      DexType* type = DexType::get_type(type_s.c_str());
+      if (type != nullptr) {
+        m_config.black_list_annos.emplace_back(type);
+      }
+    }
+
+    temp_config_list.clear();
+    pc.get("black_list_types", {}, temp_config_list);
+    for (const auto& type_s : temp_config_list) {
+      DexType* type = DexType::get_type(type_s.c_str());
+      if (type != nullptr) {
+        m_config.black_list_types.emplace_back(type);
+      }
+    }
+
+    temp_config_list.clear();
+    pc.get("keep_class_member_annos", {}, temp_config_list);
+    for (const auto& type_s : temp_config_list) {
+      DexType* type = DexType::get_type(type_s.c_str());
+      if (type != nullptr) {
+        m_config.keep_class_member_annos.emplace_back(type);
+      }
+    }
+
     pc.get("keep_class_members", {}, m_config.keep_class_members);
     pc.get("remove_class_members", {}, m_config.remove_class_members);
     pc.get(
@@ -32,7 +59,9 @@ class FinalInlinePass : public Pass {
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Config {
-    std::vector<std::string> keep_class_member_annos;
+    std::vector<DexType*> black_list_annos;
+    std::vector<DexType*> black_list_types;
+    std::vector<DexType*> keep_class_member_annos;
     std::vector<std::string> keep_class_members;
     std::vector<std::string> remove_class_members;
     bool replace_encodable_clinits;
@@ -40,4 +69,6 @@ class FinalInlinePass : public Pass {
     bool inline_string_fields;
     bool inline_wide_fields;
   } m_config;
+
+  static void inline_fields(const Scope& scope);
 };
