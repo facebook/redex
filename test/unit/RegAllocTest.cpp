@@ -240,6 +240,13 @@ TEST_F(RegAllocTest, InterferenceWeights) {
     EXPECT_EQ(div_ceil(max_unsigned_value(16) + 1, 2 * width - 1),
               fp_div_ceil(max_unsigned_value(16) + 1, 2 * width - 1));
   }
+
+  // Check that our optimized edge_weight calculation is consistent with the
+  // slower division-based method
+  EXPECT_EQ(fp_div_ceil(1, 1), edge_weight(1, 1));
+  EXPECT_EQ(fp_div_ceil(1, 2), edge_weight(2, 1));
+  EXPECT_EQ(fp_div_ceil(2, 1), edge_weight(1, 2));
+  EXPECT_EQ(fp_div_ceil(2, 2), edge_weight(2, 2));
 }
 
 TEST_F(RegAllocTest, BuildInterferenceGraph) {
@@ -279,6 +286,15 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   EXPECT_EQ(ig.get_node(3).max_vreg(), 255);
   EXPECT_EQ(ig.get_node(3).adjacent(), std::vector<reg_t>{});
   EXPECT_EQ(ig.get_node(3).type(), RegisterType::NORMAL);
+
+  // Check that the adjacency matrix is consistent with the adjacency lists
+  for (auto& pair : ig.nodes()) {
+    auto reg = pair.first;
+    for (auto adj : pair.second.adjacent()) {
+      EXPECT_TRUE(ig.is_adjacent(reg, adj));
+      EXPECT_TRUE(ig.is_adjacent(adj, reg));
+    }
+  }
 }
 
 TEST_F(RegAllocTest, Coalesce) {

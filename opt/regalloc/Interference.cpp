@@ -72,7 +72,7 @@ namespace regalloc {
 
 namespace interference {
 
-using namespace impl;
+namespace impl {
 
 /*
  * We determine a node's colorability using equation E.3 in [Smith00] for
@@ -93,24 +93,32 @@ using namespace impl;
  *
  * The LHS of the inequality is what we call the "node weight" in our
  * implementation -- it is the sum of the weights of its edges.
+ *
+ * Since this function is very hot, and since division is expensive, we
+ * optimize it by observing that w(x) ∊ { 1, 2 } for all nodes x. Thus we can
+ * replace it by a cheaper sequence of operations that produce the same output
+ * for those inputs.
  */
 
-static uint32_t edge_weight(const Node& u, const Node& v) {
-  return div_ceil(v.width(), u.width());
+uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
+  return ((v_width - 1) >> (u_width - 1)) + 1;
 }
+
+} // namespace impl
+
+using namespace impl;
 
 void Graph::add_edge(reg_t u, reg_t v) {
   if (u == v || m_adj_matrix.find({u, v}) != m_adj_matrix.end()) {
     return;
   }
   m_adj_matrix.emplace(u, v);
-  m_adj_matrix.emplace(v, u);
   auto& u_node = m_nodes.at(u);
   auto& v_node = m_nodes.at(v);
   u_node.m_adjacent.push_back(v);
   v_node.m_adjacent.push_back(u);
-  u_node.m_weight += edge_weight(u_node, v_node);
-  v_node.m_weight += edge_weight(v_node, u_node);
+  u_node.m_weight += edge_weight(u_node.width(), v_node.width());
+  v_node.m_weight += edge_weight(v_node.width(), u_node.width());
 }
 
 uint32_t Node::colorable_limit() const {
@@ -131,8 +139,8 @@ void Graph::combine(reg_t u, reg_t v) {
     }
     add_edge(u, t);
   }
-  u_node.m_weight -= edge_weight(u_node, v_node);
-  v_node.m_weight -= edge_weight(v_node, u_node);
+  u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
+  v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
   u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
   u_node.m_type_domain.meet_with(v_node.m_type_domain);
   u_node.m_props |= v_node.m_props;
@@ -146,7 +154,7 @@ void Graph::remove_node(reg_t u) {
     if (!v_node.is_active()) {
       continue;
     }
-    v_node.m_weight -= edge_weight(v_node, u_node);
+    v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
   }
   u_node.m_props.reset(Node::ACTIVE);
 }
@@ -164,6 +172,7 @@ void GraphBuilder::update_node_constraints(const IRInstruction* insn,
     node.m_type_domain.meet_with(RegisterTypeDomain(dest_reg_type(insn)));
     node.m_max_vreg =
         std::min(node.m_max_vreg, max_unsigned_value(insn->dest_bit_width()));
+    node.m_width = insn->dest_is_wide() ? 2 : 1;
   }
 
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
@@ -329,6 +338,7 @@ void GraphBuilder::make_node(Graph* graph,
                              reg_t max_vreg) {
   always_assert(graph->m_nodes.find(r) == graph->m_nodes.end());
   graph->m_nodes[r].m_type_domain.meet_with(RegisterTypeDomain(type));
+  graph->m_nodes[r].m_width = type == RegisterType::WIDE ? 2 : 1;
   graph->m_nodes[r].m_max_vreg = max_vreg;
 }
 
