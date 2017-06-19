@@ -664,6 +664,66 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
+const VirtualScope* find_rooted_scope(
+    const SignatureMap& sig_map,
+    const DexType* type,
+    const DexMethod* meth) {
+  const auto& protos = sig_map.find(meth->get_name());
+  always_assert(protos != sig_map.end());
+  const auto& scopes = protos->second.find(meth->get_proto());
+  always_assert(scopes != protos->second.end());
+  for (const auto& scope : scopes->second) {
+    if (scope.type == type &&
+        signatures_match(scope.methods[0].first, meth)) {
+      return &scope;
+    }
+  }
+  return nullptr;
+}
+
+
+/**
+ * Find all interface scopes rooted at the class provided.
+ * Those are the scope rooted at a MIRANDA method as in
+ * interface I { void m(); }
+ * abstract class A imlements I {}
+ * class B entends A { public void m() {} }
+ * Class A will have a virtual scope for m().
+ */
+void get_rooted_interface_scope(
+    const SignatureMap& sig_map,
+    const DexType* type,
+    const DexClass* cls,
+    Scopes& cls_scopes) {
+  const auto& intfs = cls->get_interfaces()->get_type_list();
+  for (const auto& intf : intfs) {
+    const DexClass* intf_cls = type_class(intf);
+    if (intf_cls == nullptr) continue;
+    for (const auto& meth : intf_cls->get_vmethods()) {
+      const auto scope = find_rooted_scope(sig_map, type, meth);
+      if (scope != nullptr && scope->type == type &&
+          !scope->methods[0].first->is_def()) {
+        const auto& existing_scopes = cls_scopes.find(type);
+        if (existing_scopes != cls_scopes.end()) {
+          bool already_found = false;
+          for (const auto& existing_scope : existing_scopes->second) {
+            if (existing_scope == scope) {
+              already_found = true;
+            }
+          }
+          if (already_found) continue;
+        }
+        TRACE(VIRT, 9, "add rooted interface scope for %s (%s) on %s\n",
+            show_deobfuscated(meth).c_str(),
+            SHOW(meth->get_name()),
+            SHOW(type));
+        cls_scopes[type].emplace_back(scope);
+      }
+    }
+    get_rooted_interface_scope(sig_map, type, intf_cls, cls_scopes);
+  }
+}
+
 /**
  * Find all scopes rooted to a given type and adds it to
  * ClassScope for the given type.
@@ -673,17 +733,21 @@ void get_root_scopes(
     const DexType* type,
     Scopes& cls_scopes) {
   const std::vector<DexMethod*>& methods = get_vmethods(type);
+  TRACE(VIRT, 9, "found %ld vmethods for %s\n", methods.size(), SHOW(type));
   for (const auto meth : methods) {
     const auto& protos = sig_map.find(meth->get_name());
     always_assert(protos != sig_map.end());
     const auto& scopes = protos->second.find(meth->get_proto());
     always_assert(scopes != protos->second.end());
     for (const auto& scope : scopes->second) {
-      if (scope.type == meth->get_class() && scope.methods[0].first == meth) {
+      if (scope.type == type) {
+        TRACE(VIRT, 9, "add virtual scope for %s\n", SHOW(type));
+        always_assert(scope.methods[0].first == meth);
         cls_scopes[type].emplace_back(&scope);
       }
     }
   }
+  get_rooted_interface_scope(sig_map, type, type_class(type), cls_scopes);
 }
 
 }
@@ -794,7 +858,10 @@ void ClassScopes::build_class_scopes(const DexType* type) {
 void ClassScopes::build_interface_scopes() {
   for (const auto& intf_it : m_interface_map) {
     const DexClass* intf_cls = type_class(intf_it.first);
-    if (intf_cls == nullptr) continue;
+    if (intf_cls == nullptr) {
+      TRACE(VIRT, 9, "missing DexClass for %s", SHOW(intf_it.first));
+      continue;
+    }
     for (const auto& meth : intf_cls->get_vmethods()) {
       const auto& scopes = m_sig_map[meth->get_name()][meth->get_proto()];
       always_assert(scopes.size() > 0); // at least the method itself
@@ -802,6 +869,7 @@ void ClassScopes::build_interface_scopes() {
       intf_scope.push_back({});
       for (const auto& scope : scopes) {
         if (scope.interfaces.count(intf_it.first) == 0) continue;
+        TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
         intf_scope.back().push_back(&scope);
       }
     }
