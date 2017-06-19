@@ -79,6 +79,7 @@ libredex_la_SOURCES = \
 	libredex/Mutators.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
+	libredex/PluginRegistry.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardLexer.cpp \
 	libredex/ProguardMap.cpp \

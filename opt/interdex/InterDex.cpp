@@ -46,11 +46,17 @@ size_t cold_start_set_dex_count = 1000;
 bool emit_canaries = false;
 static int64_t linear_alloc_limit;
 
-static void gather_mrefs(DexClass* cls, mrefs_t& mrefs, frefs_t& frefs) {
+static void gather_mrefs(InterDexPass* pass,
+                         DexClass* cls,
+                         mrefs_t& mrefs,
+                         frefs_t& frefs) {
   std::vector<DexMethod*> method_refs;
   std::vector<DexField*> field_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
+  for (const auto& plugin : pass->m_plugins) {
+    plugin->gather_mrefs(cls, method_refs, field_refs);
+  }
   mrefs.insert(method_refs.begin(), method_refs.end());
   frefs.insert(field_refs.begin(), field_refs.end());
 }
@@ -92,16 +98,26 @@ static void update_class_stats(DexClass* clazz) {
   global_vmeth_cnt += clazz->get_vmethods().size();
 }
 
-static void flush_out_dex(
-    dex_emit_tracker& det,
-    DexClassesVector& outdex,
-    size_t mrefs_size,
-    size_t frefs_size) {
+static void flush_out_dex(InterDexPass* pass,
+                          dex_emit_tracker& det,
+                          DexClassesVector& outdex,
+                          size_t mrefs_size,
+                          size_t frefs_size) {
   DexClasses dc(det.outs.size());
   for (size_t i = 0; i < det.outs.size(); i++) {
-    dc.at(i) = det.outs[i];
+    auto cls = det.outs[i];
+    TRACE(IDEX, 4, "IDEX: Emitting class :: %s\n", SHOW(cls));
+    dc.at(i) = cls;
+  }
+  for (auto& plugin : pass->m_plugins) {
+    auto add_classes = plugin->additional_classes(outdex, det.outs);
+    for (auto add_class : add_classes) {
+      TRACE(IDEX, 4, "IDEX: Emitting plugin generated class :: %s\n", SHOW(add_class));
+    }
+    dc.insert(dc.end(), add_classes.begin(), add_classes.end());
   }
   outdex.emplace_back(std::move(dc));
+
   // print out stats
   TRACE(IDEX, 1,
     "terminating dex at classes %lu, lin alloc %d:%d, mrefs %lu:%d, frefs "
@@ -122,17 +138,17 @@ static void flush_out_dex(
   det.outs.clear();
 }
 
-static void flush_out_dex(
-    dex_emit_tracker& det,
-    DexClassesVector& outdex) {
-  flush_out_dex(det, outdex, det.mrefs.size(), det.frefs.size());
+static void flush_out_dex(InterDexPass* pass,
+                          dex_emit_tracker& det,
+                          DexClassesVector& outdex) {
+  flush_out_dex(pass, det, outdex, det.mrefs.size(), det.frefs.size());
 }
 
-static void flush_out_secondary(
-    dex_emit_tracker &det,
-    DexClassesVector &outdex,
-    size_t mrefs_size,
-    size_t frefs_size) {
+static void flush_out_secondary(InterDexPass* pass,
+                                dex_emit_tracker& det,
+                                DexClassesVector& outdex,
+                                size_t mrefs_size,
+                                size_t frefs_size) {
   // don't emit dex if we don't have any classes
   if (!det.outs.size()) {
     return;
@@ -166,17 +182,13 @@ static void flush_out_secondary(
   }
 
   /* Now emit our outs list... */
-  flush_out_dex(det, outdex, mrefs_size, frefs_size);
+  flush_out_dex(pass, det, outdex, mrefs_size, frefs_size);
 }
 
-static void flush_out_secondary(
-    dex_emit_tracker &det,
-    DexClassesVector &outdex) {
-  flush_out_secondary(
-      det,
-      outdex,
-      det.mrefs.size(),
-      det.frefs.size());
+static void flush_out_secondary(InterDexPass* pass,
+                                dex_emit_tracker& det,
+                                DexClassesVector& outdex) {
+  flush_out_secondary(pass, det, outdex, det.mrefs.size(), det.frefs.size());
 }
 
 static bool is_canary(DexClass* clazz) {
@@ -248,16 +260,33 @@ static unsigned estimate_linear_alloc(DexClass* clazz) {
   return lasize;
 }
 
-static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
-    DexClass *clazz, bool is_primary) {
+static bool should_skip_class(InterDexPass* pass, DexClass* clazz) {
+  for (const auto& plugin : pass->m_plugins) {
+    if (plugin->should_skip_class(clazz)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void emit_class(InterDexPass* pass,
+                       dex_emit_tracker& det,
+                       DexClassesVector& outdex,
+                       DexClass* clazz,
+                       bool is_primary) {
   if(det.emitted.count(clazz) != 0)
     return;
   if(is_canary(clazz))
     return;
+  if (should_skip_class(pass, clazz)) {
+    TRACE(IDEX, 3, "IDEX: Skipping class :: %s\n", SHOW(clazz));
+    return;
+  }
   unsigned laclazz = estimate_linear_alloc(clazz);
   auto mrefs_size = det.mrefs.size();
   auto frefs_size = det.frefs.size();
-  gather_mrefs(clazz, det.mrefs, det.frefs);
+  gather_mrefs(pass, clazz, det.mrefs, det.frefs);
+
   if ((det.la_size + laclazz) > linear_alloc_limit ||
       det.mrefs.size() >= kMaxMethodRefs ||
       det.frefs.size() >= kMaxFieldRefs) {
@@ -271,8 +300,8 @@ static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
       kMaxMethodRefs,
       det.frefs.size(),
       kMaxFieldRefs);
-    flush_out_secondary(det, outdex, mrefs_size, frefs_size);
-    gather_mrefs(clazz, det.mrefs, det.frefs);
+    flush_out_secondary(pass, det, outdex, mrefs_size, frefs_size);
+    gather_mrefs(pass, clazz, det.mrefs, det.frefs);
   }
   det.la_size += laclazz;
   det.outs.push_back(clazz);
@@ -280,9 +309,11 @@ static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
   update_class_stats(clazz);
 }
 
-static void emit_class(dex_emit_tracker &det, DexClassesVector &outdex,
-    DexClass *clazz) {
-  emit_class(det, outdex, clazz, false);
+static void emit_class(InterDexPass* pass,
+                       dex_emit_tracker& det,
+                       DexClassesVector& outdex,
+                       DexClass* clazz) {
+  emit_class(pass, det, outdex, clazz, false);
 }
 
 static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
@@ -375,12 +406,12 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
   return unreferenced_classes;
 }
 
-static DexClassesVector run_interdex(
-  const DexClassesVector& dexen,
-  ConfigFiles& cfg,
-  bool allow_cutting_off_dex,
-  bool static_prune_classes,
-  bool normal_primary_dex) {
+static DexClassesVector run_interdex(InterDexPass* pass,
+                                     const DexClassesVector& dexen,
+                                     ConfigFiles& cfg,
+                                     bool allow_cutting_off_dex,
+                                     bool static_prune_classes,
+                                     bool normal_primary_dex) {
 
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
@@ -442,18 +473,18 @@ static DexClassesVector run_interdex(
         cls_skipped_in_primary++;
         continue;
       }
-      emit_class(primary_det, outdex, clazz, true);
+      emit_class(pass, primary_det, outdex, clazz, true);
       coldstart_classes_in_primary++;
     }
     // now add the rest
     for (auto const& clazz : primary_dex) {
-      emit_class(primary_det, outdex, clazz, true);
+      emit_class(pass, primary_det, outdex, clazz, true);
     }
     TRACE(IDEX, 1,
         "%d out of %lu classes in primary dex in interdex list\n",
         coldstart_classes_in_primary,
         primary_det.outs.size());
-    flush_out_dex(primary_det, outdex);
+    flush_out_dex(pass, primary_det, outdex);
     // record the primary dex classes in the main emit tracker,
     // so we don't emit those classes again. *cough*
     for (auto const& clazz : primary_dex) {
@@ -472,7 +503,7 @@ static DexClassesVector run_interdex(
       TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
       if (entry.find("DexEndMarker") != std::string::npos) {
         TRACE(IDEX, 1, "Terminating dex due to DexEndMarker\n");
-        flush_out_secondary(det, outdex);
+        flush_out_secondary(pass, det, outdex);
         cold_start_set_dex_count = outdex.size();
         end_markers_present = true;
       }
@@ -484,7 +515,7 @@ static DexClassesVector run_interdex(
       cls_skipped_in_secondary++;
       continue;
     }
-    emit_class(det, outdex, clazz);
+    emit_class(pass, det, outdex, clazz);
   }
 
   /* Now emit the classes we omitted from the original
@@ -498,7 +529,7 @@ static DexClassesVector run_interdex(
     }
     auto clazz = it->second;
     if (unreferenced_classes.count(clazz)) {
-      emit_class(det, outdex, clazz);
+      emit_class(pass, det, outdex, clazz);
     }
   }
 
@@ -511,12 +542,12 @@ static DexClassesVector run_interdex(
    * or primary list.
    */
   for (auto clazz : scope) {
-    emit_class(det, outdex, clazz);
+    emit_class(pass, det, outdex, clazz);
   }
 
   /* Finally, emit the "left-over" det.outs */
   if (det.outs.size()) {
-    flush_out_secondary(det, outdex);
+    flush_out_secondary(pass, det, outdex);
   }
   TRACE(IDEX, 1,
         "InterDex secondary dex count %d\n", (int)(outdex.size() - 1));
@@ -540,10 +571,26 @@ static DexClassesVector run_interdex(
 
 
 void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+  InterDexRegistry* registry = static_cast<InterDexRegistry*>(
+      PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
+  std::unique_ptr<InterDexPassPlugin> plugin = registry->create(INTERDEX_PLUGIN);
+  if (plugin) {
+    m_plugins.emplace_back(std::move(plugin));
+  }
+  for (const auto& plugin : m_plugins) {
+    plugin->configure(cfg);
+  }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
-  dexen = run_interdex(dexen, cfg, true, m_static_prune, m_normal_primary_dex);
+  auto original_scope = build_class_scope(dexen);
+  dexen = run_interdex(
+      this, dexen, cfg, true, m_static_prune, m_normal_primary_dex);
+  for (const auto& plugin : m_plugins) {
+    plugin->cleanup(original_scope);
+  }
   mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT, cold_start_set_dex_count);
+
+  m_plugins.clear();
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
