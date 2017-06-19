@@ -218,7 +218,15 @@ struct MethodBlock {
    */
   void load_null(Location& loc);
 
-  void binop_2addr(DexOpcode op, const Location&, const Location&);
+  void binop_2addr(DexOpcode op, const Location& dest, const Location& src);
+  void binop_lit16(DexOpcode op,
+                   const Location& dest,
+                   const Location& src,
+                   int16_t literal);
+  void binop_lit8(DexOpcode op,
+                  const Location& dest,
+                  const Location& src,
+                  int8_t literal);
 
   //
   // branch instruction
