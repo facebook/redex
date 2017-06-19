@@ -59,3 +59,24 @@ DexOpcodeMethod* find_invoke(
     });
   return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
 }
+
+IRInstruction* find_instruction(DexMethod* m, uint32_t opcode) {
+  m->balloon();
+  auto insns = InstructionIterable(m->get_code());
+  return find_instruction(insns.begin(), insns.end(), opcode);
+}
+
+IRInstruction* find_instruction(
+    InstructionIterator begin,
+    InstructionIterator end,
+    uint32_t opcode) {
+  auto it = std::find_if(begin, end,
+    [opcode](MethodItemEntry& mie) {
+      IRInstruction* insn = mie.insn;
+      if (mie.insn->opcode() != opcode) {
+        return false;
+      }
+      return true;
+    });
+  return it == end ? nullptr : (*it).insn;
+}

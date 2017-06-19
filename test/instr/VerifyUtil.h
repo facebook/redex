@@ -13,6 +13,7 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "Transform.h"
 
 struct Verify : testing::Test {
   Verify() {
@@ -49,3 +50,8 @@ DexOpcodeMethod* find_invoke(
     std::vector<DexInstruction*>::iterator begin,
     std::vector<DexInstruction*>::iterator end,
     uint32_t opcode, const char* target_mname);
+IRInstruction* find_instruction(DexMethod* m, uint32_t opcode);
+IRInstruction* find_instruction(
+    InstructionIterator begin,
+    InstructionIterator end,
+    uint32_t opcode);

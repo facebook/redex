@@ -7,12 +7,13 @@ def redex_instr_test(
     name,
     java_files,
     config,
+    java_deps = [],
     proguard_config=None,
     verify_srcs=None,
     gen_dex_artifacts=False,
     native_outlining=False,
 ):
-  deps = [
+  deps = java_deps + [
       "//third-party/java/fest:fest",
       "//third-party/java/jsr-305:jsr-305",  ### @Nullable
       "//third-party/java/junit:junit",
