@@ -29,7 +29,6 @@
 #include "Util.h"
 #include "Warning.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 uint32_t DexString::length() const {
   if (is_simple()) {

@@ -724,14 +724,9 @@ void DexOutput::generate_class_data_items() {
   insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t) m_cdi_offsets.size(), cdi_start);
 }
 
-static void mt_sync(void* arg) {
-  auto method = reinterpret_cast<DexMethod*>(arg);
-  method->sync();
-}
-
 static void sync_all(const Scope& scope) {
   constexpr bool serial = false; // for debugging
-  std::vector<work_item> workitems;
+  auto wq = workqueue_foreach<DexMethod*>([](DexMethod* m){m->sync();});
   walk_code(scope,
             [](DexMethod*) { return true; },
             [&](DexMethod* m, IRCode&) {
@@ -739,11 +734,10 @@ static void sync_all(const Scope& scope) {
                 TRACE(MTRANS, 2, "Syncing %s\n", SHOW(m));
                 m->sync();
               } else {
-                workitems.push_back(work_item{mt_sync, m});
+                wq.add_item(m);
               }
             });
-  WorkQueue wq;
-  wq.run_work_items(workitems.data(), (int)workitems.size());
+  wq.run_all();
 }
 
 void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {

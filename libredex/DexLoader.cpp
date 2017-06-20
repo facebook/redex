@@ -82,8 +82,7 @@ struct class_load_work {
   int num;
 };
 
-static void class_work(void* arg) {
-  auto clw = reinterpret_cast<class_load_work*>(arg);
+static void class_work(class_load_work* clw) {
   clw->dl->load_dex_class(clw->num);
 }
 
@@ -111,34 +110,29 @@ DexClasses DexLoader::load_dex(const char* location) {
   m_class_defs = (dex_class_def*)(m_dexmmap + off);
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
-  auto workptrs = new work_item[dh->class_defs_size];
+
   auto lwork = new class_load_work[dh->class_defs_size];
+  auto wq = workqueue_foreach<class_load_work*>(class_work);
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;
-    workptrs[i] = work_item{class_work, &lwork[i]};
+    wq.add_item(&lwork[i]);
   }
-  WorkQueue wq;
-  wq.run_work_items(workptrs, dh->class_defs_size);
+  wq.run_all();
   delete[] lwork;
-  delete[] workptrs;
   return classes;
 }
 
-static void mt_balloon(void* arg) {
-  auto method = reinterpret_cast<DexMethod*>(arg);
-  method->balloon();
-}
+static void mt_balloon(DexMethod* method) { method->balloon(); }
 
 static void balloon_all(const Scope& scope) {
-  std::vector<work_item> workitems;
+  auto wq = workqueue_foreach<DexMethod*>(mt_balloon);
   walk_methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
-      workitems.push_back(work_item{mt_balloon, m});
+      wq.add_item(m);
     }
   });
-  WorkQueue wq;
-  wq.run_work_items(workitems.data(), (int)workitems.size());
+  wq.run_all();
 }
 
 DexClasses load_classes_from_dex(const char* location, bool balloon) {
