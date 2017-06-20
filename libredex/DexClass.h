@@ -385,6 +385,17 @@ class DexTypeList {
  public:
   const std::deque<DexType*>& get_type_list() const { return m_list; }
 
+  size_t size() const {
+    return get_type_list().size();
+  }
+
+  DexTypeList* append_and_make(DexType* new_type) const {
+    auto old_list = get_type_list();
+    auto appended = std::deque<DexType*>(old_list.begin(), old_list.end());
+    appended.push_back(new_type);
+    return make_type_list(std::move(appended));
+  }
+
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
@@ -455,6 +466,7 @@ class DexProto {
   DexType* get_rtype() const { return m_rtype; }
   DexTypeList* get_args() const { return m_args; }
   DexString* get_shorty() const { return m_shorty; }
+  bool is_void() const { return get_rtype() == DexType::make_type("V"); }
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;

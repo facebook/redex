@@ -39,6 +39,11 @@ struct Location {
    */
   bool is_wide() const { return loc_size(type) == 2; }
 
+  bool is_ref() const {
+    char t = type_shorty(type);
+    return t == 'L' || t == '[';
+  }
+
   /**
    * Return the type of this location.
    */
