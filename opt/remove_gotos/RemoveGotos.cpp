@@ -21,8 +21,8 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "ParallelWalkers.h"
 #include "Transform.h"
-#include "Walkers.h"
 
 namespace {
 
@@ -30,8 +30,6 @@ constexpr const char* METRIC_GOTO_REMOVED = "num_goto_removed";
 
 class RemoveGotos {
  private:
-  size_t m_goto_removed{0};
-
   static bool is_goto(const MethodItemEntry& mie) {
     return mie.type == MFLOW_OPCODE && (mie.insn->opcode() == OPCODE_GOTO ||
                                         mie.insn->opcode() == OPCODE_GOTO_16 ||
@@ -75,7 +73,8 @@ class RemoveGotos {
   }
 
  public:
-  void process_method(DexMethod* method) {
+  size_t process_method(DexMethod* method) {
+    size_t num_goto_removed = 0;
     auto code = method->get_code();
     always_assert(code != nullptr);
 
@@ -89,7 +88,7 @@ class RemoveGotos {
             5,
             "Found optimizing pair, parent block id: %d\n",
             current_block->id());
-      m_goto_removed++;
+      num_goto_removed++;
 
       auto next_block = current_block->succs()[0];
 
@@ -113,16 +112,14 @@ class RemoveGotos {
     }
 
     TRACE(RMGOTO, 4, "Final opcode count: %d\n", code->count_opcodes());
+    return num_goto_removed;
   }
-
-  size_t num_goto_removed() const { return m_goto_removed; }
 };
 } // namespace
 
-int RemoveGotosPass::run(DexMethod* method) {
+size_t RemoveGotosPass::run(DexMethod* method) {
   RemoveGotos rmgotos;
-  rmgotos.process_method(method);
-  return rmgotos.num_goto_removed();
+  return rmgotos.process_method(method);
 }
 
 void RemoveGotosPass::run_pass(DexStoresVector& stores,
@@ -130,16 +127,19 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   TRACE(RMGOTO, 1, "Running RemoveGoto pass\n");
   auto scope = build_class_scope(stores);
-  RemoveGotos rmgotos;
 
-  walk_methods(scope, [&](DexMethod* m) {
-    if (!m->get_code()) {
-      return;
-    }
-    rmgotos.process_method(m);
-  });
-
-  mgr.incr_metric(METRIC_GOTO_REMOVED, rmgotos.num_goto_removed());
+  size_t total_gotos_removed =
+      walk_methods_parallel<Scope, RemoveGotos, size_t>(
+          scope,
+          [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
+            if (!m->get_code()) {
+              return 0;
+            }
+            return rmgotos.process_method(m);
+          },
+          [](size_t a, size_t b) { return a + b; },
+          [](unsigned int /*thread_index*/) { return RemoveGotos(); });
+  mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
 }
 
 static RemoveGotosPass s_pass;

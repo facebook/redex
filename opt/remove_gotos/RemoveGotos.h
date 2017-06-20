@@ -17,5 +17,5 @@ class RemoveGotosPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  int run(DexMethod*);
+  size_t run(DexMethod*);
 };
