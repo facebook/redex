@@ -24,6 +24,8 @@ def parse_trace_string(trace):
 
     We convert it into a dict here.
     """
+    if not trace:
+        return {}
     rv = {}
     for t in trace.split(','):
         try:
