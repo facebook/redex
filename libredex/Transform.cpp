@@ -23,39 +23,6 @@
 #include "DexUtil.h"
 #include "Util.h"
 
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
-  std::vector<Block*> postorder;
-  std::vector<Block*> stack;
-  std::unordered_set<Block*> visited;
-  for (size_t i = 1; i < cfg.size(); i++) {
-    if (cfg[i]->preds().size() == 0) {
-      stack.push_back(cfg[i]);
-    }
-  }
-  stack.push_back(cfg[0]);
-  while (!stack.empty()) {
-    auto const& curr = stack.back();
-    visited.insert(curr);
-    bool all_succs_visited = [&] {
-      for (auto const& s : curr->succs()) {
-        if (!visited.count(s)) {
-          stack.push_back(s);
-          return false;
-        }
-      }
-      return true;
-    }();
-    if (all_succs_visited) {
-      assert(curr == stack.back());
-      postorder.push_back(curr);
-      stack.pop_back();
-    }
-  }
-  return postorder;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
 MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     : type(that.type), addr(that.addr) {
   switch (type) {
@@ -1891,41 +1858,7 @@ void split_may_throw(FatMethod* fm, FatMethod::iterator it) {
     fm->insert(it, *MethodItemEntry::make_throwing_fallthrough(&mie));
   }
 }
-}
-
-bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
-  if (!end_block_before_throw) {
-    for (auto last = p->rbegin(); last != p->rend(); ++last) {
-      if (last->type != MFLOW_OPCODE) {
-        continue;
-      }
-      return last->insn->opcode() == OPCODE_THROW ||
-             opcode::may_throw(last->insn->opcode());
-    }
-  }
-  for (auto last = p->rbegin(); last != p->rend(); ++last) {
-    switch (last->type) {
-    case MFLOW_FALLTHROUGH:
-      if (last->throwing_mie) {
-        return true;
-      }
-      break;
-    case MFLOW_OPCODE:
-      if (last->insn->opcode() == OPCODE_THROW) {
-        return true;
-      } else {
-        return false;
-      }
-    case MFLOW_TRY:
-    case MFLOW_CATCH:
-    case MFLOW_TARGET:
-    case MFLOW_POSITION:
-    case MFLOW_DEBUG:
-      break;
-    }
-  }
-  return false;
-}
+} // namespace
 
 void IRCode::clear_cfg() {
   m_cfg.reset();

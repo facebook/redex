@@ -52,15 +52,6 @@ inline bool is_catch(Block* b) {
   return it->type == MFLOW_CATCH;
 }
 
-bool ends_with_may_throw(Block* b, bool end_block_before_throw = true);
-
-/*
- * Build a postorder sorted vector of blocks from the given CFG.  Uses a
- * standard depth-first search with a side table of already-visited nodes.
- */
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
-
-
 class ControlFlowGraph {
   using IdPair = std::pair<size_t, size_t>;
 
@@ -107,3 +98,11 @@ class ControlFlowGraph {
 };
 
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
+
+bool ends_with_may_throw(Block* b, bool end_block_before_throw = true);
+
+/*
+ * Build a postorder sorted vector of blocks from the given CFG. Uses a
+ * standard depth-first search with a side table of already-visited nodes.
+ */
+std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);

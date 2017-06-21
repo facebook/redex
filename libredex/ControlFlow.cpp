@@ -20,6 +20,22 @@ Block* ControlFlowGraph::create_block() {
   return m_blocks.back();
 }
 
+void ControlFlowGraph::calculate_exit_block() {
+  if (m_exit_block != nullptr) {
+    return;
+  }
+  auto exit_blocks = find_exit_blocks(*this);
+  if (exit_blocks.size() == 1) {
+    m_exit_block = exit_blocks.at(0);
+  } else {
+    auto ghost_exit_block = create_block();
+    set_exit_block(ghost_exit_block);
+    for (auto* b : exit_blocks) {
+      add_edge(b, ghost_exit_block, EDGE_GOTO);
+    }
+  }
+}
+
 void ControlFlowGraph::add_edge(Block* p, Block* s, EdgeType type) {
   if (std::find(p->succs().begin(), p->succs().end(), s) == p->succs().end()) {
     p->m_succs.push_back(s);
@@ -115,18 +131,67 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
   return exit_blocks;
 }
 
-void ControlFlowGraph::calculate_exit_block() {
-  if (m_exit_block != nullptr) {
-    return;
-  }
-  auto exit_blocks = find_exit_blocks(*this);
-  if (exit_blocks.size() == 1) {
-    m_exit_block = exit_blocks.at(0);
-  } else {
-    auto ghost_exit_block = create_block();
-    set_exit_block(ghost_exit_block);
-    for (auto* b : exit_blocks) {
-      add_edge(b, ghost_exit_block, EDGE_GOTO);
+bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
+  if (!end_block_before_throw) {
+    for (auto last = p->rbegin(); last != p->rend(); ++last) {
+      if (last->type != MFLOW_OPCODE) {
+        continue;
+      }
+      return last->insn->opcode() == OPCODE_THROW ||
+             opcode::may_throw(last->insn->opcode());
     }
   }
+  for (auto last = p->rbegin(); last != p->rend(); ++last) {
+    switch (last->type) {
+    case MFLOW_FALLTHROUGH:
+      if (last->throwing_mie) {
+        return true;
+      }
+      break;
+    case MFLOW_OPCODE:
+      if (last->insn->opcode() == OPCODE_THROW) {
+        return true;
+      } else {
+        return false;
+      }
+    case MFLOW_TRY:
+    case MFLOW_CATCH:
+    case MFLOW_TARGET:
+    case MFLOW_POSITION:
+    case MFLOW_DEBUG:
+      break;
+    }
+  }
+  return false;
+}
+
+std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
+  std::vector<Block*> postorder;
+  std::vector<Block*> stack;
+  std::unordered_set<Block*> visited;
+  for (size_t i = 1; i < cfg.size(); i++) {
+    if (cfg[i]->preds().size() == 0) {
+      stack.push_back(cfg[i]);
+    }
+  }
+  stack.push_back(cfg[0]);
+  while (!stack.empty()) {
+    auto const& curr = stack.back();
+    visited.insert(curr);
+    bool all_succs_visited = [&] {
+      for (auto const& s : curr->succs()) {
+        if (!visited.count(s)) {
+          stack.push_back(s);
+          return false;
+        }
+      }
+      return true;
+    }();
+    if (all_succs_visited) {
+      assert(curr == stack.back());
+      postorder.push_back(curr);
+      stack.pop_back();
+    }
+  }
+  return postorder;
 }
