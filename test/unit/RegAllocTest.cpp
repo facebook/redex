@@ -494,3 +494,28 @@ TEST_F(RegAllocTest, Spill) {
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
+
+TEST_F(RegAllocTest, MoveWideCoalesce) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
+  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN_WIDE, {1_v}));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  graph_coloring::Allocator allocator;
+  allocator.coalesce(&ig, &code);
+  InstructionList expected_insns {
+    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
+    // move-wide opcode was coalesced
+    dasm(OPCODE_RETURN_WIDE, {0_v})
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}

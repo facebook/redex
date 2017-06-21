@@ -281,7 +281,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     if (dest == src) {
       ++m_stats.moves_coalesced;
       code->remove_opcode(it.unwrap());
-    } else if (!ig->is_adjacent(dest, src)) {
+    } else if (!ig->has_non_move_edge(dest, src)) {
       // This unifies the two trees represented by dest and src
       aliases.link(dest, src);
       // Since link() doesn't tell us whether dest or src is the root of the

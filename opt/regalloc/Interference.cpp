@@ -108,17 +108,24 @@ uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
 
 using namespace impl;
 
-void Graph::add_edge(reg_t u, reg_t v) {
-  if (u == v || m_adj_matrix.find({u, v}) != m_adj_matrix.end()) {
+void Graph::add_edge(reg_t u, reg_t v, bool is_move_wide) {
+  if (u == v) {
     return;
   }
-  m_adj_matrix.emplace(u, v);
-  auto& u_node = m_nodes.at(u);
-  auto& v_node = m_nodes.at(v);
-  u_node.m_adjacent.push_back(v);
-  v_node.m_adjacent.push_back(u);
-  u_node.m_weight += edge_weight(u_node.width(), v_node.width());
-  v_node.m_weight += edge_weight(v_node.width(), u_node.width());
+  if (!is_adjacent(u, v)) {
+    auto& u_node = m_nodes.at(u);
+    auto& v_node = m_nodes.at(v);
+    u_node.m_adjacent.push_back(v);
+    v_node.m_adjacent.push_back(u);
+    u_node.m_weight += edge_weight(u_node.width(), v_node.width());
+    v_node.m_weight += edge_weight(v_node.width(), u_node.width());
+    m_adj_matrix.emplace(Edge(u, v), is_move_wide);
+  } else if (!is_move_wide && is_only_move_wide(u, v)) {
+    // If the already existed edge is move-wide edge
+    // and we want to insert a normal edge, then change
+    // the existed edge to normal edge.
+    m_adj_matrix[Edge(u, v)] = is_move_wide;
+  }
 }
 
 uint32_t Node::colorable_limit() const {
@@ -137,7 +144,7 @@ void Graph::combine(reg_t u, reg_t v) {
     if (!t_node.is_active()) {
       continue;
     }
-    add_edge(u, t);
+    add_edge(u, t, is_only_move_wide(v, t));
   }
   u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
   v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
@@ -272,7 +279,8 @@ Graph GraphBuilder::build(IRCode* code,
         auto check_cast = find_check_cast(*it);
         if (check_cast != nullptr) {
           for (auto reg : live_out.elements()) {
-            graph.add_edge(check_cast->dest(), reg);
+            // Add a non-move(normal) edge.
+            graph.add_edge(check_cast->dest(), reg, false);
           }
         }
         continue;
@@ -288,17 +296,21 @@ Graph GraphBuilder::build(IRCode* code,
         for (auto reg : live_out.elements()) {
           // We don't want to add interference edges between the src and dest
           // of a move instruction so that we have the option of coalescing
-          // those live ranges later. However, our current implementation
-          // doesn't work if we leave out the interference edges of move-wide
-          // instructions. If we have `move-wide s0, s1` with both s0 and s1
-          // live-out, and we don't add an edge between s0 and s1, we may end
-          // up with an allocation like `move-wide v0, v1` which is invalid
-          // since v0 is clobbering v1. So we add edges for move-wides, but
-          // that means that they can never be coalesced. FIXME
-          if (is_move(op) && !insn->is_wide() && reg == insn->src(0)) {
+          // those live ranges later. However, if we leave out the interference
+          // edges of move-wide instructions, when we have `move-wide s0, s1`
+          // with both s0 and s1 live-out, we may end up with an allocation
+          // like `move-wide v0, v1` which is invalid since v0 is clobbering v1.
+          // So we add move-wide edge for move-wide instructions so that this
+          // situation won't happen and they can also be coalesced.
+          if (is_move(op) && reg == insn->src(0)) {
+            if (insn->is_wide()) {
+              // Add a move-wide edge.
+              graph.add_edge(insn->dest(), reg, true);
+            }
             continue;
           }
-          graph.add_edge(insn->dest(), reg);
+          // Add a non-move(normal) edge.
+          graph.add_edge(insn->dest(), reg, false);
         }
       }
       fixpoint_iter.analyze_instruction(it->insn, &live_out);
@@ -343,7 +355,8 @@ void GraphBuilder::make_node(Graph* graph,
 }
 
 void GraphBuilder::add_edge(Graph* graph, reg_t u, reg_t v) {
-  graph->add_edge(u, v);
+  // Add a non-move(normal) edge.
+  graph->add_edge(u, v, false);
 }
 
 } // namespace interference

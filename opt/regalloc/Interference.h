@@ -190,7 +190,15 @@ class Graph {
   }
 
   bool is_adjacent(reg_t u, reg_t v) const {
-    return m_adj_matrix.find({u, v}) != m_adj_matrix.end();
+    return m_adj_matrix.find(Edge(u, v)) != m_adj_matrix.end();
+  }
+
+  bool is_only_move_wide(reg_t u, reg_t v) const {
+    return m_adj_matrix.at(Edge(u, v));
+  }
+
+  bool has_non_move_edge(reg_t u, reg_t v) const {
+    return is_adjacent(u, v) && !is_only_move_wide(u, v);
   }
 
   /*
@@ -216,11 +224,12 @@ class Graph {
 
  private:
   Graph() = default;
-  void add_edge(reg_t, reg_t);
+  void add_edge(reg_t, reg_t, bool is_move_wide);
 
   std::unordered_map<reg_t, Node> m_nodes;
   using Edge = impl::OrderedPair<reg_t>;
-  std::unordered_set<Edge, boost::hash<Edge>> m_adj_matrix;
+  std::unordered_map<Edge, bool /*is_move_wide*/, boost::hash<Edge>>
+      m_adj_matrix;
   // This map contains the LivenessDomains for all instructions which could
   // potentialy take on the /range format.
   std::unordered_map<IRInstruction*, LivenessDomain> m_range_liveness;
