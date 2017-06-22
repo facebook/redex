@@ -242,9 +242,27 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   moves_coalesced += that.moves_coalesced;
 }
 
+static bool has_2addr_form(DexOpcode op) {
+  return op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE;
+}
+
 /*
- * Coalesce symregs which have moves between them but which do not interfere
- * with each other. Remove the move instructions and combine the graph nodes.
+ * Coalesce symregs when there is potential for a more compact encoding. There
+ * are 3 kinds of instructions that have this opportunity:
+ *
+ *   * move instructions whose src and dest don't interfere can be removed
+ *
+ *   * instructions like add-int whose src(0) and dest don't interfere may
+ *     be encoded as add-int/2addr
+ *
+ *   * check-cast instructions with identical src and dest won't need to be
+ *     preceded by a move opcode in the output
+ *
+ * Coalescing means that we combine the interference graph nodes. If we have a
+ * move instruction, we remove it here. We shouldn't convert potentially
+ * 2addr-eligible opcodes to that form here because they ultimately may need
+ * the larger non-2addr encoding if their assigned vregs are larger than 4
+ * bits. They will be handled in the post-regalloc instruction selection phase.
  *
  * Return a bool indicating whether any coalescing was done.
  *
@@ -273,14 +291,17 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   auto old_coalesce_count = m_stats.moves_coalesced;
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
-    if (!is_move(insn->opcode())) {
+    auto op = insn->opcode();
+    if (!is_move(op) && !has_2addr_form(op) && op != OPCODE_CHECK_CAST) {
       continue;
     }
     auto dest = aliases.find_set(insn->dest());
     auto src = aliases.find_set(insn->src(0));
     if (dest == src) {
-      ++m_stats.moves_coalesced;
-      code->remove_opcode(it.unwrap());
+      if (is_move(op)) {
+        ++m_stats.moves_coalesced;
+        code->remove_opcode(it.unwrap());
+      }
     } else if (ig->is_coalesceable(dest, src)) {
       // This unifies the two trees represented by dest and src
       aliases.link(dest, src);
@@ -293,8 +314,10 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       }
       // Merge the child's node into the parent's
       ig->combine(parent, child);
-      ++m_stats.moves_coalesced;
-      code->remove_opcode(it.unwrap());
+      if (is_move(op)) {
+        ++m_stats.moves_coalesced;
+        code->remove_opcode(it.unwrap());
+      }
     }
   }
 
