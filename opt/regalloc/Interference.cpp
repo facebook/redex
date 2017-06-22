@@ -108,7 +108,7 @@ uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
 
 using namespace impl;
 
-void Graph::add_edge(reg_t u, reg_t v, bool is_move_wide) {
+void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
   if (u == v) {
     return;
   }
@@ -119,13 +119,17 @@ void Graph::add_edge(reg_t u, reg_t v, bool is_move_wide) {
     v_node.m_adjacent.push_back(u);
     u_node.m_weight += edge_weight(u_node.width(), v_node.width());
     v_node.m_weight += edge_weight(v_node.width(), u_node.width());
-    m_adj_matrix.emplace(Edge(u, v), is_move_wide);
-  } else if (!is_move_wide && is_only_move_wide(u, v)) {
-    // If the already existed edge is move-wide edge
-    // and we want to insert a normal edge, then change
-    // the existed edge to normal edge.
-    m_adj_matrix[Edge(u, v)] = is_move_wide;
   }
+  // If we have one instruction that creates a coalesceable edge between two
+  // nodes s0 and s1, and another that creates a non-coalesceable edge, those
+  // edges combined must be non-coalesceable. For example, if we have
+  //
+  //   move-wide s0, s1 # s0 and s1 may be coalesceable
+  //   long-to-double s0, s1 # s0 and s1 definitely not coalesceable
+  //
+  // then the final state of the edge between s0 and s1 must be
+  // non-coalesceable.
+  m_adj_matrix[Edge(u, v)] = m_adj_matrix[Edge(u, v)] || !can_coalesce;
 }
 
 uint32_t Node::colorable_limit() const {
@@ -144,7 +148,7 @@ void Graph::combine(reg_t u, reg_t v) {
     if (!t_node.is_active()) {
       continue;
     }
-    add_edge(u, t, is_only_move_wide(v, t));
+    add_edge(u, t, is_coalesceable(v, t));
   }
   u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
   v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
@@ -279,8 +283,7 @@ Graph GraphBuilder::build(IRCode* code,
         auto check_cast = find_check_cast(*it);
         if (check_cast != nullptr) {
           for (auto reg : live_out.elements()) {
-            // Add a non-move(normal) edge.
-            graph.add_edge(check_cast->dest(), reg, false);
+            graph.add_edge(check_cast->dest(), reg);
           }
         }
         continue;
@@ -294,23 +297,27 @@ Graph GraphBuilder::build(IRCode* code,
       }
       if (insn->dests_size()) {
         for (auto reg : live_out.elements()) {
-          // We don't want to add interference edges between the src and dest
-          // of a move instruction so that we have the option of coalescing
-          // those live ranges later. However, if we leave out the interference
-          // edges of move-wide instructions, when we have `move-wide s0, s1`
-          // with both s0 and s1 live-out, we may end up with an allocation
-          // like `move-wide v0, v1` which is invalid since v0 is clobbering v1.
-          // So we add move-wide edge for move-wide instructions so that this
-          // situation won't happen and they can also be coalesced.
           if (is_move(op) && reg == insn->src(0)) {
-            if (insn->is_wide()) {
-              // Add a move-wide edge.
-              graph.add_edge(insn->dest(), reg, true);
-            }
             continue;
           }
-          // Add a non-move(normal) edge.
-          graph.add_edge(insn->dest(), reg, false);
+          graph.add_edge(insn->dest(), reg);
+        }
+        // We add interference edges between the wide src and dest operands of
+        // an instruction even if the srcs are not live-out. This avoids
+        // allocations like `xor-long v1, v0, v9`, where v1 and v0 overlap --
+        // even though this is not a verification error, we have observed bugs
+        // in the ART interpreter when handling these sorts of instructions.
+        // However, we still want to be able to coalesce these symregs if they
+        // don't actually interfere based on liveness information, so that we
+        // can remove move-wide opcodes and/or use /2addr encodings.  As such,
+        // we insert a specially marked edge that coalescing ignores but
+        // coloring respects.
+        if (insn->dest_is_wide()) {
+          for (size_t i = 0; i < insn->srcs_size(); ++i) {
+            if (insn->src_is_wide(i)) {
+              graph.add_coalesceable_edge(insn->dest(), insn->src(i));
+            }
+          }
         }
       }
       fixpoint_iter.analyze_instruction(it->insn, &live_out);

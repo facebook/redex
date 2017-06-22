@@ -322,6 +322,68 @@ TEST_F(RegAllocTest, Coalesce) {
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
 
+TEST_F(RegAllocTest, MoveWideCoalesce) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
+  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN_WIDE, {1_v}));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  EXPECT_TRUE(ig.is_coalesceable(0, 1));
+  EXPECT_TRUE(ig.is_adjacent(0, 1));
+
+  graph_coloring::Allocator allocator;
+  allocator.coalesce(&ig, &code);
+  InstructionList expected_insns {
+    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
+    // move-wide opcode was coalesced
+    dasm(OPCODE_RETURN_WIDE, {0_v})
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}
+
+TEST_F(RegAllocTest, NoCoalesceWide) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
+  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
+  code.push_back(dasm(OPCODE_LONG_TO_DOUBLE, {1_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN_WIDE, {0_v}));
+  code.set_registers_size(2);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  EXPECT_FALSE(ig.is_coalesceable(0, 1));
+  EXPECT_TRUE(ig.is_adjacent(0, 1));
+
+  graph_coloring::Allocator allocator;
+  allocator.coalesce(&ig, &code);
+  InstructionList expected_insns {
+    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
+    // This move can't be coalesced away due to the long-to-double instruction
+    // below
+    dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
+    dasm(OPCODE_LONG_TO_DOUBLE, {1_v, 0_v}),
+    dasm(OPCODE_RETURN_WIDE, {0_v})
+  };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}
+
 static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
   std::vector<reg_t> vec;
   while (!stack.empty()) {
@@ -491,31 +553,6 @@ TEST_F(RegAllocTest, Spill) {
 
     dasm(OPCODE_MOVE_16, {6_v, 2_v}),
     dasm(OPCODE_RETURN, {6_v})
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
-}
-
-TEST_F(RegAllocTest, MoveWideCoalesce) {
-  using namespace dex_asm;
-
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
-  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN_WIDE, {1_v}));
-  code.set_registers_size(2);
-  code.build_cfg();
-
-  RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
-  graph_coloring::Allocator allocator;
-  allocator.coalesce(&ig, &code);
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
-    // move-wide opcode was coalesced
-    dasm(OPCODE_RETURN_WIDE, {0_v})
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }

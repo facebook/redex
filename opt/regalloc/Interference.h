@@ -193,12 +193,8 @@ class Graph {
     return m_adj_matrix.find(Edge(u, v)) != m_adj_matrix.end();
   }
 
-  bool is_only_move_wide(reg_t u, reg_t v) const {
-    return m_adj_matrix.at(Edge(u, v));
-  }
-
-  bool has_non_move_edge(reg_t u, reg_t v) const {
-    return is_adjacent(u, v) && !is_only_move_wide(u, v);
+  bool is_coalesceable(reg_t u, reg_t v) const {
+    return !is_adjacent(u, v) || !m_adj_matrix.at(Edge(u, v));
   }
 
   /*
@@ -224,11 +220,12 @@ class Graph {
 
  private:
   Graph() = default;
-  void add_edge(reg_t, reg_t, bool is_move_wide);
+  void add_edge(reg_t, reg_t, bool can_coalesce = false);
+  void add_coalesceable_edge(reg_t u, reg_t v) { add_edge(u, v, true); }
 
   std::unordered_map<reg_t, Node> m_nodes;
   using Edge = impl::OrderedPair<reg_t>;
-  std::unordered_map<Edge, bool /*is_move_wide*/, boost::hash<Edge>>
+  std::unordered_map<Edge, bool /* not_coalesceable */, boost::hash<Edge>>
       m_adj_matrix;
   // This map contains the LivenessDomains for all instructions which could
   // potentialy take on the /range format.
