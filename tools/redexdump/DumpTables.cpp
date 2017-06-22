@@ -516,12 +516,11 @@ void dump_strings(ddump_data* rd, bool print_headers) {
   const uint8_t* str_id_ptr = (uint8_t*)(rd->dexmmap) + offset;
   auto size = rd->dexh->string_ids_size;
   auto length = 0;
-  intptr_t tmp_str_id_ptr = 0;
+  uint32_t tmp_str_id_off = 0;
   for (uint32_t i = 0; i < size; ++i) {
-    auto str_data_off = *(uint32_t*)tmp_str_id_ptr;
-    tmp_str_id_ptr += 4;
-    const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + str_data_off;
+    const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + tmp_str_id_off;
     length += strlen((char*) str_data_ptr);
+    tmp_str_id_off += 4;
   }
 
   if (print_headers) {
