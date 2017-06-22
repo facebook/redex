@@ -136,7 +136,7 @@ TEST_F(PostVerify, RemoveBarBuilder_simpleCase) {
 }
 
 namespace {
-const size_t POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG = 4;
+const size_t POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG = 2;
 }
 
 TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
@@ -151,32 +151,29 @@ TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
   // Check builder was properly removed from the initialize_bar.
   check_no_builder(initialize_bar_different_regs, builder_type);
 
-  // While removing the builder 3 moves are added:
-  // * 2 for both iputs -> where we move the old value into the new register
-  // * 1 for getting the field's value -> where we get the value from the new
-  // register
-  uint16_t num_dest = 0;
-  uint16_t num_src = 0;
-
+  // Check that the register that holds field's value gets initialized
+  // with both values (will get initialized depending on the branch)
   auto insns =
       initialize_bar_different_regs->get_dex_code()->get_instructions();
+  std::vector<uint16_t> values;
+  std::vector<uint16_t> expected_values = {6, 7};
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
-    if (opcode == OPCODE_MOVE) {
-      uint16_t src = insn->src(0);
+    if (opcode == OPCODE_CONST_4) {
       uint16_t dest = insn->dest();
-
-      if (src == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
-        num_src++;
-      } else if (dest == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
-        num_dest++;
+      if (insn->dest() == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
+        values.push_back(insn->literal());
+      }
+    } else if (is_invoke(opcode)) {
+      auto invoked = static_cast<DexOpcodeMethod*>(insn)->get_method();
+      if (invoked->get_class() == bar->get_type()) {
+        EXPECT_EQ(POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG, insn->src(1));
       }
     }
   }
 
-  EXPECT_EQ(2, num_dest);
-  EXPECT_EQ(1, num_src);
+  EXPECT_EQ(expected_values, values);
 }
 
 namespace {
@@ -240,34 +237,25 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   auto initialize_null_model =
       find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
 
-  EXPECT_EQ(PRE_VERIFY_INITIALIZE_CAR_REGS + 1,
-            initialize_null_model->get_dex_code()->get_registers_size());
+  EXPECT_EQ(3, initialize_null_model->get_dex_code()->get_registers_size());
 
   // Check there is a register that holds NULL and is passed to
   // the car's model field.
   auto insns = initialize_null_model->get_dex_code()->get_instructions();
 
   // First instruction should hold the null value.
-  EXPECT_EQ(OPCODE_CONST, insns[0]->opcode());
+  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
   uint16_t null_reg = insns[0]->dest();
-
-  // While removing the builders 2 moves are added:
-  // * one for the undefined field: move <reg>, null_reg
-  // * one for the 'version' field, which uses a method parameter: move <reg>, 5
-  std::vector<uint16_t> used_regs;
-  std::vector<uint16_t> expected_regs = {null_reg,
-                                         POST_VERIFY_INITIALIZE_CAR_PARAM};
 
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
-
-    if (is_move(opcode)) {
-      used_regs.emplace_back(insn->src(0));
+    if (is_iput(opcode)) {
+      DexField* field = static_cast<const DexOpcodeField*>(insn)->get_field();
+      if (field->get_class() == car->get_type()) {
+        EXPECT_EQ(null_reg, insn->src(0));
+      }
     }
   }
-
-  std::sort(used_regs.begin(), used_regs.end());
-  EXPECT_EQ(expected_regs, used_regs);
 }
 
 /*
@@ -320,26 +308,43 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
 
   // First instruction should hold the null value, since 'model' can be
   // undefined.
-  EXPECT_EQ(OPCODE_CONST, insns[0]->opcode());
+  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
   uint16_t different_reg = insns[0]->dest();
 
-  // While removing the builders 2 moves are added for the 'model' field
-  // * one for the case when it is initialized with 'random_model'
-  //    move different_reg, <random_model_reg>
-  // * one for the 'getter'
-  //    move <getter_reg>, different_reg
-  size_t num_different_reg_usage = 0;
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
 
-    if (opcode == OPCODE_MOVE_OBJECT) {
-      if (insn->dests_size() > 0 && insn->dest() == different_reg) {
-        num_different_reg_usage++;
-      } else if (insn->srcs_size() > 0 && insn->src(0) == different_reg) {
-        num_different_reg_usage++;
-      }
+    if (opcode == OPCODE_CONST_STRING) {
+      EXPECT_EQ(different_reg, insn->dest());
     }
   }
-
-  EXPECT_EQ(2, num_different_reg_usage);
 }
+
+TEST_F(PreVerify, RemoveBPCBuilder) {
+  auto bpc = find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC;");
+  EXPECT_NE(nullptr, bpc);
+
+  auto bpc_builder =
+    find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder;");
+  EXPECT_NE(nullptr, bpc_builder);
+}
+
+TEST_F(PostVerify, RemoveBPCBuilder) {
+  auto bpc = find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC;");
+  EXPECT_NE(nullptr, bpc);
+
+  auto bpc_builder =
+    find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder");
+  EXPECT_EQ(nullptr, bpc_builder);
+
+  auto using_no_escape_builders = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
+  auto initialize_bpc =
+      find_vmethod_named(*using_no_escape_builders, "initializeBPC");
+  EXPECT_NE(nullptr, initialize_bpc);
+
+  DexType* builder_type =
+    DexType::get_type("Lcom/facebook/redex/test/instr/BPC$Builder");
+  check_no_builder(initialize_bpc, builder_type);
+}
+

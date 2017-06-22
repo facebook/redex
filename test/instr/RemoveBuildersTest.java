@@ -114,6 +114,22 @@ class Dar {
   }
 }
 
+class BPC {
+  public int x;
+
+  public BPC(Builder builder) {
+    this.x = builder.x;
+  }
+
+  public static class Builder {
+    public int x;
+
+    public BPC build() {
+      return new BPC(this);
+    }
+  }
+}
+
 class UsingNoEscapeBuilder {
 
   public Foo initializeFoo() {
@@ -196,5 +212,11 @@ class UsingNoEscapeBuilder {
     }
 
     return new Dar(8);
+  }
+
+  public BPC initializeBPC() {
+    BPC.Builder builder = new BPC.Builder();
+    builder.x = 43;
+    return builder.build();
   }
 }
