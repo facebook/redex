@@ -16,8 +16,8 @@
 #include "GraphColoring.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
+#include "ParallelWalkers.h"
 #include "Transform.h"
-#include "Walkers.h"
 
 using namespace regalloc;
 
@@ -55,41 +55,60 @@ static DexOpcode pessimize_opcode(DexOpcode op) {
 void RegAllocPass::run_pass(DexStoresVector& stores,
                             ConfigFiles&,
                             PassManager& mgr) {
+  using Data = std::nullptr_t;
+  using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  graph_coloring::Allocator::Stats stats;
-  walk_code(scope,
-            [](DexMethod*) { return true; },
-            [&](DexMethod* m, IRCode& code) {
-              TRACE(REG, 3, "Handling %s:\n", SHOW(m));
-              TRACE(REG, 5, "regs:%d code:\n%s\n",
-                    code.get_registers_size(),
-                    SHOW(&code));
-              try {
-                for (auto& mie : InstructionIterable(&code)) {
-                  mie.insn->range_to_srcs();
-                  mie.insn->normalize_registers();
-                  mie.insn->set_opcode(pessimize_opcode(mie.insn->opcode()));
-                }
+  auto stats = walk_methods_parallel<Scope, Data, Output>(
+      scope,
+      [](Data&, DexMethod* m) { // mapper
+        graph_coloring::Allocator::Stats stats;
+        if (m->get_code() == nullptr) {
+          return stats;
+        }
+        auto& code = *m->get_code();
 
-                live_range::renumber_registers(&code);
-                graph_coloring::Allocator allocator;
-                allocator.allocate(&code);
-                stats.accumulate(allocator.get_stats());
+        TRACE(REG, 3, "Handling %s:\n", SHOW(m));
+        TRACE(REG,
+              5,
+              "regs:%d code:\n%s\n",
+              code.get_registers_size(),
+              SHOW(&code));
+        try {
+          for (auto& mie : InstructionIterable(&code)) {
+            mie.insn->range_to_srcs();
+            mie.insn->normalize_registers();
+            mie.insn->set_opcode(pessimize_opcode(mie.insn->opcode()));
+          }
 
-                TRACE(REG, 5, "After alloc: regs:%d code:\n%s\n",
-                      code.get_registers_size(),
-                      SHOW(&code));
+          live_range::renumber_registers(&code);
+          graph_coloring::Allocator allocator;
+          allocator.allocate(&code);
+          stats.accumulate(allocator.get_stats());
 
-                for (auto& mie : InstructionIterable(&code)) {
-                  mie.insn->denormalize_registers();
-                  mie.insn->srcs_to_range();
-                }
-              } catch (std::exception&) {
-                fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
-                fprintf(stderr, "%s\n", SHOW(code.cfg()));
-                throw;
-              }
-            });
+          TRACE(REG,
+                5,
+                "After alloc: regs:%d code:\n%s\n",
+                code.get_registers_size(),
+                SHOW(&code));
+
+          for (auto& mie : InstructionIterable(&code)) {
+            mie.insn->denormalize_registers();
+            mie.insn->srcs_to_range();
+          }
+        } catch (std::exception&) {
+          fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
+          fprintf(stderr, "%s\n", SHOW(code.cfg()));
+          throw;
+        }
+        return stats;
+      },
+      [](Output a, Output b) { // reducer
+        a.accumulate(b);
+        return a;
+      },
+      [&](unsigned int) { // data initializer
+        return nullptr;
+      });
 
   TRACE(REG, 1, "Total reiteration count: %lu\n", stats.reiteration_count);
   TRACE(REG, 1, "Total spill count: %lu\n", stats.moves_inserted());
