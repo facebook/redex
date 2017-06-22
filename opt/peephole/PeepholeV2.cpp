@@ -19,9 +19,9 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "ParallelWalkers.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
-#include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // PeepholeOptimizerV2 implementation
@@ -1243,18 +1243,16 @@ bool contains(const std::vector<T>& vec, const T& value) {
 
 class PeepholeOptimizerV2 {
  private:
-  const std::vector<DexClass*>& m_scope;
   std::vector<Matcher> m_matchers;
+  std::vector<size_t> m_stats;
   PassManager& m_mgr;
   int m_stats_removed = 0;
   int m_stats_inserted = 0;
 
  public:
   explicit PeepholeOptimizerV2(
-      PassManager& mgr,
-      const std::vector<DexClass*>& scope,
-      const std::vector<std::string>& disabled_peepholes)
-      : m_scope(scope), m_mgr(mgr) {
+      PassManager& mgr, const std::vector<std::string>& disabled_peepholes)
+      : m_mgr(mgr) {
     for (const auto& pattern_list : patterns::get_all_patterns()) {
       for (const Pattern& pattern : pattern_list) {
         if (!contains(disabled_peepholes, pattern.name)) {
@@ -1267,7 +1265,11 @@ class PeepholeOptimizerV2 {
         }
       }
     }
+    m_stats.resize(m_matchers.size(), 0);
   }
+
+  PeepholeOptimizerV2(const PeepholeOptimizerV2&) = delete;
+  PeepholeOptimizerV2& operator=(const PeepholeOptimizerV2&) = delete;
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
@@ -1290,7 +1292,7 @@ class PeepholeOptimizerV2 {
           if (!matcher.try_match(mei.insn)) {
             continue;
           }
-          m_mgr.incr_metric(m_matchers[i].pattern.name.c_str(), 1);
+          m_stats.at(i)++;
           TRACE(PEEPHOLE, 8, "PATTERN MATCHED!\n");
           deletes.insert(end(deletes),
                          begin(matcher.matched_instructions),
@@ -1346,14 +1348,16 @@ class PeepholeOptimizerV2 {
     }
   }
 
-  void run() {
-    walk_methods(m_scope, [&](DexMethod* m) {
-      if (m->get_code()) {
-        peephole(m);
-      }
-    });
+  void run_method(DexMethod* m) {
+    if (m->get_code()) {
+      peephole(m);
+    }
+  }
 
-    print_stats();
+  void incr_all_metrics() {
+    for (size_t i = 0; i < m_matchers.size(); i++) {
+      m_mgr.incr_metric(m_matchers[i].pattern.name.c_str(), m_stats[i]);
+    }
   }
 };
 }
@@ -1362,7 +1366,23 @@ void PeepholePassV2::run_pass(DexStoresVector& stores,
                               ConfigFiles& /*cfg*/,
                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  PeepholeOptimizerV2(mgr, scope, config.disabled_peepholes).run();
+  std::vector<std::unique_ptr<PeepholeOptimizerV2>> helpers;
+  walk_methods_parallel<Scope, PeepholeOptimizerV2*, std::nullptr_t>(
+      scope,
+      [](PeepholeOptimizerV2*& ph, DexMethod* m) { // walker
+        ph->run_method(m);
+        return nullptr;
+      },
+      [](std::nullptr_t, std::nullptr_t) { return nullptr; }, // reducer
+      [&](unsigned int /*thread_index*/) { // data initializer
+        helpers.emplace_back(std::make_unique<PeepholeOptimizerV2>(
+            mgr, config.disabled_peepholes));
+        return helpers.back().get();
+      });
+  for (const auto& helper : helpers) {
+    helper->incr_all_metrics();
+  }
+
   if (!contains<std::string>(config.disabled_peepholes,
                              RedundantCheckCastRemover::get_name())) {
     RedundantCheckCastRemover(mgr, scope).run();
