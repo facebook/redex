@@ -401,7 +401,7 @@ std::vector<IRInstruction*> gather_move_builders_insn(
  * Keeps tracks of registers that are going to be used for undefined fields
  * depending on the type of field: wide, primitive etc.
  */
-class NullRegs {
+class ZeroRegs {
  public:
   bool has(DexType* type) { return get(type) != FieldOrRegStatus::UNDEFINED; }
 
@@ -413,26 +413,61 @@ class NullRegs {
   }
 
  private:
-  int null_reg{FieldOrRegStatus::UNDEFINED};
-  int null_reg_prim{FieldOrRegStatus::UNDEFINED};
-  int null_reg_prim_wide{FieldOrRegStatus::UNDEFINED};
+  int m_zero_reg_object{FieldOrRegStatus::UNDEFINED};
+  int m_zero_reg_int{FieldOrRegStatus::UNDEFINED};
+  int m_zero_reg_float{FieldOrRegStatus::UNDEFINED};
+  int m_zero_reg_long{FieldOrRegStatus::UNDEFINED};
+  int m_zero_reg_double{FieldOrRegStatus::UNDEFINED};
 
   int get(DexType* type) {
-    if (is_wide_type(type)) {
-      return null_reg_prim_wide;
-    } else {
-      return is_primitive(type) ? null_reg_prim : null_reg;
+    const auto* name = type->get_name()->c_str();
+    switch (name[0]) {
+    case 'Z':
+    case 'B':
+    case 'S':
+    case 'C':
+    case 'I':
+      return m_zero_reg_int;
+    case 'J':
+      return m_zero_reg_long;
+    case 'F':
+      return m_zero_reg_float;
+    case 'D':
+      return m_zero_reg_double;
+    case 'L':
+    case '[':
+      return m_zero_reg_object;
+    default:
+      not_reached();
     }
   }
 
   void set(DexType* type, uint16_t value) {
-    int* current_null_reg;
-    if (is_wide_type(type)) {
-      current_null_reg = &null_reg_prim_wide;
-    } else {
-      current_null_reg = is_primitive(type) ? &null_reg_prim : &null_reg;
+    const auto* name = type->get_name()->c_str();
+    switch (name[0]) {
+    case 'Z':
+    case 'B':
+    case 'S':
+    case 'C':
+    case 'I':
+      m_zero_reg_int = value;
+      return;
+    case 'J':
+      m_zero_reg_long = value;
+      return;
+    case 'F':
+      m_zero_reg_float = value;
+      return;
+    case 'D':
+      m_zero_reg_double = value;
+      return;
+    case 'L':
+    case '[':
+      m_zero_reg_object = value;
+      return;
+    default:
+      not_reached();
     }
-    *current_null_reg = value;
   }
 };
 
@@ -457,7 +492,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
       RedexContext::assume_regalloc() ? regs_size : regs_size - in_regs_size;
   uint16_t extra_regs = 0;
   std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
-  NullRegs undef_fields_regs;
+  ZeroRegs undef_fields_regs;
 
   // Instructions where the builder gets moved to a different
   // register need to be also removed (at the end).
