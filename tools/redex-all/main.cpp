@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
 
     redex::ProguardConfiguration pg_config;
     for (const auto pg_config_path : args.proguard_config_paths) {
-      Timer time_pg_parsing("Parsed ProGuard config file " + pg_config_path);
+      Timer time_pg_parsing("Parsed ProGuard config file");
       redex::proguard_parser::parse_file(pg_config_path, &pg_config);
     }
 
@@ -479,8 +479,7 @@ int main(int argc, char* argv[]) {
     cfg.using_seeds = false;
     cfg.outdir = args.out_dir;
     if (!args.seeds_filename.empty()) {
-      Timer t("Initialized seed classes from incoming seeds file " +
-              args.seeds_filename);
+      Timer t("Initialized seed classes from incoming seeds file");
       auto nseeds =
           init_seed_classes(args.seeds_filename, cfg.get_proguard_map());
       cfg.using_seeds = nseeds > 0;
