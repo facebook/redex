@@ -570,7 +570,10 @@ static DexClassesVector run_interdex(InterDexPass* pass,
 } // End namespace
 
 
-void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManager& mgr) {
+void InterDexPass::run_pass(DexClassesVector& dexen,
+                            Scope& original_scope,
+                            ConfigFiles& cfg,
+                            PassManager& mgr) {
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   std::unique_ptr<InterDexPassPlugin> plugin = registry->create(INTERDEX_PLUGIN);
@@ -582,7 +585,6 @@ void InterDexPass::run_pass(DexClassesVector& dexen, ConfigFiles& cfg, PassManag
   }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
-  auto original_scope = build_class_scope(dexen);
   dexen = run_interdex(
       this, dexen, cfg, true, m_static_prune, m_normal_primary_dex);
   for (const auto& plugin : m_plugins) {
@@ -598,9 +600,10 @@ void InterDexPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManag
     TRACE(IDEX, 1, "InterDexPass not run because no ProGuard configuration was provided.");
     return;
   }
+  auto original_scope = build_class_scope(stores);
   for (auto& store : stores) {
     if (store.get_name() == "classes") {
-      run_pass(store.get_dexen(), cfg, mgr);
+      run_pass(store.get_dexen(), original_scope, cfg, mgr);
     }
   }
 }

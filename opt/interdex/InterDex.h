@@ -23,7 +23,7 @@
 
 class InterDexPassPlugin {
  public:
-  // Run plugin initialization here. Pass should run this before running 
+  // Run plugin initialization here. Pass should run this before running
   // its implementation
   virtual void configure(ConfigFiles& cfg) = 0;
 
@@ -62,7 +62,7 @@ class InterDexPass : public Pass {
     pc.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
   }
 
-  virtual void run_pass(DexClassesVector&, ConfigFiles&, PassManager&);
+  virtual void run_pass(DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   std::vector<std::unique_ptr<InterDexPassPlugin>> m_plugins;
