@@ -768,6 +768,9 @@ class code_item(AutoParser):
         AutoParser.__init__(self, self.items, data)
         self.debug_info = None
         self.data = data
+        # Convert insns from a list to a tuple to avoid mutattion and also to
+        # allow self.insns to be hashed.
+        self.insns = tuple(self.insns)
 
     def get_debug_info(self):
         if self.debug_info is None and self.debug_info_off > 0:
@@ -1091,9 +1094,27 @@ class DexMethod:
         return self.get_class().get_name() + self.get_name()
 
     def get_method_id(self):
+        '''Get the method_id_item for this method.'''
         if self.method_id is None:
             self.method_id = self.get_dex().get_method_id(self.encoded_method)
         return self.method_id
+
+    def get_method_index(self):
+        '''Get the method index into the method_ids array in the DEX file.'''
+        return self.encoded_method.method_idx
+
+    def get_code_offset(self):
+        '''Get the code offset for this method.'''
+        return self.encoded_method.code_off
+
+    def get_code_item_index(self):
+        '''Get the index into the code_items array in the dex file for the
+        code for this method, or -1 if there is no code for this method.'''
+        code_item = self.get_code_item()
+        if code_item:
+            return self.get_dex().get_code_item_index_from_code_off(
+                    code_item.get_offset())
+        return -1
 
     def get_dex(self):
         return self.dex_class.get_dex()
@@ -1136,6 +1157,8 @@ class DexMethod:
             method_type = 'direct'
         f.write('%s method: %s%s\n' %
                 (method_type, self.get_class().get_name(), self.get_name()))
+        self.encoded_method.dump(f=f)
+        f.write('\n')
         if dump_code:
             self.dump_code()
         if dump_debug_info:
@@ -1182,6 +1205,10 @@ class DexClass:
         self.class_def.dump(f=f, print_name=False)
         f.write('\n')
 
+    def get_type_index(self):
+        '''Get type ID index (class_idx) for this class.'''
+        return self.class_def.class_idx
+
     def is_abstract(self):
         return (self.class_def.access_flags & ACC_ABSTRACT) != 0
 
@@ -1221,7 +1248,7 @@ class File:
         self.call_site_ids = None
         self.method_handle_items = None
         self.code_items = None
-        self.code_off_to_code_item = {}
+        self.code_off_to_code_item_idx = {}
         self.strings = None
         self.call_sites = None
         self.dex_classes = {}
@@ -1403,17 +1430,58 @@ class File:
                 self.data.align_to(4)
                 item = code_item(self.data)
                 self.code_items.append(item)
-                self.code_off_to_code_item[item.get_offset()] = item
+                self.code_off_to_code_item_idx[item.get_offset()] = i
             self.data.pop_offset_and_seek()
         return self.code_items
 
+    def report_code_duplication(self):
+        code_to_code_items = {}
+        code_items = self.get_code_items()
+        if code_items:
+            for code_item in code_items:
+                key = code_item.insns
+                if key in code_to_code_items:
+                    code_to_code_items[key].append(code_item)
+                else:
+                    code_to_code_items[key] = [code_item]
+            for key in code_to_code_items:
+                code_items = code_to_code_items[key]
+                if len(code_items) > 1:
+                    print('-' * 72)
+                    print('The following methods have the same code:')
+                    for code_item in code_items:
+                        method = self.find_method_from_code_off(
+                                code_item.get_offset())
+                        if method.is_virtual:
+                            print('virtual', end=' ')
+                        else:
+                            print('direct', end=' ')
+                        print(method.get_qualified_name())
+                    # Dump the code once for all methods
+                    method.dump_code()
+
+    def get_code_item_index_from_code_off(self, code_off):
+        # Make sure the code items are created
+        self.get_code_items()
+        if code_off in self.code_off_to_code_item_idx:
+            return self.code_off_to_code_item_idx[code_off]
+        return -1
+
     def find_code_item(self, code_off):
-        if self.code_items is None:
-            self.get_code_items()
-        if code_off in self.code_off_to_code_item:
-            return self.code_off_to_code_item[code_off]
+        code_item_idx = self.get_code_item_index_from_code_off(code_off)
+        if code_item_idx >= 0:
+            return self.get_code_items()[code_item_idx]
         else:
             raise ValueError('invalid code item offset %#8.8x' % code_off)
+
+    def find_method_from_code_off(self, code_off):
+        if code_off == 0:
+            return None
+        for cls in self.get_classes():
+            for method in cls.get_methods():
+                if method.get_code_offset() == code_off:
+                    return method
+        return None
 
     def get_class_defs(self):
         if self.class_defs is None:
@@ -1564,7 +1632,7 @@ class File:
                 item.dump(f=f)
                 f.write('\n')
 
-    def dump_code_items(self, options, f=sys.stdout):
+    def dump_code(self, options, f=sys.stdout):
         classes = self.get_classes()
         if classes:
             for cls in classes:
@@ -1572,12 +1640,19 @@ class File:
                     continue
                 cls.dump(f=f)
                 methods = cls.get_methods()
-                dc = options.dump_code_items or options.dump_all
+                dc = options.dump_code or options.dump_all
                 ddi = options.debug or options.dump_all
                 for method in methods:
-                    if options.dump_code_items or options.dump_all:
+                    if options.dump_code or options.dump_all:
                         method.dump(f=f, dump_code=dc, dump_debug_info=ddi)
                 f.write('\n')
+
+    def dump_code_items(self, options, f=sys.stdout):
+        code_items = self.get_code_items()
+        if code_items:
+            for (i, code_item) in enumerate(code_items):
+                f.write('code_item[%u]:\n' % (i))
+                code_item.dump(f=f)
 
     def dump(self, options, f=sys.stdout):
         self.dump_header(options, f)
@@ -1591,6 +1666,7 @@ class File:
         self.dump_class_defs(options, f)
         self.dump_call_site_ids(options, f)
         self.dump_method_handle_items(options, f)
+        self.dump_code(options, f)
         self.dump_code_items(options, f)
 
 
@@ -3630,8 +3706,19 @@ def main():
                       default=False)
     parser.add_option('--code',
                       action='store_true',
+                      dest='dump_code',
+                      help='Dump the DEX code in all class methods.',
+                      default=False)
+    parser.add_option('--code-items',
+                      action='store_true',
                       dest='dump_code_items',
                       help='Dump the DEX code items.',
+                      default=False)
+    parser.add_option('--code-duplication',
+                      action='store_true',
+                      dest='code_duplication',
+                      help=('Dump any methods in the DEX file that have the '
+                            'same instructions.'),
                       default=False)
     parser.add_option('--debug',
                       action='store_true',
@@ -3709,7 +3796,9 @@ def main():
             dex.dump_call_site_ids(options)
         if options.dump_method_handles or options.dump_all:
             dex.dump_method_handle_items(options)
-        if options.dump_code_items or options.debug or options.dump_all:
+        if options.dump_code or options.debug or options.dump_all:
+            dex.dump_code(options)
+        if options.dump_code_items or options.dump_all:
             dex.dump_code_items(options)
         if (options.dump_disassembly or options.dump_stats or
                 options.check_encoding or options.new_encoding):
@@ -3723,6 +3812,7 @@ def main():
             new_code_bytes_inefficiently_encoded = 0
             file_opcodes_byte_size = 0
             classes = dex.get_classes()
+            used_code_item_indexes = list()
             for cls in classes:
                 methods = cls.get_methods()
                 for method in methods:
@@ -3749,6 +3839,9 @@ def main():
                                 new_code_bytes_inefficiently_encoded += (
                                         dex_inst.new_encoding())
                         if options.check_encoding:
+                            code_item_idx = method.get_code_item_index()
+                            if code_item_idx >= 0:
+                                used_code_item_indexes.append(code_item_idx)
                             debug_info = method.get_debug_info()
                             if debug_info:
                                 debug_info_bytes_inefficiently_encoded += (
@@ -3767,6 +3860,16 @@ def main():
                             debug_info_bytes_inefficiently_encoded)
                     print_debug_stats(debug_info_bytes_inefficiently_encoded,
                                       file_size)
+                # Verify that all code items are used.
+                used_code_item_indexes.sort()
+                prev_ci_idx = 0
+                for ci_idx in used_code_item_indexes:
+                    if ci_idx != prev_ci_idx:
+                        efficiently_encoded = False
+                        for idx in range(prev_ci_idx + 1, ci_idx):
+                            print('code_item[%u] is not used and its '
+                                  'code_item can be removed' % (idx))
+                    prev_ci_idx = ci_idx
                 if efficiently_encoded:
                     print('file is efficiently encoded.')
             if options.new_encoding:
@@ -3777,6 +3880,8 @@ def main():
                                          file_opcodes_byte_size, file_size)
                 else:
                     print('file is efficiently encoded.')
+        if options.code_duplication:
+            dex.report_code_duplication()
 
     if options.dump_stats:
         duped_strings_byte_size = 0
@@ -3803,11 +3908,6 @@ def main():
     if i > 0:
         if options.check_encoding:
             if total_code_bytes_inefficiently_encoded > 0:
-                code_savings = get_percentage(
-                    total_code_bytes_inefficiently_encoded,
-                    total_opcode_byte_size)
-                file_savings = get_percentage(
-                    total_code_bytes_inefficiently_encoded, total_file_size)
                 print_code_stats(total_code_bytes_inefficiently_encoded,
                                  total_opcode_byte_size, total_file_size)
             if total_debug_info_bytes_inefficiently_encoded > 0:
