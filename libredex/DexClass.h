@@ -389,13 +389,6 @@ class DexTypeList {
     return get_type_list().size();
   }
 
-  DexTypeList* append_and_make(DexType* new_type) const {
-    auto old_list = get_type_list();
-    auto appended = std::deque<DexType*>(old_list.begin(), old_list.end());
-    appended.push_back(new_type);
-    return make_type_list(std::move(appended));
-  }
-
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
