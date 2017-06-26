@@ -539,7 +539,6 @@ class FileExtract:
         return result
 
     def dump(self, start=0, end=-1):
-        pos = self.tell()
         if end == -1:
             self.seek(start, SEEK_END)  # Seek to end to get size
             n = self.tell() - start
@@ -826,9 +825,6 @@ class AutoParser:
            before printing out any items'''
         return None
 
-    def get_list_show_index(self):
-        return True_
-
     def get_dump_header(self):
         '''Override in subclasses to print this string out before any items
            are dumped. This is a good place to put a description of the item
@@ -912,7 +908,6 @@ class AutoParser:
             # (set the byte order, address byte size, etc).
             if 'value_fixup' in item:
                 value_fixup = item['value_fixup']
-            start_offset = data.tell()
 
             if 'attr_offset_size' in item:
                 # the number of items is inferred by parsing up until

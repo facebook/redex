@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+
 class LookupDictionary(dict):
     """
     a dictionary which can lookup value by key, or keys by value

@@ -10,13 +10,10 @@ import copy
 import dict_utils
 import file_extract
 from file_extract import AutoParser
-import inspect
 import numbers
 import operator
 import optparse
 import os
-import pprint
-import re
 import six
 import string
 import sys
@@ -691,6 +688,7 @@ class debug_info_item(AutoParser):
     def get_line_table(self):
         if self.line_table is None:
             ops = self.get_ops()
+            row = debug_info_item.row()
             for op_args in ops:
                 op = op_args[0]
                 if op == DBG_END_SEQUENCE:
@@ -955,8 +953,6 @@ class map_item(AutoParser):
     def get_dump_flat(self):
         return True
 
-    def get_dump_flat(self):
-        return True
 # ----------------------------------------------------------------------
 # map_list
 # ----------------------------------------------------------------------
@@ -1375,7 +1371,6 @@ class File:
         '''method_ref can be one of:
            - a encoded_method object
            - integer method index'''
-        result = list()  # Return a list of matching methods
         method_ids = self.get_method_ids()
         if method_ids:
             if isinstance(method_ref, encoded_method):
@@ -1389,15 +1384,15 @@ class File:
                                  (type(method_ref)))
         return None
 
-    def get_call_site(self, index):
-        call_site_ids = self.get_call_site_ids()
-        if index >= len(call_site_ids):
-            return None
-        if self.call_sites[idx] is None:
-            self.data.push_offset_and_seek(call_site_ids[idx])
-            self.call_sites[idx] = call_site_item(self.data)
-            self.data.pop_offset_and_seek()
-        return self.call_sites[idx]
+    # def get_call_site(self, idx):
+    #     call_site_ids = self.get_call_site_ids()
+    #     if idx >= len(call_site_ids):
+    #         return None
+    #     if self.call_sites[idx] is None:
+    #         self.data.push_offset_and_seek(call_site_ids[idx])
+    #         self.call_sites[idx] = call_site_item(self.data)
+    #         self.data.pop_offset_and_seek()
+    #     return self.call_sites[idx]
 
     def get_call_site_ids(self):
         if self.call_site_ids is None:
@@ -1417,7 +1412,7 @@ class File:
             (size, offset) = self.get_map_tuple(TYPE_METHOD_HANDLE_ITEM)
             self.data.push_offset_and_seek(offset)
             for i in range(size):
-                self.method_handle_items.append(method_handle_item(data))
+                self.method_handle_items.append(method_handle_item(self.data))
             self.data.pop_offset_and_seek()
         return self.method_handle_items
 
@@ -1506,7 +1501,6 @@ class File:
     def get_strings(self):
         if self.strings is None:
             self.strings = list()
-            string_ids = self.get_string_ids()
             for string_id_item in self.get_string_ids():
                 self.data.push_offset_and_seek(string_id_item)
                 self.strings.append(string_data_item(self.data))
@@ -2565,7 +2559,6 @@ class Opcode24(Opcode):
 
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
-        size = inst.get_A()
         arg_count = inst[0] >> 12
         self.type = inst[1]
         self.regs = list()
@@ -3335,7 +3328,6 @@ class OpcodeFA(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         raise ValueError('debug this when we find one of these')
-        size = inst.get_A()
         arg_count = inst[0] >> 12
         self.method_ref_idx = inst[1]
         self.method_hdl_ref = inst[2]
@@ -3926,6 +3918,7 @@ def main():
                 print_encoding_stats(
                         total_new_code_bytes_inefficiently_encoded,
                         total_opcode_byte_size, total_file_size)
+
 
 if __name__ == '__main__':
     main()
