@@ -257,23 +257,6 @@ class LocalDce {
   void remove_unreachable_blocks(DexMethod* method, IRCode* code) {
     auto& cfg = code->cfg();
     auto& blocks = cfg.blocks();
-    // Remove edges to catch blocks that no longer exist.
-    std::vector<std::pair<Block*, Block*>> remove_edges;
-    for (auto& b : blocks) {
-      if (!is_catch(b)) {
-        continue;
-      }
-      for (auto& p : b->preds()) {
-        if (!ends_with_may_throw(p)) {
-          // We removed whatever instruction could throw to this catch.
-          remove_edges.emplace_back(p, b);
-        }
-      }
-    }
-    for (auto& e : remove_edges) {
-      cfg.remove_edge(e.first, e.second, EDGE_THROW);
-    }
-    remove_edges.clear();
 
     // remove unreachable blocks
     std::unordered_set<Block*> visited;
@@ -292,6 +275,7 @@ class LocalDce {
       if (visited.find(b) != visited.end()) {
         continue;
       }
+      std::vector<std::pair<Block*, Block*>> remove_edges;
       for (auto& s : b->succs()) {
         remove_edges.emplace_back(b, s);
       }
