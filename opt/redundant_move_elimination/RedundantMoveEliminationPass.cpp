@@ -15,7 +15,7 @@
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
-#include "Walkers.h"
+#include "ParallelWalkers.h"
 
 /**
  * This pass eliminates writes to registers that already hold the written value.
@@ -59,24 +59,32 @@
 
 namespace {
 
+struct RedundantStats {
+  size_t moves_eliminated{0};
+  size_t replaced_sources{0};
+
+  RedundantStats operator+(const RedundantStats& other) {
+    return RedundantStats{moves_eliminated + other.moves_eliminated,
+                          replaced_sources + other.replaced_sources};
+  }
+};
+
 class AliasFixpointIterator final
-  : public MonotonicFixpointIterator<Block*, AliasDomain> {
+    : public MonotonicFixpointIterator<Block*, AliasDomain> {
  public:
   const RedundantMoveEliminationPass::Config& m_config;
-  PassManager& m_mgr;
+  RedundantStats& m_stats;
 
-  using BlockToListFunc =
-      std::function<std::vector<Block*>(Block* const&)>;
+  using BlockToListFunc = std::function<std::vector<Block*>(Block* const&)>;
 
   AliasFixpointIterator(Block* start_block,
                         BlockToListFunc succ,
                         BlockToListFunc pred,
                         const RedundantMoveEliminationPass::Config& config,
-                        PassManager& mgr)
-      : MonotonicFixpointIterator<Block*, AliasDomain>(
-            start_block, succ, pred),
+                        RedundantStats& stats)
+      : MonotonicFixpointIterator<Block*, AliasDomain>(start_block, succ, pred),
         m_config(config),
-        m_mgr(mgr) {}
+        m_stats(stats) {}
 
   /*
    * if deletes is not null, this time is for real.
@@ -133,8 +141,7 @@ class AliasFixpointIterator final
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
-        insn->opcode() != OPCODE_CHECK_CAST &&
-        !is_monitor(insn->opcode())) {
+        insn->opcode() != OPCODE_CHECK_CAST && !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         RegisterValue val{insn->src(i)};
         boost::optional<Register> rep = aliases.get_representative(val);
@@ -152,7 +159,7 @@ class AliasFixpointIterator final
 
           if (insn->src(i) != *rep) {
             insn->set_src(i, *rep);
-            m_mgr.incr_metric("source_regs_replaced_with_representative", 1);
+            m_stats.replaced_sources++;
           }
         }
       }
@@ -215,27 +222,31 @@ class AliasFixpointIterator final
 
 class RedundantMoveEliminationImpl final {
  public:
-  RedundantMoveEliminationImpl(
-      const std::vector<DexClass*>& scope,
-      PassManager& mgr,
+  explicit RedundantMoveEliminationImpl(
       const RedundantMoveEliminationPass::Config& config)
-      : m_scope(scope), m_mgr(mgr), m_config(config) {}
+      : m_config(config) {}
 
-  void run() {
-    walk_methods(m_scope, [this](DexMethod* m) {
-      if (m->get_code()) {
-        run_on_method(m);
-      }
-    });
+  RedundantStats run(Scope scope) {
+    using Data = std::nullptr_t;
+    using Output = RedundantStats;
+    return walk_methods_parallel<Scope, Data, Output>(
+        scope,
+        [this](Data&, DexMethod* m) {
+          if (m->get_code()) {
+            return run_on_method(m);
+          }
+          return RedundantStats();
+        },
+        [](Output a, Output b) { return a + b; },
+        [](unsigned int /*thread_index*/) { return nullptr; });
   }
 
  private:
-  const std::vector<DexClass*>& m_scope;
-  PassManager& m_mgr;
   const RedundantMoveEliminationPass::Config& m_config;
 
-  void run_on_method(DexMethod* method) {
+  RedundantStats run_on_method(DexMethod* method) {
     std::vector<IRInstruction*> deletes;
+    RedundantStats stats;
 
     auto code = method->get_code();
     code->build_cfg();
@@ -246,16 +257,15 @@ class RedundantMoveEliminationImpl final {
         [](Block* const& block) { return block->succs(); },
         [](Block* const& block) { return block->preds(); },
         m_config,
-        m_mgr);
+        stats);
 
     if (m_config.full_method_analysis) {
       fixpoint.run(AliasDomain());
       for (auto block : blocks) {
         AliasDomain domain = fixpoint.get_entry_state_at(block);
-        domain.update(
-            [&fixpoint, block, &deletes](AliasedRegisters& aliases) {
-              fixpoint.run_on_block(block, aliases, &deletes);
-            });
+        domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
+          fixpoint.run_on_block(block, aliases, &deletes);
+        });
       }
     } else {
       for (auto block : blocks) {
@@ -264,10 +274,11 @@ class RedundantMoveEliminationImpl final {
       }
     }
 
-    m_mgr.incr_metric("redundant_moves_eliminated", deletes.size());
+    stats.moves_eliminated += deletes.size();
     for (auto insn : deletes) {
       code->remove_opcode(insn);
     }
+    return stats;
   }
 };
 }
@@ -276,8 +287,11 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /* unused */,
                                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  RedundantMoveEliminationImpl impl(scope, mgr, m_config);
-  impl.run();
+  RedundantMoveEliminationImpl impl(m_config);
+  auto stats = impl.run(scope);
+  mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
+  mgr.incr_metric("source_regs_replaced_with_representative",
+                  stats.replaced_sources);
   TRACE(RME,
         1,
         "%d redundant moves eliminated\n",
