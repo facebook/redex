@@ -13,7 +13,11 @@
 #include <memory>
 #include <utility>
 
+#ifdef __GNUC__
 #define UNUSED __attribute__((unused))
+#else
+#define UNUSED
+#endif
 
 /**
  * Insert into the proper location in a sorted container.
