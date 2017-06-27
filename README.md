@@ -121,8 +121,8 @@ appropriate args:
 -p [KEYPASS], --keypass [KEYPASS]
 ```
 
-## My App crashes with `MethodNotFoundException`, `ClassNotFoundException`,
-## `NoSuchFieldException`, or something similar. How do I fix this?
+## My App crashes with `MethodNotFoundException`, `ClassNotFoundException`, `NoSuchFieldException`, or something similar. How do I fix this?
+
 Redex probably deleted or renamed it. Redex is quite aggressive about deleting
 things it deems are unreachable. But, often Redex doesn't know about reflection
 or other complex ways an entity could be reached.
