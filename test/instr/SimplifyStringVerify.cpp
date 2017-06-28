@@ -85,12 +85,16 @@ struct PrePostVerify : testing::Test {
 
 // To verify whether Redex replaced the patterns successfully, we compute the
 // differences of the before/after methods.
+//
+// We check that the savings are at least the size of the difference in the
+// peephole patterns, instead of exactly equal to it, because other
+// transformations / optimizations may further shrink the dex file.
 TEST_F(PrePostVerify, CheckSizes) {
 #define WORK(name, saving)                                       \
   {                                                              \
     auto diff_##name = before_sizes[#name] - after_sizes[#name]; \
     constexpr int expected_saving = saving;                      \
-    EXPECT_EQ(expected_saving, diff_##name);                     \
+    EXPECT_LE(expected_saving, diff_##name);                     \
   }
   TESTS
 #undef WORK

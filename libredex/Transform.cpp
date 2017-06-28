@@ -2189,9 +2189,6 @@ void select_instructions(IRCode* code) {
     auto* insn = it->insn;
     auto op = insn->opcode();
     try_2addr_conversion(insn);
-    if (!RedexContext::next_release_gate()) {
-      continue;
-    }
     if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
       // convert check-cast v0, v1 into
       //

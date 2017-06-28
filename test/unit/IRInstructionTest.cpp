@@ -159,7 +159,6 @@ TEST(IRInstruction, TwoAddr) {
 TEST(IRInstruction, SelectCheckCast) {
   using namespace dex_asm;
   g_redex = new RedexContext();
-  RedexContext::set_next_release_gate(true);
 
   DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
   method->make_concrete(ACC_STATIC, 0);
