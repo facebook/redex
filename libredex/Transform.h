@@ -492,6 +492,15 @@ using RegMap = std::unordered_map<uint16_t, uint16_t>;
 
 void remap_registers(IRCode*, const RegMap&);
 
+/*
+ * Sets all the opcodes in unreachable blocks to MFLOW_FALLTHROUGH, and removes
+ * all successor edges connecting them to the graph. Does not actually delete
+ * the blocks themselves.
+ *
+ * Return the number of instructions removed.
+ */
+size_t remove_unreachable_blocks(IRCode* code);
+
 } // namespace transform
 
 namespace ir_code_impl {

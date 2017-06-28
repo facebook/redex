@@ -125,6 +125,7 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
   code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
 
+  code->build_cfg();
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {
@@ -159,6 +160,7 @@ TEST_F(RegAllocTest, LiveRange) {
 
   code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
 
+  code->build_cfg();
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {

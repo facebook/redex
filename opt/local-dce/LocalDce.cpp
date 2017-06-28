@@ -236,7 +236,9 @@ class LocalDce {
       code->build_cfg();
     }
 
-    remove_unreachable_blocks(method, &*code);
+    m_stats.unreachable_instruction_count +=
+        transform::remove_unreachable_blocks(code);
+    remove_empty_try_regions(code);
 
     TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
     TRACE(DCE, 5, "%s", SHOW(code->cfg()));
@@ -247,44 +249,7 @@ class LocalDce {
   }
 
  private:
-  void remove_block(IRCode* code, Block* b) {
-    for (auto& mei : InstructionIterable(b)) {
-      code->remove_opcode(mei.insn);
-      ++m_stats.unreachable_instruction_count;
-    }
-  }
-
-  void remove_unreachable_blocks(DexMethod* method, IRCode* code) {
-    auto& cfg = code->cfg();
-    auto& blocks = cfg.blocks();
-
-    // remove unreachable blocks
-    std::unordered_set<Block*> visited;
-    std::function<void (Block*)> visit = [&](Block* b) {
-      if (visited.find(b) != visited.end()) {
-        return;
-      }
-      visited.emplace(b);
-      for (auto& s : b->succs()) {
-        visit(s);
-      }
-    };
-    visit(blocks.at(0));
-    for (size_t i = 1; i < blocks.size(); ++i) {
-      auto& b = blocks.at(i);
-      if (visited.find(b) != visited.end()) {
-        continue;
-      }
-      std::vector<std::pair<Block*, Block*>> remove_edges;
-      for (auto& s : b->succs()) {
-        remove_edges.emplace_back(b, s);
-      }
-      for (auto& p : remove_edges) {
-        cfg.remove_all_edges(p.first, p.second);
-      }
-      remove_block(code, b);
-    }
-
+  void remove_empty_try_regions(IRCode* code) {
     // comb the method looking for superfluous try sections that do not enclose
     // throwing opcodes; remove them. note that try sections should never be
     // nested, otherwise this won't produce the right result.

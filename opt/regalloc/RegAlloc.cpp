@@ -80,6 +80,13 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
             mie.insn->set_opcode(pessimize_opcode(mie.insn->opcode()));
           }
 
+          // The transformations below all require a CFG. Build it once
+          // here instead of requiring each transform to build it.
+          code.build_cfg();
+          // It doesn't make sense to try to allocate registers in
+          // unreachable code. Remove it so that the allocator doesn't
+          // get confused.
+          transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code);
           graph_coloring::Allocator allocator;
           allocator.allocate(&code);

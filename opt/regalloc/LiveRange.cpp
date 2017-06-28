@@ -143,7 +143,6 @@ class ReachingDefsFixpointIterator final
 };
 
 UDChains calculate_ud_chains(IRCode* code) {
-  code->build_cfg();
   auto& cfg = code->cfg();
   ReachingDefsFixpointIterator fixpoint_iter(
       cfg, const_cast<Block*>(cfg.entry_block()));

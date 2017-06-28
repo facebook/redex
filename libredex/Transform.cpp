@@ -1339,6 +1339,52 @@ void remap_registers(IRCode* code, const RegMap& reg_map) {
   }
 }
 
+static size_t remove_block(IRCode* code, Block* b) {
+  size_t insns_removed{0};
+  for (auto& mei : InstructionIterable(b)) {
+    code->remove_opcode(mei.insn);
+    ++insns_removed;
+  }
+  return insns_removed;
+}
+
+size_t remove_unreachable_blocks(IRCode* code) {
+  auto& cfg = code->cfg();
+  auto& blocks = cfg.blocks();
+  size_t insns_removed{0};
+
+  // remove unreachable blocks
+  std::unordered_set<Block*> visited;
+  std::function<void (Block*)> visit = [&](Block* b) {
+    if (visited.find(b) != visited.end()) {
+      return;
+    }
+    visited.emplace(b);
+    for (auto& s : b->succs()) {
+      visit(s);
+    }
+  };
+  visit(blocks.at(0));
+  for (size_t i = 1; i < blocks.size(); ++i) {
+    auto& b = blocks.at(i);
+    if (visited.find(b) != visited.end()) {
+      continue;
+    }
+    // Remove all successor edges. Note that we don't need to try and remove
+    // predecessors since by definition, unreachable blocks have no preds
+    std::vector<std::pair<Block*, Block*>> remove_edges;
+    for (auto& s : b->succs()) {
+      remove_edges.emplace_back(b, s);
+    }
+    for (auto& p : remove_edges) {
+      cfg.remove_all_edges(p.first, p.second);
+    }
+    insns_removed += remove_block(code, b);
+  }
+
+  return insns_removed;
+}
+
 } // namespace transform
 
 /*
