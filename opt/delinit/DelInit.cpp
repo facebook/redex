@@ -164,36 +164,6 @@ bool can_remove(const DexMethod* m) {
   return can_remove(type_class(m->get_class()));
 }
 
-/**
- * A constructor can be removed if:
- *  - the class can be removed.
- *  or
- *  - it can be deleted
- *  - there is another constructor for the class that is used.
- */
-bool can_remove_init(const DexMethod* m, const MethodSet& called) {
-  DexClass* clazz = type_class(m->get_class());
-  if (can_remove(clazz)) {
-    return true;
-  }
-
-  if (!can_delete(m)) {
-    return false;
-  }
-
-  auto const& dmeths = clazz->get_dmethods();
-  for (auto meth : dmeths) {
-    if (meth->get_code() == nullptr) continue;
-    if (is_init(meth)) {
-      if (meth != m && called.count(meth) > 0) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 bool can_remove(const DexField* f) {
   return can_remove(type_class(f->get_class()));
 }
@@ -288,11 +258,11 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       init_called++;
       continue;
     }
-    if (!can_remove_init(init, called)) {
+    auto clazz = type_class(init->get_class());
+    if (!can_remove(clazz) && !can_delete(init)) {
       init_cant_delete++;
       continue;
     }
-    auto clazz = type_class(init->get_class());
     clazz->remove_method(init);
     TRACE(DELINIT, 5, "Delete init %s.%s %s\n", SHOW(init->get_class()),
         SHOW(init->get_name()), SHOW(init->get_proto()));
