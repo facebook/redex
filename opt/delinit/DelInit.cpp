@@ -164,6 +164,36 @@ bool can_remove(const DexMethod* m) {
   return can_remove(type_class(m->get_class()));
 }
 
+/**
+ * A constructor can be removed if:
+ *  - the class can be removed.
+ *  or
+ *  - it can be deleted
+ *  - there is another constructor for the class that is used.
+ */
+bool can_remove_init(const DexMethod* m, const MethodSet& called) {
+  DexClass* clazz = type_class(m->get_class());
+  if (can_remove(clazz)) {
+    return true;
+  }
+
+  if (!can_delete(m)) {
+    return false;
+  }
+
+  auto const& dmeths = clazz->get_dmethods();
+  for (auto meth : dmeths) {
+    if (meth->get_code() == nullptr) continue;
+    if (is_init(meth)) {
+      if (meth != m && called.count(meth) > 0) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 bool can_remove(const DexField* f) {
   return can_remove(type_class(f->get_class()));
 }
@@ -176,7 +206,7 @@ bool filter_class(DexClass* clazz) {
   if (!find_package(clazz->get_name()->c_str())) {
     return true;
   }
-  return is_interface(clazz) || is_annotation(clazz) || !can_remove(clazz) ;
+  return is_interface(clazz) || is_annotation(clazz);
 }
 
 using ClassSet = std::unordered_set<DexClass*>;
@@ -258,15 +288,11 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       init_called++;
       continue;
     }
-    if (!can_remove(init)) {
+    if (!can_remove_init(init, called)) {
       init_cant_delete++;
       continue;
     }
     auto clazz = type_class(init->get_class());
-    if (!can_remove(clazz)) {
-      init_class_cant_delete++;
-      continue;
-    }
     clazz->remove_method(init);
     TRACE(DELINIT, 5, "Delete init %s.%s %s\n", SHOW(init->get_class()),
         SHOW(init->get_name()), SHOW(init->get_proto()));
@@ -290,7 +316,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
   vmethods.clear();
   ifields.clear();
   for (auto clazz : scope) {
-    if (filter_class(clazz)) continue;
+    if (filter_class(clazz) || !can_remove(clazz)) continue;
 
     auto const& dmeths = clazz->get_dmethods();
     bool hasInit = false;
@@ -341,7 +367,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
       if (meth->get_code() == nullptr) continue;
       if (is_init(meth)) {
         initmethods.push_back(meth);
-      } else {
+      } else if (can_remove(clazz)) {
         // Method names beginning with '<' are internal VM calls
         // except <init>
         if (meth->get_name()->c_str()[0] != '<') {
