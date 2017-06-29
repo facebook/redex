@@ -111,7 +111,9 @@ enum MethodItemType {
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
   MethodItemType type;
+  // addr is not valid until sync
   uint32_t addr;
+
   union {
     TryEntry* tentry;
     CatchEntry* centry;
@@ -317,6 +319,9 @@ class IRCode {
    * :to will end up jumping to the same destination as :from. */
   void replace_branch(IRInstruction* from, IRInstruction* to);
 
+  // remove all debug source code line numbers from this block
+  void remove_debug_line_info(Block* block);
+
   template <class... Args>
   void push_back(Args&&... args) {
     m_fmethod->push_back(*(new MethodItemEntry(std::forward<Args>(args)...)));
@@ -500,6 +505,14 @@ void remap_registers(IRCode*, const RegMap&);
  * Return the number of instructions removed.
  */
 size_t remove_unreachable_blocks(IRCode* code);
+
+// remove old_block
+// if new_block is not null, reroute old_targets predecessors to new_target
+void replace_block(IRCode* code, Block* old_block, Block* new_block);
+
+// if pos is inside a try block, return the corresponding catch
+// if not, return null
+MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos);
 
 } // namespace transform
 

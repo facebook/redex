@@ -816,6 +816,15 @@ void IRCode::replace_branch(IRInstruction* from, IRInstruction* to) {
       SHOW(to));
 }
 
+void IRCode::remove_debug_line_info(Block* block) {
+  for (MethodItemEntry& mie : *block) {
+    if (mie.type == MFLOW_POSITION) {
+      mie.type = MFLOW_FALLTHROUGH;
+      mie.pos.release();
+    }
+  }
+}
+
 void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
   IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
   to->set_offset(0);
@@ -1385,6 +1394,60 @@ size_t remove_unreachable_blocks(IRCode* code) {
   return insns_removed;
 }
 
+MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos) {
+  while (++pos != code->end() && pos->type != MFLOW_TRY)
+    ;
+  return pos != code->end() && pos->tentry->type == TRY_END
+             ? pos->tentry->catch_start
+             : nullptr;
+}
+
+// delete old_block and reroute its predecessors to new_block
+//
+// if new_block is null, just delete old_block and don't reroute
+void replace_block(IRCode* code, Block* old_block, Block* new_block) {
+  const ControlFlowGraph& cfg = code->cfg();
+  std::vector<MethodItemEntry*> will_move;
+  if (new_block != nullptr) {
+    // make a copy of the targets we're going to move
+    for (MethodItemEntry& mie : *old_block) {
+      if (mie.type == MFLOW_TARGET) {
+        will_move.push_back(new MethodItemEntry(mie.target));
+      }
+    }
+  }
+
+  // delete old_block
+  for (auto it = old_block->begin(); it != old_block->end(); it++) {
+    switch (it->type) {
+    case MFLOW_OPCODE:
+      code->remove_opcode(it);
+      break;
+    case MFLOW_TARGET:
+      it->type = MFLOW_FALLTHROUGH;
+      it->throwing_mie = nullptr;
+      if (new_block == nullptr) {
+        delete it->target;
+      } // else, new_block takes ownership of the targets
+      break;
+    default:
+      break;
+    }
+  }
+
+  if (new_block != nullptr) {
+    for (auto mie : will_move) {
+      // insert the branch target at the beginning of new_block
+      // and make sure `m_begin` and `m_end`s point to the right places
+      Block* before = cfg.find_block_that_ends_here(new_block->m_begin);
+      new_block->m_begin = code->insert_before(new_block->begin(), *mie);
+      if (before != nullptr) {
+        before->m_end = new_block->m_begin;
+      }
+    }
+  }
+}
+
 } // namespace transform
 
 /*
@@ -1546,13 +1609,6 @@ class MethodSplicer {
 
 namespace {
 
-MethodItemEntry* find_active_catch(FatMethod* method,
-                                   FatMethod::iterator pos) {
-  while (++pos != method->end() && pos->type != MFLOW_TRY);
-  return pos != method->end() && pos->tentry->type == TRY_END
-    ? pos->tentry->catch_start : nullptr;
-}
-
 /**
  * Return a RegSet indicating the registers that the callee interferes with
  * either via a check-cast to or by writing to one of the ins.
@@ -1584,6 +1640,7 @@ RegSet ins_reg_defs(IRCode& code) {
 }
 
 }
+
 
 void IRCode::inline_tail_call(DexMethod* caller,
                               DexMethod* callee,
@@ -1794,7 +1851,7 @@ bool IRCode::inline_method(InlineContext& context,
   }
 
   // check if we are in a try block
-  auto caller_catch = find_active_catch(fcaller, pos);
+  auto caller_catch = transform::find_active_catch(caller_code, pos);
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
@@ -1810,7 +1867,8 @@ bool IRCode::inline_method(InlineContext& context,
   splice(pos, fcallee->begin(), ret_it);
 
   // try items can span across a return opcode
-  auto callee_catch = splice.clone(find_active_catch(fcallee, ret_it));
+  auto callee_catch =
+      splice.clone(transform::find_active_catch(callee_code, ret_it));
   if (callee_catch != nullptr) {
     fcaller->insert(pos, *(new MethodItemEntry(TRY_END, callee_catch)));
     if (caller_catch != nullptr) {
@@ -2341,6 +2399,7 @@ bool IRCode::try_sync(DexCode* code) {
     auto& targets = multis[multiopcode];
     auto multi_insn = ir_to_dex_insn.at(multiopcode->insn);
     std::sort(targets.begin(), targets.end(), multi_target_compare_index);
+    always_assert_log(!targets.empty(), "need to have targets");
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
       unsigned long count = (targets.size() * 4) + 2;

@@ -195,3 +195,13 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
   }
   return postorder;
 }
+
+Block* ControlFlowGraph::find_block_that_ends_here(
+    const FatMethod::iterator& loc) const {
+  for (Block* b : m_blocks) {
+    if (b->m_end == loc) {
+      return b;
+    }
+  }
+  return nullptr;
+}

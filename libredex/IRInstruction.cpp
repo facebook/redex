@@ -137,13 +137,14 @@ IRInstruction::IRInstruction(const DexInstruction* insn) {
   }
 }
 
+// Structural equality of opcodes except branches offsets are ignored
+// because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_opcode == that.m_opcode &&
     m_string == that.m_string && // just test one member of the union
     m_srcs == that.m_srcs &&
     m_dest == that.m_dest &&
     m_literal == that.m_literal &&
-    m_offset == that.m_offset &&
     m_range == that.m_range;
 }
 

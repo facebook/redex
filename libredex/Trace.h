@@ -30,6 +30,7 @@
   TM(DBGSTRIP)           \
   TM(DC)                 \
   TM(DCE)                \
+  TM(DEDUP_BLOCKS)       \
   TM(DELINIT)            \
   TM(DELMET)             \
   TM(DRAC)               \

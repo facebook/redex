@@ -39,6 +39,7 @@ struct Block {
  private:
   friend class ControlFlowGraph;
   friend class IRCode;
+  friend void transform::replace_block(IRCode*, Block*, Block*);
 
   size_t m_id;
   FatMethod::iterator m_begin;
@@ -85,6 +86,8 @@ class ControlFlowGraph {
    * Print the graph in the DOT graph description language.
    */
   std::ostream& write_dot_format(std::ostream&) const;
+
+  Block* find_block_that_ends_here(const FatMethod::iterator& loc) const;
 
  private:
   EdgeFlags& edge(Block* pred, Block* succ) {
