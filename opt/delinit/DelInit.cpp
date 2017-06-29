@@ -160,12 +160,13 @@ bool can_remove(const DexClass* cls) {
   return can_delete(cls) && !referenced_classes.count(cls);
 }
 
-bool can_remove(const DexMethod* m) {
-  return can_remove(type_class(m->get_class()));
+bool can_remove(const DexMethod* m, const MethodSet& callers) {
+  return callers.count(const_cast<DexMethod*>(m)) == 0 &&
+         (can_remove(type_class(m->get_class())) || can_delete(m));
 }
 
 bool can_remove(const DexField* f) {
-  return can_remove(type_class(f->get_class()));
+  return can_remove(type_class(f->get_class())) || can_delete(f);
 }
 
 /**
@@ -286,7 +287,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
   vmethods.clear();
   ifields.clear();
   for (auto clazz : scope) {
-    if (filter_class(clazz) || !can_remove(clazz)) continue;
+    if (filter_class(clazz)) continue;
 
     auto const& dmeths = clazz->get_dmethods();
     bool hasInit = false;
@@ -313,7 +314,7 @@ void DeadRefs::find_unreachable_data(DexClass* clazz) {
   classes.insert(clazz);
 
   for (const auto& meth : clazz->get_vmethods()) {
-    if (!can_remove(meth)) continue;
+    if (!can_remove(meth, called)) continue;
     vmethods.insert(meth);
   }
 
@@ -337,7 +338,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
       if (meth->get_code() == nullptr) continue;
       if (is_init(meth)) {
         initmethods.push_back(meth);
-      } else if (can_remove(clazz)) {
+      } else {
         // Method names beginning with '<' are internal VM calls
         // except <init>
         if (meth->get_name()->c_str()[0] != '<') {
@@ -437,7 +438,7 @@ int DeadRefs::remove_unreachable() {
       called_dmeths++;
       continue;
     }
-    if (!can_remove(meth)) {
+    if (!can_remove(meth, called)) {
       dont_delete_dmeths++;
       continue;
     }
