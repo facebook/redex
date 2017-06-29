@@ -125,7 +125,6 @@ size_t RemoveGotosPass::run(DexMethod* method) {
 void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* unused */,
                                PassManager& mgr) {
-  TRACE(RMGOTO, 1, "Running RemoveGoto pass\n");
   auto scope = build_class_scope(stores);
 
   size_t total_gotos_removed =
@@ -140,6 +139,10 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
           [](size_t a, size_t b) { return a + b; },
           [](unsigned int /*thread_index*/) { return RemoveGotos(); });
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
+  TRACE(RMGOTO,
+        1,
+        "Number of unnecessary gotos removed: %d\n",
+        total_gotos_removed);
 }
 
 static RemoveGotosPass s_pass;
