@@ -482,6 +482,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
   code->build_cfg();
   auto blocks = postorder_sort(code->cfg().blocks());
+  std::reverse(blocks.begin(), blocks.end());
 
   auto fields_in = fields_setters(blocks, builder);
 
