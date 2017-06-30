@@ -7,8 +7,11 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <limits>
+#include <random>
 
 #include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
