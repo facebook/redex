@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "Debug.h"
+#include "PatriciaTreeUtil.h"
 #include "Util.h"
 
 // Forward declarations.
@@ -96,7 +97,7 @@ template <typename Element>
 class PatriciaTreeSet final {
  public:
   using IntegerType = typename std::
-      conditional<std::is_pointer<Element>::value, uintptr_t, Element>::type;
+      conditional_t<std::is_pointer<Element>::value, uintptr_t, Element>;
 
   using iterator = pt_impl::PatriciaTreeIterator<Element>;
 
@@ -188,27 +189,25 @@ class PatriciaTreeSet final {
   // manipulating sets of pointers. The first parameter is necessary to make
   // template deduction work.
   template <typename T = Element,
-            typename = typename std::enable_if<std::is_pointer<T>::value>::type>
+            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
   static uintptr_t encode(Element x) {
     return reinterpret_cast<uintptr_t>(x);
   }
 
-  template <
-      typename T = Element,
-      typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
+  template <typename T = Element,
+            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
   static Element encode(Element x) {
     return x;
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if<std::is_pointer<T>::value>::type>
+            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
   static Element decode(uintptr_t x) {
     return reinterpret_cast<Element>(x);
   }
 
-  template <
-      typename T = Element,
-      typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
+  template <typename T = Element,
+            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
   static Element decode(Element x) {
     return x;
   }
@@ -237,6 +236,8 @@ inline std::ostream& operator<<(std::ostream& o,
 }
 
 namespace pt_impl {
+
+using namespace pt_util;
 
 template <typename IntegerType>
 class PatriciaTree {
@@ -310,31 +311,6 @@ class PatriciaTreeLeaf final : public PatriciaTree<IntegerType> {
  private:
   IntegerType m_key;
 };
-
-template <typename IntegerType>
-inline IntegerType is_zero_bit(IntegerType k, IntegerType m) {
-  return (k & m) == 0;
-}
-
-template <typename IntegerType>
-inline IntegerType get_lowest_bit(IntegerType x) {
-  return x & (~x + 1);
-}
-
-template <typename IntegerType>
-inline IntegerType get_branching_bit(IntegerType prefix0, IntegerType prefix1) {
-  return get_lowest_bit(prefix0 ^ prefix1);
-}
-
-template <typename IntegerType>
-IntegerType mask(IntegerType k, IntegerType m) {
-  return k & (m - 1);
-}
-
-template <typename IntegerType>
-IntegerType match_prefix(IntegerType k, IntegerType p, IntegerType m) {
-  return mask(k, m) == p;
-}
 
 template <typename IntegerType>
 std::shared_ptr<PatriciaTreeBranch<IntegerType>> join(
