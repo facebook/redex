@@ -699,6 +699,16 @@ void DexClass::sort_methods() {
   std::sort(dmeths.begin(), dmeths.end(), compare_dexmethods);
 }
 
+DexField* DexClass::find_field(const char* name, const DexType* field_type) const {
+  for (const auto f : m_ifields) {
+    if (std::strcmp(f->c_str(), name) == 0 && f->get_type() == field_type) {
+      return f;
+    }
+  }
+
+  return nullptr;
+}
+
 int DexClass::encode(DexOutputIdx* dodx,
                      dexcode_to_offset& dco,
                      uint8_t* output) {

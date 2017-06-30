@@ -911,6 +911,7 @@ class DexClass {
   void remove_field(const DexField* f);
   void sort_methods();
   void sort_fields();
+  DexField* find_field(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();
   DexAccessFlags get_access() const { return m_access_flags; }

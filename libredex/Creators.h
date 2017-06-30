@@ -184,6 +184,9 @@ struct MethodBlock {
    */
   void check_cast(Location& src_and_dst, DexType* type);
 
+
+  void instance_of(Location& obj, Location& dst, DexType* type);
+
   /**
    * Return the given location.
    */
@@ -193,6 +196,11 @@ struct MethodBlock {
    * Return void.
    */
   void ret_void();
+
+  /**
+   * Return the given location based on its type.
+   */
+  void ret(DexType* rtype, Location loc);
 
   /**
    * Load an int32 constant into the given Location.
@@ -222,6 +230,9 @@ struct MethodBlock {
    * Load null into the given Location.
    */
   void load_null(Location& loc);
+
+  // Helper
+  void init_loc(Location& loc);
 
   void binop_2addr(DexOpcode op, const Location& dest, const Location& src);
   void binop_lit16(DexOpcode op,

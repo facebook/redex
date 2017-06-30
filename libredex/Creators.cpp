@@ -303,6 +303,16 @@ void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
   push_instruction(check_cast);
 }
 
+void MethodBlock::instance_of(Location& obj, Location& dst, DexType* type) {
+  always_assert(obj.is_ref());
+  always_assert(dst.type == get_boolean_type());
+  IRInstruction* insn = new IRInstruction(OPCODE_INSTANCE_OF);
+  insn->set_dest(dst.get_reg());
+  insn->set_src(0, obj.get_reg());
+  insn->set_type(type);
+  push_instruction(insn);
+}
+
 void MethodBlock::ret(Location loc) {
   auto ch = type_shorty(loc.type);
   assert(ch != 'V');
@@ -320,6 +330,14 @@ void MethodBlock::ret(Location loc) {
 }
 
 void MethodBlock::ret_void() { push_instruction(new IRInstruction(OPCODE_RETURN_VOID)); }
+
+void MethodBlock::ret(DexType* rtype, Location loc) {
+  if (rtype != get_void_type()) {
+    ret(loc);
+  } else {
+    ret_void();
+  }
+}
 
 void MethodBlock::load_const(Location& loc, int32_t value) {
   always_assert(!loc.is_wide());
@@ -364,6 +382,16 @@ void MethodBlock::load_null(Location& loc) {
   load->set_literal(0);
   loc.type = get_object_type();
   push_instruction(load);
+}
+
+void MethodBlock::init_loc(Location& loc) {
+  if (loc.is_ref()) {
+    load_null(loc);
+  } else if (loc.is_wide()) {
+    load_const(loc, 0.0);
+  } else {
+    load_const(loc, 0);
+  }
 }
 
 void MethodBlock::binop_2addr(DexOpcode op,
