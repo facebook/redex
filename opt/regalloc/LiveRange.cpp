@@ -14,7 +14,7 @@
 
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
-#include "HashedAbstractEnvironment.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "Transform.h"
 
@@ -93,9 +93,10 @@ class DefsDomain final : public AbstractDomainReverseAdaptor<
   }
 };
 
-class DefsEnvironment final : public AbstractDomainReverseAdaptor<
-                                  HashedAbstractEnvironment<reg_t, DefsDomain>,
-                                  DefsEnvironment> {
+class DefsEnvironment final
+    : public AbstractDomainReverseAdaptor<
+          PatriciaTreeMapAbstractEnvironment<reg_t, DefsDomain>,
+          DefsEnvironment> {
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
 
