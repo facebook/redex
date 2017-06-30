@@ -1,6 +1,6 @@
 AM_CXXFLAGS = --std=gnu++14
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/test/gtest-1.7.0/include \
+	-I$(top_srcdir)/test/googletest-release-1.7.0/include \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
