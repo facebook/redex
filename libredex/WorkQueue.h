@@ -65,13 +65,12 @@ class WorkQueue {
   std::function<Output(Data&, Input)> m_mapper;
   std::function<Output(Output, Output)> m_reducer;
 
-  std::vector<std::shared_ptr<WorkerState<Input, Data, Output>>> m_states;
+  std::vector<std::unique_ptr<WorkerState<Input, Data, Output>>> m_states;
 
   const size_t m_num_threads{1};
   size_t m_insert_idx{0};
 
-  void consume(std::shared_ptr<WorkerState<Input, Data, Output>> state,
-               Input task) {
+  void consume(WorkerState<Input, Data, Output>* state, Input task) {
     state->result = m_reducer(state->result, m_mapper(state->data, task));
   }
 
@@ -99,7 +98,7 @@ WorkQueue<Input, Data, Output>::WorkQueue(
     : m_mapper(mapper), m_reducer(reducer), m_num_threads(num_threads) {
   always_assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.push_back(std::make_shared<WorkerState<Input, Data, Output>>(
+    m_states.emplace_back(std::make_unique<WorkerState<Input, Data, Output>>(
         data_initializer(i)));
   }
 }
@@ -108,19 +107,20 @@ WorkQueue<Input, Data, Output>::WorkQueue(
  * Creates a new work queue that doesn't return a value.  This is for
  * jobs that only have side-effects.
  */
-template <class Input,
-          class Data = std::nullptr_t,
-          class Output = std::nullptr_t>
-WorkQueue<Input, Data, Output> workqueue_foreach(
+template <class Input>
+WorkQueue<Input, std::nullptr_t /*Data*/, std::nullptr_t /*Output*/>
+workqueue_foreach(
     std::function<void(Input)> func,
     unsigned int num_threads = std::thread::hardware_concurrency()) {
+  using Data = std::nullptr_t;
+  using Output = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
-      [&func](Data&, Input a) {
+      [&func](Data&, Input a) -> Output {
         func(a);
         return nullptr;
       },
-      [](Data, Data) { return nullptr; },
-      [](unsigned int) { return nullptr; },
+      [](Data, Data) -> Data { return nullptr; },
+      [](unsigned int) -> Data { return nullptr; },
       num_threads);
 }
 
@@ -128,16 +128,16 @@ WorkQueue<Input, Data, Output> workqueue_foreach(
  * Creates a new work queue that reduces the items to a single value (e.g
  * for a statistics map).  This implies no thread state is required.
  */
-template <class Input, class Output, class Data = std::nullptr_t>
-WorkQueue<Input, Data, Output> workqueue_mapreduce(
+template <class Input, class Output>
+WorkQueue<Input, std::nullptr_t /*Data*/, Output> workqueue_mapreduce(
     std::function<Output(Input)> mapper,
     std::function<Output(Output, Output)> reducer,
     unsigned int num_threads = std::thread::hardware_concurrency()) {
-
+  using Data = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
-      [&mapper](Data&, Input a) { return mapper(a); },
+      [&mapper](Data&, Input a) -> Output { return mapper(a); },
       reducer,
-      [](unsigned int) { return nullptr; },
+      [](unsigned int) -> Data { return nullptr; },
       num_threads);
 }
 
@@ -154,30 +154,28 @@ void WorkQueue<Input, Data, Output>::add_item(Input task) {
 template <class Input, class Data, class Output>
 Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
   std::vector<std::thread> all_threads;
-  for (unsigned int i = 0; i < m_num_threads; ++i) {
-    all_threads.push_back(std::thread(
-        [&](std::shared_ptr<WorkerState<Input, Data, Output>> state,
-            unsigned int state_idx) {
-          state->result = init_output;
-          auto attempts = create_permutation(m_num_threads, state_idx);
-          while (true) {
-            auto have_task = false;
-            for (auto idx : attempts) {
-              auto other_state = m_states[idx];
-              Input task;
-              have_task = other_state->pop_task(task);
-              if (have_task) {
-                consume(state, task);
-                break;
-              }
-            }
-            if (!have_task) {
-              return;
-            }
-          }
-        },
-        m_states[i],
-        i));
+  auto worker = [&](WorkerState<Input, Data, Output>* state, size_t state_idx) {
+    state->result = init_output;
+    auto attempts = create_permutation(m_num_threads, state_idx);
+    while (true) {
+      auto have_task = false;
+      for (auto idx : attempts) {
+        auto other_state = m_states[idx].get();
+        Input task;
+        have_task = other_state->pop_task(task);
+        if (have_task) {
+          consume(state, task);
+          break;
+        }
+      }
+      if (!have_task) {
+        return;
+      }
+    }
+  };
+
+  for (size_t i = 0; i < m_num_threads; ++i) {
+    all_threads.emplace_back(worker, m_states[i].get(), i);
   }
 
   for (auto& thread : all_threads) {

@@ -51,7 +51,9 @@ Output walk_methods_parallel(const T& scope,
       },
       reducer,
       data_initializer,
-      std::thread::hardware_concurrency());
+      // This code is running mostly on a Hyperthread processor.
+      // It often outperforms when the thread number equals to physical cores.
+      std::thread::hardware_concurrency() / 2);
 
   for (const auto& cls : scope) {
     wq.add_item(cls);
