@@ -197,6 +197,10 @@ class ConstantPropFixpointAnalysis
     return this->get_entry_state_at(node);
   }
 
+  ConstPropEnvironment get_constants_at_exit(BlockType const& node) const {
+    return this->get_exit_state_at(node);
+  }
+
   virtual void simplify_instruction(
       const BlockType& block,
       InstructionType& insn,

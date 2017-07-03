@@ -241,8 +241,13 @@ class MonotonicFixpointIterator {
 
   void analyze_vertex(Context* context, const NodeId& node) {
     Domain& entry_state = m_entry_states[node];
-    Domain& exit_state = m_exit_states[node];
+    // We should be careful not to access m_exit_states[node] before computing
+    // the entry state, as this may silently initialize it with an unwanted
+    // value (i.e., the default-constructed value of Domain). This can in turn
+    // lead to inaccurate or even incorrect results when the node possesses a
+    // self-loop.
     compute_entry_state(context, node, &entry_state);
+    Domain& exit_state = m_exit_states[node];
     exit_state = entry_state;
     analyze_node(node, &exit_state);
   }
