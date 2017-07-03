@@ -15,6 +15,12 @@ import org.junit.Test;
 
 public class SynthMethodTest {
 
+    /* Required to prevent redex from deleting constructor, needed for JUnit */
+    @Test
+    public void createTestObject() {
+        new SynthMethodTest();
+    }
+
     /**
      * TODO: Document this test!!!
      */

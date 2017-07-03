@@ -15,6 +15,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class SimplifyString {
+
+  /* Required to prevent redex from deleting constructor, needed for JUnit */
+  @Test
+  public void createTestObject() {
+    new SimplifyString();
+  }
+
   @Test
   public void test_Coalesce_InitVoid_AppendString() {
     StringBuilder a, b;

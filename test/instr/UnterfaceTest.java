@@ -17,6 +17,12 @@ public class UnterfaceTest {
   private String mHello = "hello";
   private String mWorld = "world";
 
+  /* Required to prevent redex from deleting constructor, needed for JUnit */
+  @Test
+  public void createTestObject() {
+    new UnterfaceTest();
+  }
+
   /**
    * TODO: Document this test!!!
    */

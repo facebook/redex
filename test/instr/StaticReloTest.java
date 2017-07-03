@@ -24,6 +24,12 @@ import org.junit.Test;
  */
 public class StaticReloTest {
 
+  /* Required to prevent redex from deleting constructor, needed for JUnit */
+  @Test
+  public void createTestObject() {
+    new StaticReloTest();
+  }
+
   private static final String PKG = "com.facebook.redex.test.instr";
   private static Class getClass(String pkg, String cls) {
     try {

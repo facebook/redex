@@ -26,6 +26,12 @@ public class DelSuperTest {
     c3 = new C3();
   }
 
+  /* Required to prevent redex from deleting constructor, needed for JUnit */
+  @Test
+  public void createTestObject() {
+    new DelSuperTest();
+  }
+
   @Test
   public void testOptimized1() {
     // Should be optimized and C2/C3 should yield C1's response

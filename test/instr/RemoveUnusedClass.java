@@ -40,6 +40,12 @@ class Zeta {
 
 public class RemoveUnusedClass {
 
+    /* Required to prevent redex from deleting constructor, needed for JUnit */
+    @Test
+    public void createTestObject() {
+        new RemoveUnusedClass();
+    }
+
     // To avoid the occurence of a string that contains
     // the fully qualified name of the Zeta class we break
     // up the construction of the class name string and use a ProGuard

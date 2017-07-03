@@ -8,6 +8,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <string>
 
 #include "DexInstruction.h"
 #include "Transform.h"
@@ -18,6 +19,9 @@ TEST_F(PreVerify, ConstantPropagation) {
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
+    if(meth->get_name()->str().find("if") == std::string::npos) {
+      continue;
+    }
     auto code = meth->get_dex_code();
     EXPECT_NE(code, nullptr);
     bool has_if = false;
@@ -37,6 +41,9 @@ TEST_F(PostVerify, ConstantPropagation) {
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
+    if(meth->get_name()->str().find("if") == std::string::npos) {
+      continue;
+    }
     auto code = meth->get_dex_code();
     EXPECT_NE(code, nullptr);
     bool has_if = false;
