@@ -329,6 +329,25 @@ bool has_anno(const T* t, const DexType* anno_type) {
   return false;
 }
 
+struct dex_stats_t {
+  int num_types = 0;
+  int num_classes = 0;
+  int num_methods = 0;
+  int num_method_refs = 0;
+  int num_fields = 0;
+  int num_field_refs = 0;
+  int num_strings = 0;
+  int num_protos = 0;
+  int num_static_values = 0;
+  int num_annotations = 0;
+  int num_type_lists = 0;
+  int num_bytes = 0;
+  int num_instructions = 0;
+};
+
+dex_stats_t&
+  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
+
 namespace JavaNameUtil {
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"

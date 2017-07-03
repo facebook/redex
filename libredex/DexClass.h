@@ -423,6 +423,12 @@ inline bool compare_dextypelists(DexTypeList* a, DexTypeList* b) {
   return *a < *b;
 }
 
+struct dextypelists_comparator {
+  bool operator()(DexTypeList* a, DexTypeList* b) {
+    return compare_dextypelists(a, b);
+  }
+};
+
 class DexProto {
   friend struct RedexContext;
 

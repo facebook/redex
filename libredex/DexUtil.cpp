@@ -331,6 +331,7 @@ void load_root_dexen(
   // Load all discovered dex files
   for (const auto& dex : dexen) {
     std::cout << "Loading " << dex.string() << std::endl;
+    // N.B. throaway stats for now
     DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);
     store.add_classes(std::move(classes));
   }
@@ -349,4 +350,22 @@ size_t sum_param_sizes(const IRCode* code) {
     size += mie.insn->dest_is_wide() ? 2 : 1;
   }
   return size;
+}
+
+dex_stats_t&
+  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
+  lhs.num_types += rhs.num_types;
+  lhs.num_classes += rhs.num_classes;
+  lhs.num_methods += rhs.num_methods;
+  lhs.num_method_refs += rhs.num_method_refs;
+  lhs.num_fields += rhs.num_fields;
+  lhs.num_field_refs += rhs.num_field_refs;
+  lhs.num_strings += rhs.num_strings;
+  lhs.num_protos += rhs.num_protos;
+  lhs.num_static_values += rhs.num_static_values;
+  lhs.num_annotations += rhs.num_annotations;
+  lhs.num_type_lists += rhs.num_type_lists;
+  lhs.num_bytes += rhs.num_bytes;
+  lhs.num_instructions += rhs.num_instructions;
+  return lhs;
 }

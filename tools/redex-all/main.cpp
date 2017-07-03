@@ -266,7 +266,7 @@ bool dir_is_writable(const std::string& dir) {
   return access(dir.c_str(), W_OK) == 0;
 }
 
-Json::Value get_stats(const dex_output_stats_t& stats) {
+Json::Value get_stats(const dex_stats_t& stats) {
   Json::Value val;
   val["num_types"] = stats.num_types;
   val["num_type_lists"] = stats.num_type_lists;
@@ -300,10 +300,10 @@ Json::Value get_pass_stats(const PassManager& mgr) {
 }
 
 Json::Value get_detailed_stats(
-    const std::vector<dex_output_stats_t>& dexes_stats) {
+    const std::vector<dex_stats_t>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
-  for (const dex_output_stats_t& stats : dexes_stats) {
+  for (const dex_stats_t& stats : dexes_stats) {
     dexes[i++] = get_stats(stats);
   }
   return dexes;
@@ -319,8 +319,16 @@ Json::Value get_times() {
   return list;
 }
 
-Json::Value get_full_stats(const dex_output_stats_t& stats,
-                           const std::vector<dex_output_stats_t>& dexes_stats,
+Json::Value get_input_stats(const dex_stats_t& stats,
+                            const std::vector<dex_stats_t>& dexes_stats) {
+  Json::Value d;
+  d["total_stats"] = get_stats(stats);
+  d["dexes_stats"] = get_detailed_stats(dexes_stats);
+  return d;
+}
+
+Json::Value get_output_stats(const dex_stats_t& stats,
+                           const std::vector<dex_stats_t>& dexes_stats,
                            PassManager& mgr) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
@@ -431,19 +439,28 @@ int main(int argc, char* argv[]) {
     DexStoresVector stores;
     stores.emplace_back(std::move(root_store));
 
+    dex_stats_t input_totals;
+    std::vector<dex_stats_t> input_dexes_stats;
+
     {
       Timer t("Load classes from dexes");
       for (int i = start; i < argc; i++) {
         const std::string filename(argv[i]);
         if (filename.compare(filename.size() - 3, 3, "dex") == 0) {
-          DexClasses classes = load_classes_from_dex(filename.c_str());
+          dex_stats_t dex_stats;
+          DexClasses classes = load_classes_from_dex(filename.c_str(), &dex_stats);
+          input_totals += dex_stats;
+          input_dexes_stats.push_back(dex_stats);
           stores[0].add_classes(std::move(classes));
         } else {
           DexMetadata store_metadata;
           store_metadata.parse(filename);
           DexStore store(store_metadata);
           for (auto file_path : store_metadata.get_files()) {
-            DexClasses classes = load_classes_from_dex(file_path.c_str());
+            dex_stats_t dex_stats;
+            DexClasses classes = load_classes_from_dex(file_path.c_str(), &dex_stats);
+            input_totals += dex_stats;
+            input_dexes_stats.push_back(dex_stats);
             store.add_classes(std::move(classes));
           }
           stores.emplace_back(std::move(store));
@@ -502,8 +519,8 @@ int main(int argc, char* argv[]) {
       locator_index = new LocatorIndex(make_locator_index(stores));
     }
 
-    dex_output_stats_t totals;
-    std::vector<dex_output_stats_t> dexes_stats;
+    dex_stats_t output_totals;
+    std::vector<dex_stats_t> output_dexes_stats;
 
     auto pos_output =
         cfg.metafile(args.config.get("line_number_map", "").asString());
@@ -535,8 +552,8 @@ int main(int argc, char* argv[]) {
                                           cfg,
                                           args.config,
                                           pos_mapper.get());
-        totals += stats;
-        dexes_stats.push_back(stats);
+        output_totals += stats;
+        output_dexes_stats.push_back(stats);
       }
     }
 
@@ -547,7 +564,8 @@ int main(int argc, char* argv[]) {
       auto method_move_map =
           cfg.metafile(args.config.get("method_move_map", "").asString());
       pos_mapper->write_map();
-      stats = get_full_stats(totals, dexes_stats, manager);
+      stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
+      stats["output_stats"] = get_output_stats(output_totals, output_dexes_stats, manager);
       output_moved_methods_map(method_move_map.c_str(), cfg);
       print_warning_summary();
     }
@@ -559,7 +577,7 @@ int main(int argc, char* argv[]) {
   }
 
   // now that all the timers are done running, we can collect the data
-  stats["time_stats"] = get_times();
+  stats["output_stats"]["time_stats"] = get_times();
   Json::StyledStreamWriter writer;
   {
     std::ofstream out(stats_output_path.c_str());
