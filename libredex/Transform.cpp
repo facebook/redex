@@ -1988,6 +1988,7 @@ void IRCode::build_cfg(bool end_block_before_throw) {
   bool in_try = false;
 
   auto* block = m_cfg->create_block();
+  always_assert_log(count_opcodes() > 0, "FatMethod contains no instructions");
   block->m_begin = m_fmethod->begin();
   m_cfg->set_entry_block(block);
   // The first block can be a branch target.
