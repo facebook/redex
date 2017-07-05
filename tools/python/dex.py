@@ -14,6 +14,7 @@ import numbers
 import operator
 import optparse
 import os
+import re
 import six
 import string
 import sys
@@ -270,7 +271,7 @@ def hex_escape(s):
 # ----------------------------------------------------------------------
 class encoded_field(AutoParser):
     items = [
-        {'type': 'uleb', 'name': 'field_idx', 'format': '%5u'},
+        {'type': 'uleb', 'name': 'field_idx', 'format': '%u'},
         {'type': 'uleb', 'name': 'access_flags', 'format': '0x%8.8x'},
     ]
 
@@ -296,7 +297,7 @@ class encoded_field(AutoParser):
 
 class encoded_method(AutoParser):
     items = [
-        {'type': 'uleb', 'name': 'method_idx', 'format': '%6u'},
+        {'type': 'uleb', 'name': 'method_idx', 'format': '%u'},
         {'type': 'uleb', 'name': 'access_flags', 'format': '0x%8.8x'},
         {'type': 'uleb', 'name': 'code_off', 'format': '0x%8.8x'},
     ]
@@ -328,13 +329,13 @@ class class_data_item(AutoParser):
         {'type': 'uleb', 'name': 'direct_methods_size'},
         {'type': 'uleb', 'name': 'virtual_methods_size'},
         {'class': encoded_field, 'name': 'static_fields',
-            'attr_count': 'static_fields_size'},
+            'attr_count': 'static_fields_size', 'flat': True},
         {'class': encoded_field, 'name': 'instance_fields',
-            'attr_count': 'instance_fields_size'},
+            'attr_count': 'instance_fields_size', 'flat': True},
         {'class': encoded_method, 'name': 'direct_methods',
-            'attr_count': 'direct_methods_size'},
+            'attr_count': 'direct_methods_size', 'flat': True},
         {'class': encoded_method, 'name': 'virtual_methods',
-            'attr_count': 'virtual_methods_size'},
+            'attr_count': 'virtual_methods_size', 'flat': True},
     ]
 
     def __init__(self, data):
@@ -463,13 +464,15 @@ class encoded_catch_handler_list(AutoParser):
         return True
 
 
-def print_insns(insns, f):
+def print_instructions(insns, prefix, flat, f):
     f.write('\n')
     code_units = CodeUnits(insns)
     dex_inst = DexInstruction()
     while code_units.index_is_valid():
         dex_inst.decode(code_units)
-        f.write('  ')
+        if prefix:
+            f.write(prefix)
+        f.write('    ')
         dex_inst.dump()
 
 
@@ -606,7 +609,7 @@ class debug_info_op(AutoParser):
 class debug_info_item(AutoParser):
     items = [
         {'type': 'uleb', 'name': 'line_start'},
-        {'type': 'ulebp1', 'name': 'parameters_size'},
+        {'type': 'uleb', 'name': 'parameters_size'},
         {'type': 'ulebp1', 'name': 'parameter_names',
             'attr_count': 'parameters_size'},
     ]
@@ -732,9 +735,12 @@ class debug_info_item(AutoParser):
             data.pop_offset_and_seek()
         return self.ops
 
-    def dump_debug_info(self, f=sys.stdout):
+    def dump_debug_info(self, f=sys.stdout, prefix=None):
         ops = self.get_ops()
         for op in ops:
+            if prefix:
+                f.write(prefix)
+            f.write('    ')
             op.dump_opcode(f=f)
             f.write('\n')
 
@@ -751,7 +757,7 @@ class code_item(AutoParser):
         {'type': 'u32', 'name': 'debug_info_off'},
         {'type': 'u32', 'name': 'insns_size', 'format': '%u'},
         {'type': 'u16', 'name': 'insns',
-            'attr_count': 'insns_size', 'dump': print_insns},
+            'attr_count': 'insns_size', 'dump_list': print_instructions},
         {'type': 'u16', 'condition': lambda item,
             data: item.tries_size != 0 and item.insns_size & 1},
         {'class': try_item, 'name': 'tries', 'attr_count': 'tries_size',
@@ -948,7 +954,7 @@ class map_item(AutoParser):
         AutoParser.__init__(self, self.items, data)
 
     def get_list_header_lines(self):
-        return ['TYPE                            SIZE       OFFSET\n']
+        return ['      TYPE                            SIZE       OFFSET\n']
 
     def get_dump_flat(self):
         return True
@@ -960,8 +966,9 @@ class map_item(AutoParser):
 
 class map_list(AutoParser):
     items = [
-        {'type': 'u32', 'name': 'size', 'align': 4},
-        {'class': map_item, 'name': 'list', 'attr_count': 'size'},
+        {'type': 'u32', 'name': 'size', 'align': 4, 'dump': False},
+        {'class': map_item, 'name': 'list', 'attr_count': 'size',
+         'flat': True},
     ]
 
     def get_dump_header(self):
@@ -1075,6 +1082,50 @@ class type_list(AutoParser):
         AutoParser.__init__(self, self.items, data)
 
 
+class Progard:
+    '''Parses a proguard map file and does name lookups.'''
+    def __init__(self, path):
+        self.path = path
+        self.classes_dict = {}
+        class_dict = None
+        regex = re.compile('\s+([0-9]+:[0-9]+:)?(.*) -> (.*)$')
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.rstrip('\n')
+                if line:
+                    if line[0].isspace():
+                        match = regex.match(line)
+                        if match:
+                            old = match.group(2)
+                            new = match.group(3)
+                            # print('other old = "%s"' % (old))
+                            # print('other new = "%s"' % (new))
+                            class_dict[new] = old
+                    else:
+                        (old, new) = line.split(' -> ')
+                        # print('class old = "%s"' % (old))
+                        # print('class new = "%s"' % (new))
+                        class_dict = {}
+                        self.classes_dict[new] = (old, class_dict)
+
+    def lookup_class(self, new_class):
+        '''Translate a new class name to the old class name.'''
+        if new_class in self.classes_dict:
+            (old_class, class_dict) = self.classes_dict[new_class]
+            if old_class is not None:
+                return old_class
+        return None
+
+    def lookup_method(self, new_class, new_method):
+        '''Translate a new class name and a new method into the old class
+        name and the old method name.'''
+        if new_class in self.classes_dict:
+            (old_class, class_dict) = self.classes_dict[new_class]
+            if new_method in class_dict:
+                return class_dict[new_method]
+        return None
+
+
 class DexMethod:
     '''Encapsulates a method within a DEX file.'''
 
@@ -1085,9 +1136,16 @@ class DexMethod:
         self.is_virtual = is_virtual
         self.code_item = None
         self.insns = None
+        self.name_in_file = None
+        self.name = None
 
     def get_qualified_name(self):
-        return self.get_class().get_name() + self.get_name()
+        class_name = self.get_class().get_name()
+        method_name = self.get_name()
+        if class_name[-1] != ';':
+            return class_name + ':' + method_name
+        else:
+            return class_name + method_name
 
     def get_method_id(self):
         '''Get the method_id_item for this method.'''
@@ -1109,14 +1167,30 @@ class DexMethod:
         code_item = self.get_code_item()
         if code_item:
             return self.get_dex().get_code_item_index_from_code_off(
-                    code_item.get_offset())
+                code_item.get_offset())
         return -1
 
     def get_dex(self):
         return self.dex_class.get_dex()
 
+    def get_name_in_file(self):
+        '''Returns the name of the method as it is known in the current DEX
+        file (no proguard remapping)'''
+        if self.name_in_file is None:
+            self.name_in_file = self.get_dex().get_string(
+                self.get_method_id().name_idx)
+        return self.name_in_file
+
     def get_name(self):
-        return self.get_dex().get_string(self.get_method_id().name_idx)
+        if self.name is None:
+            cls_mangled = self.get_class().get_mangled_name()
+            name_in_file = self.get_name_in_file()
+            if cls_mangled and name_in_file:
+                self.name = self.get_dex().demangle_class_method_name(
+                    cls_mangled, name_in_file)
+                if self.name is None:
+                    self.name = name_in_file
+        return self.name
 
     def get_class(self):
         return self.dex_class
@@ -1151,14 +1225,27 @@ class DexMethod:
             method_type = 'virtual'
         else:
             method_type = 'direct'
-        f.write('%s method: %s%s\n' %
+        dex = self.get_dex()
+        f.write('method: (%s) %s%s\n' %
                 (method_type, self.get_class().get_name(), self.get_name()))
-        self.encoded_method.dump(f=f)
+        code_item_idx = dex.get_code_item_index_from_code_off(
+            self.encoded_method.code_off)
+        self.encoded_method.dump(f=f, prefix='    encoded_method.', flat=False)
+        method_id = dex.get_method_id(self.encoded_method.method_idx)
+        if method_id:
+            method_id.dump(f=f, prefix='    method_id.', flat=False)
+            proto_id = dex.get_proto_id(method_id.proto_idx)
+            if proto_id:
+                proto_id.dump(f=f, prefix='    proto_id.', flat=False)
         f.write('\n')
         if dump_code:
-            self.dump_code()
+            if code_item_idx >= 0:
+                code_item = dex.get_code_items()[code_item_idx]
+                f.write('    code_item[%u] @ %#8.8x:\n' % (code_item_idx,
+                        code_item.get_offset()))
+                code_item.dump(f=f, prefix='        ')
         if dump_debug_info:
-            self.dump_debug_info()
+            self.dump_debug_info(f=f, prefix='    ')
 
     def dump_code(self, f=sys.stdout):
         insns = self.get_instructions()
@@ -1171,11 +1258,13 @@ class DexMethod:
             return code_item.get_debug_info()
         return None
 
-    def dump_debug_info(self, f=sys.stdout):
+    def dump_debug_info(self, f=sys.stdout, prefix=None):
         debug_info = self.get_debug_info()
+        if prefix:
+            f.write(prefix)
         if debug_info:
-            f.write('\ndebug info:\n')
-            debug_info.dump_debug_info(f)
+            f.write('debug info @ %#8.8x:\n' % (debug_info.get_offset()))
+            debug_info.dump_debug_info(f=f, prefix=prefix)
             f.write('\n')
         else:
             f.write('no debug info\n')
@@ -1194,11 +1283,20 @@ class DexClass:
         self.class_def = class_def
         self.methods = None
         self.num_direct_methods = 0
+        self.mangled = None
+        self.demangled = None
 
     def dump(self, f=sys.stdout):
-        f.write('class: %s\n' % (self.get_name()))
-        f.write(class_def_item.get_table_header())
-        self.class_def.dump(f=f, print_name=False)
+        f.write('\nclass: %s\n' % (self.get_name()))
+        dex = self.get_dex()
+        class_def_offset = self.class_def.get_offset()
+        class_def_idx = dex.get_class_def_index_from_offset(class_def_offset)
+        f.write('    class_def[%u] @ %#8.8x:\n' % (class_def_idx,
+                                                   class_def_offset))
+        self.class_def.dump(f=f, flat=False, prefix='        ')
+        f.write('    class_data_item @ %#8.8x:\n' % (
+                self.class_def.class_data.get_offset()))
+        self.class_def.class_data.dump(f=f, flat=False, prefix='        ')
         f.write('\n')
 
     def get_type_index(self):
@@ -1208,8 +1306,22 @@ class DexClass:
     def is_abstract(self):
         return (self.class_def.access_flags & ACC_ABSTRACT) != 0
 
+    def get_mangled_name(self):
+        if self.mangled is None:
+            dex = self.get_dex()
+            self.mangled = dex.get_typename(self.class_def.class_idx)
+        return self.mangled
+
     def get_name(self):
-        return self.get_dex().get_typename(self.class_def.class_idx)
+        '''Get the demangled name for a class if we have a proguard file or
+        return the mangled name if we don't have a proguard file.'''
+        if self.demangled is None:
+            mangled = self.get_mangled_name()
+            if mangled:
+                self.demangled = self.get_dex().demangle_class_name(mangled)
+                if self.demangled is None:
+                    self.demangled = mangled
+        return self.demangled
 
     def get_dex(self):
         return self.dex
@@ -1226,11 +1338,30 @@ class DexClass:
         return self.methods
 
 
+def demangle_classname(mangled):
+    if (mangled and len(mangled) > 2 and mangled[0] == 'L' and
+            mangled[-1] == ';'):
+        return mangled[1:-1].replace('/', '.') + ':'
+    # Already demangled
+    return mangled
+
+
+def mangle_classname(demangled):
+    if (demangled and len(demangled) > 2 and
+            (demangled[0] != 'L' or demangled[-1] != ';')):
+        return 'L' + demangled.replace('.', '/') + ';'
+    # Already demangled
+    return demangled
+
+
 class File:
     '''Represents and DEX (Dalvik Executable) file'''
 
-    def __init__(self, path):
+    def __init__(self, path, proguard_path):
         self.path = path
+        self.proguard = None
+        if proguard_path and os.path.exists(proguard_path):
+            self.proguard = Progard(proguard_path)
         self.data = file_extract.FileExtract(open(self.path), '=', 4)
         self.header = header_item(self.data)
         self.map_list = None
@@ -1249,6 +1380,23 @@ class File:
         self.call_sites = None
         self.dex_classes = {}
 
+    def demangle_class_name(self, cls_mangled):
+        '''Given a mangled type name as it would appear in a DEX file like
+        "LX/JxK;", return the demangled version if we have a proguard file,
+        otherwise return the original class typename'''
+        if self.proguard:
+            cls_demangled = demangle_classname(cls_mangled)
+            if cls_demangled:
+                return self.proguard.lookup_class(cls_demangled)
+        return None
+
+    def demangle_class_method_name(self, cls_mangled, method_name):
+        if self.proguard:
+            cls_demangled = demangle_classname(cls_mangled)
+            if cls_demangled:
+                return self.proguard.lookup_method(cls_demangled, method_name)
+        return None
+
     def get_map_list(self):
         if self.map_list is None:
             self.data.push_offset_and_seek(self.header.map_off)
@@ -1266,7 +1414,9 @@ class File:
     def find_class(self, class_ref):
         class_idx = class_ref
         if isinstance(class_ref, six.string_types):
-            class_str_idx = self.find_string_idx(class_ref)
+            # Make sure the string is in 'L' <classname-with-slashes> ';'
+            class_mangled = mangle_classname(class_ref)
+            class_str_idx = self.find_string_idx(class_mangled)
             if class_str_idx >= 0:
                 class_idx = self.find_type_idx(class_str_idx)
         if isinstance(class_idx, numbers.Integral):
@@ -1321,6 +1471,12 @@ class File:
                 self.proto_ids.append(proto_id_item(self.data, self))
             self.data.pop_offset_and_seek()
         return self.proto_ids
+
+    def get_proto_id(self, proto_idx):
+        proto_ids = self.get_proto_ids()
+        if proto_idx >= 0 and proto_idx < len(proto_ids):
+            return proto_ids[proto_idx]
+        return None
 
     def get_field_ids(self):
         if self.field_ids is None:
@@ -1446,7 +1602,7 @@ class File:
                     print('The following methods have the same code:')
                     for code_item in code_items:
                         method = self.find_method_from_code_off(
-                                code_item.get_offset())
+                            code_item.get_offset())
                         if method.is_virtual:
                             print('virtual', end=' ')
                         else:
@@ -1454,6 +1610,13 @@ class File:
                         print(method.get_qualified_name())
                     # Dump the code once for all methods
                     method.dump_code()
+
+    def get_class_def_index_from_offset(self, class_def_offset):
+        class_defs = self.get_class_defs()
+        for (i, class_def) in enumerate(class_defs):
+            if class_def.get_offset() == class_def_offset:
+                return i
+        return -1
 
     def get_code_item_index_from_code_off(self, code_off):
         # Make sure the code items are created
@@ -1512,6 +1675,7 @@ class File:
 
     def dump_map_list(self, options, f=sys.stdout):
         self.get_map_list().dump(f=f)
+        f.write('\n')
 
     def dump_string_ids(self, options, f=sys.stdout):
         string_ids = self.get_string_ids()
@@ -1525,9 +1689,9 @@ class File:
     def dump_type_ids(self, options, f=sys.stdout):
         type_ids = self.get_type_ids()
         if type_ids:
-            f.write('\ntype_ids:\n')
+            f.write('\ntype_ids:\n      DESCRIPTOR_IDX\n')
             for (i, item) in enumerate(type_ids):
-                f.write('[%3u] type_id=%#8.8x ("%s")\n' %
+                f.write('[%3u] %#8.8x ("%s")\n' %
                         (i, item, self.get_string(item)))
 
     def find_type_idx(self, class_str_idx):
@@ -3737,6 +3901,10 @@ def main():
                       dest='new_encoding',
                       help='Report byte savings from potential new encodings.',
                       default=False)
+    parser.add_option('--proguard',
+                      dest='proguard',
+                      help='Specify a progard file to use for demangling.',
+                      default=None)
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -3746,12 +3914,13 @@ def main():
     total_file_size = 0
     op_name_to_size = {}
     string_counts = {}
+    i = 0
 
     for (i, path) in enumerate(files):
         print('Dex file: %s' % (path))
         file_size = os.path.getsize(path)
         total_file_size += file_size
-        dex = File(path)
+        dex = File(path, options.proguard)
         if options.class_filter:
             dex_class = dex.find_class(options.class_filter)
             if dex_class:
@@ -3765,7 +3934,7 @@ def main():
                     method.dump()
             else:
                 print('error: class definition not found for "%s"' % (
-                        options.class_filter))
+                      options.class_filter))
 
         if options.dump_header or options.dump_all:
             dex.dump_header(options)
@@ -3790,7 +3959,7 @@ def main():
             dex.dump_method_handle_items(options)
         if options.dump_code or options.debug or options.dump_all:
             dex.dump_code(options)
-        if options.dump_code_items or options.dump_all:
+        if options.dump_code_items:
             dex.dump_code_items(options)
         if (options.dump_disassembly or options.dump_stats or
                 options.check_encoding or options.new_encoding):
@@ -3826,10 +3995,10 @@ def main():
                                 op_name_to_size[op_name] += size
                             if options.check_encoding:
                                 code_bytes_inefficiently_encoded += (
-                                        dex_inst.check_encoding())
+                                    dex_inst.check_encoding())
                             if options.new_encoding:
                                 new_code_bytes_inefficiently_encoded += (
-                                        dex_inst.new_encoding())
+                                    dex_inst.new_encoding())
                         if options.check_encoding:
                             code_item_idx = method.get_code_item_index()
                             if code_item_idx >= 0:
@@ -3837,19 +4006,19 @@ def main():
                             debug_info = method.get_debug_info()
                             if debug_info:
                                 debug_info_bytes_inefficiently_encoded += (
-                                        method.check_debug_info_encoding())
+                                    method.check_debug_info_encoding())
             if options.check_encoding:
                 efficiently_encoded = True
                 if code_bytes_inefficiently_encoded > 0:
                     efficiently_encoded = False
                     total_code_bytes_inefficiently_encoded += (
-                            code_bytes_inefficiently_encoded)
+                        code_bytes_inefficiently_encoded)
                     print_code_stats(code_bytes_inefficiently_encoded,
                                      file_opcodes_byte_size, file_size)
                 if debug_info_bytes_inefficiently_encoded > 0:
                     efficiently_encoded = False
                     total_debug_info_bytes_inefficiently_encoded += (
-                            debug_info_bytes_inefficiently_encoded)
+                        debug_info_bytes_inefficiently_encoded)
                     print_debug_stats(debug_info_bytes_inefficiently_encoded,
                                       file_size)
                 # Verify that all code items are used.
@@ -3867,7 +4036,7 @@ def main():
             if options.new_encoding:
                 if new_code_bytes_inefficiently_encoded > 0:
                     total_new_code_bytes_inefficiently_encoded += (
-                            new_code_bytes_inefficiently_encoded)
+                        new_code_bytes_inefficiently_encoded)
                     print_encoding_stats(new_code_bytes_inefficiently_encoded,
                                          file_opcodes_byte_size, file_size)
                 else:
@@ -3885,7 +4054,7 @@ def main():
                     s_len + get_uleb128_byte_size(s_len)
         if duped_strings_byte_size > 0:
             print('%u bytes in duplicated strings across dex files.' % (
-                    duped_strings_byte_size))
+                  duped_strings_byte_size))
 
         print('BYTESIZE %AGE  OPCODE')
         print('======== ===== =================================')
@@ -3911,13 +4080,13 @@ def main():
                 can_use_new_encoding,
                 can_use_new_encoding + cant_use_new_encoding)
             print('%u invoke-kind opcodes could use new encoding' % (
-                    can_use_new_encoding), end='')
+                  can_use_new_encoding), end='')
             print('%u could not (%2.2f%%)' % (cant_use_new_encoding,
                                               invoke_kind_percentage))
             if total_new_code_bytes_inefficiently_encoded > 0:
                 print_encoding_stats(
-                        total_new_code_bytes_inefficiently_encoded,
-                        total_opcode_byte_size, total_file_size)
+                    total_new_code_bytes_inefficiently_encoded,
+                    total_opcode_byte_size, total_file_size)
 
 
 if __name__ == '__main__':

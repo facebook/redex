@@ -730,10 +730,13 @@ class AutoParser:
                    lookup will then be decoded into this object. See
                    "Switch Example" below for more information.
     'dump'         A function pointer that is called to dump the value. The
-                   funciton gets called with the value and the file:
+                   function gets called with the value and the file:
                         def dump(value, file):
                             ...
-
+    'dump_list'    A function pointer that is called to dump a list of values.
+                   The function gets called with the value and the file:
+                        def dump_list(value, prefix, flat, file):
+                            ...
     EXAMPLE 1
 
     If you have a structure that has a count followed by an array of items
@@ -972,7 +975,7 @@ class AutoParser:
                 v = value_fixup(data, v)
         return v
 
-    def dump_item(self, prefix, f, item, print_name, parent_path):
+    def dump_item(self, prefix, f, item, print_name, parent_path, flat):
         if 'switch' in item:
             cases = item['cases']
             switch_value = getattr(self, item['switch'])
@@ -981,44 +984,56 @@ class AutoParser:
             elif 'default' in cases:
                 case_items = cases['default']
             for case_item in case_items:
-                self.dump_item(prefix, f, case_item, print_name, parent_path)
+                self.dump_item(prefix, f, case_item, print_name, parent_path,
+                               flat)
             return
-        if 'name' not in item or 'dump' in item and not item['dump']:
+        # We skip printing an item if any of the following are true:
+        # - If there is no name (padding)
+        # - If there is a 'dump' value key/value pair with False as the value
+        if 'name' not in item or 'dump' in item and item['dump'] is False:
             return
         name = item['name']
         if not hasattr(self, name):
             return
         value = getattr(self, name)
         value_is_list = type(value) is list
-        flat = self.get_dump_flat()
-        if value_is_list:
-            if 'table_header' in item:
-                table_header = item['table_header']
-                f.write(table_header)
-                if not last_char_is_newline(table_header):
-                    f.write('\n')
-                print_name = False
-                flat = True
+        # If flat is None set its value automatically
+        if flat is None:
+            flat = self.get_dump_flat()
+            if value_is_list:
+                if 'table_header' in item:
+                    table_header = item['table_header']
+                    f.write(table_header)
+                    if not last_char_is_newline(table_header):
+                        f.write('\n')
+                    print_name = False
+                    flat = True
         if prefix is None:
             prefix = self.get_dump_prefix()
-        if prefix:
+        flat_list = value_is_list and 'flat' in item and item['flat']
+        if prefix and flat_list is False:
             f.write(prefix)
         if print_name:
-            if flat:
-                f.write(name)
-                f.write('=')
-            else:
-                f.write('%-*s' % (self.max_name_len, name))
-                f.write(' = ')
+            if not flat_list:
+                if flat:
+                    f.write(name)
+                    f.write('=')
+                else:
+                    f.write('%-*s' % (self.max_name_len, name))
+                    f.write(' = ')
         if 'dump' in item:
             item['dump'](value, f)
+            return
+        elif 'dump_list' in item:
+            item['dump_list'](value, prefix, flat, f)
+            return
         else:
             if value_is_list:
                 if parent_path is None:
                     item_path = name
                 else:
                     item_path = parent_path + '.' + name
-                self.dump_values(f, item, value, print_name, item_path)
+                self.dump_values(f, item, value, print_name, item_path, prefix)
             else:
                 if 'dump_width' in item:
                     dump_width = item['dump_width']
@@ -1031,10 +1046,11 @@ class AutoParser:
                         f.write(' ' * (dump_width - s_len))
                 else:
                     self.dump_value(f, item, value, print_name, parent_path)
-        if flat:
-            f.write(' ')
-        else:
-            f.write('\n')
+        if not flat_list:
+            if flat:
+                f.write(' ')
+            else:
+                f.write('\n')
 
     def dump_value(self, f, item, value, print_name, parent_path):
         if value is None:
@@ -1067,8 +1083,18 @@ class AutoParser:
             raise ValueError("item's with names must have a 'type' or "
                              "'class' key/value pair")
 
-    def dump_values(self, f, item, values, print_name, parent_path):
+    def dump_values(self, f, item, values, print_name, parent_path, prefix):
+        if len(values) == 0:
+            if 'flat' in item and item['flat']:
+                if prefix:
+                    f.write(prefix)
+                if parent_path:
+                    f.write(parent_path)
+            f.write('[]\n')
+            return
         flat = self.get_dump_flat()
+        if flat is False and 'flat' in item:
+            flat = item['flat']
         count = len(values)
         if count > 0:
             index_width = 1
@@ -1086,24 +1112,32 @@ class AutoParser:
                     for line in table_header_lines:
                         f.write(' ' * (index_width + 3))
                         f.write(line)
-            index_format = '[%%%uu] ' % (index_width)
+            index_format = '[%%%uu]' % (index_width)
+            if prefix is None:
+                prefix = ''
             for (i, value) in enumerate(values):
                 if flat:
+                    if prefix:
+                        f.write(prefix)
+                    if parent_path:
+                        f.write(parent_path)
                     f.write(index_format % (i))
+                    f.write(' = ')
                 else:
-                    f.write('\n%s[%3u]\n' % (parent_path, i))
+                    format = '\n%s%s' + index_format + '\n'
+                    f.write(format % (prefix, parent_path, i))
                 self.dump_value(f, item, value, print_name, parent_path)
                 f.write('\n')
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True,
-             parent_path=None):
+             parent_path=None, flat=None):
         header = self.get_dump_header()
         if header:
             f.write(header)
             if not last_char_is_newline(header):
                 f.write('\n')
         for item in self.items:
-            self.dump_item(prefix, f, item, print_name, parent_path)
+            self.dump_item(prefix, f, item, print_name, parent_path, flat)
 
     def read_count_from_item(self, item):
         if 'attr_count' in item:
