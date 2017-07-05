@@ -9,8 +9,8 @@
 
 #include "VirtualScope.h"
 #include "Creators.h"
-#include "DexUtil.h"
 #include "DexAccess.h"
+#include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -169,10 +169,9 @@ using BaseIntfSigs =
     std::map<const DexString*, IntfProtoMap, dexstrings_comparator>;
 
 // map to track signatures as (name, sig)
-using BaseSigs = std::map<
-    const DexString*,
-    std::set<const DexProto*, dexprotos_comparator>,
-    dexstrings_comparator>;
+using BaseSigs = std::map<const DexString*,
+                          std::set<const DexProto*, dexprotos_comparator>,
+                          dexstrings_comparator>;
 
 /**
  * Create a BaseSig which is the set of method definitions in a type.
@@ -191,9 +190,13 @@ BaseSigs load_base_sigs(SignatureMap& sig_map) {
  * VirtualScope merge functions.
  */
 void merge(VirtualScope& scope, const VirtualScope& another) {
-  TRACE(VIRT, 3, "merge scopes %s, %s - %s, %s\n",
-      SHOW(scope.type), SHOW(scope.methods[0].first),
-      SHOW(another.type), SHOW(another.methods[0].first));
+  TRACE(VIRT,
+        4,
+        "merge scopes %s, %s - %s, %s\n",
+        SHOW(scope.type),
+        SHOW(scope.methods[0].first),
+        SHOW(another.type),
+        SHOW(another.methods[0].first));
   for (const auto& meth : another.methods) {
     scope.methods.push_back(meth);
   }
@@ -208,7 +211,7 @@ void merge(VirtualScope& scope, const VirtualScope& another) {
 void escape_all(VirtualScopes& scopes) {
   for (auto& scope : scopes) {
     for (auto& vmeth : scope.methods) {
-      TRACE(VIRT, 5, "ESCAPED %s\n", SHOW(vmeth.first));
+      TRACE(VIRT, 6, "ESCAPED %s\n", SHOW(vmeth.first));
       vmeth.second |= ESCAPED;
     }
   }
@@ -231,11 +234,10 @@ void escape_all(SignatureMap& sig_map) {
  * Mark VirtualFlags at each level walking up the hierarchy.
  * Walk through all the method definitions in base.
  */
-void mark_methods(
-    const DexType* type,
-    SignatureMap& sig_map,
-    const BaseSigs& base_sigs,
-    bool escape) {
+void mark_methods(const DexType* type,
+                  SignatureMap& sig_map,
+                  const BaseSigs& base_sigs,
+                  bool escape) {
   for (const auto& protos_it : base_sigs) {
     const auto name = protos_it.first;
     for (const auto& proto : protos_it.second) {
@@ -245,12 +247,13 @@ void mark_methods(
       // mark final and override accordingly
       auto& scope = scopes[0];
       if (scope.methods.size() == 1) {
-        TRACE(VIRT, 5, "FINAL %s\n", SHOW(scope.methods[0].first));
+        TRACE(VIRT, 6, "FINAL %s\n", SHOW(scope.methods[0].first));
         scope.methods[0].second |= FINAL;
       } else {
         for (auto& meth = ++scopes[0].methods.begin();
-            meth != scope.methods.end(); meth++) {
-          TRACE(VIRT, 5, "OVERRIDE %s\n", SHOW((*meth).first));
+             meth != scope.methods.end();
+             meth++) {
+          TRACE(VIRT, 6, "OVERRIDE %s\n", SHOW((*meth).first));
           (*meth).second |= OVERRIDE;
         }
       }
@@ -259,7 +262,7 @@ void mark_methods(
       if (scopes.size() > 1) {
         for (auto& scope = ++scopes.begin(); scope != scopes.end(); scope++) {
           always_assert((*scope).methods.size() > 0);
-          TRACE(VIRT, 5, "OVERRIDE %s\n", SHOW((*scope).methods[0].first));
+          TRACE(VIRT, 6, "OVERRIDE %s\n", SHOW((*scope).methods[0].first));
           (*scope).methods[0].second |= OVERRIDE;
         }
       }
@@ -278,10 +281,9 @@ void mark_methods(
  * this step would build the entry for I.m() adding all the methods
  * in the VirtualScope for A.m().
  */
-void build_interface_scope(
-    const DexType* type,
-    SignatureMap& sig_map,
-    const BaseIntfSigs& intf_sig_map) {
+void build_interface_scope(const DexType* type,
+                           SignatureMap& sig_map,
+                           const BaseIntfSigs& intf_sig_map) {
   for (const auto& proto_it : intf_sig_map) {
     for (const auto& intfs_it : proto_it.second) {
       auto& scopes = sig_map[proto_it.first][intfs_it.first];
@@ -289,7 +291,7 @@ void build_interface_scope(
       always_assert(scopes[0].type == type);
       // mark impl all the class virtual scope
       for (auto& meth : scopes[0].methods) {
-        TRACE(VIRT, 5, "IMPL %s\n", SHOW(meth.first));
+        TRACE(VIRT, 6, "IMPL %s\n", SHOW(meth.first));
         meth.second |= IMPL;
       }
       // remaining scopes must be for interfaces so they are
@@ -314,29 +316,30 @@ void build_interface_scope(
  * Interface methods in base don't have an entry yet, that will be build later
  * because it's a straight copy of the class virtual scope.
  */
-void merge(
-    const BaseSigs& base_sigs,
-    const BaseIntfSigs& base_intf_sig_map,
-    SignatureMap& base_sig_map,
-    const SignatureMap& derived_sig_map) {
+void merge(const BaseSigs& base_sigs,
+           const BaseIntfSigs& base_intf_sig_map,
+           SignatureMap& base_sig_map,
+           const SignatureMap& derived_sig_map) {
 
   // Helpers
 
   // is_base_sig(name, proto) - is the (name, proto) a definition in base
-  const auto is_base_sig =
-      [&](const DexString* name, const DexProto* proto) {
-        TRACE(VIRT, 4, "/check base sigs for %s:%s\n",
-          SHOW(name), SHOW(proto));
-        const auto sigs = base_sigs.find(name);
-        if (sigs == base_sigs.end()) return false;
-        return sigs->second.count(proto) > 0;
-      };
+  const auto is_base_sig = [&](const DexString* name, const DexProto* proto) {
+    TRACE(VIRT, 5, "/check base sigs for %s:%s\n", SHOW(name), SHOW(proto));
+    const auto sigs = base_sigs.find(name);
+    if (sigs == base_sigs.end()) return false;
+    return sigs->second.count(proto) > 0;
+  };
 
   // is_base_intf_sig(name, proto) - is the (name, proto) an interface in base
   const auto is_base_intf_sig =
       [&](const DexString* name, const DexProto* proto, const DexType* intf) {
-        TRACE(VIRT, 4, "/check base intf (%s) sigs for %s:%s\n",
-            SHOW(intf), SHOW(name), SHOW(proto));
+        TRACE(VIRT,
+              5,
+              "/check base intf (%s) sigs for %s:%s\n",
+              SHOW(intf),
+              SHOW(name),
+              SHOW(proto));
         const auto& sigs = base_intf_sig_map.find(name);
         if (sigs == base_intf_sig_map.end()) return false;
         const auto& intfs_it = sigs->second.find(proto);
@@ -352,14 +355,21 @@ void merge(
       const auto proto = derived_scopes_it.first;
       // the signature in derived does not exists in base
       if (!is_base_sig(name, proto)) {
-        TRACE(VIRT, 3, "- no scope (%s:%s) in base, copy over\n",
-            SHOW(name), SHOW(proto));
+        TRACE(VIRT,
+              4,
+              "- no scope (%s:%s) in base, copy over\n",
+              SHOW(name),
+              SHOW(proto));
         // not a known signature in original base, copy over
         for (const auto& scope : derived_scopes_it.second) {
-          TRACE(VIRT, 3, "- copy %s (%s:%s): (%ld) %s\n",
-              SHOW(scope.type), SHOW(name), SHOW(proto),
-              scope.methods.size(),
-              SHOW(scope.methods[0].first));
+          TRACE(VIRT,
+                4,
+                "- copy %s (%s:%s): (%ld) %s\n",
+                SHOW(scope.type),
+                SHOW(name),
+                SHOW(proto),
+                scope.methods.size(),
+                SHOW(scope.methods[0].first));
           base_sig_map[name][proto].push_back(scope);
         }
         continue;
@@ -370,44 +380,64 @@ void merge(
       // first scope in base_sig_map must be that of the type under
       // analysis because we built it first and added to the empty vector
       always_assert(base_sig_map[name][proto].size() > 0);
-      TRACE(VIRT, 3,
-          "- found existing scopes for %s:%s (%ld) - first: %s, %ld, %ld\n",
-          SHOW(name), SHOW(proto), base_sig_map[name][proto].size(),
-          SHOW(base_sig_map[name][proto][0].type),
-          base_sig_map[name][proto][0].methods.size(),
-          base_sig_map[name][proto][0].interfaces.size());
-      always_assert(base_sig_map[name][proto][0].type == get_object_type() ||
+      TRACE(VIRT,
+            4,
+            "- found existing scopes for %s:%s (%ld) - first: %s, %ld, %ld\n",
+            SHOW(name),
+            SHOW(proto),
+            base_sig_map[name][proto].size(),
+            SHOW(base_sig_map[name][proto][0].type),
+            base_sig_map[name][proto][0].methods.size(),
+            base_sig_map[name][proto][0].interfaces.size());
+      always_assert(
+          base_sig_map[name][proto][0].type == get_object_type() ||
           !is_interface(type_class(base_sig_map[name][proto][0].type)));
       // walk every scope in derived that we have to merge
-      TRACE(VIRT, 3, "-- walking scopes\n");
+      TRACE(VIRT, 4, "-- walking scopes\n");
       for (const auto& scope : derived_scopes_it.second) {
         // if the scope was for a class (!interface) we merge
         // with that of base which is now the top definition
-        TRACE(VIRT, 3, "-- checking scope type %s(%ld)\n",
-            SHOW(scope.type), scope.methods.size());
-        TRACE(VIRT, 3, "-- is interface 0x%X %d\n", scope.type,
-            scope.type != get_object_type() &&
-            is_interface(type_class(scope.type)));
+        TRACE(VIRT,
+              4,
+              "-- checking scope type %s(%ld)\n",
+              SHOW(scope.type),
+              scope.methods.size());
+        TRACE(VIRT,
+              4,
+              "-- is interface 0x%X %d\n",
+              scope.type,
+              scope.type != get_object_type() &&
+                  is_interface(type_class(scope.type)));
         if (scope.type == get_object_type() ||
             !is_interface(type_class(scope.type))) {
-          TRACE(VIRT, 3, "-- merging with base scopes %s(%ld) : %s\n",
-              SHOW(base_sig_map[name][proto][0].type),
-              base_sig_map[name][proto][0].methods.size(),
-              SHOW(base_sig_map[name][proto][0].methods[0].first));
+          TRACE(VIRT,
+                4,
+                "-- merging with base scopes %s(%ld) : %s\n",
+                SHOW(base_sig_map[name][proto][0].type),
+                base_sig_map[name][proto][0].methods.size(),
+                SHOW(base_sig_map[name][proto][0].methods[0].first));
           merge(base_sig_map[name][proto][0], scope);
           continue;
         }
         // interface case. If derived was for an interface in base
         // do nothing because we will create those entries later
         if (!is_base_intf_sig(name, proto, scope.type)) {
-          TRACE(VIRT, 3, "-- unimplemented interface %s:%s - %s, %s\n",
-              SHOW(name), SHOW(proto),
-              SHOW(scope.type), SHOW(scope.methods[0].first));
+          TRACE(VIRT,
+                4,
+                "-- unimplemented interface %s:%s - %s, %s\n",
+                SHOW(name),
+                SHOW(proto),
+                SHOW(scope.type),
+                SHOW(scope.methods[0].first));
           base_sig_map[name][proto].push_back(scope);
           continue;
         }
-        TRACE(VIRT, 3, "-- implemented interface %s:%s - %s\n",
-            SHOW(name), SHOW(proto), SHOW(scope.type));
+        TRACE(VIRT,
+              4,
+              "-- implemented interface %s:%s - %s\n",
+              SHOW(name),
+              SHOW(proto),
+              SHOW(scope.type));
       }
     }
   }
@@ -422,26 +452,27 @@ void merge(
  * The ref may not exist yet and we will create it with make_method.
  * That is not causing issues because we are not changing that ref ever.
  */
-DexMethod* make_miranda(
-    const DexType* type, const DexString* name, const DexProto* proto) {
+DexMethod* make_miranda(const DexType* type,
+                        const DexString* name,
+                        const DexProto* proto) {
   auto miranda = DexMethod::make_method(const_cast<DexType*>(type),
-      const_cast<DexString*>(name), const_cast<DexProto*>(proto));
+                                        const_cast<DexString*>(name),
+                                        const_cast<DexProto*>(proto));
   // The next assert may fire because we don't delete DexMethod from the
   // cache and we may find one we have deleted and it was a def.
   // Come up with a better assert story
-  //always_assert(!miranda->is_def());
+  // always_assert(!miranda->is_def());
   return miranda;
 }
 
-bool load_interfaces_methods(
-    const std::deque<DexType*>&, BaseIntfSigs&);
+bool load_interfaces_methods(const std::deque<DexType*>&, BaseIntfSigs&);
 
 /**
  * Load methods for a given interface and its super interfaces.
  * Return true if any interface escapes (no DexClass*).
  */
-bool load_interface_methods(
-    const DexClass* intf_cls, BaseIntfSigs& intf_methods) {
+bool load_interface_methods(const DexClass* intf_cls,
+                            BaseIntfSigs& intf_methods) {
   bool escaped = false;
   const auto& interfaces = intf_cls->get_interfaces()->get_type_list();
   if (interfaces.size() > 0) {
@@ -460,14 +491,13 @@ bool load_interface_methods(
  * Load methods for a list of interfaces.
  * If any interface escapes (no DexClass*) return true.
  */
-bool load_interfaces_methods(
-    const std::deque<DexType*>& interfaces,
-    BaseIntfSigs& intf_methods) {
+bool load_interfaces_methods(const std::deque<DexType*>& interfaces,
+                             BaseIntfSigs& intf_methods) {
   bool escaped = false;
   for (const auto& intf : interfaces) {
     auto intf_cls = type_class(intf);
     if (intf_cls == nullptr) {
-      TRACE(VIRT, 4, "[Unknown interface: %s]\n", SHOW(intf));
+      TRACE(VIRT, 5, "[Unknown interface: %s]\n", SHOW(intf));
       escaped = true;
       continue;
     }
@@ -481,8 +511,7 @@ bool load_interfaces_methods(
 /**
  * Get all interface methods for a given type.
  */
-bool get_interface_methods(
-    const DexType* type, BaseIntfSigs& intf_methods) {
+bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
   always_assert_log(intf_methods.size() == 0, "intf_methods is an out param");
   // REVIEW: should we always have a DexClass for java.lang.Object?
   if (type == get_object_type()) return false;
@@ -508,10 +537,9 @@ bool get_interface_methods(
  * in this case we create an entry for A.m() and mark it miranda
  * even though the method did not exist. It will not be a def (!is_def()).
  */
-bool load_interfaces(
-    const DexType* type,
-    SignatureMap& sig_map,
-    BaseIntfSigs& intf_sig_map) {
+bool load_interfaces(const DexType* type,
+                     SignatureMap& sig_map,
+                     BaseIntfSigs& intf_sig_map) {
   bool escaped = get_interface_methods(type, intf_sig_map);
   const auto intf_flags = MIRANDA | IMPL;
   // sig_map contains only the virtual methods in the class and
@@ -542,8 +570,8 @@ bool load_interfaces(
       }
       // add the implemented interfaces to the class
       // virtual scope
-      sig_map[name][proto][0].interfaces.insert(
-          proto_it.second.begin(), proto_it.second.end());
+      sig_map[name][proto][0].interfaces.insert(proto_it.second.begin(),
+                                                proto_it.second.end());
     }
   }
   return escaped;
@@ -607,45 +635,44 @@ void load_methods(const DexType* type, SignatureMap& sig_map) {
  * ESCAPED but methods in D are not, so in this case they are just FINAL and
  * effectively D.k() would be non virtual as opposed to C.k() which is ESCAPED.
  */
-bool build_signature_map(
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    SignatureMap& sig_map) {
+bool build_signature_map(const ClassHierarchy& hierarchy,
+                         const DexType* type,
+                         SignatureMap& sig_map) {
   always_assert_log(sig_map.size() == 0,
-      "intf_methods and children_methods are out params");
+                    "intf_methods and children_methods are out params");
   const TypeSet& children = hierarchy.at(type);
-  TRACE(VIRT, 2, "* Visit %s\n", SHOW(type));
+  TRACE(VIRT, 3, "* Visit %s\n", SHOW(type));
 
   load_methods(type, sig_map);
   // will hold all the signature introduced by interfaces in type
   BaseIntfSigs intf_sig_map;
   bool escape_down = load_interfaces(type, sig_map, intf_sig_map);
   BaseSigs base_sigs = load_base_sigs(sig_map);
-  TRACE(VIRT, 2, "* Sig map computed for %s\n", SHOW(type));
+  TRACE(VIRT, 3, "* Sig map computed for %s\n", SHOW(type));
 
   // recurse through every child to collect all methods
   // and interface methods under type
   bool escape_up = false;
   for (const auto& child : children) {
     SignatureMap child_sig_map;
-    escape_up = build_signature_map(
-        hierarchy,
-        child,
-        child_sig_map) || escape_up;
-    TRACE(VIRT, 2, "* Merging sig map of %s with child %s\n",
-        SHOW(type), SHOW(child));
+    escape_up =
+        build_signature_map(hierarchy, child, child_sig_map) || escape_up;
+    TRACE(VIRT,
+          3,
+          "* Merging sig map of %s with child %s\n",
+          SHOW(type),
+          SHOW(child));
     merge(base_sigs, intf_sig_map, sig_map, child_sig_map);
   }
 
-  TRACE(VIRT, 2, "* Marking methods at %s\n", SHOW(type));
+  TRACE(VIRT, 3, "* Marking methods at %s\n", SHOW(type));
   mark_methods(type, sig_map, base_sigs, escape_up);
   build_interface_scope(type, sig_map, intf_sig_map);
   if (escape_down) {
     escape_all(sig_map);
   }
 
-  TRACE(VIRT, 2, "* Visited %s(%d, %d)\n",
-      SHOW(type), escape_up, escape_down);
+  TRACE(VIRT, 3, "* Visited %s(%d, %d)\n", SHOW(type), escape_up, escape_down);
   return escape_up | escape_down;
 }
 
@@ -664,23 +691,20 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
-const VirtualScope* find_rooted_scope(
-    const SignatureMap& sig_map,
-    const DexType* type,
-    const DexMethod* meth) {
+const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
+                                      const DexType* type,
+                                      const DexMethod* meth) {
   const auto& protos = sig_map.find(meth->get_name());
   always_assert(protos != sig_map.end());
   const auto& scopes = protos->second.find(meth->get_proto());
   always_assert(scopes != protos->second.end());
   for (const auto& scope : scopes->second) {
-    if (scope.type == type &&
-        signatures_match(scope.methods[0].first, meth)) {
+    if (scope.type == type && signatures_match(scope.methods[0].first, meth)) {
       return &scope;
     }
   }
   return nullptr;
 }
-
 
 /**
  * Find all interface scopes rooted at the class provided.
@@ -690,11 +714,10 @@ const VirtualScope* find_rooted_scope(
  * class B entends A { public void m() {} }
  * Class A will have a virtual scope for m().
  */
-void get_rooted_interface_scope(
-    const SignatureMap& sig_map,
-    const DexType* type,
-    const DexClass* cls,
-    Scopes& cls_scopes) {
+void get_rooted_interface_scope(const SignatureMap& sig_map,
+                                const DexType* type,
+                                const DexClass* cls,
+                                Scopes& cls_scopes) {
   const auto& intfs = cls->get_interfaces()->get_type_list();
   for (const auto& intf : intfs) {
     const DexClass* intf_cls = type_class(intf);
@@ -713,10 +736,12 @@ void get_rooted_interface_scope(
           }
           if (already_found) continue;
         }
-        TRACE(VIRT, 9, "add rooted interface scope for %s (%s) on %s\n",
-            show_deobfuscated(meth).c_str(),
-            SHOW(meth->get_name()),
-            SHOW(type));
+        TRACE(VIRT,
+              9,
+              "add rooted interface scope for %s (%s) on %s\n",
+              show_deobfuscated(meth).c_str(),
+              SHOW(meth->get_name()),
+              SHOW(type));
         cls_scopes[type].emplace_back(scope);
       }
     }
@@ -728,10 +753,9 @@ void get_rooted_interface_scope(
  * Find all scopes rooted to a given type and adds it to
  * ClassScope for the given type.
  */
-void get_root_scopes(
-    const SignatureMap& sig_map,
-    const DexType* type,
-    Scopes& cls_scopes) {
+void get_root_scopes(const SignatureMap& sig_map,
+                     const DexType* type,
+                     Scopes& cls_scopes) {
   const std::vector<DexMethod*>& methods = get_vmethods(type);
   TRACE(VIRT, 9, "found %ld vmethods for %s\n", methods.size(), SHOW(type));
   for (const auto meth : methods) {
@@ -750,7 +774,7 @@ void get_root_scopes(
   get_rooted_interface_scope(sig_map, type, type_class(type), cls_scopes);
 }
 
-}
+} // namespace
 
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
   Timer("Signature Map");
@@ -770,8 +794,8 @@ const std::vector<DexMethod*>& get_vmethods(const DexType* type) {
   return cls->get_vmethods();
 }
 
-const VirtualScope& find_virtual_scope(
-    const SignatureMap& sig_map, const DexMethod* meth) {
+const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
+                                       const DexMethod* meth) {
   const auto& protos = sig_map.find(meth->get_name());
   always_assert(protos != sig_map.end());
   const auto& scopes = protos->second.find(meth->get_proto());
@@ -781,8 +805,7 @@ const VirtualScope& find_virtual_scope(
     if (scope.type == get_object_type()) return scope;
     if (is_subclass(scope.type, meth_type)) return scope;
   }
-  always_assert_log(false,
-      "unreachable. Scope not found for %s\n", SHOW(meth));
+  always_assert_log(false, "unreachable. Scope not found for %s\n", SHOW(meth));
 }
 
 bool can_rename_scope(const VirtualScope* scope) {
@@ -794,8 +817,8 @@ bool can_rename_scope(const VirtualScope* scope) {
   return true;
 }
 
-std::vector<const DexMethod*> select_from(
-    const VirtualScope* scope, const DexType* type) {
+std::vector<const DexMethod*> select_from(const VirtualScope* scope,
+                                          const DexType* type) {
   std::vector<const DexMethod*> refined_scope;
   std::unordered_map<const DexType*, DexMethod*> non_child_methods;
   bool found_root_method = false;

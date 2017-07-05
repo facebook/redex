@@ -229,11 +229,24 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
   return ret;
 }
 
-void verify_and_split(const std::vector<DexMethod*>& candidates,
-                      std::unordered_set<DexMethod*>& using_this,
-                      std::unordered_set<DexMethod*>& not_using_this) {
+} // namespace
+
+void MethodDevirtualizer::verify_and_split(
+    const std::vector<DexMethod*>& candidates,
+    std::unordered_set<DexMethod*>& using_this,
+    std::unordered_set<DexMethod*>& not_using_this) {
   for (const auto m : candidates) {
-    if (keep(m) || m->is_external() || is_abstract(m)) {
+    if (!m_config.ignore_keep && keep(m)) {
+      TRACE(VIRT, 2, "failed to devirt method %s: keep %d\n", SHOW(m), keep(m));
+      continue;
+    }
+    if (m->is_external() || is_abstract(m)) {
+      TRACE(VIRT,
+            2,
+            "failed to devirt method %s: external %d abstract %d\n",
+            SHOW(m),
+            m->is_external(),
+            is_abstract(m));
       continue;
     }
     if (uses_this(m)) {
@@ -243,8 +256,6 @@ void verify_and_split(const std::vector<DexMethod*>& candidates,
     }
   }
 }
-
-} // namespace
 
 void MethodDevirtualizer::staticize_methods_not_using_this(
     const std::vector<DexClass*>& scope,

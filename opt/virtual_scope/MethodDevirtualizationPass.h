@@ -28,6 +28,7 @@ class MethodDevirtualizationPass : public Pass {
     pc.get("staticize_dmethods_using_this",
            false,
            m_staticize_dmethods_using_this);
+    pc.get("ignore_keep", false, m_ignore_keep);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -37,4 +38,5 @@ class MethodDevirtualizationPass : public Pass {
   bool m_staticize_vmethods_using_this;
   bool m_staticize_dmethods_not_using_this;
   bool m_staticize_dmethods_using_this;
+  bool m_ignore_keep;
 };
