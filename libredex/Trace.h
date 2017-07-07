@@ -8,6 +8,7 @@
  */
 
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "Util.h"
@@ -102,4 +103,5 @@ struct TraceContext {
   ~TraceContext() { s_current_method.clear(); }
 
   thread_local static std::string s_current_method;
+  static std::mutex s_trace_mutex;
 };

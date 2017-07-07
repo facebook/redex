@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -68,6 +69,7 @@ struct Tracer {
         return;
       }
     }
+    std::lock_guard<std::mutex> guard(TraceContext::s_trace_mutex);
     if (m_show_timestamps) {
       char buf[26];
       auto t = time(nullptr);
@@ -157,3 +159,4 @@ void trace(TraceModule module, int level, const char* fmt, ...) {
 }
 
 thread_local std::string TraceContext::s_current_method;
+std::mutex TraceContext::s_trace_mutex;
