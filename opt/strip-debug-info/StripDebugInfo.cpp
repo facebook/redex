@@ -3,8 +3,8 @@
 #include "StripDebugInfo.h"
 
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -15,14 +15,13 @@ namespace {
 constexpr const char* METRIC_NUM_MATCHES = "num_method_matches";
 constexpr const char* METRIC_POS_DROPPED = "num_pos_dropped";
 constexpr const char* METRIC_VAR_DROPPED = "num_var_dropped";
+constexpr const char* METRIC_PROLOGUE_DROPPED = "num_prologue_dropped";
+constexpr const char* METRIC_EPILOGUE_DROPPED = "num_epilogue_dropped";
+constexpr const char* METRIC_EMPTY_DROPPED = "num_empty_dropped";
 
-static int num_matches = 0;
-static int num_pos_dropped = 0;
-static int num_var_dropped = 0;
-
-bool should_strip(const char* str,
-    std::vector<std::string>& cls_patterns) {
-  for (auto p : cls_patterns) {
+bool pattern_matches(const char* str,
+                     const std::vector<std::string>& patterns) {
+  for (const auto& p : patterns) {
     auto substr = strstr(str, p.c_str());
     if (substr != nullptr) {
       return true;
@@ -31,82 +30,122 @@ bool should_strip(const char* str,
   return false;
 }
 
-void strip_src_files(Scope& scope, bool drop_src_files) {
-  if (drop_src_files) {
-    TRACE(DBGSTRIP, 1, "dropping src file strings\n");
-    for (auto& dex : scope) {
-      dex->set_source_file(nullptr);
+} // namespace
+
+bool StripDebugInfoPass::method_passes_filter(DexMethod* meth) const {
+  return !m_use_whitelist ||
+         pattern_matches(meth->get_class()->get_name()->c_str(),
+                         m_cls_patterns) ||
+         pattern_matches(meth->get_name()->c_str(), m_meth_patterns);
+}
+
+bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
+  bool remove = false;
+  if (mei.type == MFLOW_DEBUG) {
+    auto op = mei.dbgop->opcode();
+    switch (op) {
+    case DBG_START_LOCAL:
+    case DBG_START_LOCAL_EXTENDED:
+    case DBG_END_LOCAL:
+    case DBG_RESTART_LOCAL:
+      if (drop_local_variables()) {
+        ++m_num_var_dropped;
+        remove = true;
+      }
+      break;
+    case DBG_SET_PROLOGUE_END:
+      if (drop_prologue()) {
+        ++m_num_prologue_dropped;
+        remove = true;
+      }
+      break;
+    case DBG_SET_EPILOGUE_BEGIN:
+      if (drop_epilogue()) {
+        ++m_num_epilogue_dropped;
+        remove = true;
+      }
+      break;
+    default:
+      break;
+    }
+  } else if (mei.type == MFLOW_POSITION) {
+    if (drop_line_numbers()) {
+      ++m_num_pos_dropped;
+      remove = true;
     }
   }
+  return remove;
 }
-
-void strip_debug_info(Scope& scope,
-    bool use_whitelist,
-    std::vector<std::string>& cls_patterns,
-    std::vector<std::string>& meth_patterns,
-    bool drop_all_dbg_info,
-    bool drop_local_variables,
-    bool drop_line_numbers) {
-  walk_methods(
-      scope,
-      [&](DexMethod* meth) {
-        if (!meth->get_code()) return;
-        if (!use_whitelist ||
-          should_strip(meth->get_class()->get_name()->c_str(), cls_patterns) ||
-          should_strip(meth->get_name()->c_str(), meth_patterns)) {
-          if (drop_all_dbg_info) {
-            meth->get_code()->release_debug_item();
-            num_matches++;
-          } else if (drop_local_variables || drop_line_numbers) {
-            auto dbg_item = meth->get_code()->get_debug_item();
-            if (dbg_item) {
-              dbg_item->remove_parameter_names();
-              auto& dbg_entries = dbg_item->get_entries();
-              std::vector<DexDebugEntry> filtered_list;
-              for (auto& entry : dbg_entries) {
-                if (entry.type == DexDebugEntryType::Position &&
-                  !drop_line_numbers) {
-                  filtered_list.push_back(std::move(entry));
-                } else if (entry.type == DexDebugEntryType::Instruction &&
-                  !drop_local_variables) {
-                  filtered_list.push_back(std::move(entry));
-                } else if (entry.type == DexDebugEntryType::Position &&
-                  drop_line_numbers) {
-                  num_pos_dropped++;
-                } else if (entry.type == DexDebugEntryType::Instruction &&
-                  drop_local_variables) {
-                  num_var_dropped++;
-                }
-              }
-              dbg_item->set_entries(std::move(filtered_list));
-            }
-          }
-        }
-      });
-}
-
-}
-
-void StripDebugInfoPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void StripDebugInfoPass::run_pass(DexStoresVector& stores,
+                                  ConfigFiles& cfg,
+                                  PassManager& mgr) {
+  m_num_matches = 0;
+  m_num_pos_dropped = 0;
+  m_num_var_dropped = 0;
+  m_num_prologue_dropped = 0;
+  m_num_epilogue_dropped = 0;
+  m_num_empty_dropped = 0;
   auto scope = build_class_scope(stores);
-  strip_debug_info(scope,
-      m_use_whitelist,
-      m_cls_patterns,
-      m_meth_patterns,
-      m_drop_all_dbg_info,
-      m_drop_local_variables,
-      m_drop_line_nrs);
+  walk_methods(scope, [&](DexMethod* meth) {
+    IRCode* code = meth->get_code();
+    if (!code) return;
+    if (!method_passes_filter(meth)) return;
+    ++m_num_matches;
+    bool debug_info_empty = true;
 
-  TRACE(DBGSTRIP, 1, "matched on %d methods. Removed %d dbg line entries and %d dbg local var entries\n",
-      num_matches,
-      num_pos_dropped,
-      num_var_dropped);
+    for (auto it = code->begin(); it != code->end();) {
+      const auto& mei = *it;
+      if (should_remove(mei)) {
+        it = code->erase(it);
+      } else {
+        switch (mei.type) {
+        case MFLOW_DEBUG:
+          // Any debug information op other than an end sequence means
+          // we have debug info.
+          if (mei.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
+          break;
+        case MFLOW_POSITION:
+          // Any line position entry means we have debug info.
+          debug_info_empty = false;
+          break;
+        default:
+          break;
+        }
+        ++it;
+      }
+    }
 
-  mgr.incr_metric(METRIC_NUM_MATCHES, num_matches);
-  mgr.incr_metric(METRIC_POS_DROPPED, num_pos_dropped);
-  mgr.incr_metric(METRIC_VAR_DROPPED, num_var_dropped);
+    if (m_drop_all_dbg_info ||
+        (debug_info_empty && m_drop_all_dbg_info_if_empty)) {
+      ++m_num_empty_dropped;
+      code->release_debug_item();
+    }
+  });
 
-  strip_src_files(scope, m_drop_src_files);
+  TRACE(DBGSTRIP,
+        1,
+        "matched on %d methods. Removed %d dbg line entries, %d dbg local var "
+        "entries, %d dbg prologue start entries, %d "
+        "epilogue end entries and %u empty dbg tables.\n",
+        m_num_matches,
+        m_num_pos_dropped,
+        m_num_var_dropped,
+        m_num_prologue_dropped,
+        m_num_epilogue_dropped,
+        m_num_empty_dropped);
+
+  mgr.incr_metric(METRIC_NUM_MATCHES, m_num_matches);
+  mgr.incr_metric(METRIC_POS_DROPPED, m_num_pos_dropped);
+  mgr.incr_metric(METRIC_VAR_DROPPED, m_num_var_dropped);
+  mgr.incr_metric(METRIC_PROLOGUE_DROPPED, m_num_prologue_dropped);
+  mgr.incr_metric(METRIC_EPILOGUE_DROPPED, m_num_epilogue_dropped);
+  mgr.incr_metric(METRIC_EMPTY_DROPPED, m_num_empty_dropped);
+
+  if (m_drop_src_files) {
+    TRACE(DBGSTRIP, 1, "dropping src file strings\n");
+    for (auto& dex : scope)
+      dex->set_source_file(nullptr);
+  }
 }
 
 static StripDebugInfoPass s_pass;
