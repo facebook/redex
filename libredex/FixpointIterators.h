@@ -209,6 +209,20 @@ class MonotonicFixpointIterator {
   Domain get_exit_state_at(const NodeId& node) const {
     std::lock_guard<std::recursive_mutex> guard(m_lock);
     auto it = m_exit_states.find(node);
+    // It's impossible to get rid of this condition by initializing all exit
+    // states to _|_ prior to starting the fixpoint iteration. The reason is
+    // that we only have a partial view of the control-flow graph, i.e., all
+    // nodes that are reachable from the root. We may have control-flow graphs
+    // with unreachable nodes pointing to reachable ones, as follows:
+    //
+    //               root
+    //           U    |
+    //           |    V
+    //           +--> A
+    //
+    // When computing the entry state of A, we perform the join of the exit
+    // states of all its predecessors, which include U. Since U is invisible to
+    // the fixpoint iterator, there is no way to initialize its exit state.
     return (it == m_exit_states.end()) ? Domain::bottom() : it->second;
   }
 
@@ -245,7 +259,10 @@ class MonotonicFixpointIterator {
     // the entry state, as this may silently initialize it with an unwanted
     // value (i.e., the default-constructed value of Domain). This can in turn
     // lead to inaccurate or even incorrect results when the node possesses a
-    // self-loop.
+    // self-loop. Initializing all exit states prior to starting the fixpoint
+    // iteration is not a viable option, since the control-flow graph may
+    // contain unreachable nodes pointing to reachable ones (see the
+    // documentation of `get_exit_state_at`).
     compute_entry_state(context, node, &entry_state);
     Domain& exit_state = m_exit_states[node];
     exit_state = entry_state;

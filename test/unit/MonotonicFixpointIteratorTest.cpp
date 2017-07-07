@@ -184,7 +184,11 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
    *     }
    *  5: a = a + 1;        {y, a, b}        {y, a, b}
    *  6: x = a + b;        {y, a, b}        {x, y, a, b}
+   *     if (...) {
+   *       goto 7;
+   *     }
    *     goto 3;
+   *  7: x = y + a;
    *
    */
   void build_program2() {
@@ -194,12 +198,14 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
     m_program2.add("4", Statement(/* use: */ {"x"}, /* def: */ {}));
     m_program2.add("5", Statement(/* use: */ {"a"}, /* def: */ {"a"}));
     m_program2.add("6", Statement(/* use: */ {"a", "b"}, /* def: */ {"x"}));
+    m_program2.add("7", Statement(/* use: */ {"y", "a"}, /* def: */ {"x"}));
     m_program2.add_edge("1", "2");
     m_program2.add_edge("2", "3");
     m_program2.add_edge("3", "4");
     m_program2.add_edge("3", "5");
     m_program2.add_edge("5", "6");
     m_program2.add_edge("6", "3");
+    m_program2.add_edge("6", "7");
   }
 };
 
@@ -301,4 +307,7 @@ TEST_F(MonotonicFixpointIteratorTest, program2) {
               ::testing::UnorderedElementsAre("y", "a", "b"));
   EXPECT_THAT(fp.get_live_out_vars_at("6").elements(),
               ::testing::UnorderedElementsAre("x", "y", "a", "b"));
+
+  ASSERT_TRUE(fp.get_live_in_vars_at("7").is_bottom());
+  ASSERT_TRUE(fp.get_live_out_vars_at("7").is_bottom());
 }

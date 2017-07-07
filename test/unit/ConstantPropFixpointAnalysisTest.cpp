@@ -441,7 +441,7 @@ class GlobalConstantPropagationTest : public ::testing::Test {
   }
   /*
     r1 = 1;           | B0
-    while (true) {
+    while (true) { <------------- r2 = 1; | B2
       r2 = 2;         |
       r3 = r1;        | B1
       r4 = r2;        |
@@ -458,10 +458,15 @@ class GlobalConstantPropagationTest : public ::testing::Test {
     b1->stmts.push_back(Statement(4, uint16_t(2)));
     m_program4.add(b1);
 
+    auto b2 = new SimpleBlock;
+    b2->stmts.push_back(Statement(2, int32_t(1)));
+    m_program4.add(b2);
+
     m_program4.set_start_block(b0);
 
     m_program4.add_edge(b0, b1);
     m_program4.add_edge(b1, b1);
+    m_program4.add_edge(b2, b1);
   }
 };
 
@@ -736,4 +741,10 @@ TEST_F(GlobalConstantPropagationTest, testProgram4) {
           .get(4)
           .value()
           .equals(ConstantValue(2, ConstantValue::ConstantType::NARROW)));
+
+  // Block 2 is unreachable. Both its entry and exit states are _|_.
+  EXPECT_TRUE(
+      constant_prop.get_constants_at_entry(m_program4.get(2)).is_bottom());
+  EXPECT_TRUE(
+      constant_prop.get_constants_at_exit(m_program4.get(2)).is_bottom());
 }
