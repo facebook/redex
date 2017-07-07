@@ -35,7 +35,14 @@ Output walk_methods_parallel(const T& scope,
                              MethodWalkerFn walker,
                              OutputReducerFn reducer,
                              DataInitializerFn data_initializer,
-                             const Output& init = Output()) {
+                             const Output& init = Output(),
+                             size_t num_threads = 0) {
+  if (num_threads == 0) {
+    // This code is running mostly on a Hyperthread processor.
+    // It often outperforms when the thread number equals to physical cores.
+    num_threads = std::thread::hardware_concurrency() / 2;
+  }
+
   auto wq = WorkQueue<DexClass*, Data, Output>(
       [&](Data& data, DexClass* cls) {
         Output out = init;
@@ -51,9 +58,7 @@ Output walk_methods_parallel(const T& scope,
       },
       reducer,
       data_initializer,
-      // This code is running mostly on a Hyperthread processor.
-      // It often outperforms when the thread number equals to physical cores.
-      std::thread::hardware_concurrency() / 2);
+      num_threads);
 
   for (const auto& cls : scope) {
     wq.add_item(cls);
