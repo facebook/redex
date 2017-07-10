@@ -35,8 +35,6 @@
  * block level.
  */
 
-constexpr const char* METRIC_BRANCH_PROPAGATED = "num_branch_propagated";
-
 namespace {
 
 template <typename Integral>
@@ -138,6 +136,7 @@ void analyze_compare(const IRInstruction* inst,
 
 void LocalConstantPropagation::analyze_instruction(
     IRInstruction* const& inst, ConstPropEnvironment* current_state) {
+  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
   switch (inst->opcode()) {
   case OPCODE_CONST:
   case OPCODE_CONST_HIGH16:
@@ -334,92 +333,3 @@ void LocalConstantPropagation::simplify_instruction(
   default: {}
   }
 }
-
-void LocalConstantPropagation::propagate(DexMethod* method) {
-  TRACE(CONSTP, 5, "Class: %s\n", SHOW(method->get_class()));
-  TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
-
-  auto code = method->get_code();
-  code->build_cfg();
-  auto& cfg = code->cfg();
-  TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
-  propagate_constants_in_method(method, cfg);
-}
-
-// This is temporary and should go away once we combine
-// Intraprocedural constant propagation with this pass.
-void LocalConstantPropagation::propagate_constants_in_method(
-    DexMethod* method, ControlFlowGraph& cfg) {
-  for (auto current_block : cfg.blocks()) {
-    ConstPropEnvironment env;
-    TRACE(CONSTP, 5, "Processing block %d\n", current_block->id());
-    for (auto& mie : InstructionIterable(current_block)) {
-      auto inst = mie.insn;
-      TRACE(CONSTP, 5, "Analyzing constants in instruction: %s\n", SHOW(inst));
-      analyze_instruction(inst, &env);
-      simplify_instruction(inst, env);
-    }
-  }
-
-  auto code = method->get_code();
-  for (auto const& p : m_branch_replacements) {
-    auto const& old_op = p.first;
-    auto const& new_op = p.second;
-    if (new_op->opcode() == OPCODE_NOP) {
-      TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(old_op));
-      code->remove_opcode(old_op);
-      delete new_op;
-    } else {
-      TRACE(CONSTP,
-            4,
-            "Replacing instruction %s -> %s\n",
-            SHOW(old_op),
-            SHOW(new_op));
-      code->replace_branch(old_op, new_op);
-    }
-    m_branch_propagated++;
-  }
-  m_branch_replacements.clear();
-}
-
-void LocalConstantPropagation::run() {
-  walk_methods(m_scope, [&](DexMethod* m) {
-    if (!m->get_code()) {
-      return;
-    }
-    // Skipping blacklisted classes
-    if (m_blacklist.count(m->get_class()) > 0) {
-      TRACE(
-          CONSTP, 2, "Skipping %s.%s\n", show(m->get_class()).c_str(), SHOW(m));
-      return;
-    }
-    propagate(m);
-  });
-
-  TRACE(CONSTP, 1, "Branch condition removed: %lu\n", m_branch_propagated);
-}
-
-void LocalConstantPropagationPass::run_pass(DexStoresVector& stores,
-                                            ConfigFiles& /* cfg */,
-                                            PassManager& mgr) {
-  auto scope = build_class_scope(stores);
-  LocalConstantPropagation constant_prop(scope, m_blacklist);
-  constant_prop.run();
-  mgr.incr_metric(METRIC_BRANCH_PROPAGATED,
-                  constant_prop.num_branch_propagated());
-}
-
-void LocalConstantPropagationPass::configure_pass(const PassConfig& pc) {
-  std::vector<std::string> blacklist_names;
-  pc.get("blacklist", {}, blacklist_names);
-
-  for (auto const& name : blacklist_names) {
-    DexType* entry = DexType::get_type(name.c_str());
-    if (entry) {
-      TRACE(CONSTP, 2, "Blacklisted class: %s\n", SHOW(entry));
-      m_blacklist.insert(entry);
-    }
-  }
-}
-
-static LocalConstantPropagationPass s_pass;

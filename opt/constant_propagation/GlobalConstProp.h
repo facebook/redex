@@ -163,16 +163,16 @@ class ConstantPropFixpointAnalysis
                                BlockIterable const& cfg_iterable,
                                BlockTypeToListFunc succ,
                                BlockTypeToListFunc pred)
-      : m_start_block(start_block),
+      : MonotonicFixpointIterator<BlockType, ConstPropEnvironment>(
+            start_block, succ, pred),
+        m_start_block(start_block),
         m_cfg_iterable(cfg_iterable),
-        m_succ(succ),
-        MonotonicFixpointIterator<BlockType, ConstPropEnvironment>(
-            start_block, succ, pred) {}
+        m_succ(succ) {}
 
   void simplify() const {
     for (const auto& block : m_cfg_iterable) {
+      auto state = this->get_entry_state_at(block);
       for (auto& insn : InstructionIterable(block)) {
-        auto state = this->get_entry_state_at(block);
         analyze_instruction(insn, &state);
         simplify_instruction(block, insn, state);
       }
@@ -188,6 +188,7 @@ class ConstantPropFixpointAnalysis
 
   void analyze_node(BlockType const& block,
                     ConstPropEnvironment* state_at_entry) const override {
+    TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
     for (auto& insn : InstructionIterable(block)) {
       analyze_instruction(insn, state_at_entry);
     }
@@ -205,6 +206,7 @@ class ConstantPropFixpointAnalysis
       const BlockType& block,
       InstructionType& insn,
       const ConstPropEnvironment& current_state) const = 0;
+
   virtual void analyze_instruction(
       const InstructionType& insn,
       ConstPropEnvironment* current_state) const = 0;

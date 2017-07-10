@@ -14,16 +14,19 @@
 
 class LocalConstantPropagation {
  public:
-  LocalConstantPropagation(const Scope& scope,
-                           const std::unordered_set<DexType*>& blacklist)
-      : m_blacklist(blacklist), m_scope(scope) {}
+  using InsnReplaceVector =
+      std::vector<std::pair<IRInstruction*, IRInstruction*>>;
+
+  LocalConstantPropagation() : m_branch_propagated(0) {}
 
   void analyze_instruction(IRInstruction* const& insn,
                            ConstPropEnvironment* current_state);
   void simplify_instruction(IRInstruction*& insn,
                             const ConstPropEnvironment& current_state);
-  void run();
   size_t num_branch_propagated() const { return m_branch_propagated; }
+  const InsnReplaceVector& branch_replacements() const {
+    return m_branch_replacements;
+  }
 
  private:
   void simplify_branch(IRInstruction*& inst,
@@ -31,28 +34,10 @@ class LocalConstantPropagation {
   void analyze_move(IRInstruction* const& inst,
                     ConstPropEnvironment* current_state,
                     bool is_wide);
-
-  const std::unordered_set<DexType*>& m_blacklist;
-  const Scope& m_scope;
-  std::vector<std::pair<IRInstruction*, IRInstruction*>> m_branch_replacements;
-  size_t m_branch_propagated{0};
-
   void propagate(DexMethod* method);
 
-  // This is temporary and should go away once we combine
-  // Intraprocedural constant propagation with this pass.
-  void propagate_constants_in_method(DexMethod* method, ControlFlowGraph& cfg);
-};
-
-class LocalConstantPropagationPass : public Pass {
- public:
-  LocalConstantPropagationPass() : Pass("LocalConstantPropagationPass") {}
-
-  virtual void configure_pass(const PassConfig& pc) override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  std::unordered_set<DexType*> m_blacklist;
+  InsnReplaceVector m_branch_replacements;
+  size_t m_branch_propagated;
 };
 
 // Must be IEEE 754

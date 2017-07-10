@@ -78,12 +78,14 @@ std::ostream& operator<<(std::ostream& o, const Statement& stmt) {
 }
 
 struct SimpleBlock {
-  int id;
+  int num;
   vector<Statement> stmts;
+
+  int id() const { return num; }
 };
 
 std::ostream& operator<<(std::ostream& o, const SimpleBlock& block) {
-  o << "[Block ID: " << block.id << ", Statements: {";
+  o << "[Block ID: " << block.id() << ", Statements: {";
   for (const auto& stmt : block.stmts) {
     o << stmt << ", ";
   }
@@ -117,7 +119,7 @@ struct Program {
 
   void add(SimpleBlock* block) {
     m_blocks.push_back(block);
-    block->id = m_blocks.size() - 1;
+    block->num = m_blocks.size() - 1;
   }
 
   void add_edge(SimpleBlock* source, SimpleBlock* dest) {
@@ -472,7 +474,7 @@ class GlobalConstantPropagationTest : public ::testing::Test {
 
 void print_constants_in(Program& p, SkeletonConstantPropAnalysis& a) {
   for (const auto& block : p) {
-    printf("Block ID: %d\n", block->id);
+    printf("Block ID: %d\n", block->id());
     const auto& constants_in = a.get_constants_at_entry(block);
     cout << constants_in << "\n";
   }
