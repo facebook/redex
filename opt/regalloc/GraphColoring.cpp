@@ -717,7 +717,7 @@ void Allocator::allocate(IRCode* code) {
 
       // If we've hit this many iterations, it's very likely that we've hit
       // some bug that's causing us to loop infinitely.
-      always_assert(m_stats.reiteration_count++ < 50);
+      always_assert(m_stats.reiteration_count++ < 200);
     }
     TRACE(REG, 5, "Post-coalesce:\n%s\n", SHOW(code->cfg()));
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
