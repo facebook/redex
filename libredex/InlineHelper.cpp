@@ -417,8 +417,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    if (m_config.callee_direct_invoke_inline &&
-        !is_native(method)) {
+    if (!is_native(method)) {
       m_make_static.insert(method);
     } else {
       info.need_vmethod++;
@@ -438,8 +437,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
                                                      DexMethod* caller) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER ||
       insn->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
-    if (m_config.super_same_class_inline &&
-        callee->get_class() == caller->get_class()) {
+    if (callee->get_class() == caller->get_class()) {
       return false;
     }
     info.invoke_super++;
@@ -462,8 +460,7 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
   // if the caller and callee are in the same class, we don't have to worry
   // about unknown virtuals -- private / protected methods will remain
   // accessible
-  if (m_config.virtual_same_class_inline &&
-      caller->get_class() == callee->get_class()) {
+  if (caller->get_class() == callee->get_class()) {
     return false;
   }
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
@@ -512,8 +509,7 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
   // if the caller and callee are in the same class, we don't have to worry
   // about unknown fields -- private / protected fields will remain
   // accessible
-  if (m_config.virtual_same_class_inline &&
-      caller->get_class() == callee->get_class()) {
+  if (caller->get_class() == callee->get_class()) {
     return false;
   }
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {

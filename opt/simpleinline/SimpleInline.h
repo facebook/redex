@@ -24,13 +24,6 @@ class SimpleInlinePass : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("virtual", true, m_virtual_inline);
-    pc.get("callee_invoke_direct",
-           false,
-           m_inliner_config.callee_direct_invoke_inline);
-    pc.get("virtual_same_class",
-           false,
-           m_inliner_config.virtual_same_class_inline);
-    pc.get("super_same_class", false, m_inliner_config.super_same_class_inline);
     pc.get("throws", false, m_inliner_config.throws_inline);
     pc.get("use_liveness", false, m_inliner_config.use_liveness);
     pc.get("no_inline_annos", {}, m_no_inline_annos);

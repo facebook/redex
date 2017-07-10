@@ -30,12 +30,8 @@
 class MultiMethodInliner {
  public:
   struct Config {
-    bool callee_direct_invoke_inline;
-    bool virtual_same_class_inline;
-    bool super_same_class_inline;
     bool throws_inline;
     bool use_liveness;
-    bool no_exceed_16regs;
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
   };

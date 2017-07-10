@@ -22,9 +22,6 @@ class InlineInitPass : public Pass {
 
  public:
   InlineInitPass() : Pass("InlineInitPass") {
-    m_inliner_config.callee_direct_invoke_inline = true;
-    m_inliner_config.virtual_same_class_inline = true;
-    m_inliner_config.super_same_class_inline = true;
     m_inliner_config.use_liveness = true;
   }
 
