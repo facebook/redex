@@ -19,6 +19,7 @@ class RemoveUnreachablePass : public Pass {
     pc.get("classes_removed", true, m_classes_removed);
     pc.get("fields_removed", true, m_fields_removed);
     pc.get("methods_removed", true, m_methods_removed);
+    pc.get("ignore_string_literals", {}, m_ignore_string_literals);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -27,4 +28,5 @@ class RemoveUnreachablePass : public Pass {
     bool m_classes_removed;
     bool m_fields_removed;
     bool m_methods_removed;
+    std::vector<std::string> m_ignore_string_literals;
 };

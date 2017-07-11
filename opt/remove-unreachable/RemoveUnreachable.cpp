@@ -355,10 +355,15 @@ bool implements_library_method(
 }
 
 struct UnreachableCodeRemover {
-  UnreachableCodeRemover(DexStoresVector& stores)
-    : m_stores(stores),
-      m_inheritance_graph(stores)
-  {}
+  UnreachableCodeRemover(
+    PassManager& pm,
+    DexStoresVector& stores,
+      std::unordered_set<const DexType*>& ignore_string_literals_annos)
+      : m_pm(pm),
+        m_stores(stores),
+        m_inheritance_graph(stores),
+        m_ignore_string_literals_annos(ignore_string_literals_annos)
+    {}
 
   void mark_sweep() {
     mark();
@@ -472,8 +477,23 @@ struct UnreachableCodeRemover {
     }
   }
 
+  void gather_and_push(DexMethod* meth) {
+    auto* cls = type_class(meth->get_class());
+    bool check_strings = true;
+    if (cls) {
+      for (const auto& anno_type : m_ignore_string_literals_annos) {
+        if (has_anno(cls, anno_type)) {
+          m_pm.incr_metric("num_ignore_check_strings", 1);
+          check_strings = false;
+          break;
+        }
+      }
+    }
+    gather_and_push(meth, check_strings);
+  }
+
   template<typename T>
-  void gather_and_push(T t) {
+  void gather_and_push(T t, bool check_strings = true) {
     std::vector<DexString*> strings;
     std::vector<DexType*> types;
     std::vector<DexField*> fields;
@@ -482,13 +502,15 @@ struct UnreachableCodeRemover {
     t->gather_types(types);
     t->gather_fields(fields);
     t->gather_methods(methods);
-    for (auto const& str : strings) {
-      auto internal = JavaNameUtil::external_to_internal(str->c_str());
-      auto typestr = DexString::get_string(internal.c_str());
-      if (!typestr) continue;
-      auto type = DexType::get_type(typestr);
-      if (!type) continue;
-      push(t, type);
+    if (check_strings) {
+      for (auto const& str : strings) {
+        auto internal = JavaNameUtil::external_to_internal(str->c_str());
+        auto typestr = DexString::get_string(internal.c_str());
+        if (!typestr) continue;
+        auto type = DexType::get_type(typestr);
+        if (!type) continue;
+        push(t, type);
+      }
     }
     for (auto const& type : types) {
       push(t, type);
@@ -683,6 +705,7 @@ struct UnreachableCodeRemover {
   }
 
  private:
+  PassManager& m_pm;
   DexStoresVector& m_stores;
   InheritanceGraph m_inheritance_graph;
   std::unordered_set<const DexClass*> m_marked_classes;
@@ -693,6 +716,7 @@ struct UnreachableCodeRemover {
   std::vector<const DexClass*> m_class_stack;
   std::vector<const DexField*> m_field_stack;
   std::vector<const DexMethod*> m_method_stack;
+  std::unordered_set<const DexType*>& m_ignore_string_literals_annos;
 };
 
 }
@@ -703,10 +727,20 @@ void RemoveUnreachablePass::run_pass(
   PassManager& pm
 ) {
   if (pm.no_proguard_rules()) {
-    TRACE(RMU, 1, "RemoveUnreachablePass not run because no ProGuard configuration was provided.");
+    TRACE(RMU, 1,
+        "RemoveUnreachablePass not run because no "
+        "ProGuard configuration was provided.");
     return;
   }
-  UnreachableCodeRemover ucr(stores);
+  // load ignore string literals annotations
+  std::unordered_set<const DexType*> ignore_string_literals_annos;
+  for (const auto& name : m_ignore_string_literals) {
+    const auto type = DexType::get_type(name.c_str());
+    if (type != nullptr) {
+      ignore_string_literals_annos.insert(type);
+    }
+  }
+  UnreachableCodeRemover ucr(pm, stores, ignore_string_literals_annos);
   deleted_stats before = trace_stats("before", stores);
   ucr.mark_sweep();
 
