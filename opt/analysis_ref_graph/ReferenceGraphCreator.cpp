@@ -85,8 +85,8 @@ CreateReferenceGraphPass::field_ref_builder(
     } else {
       field_maybe_resolved = field;
     }
-    get_annots(field, enclosing_class, class_refs);
-    const auto* t = field->get_type();
+    get_annots(field_maybe_resolved, enclosing_class, class_refs);
+    const auto* t = field_maybe_resolved->get_type();
     if (t) class_refs[enclosing_class].emplace(t);
   });
 }

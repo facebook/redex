@@ -56,7 +56,8 @@ cd redex
 
 Now, build ReDex using autoconf and make.
 ```
-autoreconf -ivf && ./configure && make
+# if you're using gcc, please use gcc-4.9
+autoreconf -ivf && ./configure && make -j4
 sudo make install
 ```
 

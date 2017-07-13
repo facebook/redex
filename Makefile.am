@@ -18,33 +18,50 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/libresource/system \
 	-I$(top_srcdir)/libresource/utils \
 	-I$(top_srcdir)/opt \
+	-I$(top_srcdir)/opt/access-marking \
+	-I$(top_srcdir)/opt/add_redex_txt_to_apk \
+	-I$(top_srcdir)/opt/analysis_ref_graph \
+	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/bridge \
+	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/constant_propagation \
+	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
-	-I$(top_srcdir)/opt/access-marking \
+	-I$(top_srcdir)/opt/hotness-score \
+	-I$(top_srcdir)/opt/inlineinit \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/obfuscate \
+	-I$(top_srcdir)/opt/original_name \
+	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/peephole \
+	-I$(top_srcdir)/opt/print-members \
 	-I$(top_srcdir)/opt/rebindrefs \
+	-I$(top_srcdir)/opt/redundant_move_elimination \
+	-I$(top_srcdir)/opt/regalloc \
+	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
+	-I$(top_srcdir)/opt/remove_gotos \
 	-I$(top_srcdir)/opt/renameclasses \
+	-I$(top_srcdir)/opt/reorder-interfaces \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/simpleinline \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
+	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
-	-I$(top_srcdir)/util \
+	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
+	-I$(top_srcdir)/util \
 	-I/usr/include/jsoncpp
 
 #
@@ -124,31 +141,52 @@ bin_PROGRAMS = redexdump
 noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
+	libredex/DexAsm.cpp \
+	opt/access-marking/AccessMarking.cpp \
+	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
+	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
+	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
+	opt/constant_propagation/ConstantPropagationV2.cpp \
+	opt/constant_propagation/ConstantPropagationV3.cpp \
+	opt/constant_propagation/GlobalConstProp.cpp \
+	opt/constant_propagation/LocalConstProp.cpp \
+	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
-	opt/access-marking/AccessMarking.cpp \
+	opt/hotness-score/HotnessScore.cpp \
+	opt/inlineinit/InlineInit.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/original_name/OriginalNamePass.cpp \
+	opt/outliner/Outliner.cpp \
 	opt/peephole/Peephole.cpp \
+	opt/peephole/PeepholeV2.cpp \
+	opt/peephole/RedundantCheckCastRemover.cpp \
+	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
+	opt/redundant_move_elimination/AliasedRegisters.cpp \
+	opt/redundant_move_elimination/RedundantMoveEliminationPass.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
 	opt/regalloc/LiveRange.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc/RegisterType.cpp \
 	opt/regalloc/VirtualRegistersFile.cpp \
+	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
-	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
+	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
+	opt/remove_gotos/RemoveGotos.cpp \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
+	opt/reorder-interfaces/ReorderInterfaces.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \
 	opt/simpleinline/SimpleInline.cpp \
@@ -159,12 +197,13 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplUtil.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
+	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \
-	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
+	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \
