@@ -137,8 +137,13 @@ TEST(ProguardTest, assortment) {
 
   auto android_sdk = std::getenv("ANDROID_SDK");
   ASSERT_NE(nullptr, android_sdk);
-  auto sdk_jar = std::string(android_sdk) + "/platforms/android-16/android.jar";
-  load_jar_file(sdk_jar.c_str());
+  auto android_target = std::getenv("android_target");
+  ASSERT_NE(nullptr, android_target);
+  std::string android_version(android_target);
+  ASSERT_NE("NotFound", android_version);
+  std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
+                        android_version + "/android.jar";
+  ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
