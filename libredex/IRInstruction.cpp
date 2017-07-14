@@ -78,13 +78,6 @@ void try_2addr_conversion(IRInstruction* insn) {
   }
 }
 
-bool can_use_2addr(const IRInstruction* insn) {
-  auto op = insn->opcode();
-  return op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE &&
-         insn->dest() == insn->src(0) && insn->dest() <= 0xf &&
-         insn->src(1) <= 0xf;
-}
-
 DexOpcode convert_2to3addr(DexOpcode op) {
   always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
   constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
@@ -195,8 +188,7 @@ uint16_t IRInstruction::size() const {
       0, /* FMT_fopcode   */
       0, /* FMT_iopcode   */
   };
-  auto op = can_use_2addr(this) ? convert_3to2addr(opcode()) : opcode();
-  return args[opcode::format(op)];
+  return args[opcode::format(opcode())];
 }
 
 DexInstruction* IRInstruction::to_dex_instruction() const {
