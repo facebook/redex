@@ -45,6 +45,13 @@ struct CatchEntry {
   CatchEntry(DexType* catch_type): catch_type(catch_type), next(nullptr) {}
 };
 
+/**
+ * A SwitchIndices represents the set of int values matching a packed switch
+ * case. It could be the only value matching one case. There could also be a set
+ * of values matching a switch case.
+ */
+using SwitchIndices = std::set<int>;
+
 /*
  * Multi is where an opcode encodes more than
  * one branch end-point.  This is for packed
@@ -222,7 +229,7 @@ class IRCode {
       FatMethod::iterator cur,
       IRInstruction* insn,
       FatMethod::iterator* default_block,
-      std::map<int, FatMethod::iterator>& cases);
+      std::map<SwitchIndices, FatMethod::iterator>& cases);
 
   friend struct MethodCreator;
 

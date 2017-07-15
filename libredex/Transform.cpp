@@ -1093,7 +1093,7 @@ FatMethod::iterator IRCode::make_switch_block(
     FatMethod::iterator cur,
     IRInstruction* insn,
     FatMethod::iterator* default_block,
-    std::map<int, FatMethod::iterator>& cases) {
+    std::map<SwitchIndices, FatMethod::iterator>& cases) {
   auto switch_entry = new MethodItemEntry(insn);
   *default_block = m_fmethod->insert(cur, *switch_entry);
   FatMethod::iterator main_block = *default_block;
@@ -1107,13 +1107,17 @@ FatMethod::iterator IRCode::make_switch_block(
     auto mb_entry = new MethodItemEntry(main_bt);
     main_block = m_fmethod->insert(++main_block, *mb_entry);
 
-    // case block
-    auto case_bt = new BranchTarget();
-    case_bt->src = switch_entry;
-    case_bt->index = case_it->first;
-    case_bt->type = BRANCH_MULTI;
-    auto eb_entry = new MethodItemEntry(case_bt);
-    case_it->second = m_fmethod->insert(goto_it, *eb_entry);
+    // Insert all the branch targets jumping from the switch entry.
+    // Keep updating the iterator of the case block to point right before the
+    // GOTO going back to the end of the switch.
+    for (auto idx : case_it->first) {
+      auto case_bt = new BranchTarget();
+      case_bt->src = switch_entry;
+      case_bt->index = idx;
+      case_bt->type = BRANCH_MULTI;
+      auto eb_entry = new MethodItemEntry(case_bt);
+      case_it->second = m_fmethod->insert(goto_it, *eb_entry);
+    }
   }
   return main_block;
 }

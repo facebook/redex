@@ -474,6 +474,27 @@ MethodBlock* MethodBlock::switch_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
   auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
+  // Convert to SwitchIndices map.
+  std::map<SwitchIndices, MethodBlock*> indices_cases;
+  for (auto it : cases) {
+    SwitchIndices indices = {it.first};
+    indices_cases[indices] = it.second;
+  }
+  auto mb = make_switch_block(sw_opcode, indices_cases);
+  // Copy initialized case blocks back.
+  for (auto it : indices_cases) {
+    SwitchIndices indices = it.first;
+    always_assert(indices.size());
+    int idx = *indices.begin();
+    cases[idx] = it.second;
+  }
+  return mb;
+}
+
+MethodBlock* MethodBlock::switch_op(
+    Location test, std::map<SwitchIndices, MethodBlock*>& cases) {
+  auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
+  sw_opcode->set_src(0, test.get_reg());
   return make_switch_block(sw_opcode, cases);
 }
 
@@ -535,9 +556,9 @@ FatMethod::iterator MethodCreator::make_if_else_block(
 }
 
 MethodBlock* MethodBlock::make_switch_block(
-    IRInstruction* insn, std::map<int, MethodBlock*>& cases) {
+    IRInstruction* insn, std::map<SwitchIndices, MethodBlock*>& cases) {
   FatMethod::iterator default_it;
-  std::map<int, FatMethod::iterator> mt_cases;
+  std::map<SwitchIndices, FatMethod::iterator> mt_cases;
   for (auto cases_it : cases) {
     mt_cases[cases_it.first] = curr;
   }
@@ -552,7 +573,7 @@ FatMethod::iterator MethodCreator::make_switch_block(
     FatMethod::iterator curr,
     IRInstruction* insn,
     FatMethod::iterator* default_block,
-    std::map<int, FatMethod::iterator>& cases) {
+    std::map<SwitchIndices, FatMethod::iterator>& cases) {
   return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 

@@ -342,6 +342,8 @@ struct MethodBlock {
    *   goto end_switch_label // emitted automatically
    */
   MethodBlock* switch_op(Location test, std::map<int, MethodBlock*>& cases);
+  MethodBlock* switch_op(Location test,
+                         std::map<SwitchIndices, MethodBlock*>& cases);
 
  private:
   MethodBlock(FatMethod::iterator iterator, MethodCreator* creator);
@@ -354,7 +356,7 @@ struct MethodBlock {
   MethodBlock* make_if_block(IRInstruction* insn);
   MethodBlock* make_if_else_block(IRInstruction* insn, MethodBlock** true_block);
   MethodBlock* make_switch_block(IRInstruction* insn,
-                                 std::map<int, MethodBlock*>& cases);
+                                 std::map<SwitchIndices, MethodBlock*>& cases);
 
  private:
   MethodCreator* mc;
@@ -466,7 +468,7 @@ struct MethodCreator {
       FatMethod::iterator curr,
       IRInstruction* opcode,
       FatMethod::iterator* default_block,
-      std::map<int, FatMethod::iterator>& cases);
+      std::map<SwitchIndices, FatMethod::iterator>& cases);
 
  private:
   DexMethod* method;
