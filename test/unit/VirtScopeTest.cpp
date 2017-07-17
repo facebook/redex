@@ -358,7 +358,7 @@ TEST(Override, empty) {
     ASSERT_EQ(b_scopes[1]->methods[1].first,
         DexMethod::get_method(e_t, g, void_void));
   } else {
-    ASSERT_FALSE(false); // cannot be
+    SUCCEED(); // cannot be
   }
 
   delete g_redex;
