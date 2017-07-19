@@ -103,6 +103,8 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   int max_steps = 0;
+  size_t previous_invoke_intf_count = s_invoke_intf_count;
+  removed_count = 0;
   while (true) {
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
@@ -124,10 +126,11 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   TRACE(INTF, 1, "Removed interfaces %ld\n", removed_count);
   TRACE(INTF, 1,
           "Updated invoke-interface to invoke-virtual %ld\n",
-          s_invoke_intf_count);
+          s_invoke_intf_count - previous_invoke_intf_count);
 
   mgr.incr_metric(METRIC_REMOVED_INTERFACES, removed_count);
-  mgr.incr_metric(METRIC_INVOKE_INT_TO_VIRT, s_invoke_intf_count);
+  mgr.incr_metric(METRIC_INVOKE_INT_TO_VIRT,
+                  s_invoke_intf_count - previous_invoke_intf_count);
 
   post_dexen_changes(scope, stores);
 }
