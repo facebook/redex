@@ -213,7 +213,6 @@ redex_all_LDADD = \
 	$(BOOST_REGEX_LIB) \
 	-lpthread
 
-
 redexdump_SOURCES = \
 	tools/redexdump/DumpTables.cpp \
 	tools/redexdump/PrintUtil.cpp \

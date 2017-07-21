@@ -13,9 +13,11 @@
 
 #include "AliasedRegisters.h"
 #include "ControlFlow.h"
+#include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
+#include "PassManager.h"
 
 /**
  * This pass eliminates writes to registers that already hold the written value.
@@ -63,11 +65,16 @@ struct RedundantStats {
   size_t moves_eliminated{0};
   size_t replaced_sources{0};
 
-  RedundantStats operator+(const RedundantStats& other) {
-    return RedundantStats{moves_eliminated + other.moves_eliminated,
-                          replaced_sources + other.replaced_sources};
-  }
+  RedundantStats() = default;
+  RedundantStats(size_t elim, size_t replaced) : moves_eliminated(elim), replaced_sources(replaced) {}
+
+  RedundantStats operator+(const RedundantStats& other);
 };
+
+RedundantStats RedundantStats::operator+(const RedundantStats& other) {
+  return RedundantStats{moves_eliminated + other.moves_eliminated,
+                        replaced_sources + other.replaced_sources};
+}
 
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<Block*, AliasDomain> {
