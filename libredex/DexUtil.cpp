@@ -194,6 +194,11 @@ bool is_array(const DexType* type) {
   return type->get_name()->c_str()[0] == '[';
 }
 
+bool is_object(const DexType* type) {
+  char sig = type->get_name()->c_str()[0];
+  return (sig == 'L') || (sig == '[');
+}
+
 uint32_t get_array_level(const DexType* type) {
   auto name = type->get_name()->c_str();
   uint32_t level = 0;

@@ -172,6 +172,11 @@ bool check_cast(const DexType* type, const DexType* base_type);
 bool is_array(const DexType* type);
 
 /**
+ * Return true if the type is an object type (array types included).
+ */
+bool is_object(const DexType* type);
+
+/**
  * Return the level of the array type, that is the number of '[' in the array.
  * int[] => [I
  * int[][] => [[I

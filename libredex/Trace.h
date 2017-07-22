@@ -53,6 +53,7 @@
   TM(PEEPHOLE)           \
   TM(PGR)                \
   TM(PM)                 \
+  TM(PTA)                \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \
