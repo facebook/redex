@@ -13,20 +13,14 @@ import static java.lang.Math.*;
 import java.util.ArrayList;
 
 public class PointsToSemantics {
-  public interface I {
-    I f();
-  }
+  public interface I { I f(); }
 
   public class Base implements I {
-    public I f() {
-      return new Base();
-    }
+    public I f() { return new Base(); }
   }
 
   public class X extends Base {
-    public I g() {
-      return super.f();
-    }
+    public I g() { return super.f(); }
   }
 
   private static I cast(I o) {
@@ -40,9 +34,7 @@ public class PointsToSemantics {
   public static class A {
     ArrayList<String> m_list;
 
-    public A(int n) {
-      m_list = new ArrayList<>();
-    }
+    public A(int n) { m_list = new ArrayList<>(); }
 
     public A(int n, String s) {
       m_list = new ArrayList<>();
@@ -63,21 +55,15 @@ public class PointsToSemantics {
       return i;
     }
 
-    String pick(int n) {
-      return strs()[ints()[n]];
-    }
+    String pick(int n) { return strs()[ints()[n]]; }
   }
 
-  public interface Processor {
-    void run();
-  }
+  public interface Processor { void run(); }
 
   private static class Time {
     private long m_t;
 
-    Time(long t) {
-      m_t = t;
-    }
+    Time(long t) { m_t = t; }
 
     void sleep(long t) {}
 
@@ -116,4 +102,27 @@ public class PointsToSemantics {
   }
 
   public native int[] nativeMethod();
+
+  static class AnException extends Exception {}
+
+  X[] arrayOfX(int n) throws AnException {
+    if (n > 10) {
+      throw new AnException();
+    }
+    return new X[n];
+  }
+
+  I runOnArrayOfX(int n) {
+    try {
+      I[] a = arrayOfX(n);
+      for (int i = 0; i < n; ++i) {
+        a[i] = cast(a[i]);
+      }
+      return a[0];
+    }
+    catch (AnException e) {
+      System.out.println(e.getMessage());
+      return new Base();
+    }
+  }
 }

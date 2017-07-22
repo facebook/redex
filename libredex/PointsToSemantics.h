@@ -22,6 +22,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "PointsToSemanticsUtils.h"
 #include "TypeSystem.h"
 
 /*
@@ -423,8 +424,6 @@ class PointsToMethodSemantics {
 
   MethodKind kind() const { return m_kind; }
 
-  void shrink() { m_points_to_actions.shrink_to_fit(); }
-
   PointsToVariable get_new_variable() {
     return PointsToVariable(m_variable_counter++);
   }
@@ -434,6 +433,8 @@ class PointsToMethodSemantics {
   }
 
   void add(const PointsToAction& a) { m_points_to_actions.emplace_back(a); }
+
+  void shrink() { m_points_to_actions.shrink_to_fit(); }
 
  private:
   MethodKind m_kind;
@@ -469,6 +470,8 @@ class PointsToSemantics final {
 
   iterator end() { return m_method_semantics.end(); }
 
+  const TypeSystem& get_type_system() { return m_type_system; }
+
   const PointsToMethodSemantics& get_method_semantics(
       DexMethod* dex_method) const;
 
@@ -480,6 +483,7 @@ class PointsToSemantics final {
   void generate_points_to_actions(DexMethod* dex_method);
 
   TypeSystem m_type_system;
+  PointsToSemanticsUtils m_utils;
   std::unordered_map<DexMethod*, PointsToMethodSemantics> m_method_semantics;
 
   friend std::ostream& operator<<(std::ostream&, const PointsToSemantics&);

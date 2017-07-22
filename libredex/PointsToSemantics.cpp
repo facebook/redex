@@ -28,11 +28,14 @@
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexOpcode.h"
+#include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
+#include "PointsToSemanticsUtils.h"
+#include "RedexContext.h"
 #include "Trace.h"
 #include "Transform.h"
 
@@ -539,8 +542,13 @@ class AnchorPropagation final
 class PointsToActionGenerator final {
  public:
   explicit PointsToActionGenerator(DexMethod* dex_method,
-                                   PointsToMethodSemantics* semantics)
-      : m_dex_method(dex_method), m_semantics(semantics) {}
+                                   PointsToMethodSemantics* semantics,
+                                   const TypeSystem& type_system,
+                                   const PointsToSemanticsUtils& utils)
+      : m_dex_method(dex_method),
+        m_semantics(semantics),
+        m_type_system(type_system),
+        m_utils(utils) {}
 
   void run() {
     IRCode* code = m_dex_method->get_code();
@@ -698,7 +706,22 @@ class PointsToActionGenerator final {
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
     }
-    case OPCODE_NEW_INSTANCE:
+    case OPCODE_NEW_INSTANCE: {
+      DexType* dex_type = insn->get_type();
+      if (m_type_system.is_subtype(m_utils.get_throwable_type(), dex_type)) {
+        // If the object created is an exception (i.e., its type inherits from
+        // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
+        // model, the exact identity of an exception is abstracted away for
+        // simplicity. The operation PTS_GET_EXCEPTION can be interpreted as a
+        // nondeterministic choice among all abstract object instances that are
+        // exceptions.
+        m_semantics->add(
+            PointsToAction::load_operation(PointsToOperation(PTS_GET_EXCEPTION),
+                                           get_variable_from_anchor(insn)));
+        break;
+      }
+      // Otherwise, we fall through to the generic case.
+    }
     case OPCODE_NEW_ARRAY:
     case OPCODE_FILLED_NEW_ARRAY:
     case OPCODE_FILLED_NEW_ARRAY_RANGE: {
@@ -890,6 +913,8 @@ class PointsToActionGenerator final {
 
   DexMethod* m_dex_method;
   PointsToMethodSemantics* m_semantics;
+  const TypeSystem& m_type_system;
+  const PointsToSemanticsUtils& m_utils;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
   std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;
@@ -1019,7 +1044,8 @@ void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
   always_assert(entry != m_method_semantics.end());
   PointsToMethodSemantics* semantics = &entry->second;
   if (semantics->kind() == PTS_APK) {
-    pts_impl::PointsToActionGenerator generator(dex_method, semantics);
+    pts_impl::PointsToActionGenerator generator(
+        dex_method, semantics, m_type_system, m_utils);
     generator.run();
   }
 }
