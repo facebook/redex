@@ -11,12 +11,14 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <deque>
 #include <iterator>
 #include <limits>
 #include <ostream>
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include <boost/container/flat_set.hpp>
@@ -927,7 +929,157 @@ class PointsToActionGenerator final {
       m_anchor_sets;
 };
 
+// Removes points-to equations that have no effect on the computation of the
+// points-to analysis. We compute the dependency graph of the points-to
+// equations and we discard all variables that are not involved in any relevant
+// computation.
+class Shrinker final {
+ public:
+  explicit Shrinker(std::vector<PointsToAction>* pt_actions)
+      : m_pt_actions(pt_actions) {}
+
+  void run() {
+    // We first identify all the variables that we surely need to keep in order
+    // to perform the points-to analysis.
+    find_root_vars();
+    // We then compute the dependency graph: there is an edge v -> w between
+    // points-to variables v and w iff the value of w is needed to compute the
+    // value of v.
+    build_dependency_graph();
+    // We compute the set of variables that are reachable from any one of the
+    // root variables in the dependency graph.
+    collect_reachable_vars();
+    // We remove any points-to equation assigning a value to a variable that
+    // hasn't been marked as reachable in the previous step.
+    shrink_points_to_actions();
+  }
+
+ private:
+  using VariableSet =
+      std::unordered_set<PointsToVariable, boost::hash<PointsToVariable>>;
+
+  // We keep all `put`, `invoke` and `return` operations, since they presumably
+  // have an effect on the analysis.
+  void find_root_vars() {
+    for (const PointsToAction& pt_action : *m_pt_actions) {
+      const PointsToOperation& op = pt_action.operation();
+      if (op.is_put()) {
+        if (!op.is_sput()) {
+          m_root_vars.insert(pt_action.lhs());
+        }
+        m_root_vars.insert(pt_action.rhs());
+        continue;
+      }
+      if (op.is_invoke()) {
+        if (op.is_virtual_call()) {
+          m_root_vars.insert(pt_action.instance());
+        }
+        for (const auto& arg : pt_action.get_arguments()) {
+          m_root_vars.insert(arg.second);
+        }
+        continue;
+      }
+      if (op.is_return()) {
+        m_root_vars.insert(pt_action.src());
+        continue;
+      }
+    }
+  }
+
+  // When building the dependency graph, we are only interested in operations
+  // that assign a value to a variable but don't create any points-to relation
+  // between objects (unlike a `put` operation, for example). We don't consider
+  // `load` operations, because they can't create dependencies among variables.
+  // An edge v -> w in the dependency graph means that computing the value of
+  // variable v requires the value of variable w.
+  void build_dependency_graph() {
+    for (const PointsToAction& pt_action : *m_pt_actions) {
+      const PointsToOperation& op = pt_action.operation();
+      if (op.is_check_cast()) {
+        add_dependency(pt_action.dest(), pt_action.src());
+        continue;
+      }
+      if (op.is_get() && !op.is_sget()) {
+        add_dependency(pt_action.dest(), pt_action.instance());
+        continue;
+      }
+      if (op.is_disjunction()) {
+        for (const auto& arg : pt_action.get_arguments()) {
+          add_dependency(pt_action.dest(), arg.second);
+        }
+        continue;
+      }
+    }
+  }
+
+  void add_dependency(const PointsToVariable& x, const PointsToVariable& y) {
+    m_dependency_graph[x].insert(y);
+  }
+
+  // If there exists a path from any root variable to a variable v, this means
+  // that the value of variable v is required for performing the points-to
+  // analysis. All other variables can safely be discarded. We compute the set
+  // of reachable variables using a simple breadth-first traversal of the graph.
+  void collect_reachable_vars() {
+    std::deque<PointsToVariable> queue(m_root_vars.begin(), m_root_vars.end());
+    while (!queue.empty()) {
+      PointsToVariable v = queue.back();
+      queue.pop_back();
+      // Note that the variables already visited are exactly the variables that
+      // we need to keep.
+      if (m_vars_to_keep.count(v) != 0) {
+        continue;
+      }
+      m_vars_to_keep.insert(v);
+      const auto& deps = m_dependency_graph[v];
+      queue.insert(queue.begin(), deps.begin(), deps.end());
+    }
+  }
+
+  void shrink_points_to_actions() {
+    // Any `load`, `check_cast`, `get` or `disjunction` operation assigning a
+    // value to a variable that hasn't been marked to keep can safely be
+    // discarded.
+    m_pt_actions->erase(
+        std::remove_if(m_pt_actions->begin(),
+                       m_pt_actions->end(),
+                       [this](const PointsToAction& pt_action) {
+                         const PointsToOperation& op = pt_action.operation();
+                         return (op.is_load() || op.is_check_cast() ||
+                                 op.is_get() || op.is_disjunction()) &&
+                                (m_vars_to_keep.count(pt_action.dest()) == 0);
+                       }),
+        m_pt_actions->end());
+    m_pt_actions->shrink_to_fit();
+
+    // We can also safely remove the `dest` variable of a method call if it
+    // hasn't been marked to keep. Computing the return value of a virtual call
+    // during the analysis may entail performing the join of multiple points-to
+    // sets, which is costly. Hence, removing unneeded return values is a
+    // valuable optimization.
+    for (PointsToAction& pt_action : *m_pt_actions) {
+      if (pt_action.operation().is_invoke() && pt_action.has_dest() &&
+          (m_vars_to_keep.count(pt_action.dest()) == 0)) {
+        pt_action.remove_dest();
+      }
+    }
+  }
+
+  std::vector<PointsToAction>* m_pt_actions;
+  std::unordered_map<PointsToVariable,
+                     VariableSet,
+                     boost::hash<PointsToVariable>>
+      m_dependency_graph;
+  VariableSet m_root_vars;
+  VariableSet m_vars_to_keep;
+};
+
 } // namespace pts_impl
+
+void PointsToMethodSemantics::shrink() {
+  pts_impl::Shrinker shrinker(&m_points_to_actions);
+  shrinker.run();
+}
 
 std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
   switch (s.kind()) {

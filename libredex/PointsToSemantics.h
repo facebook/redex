@@ -246,6 +246,8 @@ struct PointsToOperation {
     return get_operations[kind];
   }
 
+  bool is_sget() const { return kind == PTS_SGET; }
+
   bool is_put() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
   (is_put ? (1ULL << OP) : 0)
@@ -255,6 +257,8 @@ struct PointsToOperation {
 #undef PTS_OP
     return put_operations[kind];
   }
+
+  bool is_sput() const { return kind == PTS_SPUT; }
 
   bool is_invoke() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
@@ -296,6 +300,8 @@ class PointsToAction final {
   PointsToVariable dest() const { return get_arg(dest_key()); }
 
   PointsToVariable src() const { return get_arg(src_key()); }
+
+  void remove_dest() { m_arguments.erase(dest_key()); }
 
   /*
    * Returns the arguments of a method call (indexed by their position in the
@@ -434,7 +440,13 @@ class PointsToMethodSemantics {
 
   void add(const PointsToAction& a) { m_points_to_actions.emplace_back(a); }
 
-  void shrink() { m_points_to_actions.shrink_to_fit(); }
+  /*
+   * This function attempts to remove points-to equations that have no effect on
+   * the analysis (e.g., reading a value that is not used in any write operation
+   * or method call). This helps relieve some of the computational burden on
+   * the resolution algorithm.
+   */
+  void shrink();
 
  private:
   MethodKind m_kind;

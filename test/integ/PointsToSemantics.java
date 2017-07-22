@@ -125,4 +125,22 @@ public class PointsToSemantics {
       return new Base();
     }
   }
+
+  long[] longMethod(long a, long b, long c, long d, long e, int n, long[] array) {
+    array[n] = a + b + c + d + e;
+    return array;
+  }
+
+  class Complex {
+    A a;
+    B b;
+    Complex c;
+    int d;
+  }
+
+  int unusedFields(Complex x) {
+    Complex y = x.c.c;
+    String s = y.b.pick(2);
+    return y.c.c.c.c.d;
+  }
 }

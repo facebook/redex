@@ -132,9 +132,8 @@ std::set<std::string> method_semantics = {
     // B#pick()
     "Lcom/facebook/redextest/PointsToSemantics$B;#pick: (I)Ljava/lang/String; "
     "{\n"
-    " V0 = THIS\n"
     " V1 = Lcom/facebook/redextest/PointsToSemantics$B;#strs()\n"
-    " V2 = Lcom/facebook/redextest/PointsToSemantics$B;#ints()\n"
+    " Lcom/facebook/redextest/PointsToSemantics$B;#ints()\n"
     " V3 = ARRAY_ELEM(V1)\n"
     " RETURN V3\n"
     "}\n",
@@ -148,7 +147,6 @@ std::set<std::string> method_semantics = {
     "}\n",
     // Time#sleep
     "Lcom/facebook/redextest/PointsToSemantics$Time;#sleep: (J)V {\n"
-    " V0 = THIS\n"
     "}\n",
     // Time#repeat()
     "Lcom/facebook/redextest/PointsToSemantics$Time;#repeat: "
@@ -182,7 +180,6 @@ std::set<std::string> method_semantics = {
     // PointsToSemantics#extract()
     "Lcom/facebook/redextest/PointsToSemantics;#extract: "
     "()Lcom/facebook/redextest/PointsToSemantics$A; {\n"
-    " V0 = THIS\n"
     " V1 = NEW Lcom/facebook/redextest/PointsToSemantics$C;\n"
     " V2 = Lcom/facebook/redextest/PointsToSemantics;#a1\n"
     " V3 = NEW Lcom/facebook/redextest/PointsToSemantics$C;\n"
@@ -204,7 +201,6 @@ std::set<std::string> method_semantics = {
     // PointsToSemantics#arrayOfX()
     "Lcom/facebook/redextest/PointsToSemantics;#arrayOfX: "
     "(I)[Lcom/facebook/redextest/PointsToSemantics$X; {\n"
-    " V0 = THIS\n"
     " V1 = EXCEPTION\n"
     " V1.{D}Lcom/facebook/redextest/PointsToSemantics$AnException;#<init>()\n"
     " V2 = NEW [Lcom/facebook/redextest/PointsToSemantics$X;\n"
@@ -228,6 +224,28 @@ std::set<std::string> method_semantics = {
     " V6.{V}Ljava/io/PrintStream;#println(0 => V7)\n"
     " V8 = NEW Lcom/facebook/redextest/PointsToSemantics$Base;\n"
     " V8.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => V0)\n"
+    "}\n",
+    // PointsToSemantics#longMethod()
+    "Lcom/facebook/redextest/PointsToSemantics;#longMethod: (JJJJJI[J)[J {\n"
+    " V1 = PARAM 6\n"
+    " RETURN V1\n"
+    "}\n",
+    // Complex's constructor
+    "Lcom/facebook/redextest/PointsToSemantics$Complex;#<init>: "
+    "(Lcom/facebook/redextest/PointsToSemantics;)V {\n"
+    " V0 = THIS\n"
+    " V1 = PARAM 0\n"
+    " V0.Lcom/facebook/redextest/PointsToSemantics$Complex;#this$0 = V1\n"
+    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    "}\n",
+    // PointsToSemantics#unusedFields()
+    "Lcom/facebook/redextest/PointsToSemantics;#unusedFields: "
+    "(Lcom/facebook/redextest/PointsToSemantics$Complex;)I {\n"
+    " V1 = PARAM 0\n"
+    " V2 = V1.Lcom/facebook/redextest/PointsToSemantics$Complex;#c\n"
+    " V3 = V2.Lcom/facebook/redextest/PointsToSemantics$Complex;#c\n"
+    " V4 = V3.Lcom/facebook/redextest/PointsToSemantics$Complex;#b\n"
+    " V4.{V}Lcom/facebook/redextest/PointsToSemantics$B;#pick()\n"
     "}\n",
 };
 
