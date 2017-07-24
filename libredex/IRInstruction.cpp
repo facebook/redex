@@ -54,30 +54,6 @@ DexOpcode opcode_range_version(DexOpcode op) {
 
 } // namespace
 
-bool is_commutative(DexOpcode op) {
-  return op == OPCODE_ADD_INT || op == OPCODE_MUL_INT ||
-         (op >= OPCODE_AND_INT && op <= OPCODE_XOR_INT) ||
-         op == OPCODE_ADD_LONG || op == OPCODE_MUL_LONG ||
-         (op >= OPCODE_AND_LONG && op <= OPCODE_XOR_LONG) ||
-         op == OPCODE_ADD_FLOAT || op == OPCODE_MUL_FLOAT ||
-         op == OPCODE_ADD_DOUBLE || op == OPCODE_MUL_DOUBLE;
-}
-
-void try_2addr_conversion(IRInstruction* insn) {
-  auto op = insn->opcode();
-  if (is_commutative(op) && insn->dest() == insn->src(1) &&
-      insn->dest() <= 0xf && insn->src(0) <= 0xf) {
-    uint16_t reg_temp = insn->src(0);
-    insn->set_src(0, insn->src(1));
-    insn->set_src(1, reg_temp);
-    insn->set_opcode(convert_3to2addr(op));
-  } else if (op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE &&
-             insn->dest() == insn->src(0) && insn->dest() <= 0xf &&
-             insn->src(1) <= 0xf) {
-    insn->set_opcode(convert_3to2addr(op));
-  }
-}
-
 DexOpcode convert_2to3addr(DexOpcode op) {
   always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
   constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;

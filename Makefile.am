@@ -32,6 +32,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/final_inline \
 	-I$(top_srcdir)/opt/hotness-score \
 	-I$(top_srcdir)/opt/inlineinit \
+	-I$(top_srcdir)/opt/instruction-selection \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/obfuscate \
@@ -160,6 +161,7 @@ redex_all_SOURCES = \
 	opt/final_inline/FinalInline.cpp \
 	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
+	opt/instruction-selection/InstructionSelection.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \

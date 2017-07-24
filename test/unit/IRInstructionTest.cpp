@@ -13,12 +13,13 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "InstructionSelection.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "Transform.h"
 #include "Show.h"
 
-using namespace ir_code_impl;
+using namespace select_instructions;
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
@@ -127,7 +128,8 @@ IRInstruction* select_instruction(IRInstruction* insn) {
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(insn);
-  select_instructions(code.get());
+  InstructionSelection select;
+  select.select_instructions(code.get());
   return code->begin()->insn;
 }
 
@@ -164,7 +166,8 @@ TEST(IRInstruction, SelectCheckCast) {
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));
-  select_instructions(code.get());
+  InstructionSelection select;
+  select.select_instructions(code.get());
 
   // check that we inserted a move opcode before the check-cast
   auto it = InstructionIterable(code.get()).begin();

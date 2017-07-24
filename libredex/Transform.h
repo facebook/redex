@@ -522,13 +522,3 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block);
 MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos);
 
 } // namespace transform
-
-namespace ir_code_impl {
-
-DexOpcode select_move_opcode(const IRInstruction* insn);
-
-DexOpcode select_const_opcode(const IRInstruction* insn);
-
-void select_instructions(IRCode* code);
-
-} // ir_code_impl

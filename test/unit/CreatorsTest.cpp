@@ -117,10 +117,10 @@ TEST(MakeSwitch, MultiIndices) {
     EXPECT_EQ(*data, 4); // 4 cases
     uint32_t* data32 = (uint32_t*)&data[1];
     EXPECT_EQ(*data32++, 0); // initial index value
-    EXPECT_EQ(*data32++, 4); // case 0
-    EXPECT_EQ(*data32++, 4); // case 1
-    EXPECT_EQ(*data32++, 7); // case 2
-    EXPECT_EQ(*data32++, 10); // case 3
+    EXPECT_EQ(*data32++, 5); // case 0
+    EXPECT_EQ(*data32++, 5); // case 1
+    EXPECT_EQ(*data32++, 8); // case 2
+    EXPECT_EQ(*data32++, 11); // case 3
   }
 
   delete g_redex;

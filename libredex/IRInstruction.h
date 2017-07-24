@@ -280,8 +280,6 @@ bool has_contiguous_srcs(const IRInstruction*);
  */
 bool needs_range_conversion(const IRInstruction*);
 
-bool is_commutative(DexOpcode op);
-void try_2addr_conversion(IRInstruction*);
 bool can_use_2addr(const IRInstruction*);
 
 DexOpcode convert_2to3addr(DexOpcode op);
