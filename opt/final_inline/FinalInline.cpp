@@ -18,6 +18,7 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -313,15 +314,15 @@ class FinalInlineImpl {
     std::vector<std::pair<DexMethod*, IRInstruction*>> simple_rewrites;
 
     auto opcode_worker = [&](DexMethod* method, IRInstruction* insn) {
-      if (insn->has_field() && is_sfield_op(insn->opcode())) {
+      if (insn->has_field() && is_sget(insn->opcode())) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Static);
         if (field == nullptr || !field->is_concrete()) return;
         if (inline_field.count(field) == 0) return;
         if (cheap_inline_field.count(field) > 0) {
-          cheap_rewrites.push_back(std::make_pair(method, insn));
+          cheap_rewrites.emplace_back(method, insn);
           return;
         }
-        simple_rewrites.push_back(std::make_pair(method, insn));
+        simple_rewrites.emplace_back(method, insn);
       }
     };
     walk_opcodes(m_full_scope,
