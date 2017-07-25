@@ -15,6 +15,15 @@
 #include <vector>
 #include <string>
 
+constexpr uint32_t kOatMagicNum = 0x0a74616F;
+
+enum class OatVersion : uint32_t {
+  UNKNOWN = 0,
+  V_064 = 0x00343630,
+  V_079 = 0x00393730,
+  V_088 = 0x00383830,
+};
+
 struct DexInput {
   std::string filename; // the location on disk.
   std::string location; // the name to store in the OAT file.

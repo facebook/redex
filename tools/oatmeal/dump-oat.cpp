@@ -35,24 +35,17 @@
 
 namespace {
 
-constexpr uint32_t kOatMagicNum = 0x0a74616F;
-
-constexpr uint32_t kOatVersionUnknown = 0;
-constexpr uint32_t kOatVersion064 = 0x00343630;
-constexpr uint32_t kOatVersion079 = 0x00393730;
-constexpr uint32_t kOatVersion088 = 0x00383830;
-
-uint32_t versionInt(const std::string& version_str) {
+OatVersion versionInt(const std::string& version_str) {
   if (version_str == "064") {
-    return kOatVersion064;
+    return OatVersion::V_064;
   } else if (version_str == "079") {
-    return kOatVersion079;
+    return OatVersion::V_079;
   } else if (version_str == "088") {
-    return kOatVersion088;
+    return OatVersion::V_088;
   } else {
     CHECK(false, "Bad version %s", version_str.c_str());
   }
-  return kOatVersionUnknown;
+  return OatVersion::UNKNOWN;
 }
 
 struct PACKED OatHeader_Common {
@@ -112,9 +105,10 @@ struct PACKED OatHeader_064 {
     cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_064));
 
     CHECK(header.common.magic == kOatMagicNum);
-    CHECK(header.common.version == kOatVersion064 ||
-          header.common.version == kOatVersion079 ||
-          header.common.version == kOatVersion088);
+    const auto v = static_cast<OatVersion>(header.common.version);
+    CHECK(v == OatVersion::V_064 ||
+          v == OatVersion::V_079 ||
+          v == OatVersion::V_088);
 
     return header;
   }
@@ -1289,7 +1283,7 @@ class OatFile_064 : public OatFile {
 
   static Status build(const std::string& oat_file_name,
                       const std::vector<DexInput>& dex_input,
-                      const uint32_t oat_version,
+                      const OatVersion oat_version,
                       InstructionSet isa,
                       bool write_elf);
 
@@ -1379,7 +1373,7 @@ class OatFile_079 : public OatFile {
 
   static Status build(const std::string& oat_file_name,
                       const std::vector<DexInput>& dex_input,
-                      const uint32_t oat_version,
+                      const OatVersion oat_version,
                       InstructionSet isa,
                       bool write_elf);
 
@@ -1514,16 +1508,18 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
     return OatFile_Bad::parse(buf);
   }
 
-  switch (header.version) {
-  case kOatVersion064:
-    return OatFile_064::parse(dex_files_only, buf, oat_offset);
-  case kOatVersion079:
-  case kOatVersion088:
-    // 079 and 088 are the same as far as I can tell.
-    return OatFile_079::parse(dex_files_only, buf, oat_offset);
-  default:
-    return OatFile_Unknown::parse(buf);
+  switch (static_cast<OatVersion>(header.version)) {
+    case OatVersion::V_064:
+      return OatFile_064::parse(dex_files_only, buf, oat_offset);
+    case OatVersion::V_079:
+    case OatVersion::V_088:
+      // 079 and 088 are the same as far as I can tell.
+      return OatFile_079::parse(dex_files_only, buf, oat_offset);
+    case OatVersion::UNKNOWN:
+      return OatFile_Unknown::parse(buf);
   }
+  fprintf(stderr, "Unhandled oat version 0x%08x\n", header.version);
+  return std::unique_ptr<OatFile>(nullptr);
 }
 
 std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
@@ -1748,7 +1744,7 @@ static size_t compute_bss_size_079(const std::vector<DexInput>& dex_files) {
 template <typename DexFileListingType, typename OatClassesType, typename LookupTablesType>
 OatFile::Status build_oatfile(const std::string& oat_file_name,
                               const std::vector<DexInput>& dex_input,
-                              const uint32_t oat_version,
+                              const OatVersion oat_version,
                               InstructionSet isa,
                               bool write_elf) {
 
@@ -1830,7 +1826,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
 
   OatHeader_Common common_header;
   common_header.magic = kOatMagicNum;
-  common_header.version = oat_version;
+  common_header.version = static_cast<uint32_t>(oat_version);
   // Note: So far, I can't replicate the checksum computation done by
   // dex2oat. It appears that the file is written in a fairly arbitrary
   // order, and the checksum is computed as those sections are written.
@@ -1853,7 +1849,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
 
 OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                    const std::vector<DexInput>& dex_input,
-                                   const uint32_t oat_version,
+                                   const OatVersion oat_version,
                                    InstructionSet isa,
                                    bool write_elf) {
   return build_oatfile<DexFileListing_064, OatClasses_064, LookupTables_Nil>(
@@ -1863,7 +1859,7 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
 
 OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                    const std::vector<DexInput>& dex_input,
-                                   const uint32_t oat_version,
+                                   const OatVersion oat_version,
                                    InstructionSet isa,
                                    bool write_elf) {
   return build_oatfile<DexFileListing_079, OatClasses_079, LookupTables>(
@@ -1879,15 +1875,15 @@ OatFile::Status OatFile::build(const std::string& oat_file_name,
   auto version = versionInt(oat_version);
   auto isa = instruction_set(arch);
   switch (version) {
-    case kOatVersion079:
-    case kOatVersion088:
+    case OatVersion::V_079:
+    case OatVersion::V_088:
       return OatFile_079::build(oat_file_name, dex_files, version, isa, write_elf);
 
-    case kOatVersion064:
+    case OatVersion::V_064:
       return OatFile_064::build(oat_file_name, dex_files, version, isa, write_elf);
 
     default:
-      fprintf(stderr, "version 0x%08x unknown\n", version);
+      fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
       return Status::BUILD_UNSUPPORTED_VERSION;
 
   }
