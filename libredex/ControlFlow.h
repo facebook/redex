@@ -90,7 +90,7 @@ class ControlFlowGraph {
   Block* find_block_that_ends_here(const FatMethod::iterator& loc) const;
 
  private:
-  EdgeFlags& edge(Block* pred, Block* succ) {
+  EdgeFlags& mutable_edge(Block* pred, Block* succ) {
     return m_edges[IdPair(pred->id(), succ->id())];
   }
 

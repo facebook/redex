@@ -41,18 +41,18 @@ void ControlFlowGraph::add_edge(Block* p, Block* s, EdgeType type) {
     p->m_succs.push_back(s);
     s->m_preds.push_back(p);
   }
-  edge(p, s).set(type);
+  mutable_edge(p, s).set(type);
 }
 
 void ControlFlowGraph::remove_edge(Block* p, Block* s, EdgeType type) {
-  edge(p, s).reset(type);
+  mutable_edge(p, s).reset(type);
   if (edge(p, s).none()) {
     remove_all_edges(p, s);
   }
 }
 
 void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
-  edge(p, s).reset();
+  mutable_edge(p, s).reset();
   p->m_succs.erase(std::remove_if(p->m_succs.begin(),
                                   p->m_succs.end(),
                                   [&](Block* b) { return b == s; }),
