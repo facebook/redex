@@ -72,6 +72,10 @@ void ElfWriter::build(InstructionSet isa,
   build_dynstr_table();
 
   switch (oat_version_) {
+    case OatVersion::V_045:
+      CHECK(false, "V_045 not yet supported!");
+      break;
+
     case OatVersion::V_064:
       next_offset_ = 0x134;
       next_addr_ = 0x134;
@@ -132,6 +136,9 @@ void ElfWriter::write(FileHandle& fh) {
 
 unsigned int ElfWriter::get_num_dynsymbols() const {
   switch (oat_version_) {
+    case OatVersion::V_045:
+      CHECK(false, "V_045 not yet supported!");
+      break;
     case OatVersion::V_064:
       // There are 4 symbols in the dynsym section - an empty one,
       // oatdata, oatexec, and oatlastword. (oatbss and oatbsslastword
@@ -225,6 +232,8 @@ void ElfWriter::add_bss(Elf32_Word bss_size) {
 
 static int get_strtab_alignment(OatVersion version) {
   switch (version) {
+    case OatVersion::V_045:
+      break;
     case OatVersion::UNKNOWN:
     case OatVersion::V_064:
       return 1;
@@ -553,6 +562,9 @@ void ElfWriter::write_headers(FileHandle& fh) {
 
 unsigned int ElfWriter::get_num_program_headers() const {
   switch (oat_version_) {
+    case OatVersion::V_045:
+      CHECK(false, "V_045 not yet supported!");
+      break;
     case OatVersion::V_064:
       return 5;
 

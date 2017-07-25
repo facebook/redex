@@ -36,7 +36,9 @@
 namespace {
 
 OatVersion versionInt(const std::string& version_str) {
-  if (version_str == "064") {
+  if (version_str == "045") {
+    return OatVersion::V_045;
+  } else if (version_str == "064") {
     return OatVersion::V_064;
   } else if (version_str == "079") {
     return OatVersion::V_079;
@@ -99,8 +101,7 @@ struct PACKED OatHeader_Common {
   }
 };
 
-// Oat header for versions 064, 079, 088.
-struct PACKED OatHeader_064 {
+struct PACKED OatHeader {
   OatHeader_Common common;
 
   InstructionSet instruction_set = InstructionSet::kNone;
@@ -110,6 +111,12 @@ struct PACKED OatHeader_064 {
   uint32_t interpreter_to_interpreter_bridge_offset = 0;
   uint32_t interpreter_to_compiled_code_bridge_offset = 0;
   uint32_t jni_dlsym_lookup_offset = 0;
+
+  // These three fields are not present in version 064 and up.
+  uint32_t portable_imt_conflict_trampoline_offset = 0;
+  uint32_t portable_resolution_trampoline_offset = 0;
+  uint32_t portable_to_interpreter_bridge_offset = 0;
+
   uint32_t quick_generic_jni_trampoline_offset = 0;
   uint32_t quick_imt_conflict_trampoline_offset = 0;
   uint32_t quick_resolution_trampoline_offset = 0;
@@ -125,29 +132,84 @@ struct PACKED OatHeader_064 {
   // note: variable width data at end
   uint8_t key_value_store[0];
 
-  static OatHeader_064 parse(ConstBuffer buf) {
-    OatHeader_064 header;
-    CHECK(buf.len >= sizeof(OatHeader_064));
-    cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_064));
+  static size_t size(OatVersion version) {
+    if (version == OatVersion::V_045) {
+      return sizeof(OatHeader);
+    } else {
+      return sizeof(OatHeader) - 3 * sizeof(uint32_t);
+    }
+  }
+
+  size_t size() const {
+    return OatHeader::size(static_cast<OatVersion>(common.version));
+  }
+
+  static OatHeader parse(ConstBuffer buf) {
+    OatHeader header;
+    CHECK(buf.len >= sizeof(OatHeader_Common));
+
+    cur_ma()->memcpyAndMark(&header, buf.ptr, sizeof(OatHeader_Common));
+    auto ptr = buf.ptr + sizeof(OatHeader_Common);
+
+    READ_WORD(&header.instruction_set, ptr);
+    READ_WORD(&header.instruction_set_features_bitmap, ptr);
+    READ_WORD(&header.dex_file_count, ptr);
+    READ_WORD(&header.executable_offset, ptr);
+    READ_WORD(&header.interpreter_to_interpreter_bridge_offset, ptr);
+    READ_WORD(&header.interpreter_to_compiled_code_bridge_offset, ptr);
+    READ_WORD(&header.jni_dlsym_lookup_offset, ptr);
+
+    // These three fields are not present in version 064 and up.
+    if (header.common.version == static_cast<uint32_t>(OatVersion::V_045)) {
+      READ_WORD(&header.portable_imt_conflict_trampoline_offset, ptr);
+      READ_WORD(&header.portable_resolution_trampoline_offset, ptr);
+      READ_WORD(&header.portable_to_interpreter_bridge_offset, ptr);
+    }
+
+    READ_WORD(&header.quick_generic_jni_trampoline_offset, ptr);
+    READ_WORD(&header.quick_imt_conflict_trampoline_offset, ptr);
+    READ_WORD(&header.quick_resolution_trampoline_offset, ptr);
+    READ_WORD(&header.quick_to_interpreter_bridge_offset, ptr);
+    READ_WORD(&header.image_patch_delta, ptr);
+    READ_WORD(&header.image_file_location_oat_checksum, ptr);
+    READ_WORD(&header.image_file_location_oat_data_begin, ptr);
+    READ_WORD(&header.key_value_store_size, ptr);
 
     CHECK(header.common.magic == kOatMagicNum);
-    const auto v = static_cast<OatVersion>(header.common.version);
-    CHECK(v == OatVersion::V_064 ||
-          v == OatVersion::V_079 ||
-          v == OatVersion::V_088);
-
     return header;
   }
 
-  void update_checksum(Adler32& cksum) {
-    auto begin = reinterpret_cast<const char*>(&instruction_set);
-    auto end = reinterpret_cast<const char*>(&key_value_store[0]);
-    cksum.update(begin, end - begin);
+  void update_checksum(Adler32&) {
+    // Note: I don't think its practical to replicate ART's checksum computation,
+    // so we don't even bother
   }
 
   void write(FileHandle& fh) {
-    write_buf(fh, ConstBuffer { reinterpret_cast<const char*>(this),
-          sizeof(OatHeader_064) });
+    write_obj(fh, common);
+
+    write_word(fh, static_cast<uint32_t>(instruction_set));
+    write_word(fh, instruction_set_features_bitmap);
+    write_word(fh, dex_file_count);
+    write_word(fh, executable_offset);
+    write_word(fh, interpreter_to_interpreter_bridge_offset);
+    write_word(fh, interpreter_to_compiled_code_bridge_offset);
+    write_word(fh, jni_dlsym_lookup_offset);
+
+    // These three fields are not present in version 064 and up.
+    if (common.version == static_cast<uint32_t>(OatVersion::V_045)) {
+      write_word(fh, portable_imt_conflict_trampoline_offset);
+      write_word(fh, portable_resolution_trampoline_offset);
+      write_word(fh, portable_to_interpreter_bridge_offset);
+    }
+
+    write_word(fh, quick_generic_jni_trampoline_offset);
+    write_word(fh, quick_imt_conflict_trampoline_offset);
+    write_word(fh, quick_resolution_trampoline_offset);
+    write_word(fh, quick_to_interpreter_bridge_offset);
+    write_word(fh, image_patch_delta);
+    write_word(fh, image_file_location_oat_checksum);
+    write_word(fh, image_file_location_oat_data_begin);
+    write_word(fh, key_value_store_size);
   }
 
   void print() {
@@ -159,7 +221,26 @@ struct PACKED OatHeader_064 {
         "  executable_offset: 0x%08x\n"
         "  interpreter_to_interpreter_bridge_offset: 0x%08x\n"
         "  interpreter_to_compiled_code_bridge_offset: 0x%08x\n"
-        "  jni_dlsym_lookup_offset: 0x%08x\n"
+        "  jni_dlsym_lookup_offset: 0x%08x\n",
+        instruction_set_str(instruction_set),
+        instruction_set_features_bitmap,
+        dex_file_count,
+        executable_offset,
+        interpreter_to_interpreter_bridge_offset,
+        interpreter_to_compiled_code_bridge_offset,
+        jni_dlsym_lookup_offset);
+
+    if (common.version == static_cast<uint32_t>(OatVersion::V_045)) {
+      printf(
+        "  portable_imt_conflict_trampoline_offset: 0x%08x\n"
+        "  portable_resolution_trampoline_offset: 0x%08x\n"
+        "  portable_to_interpreter_bridge_offset: 0x%08x\n",
+        portable_imt_conflict_trampoline_offset,
+        portable_resolution_trampoline_offset,
+        portable_to_interpreter_bridge_offset);
+    }
+
+    printf(
         "  quick_generic_jni_trampoline_offset: 0x%08x\n"
         "  quick_imt_conflict_trampoline_offset: 0x%08x\n"
         "  quick_resolution_trampoline_offset: 0x%08x\n"
@@ -168,13 +249,6 @@ struct PACKED OatHeader_064 {
         "  image_file_location_oat_checksum: 0x%08x\n"
         "  image_file_location_oat_data_begin: 0x%08x\n"
         "  key_value_store_size: 0x%08x\n",
-        instruction_set_str(instruction_set),
-        instruction_set_features_bitmap,
-        dex_file_count,
-        executable_offset,
-        interpreter_to_interpreter_bridge_offset,
-        interpreter_to_compiled_code_bridge_offset,
-        jni_dlsym_lookup_offset,
         quick_generic_jni_trampoline_offset,
         quick_imt_conflict_trampoline_offset,
         quick_resolution_trampoline_offset,
@@ -1257,11 +1331,11 @@ class OatFile_064 : public OatFile {
 
   static std::unique_ptr<OatFile> parse(bool dex_files_only, ConstBuffer buf,
                                         size_t oat_offset) {
-    auto header = OatHeader_064::parse(buf);
+    auto header = OatHeader::parse(buf);
     auto key_value_store = KeyValueStore(
-        buf.slice(sizeof(header)).truncate(header.key_value_store_size));
+        buf.slice(header.size()).truncate(header.key_value_store_size));
 
-    auto rest = buf.slice(sizeof(header) + header.key_value_store_size);
+    auto rest = buf.slice(header.size() + header.key_value_store_size);
     DexFileListing_064 dfl(dex_files_only, header.dex_file_count, rest, buf);
 
     DexFiles dex_files(dfl, buf);
@@ -1315,7 +1389,7 @@ class OatFile_064 : public OatFile {
                       const std::string& art_image_location);
 
  private:
-  OatFile_064(OatHeader_064 h,
+  OatFile_064(OatHeader h,
               KeyValueStore kv,
               DexFileListing_064 dfl,
               DexFiles dex_files,
@@ -1326,7 +1400,7 @@ class OatFile_064 : public OatFile {
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_offset) {}
 
-  OatHeader_064 header_;
+  OatHeader header_;
   KeyValueStore key_value_store_;
   DexFileListing_064 dex_file_listing_;
   DexFiles dex_files_;
@@ -1343,11 +1417,11 @@ class OatFile_079 : public OatFile {
   static std::unique_ptr<OatFile> parse(bool dex_files_only, ConstBuffer buf,
                                         size_t oat_offset) {
 
-    auto header = OatHeader_064::parse(buf);
+    auto header = OatHeader::parse(buf);
     auto key_value_store = KeyValueStore(
-        buf.slice(sizeof(header)).truncate(header.key_value_store_size));
+        buf.slice(header.size()).truncate(header.key_value_store_size));
 
-    auto rest = buf.slice(sizeof(header) + header.key_value_store_size);
+    auto rest = buf.slice(header.size() + header.key_value_store_size);
     DexFileListing_079 dfl(header.dex_file_count, rest);
 
     DexFiles dex_files(dfl, buf);
@@ -1417,7 +1491,7 @@ class OatFile_079 : public OatFile {
   size_t oat_offset() const override { return oat_offset_; }
 
  private:
-  OatFile_079(OatHeader_064 h,
+  OatFile_079(OatHeader h,
               KeyValueStore kv,
               DexFileListing_079 dfl,
               DexFiles dex_files,
@@ -1428,7 +1502,7 @@ class OatFile_079 : public OatFile {
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_offset) {}
 
-  OatFile_079(OatHeader_064 h,
+  OatFile_079(OatHeader h,
               KeyValueStore kv,
               DexFileListing_079 dfl,
               DexFiles dex_files,
@@ -1443,7 +1517,7 @@ class OatFile_079 : public OatFile {
         oat_classes_(std::move(oat_classes)),
         oat_offset_(oat_offset) {}
 
-  OatHeader_064 header_;
+  OatHeader header_;
   KeyValueStore key_value_store_;
   DexFileListing_079 dex_file_listing_;
   DexFiles dex_files_;
@@ -1537,6 +1611,9 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
   }
 
   switch (static_cast<OatVersion>(header.version)) {
+    case OatVersion::V_045:
+      CHECK(false, "version 045 not supported");
+      break;
     case OatVersion::V_064:
       return OatFile_064::parse(dex_files_only, buf, oat_offset);
     case OatVersion::V_079:
@@ -1564,13 +1641,13 @@ std::unique_ptr<OatFile> OatFile::parse_dex_files_only(void* ptr, size_t len) {
 
 ////////// building
 
-OatHeader_064 build_header(OatVersion oat_version,
+OatHeader build_header(OatVersion oat_version,
                            const std::vector<DexInput>& dex_input,
                            InstructionSet isa,
                            uint32_t keyvalue_size,
                            uint32_t oat_size,
                            const ImageInfo_064* image_info) {
-  OatHeader_064 header;
+  OatHeader header;
 
   // the common portion of the header must be re-written after we've written
   // the rest of the file, as we don't know the checksum until then.
@@ -1828,7 +1905,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
   const auto dex_file_listing_size = DexFileListingType::compute_size(dex_input);
 
   // Neither the keyvalue store or the DexFileListing require alignment.
-  uint32_t next_offset = align<4>(sizeof(OatHeader_064)
+  uint32_t next_offset = align<4>(OatHeader::size(oat_version) +
                                  + keyvalue_size
                                  + dex_file_listing_size);
 

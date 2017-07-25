@@ -19,6 +19,7 @@ constexpr uint32_t kOatMagicNum = 0x0a74616F;
 
 enum class OatVersion : uint32_t {
   UNKNOWN = 0,
+  V_045 = 0x00353430,
   V_064 = 0x00343630,
   V_079 = 0x00393730,
   V_088 = 0x00383830,
