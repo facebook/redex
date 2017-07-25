@@ -95,7 +95,7 @@ for d in $dex_dirs; do
 
     if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary -v $version -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $actual
       cat $tmp_oat.output >> $actual
@@ -110,7 +110,7 @@ for d in $dex_dirs; do
 
       new_output=`mktemp`
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -b -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary -v $version -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $new_output
       cat $tmp_oat.output >> $new_output
