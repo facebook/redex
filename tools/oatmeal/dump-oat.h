@@ -79,7 +79,8 @@ class OatFile {
                       const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,
                       const std::string& arch,
-                      bool write_elf);
+                      bool write_elf,
+                      const std::string& art_image_location);
 };
 
 enum class InstructionSet {

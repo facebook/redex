@@ -48,6 +48,32 @@ OatVersion versionInt(const std::string& version_str) {
   return OatVersion::UNKNOWN;
 }
 
+struct PACKED ImageInfo_064 {
+  int32_t patch_delta = 0;
+  uint32_t oat_checksum = 0;
+  uint32_t data_begin = 0;
+
+  ImageInfo_064() = default;
+  ImageInfo_064(int32_t pd, uint32_t oc, uint32_t db)
+    : patch_delta(pd), oat_checksum(oc), data_begin(db) {}
+};
+
+struct PACKED ArtImageHeader_064 {
+  uint8_t magic[4];
+  uint8_t version[4];
+  uint32_t image_begin;
+  uint32_t image_size;
+  uint32_t oat_checksum;
+  uint32_t oat_file_begin;
+  uint32_t oat_data_begin;
+  uint32_t oat_data_end;
+  uint32_t oat_file_end;
+  int32_t patch_delta;
+  uint32_t image_roots;
+  uint32_t pointer_size;
+  uint32_t compile_pic;
+};
+
 struct PACKED OatHeader_Common {
   uint32_t magic = 0;
   uint32_t version = 0;
@@ -1285,7 +1311,8 @@ class OatFile_064 : public OatFile {
                       const std::vector<DexInput>& dex_input,
                       const OatVersion oat_version,
                       InstructionSet isa,
-                      bool write_elf);
+                      bool write_elf,
+                      const std::string& art_image_location);
 
  private:
   OatFile_064(OatHeader_064 h,
@@ -1375,7 +1402,8 @@ class OatFile_079 : public OatFile {
                       const std::vector<DexInput>& dex_input,
                       const OatVersion oat_version,
                       InstructionSet isa,
-                      bool write_elf);
+                      bool write_elf,
+                      const std::string& art_image_location);
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     std::vector<OatDexFile> ret;
@@ -1536,10 +1564,12 @@ std::unique_ptr<OatFile> OatFile::parse_dex_files_only(void* ptr, size_t len) {
 
 ////////// building
 
-OatHeader_064 build_header(const std::vector<DexInput>& dex_input,
+OatHeader_064 build_header(OatVersion oat_version,
+                           const std::vector<DexInput>& dex_input,
                            InstructionSet isa,
                            uint32_t keyvalue_size,
-                           uint32_t oat_size) {
+                           uint32_t oat_size,
+                           const ImageInfo_064* image_info) {
   OatHeader_064 header;
 
   // the common portion of the header must be re-written after we've written
@@ -1561,6 +1591,12 @@ OatHeader_064 build_header(const std::vector<DexInput>& dex_input,
   header.executable_offset = oat_size;
 
   header.key_value_store_size = keyvalue_size;
+
+  if (image_info != nullptr) {
+    header.image_patch_delta = image_info->patch_delta;
+    header.image_file_location_oat_checksum = image_info->oat_checksum;
+    header.image_file_location_oat_data_begin = image_info->data_begin;
+  }
 
   // omitted fields default to zero, and should remain zero.
   return header;
@@ -1741,12 +1777,31 @@ static size_t compute_bss_size_079(const std::vector<DexInput>& dex_files) {
   return ret;
 }
 
+std::unique_ptr<ImageInfo_064> read_image_info_064(const std::string& art_image_location) {
+  auto art_fh = FileHandle(fopen(art_image_location.c_str(), "r"));
+  if (art_fh.get() == nullptr) {
+    return std::unique_ptr<ImageInfo_064>(nullptr);
+  }
+
+  std::unique_ptr<ArtImageHeader_064> art_header = art_fh.read_object<ArtImageHeader_064>();
+  if (!art_header) {
+    return std::unique_ptr<ImageInfo_064>(nullptr);
+  }
+
+  return std::unique_ptr<ImageInfo_064>(
+    new ImageInfo_064(art_header->patch_delta,
+                      art_header->oat_checksum,
+                      art_header->oat_data_begin)
+  );
+}
+
 template <typename DexFileListingType, typename OatClassesType, typename LookupTablesType>
 OatFile::Status build_oatfile(const std::string& oat_file_name,
                               const std::vector<DexInput>& dex_input,
                               const OatVersion oat_version,
                               InstructionSet isa,
-                              bool write_elf) {
+                              bool write_elf,
+                              const std::string& art_image_location) {
 
   const std::vector<KeyValueStore::KeyValue> key_value = {
     { "classpath", "" },
@@ -1757,8 +1812,15 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     { "dex2oat-host", "X86" },
     { "has-patch-info", "false" },
     { "native-debuggable", "false" },
+    { "image-location", art_image_location.c_str() },
     { "pic", "false" }
   };
+
+  ////////// Gather image info from boot.art and boot.oat
+  std::unique_ptr<ImageInfo_064> image_info;
+  if (oat_version == OatVersion::V_064) {
+    image_info = read_image_info_064(art_image_location);
+  }
 
   ////////// Compute sizes and offsets.
 
@@ -1774,7 +1836,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
   auto oat_size = align<0x1000>(next_offset);
 
   Adler32 cksum;
-  auto header = build_header(dex_input, isa, keyvalue_size, oat_size);
+  auto header = build_header(oat_version, dex_input, isa, keyvalue_size, oat_size, image_info.get());
   header.update_checksum(cksum);
 
   ////////// Write the file.
@@ -1839,7 +1901,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     cksum_fh.set_seek_reference(0);
     cksum_fh.seek_begin();
 
-    ElfWriter section_headers;
+    ElfWriter section_headers(oat_version);
     section_headers.build(isa, oat_size, compute_bss_size_079(dex_input));
     section_headers.write(cksum_fh);
   }
@@ -1851,9 +1913,10 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                    const std::vector<DexInput>& dex_input,
                                    const OatVersion oat_version,
                                    InstructionSet isa,
-                                   bool write_elf) {
+                                   bool write_elf,
+                                   const std::string& art_image_location) {
   return build_oatfile<DexFileListing_064, OatClasses_064, LookupTables_Nil>(
-    oat_file_name, dex_input, oat_version, isa, write_elf
+    oat_file_name, dex_input, oat_version, isa, write_elf, art_image_location
   );
 }
 
@@ -1861,9 +1924,10 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                    const std::vector<DexInput>& dex_input,
                                    const OatVersion oat_version,
                                    InstructionSet isa,
-                                   bool write_elf) {
+                                   bool write_elf,
+                                   const std::string& art_image_location) {
   return build_oatfile<DexFileListing_079, OatClasses_079, LookupTables>(
-    oat_file_name, dex_input, oat_version, isa, write_elf
+    oat_file_name, dex_input, oat_version, isa, write_elf, art_image_location
   );
 }
 
@@ -1871,20 +1935,22 @@ OatFile::Status OatFile::build(const std::string& oat_file_name,
                                const std::vector<DexInput>& dex_files,
                                const std::string& oat_version,
                                const std::string& arch,
-                               bool write_elf) {
+                               bool write_elf,
+                               const std::string& art_image_location) {
   auto version = versionInt(oat_version);
   auto isa = instruction_set(arch);
   switch (version) {
     case OatVersion::V_079:
     case OatVersion::V_088:
-      return OatFile_079::build(oat_file_name, dex_files, version, isa, write_elf);
+      return OatFile_079::build(oat_file_name, dex_files, version, isa, write_elf,
+                                art_image_location);
 
     case OatVersion::V_064:
-      return OatFile_064::build(oat_file_name, dex_files, version, isa, write_elf);
+      return OatFile_064::build(oat_file_name, dex_files, version, isa, write_elf,
+                                art_image_location);
 
     default:
       fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
       return Status::BUILD_UNSUPPORTED_VERSION;
-
   }
 }

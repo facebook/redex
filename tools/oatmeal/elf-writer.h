@@ -56,6 +56,8 @@ public:
     finalized_ = true;
   }
 
+  const std::string& at(int idx) const;
+
 private:
   bool finalized_ = false;
   std::vector<std::string> strings_;
@@ -64,6 +66,8 @@ private:
 // Used for writing the ELF packaging around an ART oat file.
 class ElfWriter {
 public:
+  explicit ElfWriter(OatVersion oat_version) : oat_version_(oat_version) {}
+
   void build(InstructionSet isa,
              Elf32_Word oat_size,
              Elf32_Word bss_size);
@@ -71,6 +75,8 @@ public:
   void write(FileHandle& fh);
 
 private:
+  void build_dynstr_table();
+
   void add_empty_section_header();
   void add_rodata(Elf32_Word oat_size);
   void add_text();
@@ -81,6 +87,8 @@ private:
   void add_dynamic();
   void add_shstrtab();
 
+  void link_section(int src_idx, int dst_idx);
+
   void write_dynstr(FileHandle& fh);
   void write_dynsym(FileHandle& fh);
   void write_hash(FileHandle& fh);
@@ -88,6 +96,8 @@ private:
   void write_shstrtab(FileHandle& fh);
   void write_headers(FileHandle& fh);
   void write_program_headers(FileHandle& fh);
+
+  uint32_t hash_dynsym(int sym_idx) const;
 
   Elf32_Word add_section_header(
     Elf32_Word str_idx,
@@ -101,7 +111,9 @@ private:
     Elf32_Word align,
     Elf32_Word entsize);
 
-  Elf32_Ehdr elf_header_;
+  OatVersion oat_version_;
+
+  Elf32_Ehdr elf_header_ = {};
 
   ElfStringTable string_table_;
   ElfStringTable dynstr_table_;
@@ -109,9 +121,8 @@ private:
   Elf32_Word next_offset_ = 0x1000;
   Elf32_Word next_addr_ = 0x1000;
 
-  // There are 5 symbols in the dynsym section - an empty one,
-  // oatdata, oatlastword, oatbss, oatbsslastword
-  static constexpr int kNumDynSymbols = 5;
+  unsigned int get_num_dynsymbols() const;
+  unsigned int get_num_program_headers() const;
 
   // There are 7 dynamic sections: DT_HASH, DT_STRTAB,
   // DT_SYMTAB, DT_SYMENT, DT_STRZ, DT_SONAME, and
@@ -136,5 +147,6 @@ private:
   int dynamic_idx_ = 0;
   int shstrtab_idx_ = 0;
 
-  std::vector<Elf32_Shdr> section_headers;
+  std::vector<Elf32_Shdr> section_headers_;
+  std::vector<Elf32_Sym> dynsyms_;
 };

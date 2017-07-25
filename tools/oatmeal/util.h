@@ -51,6 +51,10 @@ uint32_t align(uint32_t in) {
   return (in + (Width - 1)) & -Width;
 }
 
+inline uint32_t align(uint32_t width, uint32_t in) {
+  return (in + (width - 1)) & -width;
+}
+
 template <uint32_t Width>
 bool is_aligned(uint32_t in) {
   return (in & (Width - 1)) == 0;
@@ -123,6 +127,16 @@ public:
 
   virtual size_t fwrite(const void* p, size_t size, size_t count);
   size_t fread(void* ptr, size_t size, size_t count);
+
+  template <typename T>
+  std::unique_ptr<T> read_object() {
+    auto ret = std::unique_ptr<T>(new T);
+    if (this->fread(ret.get(), sizeof(T), 1) != 1) {
+      return std::unique_ptr<T>(nullptr);
+    } else {
+      return ret;
+    }
+  }
 
   bool feof();
   bool ferror();

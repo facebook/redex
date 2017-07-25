@@ -51,6 +51,8 @@ struct Arguments {
   bool print_unverified_classes = false;
 
   std::string arch;
+
+  std::string art_image_location;
 };
 
 #ifndef ANDROID
@@ -86,6 +88,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"dump-memory-usage", no_argument, nullptr, 'm'},
                              {"print-unverified-classes", no_argument, nullptr, 'p'},
                              {"arch", required_argument, nullptr, 'a'},
+                             {"art-image-location", required_argument, nullptr, 0},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -154,6 +157,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 'v':
       ret.oat_version = optarg;
+      break;
+
+    case 0:
+      ret.art_image_location = optarg;
       break;
 
     case ':':
@@ -254,7 +261,7 @@ int build(const Arguments& args) {
   }
 
   OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch,
-      args.write_elf);
+      args.write_elf, args.art_image_location);
 
   return 0;
 }
