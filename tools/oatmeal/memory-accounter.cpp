@@ -78,23 +78,20 @@ class MemoryAccounterImpl : public MemoryAccounter {
     CHECK(src >= buf_.ptr);
     uint32_t begin = src - buf_.ptr;
     uint32_t end = begin + count;
-    CHECK(end <= buf_.len);
 
-    consumed_ranges_.emplace_back(begin, end);
+    markRangeImpl(begin, end);
     memcpy(dest, src, count);
   }
 
   void markRangeConsumed(uint32_t begin, uint32_t count) override {
     uint32_t end = begin + count;
-    CHECK(end <= buf_.len);
-    consumed_ranges_.emplace_back(begin, end);
+    markRangeImpl(begin, end);
   }
 
   void markRangeConsumed(const char* ptr, uint32_t count) override {
     uint32_t begin = ptr - buf_.ptr;
     uint32_t end = begin + count;
-    CHECK(end <= buf_.len);
-    consumed_ranges_.emplace_back(begin, end);
+    markRangeImpl(begin, end);
   }
 
   void markBufferConsumed(ConstBuffer subBuffer) override {
@@ -120,6 +117,11 @@ class MemoryAccounterImpl : public MemoryAccounter {
 
   static NilMemoryAccounterImpl nil_accounter_;
   static std::vector<std::unique_ptr<MemoryAccounter>> accounter_stack_;
+
+  void markRangeImpl(uint32_t begin, uint32_t end) {
+    CHECK(begin <= end && end <= buf_.len);
+    consumed_ranges_.emplace_back(begin, end);
+  }
 };
 
 NilMemoryAccounterImpl MemoryAccounterImpl::nil_accounter_;

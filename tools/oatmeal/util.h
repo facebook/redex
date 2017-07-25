@@ -69,6 +69,19 @@ inline T nextPowerOfTwo(T in) {
   return in << 1u;
 }
 
+template <typename T>
+inline T countSetBits(T in) {
+  // Turn off all but msb.
+  if (in == 0) { return 0; }
+  int count = 1;
+  while ((in & (in - 1u)) != 0) {
+    in &= in - 1u;
+    count++;
+  }
+  return count;
+}
+
+
 struct ConstBuffer {
   const char* ptr;
   size_t len;
@@ -201,12 +214,12 @@ class ChecksummingFileHandle : public FileHandle {
 public:
   static constexpr size_t kBufSize = 50 * 1024;
 
-  ChecksummingFileHandle(FILE* fh, Adler32 cksum)
-    : FileHandle(fh), cksum_(std::move(cksum)),
+  ChecksummingFileHandle(FILE* fh, Adler32 checksum)
+    : FileHandle(fh), cksum_(std::move(checksum)),
     buffer_(new char[kBufSize]), buf_pos_(0) {}
 
-  ChecksummingFileHandle(FileHandle fh, Adler32 cksum)
-    : FileHandle(std::move(fh)), cksum_(std::move(cksum)),
+  ChecksummingFileHandle(FileHandle fh, Adler32 checksum)
+    : FileHandle(std::move(fh)), cksum_(std::move(checksum)),
     buffer_(new char[kBufSize]), buf_pos_(0) {}
 
   virtual ~ChecksummingFileHandle() {

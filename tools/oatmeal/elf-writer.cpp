@@ -232,9 +232,8 @@ void ElfWriter::add_bss(Elf32_Word bss_size) {
 
 static int get_strtab_alignment(OatVersion version) {
   switch (version) {
-    case OatVersion::V_045:
-      break;
     case OatVersion::UNKNOWN:
+    case OatVersion::V_045:
     case OatVersion::V_064:
       return 1;
     case OatVersion::V_079:
