@@ -15,12 +15,6 @@ import org.junit.Test;
 
 public class Synth2Test {
 
-    /* Required to prevent redex from deleting constructor, needed for JUnit */
-    @Test
-    public void createTestObject() {
-        new Synth2Test();
-    }
-
     /**
      * This tests some subtle behavior in synth removal, to make sure that
      * Inner.a() isn't visited twice in the same pass.  What could happen is

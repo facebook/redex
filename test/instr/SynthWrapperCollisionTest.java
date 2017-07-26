@@ -16,12 +16,6 @@ import org.junit.Test;
 
 public class SynthWrapperCollisionTest {
 
-    /* Required to prevent redex from deleting constructor, needed for JUnit */
-    @Test
-    public void createTestObject() {
-        new SynthWrapperCollisionTest();
-    }
-
     static class Inner {
         int mData;
 

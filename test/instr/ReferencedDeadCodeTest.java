@@ -15,12 +15,6 @@ import org.junit.Test;
 
 public class ReferencedDeadCodeTest {
 
-    /* Required to prevent redex from deleting constructor, needed for JUnit */
-    @Test
-    public void createTestObject() {
-        new ReferencedDeadCodeTest();
-    }
-
     /**
      * TODO: Document this test!!!
      * TODO: This test is currently broken!!! It doesn't fail when you

@@ -16,12 +16,6 @@ import org.junit.Test;
 
 public class ConstantPropagationTest {
 
-  /* Required to prevent redex from deleting constructor, needed for JUnit */
-  @Test
-  public void createTestObject() {
-    new ConstantPropagationTest();
-  }
-
   @Test
   public void if_long() {
     long x = 0x0002000300040005L;
