@@ -1477,6 +1477,10 @@ class File:
             return proto_ids[proto_idx]
         return None
 
+    def get_proto_shorty(self, proto_idx):
+        id = self.get_proto_id(proto_idx)
+        return self.get_string(id.shorty_idx)
+
     def get_field_ids(self):
         if self.field_ids is None:
             self.field_ids = list()
@@ -1756,7 +1760,7 @@ class File:
                 item.dump(f=f, print_name=False)
                 f.write(' ("%s", "%s", "%s")\n' % (
                     self.get_typename(item.class_idx),
-                    self.get_typename(item.proto_idx),
+                    self.get_proto_shorty(item.proto_idx),
                     self.get_string(item.name_idx)))
 
     def dump_class_defs(self, options, f=sys.stdout):
@@ -3784,7 +3788,9 @@ class DexEmulator(object):
 
 
 def main():
+    usage = 'Usage: dex.py [options] [dex file(s)]'
     parser = optparse.OptionParser(
+        usage=usage,
         description='A script that parses DEX files.')
     parser.add_option('-v', '--verbose',
                       action='store_true',
@@ -3848,11 +3854,12 @@ def main():
                       default=False)
     parser.add_option('--class',
                       dest='class_filter',
-                      help='Find a class by name.',
+                      help='Find a class by name. ' +
+                        'Accepts `Lpath/to/Class;` or `path.to.Class`',
                       default=None)
     parser.add_option('--method',
                       dest='method_filter',
-                      help='Find a method by name.',
+                      help='Find a method by name. Must be used with --class',
                       default=None)
     parser.add_option('--call-sites',
                       action='store_true',
@@ -3915,7 +3922,15 @@ def main():
     string_counts = {}
     i = 0
 
+    if len(files) == 0:
+        print('No input files. {}'.format(usage))
+        return
+
     for (i, path) in enumerate(files):
+        if os.path.splitext(path)[1] == '.apk':
+            print('error: dex.py operates on dex files, please unpack your apk')
+            return
+
         print('Dex file: %s' % (path))
         file_size = os.path.getsize(path)
         total_file_size += file_size
