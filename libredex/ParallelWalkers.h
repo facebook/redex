@@ -64,3 +64,17 @@ Output walk_methods_parallel(
   };
   return wq.run_all();
 }
+
+// The simple version. Call `walker` on all methods in `scope` in parallel.
+template <class T>
+void walk_methods_parallel_simple(
+    const T& scope, const std::function<void(DexMethod*)>& walker) {
+  walk_methods_parallel<std::vector<DexClass*>, std::nullptr_t, std::nullptr_t>(
+      scope,
+      [&walker](std::nullptr_t, DexMethod* m) {
+        walker(m);
+        return nullptr;
+      },
+      [](std::nullptr_t, std::nullptr_t) { return nullptr; },
+      [](int) { return nullptr; });
+}
