@@ -1062,7 +1062,8 @@ void transfer_object_reach(DexType* obj,
 bool tainted_reg_escapes(
     DexType* ty,
     DexMethod* method,
-    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map) {
+    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map,
+    bool enable_buildee_constr_change) {
   always_assert(ty != nullptr);
 
   for (auto it : taint_map) {
@@ -1104,7 +1105,8 @@ bool tainted_reg_escapes(
         for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
           if (tainted[insn->src(i)]) {
 
-            if (RedexContext::assume_regalloc()) {
+            if (RedexContext::assume_regalloc() &&
+                enable_buildee_constr_change) {
               // Don't consider builders that get passed to the buildee's
               // constructor. `update_buildee_constructor` will sort this
               // out later.

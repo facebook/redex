@@ -75,7 +75,8 @@ struct FieldsRegs {
 bool tainted_reg_escapes(
     DexType* type,
     DexMethod* method,
-    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map);
+    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map,
+    bool enable_buildee_constr_change = false);
 
 void transfer_object_reach(DexType* object,
                            uint16_t regs_size,

@@ -38,7 +38,7 @@ builder_counters b_counter;
 // checks if the `this` argument on an instance method ever gets passed to
 // a method that doesn't belong to the same instance, or if it gets stored
 // in a field, or if it escapes as a return value.
-bool this_arg_escapes(DexMethod* method) {
+bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(method != nullptr);
   always_assert(!(method->get_access() & ACC_STATIC));
 
@@ -60,10 +60,11 @@ bool this_arg_escapes(DexMethod* method) {
     }
   };
   auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
-  return tainted_reg_escapes(this_cls, method, *taint_map);
+  return tainted_reg_escapes(
+      this_cls, method, *taint_map, enable_buildee_constr_change);
 }
 
-bool this_arg_escapes(DexClass* cls) {
+bool this_arg_escapes(DexClass* cls, bool enable_buildee_constr_change) {
   always_assert(cls != nullptr);
 
   bool result = false;
@@ -71,7 +72,8 @@ bool this_arg_escapes(DexClass* cls) {
     if (!m->get_code()) {
       continue;
     }
-    if (!(m->get_access() & ACC_STATIC) && this_arg_escapes(m)) {
+    if (!(m->get_access() & ACC_STATIC) &&
+        this_arg_escapes(m, enable_buildee_constr_change)) {
       TRACE(BUILDERS,
             3,
             "this escapes in %s\n",
@@ -83,7 +85,7 @@ bool this_arg_escapes(DexClass* cls) {
     if (!m->get_code()) {
       continue;
     }
-    if (this_arg_escapes(m)) {
+    if (this_arg_escapes(m, enable_buildee_constr_change)) {
       TRACE(BUILDERS,
             3,
             "this escapes in %s\n",
@@ -218,7 +220,8 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);
-  return tainted_reg_escapes(builder, method, *taint_map);
+  return tainted_reg_escapes(
+      builder, method, *taint_map, m_enable_buildee_constr_change);
 }
 
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
@@ -279,7 +282,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexType*> this_escapes;
   for (DexType* cls_ty : builders_and_supers) {
     DexClass* cls = type_class(cls_ty);
-    if (cls->is_external() || this_arg_escapes(cls)) {
+    if (cls->is_external() ||
+        this_arg_escapes(cls, m_enable_buildee_constr_change)) {
       this_escapes.emplace(cls_ty);
     }
   }
