@@ -83,6 +83,23 @@ class TypeSystem {
     return intfs != m_interfaces.end() ? intfs->second : empty_set;
   }
 
+  TypeSet get_implemented_interfaces(const TypeSet& types) const {
+    TypeSet implemented_intfs;
+
+    for (const auto& type : types) {
+      const auto& cls_intfs = get_implemented_interfaces(type);
+      implemented_intfs.insert(cls_intfs.begin(), cls_intfs.end());
+    }
+
+    return implemented_intfs;
+  }
+
+  /**
+   * Returns only the interfaces that are implemented by the provided
+   * classes.
+   */
+  TypeSet get_local_interfaces(const TypeSet& classes);
+
   /**
    * Return true if child is a subclass or equal to parent.
    * The type must be a class (not an interface).

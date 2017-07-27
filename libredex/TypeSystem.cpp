@@ -89,6 +89,32 @@ void TypeSystem::get_all_super_interfaces(
   }
 }
 
+TypeSet TypeSystem::get_local_interfaces(const TypeSet& classes) {
+  // Collect all implemented interfaces.
+  TypeSet implemented_intfs = get_implemented_interfaces(classes);
+
+  // Remove interfaces that are implemented by other classes too.
+  for (auto it = implemented_intfs.begin(); it != implemented_intfs.end();) {
+    bool keep = true;
+
+    const auto& implementors = get_implementors(*it);
+    for (const auto& cls : implementors) {
+      if (!classes.count(cls)) {
+        keep = false;
+        break;
+      }
+    }
+
+    if (keep) {
+      ++it;
+    } else {
+      it = implemented_intfs.erase(it);
+    }
+  }
+
+  return implemented_intfs;
+}
+
 const VirtualScope* TypeSystem::find_virtual_scope(
     const DexMethod* meth) const {
 
