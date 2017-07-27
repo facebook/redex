@@ -17,10 +17,10 @@
 
 DexPosition::DexPosition(uint32_t line) : line(line), parent(nullptr) {}
 
-void DexPosition::bind(DexMethod* method, DexString* file) {
-  always_assert(method != nullptr);
-  this->method = method;
-  this->file = file;
+void DexPosition::bind(DexMethod* method_, DexString* file_) {
+  always_assert(method_ != nullptr);
+  this->method = method_;
+  this->file = file_;
 }
 
 void RealPositionMapper::register_position(DexPosition* pos) {

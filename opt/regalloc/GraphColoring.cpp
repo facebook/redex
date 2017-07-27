@@ -279,9 +279,9 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   // Every time we coalesce a pair of symregs, we put them into the same
   // union-find tree. At the end of the coalescing process, we will map all the
   // symregs in each set to the root of that tree.
-  Rank rank;
-  Parent parent;
-  RegisterAliasSets aliases((RankPMap(rank)), (ParentPMap(parent)));
+  Rank rank_map;
+  Parent parent_map;
+  RegisterAliasSets aliases((RankPMap(rank_map)), (ParentPMap(parent_map)));
   for (size_t i = 0; i < code->get_registers_size(); ++i) {
     aliases.make_set(i);
   }

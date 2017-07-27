@@ -530,8 +530,8 @@ private:
 
   T lookup_intf(T ref, DexClass* cls) {
     if (cls == nullptr) return nullptr;
-    auto found = find_def(ref, cls->get_type());
-    if (found != nullptr) return found;
+    auto found_def = find_def(ref, cls->get_type());
+    if (found_def != nullptr) return found_def;
     for (auto& intf : cls->get_interfaces()->get_type_list()) {
       auto found = lookup_intf(ref, type_class(intf));
       if (found != nullptr) return found;

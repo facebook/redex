@@ -93,7 +93,7 @@ class Locator {
   const unsigned dexnr; // 0 == special
   const unsigned clsnr;
 
-  static Locator make(uint32_t strnr, uint32_t dexnr, uint32_t clsnr);
+  static Locator make(uint32_t str, uint32_t dex, uint32_t cls);
 
   // Maximum length (including NUL) of a locator string.
   // Estimating six bits per byte is conservative enough.
@@ -104,7 +104,8 @@ class Locator {
   static inline Locator decodeBackward(const char* endpos) noexcept;
 
  private:
-  Locator(uint32_t str, uint32_t dexnr, uint32_t clsnr) : strnr(str), dexnr(dexnr), clsnr(clsnr) {}
+  Locator(uint32_t str, uint32_t dex, uint32_t cls)
+      : strnr(str), dexnr(dex), clsnr(cls) {}
 };
 
 Locator
@@ -119,10 +120,10 @@ Locator::decodeBackward(const char* endpos) noexcept
     value = value * base + (*pos-- - bias);
   }
 
-  uint32_t dexnr = (value & dexmask);
-  uint32_t clsnr = (value & clsmask) >> dexnr_bits;
-  uint32_t strnr = (value & strmask) >> (clsnr_bits + dexnr_bits);
-  return Locator(strnr, dexnr, clsnr);
+  uint32_t dex = (value & dexmask);
+  uint32_t cls = (value & clsmask) >> dexnr_bits;
+  uint32_t str = (value & strmask) >> (clsnr_bits + dexnr_bits);
+  return Locator(str, dex, cls);
 }
 
 }

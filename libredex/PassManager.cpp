@@ -37,15 +37,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
       m_registered_passes(passes),
       m_current_pass_metrics(nullptr),
       m_pg_config(empty_pg_config()) {
-  if (config["redex"].isMember("passes")) {
-    auto passes = config["redex"]["passes"];
-    for (auto& pass : passes) {
-      activate_pass(pass.asString().c_str(), config);
-    }
-  } else {
-    // If config isn't set up, run all registered passes.
-    m_activated_passes = m_registered_passes;
-  }
+  init(config);
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
@@ -55,9 +47,13 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
       m_registered_passes(passes),
       m_current_pass_metrics(nullptr),
       m_pg_config(pg_config) {
+  init(config);
+}
+
+void PassManager::init(const Json::Value& config) {
   if (config["redex"].isMember("passes")) {
-    auto passes = config["redex"]["passes"];
-    for (auto& pass : passes) {
+    auto passes_from_config = config["redex"]["passes"];
+    for (auto& pass : passes_from_config) {
       activate_pass(pass.asString().c_str(), config);
     }
   } else {
@@ -67,7 +63,6 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
 }
 
 const std::string PASS_ORDER_KEY = "pass_order";
-
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);

@@ -245,13 +245,13 @@ void mark_methods(const DexType* type,
       always_assert(scopes.size() > 0);
       always_assert(scopes[0].type == type);
       // mark final and override accordingly
-      auto& scope = scopes[0];
-      if (scope.methods.size() == 1) {
-        TRACE(VIRT, 6, "FINAL %s\n", SHOW(scope.methods[0].first));
-        scope.methods[0].second |= FINAL;
+      auto& first_scope = scopes[0];
+      if (first_scope.methods.size() == 1) {
+        TRACE(VIRT, 6, "FINAL %s\n", SHOW(first_scope.methods[0].first));
+        first_scope.methods[0].second |= FINAL;
       } else {
         for (auto& meth = ++scopes[0].methods.begin();
-             meth != scope.methods.end();
+             meth != first_scope.methods.end();
              meth++) {
           TRACE(VIRT, 6, "OVERRIDE %s\n", SHOW((*meth).first));
           (*meth).second |= OVERRIDE;

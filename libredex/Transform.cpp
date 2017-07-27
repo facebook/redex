@@ -2098,9 +2098,9 @@ void IRCode::build_cfg(bool end_block_before_throw) {
           m_cfg->add_edge(block, catchblock, EDGE_THROW);
         }
       }
-      auto begin = block->begin();
-      if (begin->type == MFLOW_TRY) {
-        auto tentry = begin->tentry;
+      auto block_begin = block->begin();
+      if (block_begin->type == MFLOW_TRY) {
+        auto tentry = block_begin->tentry;
         if (tentry->type == TRY_START) {
           always_assert(tentry->catch_start == try_end->catch_start);
           break;

@@ -386,8 +386,8 @@ static std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
         std::vector<DexType*> types;
         cls->gather_types(types);
         for (const auto& type: types) {
-          auto cls = type_class(type);
-          cold_cold_references.insert(cls);
+          auto ref_cls = type_class(type);
+          cold_cold_references.insert(ref_cls);
         }
       }
     }
@@ -576,9 +576,10 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
                             PassManager& mgr) {
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
-  std::unique_ptr<InterDexPassPlugin> plugin = registry->create(INTERDEX_PLUGIN);
-  if (plugin) {
-    m_plugins.emplace_back(std::move(plugin));
+  std::unique_ptr<InterDexPassPlugin> interdex_plugin =
+      registry->create(INTERDEX_PLUGIN);
+  if (interdex_plugin) {
+    m_plugins.emplace_back(std::move(interdex_plugin));
   }
   for (const auto& plugin : m_plugins) {
     plugin->configure(cfg);

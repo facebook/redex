@@ -53,6 +53,8 @@ class PassManager {
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
+  void init(const Json::Value& config);
+
   Json::Value m_config;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;

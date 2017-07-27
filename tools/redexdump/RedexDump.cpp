@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   bool code = false;
   bool enarr = false;
   bool anno = false;
-  bool debug = false;
+  bool redexdump_debug = false;
   uint32_t ddebug_offset = 0;
   int no_headers = 0;
 
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
         anno = true;
         break;
       case 'd':
-        debug = true;
+        redexdump_debug = true;
         break;
       case 'D':
         sscanf(optarg, "%x", &ddebug_offset);
@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
     if (anno || all) {
       dump_anno(&rd);
     }
-    if (debug || all) {
+    if (redexdump_debug || all) {
       dump_debug(&rd);
     }
     if (ddebug_offset != 0) {

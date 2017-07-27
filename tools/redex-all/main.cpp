@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
   std::string stats_output_path;
   Json::Value stats;
   {
-    Timer t("redex-all main()");
+    Timer redex_all_main_timer("redex-all main()");
 
     g_redex = new RedexContext();
 
@@ -545,15 +545,15 @@ int main(int argc, char* argv[]) {
           ss << (i + 2);
         }
         ss << ".dex";
-        auto stats = write_classes_to_dex(ss.str(),
-                                          &store.get_dexen()[i],
-                                          locator_index,
-                                          i,
-                                          cfg,
-                                          args.config,
-                                          pos_mapper.get());
-        output_totals += stats;
-        output_dexes_stats.push_back(stats);
+        auto this_dex_stats = write_classes_to_dex(ss.str(),
+                                                   &store.get_dexen()[i],
+                                                   locator_index,
+                                                   i,
+                                                   cfg,
+                                                   args.config,
+                                                   pos_mapper.get());
+        output_totals += this_dex_stats;
+        output_dexes_stats.push_back(this_dex_stats);
       }
     }
 
