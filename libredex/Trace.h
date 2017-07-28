@@ -7,13 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#pragma once
+
 #include <memory>
 #include <mutex>
 #include <string>
 
 #include "Util.h"
-
-#pragma once
 
 #define TMS              \
   TM(ADD_REDEX_TXT)      \
