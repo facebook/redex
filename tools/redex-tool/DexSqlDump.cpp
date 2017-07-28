@@ -44,7 +44,7 @@ static std::unordered_map<DexMethod*, int> method_ids;
 static std::unordered_map<DexField*, int> field_ids;
 static std::unordered_map<DexString*, int> string_ids;
 
-void dump_field_refs(FILE* fdout, DexField* field, int field_id) {
+void dump_field_refs(FILE* fdout, const char* prefix, DexField* field, int field_id) {
   static int next_string_ref = 0;
   auto* static_value = field->get_static_value();
   if (!static_value || (static_value->evtype() != DEVT_STRING)) return;
@@ -52,13 +52,14 @@ void dump_field_refs(FILE* fdout, DexField* field, int field_id) {
   auto string_id = string_ids[static_string_value->string()];
   fprintf(
     fdout,
-    "INSERT INTO field_string_refs VALUES (%d, %d, %d);\n",
+    "INSERT INTO %sfield_string_refs VALUES (%d, %d, %d);\n",
+    prefix,
     next_string_ref++,
     field_id,
     string_id);
 }
 
-void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
+void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int method_id) {
   auto code = method->get_code();
   if (!code) return;
 
@@ -74,7 +75,8 @@ void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
         auto string_id = string_ids[insn->get_string()];
         fprintf(
           fdout,
-          "INSERT INTO method_string_refs VALUES (%d, %d, %d, %d);\n",
+          "INSERT INTO %smethod_string_refs VALUES (%d, %d, %d, %d);\n",
+          prefix,
           next_string_ref++,
           method_id,
           string_id,
@@ -87,7 +89,8 @@ void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
         auto class_id = class_ids[cls];
         fprintf(
           fdout,
-          "INSERT INTO method_class_refs VALUES (%d, %d, %d, %d);\n",
+          "INSERT INTO %smethod_class_refs VALUES (%d, %d, %d, %d);\n",
+          prefix,
           next_class_ref++,
           method_id,
           class_id,
@@ -106,7 +109,8 @@ void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
         auto field_id = field_ids[insn->get_field()];
         fprintf(
           fdout,
-          "INSERT INTO method_field_refs VALUES (%d, %d, %d, %d);\n",
+          "INSERT INTO %smethod_field_refs VALUES (%d, %d, %d, %d);\n",
+          prefix,
           next_field_ref++,
           method_id,
           field_id,
@@ -125,7 +129,8 @@ void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
         auto method_ref_id = method_ids[insn->get_method()];
         fprintf(
           fdout,
-          "INSERT INTO method_method_refs VALUES (%d, %d, %d, %d);\n",
+          "INSERT INTO %smethod_method_refs VALUES (%d, %d, %d, %d);\n",
+          prefix,
           next_method_ref++,
           method_id,
           method_ref_id,
@@ -135,7 +140,7 @@ void dump_method_refs(FILE* fdout, DexMethod* method, int method_id) {
   }
 }
 
-void dump_class(FILE* fdout, const char* dex_id, DexClass* cls, int class_id) {
+void dump_class(FILE* fdout, const char* prefix, const char* dex_id, DexClass* cls, int class_id) {
   // TODO: annotations?
   // TODO: inheritance?
   // TODO: string usage
@@ -143,7 +148,8 @@ void dump_class(FILE* fdout, const char* dex_id, DexClass* cls, int class_id) {
   auto deobfuscated_name = cls->get_deobfuscated_name();
   fprintf(
     fdout,
-    "INSERT INTO classes VALUES (%d,'%s','%s','%s',%u);\n",
+    "INSERT INTO %sclasses VALUES (%d,'%s','%s','%s',%u);\n",
+    prefix,
     class_id,
     dex_id,
     deobfuscated_name.c_str(),
@@ -152,7 +158,7 @@ void dump_class(FILE* fdout, const char* dex_id, DexClass* cls, int class_id) {
   );
 }
 
-void dump_field(FILE* fdout, int class_id, DexField* field, int field_id) {
+void dump_field(FILE* fdout, const char* prefix, int class_id, DexField* field, int field_id) {
   // TODO: more fixup here on this crapped up name/signature
   // TODO: break down signature
   // TODO: annotations?
@@ -161,7 +167,8 @@ void dump_field(FILE* fdout, int class_id, DexField* field, int field_id) {
   auto field_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(
     fdout,
-    "INSERT INTO fields VALUES(%d, %d, '%s', '%s', %u);\n",
+    "INSERT INTO %sfields VALUES(%d, %d, '%s', '%s', %u);\n",
+    prefix,
     field_id,
     class_id,
     field_name,
@@ -170,7 +177,7 @@ void dump_field(FILE* fdout, int class_id, DexField* field, int field_id) {
   );
 }
 
-void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
+void dump_method(FILE* fdout, const char* prefix, int class_id, DexMethod* method, int method_id) {
   // TODO: more fixup here on this crapped up name/signature
   // TODO: break down signature
   // TODO: throws?
@@ -181,7 +188,8 @@ void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
   auto method_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(
     fdout,
-    "INSERT INTO methods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
+    "INSERT INTO %smethods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
+    prefix,
     method_id,
     class_id,
     method_name,
@@ -191,29 +199,32 @@ void dump_method(FILE* fdout, int class_id, DexMethod* method, int method_id) {
   );
 }
 
-void dump_sql(FILE* fdout, DexStoresVector& stores, ProguardMap& pg_map) {
+void dump_sql(
+  FILE* fdout,
+  DexStoresVector& stores,
+  ProguardMap& pg_map,
+  const char* prefix) {
   fprintf(
     fdout,
 R"___(
-DROP TABLE IF EXISTS field_string_refs;
-DROP TABLE IF EXISTS method_string_refs;
-DROP TABLE IF EXISTS method_field_refs;
-DROP TABLE IF EXISTS method_method_refs;
-DROP TABLE IF EXISTS method_class_refs;
-DROP TABLE IF EXISTS methods;
-DROP TABLE IF EXISTS strings;
-DROP TABLE IF EXISTS fields;
-DROP TABLE IF EXISTS is_a;
-DROP TABLE IF EXISTS methods;
-DROP TABLE IF EXISTS classes;
-CREATE TABLE classes (
+DROP TABLE IF EXISTS %1$sfield_string_refs;
+DROP TABLE IF EXISTS %1$smethod_string_refs;
+DROP TABLE IF EXISTS %1$smethod_field_refs;
+DROP TABLE IF EXISTS %1$smethod_method_refs;
+DROP TABLE IF EXISTS %1$smethod_class_refs;
+DROP TABLE IF EXISTS %1$sstrings;
+DROP TABLE IF EXISTS %1$sfields;
+DROP TABLE IF EXISTS %1$sis_a;
+DROP TABLE IF EXISTS %1$smethods;
+DROP TABLE IF EXISTS %1$sclasses;
+CREATE TABLE %1$sclasses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   dex TEXT NOT NULL, -- dex identifiers look like "<store>/<dex_id>"
   name TEXT NOT NULL,
   obfuscated_name TEXT NOT NULL,
   access INTEGER NOT NULL
 );
-CREATE TABLE methods (
+CREATE TABLE %1$smethods (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   class_id INTEGER, -- fk:classes.id
   name TEXT NOT NULL,
@@ -221,52 +232,53 @@ CREATE TABLE methods (
   access INTEGER NOT NULL,
   code_size INTEGER NOT NULL
 );
-CREATE TABLE is_a (
+CREATE TABLE %1$sis_a (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   class_id INTEGER, -- fk:classes.id
   is_a_class_id INTEGER -- fk:classes.id
 );
-CREATE TABLE strings (
+CREATE TABLE %1$sstrings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   text TEXT NOT NULL
 );
-CREATE TABLE fields (
+CREATE TABLE %1$sfields (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   class_id INTEGER, -- fk:classes.id
   name TEXT NOT NULL,
   obfuscated_name TEXT NOT NULL,
   access INTEGER NOT NULL
 );
-CREATE TABLE field_string_refs (
+CREATE TABLE %1$sfield_string_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   field_id INTEGER NOT NULL, -- fk:fields.id
   ref_string_id INTEGER NOT NULL -- fk:strings.id
 );
-CREATE TABLE method_class_refs (
+CREATE TABLE %1$smethod_class_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method_id INTEGER, -- fk:methods.id
   ref_class_id INTEGER NOT NULL, -- fk:classes.id
   opcode INTEGER NOT NULL
 );
-CREATE TABLE method_method_refs (
+CREATE TABLE %1$smethod_method_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method_id INTEGER, -- fk:methods.id
   ref_method_id INTEGER NOT NULL, -- fk:methods.id
   opcode INTEGER NOT NULL
 );
-CREATE TABLE method_field_refs (
+CREATE TABLE %1$smethod_field_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method_id INTEGER, -- fk:methods.id
   ref_field_id INTEGER NOT NULL, -- fk:fields.id
   opcode INTEGER NOT NULL
 );
-CREATE TABLE method_string_refs (
+CREATE TABLE %1$smethod_string_refs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method_id INTEGER, -- fk:methods.id
   ref_string_id INTEGER NOT NULL, -- fk:strings.id
   opcode INTEGER NOT NULL
 );
-)___"
+)___",
+    prefix
   );
   int next_class_id = 0;
   int next_method_id = 0;
@@ -289,33 +301,33 @@ CREATE TABLE method_string_refs (
         // Escape string before inserting. ' -> ''
         std::string esc(dexstr->c_str());
         boost::replace_all(esc, "'", "''");
-        fprintf(fdout, "INSERT INTO strings VALUES(%d, '%s');\n", id, esc.c_str());
+        fprintf(fdout, "INSERT INTO %sstrings VALUES(%d, '%s');\n", prefix, id, esc.c_str());
       }
       std::string dex_id_str(store_name + "/" + std::to_string(dex_idx));
       const char* dex_id = dex_id_str.c_str();
       for (const auto& cls : dex) {
         int class_id = next_class_id++;
-        dump_class(fdout, dex_id, cls, class_id);
+        dump_class(fdout, prefix, dex_id, cls, class_id);
         class_ids[cls] = class_id;
         for (auto field : cls->get_ifields()) {
           int field_id = next_field_id++;
           field_ids[field] = field_id;
-          dump_field(fdout, class_id, field, field_id);
+          dump_field(fdout, prefix, class_id, field, field_id);
         }
         for (auto field : cls->get_sfields()) {
           int field_id = next_field_id++;
           field_ids[field] = field_id;
-          dump_field(fdout, class_id, field, field_id);
+          dump_field(fdout, prefix, class_id, field, field_id);
         }
         for (const auto& meth : cls->get_dmethods()) {
           int meth_id = next_method_id++;
           method_ids[meth] = meth_id;
-          dump_method(fdout, class_id, meth, meth_id);
+          dump_method(fdout, prefix, class_id, meth, meth_id);
         }
         for (auto& meth : cls->get_vmethods()) {
           int meth_id = next_method_id++;
           method_ids[meth] = meth_id;
-          dump_method(fdout, class_id, meth, meth_id);
+          dump_method(fdout, prefix, class_id, meth, meth_id);
         }
       }
     }
@@ -331,19 +343,19 @@ CREATE TABLE method_string_refs (
       for (const auto& cls : dex) {
         for (const auto& meth : cls->get_dmethods()) {
           int meth_id = method_ids[meth];
-          dump_method_refs(fdout, meth, meth_id);
+          dump_method_refs(fdout, prefix, meth, meth_id);
         }
         for (auto& meth : cls->get_vmethods()) {
           int meth_id = method_ids[meth];
-          dump_method_refs(fdout, meth, meth_id);
+          dump_method_refs(fdout, prefix, meth, meth_id);
         }
         for (const auto& field : cls->get_sfields()) {
           int field_id = field_ids[field];
-          dump_field_refs(fdout, field, field_id);
+          dump_field_refs(fdout, prefix, field, field_id);
         }
         for (const auto& field : cls->get_ifields()) {
           int field_id = field_ids[field];
-          dump_field_refs(fdout, field, field_id);
+          dump_field_refs(fdout, prefix, field, field_id);
         }
       }
     }
@@ -363,7 +375,8 @@ CREATE TABLE method_string_refs (
       if (type_cls) {
         fprintf(
           fdout,
-          "INSERT INTO is_a VALUES(%d, %d, %d);\n",
+          "INSERT INTO %sis_a VALUES(%d, %d, %d);\n",
+          prefix,
           next_is_a_id++,
           class_ids[type_cls],
           class_ids[cls]
@@ -387,6 +400,9 @@ class DexSqlDump : public Tool {
       ("output,o",
        po::value<std::string>()->value_name("dex.sql"),
        "path to output sql dump file (defaults to stdout)")
+      ("table-prefix,t",
+       po::value<std::string>()->value_name("pre_"),
+       "prefix to use on all table names")
     ;
   }
 
@@ -400,11 +416,14 @@ class DexSqlDump : public Tool {
     auto filename = options["output"].as<std::string>().c_str();
     FILE* fdout = options.count("output") ?
       fopen(filename, "w") : stdout;
+    std::string prefix = options.count("table-prefix") ?
+      options["table-prefix"].as<std::string>() : "";
     if (!fdout) {
       fprintf(stderr, "Could not open %s for writing; terminating\n", filename);
       exit(EXIT_FAILURE);
     }
-    dump_sql(fdout, stores, pgmap);
+    auto* pfx_cstr = prefix.c_str();
+    dump_sql(fdout, stores, pgmap, pfx_cstr);
     fclose(fdout);
   }
 };
