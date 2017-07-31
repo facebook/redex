@@ -95,6 +95,8 @@ class HashedAbstractEnvironment final
     this->normalize();
   }
 
+  bool is_value() const { return this->kind() == AbstractValueKind::Value; }
+
   size_t size() const {
     assert(this->kind() == AbstractValueKind::Value);
     return this->get_value()->m_map.size();
