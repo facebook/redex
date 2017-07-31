@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#pragma once
+
 #include <boost/any.hpp>
 #include <mutex>
 
@@ -82,3 +84,5 @@ class DexUnitTestRunner {
  private:
   std::vector<DexStore> m_stores;
 };
+
+std::mutex DexUnitTestRunner::g_setup_lock;
