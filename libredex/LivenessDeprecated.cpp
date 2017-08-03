@@ -12,7 +12,7 @@
 
 #include "Dataflow.h"
 #include "IRInstruction.h"
-#include "Liveness.h"
+#include "LivenessDeprecated.h"
 #include "Transform.h"
 
 //////////////////////////////////////////////////////////////////////////////

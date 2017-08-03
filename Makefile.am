@@ -91,7 +91,7 @@ libredex_la_SOURCES = \
 	libredex/InlineHelper.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \
-	libredex/Liveness.cpp \
+	libredex/LivenessDeprecated.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/Mutators.cpp \

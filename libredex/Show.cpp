@@ -21,7 +21,7 @@
 #include "DexIdx.h"
 #include "DexUtil.h"
 #include "Creators.h"
-#include "Liveness.h"
+#include "LivenessDeprecated.h"
 #include "Transform.h"
 
 namespace {

@@ -20,7 +20,7 @@
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
-#include "Liveness.h"
+#include "LivenessDeprecated.h"
 #include "Pass.h"
 
 enum TryEntryType {
