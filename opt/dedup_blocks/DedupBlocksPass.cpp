@@ -93,20 +93,26 @@ class DedupBlocksImpl {
     const auto& code = method->get_code();
     for (const auto& entry : dups) {
       std::unordered_set<Block*> blocks = entry.second;
-      bool first = true;
-      Block* canon = nullptr;
-      for (Block* block : blocks) {
-        if (first) {
-          first = false;
-          // arbitrarily choose the canon block
-          canon = block;
 
+      // canon is block with lowest id.
+      Block* canon = nullptr;
+      size_t canon_id = std::numeric_limits<size_t>::max();
+      for (Block* block : blocks) {
+        size_t id = block->id();
+        if (id <= canon_id) {
+          canon_id = id;
+          canon = block;
+        }
+      }
+
+      for (Block* block : blocks) {
+        if (block->id() == canon_id) {
           // We remove the debug line information because it will be incorrect
           // for every block we reroute here. When there's no debug info,
           // the jvm will report the error on the closing brace of the function.
           // It's not perfect but it's better than incorrect information.
           code->remove_debug_line_info(canon);
-        } else if (canon != nullptr) {
+        } else {
           transform::replace_block(code, block, canon);
           m_mgr.incr_metric(METRIC_BLOCKS_REMOVED, 1);
         }
