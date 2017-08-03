@@ -9,7 +9,10 @@
 
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 #include <boost/graph/adjacency_list.hpp>
+#pragma GCC diagnostic pop
 #include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 
