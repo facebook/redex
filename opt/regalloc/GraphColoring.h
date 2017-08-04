@@ -12,6 +12,7 @@
 #include <stack>
 
 #include "Interference.h"
+#include "Liveness.h"
 #include "Split.h"
 #include "Transform.h"
 
@@ -125,10 +126,20 @@ class Allocator {
                   SpillPlan*,
                   SplitPlan*);
 
+  std::unordered_map<reg_t, std::vector<FatMethod::iterator>>
+  find_param_first_uses(const std::unordered_set<reg_t>&, IRCode*);
+
+  void spill_params(
+      const interference::Graph&,
+      const std::unordered_map<reg_t, std::vector<FatMethod::iterator>>&,
+      IRCode*,
+      std::unordered_set<reg_t>*);
+
   void spill(const interference::Graph&,
              const SpillPlan&,
              const RangeSet&,
-             IRCode*);
+             IRCode*,
+             std::unordered_set<reg_t>*);
 
   void allocate(bool, IRCode*);
 

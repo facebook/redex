@@ -541,8 +541,9 @@ TEST_F(RegAllocTest, Spill) {
     {1, 16},
     {2, 256},
   };
+  std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  allocator.spill(ig, spill_plan, range_set, &code);
+  allocator.spill(ig, spill_plan, range_set, &code, &new_temps);
 
   InstructionList expected_insns {
     dasm(OPCODE_CONST_4, {3_v, 1_L}),
@@ -666,7 +667,8 @@ TEST_F(RegAllocTest, Split) {
       std::unordered_map<reg_t, std::unordered_set<reg_t>>{
           {1, std::unordered_set<reg_t>{0}}};
   graph_coloring::Allocator allocator;
-  allocator.spill(ig, spill_plan, range_set, &code);
+  std::unordered_set<reg_t> new_temps;
+  allocator.spill(ig, spill_plan, range_set, &code, &new_temps);
   split(split_plan, split_costs, ig, &code);
   InstructionList expected_insns{dasm(OPCODE_CONST_4, {0_v, 1_L}),
                                  dasm(OPCODE_MOVE_16, {5_v, 0_v}),
@@ -678,5 +680,45 @@ TEST_F(RegAllocTest, Split) {
 
                                  dasm(OPCODE_MOVE, {3_v, 0_v}),
                                  dasm(OPCODE_RETURN, {3_v})};
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}
+
+TEST_F(RegAllocTest, ParamFirstUse) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
+  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
+  code.push_back(dasm(OPCODE_CONST_4, {2_v}));
+  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}));
+  code.push_back(dasm(OPCODE_RETURN, {3_v}));
+  code.set_registers_size(4);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  graph_coloring::SpillPlan spill_plan;
+  spill_plan.param_spills = std::unordered_set<reg_t> { 0, 1 };
+  std::unordered_set<reg_t> new_temps;
+  graph_coloring::Allocator allocator;
+  auto load_param = allocator.find_param_first_uses(spill_plan.param_spills, &code);
+  // No use of 1.
+  EXPECT_EQ(load_param.size(), 1);
+  allocator.spill_params(ig, load_param, &code, &new_temps);
+
+  InstructionList expected_insns {
+    dasm(IOPCODE_LOAD_PARAM, {4_v}),
+    dasm(IOPCODE_LOAD_PARAM, {1_v}),
+    dasm(OPCODE_CONST_4, {2_v}),
+
+    // Move is inserted before first use.
+    dasm(OPCODE_MOVE_16, {0_v, 4_v}),
+    dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}),
+    dasm(OPCODE_RETURN, {3_v}),
+  };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }
