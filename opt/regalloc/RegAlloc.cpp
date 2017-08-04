@@ -118,6 +118,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
       });
 
   TRACE(REG, 1, "Total reiteration count: %lu\n", stats.reiteration_count);
+  TRACE(REG, 1, "Total Params spilled early: %lu\n", stats.params_spill_early);
   TRACE(REG, 1, "Total spill count: %lu\n", stats.moves_inserted());
   TRACE(REG, 1, "  Total param spills: %lu\n", stats.param_spill_moves);
   TRACE(REG, 1, "  Total range spills: %lu\n", stats.range_spill_moves);
@@ -126,6 +127,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   TRACE(REG, 1, "Total coalesce count: %lu\n", stats.moves_coalesced);
   TRACE(REG, 1, "Total net moves: %ld\n", stats.net_moves());
 
+  mgr.incr_metric("param spilled too early", stats.params_spill_early);
   mgr.incr_metric("reiteration_count", stats.reiteration_count);
   mgr.incr_metric("spill_count", stats.moves_inserted());
   mgr.incr_metric("coalesce_count", stats.moves_coalesced);

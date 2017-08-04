@@ -313,6 +313,7 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   global_spill_moves += that.global_spill_moves;
   split_moves += that.split_moves;
   moves_coalesced += that.moves_coalesced;
+  params_spill_early += that.params_spill_early;
 }
 
 static bool has_2addr_form(DexOpcode op) {
@@ -856,6 +857,7 @@ Allocator::find_param_first_uses(const std::unordered_set<reg_t>& orig_params,
       if (params.find(dest) != params.end()) {
         params.erase(dest);
         load_param[dest].emplace_back(pend);
+        ++m_stats.params_spill_early;
       }
     }
   }
@@ -1084,6 +1086,7 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
   TRACE(REG, 3, "  Global spills: %lu\n", m_stats.global_spill_moves);
   TRACE(REG, 3, "  splits: %lu\n", m_stats.split_moves);
   TRACE(REG, 3, "Coalesce count: %lu\n", m_stats.moves_coalesced);
+  TRACE(REG, 3, "Params spilled too early: %lu\n", m_stats.params_spill_early);
   TRACE(REG, 3, "Net moves: %ld\n", m_stats.net_moves());
 }
 

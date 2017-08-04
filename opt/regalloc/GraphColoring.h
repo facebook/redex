@@ -81,6 +81,7 @@ class Allocator {
     size_t global_spill_moves{0};
     size_t split_moves{0};
     size_t moves_coalesced{0};
+    size_t params_spill_early{0};
     size_t moves_inserted() const {
       return param_spill_moves + range_spill_moves + global_spill_moves +
              split_moves;
