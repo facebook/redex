@@ -95,6 +95,12 @@ void Graph::combine(reg_t u, reg_t v) {
       continue;
     }
     add_edge(u, t, is_coalesceable(v, t));
+    if (has_containment_edge(v, t)) {
+      add_containment_edge(u, t);
+    }
+    if (has_containment_edge(t, v)) {
+      add_containment_edge(t, u);
+    }
   }
   u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
   v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
@@ -159,7 +165,7 @@ void GraphBuilder::update_node_constraints(const IRInstruction* insn,
   }
 }
 
-static IRInstruction* find_check_cast(const MethodItemEntry& mie) {
+IRInstruction* find_check_cast(const MethodItemEntry& mie) {
   always_assert(mie.type == MFLOW_FALLTHROUGH);
   if (mie.throwing_mie != nullptr &&
       mie.throwing_mie->insn->opcode() == OPCODE_CHECK_CAST) {
@@ -230,6 +236,7 @@ Graph GraphBuilder::build(IRCode* code,
         if (check_cast != nullptr) {
           for (auto reg : live_out.elements()) {
             graph.add_edge(check_cast->dest(), reg);
+            graph.add_containment_edge(check_cast->dest(), reg);
           }
         }
         continue;
@@ -266,7 +273,21 @@ Graph GraphBuilder::build(IRCode* code,
           }
         }
       }
+      // adding containment edge between liverange defined in insn and elements
+      // in live-out set of insn
+      if (insn->dests_size()) {
+        for (auto reg : live_out.elements()) {
+          graph.add_containment_edge(insn->dest(), reg);
+        }
+      }
       fixpoint_iter.analyze_instruction(it->insn, &live_out);
+      // adding containment edge between liverange used in insn and elements
+      // in live-in set of insn
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        for (auto reg : live_out.elements()) {
+          graph.add_containment_edge(insn->src(i), reg);
+        }
+      }
     }
   }
   for (auto& pair : graph.nodes()) {
@@ -292,6 +313,14 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
         o << reg << " -- " << adj << "\n";
       }
     }
+  }
+  o << "}\n";
+
+  o << "containment graph {\n";
+  for (const auto& pair : m_containment_graph) {
+    auto reg1 = pair.first;
+    auto reg2 = pair.second;
+    o << reg1 << " -- " << reg2 << "\n";
   }
   o << "}\n";
   return o;

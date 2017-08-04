@@ -84,27 +84,29 @@ class SparseSetValue final
   // Adding elem to the set, if success return true,
   // return false otherwise.
   void add(const uint16_t& elem) override {
-    always_assert(elem < m_capacity);
-    uint16_t dense_idx = m_sparse[elem];
-    uint16_t n = m_element_num;
-    if (dense_idx >= m_element_num || m_dense[dense_idx] != elem) {
-      m_sparse[elem] = n;
-      m_dense[n] = elem;
-      m_element_num = n + 1;
+    if (elem < m_capacity) {
+      uint16_t dense_idx = m_sparse[elem];
+      uint16_t n = m_element_num;
+      if (dense_idx >= m_element_num || m_dense[dense_idx] != elem) {
+        m_sparse[elem] = n;
+        m_dense[n] = elem;
+        m_element_num = n + 1;
+      }
     }
   }
 
   // Delete elem from the set, if success return true,
   // return false otherwise.
   void remove(const uint16_t& elem) override {
-    always_assert(elem < m_capacity);
-    uint16_t dense_idx = m_sparse[elem];
-    uint16_t n = m_element_num;
-    if (dense_idx < n && m_dense[dense_idx] == elem) {
-      uint16_t last_elem = m_dense[n - 1];
-      m_element_num = n - 1;
-      m_dense[dense_idx] = last_elem;
-      m_sparse[last_elem] = dense_idx;
+    if (elem < m_capacity) {
+      uint16_t dense_idx = m_sparse[elem];
+      uint16_t n = m_element_num;
+      if (dense_idx < n && m_dense[dense_idx] == elem) {
+        uint16_t last_elem = m_dense[n - 1];
+        m_element_num = n - 1;
+        m_dense[dense_idx] = last_elem;
+        m_sparse[last_elem] = dense_idx;
+      }
     }
   }
 

@@ -12,6 +12,7 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DexUtil.h"
 #include "VirtualRegistersFile.h"
@@ -217,6 +218,19 @@ std::string show(const SpillPlan& spill_plan) {
   return ss.str();
 }
 
+std::string show(const SplitPlan& split_plan) {
+  std::ostringstream ss;
+  ss << "split_around:\n";
+  for (auto pair : split_plan.split_around) {
+    ss << pair.first << ": ";
+    for (auto reg : pair.second) {
+      ss << reg << " ";
+    }
+    ss << "\n";
+  }
+  return ss.str();
+}
+
 std::string show(const interference::Graph& ig) {
   std::ostringstream ss;
   ig.write_dot_format(ss);
@@ -239,6 +253,7 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   param_spill_moves += that.param_spill_moves;
   range_spill_moves += that.range_spill_moves;
   global_spill_moves += that.global_spill_moves;
+  split_moves += that.split_moves;
   moves_coalesced += that.moves_coalesced;
 }
 
@@ -431,6 +446,7 @@ void Allocator::select(const IRCode* code,
       reg_transform->map.emplace(reg, vreg);
     } else {
       spill_plan->global_spills.emplace(reg, vreg);
+      spill_plan->spill_costs.emplace(reg, 0);
     }
     vregs_size = std::max(vregs_size, vreg_file.size());
   }
@@ -571,6 +587,193 @@ void Allocator::select_params(const IRCode* code,
       ig, param_insns, params_base, vreg_files, reg_transform, spill_plan);
 }
 
+reg_t max_value_for_src(const interference::Graph& ig,
+                        const IRInstruction* insn,
+                        size_t src_index) {
+  auto& node = ig.get_node(insn->src(src_index));
+  auto max_value = max_unsigned_value(insn->src_bit_width(src_index));
+  if (is_invoke(insn->opcode()) && node.width() == 2) {
+    // We need to reserve one vreg for denormalization. See the
+    // comments in GraphBuilder::update_node_constraints() for details.
+    --max_value;
+  }
+  return max_value;
+}
+
+/*
+ * Calculate spill costs for possible global spill
+ */
+void Allocator::spill_costs(const IRCode* code,
+                            const interference::Graph& ig,
+                            const RangeSet& range_set,
+                            SpillPlan* spill_plan) {
+  auto ii = InstructionIterable(code);
+  auto end = ii.end();
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto* insn = it->insn;
+    if (range_set.contains(insn)) {
+      continue;
+    }
+    // increment spilling costs for non-range symregs
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      auto src = insn->src(i);
+      auto max_value = max_value_for_src(ig, insn, i);
+      auto sp_it = spill_plan->global_spills.find(src);
+      if (sp_it != spill_plan->global_spills.end() &&
+          sp_it->second > max_value) {
+        ++(spill_plan->spill_costs[src]);
+      }
+    }
+    if (insn->dests_size()) {
+      auto dest = insn->dest();
+      auto max_value = max_unsigned_value(insn->dest_bit_width());
+      auto sp_it = spill_plan->global_spills.find(dest);
+      if (sp_it != spill_plan->global_spills.end() &&
+          sp_it->second > max_value) {
+        ++(spill_plan->spill_costs[dest]);
+      }
+    }
+  }
+}
+
+// Find out if there exist a
+//    invoke-xxx/fill-new-array v
+//    move-result u
+// if this exist then we can't split v around u, since splitting v around u
+// will result in inserting move in between. Return true if there exist
+// this situation for register u and v, false otherwise.
+bool bad_move_result(reg_t u, reg_t v, const SplitCosts& split_costs) {
+  for (auto mei : split_costs.get_write_result(u)) {
+    auto write_result_insn = mei->insn;
+    for (size_t i = 0; i < write_result_insn->srcs_size(); ++i) {
+      if (write_result_insn->src(i) == v) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// if reg was dead on the edge of try block to catch block,
+// all the try block to this catch block should has reg died on their edge,
+// otherwise avoid to split it. Return true if we should avoid split it,
+// return false otherwise.
+bool bad_catch(reg_t reg, const SplitCosts& split_costs) {
+  const auto& death_at_catch = split_costs.death_at_catch(reg);
+  for (auto pair : death_at_catch) {
+    if (pair.first->preds().size() != pair.second) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ * Finding corresponding register that elements in spill_plan can split around
+ * or be split around.
+ */
+void Allocator::find_split(const interference::Graph& ig,
+                           const SplitCosts& split_costs,
+                           RegisterTransform* reg_transform,
+                           SpillPlan* spill_plan,
+                           SplitPlan* split_plan) {
+  std::unordered_set<reg_t> to_erase_spill;
+  auto& reg_map = reg_transform->map;
+  // Find best split/spill plan for all the global spill plan.
+  auto spill_it = spill_plan->global_spills.begin();
+  while (spill_it != spill_plan->global_spills.end()) {
+    auto reg = spill_it->first;
+    auto best_cost = spill_plan->spill_costs.at(reg);
+    if (best_cost == 0) {
+      ++spill_it;
+      continue;
+    }
+    reg_t best_vreg = 0;
+    bool split_found = false;
+    bool split_around_name = false;
+    // Find all the vregs assigned to reg's neighbors.
+    // Key is vreg, value is a set of registers that are mapped to this vreg.
+    std::unordered_map<reg_t, std::unordered_set<reg_t>> mapped_neighbors;
+    auto& node = ig.get_node(reg);
+    for (auto adj : node.adjacent()) {
+      auto it = reg_map.find(adj);
+      if (it != reg_map.end()) {
+        mapped_neighbors[it->second].emplace(adj);
+      }
+    }
+    auto max_reg_bound = ig.get_node(reg).max_vreg();
+    // For each vreg(color).
+    for (auto vreg_assigned : mapped_neighbors) {
+      // We only want to check neighbors that has vreg assigned that
+      // can be used by the reg.
+      if (vreg_assigned.first > max_reg_bound) {
+        continue;
+      }
+
+      // Try to split vreg around reg.
+      bool split_OK = true;
+      size_t cost = 0;
+      for (auto neighbor : vreg_assigned.second) {
+        if (bad_move_result(reg, neighbor, split_costs) ||
+            ig.has_containment_edge(neighbor, reg)) {
+          split_OK = false;
+          break;
+        } else {
+          cost += split_costs.total_value_at(reg);
+        }
+      }
+      if (split_OK && cost < best_cost) {
+        if (!bad_catch(reg, split_costs)) {
+          best_cost = cost;
+          best_vreg = vreg_assigned.first;
+          split_around_name = true;
+          split_found = true;
+        }
+      }
+
+      // Try to split reg around vreg.
+      split_OK = true;
+      cost = 0;
+      for (auto neighbor : vreg_assigned.second) {
+        if (bad_move_result(neighbor, reg, split_costs) ||
+            ig.has_containment_edge(reg, neighbor)) {
+          split_OK = false;
+          break;
+        } else {
+          if (bad_catch(neighbor, split_costs)) {
+            split_OK = false;
+            break;
+          }
+          cost += split_costs.total_value_at(neighbor);
+        }
+      }
+      if (split_OK && cost < best_cost) {
+        best_cost = cost;
+        best_vreg = vreg_assigned.first;
+        split_around_name = false;
+        split_found = true;
+      }
+    }
+
+    if (split_found) {
+      reg_map.emplace(reg, best_vreg);
+      auto neighbors = mapped_neighbors.at(best_vreg);
+      if (split_around_name) {
+        for (auto neighbor : neighbors) {
+          split_plan->split_around[reg].emplace(neighbor);
+        }
+      } else {
+        for (auto neighbor : neighbors) {
+          split_plan->split_around[neighbor].emplace(reg);
+        }
+      }
+      spill_it = spill_plan->global_spills.erase(spill_it);
+    } else {
+      ++spill_it;
+    }
+  }
+}
+
 /*
  * Insert loads before every use of a globally spilled symreg, and stores
  * after a def.
@@ -645,12 +848,7 @@ void Allocator::spill(const interference::Graph& ig,
         }
         auto& node = ig.get_node(src);
         auto sp_it = spill_plan.global_spills.find(src);
-        auto max_value = max_unsigned_value(insn->src_bit_width(i));
-        if (is_invoke(insn->opcode()) && node.width() == 2) {
-          // We need to reserve one vreg for denormalization. See the
-          // comments in GraphBuilder::update_node_constraints() for details.
-          --max_value;
-        }
+        auto max_value = max_value_for_src(ig, insn, i);
         if (sp_it != spill_plan.global_spills.end() &&
             sp_it->second > max_value) {
           auto temp = code->allocate_temp();
@@ -691,7 +889,7 @@ void Allocator::spill(const interference::Graph& ig,
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(IRCode* code) {
+void Allocator::allocate(bool use_splitting, IRCode* code) {
 
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
@@ -703,7 +901,9 @@ void Allocator::allocate(IRCode* code) {
 
   bool first{true};
   while (true) {
+    SplitCosts split_costs;
     SpillPlan spill_plan;
+    SplitPlan split_plan;
     RegisterTransform reg_transform;
 
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
@@ -711,6 +911,7 @@ void Allocator::allocate(IRCode* code) {
     if (first) {
       coalesce(&ig, code);
       first = false;
+      TRACE(REG, 5, "Post-coalesce:\n%s\n", SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
       // moves that were inserted by spilling
@@ -719,7 +920,6 @@ void Allocator::allocate(IRCode* code) {
       // some bug that's causing us to loop infinitely.
       always_assert(m_stats.reiteration_count++ < 200);
     }
-    TRACE(REG, 5, "Post-coalesce:\n%s\n", SHOW(code->cfg()));
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
 
     std::stack<reg_t> select_stack;
@@ -734,7 +934,20 @@ void Allocator::allocate(IRCode* code) {
 
     if (!spill_plan.empty()) {
       TRACE(REG, 5, "Spill plan:\n%s\n", SHOW(spill_plan));
+      if (use_splitting) {
+        spill_costs(code, ig, range_set, &spill_plan);
+        calc_split_costs(code, &split_costs);
+        find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
+      }
       spill(ig, spill_plan, range_set, code);
+      if (split_plan.split_around.size() > 0) {
+        TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));
+        m_stats.split_moves +=
+            split(split_plan, split_costs, ig, code);
+        // Since in split we might have inserted new blocks to load between
+        // blocks. So we call build_cfg() again to have a correct cfg.
+        code->build_cfg();
+      }
     } else {
       transform::remap_registers(code, reg_transform.map);
       code->set_registers_size(reg_transform.size);
@@ -747,6 +960,7 @@ void Allocator::allocate(IRCode* code) {
   TRACE(REG, 3, "  Param spills: %lu\n", m_stats.param_spill_moves);
   TRACE(REG, 3, "  Range spills: %lu\n", m_stats.range_spill_moves);
   TRACE(REG, 3, "  Global spills: %lu\n", m_stats.global_spill_moves);
+  TRACE(REG, 3, "  splits: %lu\n", m_stats.split_moves);
   TRACE(REG, 3, "Coalesce count: %lu\n", m_stats.moves_coalesced);
   TRACE(REG, 3, "Net moves: %ld\n", m_stats.net_moves());
 }

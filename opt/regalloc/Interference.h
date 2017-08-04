@@ -17,7 +17,6 @@
 
 #include "Liveness.h"
 #include "RegisterType.h"
-#include "SparseSetAbstractDomain.h"
 #include "Transform.h"
 
 class IRCode;
@@ -197,6 +196,11 @@ class Graph {
     return !is_adjacent(u, v) || !m_adj_matrix.at(Edge(u, v));
   }
 
+  bool has_containment_edge(reg_t u, reg_t v) const {
+    return m_containment_graph.find(ContainmentEdge(u, v)) !=
+           m_containment_graph.end();
+  }
+
   /*
    * Returns the live-out info for a given instruction that has a potential
    * range encoding. We can use it to make better allocation decisions for
@@ -219,14 +223,23 @@ class Graph {
   std::ostream& write_dot_format(std::ostream&) const;
 
  private:
+  using ContainmentEdge = std::pair<reg_t, reg_t>;
   Graph() = default;
   void add_edge(reg_t, reg_t, bool can_coalesce = false);
   void add_coalesceable_edge(reg_t u, reg_t v) { add_edge(u, v, true); }
+  void add_containment_edge(reg_t u, reg_t v) {
+    if (u == v) {
+      return;
+    }
+    m_containment_graph.emplace(ContainmentEdge(u, v));
+  }
 
   std::unordered_map<reg_t, Node> m_nodes;
   using Edge = impl::OrderedPair<reg_t>;
   std::unordered_map<Edge, bool /* not_coalesceable */, boost::hash<Edge>>
       m_adj_matrix;
+  std::unordered_set<ContainmentEdge, boost::hash<ContainmentEdge>>
+      m_containment_graph;
   // This map contains the LivenessDomains for all instructions which could
   // potentialy take on the /range format.
   std::unordered_map<IRInstruction*, LivenessDomain> m_range_liveness;
@@ -260,6 +273,8 @@ class GraphBuilder {
 uint32_t edge_weight(uint8_t, uint8_t);
 
 } // namespace impl
+
+IRInstruction* find_check_cast(const MethodItemEntry& mie);
 
 inline Graph build_graph(IRCode* code,
                          reg_t initial_regs,

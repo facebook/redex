@@ -534,6 +534,7 @@ TEST_F(RegAllocTest, Spill) {
   interference::Graph ig =
       interference::build_graph(&code, code.get_registers_size(), range_set);
 
+  SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
   spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
     {0, 16},
@@ -556,5 +557,126 @@ TEST_F(RegAllocTest, Spill) {
     dasm(OPCODE_MOVE_16, {6_v, 2_v}),
     dasm(OPCODE_RETURN, {6_v})
   };
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+}
+
+TEST_F(RegAllocTest, ContainmentGraph) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
+  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
+  code.push_back(dasm(OPCODE_MOVE, {2_v, 0_v}));
+  code.push_back(dasm(OPCODE_MOVE, {3_v, 1_v}));
+  code.push_back(dasm(OPCODE_ADD_INT, {4_v, 2_v, 3_v}));
+  code.push_back(dasm(OPCODE_RETURN, {4_v}));
+  code.set_registers_size(5);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+  EXPECT_TRUE(ig.has_containment_edge(0, 1));
+  EXPECT_TRUE(ig.has_containment_edge(1, 0));
+  EXPECT_TRUE(ig.has_containment_edge(1, 2));
+  EXPECT_TRUE(ig.has_containment_edge(2, 1));
+  EXPECT_TRUE(ig.has_containment_edge(3, 2));
+
+  EXPECT_FALSE(ig.has_containment_edge(4, 2));
+  EXPECT_FALSE(ig.has_containment_edge(2, 4));
+  EXPECT_FALSE(ig.has_containment_edge(4, 3));
+  EXPECT_FALSE(ig.has_containment_edge(3, 4));
+
+  EXPECT_FALSE(ig.has_containment_edge(0, 4));
+  EXPECT_FALSE(ig.has_containment_edge(1, 4));
+  EXPECT_FALSE(ig.has_containment_edge(4, 0));
+  EXPECT_FALSE(ig.has_containment_edge(4, 1));
+
+  graph_coloring::Allocator allocator;
+  allocator.coalesce(&ig, &code);
+  InstructionList expected_insns{dasm(IOPCODE_LOAD_PARAM, {0_v}),
+                                 dasm(IOPCODE_LOAD_PARAM, {1_v}),
+                                 // move opcode was coalesced
+                                 dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
+                                 dasm(OPCODE_RETURN, {0_v})};
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(ig.has_containment_edge(1, 0));
+  EXPECT_TRUE(ig.has_containment_edge(0, 1));
+}
+
+TEST_F(RegAllocTest, FindSplit) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
+  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  code.push_back(dasm(OPCODE_MOVE, {2_v, 1_v}));
+  code.push_back(dasm(OPCODE_MOVE, {4_v, 1_v}));
+  code.push_back(dasm(OPCODE_MOVE, {3_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN, {3_v}));
+  code.set_registers_size(5);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  SplitCosts split_costs;
+  SplitPlan split_plan;
+  graph_coloring::SpillPlan spill_plan;
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{{1, 16}};
+  graph_coloring::RegisterTransform reg_transform;
+  reg_transform.map = transform::RegMap{{0, 0}, {2, 1}, {4, 1}, {3, 1}};
+  graph_coloring::Allocator allocator;
+  allocator.spill_costs(&code, ig, range_set, &spill_plan);
+  calc_split_costs(&code, &split_costs);
+  allocator.find_split(
+      ig, split_costs, &reg_transform, &spill_plan, &split_plan);
+  EXPECT_EQ(split_plan.split_around.at(1), std::unordered_set<reg_t>{0});
+}
+
+TEST_F(RegAllocTest, Split) {
+  using namespace dex_asm;
+
+  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  method->make_concrete(ACC_STATIC, false);
+  IRCode code(method, 0);
+  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
+  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  code.push_back(dasm(OPCODE_MOVE, {2_v, 1_v}));
+  code.push_back(dasm(OPCODE_MOVE, {4_v, 1_v}));
+  code.push_back(dasm(OPCODE_MOVE, {3_v, 0_v}));
+  code.push_back(dasm(OPCODE_RETURN, {3_v}));
+  code.set_registers_size(5);
+  code.build_cfg();
+
+  RangeSet range_set;
+  interference::Graph ig =
+      interference::build_graph(&code, code.get_registers_size(), range_set);
+
+  SplitCosts split_costs;
+  SplitPlan split_plan;
+  graph_coloring::SpillPlan spill_plan;
+  // split 0 around 1
+  split_plan.split_around =
+      std::unordered_map<reg_t, std::unordered_set<reg_t>>{
+          {1, std::unordered_set<reg_t>{0}}};
+  graph_coloring::Allocator allocator;
+  allocator.spill(ig, spill_plan, range_set, &code);
+  split(split_plan, split_costs, ig, &code);
+  InstructionList expected_insns{dasm(OPCODE_CONST_4, {0_v, 1_L}),
+                                 dasm(OPCODE_MOVE_16, {5_v, 0_v}),
+
+                                 dasm(OPCODE_CONST_4, {1_v, 1_L}),
+                                 dasm(OPCODE_MOVE, {2_v, 1_v}),
+                                 dasm(OPCODE_MOVE, {4_v, 1_v}),
+                                 dasm(OPCODE_MOVE_16, {0_v, 5_v}),
+
+                                 dasm(OPCODE_MOVE, {3_v, 0_v}),
+                                 dasm(OPCODE_RETURN, {3_v})};
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
 }

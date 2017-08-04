@@ -181,6 +181,7 @@ redex_all_SOURCES = \
 	opt/regalloc/LiveRange.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc/RegisterType.cpp \
+	opt/regalloc/Split.cpp \
 	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \

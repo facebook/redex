@@ -60,7 +60,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   auto stats = walk_methods_parallel<Scope, Data, Output>(
       scope,
-      [](Data&, DexMethod* m) { // mapper
+      [this](Data&, DexMethod* m) { // mapper
         graph_coloring::Allocator::Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
@@ -89,7 +89,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code);
           graph_coloring::Allocator allocator;
-          allocator.allocate(&code);
+          allocator.allocate(m_use_splitting, &code);
           stats.accumulate(allocator.get_stats());
 
           TRACE(REG,
@@ -122,6 +122,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   TRACE(REG, 1, "  Total param spills: %lu\n", stats.param_spill_moves);
   TRACE(REG, 1, "  Total range spills: %lu\n", stats.range_spill_moves);
   TRACE(REG, 1, "  Total global spills: %lu\n", stats.global_spill_moves);
+  TRACE(REG, 1, "  Total splits: %lu\n", stats.split_moves);
   TRACE(REG, 1, "Total coalesce count: %lu\n", stats.moves_coalesced);
   TRACE(REG, 1, "Total net moves: %ld\n", stats.net_moves());
 
