@@ -18,6 +18,7 @@
 
 #include "AbstractDomain.h"
 #include "Debug.h"
+#include "Util.h"
 
 /*
  * The reduced cartesian product of abstract domains D1 x ... x Dn consists of
@@ -158,55 +159,43 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
   }
 
   bool is_top() const override {
-    static std::tuple<std::function<bool(const Domains&)>...> predicates(
-        [](const Domains& component) { return component.is_top(); }...);
-    bool are_all_components_top;
-    all_of(predicates, &are_all_components_top);
-    return are_all_components_top;
+    return all_of([](auto&& component) { return component.is_top(); });
   }
 
-  // Since our baseline compiler doesn't support C++14's polymorphic lambdas, we
-  // need to define a tuple of lambdas and apply it to the components in order
-  // to implement each domain operation.
-
-  bool leq(const Derived& other) const override {
-    static std::tuple<std::function<bool(const Domains&, const Domains&)>...>
-    predicates(&Domains::leq...);
-    bool result;
-    compare_with(other.m_product, predicates, &result);
-    return result;
+  bool leq(const Derived& other_domain) const override {
+    return compare_with(other_domain, [](auto&& self, auto&& other) {
+      return self.leq(other);
+    });
   }
 
-  bool equals(const Derived& other) const override {
-    static std::tuple<std::function<bool(const Domains&, const Domains&)>...>
-    predicates(&Domains::equals...);
-    bool result;
-    compare_with(other.m_product, predicates, &result);
-    return result;
+  bool equals(const Derived& other_domain) const override {
+    return compare_with(other_domain, [](auto&& self, auto&& other) {
+      return self.equals(other);
+    });
   }
 
   void set_to_bottom() override {
-    static std::tuple<std::function<void(size_t, Domains*)>...> operations([](
-        size_t index, Domains* component) { component->set_to_bottom(); }...);
-    for_each(operations);
+    return tuple_apply(
+        [](auto&&... c) { int UNUSED expand[] = {(c.set_to_bottom(), 0)...}; },
+        m_product);
   }
 
   void set_to_top() override {
-    static std::tuple<std::function<void(size_t, Domains*)>...> operations(
-        [](size_t index, Domains* component) { component->set_to_top(); }...);
-    for_each(operations);
+    return tuple_apply(
+        [](auto&&... c) { int UNUSED expand[] = {(c.set_to_top(), 0)...}; },
+        m_product);
   }
 
-  void join_with(const Derived& other) override {
-    static std::tuple<std::function<void(Domains*, const Domains&)>...> joins(
-        &Domains::join_with...);
-    combine_with(other.m_product, joins, /* smash_bottom */ false);
+  void join_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.join_with(other); },
+                 /* smash_bottom */ false);
   }
 
-  void widen_with(const Derived& other) override {
-    static std::tuple<std::function<void(Domains*, const Domains&)>...>
-    widenings(&Domains::widen_with...);
-    combine_with(other.m_product, widenings, /* smash_bottom */ false);
+  void widen_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.widen_with(other); },
+                 /* smash_bottom */ false);
   }
 
   // We leave the Meet and Narrowing methods virtual, because one might want
@@ -215,140 +204,102 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
   // this operation after each Meet, or it might even break the termination
   // property of the Narrowing.
 
-  virtual void meet_with(const Derived& other) override {
-    static std::tuple<std::function<void(Domains*, const Domains&)>...> meets(
-        &Domains::meet_with...);
-    combine_with(other.m_product, meets, /* smash_bottom */ true);
+  virtual void meet_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.meet_with(other); },
+                 /* smash_bottom */ true);
   }
 
-  virtual void narrow_with(const Derived& other) override {
-    static std::tuple<std::function<void(Domains*, const Domains&)>...>
-    narrowings(&Domains::narrow_with...);
-    combine_with(other.m_product, narrowings, /* smash_bottom */ true);
+  virtual void narrow_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.narrow_with(other); },
+                 /* smash_bottom */ true);
   }
 
  private:
   // Performs the smash-bottom normalization of a tuple of abstract values.
   void normalize() {
-    static std::tuple<std::function<bool(const Domains&)>...> predicates(
-        [](const Domains& component) { return component.is_bottom(); }...);
-    bool is_one_component_bottom = false;
-    any_of(predicates, &is_one_component_bottom);
-    if (is_one_component_bottom) {
+    if (any_of([](auto&& component) { return component.is_bottom(); })) {
       set_to_bottom();
     }
   }
 
   // The following methods are used to unpack a tuple of operations/predicates
-  // and apply them to a tuple of abstract values. We use the template deduction
-  // mechanism combined with recursion to simulate a sequential iteration over
-  // the components ranging from index 0 to sizeof...(Domains) - 1.
+  // and apply them to a tuple of abstract values. We use an implementation of
+  // C++ 17's std::apply to iterate tuple elements.
+  // - http://en.cppreference.com/w/cpp/utility/apply
 
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type all_of(
-      const std::tuple<std::function<bool(const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    *result = true;
+  template <class F, class Tuple, std::size_t... I>
+  constexpr decltype(auto) static tuple_apply_impl(F&& f,
+                                                   Tuple&& t,
+                                                   std::index_sequence<I...>) {
+    return f(std::get<I>(std::forward<Tuple>(t))...);
   }
 
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type all_of(
-      const std::tuple<std::function<bool(const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    if (!std::get<Index>(predicates)(std::get<Index>(m_product))) {
-      *result = false;
-      return;
+  template <class F, class Tuple>
+  constexpr decltype(auto) static tuple_apply(F&& f, Tuple&& t) {
+    return tuple_apply_impl(
+        std::forward<F>(f),
+        std::forward<Tuple>(t),
+        std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
+  }
+
+  template <class Predicate>
+  bool all_of(Predicate&& predicate) const {
+    return tuple_apply(
+        [predicate](const Domains&... component) {
+          bool result = true;
+          bool UNUSED expand[] = {(result &= predicate(component))...};
+          return result;
+        },
+        m_product);
+  }
+
+  template <class Predicate>
+  bool any_of(Predicate&& predicate) const {
+    return tuple_apply(
+        [predicate](const Domains&... component) {
+          bool result = false;
+          bool UNUSED expand[] = {(result |= predicate(component))...};
+          return result;
+        },
+        m_product);
+  }
+
+  // We also use the template deduction mechanism combined with recursion to
+  // simulate a sequential iteration over the components ranging from index 0 to
+  // sizeof...(Domains) - 1.
+
+  template <size_t Index = 0, class Predicate>
+  std::enable_if_t<Index == sizeof...(Domains), bool> compare_with(
+      const Derived& other, Predicate&& predicate) const {
+    return true;
+  }
+
+  template <size_t Index = 0, class Predicate>
+  std::enable_if_t<Index != sizeof...(Domains), bool> compare_with(
+      const Derived& other, Predicate&& predicate) const {
+    if (!predicate(std::get<Index>(m_product),
+                   std::get<Index>(other.m_product))) {
+      return false;
     }
-    all_of<Index + 1>(predicates, result);
+    return compare_with<Index + 1>(other, predicate);
   }
 
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type any_of(
-      const std::tuple<std::function<bool(const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    *result = false;
-  }
+  template <size_t Index = 0, class Operation>
+  std::enable_if_t<Index == sizeof...(Domains)> combine_with(
+      const Derived& other, Operation&& operation, bool smash_bottom) {}
 
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type any_of(
-      const std::tuple<std::function<bool(const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    if (std::get<Index>(predicates)(std::get<Index>(m_product))) {
-      *result = true;
-      return;
-    }
-    all_of<Index + 1>(predicates, result);
-  }
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type for_each(
-      const std::tuple<std::function<void(size_t, DomainTypes*)>...>&
-          operations) {}
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type for_each(
-      const std::tuple<std::function<void(size_t, DomainTypes*)>...>&
-          operations) {
-    std::get<Index>(operations)(Index, &std::get<Index>(m_product));
-    for_each<Index + 1>(operations);
-  }
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type for_each(
-      const std::tuple<std::function<void(size_t, const DomainTypes&)>...>&
-          operations) const {}
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type for_each(
-      const std::tuple<std::function<void(size_t, const DomainTypes&)>...>&
-          operations) const {
-    std::get<Index>(operations)(Index, std::get<Index>(m_product));
-    for_each<Index + 1>(operations);
-  }
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type compare_with(
-      const std::tuple<DomainTypes...>& other_product,
-      const std::tuple<std::function<bool(const DomainTypes&,
-                                          const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    *result = true;
-  }
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type compare_with(
-      const std::tuple<DomainTypes...>& other_product,
-      const std::tuple<std::function<bool(const DomainTypes&,
-                                          const DomainTypes&)>...>& predicates,
-      bool* result) const {
-    if (!std::get<Index>(predicates)(std::get<Index>(m_product),
-                                     std::get<Index>(other_product))) {
-      *result = false;
-      return;
-    }
-    compare_with<Index + 1>(other_product, predicates, result);
-  }
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index == sizeof...(DomainTypes)>::type combine_with(
-      const std::tuple<DomainTypes...>& other_product,
-      const std::tuple<
-          std::function<void(DomainTypes*, const DomainTypes&)>...>& operations,
-      bool smash_bottom) {}
-
-  template <size_t Index = 0, typename... DomainTypes>
-  typename std::enable_if<Index != sizeof...(DomainTypes)>::type combine_with(
-      const std::tuple<DomainTypes...>& other_product,
-      const std::tuple<
-          std::function<void(DomainTypes*, const DomainTypes&)>...>& operations,
-      bool smash_bottom) {
+  template <size_t Index = 0, class Operation>
+  std::enable_if_t<Index != sizeof...(Domains)> combine_with(
+      const Derived& other, Operation&& operation, bool smash_bottom) {
     auto& component = std::get<Index>(m_product);
-    std::get<Index>(operations)(&component, std::get<Index>(other_product));
+    operation(component, std::get<Index>(other.m_product));
     if (smash_bottom && component.is_bottom()) {
       set_to_bottom();
       return;
     }
-    combine_with<Index + 1>(other_product, operations, smash_bottom);
+    combine_with<Index + 1>(other, operation, smash_bottom);
   }
 
   std::tuple<Domains...> m_product;
@@ -358,20 +309,28 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
       std::ostream& o, const ReducedProductAbstractDomain<T, Ts...>& p);
 };
 
+namespace {
+template <class Tuple, std::size_t... I>
+void tuple_print_impl(std::ostream& o, Tuple&& t, std::index_sequence<I...>) {
+  int UNUSED print[] = {
+      0, (void(o << (I == 0 ? "" : ", ") << std::get<I>(t)), 0)...};
+}
+
+template <class Tuple>
+void tuple_print(std::ostream& o, Tuple&& t) {
+  return tuple_print_impl(
+      o,
+      std::forward<Tuple>(t),
+      std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
+}
+}
+
 template <typename Derived, typename... Domains>
 std::ostream& operator<<(
     std::ostream& o,
     const ReducedProductAbstractDomain<Derived, Domains...>& p) {
-  std::tuple<std::function<void(size_t, const Domains&)>...> operations(
-      [&o](size_t index, const Domains& component) {
-        o << component;
-        if (index < sizeof...(Domains) - 1) {
-          // This is not the last component of the tuple.
-          o << ", ";
-        }
-      }...);
   o << "(";
-  p.for_each(operations);
+  tuple_print(o, p.m_product);
   o << ")";
   return o;
 }
