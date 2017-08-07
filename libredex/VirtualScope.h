@@ -436,11 +436,11 @@ inline std::vector<DexMethod*> devirtualize(const SignatureMap& sig_map) {
         }
         for (const auto& meth : scope.methods) {
           if (!meth.first->is_concrete()) continue;
-          if (meth.second == FINAL) {
-            always_assert(scope.interfaces.size() == 0);
-            always_assert(scope.methods.size() == 1);
-            non_virtual.push_back(meth.first);
+          if (meth.second != FINAL) {
+            break;
           }
+          always_assert(scope.interfaces.size() == 0);
+          non_virtual.push_back(meth.first);
         }
       }
     }
@@ -465,9 +465,12 @@ inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {
       continue;
     }
 
-    if (scope.interfaces.size() == 0 &&
-        scope.methods.size() == 1) {
-      always_assert(scope.methods[0].second == FINAL);
+    for (const auto& m : scope.methods) {
+      if (!m.first->is_concrete()) continue;
+      if (m.second != FINAL) {
+        break;
+      }
+      always_assert(scope.interfaces.size() == 0);
       return true;
     }
   }
