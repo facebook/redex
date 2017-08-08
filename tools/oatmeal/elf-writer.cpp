@@ -243,12 +243,29 @@ static int get_strtab_alignment(OatVersion version) {
   return 1;
 }
 
+static Elf32_Word get_str_entsize(OatVersion version) {
+  switch (version) {
+    case OatVersion::UNKNOWN:
+    case OatVersion::V_039:
+    case OatVersion::V_045:
+      return 1;
+    case OatVersion::V_064:
+    case OatVersion::V_079:
+    case OatVersion::V_088:
+      return 0;
+  }
+  fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
+  return 0;
+}
+
 void ElfWriter::add_dynstr() {
   const auto alignment = get_strtab_alignment(oat_version_);
   next_addr_ = align(alignment, next_addr_);
   next_offset_ = align(alignment, next_offset_);
 
   auto dynstr_size = dynstr_table_.size();
+
+  auto ent_size = get_str_entsize(oat_version_);
 
   dynstr_idx_ = add_section_header(
     string_table_.get_string(".dynstr"),
@@ -257,7 +274,7 @@ void ElfWriter::add_dynstr() {
     next_addr_,
     next_offset_,
     dynstr_size,
-    0, 0, alignment, 0
+    0, 0, alignment, ent_size
   );
   next_addr_ += dynstr_size,
   next_offset_ += dynstr_size;
@@ -342,6 +359,8 @@ void ElfWriter::add_shstrtab() {
   string_table_.finalize();
   const auto strtab_size = string_table_.size();
 
+  auto ent_size = get_str_entsize(oat_version_);
+
   shstrtab_idx_ = add_section_header(
     strtab_label_idx,
     SHT_STRTAB,
@@ -349,7 +368,7 @@ void ElfWriter::add_shstrtab() {
     0,
     next_offset_,
     strtab_size,
-    0, 0, alignment, 0
+    0, 0, alignment, ent_size
   );
 
   next_offset_ += strtab_size;

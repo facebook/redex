@@ -64,6 +64,7 @@ struct PACKED ImageInfo_064 {
 
 struct PACKED ArtImageHeader {
   enum class Version {
+    V_009 = 0x00393030,
     V_012 = 0x00323130,
     V_017 = 0x00373130,
   };
@@ -106,6 +107,7 @@ struct PACKED ArtImageHeader {
     READ_WORD(&ret->image_size, ptr);
 
     switch (static_cast<Version>(ret->version)) {
+      case Version::V_009:
       case Version::V_012:
         READ_WORD(&ret->image_bitmap_offset, ptr);
         READ_WORD(&ret->image_bitmap_size, ptr);
