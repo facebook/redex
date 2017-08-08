@@ -19,10 +19,11 @@ constexpr uint32_t kOatMagicNum = 0x0a74616F;
 
 enum class OatVersion : uint32_t {
   UNKNOWN = 0,
-  V_045 = 0x00353430,
-  V_064 = 0x00343630,
-  V_079 = 0x00393730,
-  V_088 = 0x00383830,
+  V_039 = 0x00393330, // 5.0, api level 21
+  V_045 = 0x00353430, // 5.1, api level 22
+  V_064 = 0x00343630, // 6.0, api level 23
+  V_079 = 0x00393730, // 7.0, api level 24
+  V_088 = 0x00383830, // 7.1, api level 25
 };
 
 struct DexInput {

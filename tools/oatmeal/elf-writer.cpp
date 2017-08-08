@@ -72,10 +72,8 @@ void ElfWriter::build(InstructionSet isa,
   build_dynstr_table();
 
   switch (oat_version_) {
+    case OatVersion::V_039:
     case OatVersion::V_045:
-      CHECK(false, "V_045 not yet supported!");
-      break;
-
     case OatVersion::V_064:
       next_offset_ = 0x134;
       next_addr_ = 0x134;
@@ -136,9 +134,8 @@ void ElfWriter::write(FileHandle& fh) {
 
 unsigned int ElfWriter::get_num_dynsymbols() const {
   switch (oat_version_) {
+    case OatVersion::V_039:
     case OatVersion::V_045:
-      CHECK(false, "V_045 not yet supported!");
-      break;
     case OatVersion::V_064:
       // There are 4 symbols in the dynsym section - an empty one,
       // oatdata, oatexec, and oatlastword. (oatbss and oatbsslastword
@@ -161,7 +158,8 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
 void ElfWriter::build_dynstr_table() {
   dynstr_table_.get_string("");
   dynstr_table_.get_string("oatdata");
-  if (oat_version_ == OatVersion::V_064) {
+  if (oat_version_ == OatVersion::V_064 || oat_version_ == OatVersion::V_045 ||
+      oat_version_ == OatVersion::V_039) {
     dynstr_table_.get_string("oatexec");
   }
   dynstr_table_.get_string("oatlastword");
@@ -233,6 +231,7 @@ void ElfWriter::add_bss(Elf32_Word bss_size) {
 static int get_strtab_alignment(OatVersion version) {
   switch (version) {
     case OatVersion::UNKNOWN:
+    case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
       return 1;
@@ -397,7 +396,8 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
   add_symbol(dynstr_table_.get_string("oatdata"),
       oat_addr, oat_size, STB_GLOBAL, STT_OBJECT, rodata_idx_);
 
-  if (oat_version_ == OatVersion::V_064) {
+  if (oat_version_ == OatVersion::V_064 || oat_version_ == OatVersion::V_045 ||
+      oat_version_ == OatVersion::V_039) {
     add_symbol(dynstr_table_.get_string("oatexec"),
         oat_addr + oat_size, 0, STB_GLOBAL, STT_OBJECT, text_idx_);
   }
@@ -459,55 +459,64 @@ void ElfWriter::write_hash(FileHandle& fh) {
   const auto num_dynsymbols = get_num_dynsymbols();
   std::vector<Elf32_Word> hash;
 
-  if (oat_version_ == OatVersion::V_064) {
+  switch (oat_version_) {
+    case OatVersion::V_039:
+    case OatVersion::V_045:
+    case OatVersion::V_064: {
 
-    CHECK(dynsyms_.size() == num_dynsymbols,
-          "dynsyms must be written before the hash table");
+      CHECK(dynsyms_.size() == num_dynsymbols,
+            "dynsyms must be written before the hash table");
 
-    auto num_buckets = num_hash_buckets_064(num_dynsymbols);
+      auto num_buckets = num_hash_buckets_064(num_dynsymbols);
 
-    // 1 is for the implicit NULL symbol.
-    Elf32_Word chain_size = num_dynsymbols;
-    hash.push_back(num_buckets);
-    hash.push_back(chain_size);
-    uint32_t bucket_offset = hash.size();
-    uint32_t chain_offset = bucket_offset + num_buckets;
-    hash.resize(hash.size() + num_buckets + chain_size, 0);
+      // 1 is for the implicit NULL symbol.
+      Elf32_Word chain_size = num_dynsymbols;
+      hash.push_back(num_buckets);
+      hash.push_back(chain_size);
+      uint32_t bucket_offset = hash.size();
+      uint32_t chain_offset = bucket_offset + num_buckets;
+      hash.resize(hash.size() + num_buckets + chain_size, 0);
 
-    Elf32_Word* buckets = hash.data() + bucket_offset;
-    Elf32_Word* chain = hash.data() + chain_offset;
+      Elf32_Word* buckets = hash.data() + bucket_offset;
+      Elf32_Word* chain = hash.data() + chain_offset;
 
-    // Insert the symbols into the hash table.
-    // 0 indicates an empty location in the hash table. If we find that a location
-    // is already occupied, the chain table is used to store the chain of indices
-    // that lead to the place where the symbol is finally inserted.
-    for (unsigned int i = 1; i < num_dynsymbols; i++) {
-      // Add 1 since we need to have the null symbol that is not in the symbols
-      // list.
-      Elf32_Word index = i;
-      Elf32_Word hash_val = hash_dynsym(i) % num_buckets;
-      if (buckets[hash_val] == 0) {
-        buckets[hash_val] = index;
-      } else {
-        auto chain_idx = buckets[hash_val];
-        while (chain[chain_idx] != 0) {
-          chain_idx = chain[chain_idx];
+      // Insert the symbols into the hash table.
+      // 0 indicates an empty location in the hash table. If we find that a location
+      // is already occupied, the chain table is used to store the chain of indices
+      // that lead to the place where the symbol is finally inserted.
+      for (unsigned int i = 1; i < num_dynsymbols; i++) {
+        // Add 1 since we need to have the null symbol that is not in the symbols
+        // list.
+        Elf32_Word index = i;
+        Elf32_Word hash_val = hash_dynsym(i) % num_buckets;
+        if (buckets[hash_val] == 0) {
+          buckets[hash_val] = index;
+        } else {
+          auto chain_idx = buckets[hash_val];
+          while (chain[chain_idx] != 0) {
+            chain_idx = chain[chain_idx];
+          }
+          chain[chain_idx] = index;
         }
-        chain[chain_idx] = index;
       }
+      break;
     }
-  } else if (oat_version_ == OatVersion::V_079 ||
-             oat_version_ == OatVersion::V_088) {
-    // Everything goes in 1 bucket, chained.
-    hash.push_back(1);
-    hash.push_back(num_dynsymbols); // Number of chains.
+    case OatVersion::V_079:
+    case OatVersion::V_088: {
+      // Everything goes in 1 bucket, chained.
+      hash.push_back(1);
+      hash.push_back(num_dynsymbols); // Number of chains.
 
-    hash.push_back(1);
-    hash.push_back(0);
-    for (unsigned int i = 1; i < num_dynsymbols - 1; i++) {
-      hash.push_back(i + 1);  // point symbol to next one.
+      hash.push_back(1);
+      hash.push_back(0);
+      for (unsigned int i = 1; i < num_dynsymbols - 1; i++) {
+        hash.push_back(i + 1);  // point symbol to next one.
+      }
+      hash.push_back(0);  // Last symbol terminates the chain.
+      break;
     }
-    hash.push_back(0);  // Last symbol terminates the chain.
+    case OatVersion::UNKNOWN:
+      break;
   }
 
   fh.seek_set(section_headers_.at(hash_idx_).sh_offset);
@@ -561,9 +570,8 @@ void ElfWriter::write_headers(FileHandle& fh) {
 
 unsigned int ElfWriter::get_num_program_headers() const {
   switch (oat_version_) {
+    case OatVersion::V_039:
     case OatVersion::V_045:
-      CHECK(false, "V_045 not yet supported!");
-      break;
     case OatVersion::V_064:
       return 5;
 
@@ -610,46 +618,54 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
       0x1000
   });
 
-  if (oat_version_ == OatVersion::V_064) {
+  switch (oat_version_) {
+    case OatVersion::V_039:
+    case OatVersion::V_045:
+    case OatVersion::V_064: {
+      // LOAD text
+      prog_headers.push_back(Elf32_Phdr {
+          PT_LOAD,
+          rodata_end, rodata_end, rodata_end,
+          0,
+          section_headers_.at(text_idx_).sh_size,
+          PF_R | PF_X,
+          0x1000
+      });
+      break;
+    }
 
-    // LOAD text
-    prog_headers.push_back(Elf32_Phdr {
-        PT_LOAD,
-        rodata_end, rodata_end, rodata_end,
-        0,
-        section_headers_.at(text_idx_).sh_size,
-        PF_R | PF_X,
-        0x1000
-    });
+    case OatVersion::V_079:
+    case OatVersion::V_088: {
 
+      // LOAD bss
+      prog_headers.push_back(Elf32_Phdr {
+          PT_LOAD,
+          0, rodata_end, rodata_end,
+          0,
+          section_headers_.at(bss_idx_).sh_size,
+          PF_R | PF_W,
+          0x1000
+      });
 
-  } else if (oat_version_ == OatVersion::V_079 ||
-             oat_version_ == OatVersion::V_088) {
-    // LOAD bss
-    prog_headers.push_back(Elf32_Phdr {
-        PT_LOAD,
-        0, rodata_end, rodata_end,
-        0,
-        section_headers_.at(bss_idx_).sh_size,
-        PF_R | PF_W,
-        0x1000
-    });
-
-    // LOAD dynstr, dynsym, hash
-    const auto dynstr_offset = section_headers_.at(dynstr_idx_).sh_offset;
-    const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;
-    const auto hash_addr = section_headers_.at(hash_idx_).sh_addr;
-    const auto hash_size = section_headers_.at(hash_idx_).sh_size;
-    prog_headers.push_back(Elf32_Phdr {
-        PT_LOAD,
-        dynstr_offset,
-        dynstr_addr,
-        dynstr_addr,
-        hash_addr + hash_size - dynstr_addr,
-        hash_addr + hash_size - dynstr_addr,
-        PF_R,
-        0x1000
-    });
+      // LOAD dynstr, dynsym, hash
+      const auto dynstr_offset = section_headers_.at(dynstr_idx_).sh_offset;
+      const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;
+      const auto hash_addr = section_headers_.at(hash_idx_).sh_addr;
+      const auto hash_size = section_headers_.at(hash_idx_).sh_size;
+      prog_headers.push_back(Elf32_Phdr {
+          PT_LOAD,
+          dynstr_offset,
+          dynstr_addr,
+          dynstr_addr,
+          hash_addr + hash_size - dynstr_addr,
+          hash_addr + hash_size - dynstr_addr,
+          PF_R,
+          0x1000
+      });
+      break;
+    }
+    case OatVersion::UNKNOWN:
+      break;
   }
 
   // LOAD and DYNAMIC dynamic
