@@ -62,6 +62,7 @@ std::vector<int> create_permutation(int num, unsigned int thread_idx) {
 template <class Input, class Data, class Output>
 class WorkQueue {
  private:
+  bool m_currently_running{false};
   std::function<Output(Data&, Input)> m_mapper;
   std::function<Output(Output, Output)> m_reducer;
 
@@ -82,6 +83,14 @@ class WorkQueue {
       unsigned int num_threads);
 
   void add_item(Input task);
+
+  void set_mapper(std::function<Output(Data&, Input)> mapper) {
+    m_mapper = mapper;
+  }
+
+  void set_reducer(std::function<Output(Output&, Output)> reducer) {
+    m_reducer = reducer;
+  }
 
   /**
    * Spawn threads and evaluate function.  This method blocks.
@@ -143,8 +152,14 @@ WorkQueue<Input, std::nullptr_t /*Data*/, Output> workqueue_mapreduce(
 
 template <class Input, class Data, class Output>
 void WorkQueue<Input, Data, Output>::add_item(Input task) {
-  m_insert_idx = (m_insert_idx + 1) % m_num_threads;
-  m_states[m_insert_idx]->queue.push(task);
+  if (m_currently_running) {
+    auto insert_idx = rand() % m_num_threads;
+    std::lock_guard<std::mutex> guard(m_states[insert_idx]->queue_mtx);
+    m_states[insert_idx]->queue.push(task);
+  } else {
+    m_insert_idx = (m_insert_idx + 1) % m_num_threads;
+    m_states[m_insert_idx]->queue.push(task);
+  }
 }
 
 /*
@@ -153,6 +168,7 @@ void WorkQueue<Input, Data, Output>::add_item(Input task) {
  */
 template <class Input, class Data, class Output>
 Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
+  m_currently_running = true;
   std::vector<std::thread> all_threads;
   auto worker = [&](WorkerState<Input, Data, Output>* state, size_t state_idx) {
     state->result = init_output;
@@ -186,5 +202,6 @@ Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
   for (auto& thread_state : m_states) {
     result = m_reducer(result, thread_state->result);
   }
+  m_currently_running = false;
   return result;
 }

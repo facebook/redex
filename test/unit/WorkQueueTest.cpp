@@ -85,3 +85,21 @@ TEST(WorkQueueTest, checkDataInitialization) {
   int result = wq.run_all();
   EXPECT_EQ(50 * NUM_INTS, result);
 }
+
+// Check that we can dynamically adding work items during execution.
+TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
+  auto wq = workqueue_mapreduce<int, int>([](int a) { return a; },
+                                          [](int a, int b) { return a + b; });
+  wq.set_mapper([&wq](std::nullptr_t&, int a) {
+    if (a > 0) {
+      wq.add_item(a - 1);
+      return a;
+    }
+    return 0;
+  });
+  wq.add_item(10);
+  auto result = wq.run_all();
+
+  // 10 + 9 + ... + 1 + 0 = 55
+  EXPECT_EQ(55, result);
+}
