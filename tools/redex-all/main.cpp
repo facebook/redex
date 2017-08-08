@@ -57,6 +57,10 @@ static void usage() {
       "                   0: no warnings\n"
       "                   1: count of warnings\n"
       "                   2: full text of warnings\n"
+      "     --verify-none-mode Run redex in verify-none mode.\n"
+      "                        This will activate optimization passes or\n"
+      "                        code in some passes that wouldn't normally\n"
+      "                        operate with verification enabled.\n"
       "  -Skey=string  Add a string value to the global config, overwriting "
       "the "
       "existing value if any\n"
@@ -82,14 +86,13 @@ static void usage() {
 /////////////////////////////////////////////////////////////////////////////
 
 struct Arguments {
-  Arguments() : config(Json::nullValue) {}
-
-  Json::Value config;
+  Json::Value config{Json::nullValue};
   std::set<std::string> jar_paths;
   std::vector<std::string> proguard_config_paths;
   std::string seeds_filename;
   std::string out_dir;
   std::string printseeds;
+  bool verify_none_mode{false};
 };
 
 bool parse_config(const char* config_file, Arguments& args) {
@@ -167,6 +170,8 @@ Json::Value default_config() {
 }
 
 int parse_args(int argc, char* argv[], Arguments& args) {
+  int verify_none_mode = 0;
+
   const struct option options[] = {
       {"apkdir", required_argument, 0, 'a'},
       {"config", required_argument, 0, 'c'},
@@ -176,9 +181,11 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       {"outdir", required_argument, 0, 'o'},
       {"warn", required_argument, 0, 'w'},
       {"printseeds", required_argument, 0, 'q'},
+      {"verify-none-mode", no_argument, &verify_none_mode, 1},
       {nullptr, 0, nullptr, 0},
   };
   args.out_dir = ".";
+
   int c;
 
   std::vector<std::string> json_values_from_command_line;
@@ -237,10 +244,19 @@ int parse_args(int argc, char* argv[], Arguments& args) {
       return 0;
     case '?':
       return 0; // getopt_long has printed an error
+    case 0:
+      // We're parsing a long opt and nothing has been broken yet,
+      // keep parsing...
+      continue;
     default:
       abort();
     }
   }
+
+  if (verify_none_mode == 1) {
+    args.verify_none_mode = true;
+  }
+  TRACE(MAIN, 2, "Verify-none mode: %s\n", args.verify_none_mode ? "Yes" : "No");
 
   // We add these values to the config at the end so that they will always
   // overwrite values read from the config file regardless of the order of

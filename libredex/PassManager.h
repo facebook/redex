@@ -22,31 +22,37 @@ class PassManager {
  public:
   PassManager(
     const std::vector<Pass*>& passes,
-    const Json::Value& config = Json::Value(Json::objectValue));
+    const Json::Value& config = Json::Value(Json::objectValue),
+    bool verify_none_mode = false);
+
+  PassManager(
+    const std::vector<Pass*>& passes,
+    const redex::ProguardConfiguration& pg_config,
+    const Json::Value& config = Json::Value(Json::objectValue),
+    bool verify_none_mode = false);
+
   struct PassMetrics {
     std::string name;
     std::unordered_map<std::string, int> metrics;
   };
+
   void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   std::vector<PassManager::PassMetrics> get_metrics() const;
   const Json::Value& get_config() const { return m_config; }
+  bool verify_none_enabled() const { return m_verify_none_mode; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
   std::unordered_map<std::string, int> get_interdex_metrics();
 
-  PassManager(
-    const std::vector<Pass*>& passes,
-    const redex::ProguardConfiguration& pg_config,
-    const Json::Value& config = Json::Value(Json::objectValue));
 
   redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
   bool no_proguard_rules() {
     return m_pg_config.keep_rules.empty() && !m_testing_mode;;
   }
-  // Cal set_testing_mode() in tests that need passes to run which
+  // Call set_testing_mode() in tests that need passes to run which
   // do not use ProGuard configuration keep rules.
   void set_testing_mode() { m_testing_mode = true; }
 
@@ -68,5 +74,6 @@ class PassManager {
   int m_interdex_location = -1;
 
   redex::ProguardConfiguration m_pg_config;
-  bool m_testing_mode{false};
+  bool m_testing_mode;
+  bool m_verify_none_mode;
 };

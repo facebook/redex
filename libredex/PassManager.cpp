@@ -32,21 +32,27 @@ redex::ProguardConfiguration empty_pg_config() {
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
-                         const Json::Value& config)
+                         const Json::Value& config,
+                         bool verify_none_mode)
     : m_config(config),
       m_registered_passes(passes),
       m_current_pass_metrics(nullptr),
-      m_pg_config(empty_pg_config()) {
+      m_pg_config(empty_pg_config()),
+      m_testing_mode(false),
+      m_verify_none_mode(verify_none_mode) {
   init(config);
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const redex::ProguardConfiguration& pg_config,
-                         const Json::Value& config)
+                         const Json::Value& config,
+                         bool verify_none_mode)
     : m_config(config),
       m_registered_passes(passes),
       m_current_pass_metrics(nullptr),
-      m_pg_config(pg_config) {
+      m_pg_config(pg_config),
+      m_testing_mode(false),
+      m_verify_none_mode(verify_none_mode) {
   init(config);
 }
 

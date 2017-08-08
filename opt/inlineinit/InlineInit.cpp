@@ -49,6 +49,11 @@ void InlineInitPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& mgr) {
 
+  if (!mgr.verify_none_enabled()) {
+    TRACE(INLINIT, 1, "Verify-none mode is disabled, skipping Inline Init...\n");
+    return;
+  }
+
   auto scope = build_class_scope(stores);
   auto& primary_dex = stores[0].get_dexen()[0];
 

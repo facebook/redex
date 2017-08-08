@@ -93,7 +93,7 @@ class PassConfig {
 class Pass {
  public:
 
-  Pass(std::string name)
+  Pass(const std::string& name)
      : m_name(name) {
     PassRegistry::get().register_pass(this);
   }

@@ -40,6 +40,7 @@
   TM(HOTNESS)            \
   TM(IDEX)               \
   TM(INL)                \
+  TM(INLINIT)            \
   TM(INTF)               \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
