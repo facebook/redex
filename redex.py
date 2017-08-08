@@ -418,6 +418,22 @@ Given an APK, produce a better APK!
 
     return parser
 
+def remove_comments_from_line(l):
+    (found_backslash, in_quote) = (False, False)
+    for idx, c in enumerate(l):
+        if c == "\\" and not found_backslash:
+            found_backslash = True
+        elif c == "\"" and not found_backslash:
+            found_backslash = False
+            in_quote = not in_quote
+        elif c == "#" and not in_quote:
+            return l[:idx]
+        else:
+            found_backslash = False
+    return l
+
+def remove_comments(lines):
+    return "".join([remove_comments_from_line(l) + "\n" for l in lines])
 
 def run_redex(args):
     debug_mode = args.unpack_only or args.debug
@@ -433,7 +449,8 @@ def run_redex(args):
     else:
         with open(config) as config_file:
             try:
-                config_dict = json.load(config_file)
+                lines = config_file.readlines()
+                config_dict = json.loads(remove_comments(lines))
             except ValueError:
                 raise ValueError("Invalid JSON in ReDex config file: %s" %
                                  config_file.name)

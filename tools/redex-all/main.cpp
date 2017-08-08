@@ -23,8 +23,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
 #include <json/json.h>
 
+#include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -95,7 +98,10 @@ bool parse_config(const char* config_file, Arguments& args) {
     fprintf(stderr, "ERROR: cannot find config file\n");
     return false;
   }
-  config_stream >> args.config; // parse JSON
+  boost::iostreams::filtering_istream inbuf;
+  inbuf.push(CommentFilter());
+  inbuf.push(config_stream);
+  inbuf >> args.config; // parse JSON
   return true;
 }
 
@@ -328,8 +334,8 @@ Json::Value get_input_stats(const dex_stats_t& stats,
 }
 
 Json::Value get_output_stats(const dex_stats_t& stats,
-                           const std::vector<dex_stats_t>& dexes_stats,
-                           PassManager& mgr) {
+                             const std::vector<dex_stats_t>& dexes_stats,
+                             PassManager& mgr) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
