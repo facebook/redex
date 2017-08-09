@@ -217,17 +217,16 @@ IRInstruction* find_check_cast(const MethodItemEntry& mie) {
  * register interfere with the live registers in both B0 and B1, so that when
  * the move gets inserted, it does not clobber any live registers.
  */
-Graph GraphBuilder::build(IRCode* code,
+Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
+                          IRCode* code,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
   for (const auto& mie : InstructionIterable(code)) {
     GraphBuilder::update_node_constraints(mie.insn, range_set, &graph);
   }
+
   auto& cfg = code->cfg();
-  cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
   for (Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     for (auto it = block->rbegin(); it != block->rend(); ++it) {

@@ -17,6 +17,7 @@
 #include "IRInstruction.h"
 #include "Interference.h"
 #include "LiveRange.h"
+#include "Liveness.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "RegisterType.h"
@@ -264,10 +265,14 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
   code.set_registers_size(4);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
   // +---+
   // | 1 |
   // +---+
@@ -310,10 +315,14 @@ TEST_F(RegAllocTest, Coalesce) {
   code.push_back(dasm(OPCODE_RETURN, {1_v}));
   code.set_registers_size(2);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, &code);
   InstructionList expected_insns {
@@ -335,10 +344,14 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
   code.push_back(dasm(OPCODE_RETURN_WIDE, {1_v}));
   code.set_registers_size(2);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   EXPECT_TRUE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
@@ -365,10 +378,14 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   code.push_back(dasm(OPCODE_RETURN_WIDE, {0_v}));
   code.set_registers_size(2);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   EXPECT_FALSE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
@@ -462,11 +479,15 @@ TEST_F(RegAllocTest, SelectRange) {
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
   code.set_registers_size(7);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set = init_range_set(&code);
   EXPECT_EQ(range_set.size(), 1);
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
   for (size_t i = 0; i < 6; ++i) {
     auto& node = ig.get_node(i);
     EXPECT_TRUE(node.is_range() && node.is_param());
@@ -504,11 +525,15 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   code.push_back(dasm(OPCODE_RETURN_VOID));
   code.set_registers_size(2);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
   range_set.emplace(invoke);
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
   graph_coloring::SpillPlan spill_plan;
   graph_coloring::RegisterTransform reg_transform;
   graph_coloring::Allocator allocator;
@@ -529,10 +554,14 @@ TEST_F(RegAllocTest, Spill) {
   code.push_back(dasm(OPCODE_RETURN, {2_v}));
   code.set_registers_size(3);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
@@ -575,10 +604,14 @@ TEST_F(RegAllocTest, ContainmentGraph) {
   code.push_back(dasm(OPCODE_RETURN, {4_v}));
   code.set_registers_size(5);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(1, 2));
@@ -621,10 +654,14 @@ TEST_F(RegAllocTest, FindSplit) {
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
   code.set_registers_size(5);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -634,7 +671,7 @@ TEST_F(RegAllocTest, FindSplit) {
   reg_transform.map = transform::RegMap{{0, 0}, {2, 1}, {4, 1}, {3, 1}};
   graph_coloring::Allocator allocator;
   allocator.spill_costs(&code, ig, range_set, &spill_plan);
-  calc_split_costs(&code, &split_costs);
+  calc_split_costs(fixpoint_iter, &code, &split_costs);
   allocator.find_split(
       ig, split_costs, &reg_transform, &spill_plan, &split_plan);
   EXPECT_EQ(split_plan.split_around.at(1), std::unordered_set<reg_t>{0});
@@ -654,10 +691,14 @@ TEST_F(RegAllocTest, Split) {
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
   code.set_registers_size(5);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -669,7 +710,7 @@ TEST_F(RegAllocTest, Split) {
   graph_coloring::Allocator allocator;
   std::unordered_set<reg_t> new_temps;
   allocator.spill(ig, spill_plan, range_set, &code, &new_temps);
-  split(split_plan, split_costs, ig, &code);
+  split(fixpoint_iter, split_plan, split_costs, ig, &code);
   InstructionList expected_insns{dasm(OPCODE_CONST_4, {0_v, 1_L}),
                                  dasm(OPCODE_MOVE_16, {5_v, 0_v}),
 
@@ -696,16 +737,21 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
   code.set_registers_size(4);
   code.build_cfg();
+  auto& cfg = code.cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
 
   RangeSet range_set;
-  interference::Graph ig =
-      interference::build_graph(&code, code.get_registers_size(), range_set);
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, &code, code.get_registers_size(), range_set);
 
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.param_spills = std::unordered_set<reg_t> { 0, 1 };
+  spill_plan.param_spills = std::unordered_set<reg_t>{0, 1};
   std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  auto load_param = allocator.find_param_first_uses(spill_plan.param_spills, &code);
+  auto load_param = allocator.find_param_first_uses(
+      fixpoint_iter, spill_plan.param_spills, &code);
   // No use of 1.
   EXPECT_EQ(load_param.size(), 1);
   allocator.spill_params(ig, load_param, &code, &new_temps);

@@ -13,10 +13,10 @@ namespace regalloc {
 
 // Calculate potential split costs for each live range. Also store information
 // of catch block and move-result for later use.
-void calc_split_costs(IRCode* code, SplitCosts* split_costs) {
+void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
+                      IRCode* code,
+                      SplitCosts* split_costs) {
   auto& cfg = code->cfg();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
   for (Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
@@ -435,7 +435,8 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
 // Live range splitting, Theory from
 // K. Cooper & L. Simpson. Live Range Splitting in a Graph Coloring
 // Register Allocator.
-size_t split(const SplitPlan& split_plan,
+size_t split(const LivenessFixpointIterator& fixpoint_iter,
+             const SplitPlan& split_plan,
              const SplitCosts& split_costs,
              const Graph& ig,
              IRCode* code) {
@@ -445,8 +446,6 @@ size_t split(const SplitPlan& split_plan,
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
   auto& cfg = code->cfg();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   for (Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);

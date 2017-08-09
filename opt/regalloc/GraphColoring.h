@@ -128,7 +128,9 @@ class Allocator {
                   SplitPlan*);
 
   std::unordered_map<reg_t, std::vector<FatMethod::iterator>>
-  find_param_first_uses(const std::unordered_set<reg_t>&, IRCode*);
+  find_param_first_uses(const LivenessFixpointIterator&,
+                        const std::unordered_set<reg_t>&,
+                        IRCode*);
 
   void spill_params(
       const interference::Graph&,

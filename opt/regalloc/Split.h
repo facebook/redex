@@ -112,8 +112,12 @@ struct BlockLoadInfo {
 using namespace interference;
 
 // Count load and store for possible split
-void calc_split_costs(IRCode*, SplitCosts*);
+void calc_split_costs(const LivenessFixpointIterator&, IRCode*, SplitCosts*);
 
-size_t split(const SplitPlan&, const SplitCosts&, const Graph&, IRCode*);
+size_t split(const LivenessFixpointIterator&,
+             const SplitPlan&,
+             const SplitCosts&,
+             const Graph&,
+             IRCode*);
 
 } // namespace regalloc

@@ -835,7 +835,8 @@ void Allocator::find_split(const interference::Graph& ig,
 
 // Function for finding first uses of params that need to be spilt.
 std::unordered_map<reg_t, std::vector<FatMethod::iterator>>
-Allocator::find_param_first_uses(const std::unordered_set<reg_t>& orig_params,
+Allocator::find_param_first_uses(const LivenessFixpointIterator& fixpoint_iter,
+                                 const std::unordered_set<reg_t>& orig_params,
                                  IRCode* code) {
   std::unordered_map<reg_t, std::vector<FatMethod::iterator>> load_param;
   if (orig_params.size() == 0) {
@@ -868,8 +869,6 @@ Allocator::find_param_first_uses(const std::unordered_set<reg_t>& orig_params,
   std::unordered_map<Block*, LivenessDomain> block_live_in;
   auto& cfg = code->cfg();
   Block* start_block = cfg.entry_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
   for (Block* block : cfg.blocks()) {
     LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
     block_live_in[block] = live_in;
@@ -1026,11 +1025,23 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
     SplitPlan split_plan;
     RegisterTransform reg_transform;
 
+    // Generate LivenessFixpointIterator for liveness analysis in build_graph,
+    // calc_split_costs, find_param_first_uses and splits.
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+    LivenessFixpointIterator fixpoint_iter(
+        const_cast<Block*>(cfg.exit_block()));
+    fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
-    auto ig = interference::build_graph(code, initial_regs, range_set);
+    auto ig =
+        interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
     if (first) {
       coalesce(&ig, code);
       first = false;
+      // After coalesce the live_out and live_in of blocks may change, so run
+      // LivenessFixpointIterator again.
+      fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
       TRACE(REG, 5, "Post-coalesce:\n%s\n", SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
@@ -1056,10 +1067,11 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
       TRACE(REG, 5, "Spill plan:\n%s\n", SHOW(spill_plan));
       if (use_splitting) {
         spill_costs(code, ig, range_set, &spill_plan);
-        calc_split_costs(code, &split_costs);
+        calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      auto load_param = find_param_first_uses(spill_plan.param_spills, code);
+      auto load_param =
+          find_param_first_uses(fixpoint_iter, spill_plan.param_spills, code);
       std::unordered_set<reg_t> new_temps;
       if (load_param.size() > 0) {
         spill_params(ig, load_param, code, &new_temps);
@@ -1067,7 +1079,8 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
       spill(ig, spill_plan, range_set, code, &new_temps);
       if (split_plan.split_around.size() > 0) {
         TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));
-        m_stats.split_moves += split(split_plan, split_costs, ig, code);
+        m_stats.split_moves +=
+            split(fixpoint_iter, split_plan, split_costs, ig, code);
         // Since in split we might have inserted new blocks to load between
         // blocks. So we call build_cfg() again to have a correct cfg.
         code->build_cfg();
