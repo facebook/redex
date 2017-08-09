@@ -13,8 +13,8 @@
 
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
-#include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
 
 /**
  *This class represents constant values living in the following lattice:
@@ -114,7 +114,7 @@ class ConstantDomain final
 std::ostream& operator<<(std::ostream& o, const ConstantDomain& cd);
 
 using ConstPropEnvironment =
-    HashedAbstractEnvironment<uint16_t, ConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<uint16_t, ConstantDomain>;
 
 class ConstPropEnvUtil {
  public:
