@@ -11,12 +11,11 @@ import os
 import re
 import subprocess
 import shutil
-import string
 import zipfile
 
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
-from pyredex.utils import abs_glob, make_temp_dir
+from pyredex.utils import abs_glob
 from pyredex.logger import log
 
 class ApplicationModule(object):
@@ -95,8 +94,14 @@ class ApplicationModule(object):
                 log('module ' + self.name + ' is Api21ModuleDexMode')
                 self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id):
-        self.dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators, locator_store_id)
+    def repackage(
+        self, extracted_apk_dir, dex_dir, have_locators, locator_store_id,
+        fast_repackage
+    ):
+        self.dex_mode.repackage(
+            extracted_apk_dir, dex_dir, have_locators, locator_store_id,
+            fast_repackage
+        )
 
 class DexMetadata(object):
     def __init__(self,
@@ -151,7 +156,9 @@ class BaseDexMode(object):
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators):
+    def repackage(
+        self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+    ):
         primary_dex = join(dex_dir, self._dex_prefix + '.dex')
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, extracted_apk_dir)
@@ -195,8 +202,13 @@ class Api21DexMode(BaseDexMode):
         for path in abs_glob(extracted_dex_dir, '*.dex'):
             shutil.move(path, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
-        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
+    def repackage(
+        self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0,
+        fast_repackage=False
+    ):
+        BaseDexMode.repackage(
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+        )
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
         metadata = DexMetadata(is_root_relative=self._is_root_relative,
@@ -274,8 +286,13 @@ class SubdirDexMode(BaseDexMode):
         os.remove(join(extracted_apk_dir, self._secondary_dir, 'metadata.txt'))
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
-        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
+    def repackage(
+        self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0,
+        fast_repackage=False
+    ):
+        BaseDexMode.repackage(
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+        )
 
         metadata = DexMetadata(have_locators=have_locators,
                                store=self._store_id,
@@ -395,8 +412,13 @@ class XZSDexMode(BaseDexMode):
             os.remove(jarpath)
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0):
-        BaseDexMode.repackage(self, extracted_apk_dir, dex_dir, have_locators)
+    def repackage(
+        self, extracted_apk_dir, dex_dir, have_locators, locator_store_id=0,
+        fast_repackage=False
+    ):
+        BaseDexMode.repackage(
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+        )
 
         dex_sizes = {}
         jar_sizes = {}
@@ -442,8 +464,13 @@ class XZSDexMode(BaseDexMode):
                 for x in abs_glob(dex_dir, self._store_name + '-*.dex.jar'))
 
         # XZ-compress the result
-        subprocess.check_call(['xz', '-z9', '--check=crc32', '--threads=6',
-                concat_jar_path])
+        compression_level = 0 if fast_repackage else 9
+        subprocess.check_call(
+            [
+                'xz', '-z%d' % compression_level, '--check=crc32',
+                '--threads=6', concat_jar_path
+            ]
+        )
 
         # Copy all the archive and metadata back to the apk directory
         secondary_dex_dir = join(extracted_apk_dir, self._xzs_dir)

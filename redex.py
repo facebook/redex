@@ -399,6 +399,9 @@ Given an APK, produce a better APK!
     parser.add_argument('-d', '--debug', action='store_true',
             help='Unpack the apk and print the redex command line to run')
 
+    parser.add_argument('--dev', action='store_true',
+            help='Optimize for development speed')
+
     parser.add_argument('-m', '--proguard-map', nargs='?',
             help='Path to proguard mapping.txt for deobfuscating names')
 
@@ -547,12 +550,17 @@ def run_redex(args):
     have_locators = config_dict.get("emit_locator_strings")
     log("Emit Locator Strings: %s" % have_locators)
 
-    dex_mode.repackage(extracted_apk_dir, dex_dir, have_locators)
+    dex_mode.repackage(
+        extracted_apk_dir, dex_dir, have_locators, fast_repackage=args.dev
+    )
 
     locator_store_id = 1
     for module in application_modules:
         log('repacking module: ' + module.get_name() + ' with id ' + str(locator_store_id))
-        module.repackage(extracted_apk_dir, dex_dir, have_locators, locator_store_id)
+        module.repackage(
+            extracted_apk_dir, dex_dir, have_locators, locator_store_id,
+            fast_repackage=args.dev
+        )
         locator_store_id = locator_store_id + 1
 
     log('Creating output apk')
