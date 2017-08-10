@@ -70,7 +70,7 @@ std::unique_ptr<LivenessMap> Liveness::analyze(ControlFlowGraph& cfg,
           continue;
         }
         auto& analysis = amap.at(mie.insn);
-        TRACE(REG, 5, "%04x: %s", mie.addr, SHOW(mie.insn));
+        TRACE(REG, 5, "%s", SHOW(mie.insn));
         TRACE(REG, 5, " [Live registers:%s]\n", SHOW(analysis));
       }
     }

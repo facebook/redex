@@ -10,6 +10,8 @@
 #include "Transform.h"
 
 #include <algorithm>
+#include <boost/bimap/bimap.hpp>
+#include <boost/bimap/unordered_set_of.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 #include <memory>
 #include <unordered_set>
@@ -24,7 +26,7 @@
 #include "Util.h"
 
 MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
-    : type(that.type), addr(that.addr) {
+    : type(that.type) {
   switch (type) {
   case MFLOW_TRY:
     tentry = that.tentry;
@@ -306,31 +308,34 @@ DexOpcode invert_conditional_branch(DexOpcode op) {
   }
 }
 
-template <typename K, typename V>
-static V get_target(MethodItemEntry* mei,
-                    const std::unordered_map<K, V>& addr_map) {
-  uint32_t base = mei->addr;
+namespace {
+
+using namespace boost::bimaps;
+
+struct Entry {};
+struct Addr {};
+
+typedef bimap<tagged<MethodItemEntry*, Entry>,
+              unordered_set_of<tagged<uint32_t, Addr>>>
+    EntryAddrBiMap;
+
+} // namespace
+
+static MethodItemEntry* get_target(
+    const MethodItemEntry* mei,
+    const EntryAddrBiMap& bm) {
+  uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->insn->offset();
   uint32_t target = base + offset;
   always_assert_log(
-      addr_map.count(target) != 0,
+      bm.by<Addr>().count(target) != 0,
       "Invalid opcode target %08x[%p](%08x) %08x in get_target %s\n",
       base,
       mei,
       offset,
       target,
       SHOW(mei->insn));
-  return addr_map.at(target);
-}
-
-static void insert_mentry_before(FatMethod* fm,
-                                 MethodItemEntry* mentry,
-                                 MethodItemEntry* dest) {
-  if (dest == nullptr) {
-    fm->push_back(*mentry);
-  } else {
-    fm->insert(fm->iterator_to(*dest), *mentry);
-  }
+  return bm.by<Addr>().at(target);
 }
 
 static void insert_branch_target(FatMethod* fm,
@@ -340,8 +345,7 @@ static void insert_branch_target(FatMethod* fm,
   bt->type = BRANCH_SIMPLE;
   bt->src = src;
 
-  MethodItemEntry* mentry = new MethodItemEntry(bt);
-  insert_mentry_before(fm, mentry, target);
+  fm->insert(fm->iterator_to(*target), *(new MethodItemEntry(bt)));
 }
 
 // Returns true if the offset could be encoded without modifying fm.
@@ -377,7 +381,7 @@ bool encode_offset(FatMethod* fm,
       DexOpcode inverted = invert_conditional_branch(bop);
       MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(inverted));
       mei->insn->set_src(0, insn->src(0));
-      insert_mentry_before(fm, mei, branch_op_mie);
+      fm->insert(fm->iterator_to(*branch_op_mie), *mei);
 
       // this iterator should always be valid -- an if-* instruction cannot
       // be the last opcode in a well-formed method
@@ -418,8 +422,7 @@ static void insert_multi_branch_target(FatMethod* fm,
   bt->src = src;
   bt->index = index;
 
-  MethodItemEntry* mentry = new MethodItemEntry(bt);
-  insert_mentry_before(fm, mentry, target);
+  fm->insert(fm->iterator_to(*target), *(new MethodItemEntry(bt)));
 }
 
 static int32_t read_int32(const uint16_t*& data) {
@@ -432,16 +435,16 @@ static int32_t read_int32(const uint16_t*& data) {
 static void shard_multi_target(FatMethod* fm,
                                DexOpcodeData* fopcode,
                                MethodItemEntry* src,
-                               addr_mei_t& addr_to_mei) {
+                               const EntryAddrBiMap& bm) {
   const uint16_t* data = fopcode->data();
   uint16_t entries = *data++;
   auto ftype = fopcode->opcode();
-  uint32_t base = src->addr;
+  uint32_t base = bm.by<Entry>().at(src);
   if (ftype == FOPCODE_PACKED_SWITCH) {
     int32_t index = read_int32(data);
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
-      auto target = addr_to_mei[targetaddr];
+      auto target = bm.by<Addr>().at(targetaddr);
       insert_multi_branch_target(fm, index, target, src);
       index++;
     }
@@ -450,7 +453,7 @@ static void shard_multi_target(FatMethod* fm,
     for (int i = 0; i < entries; i++) {
       int32_t index = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
-      auto target = addr_to_mei[targetaddr];
+      auto target = bm.by<Addr>().at(targetaddr);
       insert_multi_branch_target(fm, index, target, src);
     }
   } else {
@@ -460,20 +463,21 @@ static void shard_multi_target(FatMethod* fm,
 
 static void generate_branch_targets(
     FatMethod* fm,
-    addr_mei_t& addr_to_mei,
-    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data) {
+    const EntryAddrBiMap& bm,
+    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
   for (auto miter = fm->begin(); miter != fm->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE) {
       auto insn = mentry->insn;
       if (is_branch(insn->opcode())) {
         if (is_multi_branch(insn->opcode())) {
-          auto fopcode = get_target(mentry, addr_to_data);
-          shard_multi_target(fm, fopcode, mentry, addr_to_mei);
+          auto* fopcode_entry = get_target(mentry, bm);
+          auto* fopcode = entry_to_data.at(fopcode_entry);
+          shard_multi_target(fm, fopcode, mentry, bm);
           delete fopcode;
           // TODO: erase fopcode from map
         } else {
-          auto target = get_target(mentry, addr_to_mei);
+          auto target = get_target(mentry, bm);
           insert_branch_target(fm, target, mentry);
         }
       }
@@ -487,27 +491,21 @@ static void generate_branch_targets(
  */
 void gather_array_data(
     FatMethod* fm,
-    std::unordered_map<uint32_t, DexOpcodeData*>& addr_to_data) {
+    const EntryAddrBiMap& bm,
+    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
   for (MethodItemEntry& mie : InstructionIterable(fm)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      insn->set_data(get_target(&mie, addr_to_data));
+      insn->set_data(entry_to_data.at(get_target(&mie, bm)));
     }
   }
 }
 
 static void associate_debug_entries(FatMethod* fm,
                                     DexDebugItem& dbg,
-                                    addr_mei_t& addr_to_mei) {
+                                    const EntryAddrBiMap& bm) {
   for (auto& entry : dbg.get_entries()) {
-    auto insert_point = addr_to_mei[entry.addr];
-    if (!insert_point) {
-      /* We don't have a way of emitting debug info for fopcodes.  To
-       * be honest, I'm not sure why DX emits them.  We don't.
-       */
-      TRACE(MTRANS, 5, "Warning..Skipping fopcode debug opcode\n");
-      continue;
-    }
+    auto insert_point = bm.by<Addr>().at(entry.addr);
     MethodItemEntry* mentry;
     switch (entry.type) {
       case DexDebugEntryType::Instruction:
@@ -519,20 +517,20 @@ static void associate_debug_entries(FatMethod* fm,
       default:
         not_reached();
     }
-    insert_mentry_before(fm, mentry, insert_point);
+    fm->insert(fm->iterator_to(*insert_point), *mentry);
   }
   dbg.get_entries().clear();
 }
 
 static void associate_try_items(FatMethod* fm,
                                 DexCode& code,
-                                addr_mei_t& addr_to_mei) {
+                                const EntryAddrBiMap& bm) {
   auto const& tries = code.get_tries();
   for (auto& tri : tries) {
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
     for (auto catz : tri->m_catches) {
-      auto catzop = addr_to_mei[catz.second];
+      auto catzop = bm.by<Addr>().at(catz.second);
       TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
       auto catch_mei = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mei : catch_start;
@@ -540,18 +538,18 @@ static void associate_try_items(FatMethod* fm,
         last_catch->next = catch_mei;
       }
       last_catch = catch_mei->centry;
-      insert_mentry_before(fm, catch_mei, catzop);
+      fm->insert(fm->iterator_to(*catzop), *catch_mei);
     }
 
-    auto begin = addr_to_mei[tri->m_start_addr];
+    auto begin = bm.by<Addr>().at(tri->m_start_addr);
     TRACE(MTRANS, 3, "try_start %08x mei %p\n", tri->m_start_addr, begin);
     auto try_start = new MethodItemEntry(TRY_START, catch_start);
-    insert_mentry_before(fm, try_start, begin);
+    fm->insert(fm->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
-    auto end = addr_to_mei[lastaddr];
+    auto end = bm.by<Addr>().at(lastaddr);
     TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
-    insert_mentry_before(fm, try_end, end);
+    fm->insert(fm->iterator_to(*end), *try_end);
   }
 }
 
@@ -607,40 +605,38 @@ void generate_load_params(const DexMethod* method,
 void balloon(DexMethod* method, FatMethod* fmethod) {
   auto dex_code = method->get_dex_code();
   auto instructions = dex_code->release_instructions();
-  addr_mei_t addr_to_mei;
-  std::unordered_map<uint32_t, DexOpcodeData*> addr_to_data;
+  // This is a 1-to-1 map between MethodItemEntries of type MFLOW_OPCODE and
+  // address offsets.
+  EntryAddrBiMap bm;
+  std::unordered_map<MethodItemEntry*, DexOpcodeData*> entry_to_data;
 
-  std::vector<uint32_t> old_nop_addrs;
   uint32_t addr = 0;
   for (auto insn : *instructions) {
-    if (is_fopcode(insn->opcode())) {
-      addr_to_data.emplace(addr, static_cast<DexOpcodeData*>(insn));
-    } else if (insn->opcode() == OPCODE_NOP) {
-      old_nop_addrs.push_back(addr);
-    } else {
-      // NOPs are used for alignment, which FatMethod doesn't care about
-      MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(insn));
-      fmethod->push_back(*mei);
-      addr_to_mei[addr] = mei;
-      mei->addr = addr;
-
-      // but, anything that refers to a NOP's address should redirect to the
-      // next real address
-      for (const auto& nop_addr : old_nop_addrs) {
-        addr_to_mei[nop_addr] = mei;
+    MethodItemEntry* mei;
+    if (insn->opcode() == OPCODE_NOP || is_fopcode(insn->opcode())) {
+      // We have to insert dummy entries for these opcodes so that try items
+      // and debug entries that are adjacent to them can find the right
+      // address.
+      mei = new MethodItemEntry();
+      if (is_fopcode(insn->opcode())) {
+        entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       }
-      old_nop_addrs.clear();
-
-      TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
+    } else {
+      mei = new MethodItemEntry(new IRInstruction(insn));
     }
+    fmethod->push_back(*mei);
+    bm.insert(EntryAddrBiMap::relation(mei, addr));
+    TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     addr += insn->size();
   }
-  generate_branch_targets(fmethod, addr_to_mei, addr_to_data);
-  gather_array_data(fmethod, addr_to_data);
-  associate_try_items(fmethod, *dex_code, addr_to_mei);
+  bm.insert(EntryAddrBiMap::relation(&*fmethod->end(), addr));
+
+  generate_branch_targets(fmethod, bm, entry_to_data);
+  gather_array_data(fmethod, bm, entry_to_data);
+  associate_try_items(fmethod, *dex_code, bm);
   auto debugitem = dex_code->get_debug_item();
   if (debugitem) {
-    associate_debug_entries(fmethod, *debugitem, addr_to_mei);
+    associate_debug_entries(fmethod, *debugitem, bm);
   }
 }
 
@@ -690,7 +686,6 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
 
     MethodItemEntry* copy_item_entry = new MethodItemEntry();
     copy_item_entry->type = mie.type;
-    copy_item_entry->addr = mie.addr;
 
     switch (mie.type) {
       case MFLOW_TRY:
@@ -2206,6 +2201,7 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
 }
 
 bool IRCode::try_sync(DexCode* code) {
+  std::unordered_map<MethodItemEntry*, uint32_t> entry_to_addr;
   uint32_t addr = 0;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
@@ -2213,7 +2209,7 @@ bool IRCode::try_sync(DexCode* code) {
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
-    mentry->addr = addr;
+    entry_to_addr[mentry] = addr;
     if (mentry->type == MFLOW_OPCODE) {
       TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
       addr += mentry->insn->size();
@@ -2227,9 +2223,12 @@ bool IRCode::try_sync(DexCode* code) {
   bool needs_resync = false;
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
+    if (entry_to_addr.find(mentry) == entry_to_addr.end()) {
+      continue;
+    }
     if (mentry->type == MFLOW_OPCODE) {
       auto opcode = mentry->insn->opcode();
-      if (is_branch(opcode) && is_multi_branch(opcode)) {
+      if (is_multi_branch(opcode)) {
         multi_branches.push_back(mentry);
       }
     }
@@ -2237,12 +2236,13 @@ bool IRCode::try_sync(DexCode* code) {
       BranchTarget* bt = mentry->target;
       if (bt->type == BRANCH_MULTI) {
         multis[bt->src].push_back(bt);
-        multi_targets[bt] = mentry->addr;
+        multi_targets[bt] = entry_to_addr.at(mentry);
         // We can't fix the primary switch opcodes address until we emit
         // the fopcode, which comes later.
       } else if (bt->type == BRANCH_SIMPLE) {
         MethodItemEntry* branch_op_mie = bt->src;
-        int32_t branch_offset = mentry->addr - branch_op_mie->addr;
+        int32_t branch_offset =
+            entry_to_addr.at(mentry) - entry_to_addr.at(branch_op_mie);
         if (branch_offset == 1) {
           needs_resync = true;
           remove_opcode(branch_op_mie->insn);
@@ -2282,7 +2282,7 @@ bool IRCode::try_sync(DexCode* code) {
           (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
       for (BranchTarget* target : targets) {
         *spkeys++ = target->index;
-        *sptargets++ = multi_targets[target] - multiopcode->addr;
+        *sptargets++ = multi_targets[target] - entry_to_addr.at(multiopcode);
       }
       // Emit align nop
       if (addr & 1) {
@@ -2295,7 +2295,7 @@ bool IRCode::try_sync(DexCode* code) {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multi_insn->set_offset(addr - multiopcode->addr);
+      multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
       multi_insn->set_opcode(OPCODE_SPARSE_SWITCH);
       addr += count;
     } else {
@@ -2307,7 +2307,7 @@ bool IRCode::try_sync(DexCode* code) {
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       *psdata++ = targets.front()->index;
       for (BranchTarget* target : targets) {
-        *psdata++ = multi_targets[target] - multiopcode->addr;
+        *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
       }
       // Emit align nop
       if (addr & 1) {
@@ -2320,7 +2320,7 @@ bool IRCode::try_sync(DexCode* code) {
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
-      multi_insn->set_offset(addr - multiopcode->addr);
+      multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
       multi_insn->set_opcode(OPCODE_PACKED_SWITCH);
       addr += count;
     }
@@ -2338,7 +2338,7 @@ bool IRCode::try_sync(DexCode* code) {
         opout.push_back(new DexInstruction(OPCODE_NOP));
         ++addr;
       }
-      insn->set_offset(addr - mentry->addr);
+      insn->set_offset(addr - entry_to_addr.at(mentry));
       auto fopcode = mentry->insn->get_data();
       opout.push_back(fopcode);
       addr += fopcode->size();
@@ -2352,9 +2352,9 @@ bool IRCode::try_sync(DexCode* code) {
     auto& entries = debugitem->get_entries();
     for (auto& mentry : *m_fmethod) {
       if (mentry.type == MFLOW_DEBUG) {
-        entries.emplace_back(mentry.addr, std::move(mentry.dbgop));
+        entries.emplace_back(entry_to_addr.at(&mentry), std::move(mentry.dbgop));
       } else if (mentry.type == MFLOW_POSITION) {
-        entries.emplace_back(mentry.addr, std::move(mentry.pos));
+        entries.emplace_back(entry_to_addr.at(&mentry), std::move(mentry.pos));
       }
     }
   }
@@ -2380,15 +2380,16 @@ bool IRCode::try_sync(DexCode* code) {
 
     always_assert(try_end->tentry->catch_start ==
                   try_start->tentry->catch_start);
-    auto insn_count = try_end->addr - try_start->addr;
+    auto insn_count = entry_to_addr.at(try_end) - entry_to_addr.at(try_start);
     if (insn_count == 0) {
       continue;
     }
-    auto try_item = new DexTryItem(try_start->addr, insn_count);
+    auto try_item = new DexTryItem(entry_to_addr.at(try_start), insn_count);
     for (auto mei = try_end->tentry->catch_start;
         mei != nullptr;
         mei = mei->centry->next) {
-      try_item->m_catches.emplace_back(mei->centry->catch_type, mei->addr);
+      try_item->m_catches.emplace_back(mei->centry->catch_type,
+                                       entry_to_addr.at(mei));
     }
     tries.emplace_back(try_item);
   }

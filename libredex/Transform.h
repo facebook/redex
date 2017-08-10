@@ -118,8 +118,6 @@ enum MethodItemType {
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
   MethodItemType type;
-  // addr is not valid until sync
-  uint32_t addr;
 
   union {
     TryEntry* tentry;
@@ -181,10 +179,6 @@ struct FatMethodDisposer {
 std::string show(const FatMethod*);
 
 class InlineContext;
-
-namespace {
-  typedef std::unordered_map<uint32_t, MethodItemEntry*> addr_mei_t;
-}
 
 class MethodSplicer;
 
