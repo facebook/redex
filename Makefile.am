@@ -54,6 +54,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
+	-I$(top_srcdir)/opt/string_simplification \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/track_resources \
@@ -201,6 +202,8 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplUtil.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
+	opt/string_simplification/StringIterator.cpp \
+	opt/string_simplification/StringSimplification.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/track_resources/TrackResources.cpp \

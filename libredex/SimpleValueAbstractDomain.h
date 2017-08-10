@@ -42,9 +42,6 @@ class SimpleValueAbstractDomain
   using AbstractValueKind = typename svad_impl::SimpleValue<T>::Kind;
 
  public:
-  friend std::ostream& operator<<(std::ostream& o,
-                                  const SimpleValueAbstractDomain<T>& sv);
-
   static SimpleValueAbstractDomain<T> bottom() {
     return SimpleValueAbstractDomain(AbstractValueKind::Bottom);
   }
@@ -64,19 +61,20 @@ class SimpleValueAbstractDomain
                                   SimpleValueAbstractDomain<T>>(kind) {}
 
   T value() const { return this->get_value()->value(); }
-
-  friend std::ostream& operator<<(std::ostream& o,
-                                  const SimpleValueAbstractDomain& sv) {
-    if (sv.is_bottom()) {
-      o << "_|_";
-    } else if (sv.is_top()) {
-      o << "T";
-    } else {
-      o << sv.value();
-    }
-    return o;
-  }
 };
+
+template <typename T>
+inline std::ostream& operator<<(std::ostream& o,
+                                const SimpleValueAbstractDomain<T>& sv) {
+  if (sv.is_bottom()) {
+    o << "_|_";
+  } else if (sv.is_top()) {
+    o << "T";
+  } else {
+    o << sv.value();
+  }
+  return o;
+}
 
 namespace svad_impl {
 
