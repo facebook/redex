@@ -93,14 +93,24 @@ struct BlockModeInsn {
 
 struct BlockLoadInfo {
   using BlockEdge = std::pair<Block*, Block*>;
+
+  struct block_edge_comparator {
+    bool operator()(const BlockEdge& b1, const BlockEdge& b2) {
+      if (b1.first->id() != b2.first->id()) {
+        return b1.first->id() < b2.first->id();
+      }
+      return b1.second->id() < b2.second->id();
+    }
+  };
+
   // Map of catch blocks and registers already loaded in these blocks.
   std::unordered_map<Block*, std::unordered_set<reg_t>> try_loaded_regs;
   // Map of non-catch blocks and registers already loaded in these blocks.
   std::unordered_map<Block*, std::unordered_set<reg_t>> other_loaded_regs;
   // Map of the edges between two blocks and what their type is and load
   // instructions we should inserted for these edges.
-  std::unordered_map<BlockEdge, BlockModeInsn, boost::hash<BlockEdge>>
-      mode_and_insn;
+  // This is an ordered map because we iterate through it.
+  std::map<BlockEdge, BlockModeInsn, block_edge_comparator> mode_and_insn;
   // Map of branch edges between two blocks and pairs of MethodItemEntry of
   // BRANCH instruction and branch target.
   std::unordered_map<BlockEdge,
