@@ -24,7 +24,10 @@
 #include <unistd.h>
 
 #include <boost/iostreams/device/file.hpp>
-#include <boost/iostreams/filtering_stream.hpp>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#include <boost/iostreams/filtering_stream.hpp> // uses deprecated auto_ptr
+#pragma GCC diagnostic pop
 #include <json/json.h>
 
 #include "CommentFilter.h"
