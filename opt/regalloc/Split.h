@@ -95,7 +95,7 @@ struct BlockLoadInfo {
   using BlockEdge = std::pair<Block*, Block*>;
 
   struct block_edge_comparator {
-    bool operator()(const BlockEdge& b1, const BlockEdge& b2) {
+    bool operator()(const BlockEdge& b1, const BlockEdge& b2) const {
       if (b1.first->id() != b2.first->id()) {
         return b1.first->id() < b2.first->id();
       }
