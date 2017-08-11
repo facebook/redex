@@ -92,6 +92,9 @@ class RenameClassesPassV2 : public Pass {
                     ConfigFiles& cfg,
                     bool rename_annotations,
                     PassManager& mgr);
+  void eval_classes_post(Scope& scope,
+                         const ClassHierarchy& class_hierarchy,
+                         PassManager& mgr);
   void rename_classes(Scope& scope,
                       ConfigFiles& cfg,
                       bool rename_annotations,

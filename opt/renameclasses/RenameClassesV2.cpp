@@ -630,6 +630,54 @@ void RenameClassesPassV2::eval_classes(
   }
 }
 
+/**
+ * We re-evaluate a number of config rules again at pass running time.
+ * The reason is that the types specified in those rules can be created in
+ * previous Redex passes and did not exist when the initial evaluation happened.
+ */
+void RenameClassesPassV2::eval_classes_post(
+    Scope& scope,
+    const ClassHierarchy& class_hierarchy,
+    PassManager& mgr) {
+  std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
+  build_dont_rename_hierarchies(
+      mgr, scope, class_hierarchy, dont_rename_hierarchies);
+
+  for (auto clazz : scope) {
+    if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
+      continue;
+    }
+    
+    const char* clsname = clazz->get_name()->c_str();
+    std::string strname = std::string(clsname);
+
+    // Don't rename anythings in the direct name blacklist (hierarchy ignored)
+    if (m_dont_rename_specific.count(clsname) > 0) {
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
+      continue;
+    }
+
+    // Don't rename anything if it falls in a blacklisted package
+    bool package_blacklisted = false;
+    for (const auto& pkg : m_dont_rename_packages) {
+      if (strname.rfind("L" + pkg) == 0) {
+        TRACE(
+            RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname, pkg.c_str());
+        m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
+        package_blacklisted = true;
+        break;
+      }
+    }
+    if (package_blacklisted) continue;
+
+    if (dont_rename_hierarchies.count(clazz->get_type()) > 0) {
+      std::string rule = dont_rename_hierarchies[clazz->get_type()];
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
+      continue;
+    }
+  }
+}
+
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& cfg,
                                     PassManager& mgr) {
@@ -834,6 +882,8 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
+  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
+  eval_classes_post(scope, class_hierarchy, mgr);
   int total_classes = scope.size();
 
   s_base_strings_size = 0;
