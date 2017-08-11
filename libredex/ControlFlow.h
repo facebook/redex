@@ -89,6 +89,16 @@ class ControlFlowGraph {
 
   Block* find_block_that_ends_here(const FatMethod::iterator& loc) const;
 
+  // Find a common dominator block that is closest to both block.
+  Block* idom_intersect(
+      const std::unordered_map<Block*, size_t>& postorder_numbers,
+      const std::unordered_map<Block*, Block*>& immediate_dominator,
+      Block* block1,
+      Block* block2) const;
+
+  // Finding immediate dominator for each blocks in ControlFlowGraph.
+  std::unordered_map<Block*, Block*> immediate_dominator() const;
+
  private:
   EdgeFlags& mutable_edge(Block* pred, Block* succ) {
     return m_edges[IdPair(pred->id(), succ->id())];

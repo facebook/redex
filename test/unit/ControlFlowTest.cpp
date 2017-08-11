@@ -199,3 +199,79 @@ TEST(ControlFlow, findExitBlocks) {
     EXPECT_EQ(cfg.exit_block(), b5);
   }
 }
+
+TEST(ControlFlow, findImmediateDominator) {
+  {
+    //                 +---------+
+    //                 v         |
+    //     +---+     +---+     +---+     +---+
+    //  +- | 0 | --> | 1 | --> | 2 | --> | 5 |
+    //  |  +---+     +---+     +---+     +---+
+    //  |                                  ^
+    //  |    +---------+                   |
+    //  |    v         |                   |
+    //  |  +---+     +---+                 |
+    //  +> | 3 | --> | 4 | ----------------+
+    //     +---+     +---+
+    ControlFlowGraph cfg;
+    auto b0 = cfg.create_block();
+    auto b1 = cfg.create_block();
+    auto b2 = cfg.create_block();
+    auto b3 = cfg.create_block();
+    auto b4 = cfg.create_block();
+    auto b5 = cfg.create_block();
+    cfg.set_entry_block(b0);
+    cfg.add_edge(b0, b1, EDGE_GOTO);
+    cfg.add_edge(b1, b2, EDGE_GOTO);
+    cfg.add_edge(b2, b1, EDGE_GOTO);
+    cfg.add_edge(b0, b3, EDGE_GOTO);
+    cfg.add_edge(b3, b4, EDGE_GOTO);
+    cfg.add_edge(b4, b3, EDGE_GOTO);
+    cfg.add_edge(b4, b5, EDGE_GOTO);
+    cfg.add_edge(b2, b5, EDGE_GOTO);
+    auto idom = cfg.immediate_dominator();
+    EXPECT_EQ(idom[b0], b0);
+    EXPECT_EQ(idom[b1], b0);
+    EXPECT_EQ(idom[b3], b0);
+    EXPECT_EQ(idom[b2], b1);
+    EXPECT_EQ(idom[b4], b3);
+    EXPECT_EQ(idom[b5], b0);
+  }
+  {
+    //                 +---------+
+    //                 v         |
+    //     +---+     +---+     +---+     +---+
+    //     | 0 | --> | 1 | --> | 2 | --> | 5 |
+    //     +---+     +---+     +---+     +---+
+    //                |                    ^
+    //  +-------------+                    |
+    //  |    +---------+                   |
+    //  |    v         |                   |
+    //  |  +---+     +---+                 |
+    //  +> | 3 | --> | 4 | ----------------+
+    //     +---+     +---+
+    ControlFlowGraph cfg;
+    auto b0 = cfg.create_block();
+    auto b1 = cfg.create_block();
+    auto b2 = cfg.create_block();
+    auto b3 = cfg.create_block();
+    auto b4 = cfg.create_block();
+    auto b5 = cfg.create_block();
+    cfg.set_entry_block(b0);
+    cfg.add_edge(b0, b1, EDGE_GOTO);
+    cfg.add_edge(b1, b2, EDGE_GOTO);
+    cfg.add_edge(b2, b1, EDGE_GOTO);
+    cfg.add_edge(b1, b3, EDGE_GOTO);
+    cfg.add_edge(b3, b4, EDGE_GOTO);
+    cfg.add_edge(b4, b3, EDGE_GOTO);
+    cfg.add_edge(b4, b5, EDGE_GOTO);
+    cfg.add_edge(b2, b5, EDGE_GOTO);
+    auto idom = cfg.immediate_dominator();
+    EXPECT_EQ(idom[b0], b0);
+    EXPECT_EQ(idom[b1], b0);
+    EXPECT_EQ(idom[b3], b1);
+    EXPECT_EQ(idom[b2], b1);
+    EXPECT_EQ(idom[b4], b3);
+    EXPECT_EQ(idom[b5], b1);
+  }
+}
