@@ -1914,13 +1914,6 @@ bool IRCode::inline_method(InlineContext& context,
   return true;
 }
 
-void IRCode::enlarge_regs(DexMethod* method, uint16_t newregs) {
-  auto code = method->get_code();
-  always_assert(code != nullptr);
-  always_assert(code->get_registers_size() <= newregs);
-  enlarge_registers(code, newregs);
-}
-
 namespace {
 bool end_of_block(const FatMethod* fm,
                   FatMethod::iterator it,

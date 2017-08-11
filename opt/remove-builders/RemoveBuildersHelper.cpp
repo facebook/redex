@@ -95,20 +95,6 @@ std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
 }
 
-bool enlarge_register_frame(DexMethod* method, uint16_t extra_regs) {
-
-  always_assert(method != nullptr);
-
-  auto oldregs = method->get_code()->get_registers_size();
-  auto newregs = oldregs + extra_regs;
-
-  if (newregs > 16) {
-    return false;
-  }
-  IRCode::enlarge_regs(method, newregs);
-  return true;
-}
-
 DexOpcode get_move_opcode(const IRInstruction* insn) {
   always_assert(insn != nullptr);
   always_assert(is_iget(insn->opcode()));
@@ -174,49 +160,6 @@ void add_instr(IRCode* code,
 }
 
 using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
-
-/**
- * Updates parameter registers to account for the extra registers.
- *
- * Based on the type of the instruction that we try to remove,
- * we update the parameter registers to account for the extra registers
- * in the new move instructions.
- * Basically, we update the registers that were previously param regs
- * to the correct param registers after the allocation of extra regs.
- *
- * Example:
- *   4 regs, 2 ins (-> v2, v3 are param regs)
- *   extra regs = 3 (-> v5, v6 are param reg after the pass)
- *
- *   For an: `iput-object v2, obj`
- *   we created a move replacement: `move <new_reg>, v2`
- *   which needs to be updated to `move <new_reg>, v5`
- */
-void update_reg_params(const std::unordered_set<IRInstruction*>& update_list,
-                       uint16_t next_available_reg,
-                       uint16_t extra_regs,
-                       MoveList& move_list) {
-
-  for (const auto& update : update_list) {
-    IRInstruction* new_insn = move_list[update];
-    new_insn->set_src(0, new_insn->src(0) + extra_regs);
-  }
-
-  for (const auto& move_elem : move_list) {
-    const IRInstruction* old_insn = move_elem.first;
-    IRInstruction* new_insn = move_elem.second;
-
-    if (is_iput(old_insn->opcode())) {
-      if (old_insn->src(0) >= next_available_reg) {
-        new_insn->set_src(0, new_insn->src(0) + extra_regs);
-      }
-    } else if (is_iget(old_insn->opcode())) {
-      if (old_insn->dest() >= next_available_reg) {
-        new_insn->set_dest(new_insn->dest() + extra_regs);
-      }
-    }
-  }
-}
 
 void method_updates(DexMethod* method,
                     const std::vector<IRInstruction*>& deletes,
@@ -488,9 +431,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
   static auto init = DexString::make_string("<init>");
   uint16_t regs_size = code->get_registers_size();
-  uint16_t in_regs_size = sum_param_sizes(code);
-  uint16_t next_available_reg =
-      RedexContext::assume_regalloc() ? regs_size : regs_size - in_regs_size;
+  uint16_t next_available_reg = regs_size;
   uint16_t extra_regs = 0;
   std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
   ZeroRegs undef_fields_regs;
@@ -631,19 +572,9 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     }
   }
 
-  if (RedexContext::assume_regalloc()) {
-    code->set_registers_size(next_available_reg + extra_regs);
-  } else if (!enlarge_register_frame(method, extra_regs)) {
-    return false;
-  }
+  code->set_registers_size(next_available_reg + extra_regs);
 
   null_initializations(code, extra_null_regs);
-
-  // Update register parameters.
-  if (!RedexContext::assume_regalloc()) {
-    update_reg_params(
-        update_list, next_available_reg, extra_regs, move_replacements);
-  }
 
   method_updates(method, deletes, move_replacements);
   return true;
@@ -1105,8 +1036,7 @@ bool tainted_reg_escapes(
         for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
           if (tainted[insn->src(i)]) {
 
-            if (RedexContext::assume_regalloc() &&
-                enable_buildee_constr_change) {
+            if (enable_buildee_constr_change) {
               // Don't consider builders that get passed to the buildee's
               // constructor. `update_buildee_constructor` will sort this
               // out later.

@@ -284,14 +284,6 @@ class IRCode {
                             IRCode* callee,
                             FatMethod::iterator pos);
 
-  /*
-   * Simple register allocator.
-   * Example:
-   * - before: 4 registers, 2 ins -> [v0, v1, p0, p1]
-   * - after: 7 registers -> [v0, v1, v2, v3, v4, p0, p1] where v2 -> v4 are new.
-   */
-  static void enlarge_regs(DexMethod* method, uint16_t newregs);
-
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
