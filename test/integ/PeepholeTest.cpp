@@ -15,7 +15,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
-#include "PeepholeV2.h"
+#include "Peephole.h"
 #include "Transform.h"
 
 // Helper to hold a list of instructions
@@ -90,7 +90,7 @@ static IRInstructionList op_unary(DexOpcode opcode) {
 class PeepholeTest : public ::testing::Test {
   RedexContext* saved_context = nullptr;
   ConfigFiles config;
-  PeepholePassV2 peephole_pass;
+  PeepholePass peephole_pass;
   PassManager manager;
   std::vector<DexStore> stores;
   DexClass* dex_class = nullptr;

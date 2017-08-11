@@ -171,7 +171,6 @@ redex_all_SOURCES = \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/outliner/Outliner.cpp \
 	opt/peephole/Peephole.cpp \
-	opt/peephole/PeepholeV2.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
