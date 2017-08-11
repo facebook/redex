@@ -13,6 +13,10 @@ if [ -n "$ORIG_TTY" ]; then
   exec < $ORIG_TTY
 fi
 
+# for consistent sorting between linux/mac.
+LC_ALL=C
+export LC_ALL
+
 # <argument-parsing type="janky">
 
 oatmeal_binary=$1
