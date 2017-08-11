@@ -113,13 +113,15 @@ DexStoresVector Tool::init(
   }
 
   // Load jars
-  auto delim = boost::is_any_of(":,");
-  std::vector<std::string> system_jars;
-  boost::split(system_jars, system_jar_paths, delim);
-  for (const auto& system_jar : system_jars) {
-    std::cout << "Loading " << system_jar << std::endl;
-    if (!load_jar_file(system_jar.c_str())) {
-      throw std::runtime_error("Could not load system jar file '"+system_jar+"'");
+  if (system_jar_paths != "") {
+    auto delim = boost::is_any_of(":,");
+    std::vector<std::string> system_jars;
+    boost::split(system_jars, system_jar_paths, delim);
+    for (const auto& system_jar : system_jars) {
+      std::cout << "Loading " << system_jar << std::endl;
+      if (!load_jar_file(system_jar.c_str())) {
+        throw std::runtime_error("Could not load system jar file '"+system_jar+"'");
+      }
     }
   }
 
