@@ -184,8 +184,4 @@ TEST_F(PeepholeTest, Arithmetic) {
   test_1_nochange("add16_1", op_lit(OPCODE_ADD_INT_LIT16, 1));
   test_1_nochange("mult8_3", op_lit(OPCODE_MUL_INT_LIT8, 3));
   test_1_nochange("mult16_12", op_lit(OPCODE_MUL_INT_LIT16, 12));
-
-  // Negate only has 4 bits for dest register. Ensure we don't try to lower a
-  // multiply to a negate if the register offset is too high
-  test_1_nochange("mult16_neg1_far", op_lit(OPCODE_MUL_INT_LIT8, -1, 17));
 }
