@@ -287,7 +287,8 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
 void load_root_dexen(
   DexStore& store,
   const std::string& dexen_dir_str,
-  bool balloon) {
+  bool balloon,
+  bool verbose) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
   assert(fs::is_directory(dexen_dir_path));
@@ -335,7 +336,9 @@ void load_root_dexen(
   std::sort(dexen.begin(), dexen.end(), dex_comparator);
   // Load all discovered dex files
   for (const auto& dex : dexen) {
-    std::cout << "Loading " << dex.string() << std::endl;
+    if (verbose) {
+      std::cout << "Loading " << dex.string() << std::endl;
+    }
     // N.B. throaway stats for now
     DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);
     store.add_classes(std::move(classes));

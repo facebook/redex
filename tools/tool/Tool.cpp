@@ -21,9 +21,11 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-void load_store_dexen(DexStore& store, const DexMetadata& store_metadata) {
+void load_store_dexen(DexStore& store, const DexMetadata& store_metadata, bool verbose) {
   for (const auto& file_path : store_metadata.get_files()) {
-    std::cout << "Loading " << file_path << std::endl;
+    if (verbose) {
+      std::cout << "Loading " << file_path << std::endl;
+    }
     DexClasses classes = load_classes_from_dex(file_path.c_str(), true);
     store.add_classes(std::move(classes));
   }
@@ -118,9 +120,11 @@ DexStoresVector Tool::init(
     std::vector<std::string> system_jars;
     boost::split(system_jars, system_jar_paths, delim);
     for (const auto& system_jar : system_jars) {
-      std::cout << "Loading " << system_jar << std::endl;
-      if (!load_jar_file(system_jar.c_str())) {
-        throw std::runtime_error("Could not load system jar file '"+system_jar+"'");
+      if (m_verbose) {
+        std::cout << "Loading " << system_jar << std::endl;
+        if (!load_jar_file(system_jar.c_str())) {
+          throw std::runtime_error("Could not load system jar file '"+system_jar+"'");
+        }
       }
     }
   }
@@ -130,18 +134,20 @@ DexStoresVector Tool::init(
   DexStoresVector stores;
 
   // Load root dexen
-  load_root_dexen(root_store, dexen_dir_str, /* ballon = */ true);
+  load_root_dexen(root_store, dexen_dir_str, /* balloon = */ true, m_verbose);
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen
   for (const auto& metadata : find_stores(apk_dir_str, dexen_dir_str)) {
     DexStore store(metadata);
-    load_store_dexen(store, metadata);
+    load_store_dexen(store, metadata, m_verbose);
     stores.emplace_back(std::move(store));
   }
 
   // Initialize reachable classes
-  std::cout << "Initializing reachable classes" << std::endl;
+  if (m_verbose) {
+    std::cout << "Initializing reachable classes" << std::endl;
+  }
   Scope scope = build_class_scope(stores);
   Json::Value config;
   redex::ProguardConfiguration pg_config;

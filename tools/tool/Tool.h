@@ -28,9 +28,10 @@ using DexStoresVector = std::vector<DexStore>;
 class Tool {
  public:
 
-  Tool(const std::string& name, const std::string& desc)
+  Tool(const std::string& name, const std::string& desc, bool verbose=true)
      : m_name(name),
-       m_desc(desc) {
+       m_desc(desc),
+       m_verbose(verbose) {
     ToolRegistry::get().register_tool(this);
   }
 
@@ -55,4 +56,7 @@ class Tool {
  private:
   std::string m_name;
   std::string m_desc;
+
+ protected:
+  bool m_verbose;
 };
