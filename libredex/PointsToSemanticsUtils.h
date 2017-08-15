@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "DexClass.h"
+#include "IRInstruction.h"
 
 /*
  * This class contains a set of utility functions used to build the points-to
@@ -23,7 +26,17 @@
 class PointsToSemanticsUtils final {
  public:
   PointsToSemanticsUtils()
-      : m_throwable_type(DexType::make_type("Ljava/lang/Throwable;")) {}
+      : m_throwable_type(DexType::make_type("Ljava/lang/Throwable;")),
+        m_primitive_type_wrappers({DexType::make_type("Ljava/lang/Boolean;"),
+                                   DexType::make_type("Ljava/lang/Byte;"),
+                                   DexType::make_type("Ljava/lang/Character;"),
+                                   DexType::make_type("Ljava/lang/Double;"),
+                                   DexType::make_type("Ljava/lang/Float;"),
+                                   DexType::make_type("Ljava/lang/Integer;"),
+                                   DexType::make_type("Ljava/lang/Long;"),
+                                   DexType::make_type("Ljava/lang/Short;"),
+                                   DexType::make_type("Ljava/lang/Void;")}),
+        m_wrapper_class_type_field_name(DexString::make_string("TYPE")) {}
 
   PointsToSemanticsUtils(const PointsToSemanticsUtils& other) = delete;
 
@@ -32,6 +45,16 @@ class PointsToSemanticsUtils final {
 
   DexType* get_throwable_type() const { return m_throwable_type; }
 
+  bool is_primitive_type_wrapper(DexType* dex_type) const {
+    return m_primitive_type_wrappers.count(dex_type) > 0;
+  }
+
+  // Checks whether an sget-object instruction accesses the `TYPE` field of a
+  // primitive type's wrapper class.
+  bool is_primitive_type_class_object_retrieval(IRInstruction* insn) const;
+
  private:
   DexType* m_throwable_type;
+  std::unordered_set<DexType*> m_primitive_type_wrappers;
+  DexString* m_wrapper_class_type_field_name;
 };

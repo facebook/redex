@@ -237,7 +237,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
     break;
   }
   case PTS_CONST_CLASS: {
-    o << a.dest() << " = " << op.dex_type->get_name()->str();
+    o << a.dest() << " = CLASS<" << op.dex_type->get_name()->str() << ">";
     break;
   }
   case PTS_GET_EXCEPTION: {
@@ -697,7 +697,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_CONST_CLASS: {
       m_semantics->add(PointsToAction::load_operation(
-          PointsToOperation(PTS_CONST_STRING, insn->get_type()),
+          PointsToOperation(PTS_CONST_CLASS, insn->get_type()),
           get_variable_from_anchor(insn)));
       break;
     }
@@ -779,6 +779,16 @@ class PointsToActionGenerator final {
       break;
     }
     case OPCODE_SGET_OBJECT: {
+      // One way to get the java.lang.Class object of a primitive type is by
+      // querying the `TYPE` field of the corresponding wrapper class. We
+      // translate those kind of sget-object instructions into equivalent
+      // PTS_CONST_CLASS operations.
+      if (m_utils.is_primitive_type_class_object_retrieval(insn)) {
+        m_semantics->add(PointsToAction::load_operation(
+            PointsToOperation(PTS_CONST_CLASS, insn->get_field()->get_class()),
+            get_variable_from_anchor(insn)));
+        break;
+      }
       m_semantics->add(PointsToAction::get_operation(
           PointsToOperation(PTS_SGET, insn->get_field()),
           get_variable_from_anchor(insn)));
