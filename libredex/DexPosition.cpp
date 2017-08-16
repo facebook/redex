@@ -216,9 +216,3 @@ DexString* RealPositionMapper::get_source_file(const DexClass*) {
 DexString* NoopPositionMapper::get_source_file(const DexClass* clz) {
   return clz->get_source_file();
 }
-
-
-uint32_t NoopPositionMapper::get_next_line(const DexDebugItem* dbg) {
-  // XXX: we could be smarter and look for the first position entry
-  return dbg->get_line_start();
-}

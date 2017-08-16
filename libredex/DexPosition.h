@@ -35,7 +35,6 @@ class PositionMapper {
   virtual ~PositionMapper() {};
   virtual DexString* get_source_file(const DexClass*) = 0;
   virtual uint32_t position_to_line(DexPosition*) = 0;
-  virtual uint32_t get_next_line(const DexDebugItem*) = 0;
   virtual void register_position(DexPosition* pos) = 0;
   virtual void write_map() = 0;
   static PositionMapper* make(const std::string& map_filename,
@@ -64,10 +63,6 @@ class RealPositionMapper : public PositionMapper {
       : m_filename(filename), m_filename_v2(filename_v2) {}
   virtual DexString* get_source_file(const DexClass*);
   virtual uint32_t position_to_line(DexPosition*);
-  virtual uint32_t get_next_line(const DexDebugItem*) {
-    // line numbers are not allowed to be less than one
-    return m_positions.size() + 1;
-  }
   virtual void register_position(DexPosition* pos);
   virtual void write_map();
 };
@@ -78,7 +73,6 @@ class NoopPositionMapper : public PositionMapper {
   virtual uint32_t position_to_line(DexPosition* pos) {
     return pos->line;
   }
-  virtual uint32_t get_next_line(const DexDebugItem*);
   virtual void register_position(DexPosition* pos) {}
   virtual void write_map() {}
 };

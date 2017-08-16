@@ -528,7 +528,6 @@ struct DexDebugEntry final {
 };
 
 class DexDebugItem {
-  uint32_t m_line_start;
   std::vector<DexString*> m_param_names;
   std::vector<DexDebugEntry> m_dbg_entries;
   DexDebugItem(DexIdx* idx, uint32_t offset);
@@ -543,7 +542,6 @@ class DexDebugItem {
   void set_entries(std::vector<DexDebugEntry> dbg_entries) {
     m_dbg_entries.swap(dbg_entries);
   }
-  uint32_t get_line_start() const { return m_line_start; }
   std::vector<DexString*>& get_param_names() { return m_param_names; }
   void remove_parameter_names() { m_param_names.clear(); };
   void bind_positions(DexMethod* method, DexString* file);
