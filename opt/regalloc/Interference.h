@@ -223,6 +223,8 @@ class Graph {
   std::ostream& write_dot_format(std::ostream&) const;
 
  private:
+  bool should_separate_node(const Node&, const Node&) const;
+
   using ContainmentEdge = std::pair<reg_t, reg_t>;
   Graph() = default;
   void add_edge(reg_t, reg_t, bool can_coalesce = false);

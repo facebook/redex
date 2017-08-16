@@ -411,11 +411,15 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
  *
  * Nodes that are used by load-param or range opcodes are ignored.
  *
+ * Nodes that aren't constrained to < 16 bits are partitioned into
+ * a separate stack so they can be colored separately later.
+ *
  * This is fairly similar to section 8.8 in [Briggs92], except we are using
  * a weight as given by [Smith00] instead of just the node's degree.
  */
 void Allocator::simplify(interference::Graph* ig,
-                         std::stack<reg_t>* select_stack) {
+                         std::stack<reg_t>* select_stack,
+                         std::stack<reg_t>* spilled_select_stack) {
   // Nodes of low weight that we know are colorable. Note that even if all
   // the nodes in `low` have a max_vreg of 15, we can still have more than 16
   // of them here since some of them can have zero weight.
@@ -443,7 +447,11 @@ void Allocator::simplify(interference::Graph* ig,
       auto reg = *low.begin();
       const auto& node = ig->get_node(reg);
       TRACE(REG, 6, "Removing %u\n", reg);
-      select_stack->push(reg);
+      if (node.max_vreg() < max_unsigned_value(16)) {
+        select_stack->push(reg);
+      } else {
+        spilled_select_stack->push(reg);
+      }
       ig->remove_node(reg);
       low.erase(reg);
       for (auto adj : node.adjacent()) {
@@ -493,7 +501,7 @@ void Allocator::select(const IRCode* code,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
                        SpillPlan* spill_plan) {
-  reg_t vregs_size{0};
+  reg_t vregs_size = reg_transform->size;
   while (!select_stack->empty()) {
     auto reg = select_stack->top();
     select_stack->pop();
@@ -1054,12 +1062,21 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
 
     std::stack<reg_t> select_stack;
-    simplify(&ig, &select_stack);
+    std::stack<reg_t> spilled_select_stack;
+    simplify(&ig, &select_stack, &spilled_select_stack);
     select(code, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s\n", SHOW(reg_transform));
     choose_range_promotions(code, ig, spill_plan, &range_set);
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
+    // Select registers for symregs that can be addressed using all 16 bits.
+    // These symregs are typically generated during the spilling and splitting
+    // steps. We want to process them after the range-related symregs because
+    // range-related symregs may also be constrained to use less than 16 bits.
+    // Basically, the registers in `spilled_select_stack` are in the least
+    // constrained category of registers, so it makes sense to allocate them
+    // last.
+    select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
     select_params(code, ig, &reg_transform, &spill_plan);
     TRACE(REG, 5, "Transform after range alloc:\n%s\n", SHOW(reg_transform));
 

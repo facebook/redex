@@ -92,7 +92,9 @@ class Allocator {
 
   bool coalesce(interference::Graph*, IRCode*);
 
-  void simplify(interference::Graph*, std::stack<reg_t>* select_stack);
+  void simplify(interference::Graph*,
+                std::stack<reg_t>* select_stack,
+                std::stack<reg_t>* spilled_select_stack);
 
   void select(const IRCode*,
               const interference::Graph&,

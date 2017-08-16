@@ -455,7 +455,8 @@ TEST_F(RegAllocTest, Simplify) {
   // now we cannot color 0.
   graph_coloring::Allocator allocator;
   std::stack<reg_t> select_stack;
-  allocator.simplify(&ig, &select_stack);
+  std::stack<reg_t> spilled_select_stack;
+  allocator.simplify(&ig, &select_stack, &spilled_select_stack);
   auto selected = stack_to_vec(select_stack);
   EXPECT_EQ(selected, std::vector<reg_t>({1, 0, 2}));
 }
@@ -498,7 +499,8 @@ TEST_F(RegAllocTest, SelectRange) {
   graph_coloring::RegisterTransform reg_transform;
   graph_coloring::Allocator allocator;
   std::stack<reg_t> select_stack;
-  allocator.simplify(&ig, &select_stack);
+  std::stack<reg_t> spilled_select_stack;
+  allocator.simplify(&ig, &select_stack, &spilled_select_stack);
   allocator.select(&code, ig, &select_stack, &reg_transform, &spill_plan);
   // v3 is referenced by both range and non-range instructions. We should not
   // allocate it in select() but leave it to select_ranges()
