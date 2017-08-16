@@ -5,6 +5,10 @@ AC_PREREQ([2.69])
 AC_INIT([redex], [1.0], [not-valid-yet@fb.com])
 AM_INIT_AUTOMAKE(redex, 1.0)
 
+# clear out default cxx flags (was "-O2 -g") so that they don't override
+# the flags defined in AM_CXXFLAGS
+: ${CXXFLAGS=""}
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
