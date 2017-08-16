@@ -1141,23 +1141,9 @@ PointsToSemantics::PointsToSemantics(const Scope& scope)
   }
 
   // We generate a system of points-to actions for each Dex method in parallel.
-  using Data = std::nullptr_t;
-  using Output = std::nullptr_t;
-  walk_methods_parallel<Scope, Data, Output>(
-      scope,
-      [this](Data&, DexMethod* dex_method) {
-        // Mapper
-        generate_points_to_actions(dex_method);
-        return nullptr;
-      },
-      [](Output, Output) {
-        // Reducer
-        return nullptr;
-      },
-      [](int) {
-        // Data initializer
-        return nullptr;
-      });
+  walk_methods_parallel_simple<Scope>(scope, [this](DexMethod* dex_method) {
+    generate_points_to_actions(dex_method);
+  });
 }
 
 const PointsToMethodSemantics& PointsToSemantics::get_method_semantics(
@@ -1183,7 +1169,11 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
     } else if ((access_flags & DexAccessFlags::ACC_NATIVE)) {
       kind = PTS_NATIVE;
     } else {
-      kind = PTS_EXTERNAL;
+      // The definition of a method that is neither abstract nor native should
+      // always have an associated IRCode component.
+      always_assert_log(false,
+                        "Method %s has no associated code component",
+                        SHOW(dex_method->get_name()));
     }
   } else {
     kind = PTS_APK;
