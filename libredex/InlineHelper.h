@@ -34,6 +34,7 @@ class MultiMethodInliner {
     bool use_liveness;
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
+    std::unordered_set<DexType*> whitelist_no_method_limit;
   };
 
   MultiMethodInliner(
@@ -161,7 +162,8 @@ class MultiMethodInliner {
    * other constraints that might be worth looking into, e.g. the number of
    * registers.
    */
-  bool caller_too_large(InlineContext& ctx, DexMethod* caller);
+  bool caller_too_large(
+      InlineContext& ctx, DexMethod* caller, DexType* caller_type);
 
   /**
    * Change the visibility of members accessed in a callee as they are moved

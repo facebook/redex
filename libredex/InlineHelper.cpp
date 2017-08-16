@@ -298,7 +298,7 @@ bool MultiMethodInliner::is_inlinable(InlineContext& ctx,
   if (caller_is_blacklisted(caller)) return false;
   if (has_external_catch(callee)) return false;
   if (cannot_inline_opcodes(callee, caller)) return false;
-  if (caller_too_large(ctx, callee)) return false;
+  if (caller_too_large(ctx, callee, caller->get_class())) return false;
 
   return true;
 }
@@ -325,7 +325,12 @@ bool MultiMethodInliner::is_blacklisted(DexMethod* callee) {
 }
 
 bool MultiMethodInliner::caller_too_large(InlineContext& ctx,
-                                          DexMethod* callee) {
+                                          DexMethod* callee,
+                                          DexType* caller_type) {
+  if (m_config.whitelist_no_method_limit.count(caller_type)) {
+    return false;
+  }
+
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
