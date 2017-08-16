@@ -1225,17 +1225,35 @@ void enlarge_registers(IRCode* code, uint16_t newregs) {
   code->set_registers_size(newregs);
 }
 
-void remap_callee_regs(IRInstruction* invoke,
-                       DexMethod* method,
-                       uint16_t newregs) {
+/*
+ * Map the callee's param registers to the argument registers of the caller.
+ * Any other callee register N will get mapped to caller_registers_size + N.
+ * The resulting callee code can then be appended to the caller's code without
+ * any register conflicts.
+ */
+void remap_callee_for_tail_call(const IRCode* caller_code,
+                                IRCode* callee_code,
+                                FatMethod::iterator invoke_it) {
   RegMap reg_map;
-  auto oldregs = method->get_code()->get_registers_size();
-  auto wc = invoke->arg_word_count();
-  for (uint16_t i = 0; i < wc; ++i) {
-    reg_map[oldregs - wc + i] = invoke->src(i);
+  auto insn = invoke_it->insn;
+  auto callee_reg_start = caller_code->get_registers_size();
+
+  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
+  auto param_it = param_insns.begin();
+  auto param_end = param_insns.end();
+  insn->range_to_srcs();
+  insn->normalize_registers();
+  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
+    always_assert(param_it != param_end);
+    reg_map[param_it->insn->dest()] = insn->src(i);
   }
-  transform::remap_registers(method->get_code(), reg_map);
-  method->get_code()->set_registers_size(newregs);
+  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
+    if (reg_map.count(i) != 0) {
+      continue;
+    }
+    reg_map[i] = callee_reg_start + i;
+  }
+  transform::remap_registers(callee_code, reg_map);
 }
 
 /**
@@ -1640,31 +1658,18 @@ RegSet ins_reg_defs(IRCode& code) {
 
 }
 
-
 void IRCode::inline_tail_call(DexMethod* caller,
                               DexMethod* callee,
-                              IRInstruction* invoke) {
+                              FatMethod::iterator pos) {
   TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
-  auto fcaller = caller->get_code()->m_fmethod;
-  auto fcallee = callee->get_code()->m_fmethod;
+  auto* caller_code = caller->get_code();
+  auto* callee_code = callee->get_code();
+  auto fcaller = caller_code->m_fmethod;
+  auto fcallee = callee_code->m_fmethod;
 
-  auto bregs = caller->get_code()->get_registers_size();
-  auto eregs = callee->get_code()->get_registers_size();
-  auto bins = sum_param_sizes(caller->get_code());
-  auto eins = sum_param_sizes(callee->get_code());
-  always_assert(bins >= eins);
-  auto newregs = std::max(bregs, uint16_t(eregs + bins - eins));
-  always_assert(newregs <= 16);
-
-  // Remap registers to account for possibly larger frame, more ins
-  enlarge_registers(caller->get_code(), newregs);
-  remap_callee_regs(invoke, callee, newregs);
-
-  auto pos = std::find_if(fcaller->begin(),
-                          fcaller->end(),
-                          [invoke](const MethodItemEntry& mei) {
-                            return mei.type == MFLOW_OPCODE && mei.insn == invoke;
-                          });
+  remap_callee_for_tail_call(caller_code, callee_code, pos);
+  caller_code->set_registers_size(caller_code->get_registers_size() +
+                                  callee_code->get_registers_size());
 
   cleanup_callee_debug(fcallee);
   auto it = fcallee->begin();

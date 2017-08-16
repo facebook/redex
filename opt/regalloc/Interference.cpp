@@ -295,7 +295,8 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
     if (reg >= initial_regs) {
       node.m_props.set(Node::SPILL);
     }
-    assert(!node.m_type_domain.is_bottom());
+    always_assert_log(
+        !node.m_type_domain.is_bottom(), "type of v%u is bottom!", reg);
   }
   return graph;
 }
