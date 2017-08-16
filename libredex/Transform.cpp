@@ -1374,6 +1374,26 @@ static size_t remove_block(IRCode* code, Block* b) {
   return insns_removed;
 }
 
+void visit(Block* b, std::unordered_set<Block*>& visited) {
+  if (visited.find(b) != visited.end()) {
+    return;
+  }
+  visited.emplace(b);
+  for (auto& s : b->succs()) {
+    visit(s, visited);
+  }
+}
+
+void remove_succ_edges(Block* b, ControlFlowGraph* cfg) {
+  std::vector<std::pair<Block*, Block*>> remove_edges;
+  for (auto& s : b->succs()) {
+    remove_edges.emplace_back(b, s);
+  }
+  for (auto& p : remove_edges) {
+    cfg->remove_all_edges(p.first, p.second);
+  }
+}
+
 size_t remove_unreachable_blocks(IRCode* code) {
   auto& cfg = code->cfg();
   auto& blocks = cfg.blocks();
@@ -1381,16 +1401,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
 
   // remove unreachable blocks
   std::unordered_set<Block*> visited;
-  std::function<void (Block*)> visit = [&](Block* b) {
-    if (visited.find(b) != visited.end()) {
-      return;
-    }
-    visited.emplace(b);
-    for (auto& s : b->succs()) {
-      visit(s);
-    }
-  };
-  visit(blocks.at(0));
+  visit(blocks.at(0), visited);
   for (size_t i = 1; i < blocks.size(); ++i) {
     auto& b = blocks.at(i);
     if (visited.find(b) != visited.end()) {
@@ -1398,13 +1409,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
     }
     // Remove all successor edges. Note that we don't need to try and remove
     // predecessors since by definition, unreachable blocks have no preds
-    std::vector<std::pair<Block*, Block*>> remove_edges;
-    for (auto& s : b->succs()) {
-      remove_edges.emplace_back(b, s);
-    }
-    for (auto& p : remove_edges) {
-      cfg.remove_all_edges(p.first, p.second);
-    }
+    remove_succ_edges(b, &cfg);
     insns_removed += remove_block(code, b);
   }
 
@@ -2102,6 +2107,16 @@ void IRCode::build_cfg(bool end_block_before_throw) {
       always_assert_log(bid > 0, "No beginning of try region found");
       --bid;
     }
+  }
+  // Remove edges between unreachable blocks and their succ blocks.
+  std::unordered_set<Block*> visited;
+  transform::visit(blocks.at(0), visited);
+  for (size_t i = 1; i < blocks.size(); ++i) {
+    auto& b = blocks.at(i);
+    if (visited.find(b) != visited.end()) {
+      continue;
+    }
+    transform::remove_succ_edges(b, m_cfg.get());
   }
   TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
