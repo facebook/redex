@@ -315,7 +315,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // will go into B11 but not both B11 and B12, so if this occurred,
         // we would treat it like the case of
         // live_out(block) - live_in(succ_block).
-        if (is_conditional_branch(insn->opcode()) && it == block->rbegin()) {
+        if (is_branch(insn->opcode()) && it == block->rbegin()) {
           for (auto& s : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
