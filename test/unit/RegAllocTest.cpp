@@ -734,6 +734,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   IRCode code(method, 0);
   EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
   EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
+  code.push_back(dasm(OPCODE_CONST_4, {1_v}));
   code.push_back(dasm(OPCODE_CONST_4, {2_v}));
   code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}));
   code.push_back(dasm(OPCODE_RETURN, {3_v}));
@@ -753,14 +754,17 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
   auto load_param = allocator.find_param_first_uses(
-      fixpoint_iter, spill_plan.param_spills, &code);
-  // No use of 1.
-  EXPECT_EQ(load_param.size(), 1);
+      spill_plan.param_spills, &code);
   allocator.spill_params(ig, load_param, &code, &new_temps);
 
   InstructionList expected_insns {
     dasm(IOPCODE_LOAD_PARAM, {4_v}),
-    dasm(IOPCODE_LOAD_PARAM, {1_v}),
+    dasm(IOPCODE_LOAD_PARAM, {5_v}),
+
+    // Because v1 is getting overwritten, spill move is inserted at
+    // beginning of method body.
+    dasm(OPCODE_MOVE_16, {1_v, 5_v}),
+    dasm(OPCODE_CONST_4, {1_v}),
     dasm(OPCODE_CONST_4, {2_v}),
 
     // Move is inserted before first use.

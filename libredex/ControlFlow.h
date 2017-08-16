@@ -53,6 +53,11 @@ inline bool is_catch(Block* b) {
   return it->type == MFLOW_CATCH;
 }
 
+struct DominatorInfo {
+  Block* dom;
+  size_t postorder;
+};
+
 class ControlFlowGraph {
   using IdPair = std::pair<size_t, size_t>;
 
@@ -91,13 +96,12 @@ class ControlFlowGraph {
 
   // Find a common dominator block that is closest to both block.
   Block* idom_intersect(
-      const std::unordered_map<Block*, size_t>& postorder_numbers,
-      const std::unordered_map<Block*, Block*>& immediate_dominator,
+      const std::unordered_map<Block*, DominatorInfo>& postorder_dominator,
       Block* block1,
       Block* block2) const;
 
   // Finding immediate dominator for each blocks in ControlFlowGraph.
-  std::unordered_map<Block*, Block*> immediate_dominator() const;
+  std::unordered_map<Block*, DominatorInfo> immediate_dominators() const;
 
  private:
   EdgeFlags& mutable_edge(Block* pred, Block* succ) {

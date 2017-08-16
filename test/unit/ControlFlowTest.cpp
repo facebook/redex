@@ -229,13 +229,13 @@ TEST(ControlFlow, findImmediateDominator) {
     cfg.add_edge(b4, b3, EDGE_GOTO);
     cfg.add_edge(b4, b5, EDGE_GOTO);
     cfg.add_edge(b2, b5, EDGE_GOTO);
-    auto idom = cfg.immediate_dominator();
-    EXPECT_EQ(idom[b0], b0);
-    EXPECT_EQ(idom[b1], b0);
-    EXPECT_EQ(idom[b3], b0);
-    EXPECT_EQ(idom[b2], b1);
-    EXPECT_EQ(idom[b4], b3);
-    EXPECT_EQ(idom[b5], b0);
+    auto idom = cfg.immediate_dominators();
+    EXPECT_EQ(idom[b0].dom, b0);
+    EXPECT_EQ(idom[b1].dom, b0);
+    EXPECT_EQ(idom[b3].dom, b0);
+    EXPECT_EQ(idom[b2].dom, b1);
+    EXPECT_EQ(idom[b4].dom, b3);
+    EXPECT_EQ(idom[b5].dom, b0);
   }
   {
     //                 +---------+
@@ -266,12 +266,12 @@ TEST(ControlFlow, findImmediateDominator) {
     cfg.add_edge(b4, b3, EDGE_GOTO);
     cfg.add_edge(b4, b5, EDGE_GOTO);
     cfg.add_edge(b2, b5, EDGE_GOTO);
-    auto idom = cfg.immediate_dominator();
-    EXPECT_EQ(idom[b0], b0);
-    EXPECT_EQ(idom[b1], b0);
-    EXPECT_EQ(idom[b3], b1);
-    EXPECT_EQ(idom[b2], b1);
-    EXPECT_EQ(idom[b4], b3);
-    EXPECT_EQ(idom[b5], b1);
+    auto idom = cfg.immediate_dominators();
+    EXPECT_EQ(idom[b0].dom, b0);
+    EXPECT_EQ(idom[b1].dom, b0);
+    EXPECT_EQ(idom[b3].dom, b1);
+    EXPECT_EQ(idom[b2].dom, b1);
+    EXPECT_EQ(idom[b4].dom, b3);
+    EXPECT_EQ(idom[b5].dom, b1);
   }
 }
