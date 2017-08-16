@@ -35,6 +35,8 @@
 
 namespace {
 
+const char* kCreatedByOatmeal = "created_by_oatmeal";
+
 OatVersion versionInt(const std::string& version_str) {
   if (version_str == "039") {
     return OatVersion::V_039;
@@ -335,7 +337,7 @@ class KeyValueStore {
       // key
       {
         auto len = strnlen(&buf[next], remaining) + 1;
-        kv.first = std::string(&buf[next], len);
+        kv.first = std::string(&buf[next], len - 1);
         next += len;
         remaining -= len;
       }
@@ -345,7 +347,7 @@ class KeyValueStore {
       // value
       {
         auto len = strnlen(&buf[next], remaining) + 1;
-        kv.second = std::string(&buf[next], len);
+        kv.second = std::string(&buf[next], len - 1);
         next += len;
         remaining -= len;
       }
@@ -373,6 +375,15 @@ class KeyValueStore {
       ret += e.second.size() + 1;
     }
     return ret;
+  }
+
+  bool has_key(const std::string& key) const {
+    for (const auto& kv : kv_pairs_) {
+      if (kv.first == key) {
+        return true;
+      }
+    }
+    return false;
   }
 
  private:
@@ -1514,6 +1525,10 @@ class OatFile_064 : public OatFile {
     return ret;
   }
 
+  bool created_by_oatmeal() const override {
+    return key_value_store_.has_key(kCreatedByOatmeal);
+  }
+
   size_t oat_offset() const override { return oat_offset_; }
 
   static Status build(const std::string& oat_file_name,
@@ -1625,6 +1640,10 @@ class OatFile_079 : public OatFile {
 
   size_t oat_offset() const override { return oat_offset_; }
 
+  bool created_by_oatmeal() const override {
+    return key_value_store_.has_key(kCreatedByOatmeal);
+  }
+
  private:
   OatFile_079(OatHeader h,
               KeyValueStore kv,
@@ -1680,6 +1699,10 @@ public:
     return std::vector<OatDexFile>();
   }
 
+  bool created_by_oatmeal() const override {
+    return false;
+  }
+
 private:
   explicit OatFile_Unknown(ConstBuffer buf) {
     header_ = OatHeader_Common::parse(buf);
@@ -1705,6 +1728,10 @@ public:
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     return std::vector<OatDexFile>();
+  }
+
+  bool created_by_oatmeal() const override {
+    return false;
   }
 
 private:
@@ -2023,7 +2050,8 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     { "has-patch-info", "false" },
     { "native-debuggable", "false" },
     { "image-location", art_image_location.c_str() },
-    { "pic", "false" }
+    { "pic", "false" },
+    { kCreatedByOatmeal, "true" }
   };
 
   ////////// Gather image info from boot.art and boot.oat

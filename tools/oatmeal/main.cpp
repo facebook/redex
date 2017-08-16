@@ -53,6 +53,8 @@ struct Arguments {
   std::string arch;
 
   std::string art_image_location;
+
+  bool test_is_oatmeal = false;
 };
 
 #ifndef ANDROID
@@ -89,6 +91,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"print-unverified-classes", no_argument, nullptr, 'p'},
                              {"arch", required_argument, nullptr, 'a'},
                              {"art-image-location", required_argument, nullptr, 0},
+                             {"test-is-oatmeal", no_argument, nullptr, 1},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -163,6 +166,10 @@ Arguments parse_args(int argc, char* argv[]) {
       ret.art_image_location = optarg;
       break;
 
+    case 1:
+      ret.test_is_oatmeal = true;
+      break;
+
     case ':':
       fprintf(stderr, "ERROR: %s requires an argument\n", argv[optind - 1]);
       exit(1);
@@ -233,6 +240,15 @@ int dump(const Arguments& args) {
 
   ConstBuffer buf{file_contents.get(), file_size};
   auto ma_scope = MemoryAccounter::NewScope(buf);
+
+  if (args.test_is_oatmeal) {
+    auto oatfile = OatFile::parse_dex_files_only(buf);
+    if (oatfile->created_by_oatmeal()) {
+      return 0;
+    } else {
+      return 1;
+    }
+  }
 
   auto oatfile = OatFile::parse(buf);
   oatfile->print(args.dump_classes, args.dump_tables, args.print_unverified_classes);
