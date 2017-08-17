@@ -111,8 +111,8 @@ std::set<std::string> method_semantics = {
     " V0.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // B#strs()
-    "Lcom/facebook/redextest/PointsToSemantics$B;#strs: ()[Ljava/lang/String; "
-    "{\n"
+    "Lcom/facebook/redextest/PointsToSemantics$B;#strs: ()[Ljava/lang/String;"
+    " {\n"
     " V0 = NEW [Ljava/lang/String;\n"
     " V1 = \"a\"\n"
     " ARRAY_ELEM(V0) = V1\n"
@@ -130,8 +130,8 @@ std::set<std::string> method_semantics = {
     " RETURN V0\n"
     "}\n",
     // B#pick()
-    "Lcom/facebook/redextest/PointsToSemantics$B;#pick: (I)Ljava/lang/String; "
-    "{\n"
+    "Lcom/facebook/redextest/PointsToSemantics$B;#pick: (I)Ljava/lang/String;"
+    " {\n"
     " V1 = Lcom/facebook/redextest/PointsToSemantics$B;#strs()\n"
     " Lcom/facebook/redextest/PointsToSemantics$B;#ints()\n"
     " V3 = ARRAY_ELEM(V1)\n"
@@ -249,8 +249,8 @@ std::set<std::string> method_semantics = {
     "}\n",
     // PointsToSemantics#getClassTest()
     "Lcom/facebook/redextest/PointsToSemantics;#getClassTest: "
-    "()[Ljava/lang/Class; {\n "
-    "V0 = THIS\n"
+    "()[Ljava/lang/Class; {\n"
+    " V0 = THIS\n"
     " V1 = NEW [Ljava/lang/Class;\n"
     " V2 = \"foo\"\n"
     " V3 = V2.{V}Ljava/lang/Object;#getClass()\n"

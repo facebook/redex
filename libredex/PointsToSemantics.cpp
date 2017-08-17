@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <deque>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <ostream>
@@ -233,7 +234,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
   const PointsToOperation& op = a.operation();
   switch (op.kind) {
   case PTS_CONST_STRING: {
-    o << a.dest() << " = \"" << op.dex_string->str() << "\"";
+    o << a.dest() << " = " << std::quoted(op.dex_string->str());
     break;
   }
   case PTS_CONST_CLASS: {
@@ -1099,10 +1100,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
   }
   case PTS_NATIVE: {
     o << "= NATIVE";
-    break;
-  }
-  case PTS_EXTERNAL: {
-    o << "= EXTERNAL";
     break;
   }
   case PTS_APK:

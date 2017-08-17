@@ -25,18 +25,7 @@
  */
 class PointsToSemanticsUtils final {
  public:
-  PointsToSemanticsUtils()
-      : m_throwable_type(DexType::make_type("Ljava/lang/Throwable;")),
-        m_primitive_type_wrappers({DexType::make_type("Ljava/lang/Boolean;"),
-                                   DexType::make_type("Ljava/lang/Byte;"),
-                                   DexType::make_type("Ljava/lang/Character;"),
-                                   DexType::make_type("Ljava/lang/Double;"),
-                                   DexType::make_type("Ljava/lang/Float;"),
-                                   DexType::make_type("Ljava/lang/Integer;"),
-                                   DexType::make_type("Ljava/lang/Long;"),
-                                   DexType::make_type("Ljava/lang/Short;"),
-                                   DexType::make_type("Ljava/lang/Void;")}),
-        m_wrapper_class_type_field_name(DexString::make_string("TYPE")) {}
+  PointsToSemanticsUtils() = default;
 
   PointsToSemanticsUtils(const PointsToSemanticsUtils& other) = delete;
 
@@ -54,7 +43,16 @@ class PointsToSemanticsUtils final {
   bool is_primitive_type_class_object_retrieval(IRInstruction* insn) const;
 
  private:
-  DexType* m_throwable_type;
-  std::unordered_set<DexType*> m_primitive_type_wrappers;
-  DexString* m_wrapper_class_type_field_name;
+  DexType* m_throwable_type{DexType::make_type("Ljava/lang/Throwable;")};
+  std::unordered_set<DexType*> m_primitive_type_wrappers{
+      {DexType::make_type("Ljava/lang/Boolean;"),
+       DexType::make_type("Ljava/lang/Byte;"),
+       DexType::make_type("Ljava/lang/Character;"),
+       DexType::make_type("Ljava/lang/Double;"),
+       DexType::make_type("Ljava/lang/Float;"),
+       DexType::make_type("Ljava/lang/Integer;"),
+       DexType::make_type("Ljava/lang/Long;"),
+       DexType::make_type("Ljava/lang/Short;"),
+       DexType::make_type("Ljava/lang/Void;")}};
+  DexString* m_wrapper_class_type_field_name{DexString::make_string("TYPE")};
 };

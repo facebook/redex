@@ -412,7 +412,6 @@ enum MethodKind {
   PTS_ABSTRACT, // Abstract method
   PTS_NATIVE, // Native method
   PTS_STUB, // The set of points-to equations for the method is a stub
-  PTS_EXTERNAL, // No code or stub is available for the method
 };
 
 /*
