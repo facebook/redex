@@ -168,52 +168,52 @@ struct DexPattern {
     unsigned int const copy_index;
   };
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set)
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::none),
         dummy(nullptr) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set,
              DexMethod* const method)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::method),
         method(method) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set,
              String const string)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::string),
         string(string) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set,
              Literal const literal)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::literal),
         literal(literal) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set,
              Type const type)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::type),
         type(type) {}
 
@@ -234,14 +234,14 @@ struct Pattern {
   const std::vector<DexPattern> replace;
   const std::function<bool(const Matcher&)> predicate;
 
-  Pattern(std::string name,
-          std::vector<DexPattern> match,
-          std::vector<DexPattern> replace,
-          std::function<bool(const Matcher&)> predicate = {})
-      : name(std::move(name)),
-        match(std::move(match)),
-        replace(std::move(replace)),
-        predicate(std::move(predicate)) {}
+  Pattern(std::string pattern_name,
+          std::vector<DexPattern> pattern_match,
+          std::vector<DexPattern> pattern_replace,
+          std::function<bool(const Matcher&)> predicate_fn = {})
+      : name(std::move(pattern_name)),
+        match(std::move(pattern_match)),
+        replace(std::move(pattern_replace)),
+        predicate(std::move(predicate_fn)) {}
 };
 
 // Matcher holds the matching state for the given pattern.
@@ -263,7 +263,7 @@ struct Matcher {
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
   std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
 
-  explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
+  explicit Matcher(const Pattern& p) : pattern(p), match_index(0) {}
 
   void reset() {
     match_index = 0;

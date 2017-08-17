@@ -27,8 +27,8 @@
 #include "Walkers.h"
 
 struct AnalysisImpl : SingleImplAnalysis {
-  AnalysisImpl(const Scope& scope, DexClasses& primary_dex)
-      : SingleImplAnalysis(), scope(scope) {
+  AnalysisImpl(const Scope& s, DexClasses& primary_dex)
+      : SingleImplAnalysis(), scope(s) {
     for (const auto& cls : primary_dex) {
       primary.insert(cls->get_type());
     }

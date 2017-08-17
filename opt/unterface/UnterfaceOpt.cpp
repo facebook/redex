@@ -22,8 +22,8 @@ namespace {
  */
 struct Unterface {
 
-  Unterface(DexClass* intf, std::unordered_set<DexClass*>& classes)
-      : intf(intf),
+  Unterface(DexClass* interface, std::unordered_set<DexClass*>& classes)
+      : intf(interface),
         impls(classes.begin(), classes.end()),
         untf(nullptr),
         sw_field(nullptr),

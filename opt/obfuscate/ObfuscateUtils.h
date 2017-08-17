@@ -64,7 +64,7 @@ public:
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
   // the pointer it is passed
-  explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) { }
+  explicit DexNameWrapper(T dex_element) : dex_elem(dex_element) { }
 
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
   DexNameWrapper& operator=(DexNameWrapper&& other) = default;
@@ -276,9 +276,9 @@ protected:
   }
 
 public:
-  NameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-      ids_to_avoid(ids_to_avoid), used_ids(used_ids) {}
+  NameGenerator(const std::unordered_set<std::string>& ids_to_avoid_,
+      std::unordered_set<std::string>& used_ids_) :
+      ids_to_avoid(ids_to_avoid_), used_ids(used_ids_) {}
   virtual ~NameGenerator() = default;
 
   // We want to rename the DexField pointed to by this wrapper.
@@ -602,14 +602,14 @@ public:
   const bool operate_on_privates;
   NameGenerator<T>& name_gen;
 
-  RenamingContext(std::vector<T>& elems,
-                  std::unordered_set<std::string>& ids_to_avoid,
-                  NameGenerator<T>& name_gen,
-                  bool operate_on_privates)
-      : elems(elems),
-        ids_to_avoid(ids_to_avoid),
-        operate_on_privates(operate_on_privates),
-        name_gen(name_gen) {}
+  RenamingContext(std::vector<T>& elems_,
+                  std::unordered_set<std::string>& ids_to_avoid_,
+                  NameGenerator<T>& name_gen_,
+                  bool operate_on_privates_)
+      : elems(elems_),
+        ids_to_avoid(ids_to_avoid_),
+        operate_on_privates(operate_on_privates_),
+        name_gen(name_gen_) {}
   virtual ~RenamingContext() {}
 
   // Whether or not on this pass we should rename the member
@@ -628,14 +628,14 @@ class MethodRenamingContext : public RenamingContext<DexMethod*> {
   DexString* clinitstr = DexString::get_string("<clinit>");
   DexMethodManager& name_mapping;
 public:
- MethodRenamingContext(std::vector<DexMethod*>& elems,
-                       std::unordered_set<std::string>& ids_to_avoid,
-                       NameGenerator<DexMethod*>& name_gen,
-                       DexMethodManager& name_mapping,
-                       bool operate_on_privates)
+ MethodRenamingContext(std::vector<DexMethod*>& elems_,
+                       std::unordered_set<std::string>& ids_to_avoid_,
+                       NameGenerator<DexMethod*>& name_gen_,
+                       DexMethodManager& name_mapping_,
+                       bool operate_on_privates_)
      : RenamingContext<DexMethod*>(
-           elems, ids_to_avoid, name_gen, operate_on_privates),
-       name_mapping(name_mapping) {}
+           elems_, ids_to_avoid_, name_gen_, operate_on_privates_),
+       name_mapping(name_mapping_) {}
 
  // For methods we have to make sure we don't rename <init> or <clinit> ever
  virtual bool can_rename_elem(DexMethod* elem) const override {
@@ -694,13 +694,13 @@ void walk_hierarchy(
     HierarchyDirection h_dir,
     const ClassHierarchy& ch) {
   if (!cls) return;
-  auto visit = [&](DexClass* cls) {
-    for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
+  auto visit = [&](DexClass* clazz) {
+    for (const auto meth : const_cast<const DexClass*>(clazz)->get_dmethods()) {
       if (!is_private(meth) || visit_private)
         on_member(const_cast<DexMethod*>(meth));
     }
 
-    for (const auto meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
+    for (const auto meth : const_cast<const DexClass*>(clazz)->get_vmethods()) {
       if (!is_private(meth) || visit_private)
         on_member(const_cast<DexMethod*>(meth));
     }};

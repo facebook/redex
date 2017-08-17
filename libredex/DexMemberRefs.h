@@ -21,8 +21,8 @@ struct DexMethodRef {
   DexString* name = nullptr;
   DexProto* proto = nullptr;
   DexMethodRef() = default;
-  DexMethodRef(DexType* cls, DexString* name, DexProto* proto)
-      : cls(cls), name(name), proto(proto) {}
+  DexMethodRef(DexType* clazz, DexString* n, DexProto* p)
+      : cls(clazz), name(n), proto(p) {}
 
   bool operator==(const DexMethodRef& r) const {
     return cls == r.cls && name == r.name && proto == r.proto;
@@ -36,8 +36,8 @@ struct DexFieldRef {
   DexType* type = nullptr;
 
   DexFieldRef() = default;
-  DexFieldRef(DexType* cls, DexString* name, DexType* type)
-      : cls(cls), name(name), type(type) {}
+  DexFieldRef(DexType* clazz, DexString* n, DexType* t)
+      : cls(clazz), name(n), type(t) {}
 
   bool operator==(const DexFieldRef& r) const {
     return cls == r.cls && name == r.name && type  == r.type;

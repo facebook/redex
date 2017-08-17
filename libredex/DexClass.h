@@ -504,12 +504,15 @@ struct DexDebugEntry final {
     std::unique_ptr<DexPosition> pos;
     std::unique_ptr<DexDebugInstruction> insn;
   };
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
-      : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn)
+  DexDebugEntry(uint32_t address, std::unique_ptr<DexPosition> position)
+      : type(DexDebugEntryType::Position),
+        addr(address),
+        pos(std::move(position)) {}
+  DexDebugEntry(uint32_t address,
+                std::unique_ptr<DexDebugInstruction> dbg_insn)
       : type(DexDebugEntryType::Instruction),
-        addr(addr),
-        insn(std::move(insn)) {}
+        addr(address),
+        insn(std::move(dbg_insn)) {}
   // should only be copied via DexDebugItem's copy ctor, which is responsible
   // for remapping DexPositions' parent pointer
   DexDebugEntry(const DexDebugEntry&) = delete;

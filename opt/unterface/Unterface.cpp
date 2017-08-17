@@ -235,8 +235,8 @@ TypeRelationship InterfaceImplementations::match(
   return intf_impls;
 }
 
-InterfaceImplementations::InterfaceImplementations(Scope& scope)
-    : scope(scope) {
+InterfaceImplementations::InterfaceImplementations(Scope& s)
+    : scope(s) {
   ch = build_type_hierarchy(scope);
   load_interfaces();
   for (auto intf : ifset) {

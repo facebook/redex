@@ -77,7 +77,7 @@ class Breadcrumbs {
 
  public:
 
-  explicit Breadcrumbs(const Scope& scope) : scope(scope) {
+  explicit Breadcrumbs(const Scope& s) : scope(s) {
     classes.insert(scope.begin(), scope.end());
   }
 
