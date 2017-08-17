@@ -111,7 +111,7 @@ def run_pass(
     if config_path:
         args += ['--config', config_path]
 
-    if script_args.verify_none_mode:
+    if script_args.verify_none_mode or config_json.get("verify_none_mode"):
         args += ['--verify-none-mode']
 
     if script_args.warn:

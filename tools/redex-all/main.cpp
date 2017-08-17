@@ -528,7 +528,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, pg_config, args.config);
+    PassManager manager(passes, pg_config, args.config, args.verify_none_mode);
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, cfg);
