@@ -143,9 +143,9 @@ bool must_set_method_annotations(const SingleImplConfig& config) {
 struct OptimizationImpl {
   OptimizationImpl(
       std::unique_ptr<SingleImplAnalysis> analysis,
-      const ClassHierarchy& cls_hierarchy)
+      const ClassHierarchy& ch)
           : single_impls(std::move(analysis))
-          , ch(cls_hierarchy) {}
+          , ch(ch) {}
 
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 

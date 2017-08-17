@@ -187,9 +187,9 @@ DexString* get_name(int seed) {
 }
 
 struct VirtualRenamer {
-  VirtualRenamer(const ClassScopes& scopes, const RefsMap& refs) :
-      class_scopes(scopes),
-      def_refs(refs) {}
+  VirtualRenamer(const ClassScopes& class_scopes, const RefsMap& def_refs) :
+      class_scopes(class_scopes),
+      def_refs(def_refs) {}
 
   int rename_virtual_scopes(const DexType* type, int& seed) const;
   int rename_interface_scopes(int& seed) const;

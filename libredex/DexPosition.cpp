@@ -15,7 +15,7 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 
-DexPosition::DexPosition(uint32_t ln) : line(ln), parent(nullptr) {}
+DexPosition::DexPosition(uint32_t line) : line(line), parent(nullptr) {}
 
 void DexPosition::bind(DexMethod* method_, DexString* file_) {
   always_assert(method_ != nullptr);

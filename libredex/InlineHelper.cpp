@@ -148,9 +148,9 @@ MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
-    std::function<DexMethod*(DexMethod*, MethodSearch)> resolve_fn,
+    std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
     const Config& config)
-    : resolver(resolve_fn), m_scope(scope), m_config(config) {
+    : resolver(resolver), m_scope(scope), m_config(config) {
   // build the xstores array
   xstores.push_back(std::unordered_set<DexType*>());
   for (const auto& cls : stores[0].get_dexen()[0]) {

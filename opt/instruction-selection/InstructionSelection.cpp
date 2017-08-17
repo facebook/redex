@@ -177,20 +177,19 @@ void InstructionSelectionPass::run_pass(DexStoresVector& stores,
   using Data = std::nullptr_t;
   using Output = InstructionSelection::Stats;
   auto scope = build_class_scope(stores);
-  auto mapper = [](Data&, DexMethod* m) {
-    InstructionSelection::Stats stats;
-    if (m->get_code() == nullptr) {
-      return stats;
-    }
-    auto code = m->get_code();
-    InstructionSelection select;
-    select.select_instructions(code);
-    stats.accumulate(select.get_stats());
-    return stats;
-  };
   auto stats = walk_methods_parallel<Scope, Data, Output>(
       scope,
-      mapper,
+      [](Data&, DexMethod* m) {
+        InstructionSelection::Stats stats;
+        if (m->get_code() == nullptr) {
+          return stats;
+        }
+        auto code = m->get_code();
+        InstructionSelection select;
+        select.select_instructions(code);
+        stats.accumulate(select.get_stats());
+        return stats;
+      },
       [](Output a, Output b) {
         a.accumulate(b);
         return a;

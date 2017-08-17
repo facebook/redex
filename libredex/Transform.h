@@ -33,8 +33,8 @@ std::string show(TryEntryType t);
 struct TryEntry {
   TryEntryType type;
   MethodItemEntry* catch_start;
-  TryEntry(TryEntryType ty, MethodItemEntry* catch_start_entry):
-      type(ty), catch_start(catch_start_entry) {
+  TryEntry(TryEntryType type, MethodItemEntry* catch_start):
+      type(type), catch_start(catch_start) {
     always_assert(catch_start != nullptr);
   }
 };
@@ -42,7 +42,7 @@ struct TryEntry {
 struct CatchEntry {
   DexType* catch_type;
   MethodItemEntry* next; // always null for catchall
-  explicit CatchEntry(DexType* catch_ty): catch_type(catch_ty), next(nullptr) {}
+  CatchEntry(DexType* catch_type): catch_type(catch_type), next(nullptr) {}
 };
 
 /**

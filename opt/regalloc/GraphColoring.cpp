@@ -9,11 +9,8 @@
 
 #include "GraphColoring.h"
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
-#pragma GCC diagnostic pop
 
 #include "ControlFlow.h"
 #include "Debug.h"

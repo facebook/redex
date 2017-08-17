@@ -25,7 +25,7 @@ match_t<IRInstruction> return_void() {
   };
 }
 
-match_t<IRInstruction, std::tuple<int> > has_n_args(int num) {
+match_t<IRInstruction, std::tuple<int> > has_n_args(int n) {
   return {
     // N.B. "int n" must be const ref in order to appease N-ary matcher template
     [](const IRInstruction* insn, const int& n) {
@@ -38,7 +38,7 @@ match_t<IRInstruction, std::tuple<int> > has_n_args(int num) {
         return insn->arg_word_count() == n;
       }
     },
-    num
+    n
   };
 }
 
@@ -169,12 +169,12 @@ bool is_assignable_to(const DexType* child, const DexType* parent) {
 }
 
 match_t<DexType, std::tuple<const DexType*> >
-  is_assignable_to(const DexType* parent_type) {
+  is_assignable_to(const DexType* parent) {
   return {
     [](const DexType* child, const DexType* const& parent) {
       return is_assignable_to(child, parent);
     },
-    parent_type
+    parent
   };
 }
 

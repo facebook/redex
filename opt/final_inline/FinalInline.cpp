@@ -35,14 +35,11 @@ struct FieldDependency {
   IRInstruction* sput;
   DexField* field;
 
-  FieldDependency(DexMethod* clinit_method,
-                  IRInstruction* sget_insn,
-                  IRInstruction* sput_insn,
-                  DexField* dex_field)
-      : clinit(clinit_method),
-        sget(sget_insn),
-        sput(sput_insn),
-        field(dex_field) {}
+  FieldDependency(DexMethod* clinit,
+                  IRInstruction* sget,
+                  IRInstruction* sput,
+                  DexField* field)
+      : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };
 
 class FinalInlineImpl {

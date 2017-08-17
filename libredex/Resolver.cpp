@@ -16,8 +16,8 @@ DexMethod* resolve_intf_method_ref(
     const DexString* name,
     const DexProto* proto) {
 
-  auto find_method = [&](const DexClass* c) -> DexMethod* {
-    const auto& vmethods = c->get_vmethods();
+  auto find_method = [&](const DexClass* cls) -> DexMethod* {
+    const auto& vmethods = cls->get_vmethods();
     for (const auto vmethod : vmethods) {
       if (vmethod->get_name() == name &&
           vmethod->get_proto() == proto) {
