@@ -23,9 +23,13 @@ class RegAllocPass : public Pass {
               "in the redex config\n");
     }
     pc.get("live_range_splitting", false, m_use_splitting);
+    pc.get("spill_param_properly", false, m_spill_param_properly);
+    pc.get("select_spill_later", false, m_select_spill_later);
   }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_use_splitting = false;
+  bool m_spill_param_properly = false;
+  bool m_select_spill_later = false;
 };

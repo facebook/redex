@@ -236,6 +236,9 @@ class Graph {
     m_containment_graph.emplace(ContainmentEdge(u, v));
   }
 
+  // Boolean of whether we should separate symregs requiring less than 16 bits
+  // from those without this constraint,
+  bool m_separate_node{false};
   std::unordered_map<reg_t, Node> m_nodes;
   using Edge = impl::OrderedPair<reg_t>;
   std::unordered_map<Edge, bool /* not_coalesceable */, boost::hash<Edge>>
@@ -265,6 +268,7 @@ class GraphBuilder {
 
  public:
   static Graph build(const LivenessFixpointIterator&,
+                     bool select_spill_later,
                      IRCode*,
                      reg_t initial_regs,
                      const RangeSet&);
@@ -282,11 +286,12 @@ uint32_t edge_weight(uint8_t, uint8_t);
 IRInstruction* find_check_cast(const MethodItemEntry& mie);
 
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
+                         bool select_spill_later,
                          IRCode* code,
                          reg_t initial_regs,
                          const RangeSet& range_set) {
   return impl::GraphBuilder::build(
-      fixpoint_iter, code, initial_regs, range_set);
+      fixpoint_iter, select_spill_later, code, initial_regs, range_set);
 }
 
 } // interference

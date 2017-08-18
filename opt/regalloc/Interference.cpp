@@ -61,8 +61,9 @@ using namespace impl;
 // others' weights.
 bool Graph::should_separate_node(const Node& u_node,
                                  const Node& v_node) const {
-  return (u_node.max_vreg() < max_unsigned_value(16)) ^
-         (v_node.max_vreg() < max_unsigned_value(16));
+  return m_separate_node &&
+         ((u_node.max_vreg() < max_unsigned_value(16)) ^
+         (v_node.max_vreg() < max_unsigned_value(16)));
 }
 
 void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
@@ -235,10 +236,12 @@ IRInstruction* find_check_cast(const MethodItemEntry& mie) {
  * the move gets inserted, it does not clobber any live registers.
  */
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
+                          bool select_spill_later,
                           IRCode* code,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
+  graph.m_separate_node = select_spill_later;
   for (const auto& mie : InstructionIterable(code)) {
     GraphBuilder::update_node_constraints(mie.insn, range_set, &graph);
   }
