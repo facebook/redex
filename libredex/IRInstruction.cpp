@@ -472,3 +472,49 @@ void IRInstruction::srcs_to_range() {
   set_range_size(srcs_size());
   set_arg_word_count(0);
 }
+
+uint64_t IRInstruction::hash() {
+  std::vector<uint64_t> bits;
+  bits.push_back(opcode());
+
+  for (size_t i = 0; i < srcs_size(); i++) {
+    bits.push_back(src(i));
+  }
+
+  if (dests_size() > 0) {
+    bits.push_back(dest());
+  }
+
+  if (has_data()) {
+    size_t size = get_data()->size();
+    const auto& data = get_data()->data();
+    for (size_t i = 0; i < size; i++) {
+      bits.push_back(data[i]);
+    }
+  }
+
+  if (has_type()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_type()));
+  }
+  if (has_field()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_field()));
+  }
+  if (has_method()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_method()));
+  }
+  if (has_string()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_string()));
+  }
+  if (opcode::has_range(opcode())) {
+    bits.push_back(range_base());
+    bits.push_back(range_size());
+  }
+  bits.push_back(literal());
+  // ignore offset because its not known until sync to DexInstructions
+
+  uint64_t result = 0;
+  for (uint64_t elem : bits) {
+    result ^= elem;
+  }
+  return result;
+}

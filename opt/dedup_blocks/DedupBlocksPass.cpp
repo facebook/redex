@@ -380,49 +380,7 @@ class DedupBlocksImpl {
   static hash_t hash(Block* block) {
     hash_t result = 0;
     for (auto& mie : InstructionIterable(block)) {
-      result ^= hash(mie.insn);
-    }
-    return result;
-  }
-
-  static hash_t hash(IRInstruction* insn) {
-    std::vector<hash_t> bits;
-    bits.push_back(insn->opcode());
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      bits.push_back(insn->src(i));
-    }
-    if (insn->dests_size() > 0) {
-      bits.push_back(insn->dest());
-    }
-    if (insn->has_data()) {
-      size_t size = insn->get_data()->size();
-      const auto& data = insn->get_data()->data();
-      for (size_t i = 0; i < size; i++) {
-        bits.push_back(data[i]);
-      }
-    }
-    if (insn->has_type()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_type()));
-    }
-    if (insn->has_field()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_field()));
-    }
-    if (insn->has_method()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_method()));
-    }
-    if (insn->has_string()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_string()));
-    }
-    if (opcode::has_range(insn->opcode())) {
-      bits.push_back(insn->range_base());
-      bits.push_back(insn->range_size());
-    }
-    bits.push_back(insn->literal());
-    // ignore insn->offset because its not known until sync to DexInstructions
-
-    hash_t result = 0;
-    for (hash_t elem : bits) {
-      result ^= elem;
+      result ^= mie.insn->hash();
     }
     return result;
   }
