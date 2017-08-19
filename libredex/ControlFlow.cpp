@@ -9,6 +9,8 @@
 
 #include "ControlFlow.h"
 
+#include <stack>
+
 ControlFlowGraph::~ControlFlowGraph() {
   for (auto block : m_blocks) {
     delete block;

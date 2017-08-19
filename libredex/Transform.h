@@ -21,7 +21,6 @@
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
 #include "LivenessDeprecated.h"
-#include "Pass.h"
 
 enum TryEntryType {
   TRY_START = 0,

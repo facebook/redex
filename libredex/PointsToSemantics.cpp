@@ -1138,7 +1138,7 @@ PointsToSemantics::PointsToSemantics(const Scope& scope)
   }
 
   // We generate a system of points-to actions for each Dex method in parallel.
-  walk_methods_parallel_simple<Scope>(scope, [this](DexMethod* dex_method) {
+  walk_methods_parallel_simple(scope, [this](DexMethod* dex_method) {
     generate_points_to_actions(dex_method);
   });
 }
