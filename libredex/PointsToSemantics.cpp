@@ -23,6 +23,7 @@
 #include <utility>
 
 #include <boost/container/flat_set.hpp>
+#include <boost/functional/hash.hpp>
 #include <boost/functional/hash_fwd.hpp>
 #include <boost/optional.hpp>
 
