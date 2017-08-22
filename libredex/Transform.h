@@ -177,7 +177,7 @@ struct FatMethodDisposer {
 
 std::string show(const FatMethod*);
 
-class InlineContext;
+struct InlineContext;
 
 class MethodSplicer;
 
@@ -397,14 +397,11 @@ class IRCode {
  * In particular, it caches the liveness analysis so that we can reuse it when
  * multiple callees into the same caller.
  */
-class InlineContext {
-  std::unique_ptr<LivenessMap> m_liveness;
- public:
-  uint64_t estimated_insn_size {0};
+struct InlineContext {
   uint16_t original_regs;
   IRCode* caller_code;
-  InlineContext(DexMethod* caller, bool use_liveness);
-  Liveness live_out(IRInstruction*);
+  uint64_t estimated_insn_size{0};
+  InlineContext(DexMethod* caller);
 };
 
 class InstructionIterator {

@@ -175,27 +175,10 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-InlineContext::InlineContext(DexMethod* caller, bool use_liveness)
+InlineContext::InlineContext(DexMethod* caller)
     : original_regs(caller->get_code()->get_registers_size()),
-      caller_code(&*caller->get_code()) {
-  auto mtcaller = caller_code;
-  estimated_insn_size = mtcaller->sum_opcode_sizes();
-  if (use_liveness) {
-    mtcaller->build_cfg(false);
-    m_liveness = Liveness::analyze(mtcaller->cfg(), original_regs);
-  }
-}
-
-Liveness InlineContext::live_out(IRInstruction* insn) {
-  if (m_liveness) {
-    return m_liveness->at(insn);
-  } else {
-    // w/o liveness analysis we just assume that all caller regs are live
-    auto rs = RegSet(original_regs);
-    rs.flip();
-    return Liveness(std::move(rs));
-  }
-}
+      caller_code(caller->get_code()),
+      estimated_insn_size(caller_code->sum_opcode_sizes()) {}
 
 IRCode::~IRCode() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
@@ -551,19 +534,6 @@ static void associate_try_items(FatMethod* fm,
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     fm->insert(fm->iterator_to(*end), *try_end);
   }
-}
-
-bool has_aliased_arguments(IRInstruction* invoke) {
-  assert(invoke->has_method());
-  std::unordered_set<uint16_t> seen;
-  for (size_t i = 0; i < invoke->srcs_size(); ++i) {
-    auto pair = seen.emplace(invoke->src(i));
-    bool did_insert = pair.second;
-    if (!did_insert) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /*
@@ -1121,26 +1091,6 @@ namespace {
 
 using RegMap = transform::RegMap;
 
-/*
- * If the callee has wide instructions, naive 1-to-1 remapping of registers
- * won't work. Suppose we want to map v1 in the callee to v1 in the caller,
- * because we know v1 is not live. If the instruction using v1 in the callee
- * is wide, we need to check that v2 in the caller is also not live.
- *
- * Similarly, range opcodes require contiguity in their registers, and that
- * cannot be handled by a naive 1-1 remapping.
- */
-bool simple_reg_remap(IRCode* mt) {
-  for (auto& mie : InstructionIterable(mt)) {
-    auto insn = mie.insn;
-    if (!opcode::is_load_param(insn->opcode()) &&
-        (insn->is_wide() || opcode::has_range(insn->opcode()))) {
-      return false;
-    }
-  }
-  return true;
-}
-
 const char* DEBUG_ONLY show_reg_map(RegMap& map) {
   for (auto pair : map) {
     TRACE(INL, 5, "%u -> %u\n", pair.first, pair.second);
@@ -1204,27 +1154,6 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
   }
 }
 
-void remap_reg_set(RegSet& reg_set, const RegMap& reg_map, uint16_t newregs) {
-  RegSet mapped(newregs);
-  for (auto pair : reg_map) {
-    mapped[pair.second] = reg_set[pair.first];
-    reg_set[pair.first] = false;
-  }
-  reg_set.resize(newregs);
-  reg_set |= mapped;
-}
-
-void enlarge_registers(IRCode* code, uint16_t newregs) {
-  RegMap reg_map;
-  auto oldregs = code->get_registers_size();
-  size_t ins = sum_param_sizes(code);
-  for (uint16_t i = 0; i < ins; ++i) {
-    reg_map[oldregs - ins + i] = newregs - ins + i;
-  }
-  transform::remap_registers(code, reg_map);
-  code->set_registers_size(newregs);
-}
-
 /*
  * Map the callee's param registers to the argument registers of the caller.
  * Any other callee register N will get mapped to caller_registers_size + N.
@@ -1254,53 +1183,6 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
     reg_map[i] = callee_reg_start + i;
   }
   transform::remap_registers(callee_code, reg_map);
-}
-
-/**
- * Maps the callee param registers to the argument registers of the caller's
- * invoke instruction.
- */
-RegMap build_callee_param_reg_map(IRInstruction* invoke, IRCode* callee) {
-  RegMap reg_map;
-  auto oldregs = callee->get_registers_size();
-  if (is_invoke_range(invoke->opcode())) {
-    auto base = invoke->range_base();
-    auto range = invoke->range_size();
-    for (uint16_t i = 0; i < range; ++i) {
-      reg_map[oldregs - range + i] = base + i;
-    }
-  } else {
-    auto wc = invoke->arg_word_count();
-    for (uint16_t i = 0; i < wc; ++i) {
-      reg_map[oldregs - wc + i] = invoke->src(i);
-    }
-  }
-  return reg_map;
-}
-
-/**
- * Builds a register map for a callee.
- */
-RegMap build_callee_reg_map(IRInstruction* invoke,
-                            IRCode* callee,
-                            RegSet invoke_live_in) {
-  RegMap reg_map;
-  auto oldregs = callee->get_registers_size();
-  auto ins = sum_param_sizes(callee);
-  // remap all local regs (not args)
-  auto avail_regs = ~invoke_live_in;
-  auto caller_reg = avail_regs.find_first();
-  for (uint16_t i = 0; i < oldregs - ins; ++i) {
-    always_assert_log(caller_reg != RegSet::npos,
-                      "Ran out of caller registers for callee register %d", i);
-    reg_map[i] = caller_reg;
-    caller_reg = avail_regs.find_next(caller_reg);
-  }
-  auto param_reg_map = build_callee_param_reg_map(invoke, callee);
-  for (auto pair : param_reg_map) {
-    reg_map[pair.first] = pair.second;
-  }
-  return reg_map;
 }
 
 /**
@@ -1629,38 +1511,31 @@ class MethodSplicer {
   }
 };
 
-namespace {
+RegMap gen_callee_reg_map_for_tail_call(IRCode* caller_code,
+                                        IRCode* callee_code,
+                                        FatMethod::iterator invoke_it) {
+  RegMap reg_map;
+  auto insn = invoke_it->insn;
+  auto callee_reg_start = caller_code->get_registers_size();
 
-/**
- * Return a RegSet indicating the registers that the callee interferes with
- * either via a check-cast to or by writing to one of the ins.
- * When inlining, writing over one of the ins may change the type of the
- * register to a type that breaks the invariants in the caller.
- */
-RegSet ins_reg_defs(IRCode& code) {
-  RegSet def_ins(code.get_registers_size());
-  for (auto& mie : InstructionIterable(&code)) {
-    auto insn = mie.insn;
-    if (opcode::is_load_param(insn->opcode())) {
-      continue;
-    } else if (insn->dests_size() > 0) {
-      def_ins.set(insn->dest());
-      if (insn->dest_is_wide()) {
-        def_ins.set(insn->dest() + 1);
-      }
-    }
+  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
+  auto param_it = param_insns.begin();
+  auto param_end = param_insns.end();
+  insn->range_to_srcs();
+  insn->normalize_registers();
+  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
+    always_assert(param_it != param_end);
+    reg_map[param_it->insn->dest()] = insn->src(i);
   }
-  // temp_regs are the first n registers in the method that are not ins.
-  // Dx methods use the last k registers for the arguments (where k is the size
-  // of the args).
-  // So an instruction writes an ins if it has a destination and the
-  // destination is bigger or equal than temp_regs.
-  auto temp_regs = code.get_registers_size() - sum_param_sizes(&code);
-  RegSet param_filter(temp_regs);
-  param_filter.resize(code.get_registers_size(), true);
-  return param_filter & def_ins;
-}
-
+  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
+    if (reg_map.count(i) != 0) {
+      continue;
+    }
+    reg_map[i] = callee_reg_start + i;
+  }
+  caller_code->set_registers_size(callee_reg_start +
+                                  callee_code->get_registers_size());
+  return reg_map;
 }
 
 void IRCode::inline_tail_call(DexMethod* caller,
@@ -1697,72 +1572,6 @@ void IRCode::inline_tail_call(DexMethod* caller,
 }
 
 /*
- * This function maps the callee registers to the caller's register file. It
- * assumes that there is no register allocation pass that will run afterward,
- * so it does a bunch of clever stuff to maximize usage of registers.
- */
-std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
-    InlineContext& context,
-    IRCode* callee_code,
-    FatMethod::iterator invoke_it) {
-  auto caller_code = context.caller_code;
-  auto invoke = invoke_it->insn;
-  uint16_t newregs = caller_code->get_registers_size();
-  if (newregs > 16) {
-    return nullptr;
-  }
-
-  bool simple_remap_ok = simple_reg_remap(&*callee_code);
-  // if the simple approach won't work, just be conservative and assume all
-  // caller temp regs are live
-  auto invoke_live_out = context.live_out(invoke);
-  if (!simple_remap_ok) {
-    auto rs = RegSet(context.original_regs);
-    rs.flip();
-    invoke_live_out = Liveness(std::move(rs));
-  }
-  auto caller_ins = sum_param_sizes(caller_code);
-  auto callee_ins = sum_param_sizes(callee_code);
-  // the caller liveness info is cached across multiple inlinings but the caller
-  // regs may have increased in the meantime, so update the liveness here
-  invoke_live_out.enlarge(caller_ins, newregs);
-
-  auto callee_param_reg_map = build_callee_param_reg_map(invoke, callee_code);
-  auto def_ins = ins_reg_defs(*callee_code);
-  // if we map two callee registers v0 and v1 to the same caller register v2,
-  // and v1 gets written to in the callee, we're gonna have a bad time
-  if (def_ins.any() && has_aliased_arguments(invoke)) {
-    return nullptr;
-  }
-  remap_reg_set(def_ins, callee_param_reg_map, newregs);
-  if (def_ins.intersects(invoke_live_out.bits())) {
-    return nullptr;
-  }
-
-  auto temps_needed = callee_code->get_registers_size() - callee_ins;
-  auto invoke_live_in = invoke_live_out;
-  Liveness::trans(invoke, &invoke_live_in);
-  uint16_t temps_avail = newregs - invoke_live_in.bits().count();
-  if (temps_avail < temps_needed) {
-    newregs += temps_needed - temps_avail;
-    if (newregs > 16) {
-      return nullptr;
-    }
-    enlarge_registers(caller_code, newregs);
-    invoke_live_in.enlarge(caller_ins, newregs);
-    invoke_live_out.enlarge(caller_ins, newregs);
-  }
-  auto callee_reg_map =
-      build_callee_reg_map(invoke, callee_code, invoke_live_in.bits());
-  TRACE(INL, 5, "Callee reg map\n");
-  TRACE(INL, 5, "%s", show_reg_map(callee_reg_map));
-
-  // adjust method header
-  caller_code->set_registers_size(newregs);
-  return std::make_unique<RegMap>(callee_reg_map);
-}
-
-/*
  * Expands the caller register file by the size of the callee register file,
  * and allocates the high registers to the callee. E.g. if we have a caller
  * with registers_size of M and a callee with registers_size N, this function
@@ -1770,10 +1579,9 @@ std::unique_ptr<RegMap> gen_callee_reg_map_no_alloc(
  * callee to M + k in the caller. It also inserts move instructions to map the
  * callee arguments to the newly allocated registers.
  */
-std::unique_ptr<RegMap> gen_callee_reg_map_with_alloc(
-    InlineContext& context,
-    const IRCode* callee_code,
-    FatMethod::iterator invoke_it) {
+std::unique_ptr<RegMap> gen_callee_reg_map(InlineContext& context,
+                                           const IRCode* callee_code,
+                                           FatMethod::iterator invoke_it) {
   auto caller_code = context.caller_code;
   auto callee_reg_start = caller_code->get_registers_size();
   auto insn = invoke_it->insn;
@@ -1824,14 +1632,8 @@ bool IRCode::inline_method(InlineContext& context,
                            FatMethod::iterator pos) {
   TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller_code));
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee_code));
-  auto callee_reg_map =
-      RedexContext::assume_regalloc()
-          ? gen_callee_reg_map_with_alloc(context, callee_code, pos)
-          : gen_callee_reg_map_no_alloc(context, callee_code, pos);
-  if (!callee_reg_map) {
-    return false;
-  }
 
+  auto callee_reg_map = gen_callee_reg_map(context, callee_code, pos);
   auto caller_code = context.caller_code;
   auto fcaller = caller_code->m_fmethod;
   auto fcallee = callee_code->m_fmethod;
@@ -1864,8 +1666,8 @@ bool IRCode::inline_method(InlineContext& context,
 
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
-  auto splice = MethodSplicer(&*caller_code,
-                              &*callee_code,
+  auto splice = MethodSplicer(caller_code,
+                              callee_code,
                               *callee_reg_map,
                               invoke_position.get(),
                               caller_catch);

@@ -260,7 +260,7 @@ void MultiMethodInliner::inline_callees(
   }
 
   // attempt to inline all inlinable candidates
-  InlineContext inline_context(caller, m_config.use_liveness);
+  InlineContext inline_context(caller);
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
     auto insn = inlinable.second;

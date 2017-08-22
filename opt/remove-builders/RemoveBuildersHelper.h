@@ -94,7 +94,6 @@ class BuilderTransform {
                    const Scope& scope,
                    DexStoresVector& stores,
                    bool throws_inline) {
-    m_inliner_config.use_liveness = !RedexContext::assume_regalloc();
     m_inliner_config.throws_inline = throws_inline;
 
     auto resolver = [&](DexMethod* method, MethodSearch search) {
