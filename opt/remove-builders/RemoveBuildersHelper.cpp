@@ -554,7 +554,8 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           continue;
         }
 
-      } else if (opcode == OPCODE_NEW_INSTANCE) {
+      } else if (opcode == OPCODE_NEW_INSTANCE ||
+                 opcode == OPCODE_CHECK_CAST) {
         DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
           deletes.push_back(insn);
@@ -1167,6 +1168,16 @@ bool BuilderTransform::inline_methods(
   std::vector<DexMethod*> to_inline = get_methods_to_inline(code, type);
 
   while (to_inline.size() != 0) {
+
+    for (const auto& inlinable : to_inline) {
+      if (!inlinable->get_code()) {
+        fprintf(stderr,
+                "[BUILDERS]: Trying to inline abstract / native etc method: %s in %s\n",
+                SHOW(inlinable),
+                SHOW(method));
+        return false;
+      }
+    }
 
     m_inliner->inline_callees(method, to_inline);
 
