@@ -238,11 +238,6 @@ struct PACKED OatHeader {
     return header;
   }
 
-  void update_checksum(Adler32&) {
-    // Note: I don't think its practical to replicate ART's checksum computation,
-    // so we don't even bother
-  }
-
   void write(FileHandle& fh) {
     write_obj(fh, common);
 
@@ -1072,7 +1067,7 @@ public:
   void print_unverified_classes();
 
   static void write(const std::vector<DexFileListing_079::DexFile_079>& dex_files,
-                    ChecksummingFileHandle& cksum_fh);
+                    FileHandle& cksum_fh);
 
 private:
   std::vector<DexClasses> classes_;
@@ -1081,7 +1076,7 @@ private:
 class OatClasses_064 : public OatClasses {
 public:
   static void write(const std::vector<DexFileListing_064::DexFile_064>& dex_files,
-                    ChecksummingFileHandle& cksum_fh) {
+                    FileHandle& cksum_fh) {
     // offsets were already written to the DexFileListing_064.
     for (const auto& file : dex_files) {
       if (file.class_offsets.size() == 0) { continue; }
@@ -1175,7 +1170,7 @@ void OatClasses_079::print_unverified_classes() {
 
 void OatClasses_079::write(
     const std::vector<DexFileListing_079::DexFile_079>& dex_files,
-    ChecksummingFileHandle& cksum_fh) {
+    FileHandle& cksum_fh) {
   for (const auto& dex_file : dex_files) {
     CHECK(dex_file.classes_offset == cksum_fh.bytes_written());
     const auto num_classes = dex_file.num_classes;
@@ -1285,7 +1280,7 @@ class LookupTables {
 
   static void write(const std::vector<DexInput>& dex_input_vec,
                     const std::vector<DexFileListing_079::DexFile_079>& dex_files,
-                    ChecksummingFileHandle& cksum_fh) {
+                    FileHandle& cksum_fh) {
     foreach_pair(dex_input_vec, dex_files,
       [&](const DexInput& dex_input, const DexFileListing_079::DexFile_079& dex_file) {
         CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
@@ -1968,7 +1963,7 @@ DexFileListing_079::build(const std::vector<DexInput>& dex_input,
 template <typename DexFileListingType>
 void write_dex_files(const std::vector<DexInput>& dex_input,
                      const std::vector<DexFileListingType>& dex_files,
-                     ChecksummingFileHandle& cksum_fh) {
+                     FileHandle& cksum_fh) {
   foreach_pair(dex_input, dex_files,
     [&](const DexInput& input, const DexFileListingType& dex_file) {
       CHECK(dex_file.file_offset == cksum_fh.bytes_written());
@@ -2074,9 +2069,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
   auto dex_files = DexFileListingType::build(dex_input, next_offset);
   auto oat_size = align<0x1000>(next_offset);
 
-  Adler32 cksum;
   auto header = build_header(oat_version, dex_input, isa, keyvalue_size, oat_size, image_info.get());
-  header.update_checksum(cksum);
 
   ////////// Write the file.
 
@@ -2091,55 +2084,48 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     oat_fh.reset_bytes_written();
   }
 
-  // Write header. Can't use ChecksummingFileHandle because the OatHeader_Common
-  // portion of the header is not part of the checksum.
   header.write(oat_fh);
 
-  // Destroy oat_fh, create cksum_fh
-  ChecksummingFileHandle cksum_fh(std::move(oat_fh), std::move(cksum));
-
   // Write key value store.
-  KeyValueStore::write(cksum_fh, key_value);
+  KeyValueStore::write(oat_fh, key_value);
 
   // write DexFileListing
-  DexFileListingType::write(cksum_fh, dex_files);
+  DexFileListingType::write(oat_fh, dex_files);
 
   // Write padding to align to 4 bytes.
-  auto padding = align<4>(cksum_fh.bytes_written()) - cksum_fh.bytes_written();
+  auto padding = align<4>(oat_fh.bytes_written()) - oat_fh.bytes_written();
   char buf[4] = {};
-  write_buf(cksum_fh, ConstBuffer { buf, padding });
+  write_buf(oat_fh, ConstBuffer { buf, padding });
 
-  write_dex_files(dex_input, dex_files, cksum_fh);
-  OatClassesType::write(dex_files, cksum_fh);
+  write_dex_files(dex_input, dex_files, oat_fh);
+  OatClassesType::write(dex_files, oat_fh);
 
-  LookupTablesType::write(dex_input, dex_files, cksum_fh);
+  LookupTablesType::write(dex_input, dex_files, oat_fh);
 
   // Pad with 0s up to oat_size
-  // TODO: is the padding part of the checksum?
-  write_padding(cksum_fh, 0, oat_size - cksum_fh.bytes_written());
+  write_padding(oat_fh, 0, oat_size - oat_fh.bytes_written());
 
   ////////// Update header with final checksum.
 
-  const auto final_checksum = cksum_fh.cksum().get();
-
-  // Note: the checksum in cksum_fh is garbage after this call.
-  CHECK(cksum_fh.seek_begin());
+  CHECK(oat_fh.seek_begin());
 
   // Note: So far, I can't replicate the checksum computation done by
   // dex2oat. It appears that the file is written in a fairly arbitrary
   // order, and the checksum is computed as those sections are written.
   // Fortunately, art does not seem to verify the checksum at any point.
-  header.common.adler32_checksum = final_checksum;
+  // We don't even attempt to compute the checksum now, as it takes a few
+  // seconds to do so.
+  header.common.adler32_checksum = 0xcdcdcdcd;
 
-  write_obj(cksum_fh, header.common);
+  write_obj(oat_fh, header.common);
 
   if (write_elf) {
-    cksum_fh.set_seek_reference(0);
-    cksum_fh.seek_begin();
+    oat_fh.set_seek_reference(0);
+    oat_fh.seek_begin();
 
     ElfWriter section_headers(oat_version);
     section_headers.build(isa, oat_size, compute_bss_size_079(dex_input));
-    section_headers.write(cksum_fh);
+    section_headers.write(oat_fh);
   }
 
   return OatFile::Status::BUILD_SUCCESS;

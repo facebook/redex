@@ -53,40 +53,6 @@ void FileHandle::set_seek_reference(long offset) {
   seek_ref_ = offset;
 }
 
-size_t ChecksummingFileHandle::fwrite(const void* p, size_t size, size_t count) {
-  const auto bytes = size * count;
-
-  if (buf_pos_ + bytes >= kBufSize) {
-    flush();
-  }
-
-  if (bytes >= kBufSize) {
-    // we've already flushed here.
-    auto ret = flush_write(reinterpret_cast<const char*>(p), size, count);
-    bytes_written_ += bytes;
-    return ret;
-  }
-
-  CHECK(buf_pos_ + bytes < kBufSize);
-  memcpy(&buffer_[buf_pos_], p, bytes);
-  buf_pos_ += bytes;
-  bytes_written_ += bytes;
-  return count;
-}
-
-void ChecksummingFileHandle::flush() {
-  if (buf_pos_ == 0) {
-    return;
-  }
-  CHECK(flush_write(buffer_.get(), 1, buf_pos_) == buf_pos_);
-  buf_pos_ = 0;
-}
-
-size_t ChecksummingFileHandle::flush_write(const char* p, size_t size, size_t count) {
-  cksum_.update(p, size * count);
-  return fwrite_impl(p, size, count);
-}
-
 void write_word(FileHandle& fh, uint32_t value) {
   auto bytes_written = fh.fwrite(&value, sizeof(value), 1) * sizeof(value);
   if (bytes_written != sizeof(value)) {
