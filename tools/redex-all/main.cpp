@@ -431,8 +431,6 @@ int main(int argc, char* argv[]) {
 
     RedexContext::set_next_release_gate(
         args.config.get("next_release_gate", false).asBool());
-    RedexContext::set_assume_regalloc(
-        args.config.get("assume_regalloc", false).asBool());
 
     redex::ProguardConfiguration pg_config;
     for (const auto pg_config_path : args.proguard_config_paths) {

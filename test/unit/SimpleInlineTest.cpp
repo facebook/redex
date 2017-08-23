@@ -23,7 +23,6 @@ std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
  */
 TEST(SimpleInlineTest, insertMoves) {
   g_redex = new RedexContext();
-  RedexContext::set_assume_regalloc(true);
 
   using namespace dex_asm;
   auto callee = DexMethod::make_method(

@@ -17,11 +17,6 @@ class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
   virtual void configure_pass(const PassConfig& pc) override {
-    if (!RedexContext::assume_regalloc()) {
-      fprintf(stderr,
-              "WARNING: you probably want to set `\"assume_regalloc\" : true` "
-              "in the redex config\n");
-    }
     pc.get("live_range_splitting", false, m_use_splitting);
     pc.get("spill_param_properly", false, m_spill_param_properly);
     pc.get("select_spill_later", false, m_select_spill_later);
