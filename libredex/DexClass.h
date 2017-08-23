@@ -903,6 +903,16 @@ class DexClass {
     return nullptr;
   }
 
+  std::vector<DexMethod*> get_ctors() const {
+    std::vector<DexMethod*> ctors;
+    for (auto meth : get_dmethods()) {
+      if (strcmp(meth->get_name()->c_str(), "<init>") == 0) {
+        ctors.push_back(meth);
+      }
+    }
+    return ctors;
+  }
+
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
