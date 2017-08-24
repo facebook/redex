@@ -53,7 +53,7 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
   };
 
   for (const auto& jar : jars) {
-    load_jar_file((base_directory + "/" + jar).c_str(), hook);
+    load_jar_file((base_directory + "/" + jar).c_str(), nullptr, hook);
   }
   return info;
 }

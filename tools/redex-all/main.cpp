@@ -491,11 +491,12 @@ int main(int argc, char* argv[]) {
       }
     }
 
+    Scope external_classes;
     if (!library_jars.empty()) {
       Timer t("Load library jars");
       for (const auto& library_jar : library_jars) {
         TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
-        if (!load_jar_file(library_jar.c_str())) {
+        if (!load_jar_file(library_jar.c_str(), &external_classes)) {
           // Try again with the basedir
           std::string basedir_path =
               pg_config.basedirectory + "/" + library_jar.c_str();
@@ -529,7 +530,7 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, cfg);
+      manager.run_passes(stores, external_classes, cfg);
     }
 
     TRACE(MAIN, 1, "Writing out new DexClasses...\n");

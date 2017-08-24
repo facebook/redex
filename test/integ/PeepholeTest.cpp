@@ -151,7 +151,8 @@ class PeepholeTest : public ::testing::Test {
               const IRInstructionList& expected) {
     DexMethod* method = make_void_method(name, src);
     dex_class->add_method(method);
-    manager.run_passes(stores, config);
+    Scope external_classes;
+    manager.run_passes(stores, external_classes, config);
     IRInstructionList result(method->get_code());
     EXPECT_EQ(result, expected) << " for test " << name;
     dex_class->remove_method(method);

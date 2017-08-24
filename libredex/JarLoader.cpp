@@ -339,7 +339,9 @@ static DexMethod *make_dexmethod(std::vector<cp_entry> &cpool,
   return method;
 }
 
-static bool parse_class(uint8_t *buffer, attribute_hook_t attr_hook) {
+static bool parse_class(uint8_t* buffer,
+                        Scope* classes,
+                        attribute_hook_t attr_hook) {
   uint32_t magic = read32(buffer);
   uint16_t vminor DEBUG_ONLY = read16(buffer);
   uint16_t vmajor DEBUG_ONLY = read16(buffer);
@@ -438,7 +440,10 @@ static bool parse_class(uint8_t *buffer, attribute_hook_t attr_hook) {
       invoke_attr_hook({method}, attrPtr);
     }
   }
-  DexClass *dc DEBUG_ONLY = cc.create();
+  DexClass *dc = cc.create();
+  if (classes != nullptr) {
+    classes->emplace_back(dc);
+  }
   //#define DEBUG_PRINT
 #ifdef DEBUG_PRINT
   fprintf(stderr, "DexClass constructed from jar:\n%s\n", SHOW(dc));
@@ -693,8 +698,9 @@ static bool decompress_class(jar_entry &file, uint8_t *mapping,
 
 static const int kStartBufferSize = 128 * 1024;
 
-static bool process_jar_entries(std::vector<jar_entry> &files,
-                                uint8_t *mapping,
+static bool process_jar_entries(std::vector<jar_entry>& files,
+                                uint8_t* mapping,
+                                Scope* classes,
                                 attribute_hook_t attr_hook) {
   ssize_t bufsize = kStartBufferSize;
   uint8_t *outbuffer = (uint8_t*)malloc(bufsize);
@@ -726,7 +732,7 @@ static bool process_jar_entries(std::vector<jar_entry> &files,
       return false;
     }
 
-    if (!parse_class(outbuffer, attr_hook)) {
+    if (!parse_class(outbuffer, classes, attr_hook)) {
       free(outbuffer);
       return false;
     }
@@ -737,6 +743,7 @@ static bool process_jar_entries(std::vector<jar_entry> &files,
 
 static bool process_jar(uint8_t* mapping,
                         ssize_t size,
+                        Scope* classes,
                         attribute_hook_t attr_hook) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
@@ -746,13 +753,15 @@ static bool process_jar(uint8_t* mapping,
     return false;
   if (!get_jar_entries(mapping, pce, files))
     return false;
-  if (!process_jar_entries(files, mapping, attr_hook)) {
+  if (!process_jar_entries(files, mapping, classes, attr_hook)) {
     return false;
   }
   return true;
 }
 
-bool load_jar_file(const char* location, attribute_hook_t attr_hook) {
+bool load_jar_file(const char* location,
+                   Scope* classes,
+                   attribute_hook_t attr_hook) {
   int fd = open(location, O_RDONLY);
   struct stat stat;
   ssize_t size;
@@ -774,7 +783,7 @@ bool load_jar_file(const char* location, attribute_hook_t attr_hook) {
     perror("Address space allocation failed for mmap\n");
     return false;
   }
-  bool rv = process_jar(mapping, size, attr_hook);
+  bool rv = process_jar(mapping, size, classes, attr_hook);
   munmap(mapping, size);
   if (!rv) {
     fprintf(stderr, "Error processing jar: %s\n", location);

@@ -133,7 +133,8 @@ void test(bool old_version) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
+  Scope external_classes;
+  manager.run_passes(stores, external_classes, dummy_cfg);
 
   TRACE(CONSTP, 1, "Code after:\n");
   for(const auto& cls : classes) {

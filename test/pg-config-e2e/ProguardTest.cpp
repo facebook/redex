@@ -143,11 +143,12 @@ TEST(ProguardTest, assortment) {
   ASSERT_NE("NotFound", android_version);
   std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
                         android_version + "/android.jar";
-  ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
+  Scope external_classes;
+  ASSERT_TRUE(load_jar_file(sdk_jar.c_str(), &external_classes));
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(proguard_map, &pg_config, scope);
+  process_proguard_rules(proguard_map, scope, external_classes, &pg_config);
 
   // Check the top level Android activity class
   {

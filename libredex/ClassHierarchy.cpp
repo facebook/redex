@@ -42,11 +42,7 @@ DexMethod* check_dmethods(const DexString* name,
 }
 
 /**
- * Given a class, walks up the hierarchy and creates entries from parent to
- * children.
- * If no super is found the type is considered a child of java.lang.Object.
- * If the type is unknown (no DexClass) the walk stops and the hierarchy is
- * formed up to the first unknown type.
+ * Creates an entry from a parent to a child class.
  */
 void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
   // ensure an entry for the DexClass is created
@@ -56,12 +52,8 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
   if (super != nullptr) {
     hierarchy[super].insert(type);
   } else {
-    if (type != get_object_type()) {
-      // if the type in question is not java.lang.Object and it has
-      // no super make it a subclass of java.lang.Object
-      hierarchy[get_object_type()].insert(type);
-      TRACE(VIRT, 4, "[no super on %s]\n", SHOW(type));
-    }
+    always_assert_log(cls->get_type() == get_object_type(),
+                      SHOW(cls->get_type()));
   }
 }
 

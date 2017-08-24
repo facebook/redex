@@ -492,7 +492,7 @@ struct ClassCreator {
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;
     m_cls->m_super_class = nullptr;
-    m_cls->m_interfaces = nullptr;
+    m_cls->m_interfaces = DexTypeList::make_type_list({});
     m_cls->m_source_file = nullptr;
     m_cls->m_anno = nullptr;
     m_cls->m_has_class_data = false;
