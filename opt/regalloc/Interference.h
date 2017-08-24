@@ -16,10 +16,8 @@
 #include <vector>
 
 #include "Liveness.h"
+#include "IRCode.h"
 #include "RegisterType.h"
-#include "Transform.h"
-
-class IRCode;
 
 namespace regalloc {
 

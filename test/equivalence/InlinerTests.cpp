@@ -11,8 +11,8 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
-#include "Transform.h"
 #include "Util.h"
 
 class InlinerTestAliasedInputs : public EquivalenceTest {

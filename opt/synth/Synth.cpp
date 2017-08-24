@@ -18,21 +18,21 @@
 #include <utility>
 #include <vector>
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "IRInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "Mutators.h"
-#include "Resolver.h"
 #include "PassManager.h"
-#include "Transform.h"
 #include "ReachableClasses.h"
-#include "ClassHierarchy.h"
+#include "Resolver.h"
+#include "SynthConfig.h"
 #include "Walkers.h"
 
-#include "SynthConfig.h"
 
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
 constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";

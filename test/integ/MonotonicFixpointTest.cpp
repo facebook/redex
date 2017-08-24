@@ -21,9 +21,9 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "RedexContext.h"
-#include "Transform.h"
 
 #include "FixpointIterators.h"
 #include "HashedSetAbstractDomain.h"

@@ -12,7 +12,7 @@
 #include <boost/functional/hash.hpp>
 #include <utility>
 
-#include "Transform.h"
+#include "IRCode.h"
 
 enum EdgeType {
   EDGE_GOTO,
@@ -20,6 +20,11 @@ enum EdgeType {
   EDGE_THROW,
   EDGE_TYPE_SIZE
 };
+
+// Forward declare friend function of Block to handle cyclic dependency
+namespace transform {
+  void replace_block(IRCode*, Block*, Block*);
+}
 
 struct Block {
   explicit Block(size_t id) : m_id(id) {}

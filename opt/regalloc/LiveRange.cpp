@@ -14,9 +14,9 @@
 
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
+#include "IRCode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
-#include "Transform.h"
 
 namespace {
 

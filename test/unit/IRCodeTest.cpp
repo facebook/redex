@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);

@@ -18,8 +18,9 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "Transform.h"
 #include "Walkers.h"
 

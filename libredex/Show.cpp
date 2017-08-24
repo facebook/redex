@@ -13,6 +13,7 @@
 #include <sstream>
 
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "DexClass.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
@@ -20,9 +21,8 @@
 #include "DexOpcode.h"
 #include "DexIdx.h"
 #include "DexUtil.h"
-#include "Creators.h"
+#include "IRCode.h"
 #include "LivenessDeprecated.h"
-#include "Transform.h"
 
 namespace {
 

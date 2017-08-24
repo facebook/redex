@@ -12,6 +12,7 @@
 #include <stack>
 
 #include "Interference.h"
+#include "IRCode.h"
 #include "Liveness.h"
 #include "Split.h"
 #include "Transform.h"

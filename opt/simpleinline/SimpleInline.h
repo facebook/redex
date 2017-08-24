@@ -9,14 +9,14 @@
 
 #pragma once
 
+#include <map>
+#include <set>
+
 #include "DexClass.h"
+#include "IRCode.h"
 #include "InlineHelper.h"
 #include "Pass.h"
 #include "Resolver.h"
-#include "Transform.h"
-
-#include <map>
-#include <set>
 
 class SimpleInlinePass : public Pass {
  public:

@@ -23,19 +23,19 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 
 */
 
-#include "ControlFlow.h"
-#include "DexOutput.h"
-#include "Resolver.h"
-#include "Show.h"
-#include "Tool.h"
-#include "Transform.h"
-#include "ClassHierarchy.h"
-#include "Walkers.h"
-
 #include <boost/algorithm/string/replace.hpp>
 #include <queue>
 #include <vector>
 #include <unordered_map>
+
+#include "ClassHierarchy.h"
+#include "ControlFlow.h"
+#include "DexOutput.h"
+#include "IRCode.h"
+#include "Resolver.h"
+#include "Show.h"
+#include "Tool.h"
+#include "Walkers.h"
 
 namespace {
 

@@ -34,6 +34,7 @@
 #include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -41,7 +42,6 @@
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
 #include "Trace.h"
-#include "Transform.h"
 
 size_t hash_value(const PointsToVariable& v) {
   boost::hash<int32_t> hasher;

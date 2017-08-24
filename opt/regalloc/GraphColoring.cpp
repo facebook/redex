@@ -15,6 +15,8 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "Transform.h"
 #include "VirtualRegistersFile.h"
 
 namespace regalloc {

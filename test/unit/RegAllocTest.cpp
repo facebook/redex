@@ -14,6 +14,7 @@
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "Interference.h"
 #include "LiveRange.h"
@@ -25,8 +26,6 @@
 #include "Transform.h"
 #include "Util.h"
 #include "VirtualRegistersFile.h"
-
-using namespace regalloc;
 
 using namespace regalloc;
 

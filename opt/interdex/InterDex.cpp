@@ -15,17 +15,17 @@
 #include <vector>
 #include <unordered_set>
 
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "ConfigFiles.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "ReachableClasses.h"
 #include "StringUtil.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 namespace {

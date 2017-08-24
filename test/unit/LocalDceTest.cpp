@@ -11,8 +11,8 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "LocalDce.h"
-#include "Transform.h"
 
 struct LocalDceTryTest : testing::Test {
   DexMethod* m_method;

@@ -9,12 +9,13 @@
 
 #pragma once
 
-#include "DexClass.h"
-#include "IRInstruction.h"
-#include "DexUtil.h"
-#include "Transform.h"
 #include <vector>
 #include <unordered_map>
+
+#include "DexClass.h"
+#include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 
 struct MethodCreator;
 struct MethodBlock;

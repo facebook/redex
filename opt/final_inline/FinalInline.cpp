@@ -22,9 +22,9 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 namespace {

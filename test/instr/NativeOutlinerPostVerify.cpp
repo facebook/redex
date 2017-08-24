@@ -14,9 +14,9 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "Transform.h"
 #include "VerifyUtil.h"
 
 #include "NativeOutliner.h"

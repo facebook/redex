@@ -11,11 +11,12 @@
 
 #include <functional>
 #include <vector>
+
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
+#include "IRCode.h"
 #include "Match.h"
-#include "Transform.h"
 
 /**
  * Walk all methods of all classes defined in 'scope' calling back

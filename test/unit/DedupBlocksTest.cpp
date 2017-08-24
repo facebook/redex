@@ -15,7 +15,7 @@
 #include "DedupBlocksPass.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 struct Branch {
   MethodItemEntry* source;

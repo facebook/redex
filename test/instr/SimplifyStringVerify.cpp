@@ -16,8 +16,8 @@
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
+#include "IRCode.h"
 #include "Show.h"
-#include "Transform.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
 

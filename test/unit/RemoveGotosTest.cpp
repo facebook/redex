@@ -13,8 +13,8 @@
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "RemoveGotos.h"
-#include "Transform.h"
 
 struct RemoveGotosTest : testing::Test {
   DexMethod* m_method;

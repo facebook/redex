@@ -18,13 +18,13 @@
 #include "ClassHierarchy.h"
 #include "DexAccess.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
-#include "Transform.h"
 
 namespace redex {
 

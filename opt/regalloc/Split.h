@@ -10,8 +10,8 @@
 #pragma once
 
 #include "Interference.h"
+#include "IRCode.h"
 #include "Liveness.h"
-#include "Transform.h"
 
 namespace regalloc {
 

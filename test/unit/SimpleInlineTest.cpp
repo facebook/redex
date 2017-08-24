@@ -11,7 +11,7 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);

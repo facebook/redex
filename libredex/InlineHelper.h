@@ -9,14 +9,14 @@
 
 #pragma once
 
-#include "DexClass.h"
-#include "Transform.h"
-#include "Resolver.h"
-
 #include <functional>
 #include <map>
 #include <set>
 #include <vector>
+
+#include "DexClass.h"
+#include "IRCode.h"
+#include "Resolver.h"
 
 /**
  * Helper class to inline a set of condidates.

@@ -10,10 +10,9 @@
 #pragma once
 
 #include "GlobalConstProp.h"
+#include "IRCode.h"
 #include "LocalConstProp.h"
 #include "Pass.h"
-
-#include "Transform.h"
 
 class ConstantPropagationPassV3 : public Pass {
  public:

@@ -18,13 +18,13 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "InterDex.h"
+#include "IRCode.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
-#include "Transform.h"
 
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;

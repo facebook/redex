@@ -7,19 +7,20 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "Obfuscate.h"
-#include "ObfuscateUtils.h"
+#include <list>
+
+#include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "Obfuscate.h"
+#include "ObfuscateUtils.h"
 #include "ProguardMap.h"
 #include "ReachableClasses.h"
-#include "Trace.h"
-#include "Transform.h"
-#include "Walkers.h"
 #include "Resolver.h"
-#include "ClassHierarchy.h"
+#include "Trace.h"
 #include "VirtualRenamer.h"
-#include <list>
+#include "Walkers.h"
 
 namespace {
 

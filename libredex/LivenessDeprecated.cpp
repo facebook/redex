@@ -11,9 +11,9 @@
 #include <deque>
 
 #include "Dataflow.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "LivenessDeprecated.h"
-#include "Transform.h"
 
 //////////////////////////////////////////////////////////////////////////////
 

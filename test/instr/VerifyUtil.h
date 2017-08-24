@@ -13,7 +13,7 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 struct Verify : testing::Test {
   Verify() {

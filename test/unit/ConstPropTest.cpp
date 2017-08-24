@@ -16,9 +16,9 @@
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "FinalInline.h"
 #include "Resolver.h"
-#include "Transform.h"
 
 // Map of type string -> (sget opcode, sput opcode)
 static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>>

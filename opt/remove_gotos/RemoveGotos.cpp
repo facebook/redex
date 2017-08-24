@@ -20,9 +20,9 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
-#include "Transform.h"
 
 namespace {
 

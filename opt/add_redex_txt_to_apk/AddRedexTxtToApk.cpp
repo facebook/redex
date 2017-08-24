@@ -13,8 +13,8 @@
 
 #include "Debug.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Pass.h"
-#include "Transform.h"
 #include "Warning.h"
 
 void AddRedexTxtToApkPass::run_pass(DexStoresVector& /* unused */, ConfigFiles& /* unused */, PassManager& mgr) {

@@ -12,7 +12,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 namespace regalloc {
 

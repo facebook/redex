@@ -16,8 +16,8 @@
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
+#include "IRCode.h"
 #include "Match.h"
-#include "Transform.h"
 #include "WorkQueue.h"
 
 /**

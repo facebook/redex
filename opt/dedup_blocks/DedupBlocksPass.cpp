@@ -9,17 +9,18 @@
 
 #include "DedupBlocksPass.h"
 
-#include "ControlFlow.h"
-#include "DexClass.h"
-#include "DexOutput.h"
-#include "DexUtil.h"
-#include "Transform.h"
-#include "Walkers.h"
-
 #include <boost/optional.hpp>
 #include <iterator>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "ControlFlow.h"
+#include "DexClass.h"
+#include "DexOutput.h"
+#include "DexUtil.h"
+#include "IRCode.h"
+#include "Transform.h"
+#include "Walkers.h"
 
 /*
  * This pass removes blocks that are duplicates in a method.

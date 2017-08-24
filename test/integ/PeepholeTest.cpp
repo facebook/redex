@@ -13,10 +13,10 @@
 #include "DexLoader.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "Peephole.h"
-#include "Transform.h"
 
 // Helper to hold a list of instructions
 struct IRInstructionList {

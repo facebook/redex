@@ -7,15 +7,15 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "ControlFlow.h"
-#include "Show.h"
-#include "Tool.h"
-#include "Transform.h"
-#include "Walkers.h"
-
 #include <queue>
 #include <vector>
 #include <unordered_map>
+
+#include "ControlFlow.h"
+#include "IRCode.h"
+#include "Show.h"
+#include "Tool.h"
+#include "Walkers.h"
 
 namespace {
 

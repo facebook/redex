@@ -14,9 +14,9 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
-#include "Transform.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "Walkers.h"
 
 namespace {

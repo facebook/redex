@@ -11,6 +11,8 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
+#include "Transform.h"
+
 namespace {
 
 // TODO: make naming of methods smart
