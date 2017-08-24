@@ -93,7 +93,6 @@ libredex_la_SOURCES = \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \
-	libredex/LivenessDeprecated.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/Mutators.cpp \

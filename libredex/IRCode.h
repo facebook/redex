@@ -20,7 +20,6 @@
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "IRInstruction.h"
-#include "LivenessDeprecated.h"
 
 enum TryEntryType {
   TRY_START = 0,
@@ -180,6 +179,8 @@ std::string show(const FatMethod*);
 struct InlineContext;
 
 class MethodSplicer;
+
+struct Block;
 
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
 // belong there... I'm going to move them out soon
