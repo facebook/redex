@@ -65,6 +65,7 @@ class DedupBlocksImpl {
   using hash_t = uint64_t;
   using duplicates_t = std::unordered_map<hash_t, std::unordered_set<Block*>>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
+  const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
   const std::vector<DexClass*>& m_scope;
   PassManager& m_mgr;
   const DedupBlocksPass::Config& m_config;
@@ -76,11 +77,15 @@ class DedupBlocksImpl {
   duplicates_t collect_duplicates(IRCode* code) {
     const auto& blocks = code->cfg().blocks();
     std::unordered_map<hash_t, std::unordered_set<Block*>> duplicates;
+
+    int num_eligible_blocks = 0;
     for (Block* block : blocks) {
       if (has_opcodes(block) && should_remove(code->cfg(), block)) {
         duplicates[hash(block)].insert(block);
+        ++num_eligible_blocks;
       }
     }
+    m_mgr.incr_metric(METRIC_ELIGIBLE_BLOCKS, num_eligible_blocks);
 
     remove_singletons(duplicates);
     // the hash function isn't perfect, so check behind with an equals function
@@ -183,10 +188,13 @@ class DedupBlocksImpl {
       return false;
     }
 
+    // We can't replace blocks that are involved in a fallthrough because they
+    // depend on their position in the list of instructions. Deduplicating
+    // will involve sending control to a block in a different place.
     for (Block* pred : block->preds()) {
       if (!has_opcodes(pred)) {
-        // Skip these for simplicity's sake. I don't want to go recursively
-        // searching for the previous block with code. But you could! TODO
+        // Skip this case because it's complicated. It should be fixed by
+        // upcoming changes to the CFG
         return false;
       }
 
@@ -219,17 +227,10 @@ class DedupBlocksImpl {
                              Block* pred,
                              Block* succ) {
     always_assert_log(has_opcodes(pred), "need opcodes");
-
     const auto& flags = cfg.edge(pred, succ);
-    if (!(flags[EDGE_GOTO])) {
-      return false;
-    }
-
     const auto& last_of_pred = last_opcode(pred);
-    if (!is_goto(last_of_pred->insn->opcode())) {
-      return true;
-    }
-    return false;
+
+    return flags[EDGE_GOTO] && !is_goto(last_of_pred->insn->opcode());
   }
 
   void record_stats(const duplicates_t& duplicates) {
@@ -253,6 +254,11 @@ class DedupBlocksImpl {
   }
 
   void report_stats() {
+    TRACE(DEDUP_BLOCKS,
+          2,
+          "%d eligible_blocks\n",
+          m_mgr.get_metric(METRIC_ELIGIBLE_BLOCKS));
+
     for (const auto& entry : m_dup_sizes) {
       TRACE(DEDUP_BLOCKS,
             2,
@@ -361,6 +367,19 @@ class DedupBlocksImpl {
     return true;
   }
 
+  // FIXME: what if the successors are the same but the type of connecting
+  // edges are different?
+  // Like so:
+  //
+  // B0: if-eqz v0, B3
+  // B1: return
+  // B2: if eqz v0, B1
+  // B3: add-int v1, 1
+  //
+  // B0's succs are B1 (fallthru) and B3 (branch)
+  // B2's succs are B3 (fallthru) and B1 (branch)
+  //
+  // Is this possible to write in java? (because java doesn't have gotos)
   static bool same_successors(Block* b1, Block* b2) {
 
     const auto& b1_succs = b1->succs();
