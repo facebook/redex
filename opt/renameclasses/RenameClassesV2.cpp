@@ -647,7 +647,7 @@ void RenameClassesPassV2::eval_classes_post(
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       continue;
     }
-    
+
     const char* clsname = clazz->get_name()->c_str();
     std::string strname = std::string(clsname);
 
@@ -863,11 +863,6 @@ void RenameClassesPassV2::rename_classes(
       }
     }
   });
-
-  for (auto* clazz : scope) {
-    clazz->sort_methods();
-    clazz->sort_fields();
-  }
 
   sanity_check(scope, aliases);
 }

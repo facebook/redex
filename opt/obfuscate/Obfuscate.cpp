@@ -60,12 +60,8 @@ int obfuscate_elems(const RenamingContext<T>& context,
   return num_renames;
 }
 
-void sort_members(std::vector<DexClass*>& classes) {
-  // Sort the result because dexes have to be sorted
+void debug_logging(std::vector<DexClass*>& classes) {
   for (DexClass* cls : classes) {
-    cls->sort_fields();
-    cls->sort_methods();
-    // Debug logging
     TRACE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
     for (DexField* f : cls->get_ifields())
       TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
@@ -257,7 +253,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
 
   stats.vmethods_renamed = rename_virtuals(scope);
 
-  sort_members(scope);
+  debug_logging(scope);
 
   TRACE(OBFUSCATE, 1,
       "%s: %ld\n%s: %ld\n"

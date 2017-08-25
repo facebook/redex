@@ -245,11 +245,6 @@ void rename_classes(
       }
     }
   });
-
-  for (auto clazz : scope) {
-    clazz->sort_fields();
-    clazz->sort_methods();
-  }
 }
 
 void RenameClassesPass::run_pass(

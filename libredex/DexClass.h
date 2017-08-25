@@ -923,8 +923,6 @@ class DexClass {
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
-  void sort_methods();
-  void sort_fields();
   DexField* find_field(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();
@@ -976,6 +974,10 @@ class DexClass {
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
+
+ private:
+  void sort_methods();
+  void sort_fields();
 };
 
 inline bool compare_dexclasses(const DexClass* a, const DexClass* b) {

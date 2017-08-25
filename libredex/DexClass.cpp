@@ -729,6 +729,10 @@ int DexClass::encode(DexOutputIdx* dodx,
              m_super_class->get_name()->c_str(),
              m_access_flags);
   }
+
+  sort_fields();
+  sort_methods();
+
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, (uint32_t) m_sfields.size());
   encdata = write_uleb128(encdata, (uint32_t) m_ifields.size());
@@ -738,13 +742,6 @@ int DexClass::encode(DexOutputIdx* dodx,
   idxbase = 0;
   for (auto const& f : m_sfields) {
     uint32_t idx = dodx->fieldidx(f);
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for sfield, need to apply sort. "
-                      "Must be done prior to static value emit."
-                      "\nOffending type: %s"
-                      "\nOffending field: %s",
-                      SHOW(this),
-                      SHOW(f));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, f->get_access());
@@ -752,12 +749,6 @@ int DexClass::encode(DexOutputIdx* dodx,
   idxbase = 0;
   for (auto const& f : m_ifields) {
     uint32_t idx = dodx->fieldidx(f);
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for ifield, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending field: %s",
-                      SHOW(this),
-                      SHOW(f));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, f->get_access());
@@ -772,12 +763,6 @@ int DexClass::encode(DexOutputIdx* dodx,
                       SHOW(this),
                       SHOW(m));
     assert(!m->is_virtual());
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for dmethod, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending method: %s",
-                      SHOW(this),
-                      SHOW(m));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -797,12 +782,6 @@ int DexClass::encode(DexOutputIdx* dodx,
                       SHOW(this),
                       SHOW(m));
     assert(m->is_virtual());
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for vmethod, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending method: %s",
-                      SHOW(this),
-                      SHOW(m));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
