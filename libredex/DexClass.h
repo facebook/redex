@@ -712,7 +712,7 @@ class DexMethod {
   }
 
   /**
-   * Get a method using a canonical name: Lcls;.name(args)rtype
+   * Get a method using a canonical name: Lcls;.name:(args)rtype
    */
   static DexMethod* get_method(std::string canon);
 

@@ -512,7 +512,7 @@ uint64_t IRInstruction::hash() {
     bits.push_back(range_size());
   }
   bits.push_back(literal());
-  // ignore offset because its not known until sync to DexInstructions
+  // ignore offset because it's not known until sync to DexInstructions
 
   uint64_t result = 0;
   for (uint64_t elem : bits) {
