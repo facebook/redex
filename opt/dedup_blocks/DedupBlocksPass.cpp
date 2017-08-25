@@ -129,7 +129,8 @@ class DedupBlocksImpl {
   void remove_invalid_sets(IRCode* code, duplicates_t& dups) {
     for (auto it = dups.begin(); it != dups.end();) {
       std::unordered_set<Block*> blocks = it->second;
-      if (!all_equal(blocks) || conflicting_try_regions(code, blocks)) {
+      if (!all_equal(code->cfg(), blocks) ||
+          conflicting_try_regions(code, blocks)) {
         it = dups.erase(it);
       } else {
         ++it;
@@ -326,12 +327,13 @@ class DedupBlocksImpl {
     return false;
   }
 
-  static bool all_equal(std::unordered_set<Block*> blocks) {
+  static bool all_equal(const ControlFlowGraph& cfg,
+                        std::unordered_set<Block*> blocks) {
     Block* canon = nullptr;
     for (auto i = blocks.begin(); i != blocks.end(); i++) {
       if (canon == nullptr) {
         canon = *i;
-      } else if (!equals(canon, *i)) {
+      } else if (!equals(cfg, canon, *i)) {
         return false;
       }
     }
@@ -342,9 +344,9 @@ class DedupBlocksImpl {
   // because they are unknown until we sync back to DexInstructions.
   //
   // The blocks must also have the exact same successors
-  static bool equals(Block* b1, Block* b2) {
+  static bool equals(const ControlFlowGraph& cfg, Block* b1, Block* b2) {
 
-    if (!same_successors(b1, b2)) {
+    if (!same_successors(cfg, b1, b2)) {
       return false;
     }
 
@@ -367,30 +369,33 @@ class DedupBlocksImpl {
     return true;
   }
 
-  // FIXME: what if the successors are the same but the type of connecting
-  // edges are different?
-  // Like so:
-  //
-  // B0: if-eqz v0, B3
-  // B1: return
-  // B2: if eqz v0, B1
-  // B3: add-int v1, 1
-  //
-  // B0's succs are B1 (fallthru) and B3 (branch)
-  // B2's succs are B3 (fallthru) and B1 (branch)
-  //
-  // Is this possible to write in java? (because java doesn't have gotos)
-  static bool same_successors(Block* b1, Block* b2) {
-
+  static bool same_successors(const ControlFlowGraph& cfg,
+                              Block* b1,
+                              Block* b2) {
     const auto& b1_succs = b1->succs();
     const auto& b2_succs = b2->succs();
     if (b1_succs.size() != b2_succs.size()) {
       return false;
     }
     for (Block* b1_succ : b1_succs) {
-      if (std::find(b2_succs.begin(), b2_succs.end(), b1_succ) ==
-          b2_succs.end()) {
+      const auto& in_b2 = std::find(b2_succs.begin(), b2_succs.end(), b1_succ);
+      if (in_b2 == b2_succs.end()) {
         // b1 has a succ that b2 doesn't
+        return false;
+      }
+
+      if (cfg.edge(b1, b1_succ) != cfg.edge(b2, *in_b2)) {
+        // successors are the same but the type of connecting
+        // edges are different.
+        // Like so:
+        //
+        // B0: if-eqz v0, B3
+        // B1: return
+        // B2: if eqz v0, B1
+        // B3: add-int v1, 1
+        //
+        // B0's succs are B1 (fallthru) and B3 (branch)
+        // B2's succs are B3 (fallthru) and B1 (branch)
         return false;
       }
     }
