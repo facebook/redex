@@ -393,8 +393,8 @@ void DeadRefs::track_callers(Scope& scope) {
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
-          auto callee = insn->get_method();
-          callee = resolve_method(callee, opcode_to_search(insn));
+          auto callee =
+              resolve_method(insn->get_method(), opcode_to_search(insn));
           if (callee == nullptr || !callee->is_concrete()) return;
           if (vmethods.count(callee) > 0) {
             vmethods.erase(callee);
@@ -403,8 +403,7 @@ void DeadRefs::track_callers(Scope& scope) {
           return;
         }
         if (insn->has_field()) {
-          auto field = insn->get_field();
-          field = resolve_field(field,
+          auto field = resolve_field(insn->get_field(),
               is_ifield_op(insn->opcode()) ?
                   FieldSearch::Instance :
                   is_sfield_op(insn->opcode()) ?

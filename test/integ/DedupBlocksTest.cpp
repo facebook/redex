@@ -25,7 +25,7 @@ int count_someFunc_calls(IRCode* code) {
   for (auto& mie : InstructionIterable(code)) {
     TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));
     if (mie.insn->has_method()) {
-      DexMethod* called = mie.insn->get_method();
+      DexMethodRef* called = mie.insn->get_method();
       if (strcmp(called->get_name()->c_str(), "someFunc") == 0) {
         num_some_func_calls++;
       }

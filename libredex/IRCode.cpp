@@ -102,7 +102,7 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
   }
 }
 
-void MethodItemEntry::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -125,7 +125,7 @@ void MethodItemEntry::gather_methods(std::vector<DexMethod*>& lmethod) const {
   }
 }
 
-void MethodItemEntry::gather_fields(std::vector<DexField*>& lfield) const {
+void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -221,13 +221,13 @@ void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_dbg) m_dbg->gather_strings(lstring);
 }
 
-void IRCode::gather_fields(std::vector<DexField*>& lfield) const {
+void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   for (auto& mie : *m_fmethod) {
     mie.gather_fields(lfield);
   }
 }
 
-void IRCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto& mie : *m_fmethod) {
     mie.gather_methods(lmethod);
   }

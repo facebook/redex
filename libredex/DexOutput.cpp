@@ -1156,7 +1156,7 @@ void write_method_mapping(
     // Some method refs aren't "concrete" (e.g., referring to a method defined
     // by a superclass via a subclass).  We only know how to deobfuscate
     // concrete names, so resolve this ref to an actual definition.
-    auto resolved_method = [&] {
+    auto resolved_method = [&]() -> DexMethodRef* {
       if (cls) {
         auto resm = resolve_method(method,
             is_interface(cls) ? MethodSearch::Interface : MethodSearch::Any);
@@ -1167,8 +1167,11 @@ void write_method_mapping(
 
     // Consult the cached method names, or just give it back verbatim.
     auto deobf_method = [&] {
-      auto deobfname = resolved_method->get_deobfuscated_name();
-      if (!deobfname.empty()) return deobfname;
+      if (resolved_method->is_def()) {
+        auto deobfname =
+            static_cast<DexMethod*>(resolved_method)->get_deobfuscated_name();
+        if (!deobfname.empty()) return deobfname;
+      }
       return proguard_name(resolved_method);
     }();
 

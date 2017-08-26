@@ -156,8 +156,8 @@ struct MethodItemEntry {
 
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 };
 
 using MethodItemMemberListOption =
@@ -266,8 +266,8 @@ class IRCode {
   void gather_catch_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 
   /*
    * Inline tail-called `callee` into `caller` at instruction `invoke`.

@@ -196,7 +196,8 @@ static DexField *make_dexfield(std::vector<cp_entry> &cpool,
   }
   DexString *name = DexString::make_string(nbuffer);
   DexType *desc = DexType::make_type(dbuffer);
-  DexField *field = DexField::make_field(self, name, desc);
+  DexField *field =
+      static_cast<DexField*>(DexField::make_field(self, name, desc));
   field->set_access((DexAccessFlags)finfo.aflags);
   field->set_external();
   return field;
@@ -319,9 +320,11 @@ static DexMethod *make_dexmethod(std::vector<cp_entry> &cpool,
   if (rtype == nullptr)
     return nullptr;
   DexProto *proto = DexProto::make_proto(rtype, tlist);
-  DexMethod *method = DexMethod::make_method(self, name, proto);
+  DexMethod *method = static_cast<DexMethod*>(
+      DexMethod::make_method(self, name, proto));
   if (method->is_concrete()) {
-    fprintf(stderr, "Pre-concrete method attempted to load '%s', bailing\n", SHOW(method));
+    fprintf(stderr, "Pre-concrete method attempted to load '%s', bailing\n",
+        SHOW(method));
     return nullptr;
   }
   uint32_t access = finfo.aflags;

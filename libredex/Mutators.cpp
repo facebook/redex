@@ -57,9 +57,9 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
     params.push_front(clstype);
     auto new_args = DexTypeList::make_type_list(std::move(params));
     auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
-    DexMethodRef ref;
-    ref.proto = new_proto;
-    method->change(ref, true /* rename_on_collision */);
+    DexMethodSpec spec;
+    spec.proto = new_proto;
+    method->change(spec, true /* rename_on_collision */);
 
     auto code = method->get_code();
     // If the debug info param count doesn't match the param count in the

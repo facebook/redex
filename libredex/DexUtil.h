@@ -97,7 +97,7 @@ bool is_wide_type(const DexType* type);
 /**
  * Return true if method signatures (name and proto) match.
  */
-inline bool signatures_match(const DexMethod* a, const DexMethod* b) {
+inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
 

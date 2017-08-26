@@ -298,14 +298,14 @@ void AnalysisImpl::collect_method_defs() {
  */
 void AnalysisImpl::analyze_opcodes() {
 
-  auto check_arg = [&](DexType* type, DexMethod* meth, IRInstruction* insn) {
+  auto check_arg = [&](DexType* type, DexMethodRef* meth, IRInstruction* insn) {
     auto intf = get_and_check_single_impl(type);
     if (intf) {
       single_impls[intf].methodrefs[meth].insert(insn);
     }
   };
 
-  auto check_sig = [&](DexMethod* meth, IRInstruction* insn) {
+  auto check_sig = [&](DexMethodRef* meth, IRInstruction* insn) {
     // check the sig for single implemented interface
     const auto proto = meth->get_proto();
     check_arg(proto->get_rtype(), meth, insn);
@@ -315,7 +315,7 @@ void AnalysisImpl::analyze_opcodes() {
     }
   };
 
-  auto check_field = [&](DexField* field, IRInstruction* insn) {
+  auto check_field = [&](DexFieldRef* field, IRInstruction* insn) {
     auto cls = field->get_class();
     cls = get_and_check_single_impl(cls);
     if (cls) {
@@ -366,7 +366,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_IPUT:
                  case OPCODE_IPUT_WIDE:
                  case OPCODE_IPUT_OBJECT: {
-                   auto field =
+                   DexFieldRef* field =
                        resolve_field(insn->get_field(), FieldSearch::Instance);
                    if (field == nullptr) {
                      field = insn->get_field();
@@ -380,7 +380,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_SPUT:
                  case OPCODE_SPUT_WIDE:
                  case OPCODE_SPUT_OBJECT: {
-                   auto field =
+                   DexFieldRef* field =
                        resolve_field(insn->get_field(), FieldSearch::Static);
                    if (field == nullptr) {
                      field = insn->get_field();

@@ -27,10 +27,10 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     auto arg = DexType::make_type("I");
     auto args = DexTypeList::make_type_list({arg, arg});
     auto proto = DexProto::make_proto(ret, args); // I(I, I)
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto);
+                               proto));
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 0));
     {
@@ -90,10 +90,10 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     auto ret = DexType::make_type("V");
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // V()
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto);
+                               proto));
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 1));
     using namespace dex_asm;

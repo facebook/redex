@@ -24,12 +24,12 @@
 class DexDebugInstruction;
 class DexString;
 class DexType;
-class DexField;
+class DexFieldRef;
 class DexTypeList;
 class DexProto;
-class DexMethod;
+class DexMethodRef;
 class DexClass;
-struct DexFieldRef;
+struct DexFieldSpec;
 struct DexDebugEntry;
 struct DexPosition;
 struct RedexContext;
@@ -47,14 +47,14 @@ struct RedexContext {
   DexType* get_type(DexString* dstring);
   void alias_type_name(DexType* type, DexString* new_name);
 
-  DexField* make_field(const DexType* container,
-                       const DexString* name,
-                       const DexType* type);
-  DexField* get_field(const DexType* container,
-                      const DexString* name,
-                      const DexType* type);
-  void mutate_field(DexField* field,
-                    const DexFieldRef& ref);
+  DexFieldRef* make_field(const DexType* container,
+                          const DexString* name,
+                          const DexType* type);
+  DexFieldRef* get_field(const DexType* container,
+                         const DexString* name,
+                         const DexType* type);
+  void mutate_field(DexFieldRef* field,
+                    const DexFieldSpec& ref);
 
   DexTypeList* make_type_list(std::deque<DexType*>&& p);
   DexTypeList* get_type_list(std::deque<DexType*>&& p);
@@ -64,15 +64,15 @@ struct RedexContext {
                        DexString* shorty);
   DexProto* get_proto(DexType* rtype, DexTypeList* args);
 
-  DexMethod* make_method(DexType* type,
+  DexMethodRef* make_method(DexType* type,
                          DexString* name,
                          DexProto* proto);
-  DexMethod* get_method(DexType* type,
+  DexMethodRef* get_method(DexType* type,
                         DexString* name,
                         DexProto* proto);
-  void erase_method(DexMethod*);
-  void mutate_method(DexMethod* method,
-                     const DexMethodRef& ref,
+  void erase_method(DexMethodRef*);
+  void mutate_method(DexMethodRef* method,
+                     const DexMethodSpec& ref,
                      bool rename_on_collision = false);
 
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
@@ -111,8 +111,8 @@ struct RedexContext {
   std::unordered_map<DexString*, DexType*> s_type_map;
   std::mutex s_type_lock;
 
-  // DexField
-  std::unordered_map<DexFieldRef, DexField*> s_field_map;
+  // DexFieldRef
+  std::unordered_map<DexFieldSpec, DexFieldRef*> s_field_map;
   std::mutex s_field_lock;
 
   // DexTypeList
@@ -125,7 +125,7 @@ struct RedexContext {
   std::mutex s_proto_lock;
 
   // DexMethod
-  std::unordered_map<DexMethodRef, DexMethod*> s_method_map;
+  std::unordered_map<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
 
   // Type-to-class map and class hierarchy

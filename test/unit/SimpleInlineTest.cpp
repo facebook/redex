@@ -25,12 +25,13 @@ TEST(SimpleInlineTest, insertMoves) {
   g_redex = new RedexContext();
 
   using namespace dex_asm;
-  auto callee = DexMethod::make_method(
-      "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"});
+  auto callee = static_cast<DexMethod*>(DexMethod::make_method(
+      "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   callee->set_code(std::make_unique<IRCode>(callee, 0));
 
-  auto caller = DexMethod::make_method("Lfoo;", "testCaller", "V", {});
+  auto caller = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "testCaller", "V", {}));
   caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   caller->set_code(std::make_unique<IRCode>(caller, 0));
 

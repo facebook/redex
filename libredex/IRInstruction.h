@@ -183,23 +183,23 @@ class IRInstruction final {
     return this;
   }
 
-  DexField* get_field() const {
+  DexFieldRef* get_field() const {
     always_assert(has_field());
     return m_field;
   }
 
-  IRInstruction* set_field(DexField* field) {
+  IRInstruction* set_field(DexFieldRef* field) {
     always_assert(has_field());
     m_field = field;
     return this;
   }
 
-  DexMethod* get_method() const {
+  DexMethodRef* get_method() const {
     always_assert(has_method());
     return m_method;
   }
 
-  IRInstruction* set_method(DexMethod* method) {
+  IRInstruction* set_method(DexMethodRef* method) {
     always_assert(has_method());
     m_method = method;
     return this;
@@ -232,13 +232,13 @@ class IRInstruction final {
     }
   }
 
-  void gather_fields(std::vector<DexField*>& lfield) const {
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const {
     if (has_field()) {
       lfield.push_back(m_field);
     }
   }
 
-  void gather_methods(std::vector<DexMethod*>& lmethod) const {
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const {
     if (has_method()) {
       lmethod.push_back(m_method);
     }
@@ -254,8 +254,8 @@ class IRInstruction final {
   union {
     DexString* m_string {nullptr};
     DexType* m_type;
-    DexField* m_field;
-    DexMethod* m_method;
+    DexFieldRef* m_field;
+    DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
 

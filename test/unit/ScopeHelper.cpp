@@ -68,103 +68,123 @@ DexClass* create_java_lang_object() {
   auto wait = DexString::make_string("wait");
 
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  auto method = DexMethod::make_method(obj_t, clone, void_object);
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method(obj_t, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   obj_cls->add_method(method);
 
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
-  method = DexMethod::make_method(obj_t, equals, object_bool);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(obj_t, equals, object_bool));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, finalize, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, finalize, void_void));
   if (method == nullptr) {
     // protected java.lang.Object.finalize()V
-    method = DexMethod::make_method(obj_t, finalize, void_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, finalize, void_void));
     method->set_access(ACC_PROTECTED);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, getClass, void_class);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, getClass, void_class));
   if (method == nullptr) {
     // public final native java.lang.Object.getClass()Ljava/lang/Class;
-    method = DexMethod::make_method(obj_t, getClass, void_class);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, getClass, void_class));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, hashCode, void_int);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, hashCode, void_int));
   if (method == nullptr) {
     // public native java.lang.Object.hashCode()I
-    method = DexMethod::make_method(obj_t, hashCode, void_int);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, hashCode, void_int));
     method->set_access(ACC_PUBLIC | ACC_NATIVE);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, notify, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, notify, void_void));
   if (method == nullptr) {
     // public final native java.lang.Object.notify()V
-    method = DexMethod::make_method(obj_t, notify, void_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, notify, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, notifyAll, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, notifyAll, void_void));
   if (method == nullptr) {
     // public final native java.lang.Object.notifyAll()V
-    method = DexMethod::make_method(obj_t, notifyAll, void_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, notifyAll, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, toString, void_string);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, toString, void_string));
   if (method == nullptr) {
     // public java.lang.Object.toString()Ljava/lang/String;
-    method = DexMethod::make_method(obj_t, toString, void_string);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, toString, void_string));
     method->set_access(ACC_PUBLIC);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, wait, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, wait, void_void));
   if (method == nullptr) {
     // public final java.lang.Object.wait()V
-    method = DexMethod::make_method(obj_t, wait, void_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, wait, void_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, wait, long_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, wait, long_void));
   if (method == nullptr) {
     // public final java.lang.Object.wait(J)V
-    method = DexMethod::make_method(obj_t, wait, long_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, wait, long_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL);
     method->set_virtual(true);
     method->set_external();
   }
   obj_cls->add_method(method);
 
-  method = DexMethod::get_method(obj_t, wait, long_int_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::get_method(obj_t, wait, long_int_void));
   if (method == nullptr) {
     // public final native java.lang.Object.wait(JI)V
-    method = DexMethod::make_method(obj_t, wait, long_int_void);
+    method = static_cast<DexMethod*>(
+        DexMethod::make_method(obj_t, wait, long_int_void));
     method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
     method->set_virtual(true);
     method->set_external();
@@ -218,8 +238,8 @@ DexMethod* create_abstract_method(
     DexProto* proto,
     DexAccessFlags access /*= ACC_PUBLIC*/) {
   access = access | ACC_ABSTRACT;
-  auto method = DexMethod::make_method(
-      cls->get_type(), DexString::make_string(name), proto);
+  auto method = static_cast<DexMethod*>(DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto));
   method->make_concrete(access, std::unique_ptr<IRCode>(nullptr), true);
   cls->add_method(method);
   return method;

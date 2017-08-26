@@ -173,11 +173,12 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   if (!method) return nullptr;
   if (!method->is_concrete()) return nullptr;
 
+  const auto method_def = static_cast<DexMethod*>(method);
   auto collision = find_collision_excepting(ch,
-                                            method,
-                                            method->get_name(),
-                                            method->get_proto(),
-                                            type_class(method->get_class()),
+                                            method_def,
+                                            method_def->get_name(),
+                                            method_def->get_proto(),
+                                            type_class(method_def->get_class()),
                                             true,
                                             true);
   if (collision) {
@@ -185,7 +186,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
           5,
           "wrapper blocked:%s\nwrapped method:%s\nconflicts with:%s\n",
           SHOW(m),
-          SHOW(method),
+          SHOW(method_def),
           SHOW(collision));
     return nullptr;
   }
@@ -199,12 +200,12 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
     if (!is_return_value(it->insn->opcode())) return nullptr;
     ++it;
     if (it != end) return nullptr; // exception handling code
-    return method;
+    return method_def;
   }
   if (it->insn->opcode() == OPCODE_RETURN_VOID) {
     ++it;
     if (it != end) return nullptr; // exception handling code
-    return method;
+    return method_def;
   }
   return nullptr;
 }
@@ -237,8 +238,11 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   if (it == end) return nullptr;
   if (it->insn->opcode() != OPCODE_RETURN_VOID) return nullptr;
   auto method = invoke->get_method();
-  if (!method->is_concrete() || !is_constructor(method)) return nullptr;
-  return method;
+  if (!method->is_concrete() ||
+      !is_constructor(static_cast<DexMethod*>(method))) {
+    return nullptr;
+  }
+  return static_cast<DexMethod*>(method);
 }
 
 struct WrapperMethods {
@@ -652,7 +656,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   std::unordered_multimap<DexMethod*, DexMethod*> wrappees_to_wrappers;
   for (auto wpair : wrapper_calls) {
     auto call_inst = wpair.first;
-    auto wrapper = call_inst->get_method();
+    auto wrapper = static_cast<DexMethod*>(call_inst->get_method());
     auto wrappee = wpair.second;
     wrappees_to_wrappers.emplace(wrappee, wrapper);
     if (!can_update_wrappee(ch, wrappee, wrapper)) {
@@ -662,7 +666,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   for (auto wpair : wrapped_calls) {
     auto call_inst = wpair.first;
     auto wrapper = wpair.second;
-    auto wrappee = call_inst->get_method();
+    auto wrappee = static_cast<DexMethod*>(call_inst->get_method());
     wrappees_to_wrappers.emplace(wrappee, wrapper);
     if (!can_update_wrappee(ch, wrappee, wrapper)) {
       bad_wrappees.emplace(wrappee);
@@ -686,7 +690,8 @@ void replace_wrappers(const ClassHierarchy& ch,
     std::remove_if(
       wrapped_calls.begin(), wrapped_calls.end(),
       [&](const std::pair<IRInstruction*, DexMethod*>& p) {
-        return bad_wrappees.count(p.first->get_method());
+        return bad_wrappees.count(
+            static_cast<DexMethod*>(p.first->get_method()));
       }),
     wrapped_calls.end()
   );
@@ -699,12 +704,13 @@ void replace_wrappers(const ClassHierarchy& ch,
   for (auto g : getter_calls) {
     using std::get;
     if (!replace_getter_wrapper(&*code, get<0>(g), get<1>(g), get<2>(g))) {
-      ssms.keepers.emplace(get<0>(g)->get_method());
+      always_assert(get<0>(g)->get_method()->is_def());
+      ssms.keepers.emplace(static_cast<DexMethod*>(get<0>(g)->get_method()));
     }
   }
   for (auto wpair : wrapper_calls) {
     auto call_inst = wpair.first;
-    auto wrapper = call_inst->get_method();
+    auto wrapper = static_cast<DexMethod*>(call_inst->get_method());
     auto wrappee = wpair.second;
     auto success =
       replace_method_wrapper(
@@ -715,13 +721,13 @@ void replace_wrappers(const ClassHierarchy& ch,
         wrappee,
         ssms);
     if (!success) {
-      ssms.keepers.emplace(wpair.first->get_method());
+      ssms.keepers.emplace(static_cast<DexMethod*>(wpair.first->get_method()));
     }
   }
   for (auto wpair : wrapped_calls) {
     auto call_inst = wpair.first;
     auto wrapper = wpair.second;
-    auto wrappee = call_inst->get_method();
+    auto wrappee = static_cast<DexMethod*>(call_inst->get_method());
     auto success =
       replace_method_wrapper(
         ch,
@@ -731,7 +737,7 @@ void replace_wrappers(const ClassHierarchy& ch,
         wrappee,
         ssms);
     if (!success) {
-      ssms.keepers.emplace(wpair.first->get_method());
+      ssms.keepers.emplace(static_cast<DexMethod*>(wpair.first->get_method()));
     }
   }
   for (auto cpair : ctor_calls) {
@@ -859,8 +865,9 @@ void do_transform(const ClassHierarchy& ch,
           opcode != OPCODE_INVOKE_DIRECT_RANGE) {
         continue;
       }
-      auto wrappee = insn->get_method();
-      if (ssms.promoted_to_static.count(wrappee) == 0) {
+      auto wrappee = 
+            resolve_method(insn->get_method(), MethodSearch::Direct);
+      if (wrappee == nullptr || ssms.promoted_to_static.count(wrappee) == 0) {
         continue;
       }
       // change the opcode to invoke-static

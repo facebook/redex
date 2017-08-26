@@ -40,7 +40,7 @@ class MultiMethodInliner {
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
+      std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const Config& config);
 
   ~MultiMethodInliner() {
@@ -183,7 +183,7 @@ class MultiMethodInliner {
   /**
    * Resolver function to map a method reference to a method definition.
    */
-  std::function<DexMethod*(DexMethod*, MethodSearch)> resolver;
+  std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver;
 
   /**
    * Set of classes in each logical store that must not be touched

@@ -96,7 +96,7 @@ class BuilderTransform {
                    bool throws_inline) {
     m_inliner_config.throws_inline = throws_inline;
 
-    auto resolver = [&](DexMethod* method, MethodSearch search) {
+    auto resolver = [&](DexMethodRef* method, MethodSearch search) {
       return resolve_method(method, search, m_resolved_refs);
     };
 

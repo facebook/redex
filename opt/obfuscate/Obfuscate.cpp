@@ -43,9 +43,9 @@ using std::unordered_set;
  *   updated every time we choose a name.
  * returns the number of find_new_name calls done
  */
-template <class T, class R, class K>
+template <class T, class R, class S, class K>
 int obfuscate_elems(const RenamingContext<T>& context,
-    DexElemManager<T, R, K>& name_mapping) {
+    DexElemManager<T, R, S, K>& name_mapping) {
   int num_renames = 0;
   for (T elem : context.elems) {
     if (!context.can_rename_elem(elem) ||
@@ -74,10 +74,10 @@ void debug_logging(std::vector<DexClass*>& classes) {
   TRACE(OBFUSCATE, 3, "Finished applying new names to defs\n");
 }
 
-template<typename DexMember, typename DexMemberRef, typename K>
-DexMember* find_renamable_ref(DexMember* ref,
-    std::unordered_map<DexMember*, DexMember*>& ref_def_cache,
-    DexElemManager<DexMember*, DexMemberRef, K>& name_mapping) {
+template<typename DexMember, typename DexMemberRef, typename DexMemberSpec, typename K>
+DexMember* find_renamable_ref(DexMemberRef* ref,
+    std::unordered_map<DexMemberRef*, DexMember*>& ref_def_cache,
+    DexElemManager<DexMember*, DexMemberRef*, DexMemberSpec, K>& name_mapping) {
   TRACE(OBFUSCATE, 4, "Found a ref opcode\n");
   DexMember* def = nullptr;
   auto member_itr = ref_def_cache.find(ref);
@@ -92,13 +92,13 @@ DexMember* find_renamable_ref(DexMember* ref,
 
 void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
     DexMethodManager& method_name_mapping) {
-  std::unordered_map<DexField*, DexField*> f_ref_def_cache;
-  std::unordered_map<DexMethod*, DexMethod*> m_ref_def_cache;
+  std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
+  std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
   walk_opcodes(scope,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* instr) {
       if (instr->has_field()) {
-        DexField* field_ref = instr->get_field();
+        DexFieldRef* field_ref = instr->get_field();
         if (field_ref->is_def()) return;
         DexField* field_def =
             find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
@@ -107,7 +107,7 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
           instr->set_field(field_def);
         }
       } else if (instr->has_method()) {
-        DexMethod* method_ref = instr->get_method();
+        DexMethodRef* method_ref = instr->get_method();
         if (method_ref->is_def()) return;
         DexMethod* method_def =
             find_renamable_ref(method_ref, m_ref_def_cache,

@@ -16,11 +16,11 @@
 DexFieldManager new_dex_field_manager() {
   return DexFieldManager(
       [](DexField*& f) -> FieldNameWrapper* { return new FieldNameWrapper(f); },
-      [](DexField*& f) -> DexType* { return f->get_type(); },
-      [](const std::string& new_name) -> DexFieldRef {
-        DexFieldRef ref;
-        ref.name = DexString::make_string(new_name);
-        return ref;
+      [](DexFieldRef* f) -> DexType* { return f->get_type(); },
+      [](const std::string& new_name) -> DexFieldSpec {
+        DexFieldSpec spec;
+        spec.name = DexString::make_string(new_name);
+        return spec;
       });
 }
 
@@ -29,10 +29,10 @@ DexMethodManager new_dex_method_manager() {
       [](DexMethod*& f) -> MethodNameWrapper* {
         return new MethodNameWrapper(f);
       },
-      [](DexMethod*& m) -> DexProto* { return m->get_proto(); },
-      [](const std::string& new_name) -> DexMethodRef {
-        DexMethodRef ref;
-        ref.name = DexString::make_string(new_name);
-        return ref;
+      [](DexMethodRef* m) -> DexProto* { return m->get_proto(); },
+      [](const std::string& new_name) -> DexMethodSpec {
+        DexMethodSpec spec;
+        spec.name = DexString::make_string(new_name);
+        return spec;
       });
 }

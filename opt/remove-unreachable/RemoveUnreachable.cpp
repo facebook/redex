@@ -233,7 +233,7 @@ bool is_canary(const DexClass* cls) {
   return strstr(cls->get_name()->c_str(), "Canary");
 }
 
-DexMethod* resolve(const DexMethod* method, const DexClass* cls) {
+DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
     if (signatures_match(method, m)) {
@@ -376,12 +376,12 @@ struct UnreachableCodeRemover {
     m_marked_classes.emplace(cls);
   }
 
-  void mark(const DexField* field) {
+  void mark(const DexFieldRef* field) {
     if (!field) return;
     m_marked_fields.emplace(field);
   }
 
-  void mark(const DexMethod* method) {
+  void mark(const DexMethodRef* method) {
     if (!method) return;
     m_marked_methods.emplace(method);
   }
@@ -390,11 +390,11 @@ struct UnreachableCodeRemover {
     return m_marked_classes.count(cls);
   }
 
-  bool marked(const DexField* field) {
+  bool marked(const DexFieldRef* field) {
     return m_marked_fields.count(field);
   }
 
-  bool marked(const DexMethod* method) {
+  bool marked(const DexMethodRef* method) {
     return m_marked_methods.count(method);
   }
 
@@ -444,8 +444,11 @@ struct UnreachableCodeRemover {
   }
 
   template<class Parent>
-  void push(const Parent* parent, const DexField* field) {
+  void push(const Parent* parent, const DexFieldRef* field) {
     if (!field || marked(field)) return;
+    if (field->is_def()) {
+      gather_and_push(static_cast<const DexField*>(field));
+    }
     record_reachability(parent, field);
     mark(field);
     m_field_stack.emplace_back(field);
@@ -459,7 +462,7 @@ struct UnreachableCodeRemover {
   }
 
   template<class Parent>
-  void push(const Parent* parent, const DexMethod* method) {
+  void push(const Parent* parent, const DexMethodRef* method) {
     if (!method || marked(method)) return;
     record_reachability(parent, method);
     mark(method);
@@ -496,8 +499,8 @@ struct UnreachableCodeRemover {
   void gather_and_push(T t, bool check_strings = true) {
     std::vector<DexString*> strings;
     std::vector<DexType*> types;
-    std::vector<DexField*> fields;
-    std::vector<DexMethod*> methods;
+    std::vector<DexFieldRef*> fields;
+    std::vector<DexMethodRef*> methods;
     t->gather_strings(strings);
     t->gather_types(types);
     t->gather_fields(fields);
@@ -572,30 +575,33 @@ struct UnreachableCodeRemover {
     }
   }
 
-  void visit(DexField* field) {
+  void visit(DexFieldRef* field) {
     TRACE(RMU, 4, "Visiting field: %s\n", SHOW(field));
     if (!field->is_concrete()) {
       auto const& realfield = resolve_field(
         field->get_class(), field->get_name(), field->get_type());
       push(field, realfield);
     }
-    gather_and_push(field);
     push(field, field->get_class());
     push(field, field->get_type());
   }
 
-  void visit(DexMethod* method) {
+  void visit(DexMethodRef* method) {
     TRACE(RMU, 4, "Visiting method: %s\n", SHOW(method));
     auto resolved_method = resolve(method, type_class(method->get_class()));
-    TRACE(RMU, 5, "    Resolved to: %s\n", SHOW(resolved_method));
-    push(method, resolved_method);
-    gather_and_push(method);
+    if (resolved_method != nullptr) {
+      TRACE(RMU, 5, "    Resolved to: %s\n", SHOW(resolved_method));
+      push(method, resolved_method);
+      gather_and_push(resolved_method);
+    }
     push(method, method->get_class());
     push(method, method->get_proto()->get_rtype());
     for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
       push(method, t);
     }
-    if (method->is_virtual() || !method->is_concrete()) {
+    if (method->is_def() && (
+        static_cast<DexMethod*>(method)->is_virtual() ||
+            !method->is_concrete())) {
       // If we're keeping an interface method, we have to keep its
       // implementations.  Annoyingly, the implementation might be defined on a
       // super class of the class that implements the interface.
@@ -661,13 +667,13 @@ struct UnreachableCodeRemover {
       if (!m_field_stack.empty()) {
         auto field = m_field_stack.back();
         m_field_stack.pop_back();
-        visit(const_cast<DexField*>(field));
+        visit(const_cast<DexFieldRef*>(field));
         continue;
       }
       if (!m_method_stack.empty()) {
         auto method = m_method_stack.back();
         m_method_stack.pop_back();
-        visit(const_cast<DexMethod*>(method));
+        visit(const_cast<DexMethodRef*>(method));
         continue;
       }
       return;
@@ -709,13 +715,13 @@ struct UnreachableCodeRemover {
   DexStoresVector& m_stores;
   InheritanceGraph m_inheritance_graph;
   std::unordered_set<const DexClass*> m_marked_classes;
-  std::unordered_set<const DexField*> m_marked_fields;
-  std::unordered_set<const DexMethod*> m_marked_methods;
+  std::unordered_set<const DexFieldRef*> m_marked_fields;
+  std::unordered_set<const DexMethodRef*> m_marked_methods;
   std::unordered_set<const DexField*> m_cond_marked_fields;
   std::unordered_set<const DexMethod*> m_cond_marked_methods;
   std::vector<const DexClass*> m_class_stack;
-  std::vector<const DexField*> m_field_stack;
-  std::vector<const DexMethod*> m_method_stack;
+  std::vector<const DexFieldRef*> m_field_stack;
+  std::vector<const DexMethodRef*> m_method_stack;
   std::unordered_set<const DexType*>& m_ignore_string_literals_annos;
 };
 

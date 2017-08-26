@@ -21,7 +21,9 @@ class DedupBlocksPass : public Pass {
     std::vector<std::string> method_black_list_names;
     pc.get("method_black_list", {}, method_black_list_names);
     for (std::string name : method_black_list_names) {
-      m_config.method_black_list.emplace(DexMethod::get_method(name));
+      auto meth = DexMethod::get_method(name);
+      if (meth == nullptr || !meth->is_def()) continue;
+      m_config.method_black_list.emplace(static_cast<DexMethod*>(meth));
     }
   }
 

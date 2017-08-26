@@ -21,10 +21,12 @@
  */
 class DexString;
 class DexType;
+class DexFieldRef;
 class DexField;
 class DexTypeList;
 class DexProto;
 class DexCode;
+class DexMethodRef;
 class DexMethod;
 class DexClass;
 class DexEncodedValue;
@@ -44,12 +46,12 @@ class InstructionIterable;
 
 std::string show(const DexString*);
 std::string show(const DexType*);
-std::string show(const DexField*);
+std::string show(const DexFieldRef*);
 std::string show(const DexDebugEntry*);
 std::string show(const DexTypeList*);
 std::string show(const DexProto*);
 std::string show(const DexCode*);
-std::string show(const DexMethod*);
+std::string show(const DexMethodRef*);
 std::string show(const DexPosition*);
 std::string show(const DexClass*);
 std::string show(const DexEncodedValue*);

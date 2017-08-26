@@ -19,6 +19,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"
 
@@ -290,8 +291,12 @@ class DedupBlocksImpl {
 
   static bool calls_constructor(Block* block) {
     for (const auto& mie : InstructionIterable(block)) {
-      if (is_invoke(mie.insn->opcode()) && is_init(mie.insn->get_method())) {
-        return true;
+      if (is_invoke(mie.insn->opcode())) {
+        auto meth =
+            resolve_method(mie.insn->get_method(), opcode_to_search(mie.insn));
+        if (meth != nullptr && is_init(meth)) {
+          return true;
+        }
       }
     }
     return false;

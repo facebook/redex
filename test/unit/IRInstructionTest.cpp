@@ -39,8 +39,8 @@ TEST(IRInstruction, RoundTrip) {
 
   DexType* ty = DexType::make_type("Lfoo;");
   DexString* str = DexString::make_string("foo");
-  DexField* field = DexField::make_field(ty, str, ty);
-  DexMethod* method = DexMethod::make_method(
+  DexFieldRef* field = DexField::make_field(ty, str, ty);
+  DexMethodRef* method = DexMethod::make_method(
       ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({})));
 
   for (DexOpcode op : all_opcodes) {
@@ -124,7 +124,8 @@ TEST(IRInstruction, NormalizeInvoke) {
  * this makes easy to test.
  */
 IRInstruction* select_instruction(IRInstruction* insn) {
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(insn);
@@ -162,7 +163,8 @@ TEST(IRInstruction, SelectCheckCast) {
   using namespace dex_asm;
   g_redex = new RedexContext();
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));

@@ -55,8 +55,8 @@ struct Unterface {
 /**
  * Create a DexMethod for an unterface ctor.
  */
-DexMethod* obj_ctor() {
-  static DexMethod* ctor = DexMethod::make_method(
+DexMethodRef* obj_ctor() {
+  static DexMethodRef* ctor = DexMethod::make_method(
       get_object_type(),
       DexString::make_string("<init>"),
       DexProto::make_proto(get_void_type(),
@@ -437,15 +437,15 @@ void make_unterface_class(Unterface& unterface) {
   untf_cls->add_interface(unterface.intf->get_type());
 
   auto switch_field_name = DexString::make_string("sw");
-  auto switch_field = DexField::make_field(
-      untf_cls->get_type(), switch_field_name, get_int_type());
+  auto switch_field = static_cast<DexField*>(DexField::make_field(
+      untf_cls->get_type(), switch_field_name, get_int_type()));
   switch_field->make_concrete(ACC_PRIVATE);
   untf_cls->add_field(switch_field);
   TRACE(UNTF, 8, "Unterface field %s\n", SHOW(switch_field));
   unterface.sw_field = switch_field;
   auto obj_field_name = DexString::make_string("obj");
-  auto obj_field = DexField::make_field(
-      untf_cls->get_type(), obj_field_name, get_object_type());
+  auto obj_field = static_cast<DexField*>(DexField::make_field(
+      untf_cls->get_type(), obj_field_name, get_object_type()));
   obj_field->make_concrete(ACC_PRIVATE);
   untf_cls->add_field(obj_field);
   TRACE(UNTF, 8, "Unterface field %s\n", SHOW(obj_field));

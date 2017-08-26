@@ -705,7 +705,7 @@ void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) {
   encode_args(insns);
 }
 
-void DexOpcodeField::gather_fields(std::vector<DexField*>& lfield) const {
+void DexOpcodeField::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   lfield.push_back(m_field);
 }
 
@@ -717,7 +717,8 @@ void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) {
   *insns++ = idx;
 }
 
-void DexOpcodeMethod::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexOpcodeMethod::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
   lmethod.push_back(m_method);
 }
 
@@ -981,7 +982,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT: {
     uint16_t fidx = *insns++;
-    DexField* field = idx->get_fieldidx(fidx);
+    DexFieldRef* field = idx->get_fieldidx(fidx);
     return new DexOpcodeField(fopcode, field);
   }
   /* MethodRef: */
@@ -997,7 +998,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx, const uint16_t*& i
   case OPCODE_INVOKE_INTERFACE_RANGE: {
     uint16_t midx = *insns++;
     uint16_t arg = *insns++;
-    DexMethod* meth = idx->get_methodidx(midx);
+    DexMethodRef* meth = idx->get_methodidx(midx);
     return new DexOpcodeMethod(fopcode, meth, arg);
   }
   /* StringRef: */

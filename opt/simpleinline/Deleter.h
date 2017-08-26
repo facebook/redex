@@ -24,7 +24,7 @@
 size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
-    std::function<DexMethod*(DexMethod*, MethodSearch)> resolver);
+    std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver);
 
 /**
  * Attempt to delete all removable candidates if there are no reference to
@@ -36,7 +36,7 @@ inline size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable) {
   return delete_methods(scope, removable,
-      [](DexMethod* method, MethodSearch search) {
+      [](DexMethodRef* method, MethodSearch search) {
         return resolve_method(method, search);
   });
 }

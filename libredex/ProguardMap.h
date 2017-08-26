@@ -120,8 +120,8 @@ void apply_deobfuscated_names(
  */
 std::string proguard_name(const DexType* cls);
 std::string proguard_name(const DexClass* cls);
-std::string proguard_name(const DexMethod* method);
-std::string proguard_name(const DexField* field);
+std::string proguard_name(const DexMethodRef* method);
+std::string proguard_name(const DexFieldRef* field);
 
 /**
  * Convert a dot-style name to a dexdump-style name, e.g.:

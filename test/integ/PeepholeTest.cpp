@@ -101,8 +101,8 @@ class PeepholeTest : public ::testing::Test {
     auto ret = get_void_type();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // I()
-    DexMethod* method = DexMethod::make_method(
-        dex_class->get_type(), DexString::make_string(method_name), proto);
+    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
+        dex_class->get_type(), DexString::make_string(method_name), proto));
     method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     // FIXME we should determine the actual number of temp regs used from
     // the IRInstructionList

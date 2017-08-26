@@ -57,7 +57,7 @@ void InlineInitPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   auto& primary_dex = stores[0].get_dexen()[0];
 
-  auto resolver = [&](DexMethod* method, MethodSearch search) {
+  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, m_resolved_refs);
   };
 

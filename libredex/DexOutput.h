@@ -24,8 +24,8 @@ using facebook::Locator;
 typedef std::unordered_map<DexString*, uint32_t> dexstring_to_idx;
 typedef std::unordered_map<DexType*, uint16_t> dextype_to_idx;
 typedef std::unordered_map<DexProto*, uint32_t> dexproto_to_idx;
-typedef std::unordered_map<DexField*, uint32_t> dexfield_to_idx;
-typedef std::unordered_map<DexMethod*, uint32_t> dexmethod_to_idx;
+typedef std::unordered_map<DexFieldRef*, uint32_t> dexfield_to_idx;
+typedef std::unordered_map<DexMethodRef*, uint32_t> dexmethod_to_idx;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores);
@@ -77,8 +77,8 @@ class DexOutputIdx {
   uint32_t stringidx(DexString* s) const { return m_string->at(s); }
   uint16_t typeidx(DexType* t) const { return m_type->at(t); }
   uint16_t protoidx(DexProto* p) const { return m_proto->at(p); }
-  uint32_t fieldidx(DexField* f) const { return m_field->at(f); }
-  uint32_t methodidx(DexMethod* m) const { return m_method->at(m); }
+  uint32_t fieldidx(DexFieldRef* f) const { return m_field->at(f); }
+  uint32_t methodidx(DexMethodRef* m) const { return m_method->at(m); }
 
   size_t stringsize() const { return m_string->size(); }
   size_t typesize() const { return m_type->size(); }
@@ -103,8 +103,8 @@ dex_stats_t write_classes_to_dex(
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
 typedef bool (*cmp_dproto)(const DexProto*, const DexProto*);
-typedef bool (*cmp_dfield)(const DexField*, const DexField*);
-typedef bool (*cmp_dmethod)(const DexMethod*, const DexMethod*);
+typedef bool (*cmp_dfield)(const DexFieldRef*, const DexFieldRef*);
+typedef bool (*cmp_dmethod)(const DexMethodRef*, const DexMethodRef*);
 
 /*
  * This API gathers all of the data referred to by a set of DexClasses in
@@ -139,8 +139,8 @@ class GatheredTypes {
  private:
   std::vector<DexString*> m_lstring;
   std::vector<DexType*> m_ltype;
-  std::vector<DexField*> m_lfield;
-  std::vector<DexMethod*> m_lmethod;
+  std::vector<DexFieldRef*> m_lfield;
+  std::vector<DexMethodRef*> m_lmethod;
   DexClasses* m_classes;
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;

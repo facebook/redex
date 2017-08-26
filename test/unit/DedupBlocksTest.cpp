@@ -40,8 +40,8 @@ struct DedupBlocksTest : testing::Test {
   }
 
   DexMethod* get_fresh_method(const std::string& name) {
-    DexMethod* method = DexMethod::make_method(
-        m_type, DexString::make_string(name), m_proto);
+    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
+        m_type, DexString::make_string(name), m_proto));
     method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
     m_creator->add_method(method);

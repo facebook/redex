@@ -36,7 +36,7 @@ namespace {
 constexpr const char* METRIC_BRIDGES_REMOVED = "bridges_removed_count";
 constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 
-DexMethod* match_pattern(DexMethod* bridge) {
+DexMethodRef* match_pattern(DexMethod* bridge) {
   auto code = bridge->get_code();
   if (!code) return nullptr;
   auto ii = InstructionIterable(code);
@@ -86,8 +86,10 @@ bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
 }
 
 DexMethod* find_bridgee(DexMethod* bridge) {
-  auto bridgee = match_pattern(bridge);
-  if (!bridgee) return nullptr;
+  auto bridgee_ref = match_pattern(bridge);
+  if (!bridgee_ref) return nullptr;
+  if (!bridgee_ref->is_def()) return nullptr;
+  auto bridgee = static_cast<DexMethod*>(bridgee_ref);
   if (!is_optimization_candidate(bridge, bridgee)) return nullptr;
   return bridgee;
 }
@@ -277,7 +279,7 @@ class BridgeRemover {
   }
 
   void exclude_referenced_bridgees() {
-    std::vector<DexMethod*> refs;
+    std::vector<DexMethodRef*> refs;
 
     auto visit_methods = [&refs](DexMethod* m) {
         auto const& anno = m->get_anno_set();
@@ -307,7 +309,11 @@ class BridgeRemover {
       }
     }
 
-    std::unordered_set<DexMethod*> refs_set(refs.begin(), refs.end());
+    std::unordered_set<DexMethod*> refs_set;
+    for (const auto& ref : refs) {
+      if (!ref->is_def()) continue;
+      refs_set.insert(static_cast<DexMethod*>(ref));
+    }
     std::vector<DexMethod*> kill_me;
     for (auto const& p : m_bridges_to_bridgees) {
       if (refs_set.count(p.second)) {

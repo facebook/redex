@@ -79,7 +79,8 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
                           nullptr,
                       "field %s already exists!",
                       redex_field_name);
-    DexField* f = DexField::make_field(cls_type, field_name, string_type);
+    DexField* f = static_cast<DexField*>(
+        DexField::make_field(cls_type, field_name, string_type));
     f->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
                      new DexEncodedValueString(external_name_s));
     insert_sorted(cls->get_sfields(), f, compare_dexfields);

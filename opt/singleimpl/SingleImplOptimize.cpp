@@ -185,8 +185,8 @@ struct OptimizationImpl {
 void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     assert(!single_impls->is_escaped(field->get_class()));
-    auto f = DexField::make_field(
-        field->get_class(), field->get_name(), data.cls);
+    auto f = static_cast<DexField*>(DexField::make_field(
+        field->get_class(), field->get_name(), data.cls));
     assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s\n", SHOW(field));
     f->set_deobfuscated_name(field->get_deobfuscated_name());
@@ -210,10 +210,8 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
     assert(!single_impls->is_escaped(field->get_class()));
-    DexField* f = DexField::make_field(
+    DexFieldRef* f = DexField::make_field(
         field->get_class(), field->get_name(), data.cls);
-    f->set_deobfuscated_name(field->get_deobfuscated_name());
-    f->rstate = field->rstate;
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
       assert(f != opcode->get_field());
@@ -228,7 +226,7 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
  * the new to the proper class method list.
  */
 void OptimizationImpl::set_method_defs(DexType* intf,
-                                           SingleImplData& data) {
+                                       SingleImplData& data) {
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s\n", SHOW(method));
     auto meth = method;
@@ -236,7 +234,8 @@ void OptimizationImpl::set_method_defs(DexType* intf,
     if (meth_it != new_methods.end()) {
       // if a method rewrite existed it must not be on a single impl
       // given we have escaped to next pass all collisions
-      meth = meth_it->second;
+      always_assert(meth_it->second->is_def());
+      meth = static_cast<DexMethod*>(meth_it->second);
       TRACE(INTF, 4, "(MDEF) current: %s\n", SHOW(meth));
       assert(!single_impls->is_single_impl(method->get_class()) ||
              single_impls->is_escaped(method->get_class()));
@@ -252,8 +251,8 @@ void OptimizationImpl::set_method_defs(DexType* intf,
           SHOW(meth->get_proto()),
           SHOW(proto));
     assert(proto != meth->get_proto());
-    auto new_meth = DexMethod::make_method(
-        meth->get_class(), meth->get_name(), proto);
+    auto new_meth = static_cast<DexMethod*>(DexMethod::make_method(
+        meth->get_class(), meth->get_name(), proto));
     // new_meth may have already existed in RedexContext, so
     // we need to make sure it isn't concrete.
     // TODO: this is horrible. After we remove methods, we shouldn't
@@ -275,7 +274,7 @@ void OptimizationImpl::set_method_defs(DexType* intf,
  * Rewrite all method refs.
  */
 void OptimizationImpl::set_method_refs(DexType* intf,
-                                           SingleImplData& data) {
+                                       SingleImplData& data) {
   for (auto mrefit : data.methodrefs) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF)  %s\n", SHOW(method));
@@ -300,16 +299,20 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     // Still we need to change the opcodes where we assert the new method
     // to go in the opcode is in fact different than what was there.
     auto proto = get_or_make_proto(intf, data.cls, new_meth->get_proto());
-    new_meth = DexMethod::make_method(
+    auto created_meth = DexMethod::make_method(
             new_meth->get_class(), new_meth->get_name(), proto);
-    new_meth->set_deobfuscated_name(method->get_deobfuscated_name());
-    new_meth->rstate = method->rstate;
-    new_methods[method] = new_meth;
-    TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(new_meth));
+    if (created_meth->is_def() && method->is_def()) {
+      static_cast<DexMethod*>(created_meth)->set_deobfuscated_name(
+          static_cast<DexMethod*>(method)->get_deobfuscated_name());
+      static_cast<DexMethod*>(created_meth)->rstate =
+          static_cast<DexMethod*>(method)->rstate;
+    }
+    new_methods[method] = created_meth;
+    TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(created_meth));
     for (auto opcode : mrefit.second) {
       TRACE(INTF, 3, "(MREF) %s\n", SHOW(opcode));
-      assert(opcode->get_method() != new_meth);
-      opcode->set_method(new_meth);
+      assert(opcode->get_method() != created_meth);
+      opcode->set_method(created_meth);
       TRACE(INTF, 3, "(MREF) \t=> %s\n", SHOW(opcode));
     }
   }
@@ -327,7 +330,8 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     auto meth = method;
     auto meth_it = new_methods.find(meth);
     if (meth_it != new_methods.end()) {
-      meth = meth_it->second;
+      always_assert(meth_it->second->is_def());
+      meth = static_cast<DexMethod*>(meth_it->second);
     }
     drop_single_impl_collision(intf, data, meth);
     auto impl = type_class(data.cls);
@@ -347,8 +351,9 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     TRACE(INTF, 3, "(MITF) interface method %s\n", SHOW(meth));
     auto new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
     if (!new_meth) {
-      new_meth = DexMethod::make_method(impl->get_type(), meth->get_name(),
-          meth->get_proto());
+      new_meth = static_cast<DexMethod*>(
+          DexMethod::make_method(
+              impl->get_type(), meth->get_name(), meth->get_proto()));
       new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
@@ -437,7 +442,10 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
                                                       SingleImplData& data) {
   for (auto method : data.methoddefs) {
     auto meth_it = new_methods.find(method);
-    if (meth_it != new_methods.end()) method = meth_it->second;
+    if (meth_it != new_methods.end()) {
+      always_assert(meth_it->second->is_def());
+      method = static_cast<DexMethod*>(meth_it->second);
+    }
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     assert(proto != method->get_proto());
     DexMethod* collision = find_collision(ch,

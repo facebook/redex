@@ -61,8 +61,8 @@ using Scope = std::vector<DexClass*>;
 // Forward decls to break cycle with ProguardMap.h
 std::string proguard_name(const DexType* cls);
 std::string proguard_name(const DexClass* cls);
-std::string proguard_name(const DexMethod* method);
-std::string proguard_name(const DexField* field);
+std::string proguard_name(const DexMethodRef* method);
+std::string proguard_name(const DexFieldRef* field);
 
 class DexString {
   friend struct RedexContext;
@@ -230,28 +230,72 @@ struct dextypes_comparator {
   }
 };
 
-class DexField {
+/**
+ * A DexFieldRef is a reference to a DexField.
+ * A reference may or may not map to a definition.
+ * Consider the following:
+ * class A { public int i; }
+ * class B extends A {}
+ * B b = ...;
+ * b.i = 0;
+ * the code compiles to
+ * iput v0, v1 LB;.i:I
+ * B.i does not exist and it's a reference.
+ * The type of the reference is effectively the scope where resolution starts.
+ * DexFieldRef are never really materialized and everything is a DexField.
+ * The API however returns DexFieldRef for references thus imposing some
+ * kind of resolution to get to a definition if needed.
+ */
+class DexFieldRef {
   friend struct RedexContext;
 
-  DexFieldRef m_ref;
-  /* Concrete method members */
-  DexAnnotationSet* m_anno;
-  DexEncodedValue* m_value; /* Static Only */
-  DexAccessFlags m_access;
+ protected:
+  DexFieldSpec m_spec;
   bool m_concrete;
   bool m_external;
+
+  ~DexFieldRef() {}
+  DexFieldRef(DexType* container, DexString* name, DexType* type) {
+    m_spec.cls = container;
+    m_spec.name = name;
+    m_spec.type = type;
+    m_concrete = false;
+    m_external = false;
+  }
+
+ public:
+   bool is_concrete() const { return m_concrete; }
+   bool is_external() const { return m_external; }
+   bool is_def() const { return is_concrete() || is_external(); }
+
+   DexType* get_class() const { return m_spec.cls; }
+   DexString* get_name() const { return m_spec.name; }
+   const char* c_str() const { return get_name()->c_str(); }
+   DexType* get_type() const { return m_spec.type; }
+
+   void gather_types_shallow(std::vector<DexType*>& ltype) const;
+   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
+
+   void change(const DexFieldSpec& ref) {
+     g_redex->mutate_field(this, ref);
+   }
+};
+
+class DexField : public DexFieldRef {
+  friend struct RedexContext;
+
+  /* Concrete method members */
+  DexAccessFlags m_access;
+  DexAnnotationSet* m_anno;
+  DexEncodedValue* m_value; /* Static Only */
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexField(DexType* container, DexString* name, DexType* type) {
-    m_concrete = false;
-    m_external = false;
+  DexField(DexType* container, DexString* name, DexType* type) :
+      DexFieldRef(container, name, type) {
+    m_access = static_cast<DexAccessFlags>(0);
     m_anno = nullptr;
     m_value = nullptr;
-    m_access = static_cast<DexAccessFlags>(0);
-    m_ref.cls = container;
-    m_ref.name = name;
-    m_ref.type = type;
   }
 
  public:
@@ -261,33 +305,26 @@ class DexField {
 
   // If the DexField exists, return it, otherwise create it and return it.
   // See also get_field()
-  static DexField* make_field(const DexType* container,
-                              const DexString* name,
-                              const DexType* type) {
+  static DexFieldRef* make_field(const DexType* container,
+                                 const DexString* name,
+                                 const DexType* type) {
     return g_redex->make_field(container, name, type);
   }
 
   // Return an existing DexField or nullptr if one does not exist.
-  static DexField* get_field(const DexType* container,
-                             const DexString* name,
-                             const DexType* type) {
+  static DexFieldRef* get_field(const DexType* container,
+                                const DexString* name,
+                                const DexType* type) {
     return g_redex->get_field(container, name, type);
   }
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexEncodedValue* get_static_value() { return m_value; }
-  DexType* get_class() const { return m_ref.cls; }
-  DexString* get_name() const { return m_ref.name; }
-  const char* c_str() const { return get_name()->c_str(); }
-  DexType* get_type() const { return m_ref.type; }
-  bool is_def() const { return is_concrete() || is_external(); }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;
   }
-  bool is_concrete() const { return m_concrete; }
-  bool is_external() const { return m_external; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
@@ -312,32 +349,25 @@ class DexField {
     m_anno = nullptr;
   }
 
-  void change(const DexFieldRef& ref) {
-    g_redex->mutate_field(this, ref);
-  }
-
   void attach_annotation_set(DexAnnotationSet* aset) {
     if (m_anno == nullptr && m_concrete == false) {
       m_anno = aset;
       return;
     }
     always_assert_log(false, "attach_annotation_set failed for field %s.%s\n",
-                      m_ref.cls->get_name()->c_str(),
-                      m_ref.name->c_str());
+                      m_spec.cls->get_name()->c_str(),
+                      m_spec.name->c_str());
   }
-
-  void gather_types_shallow(std::vector<DexType*>& ltype);
-  void gather_strings_shallow(std::vector<DexString*>& lstring);
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 
 };
 
 /* Non-optimizing DexSpec compliant ordering */
-inline bool compare_dexfields(const DexField* a, const DexField* b) {
+inline bool compare_dexfields(const DexFieldRef* a, const DexFieldRef* b) {
   if (a == nullptr) {
     return b != nullptr;
   } else if (b == nullptr) {
@@ -353,7 +383,7 @@ inline bool compare_dexfields(const DexField* a, const DexField* b) {
 }
 
 struct dexfields_comparator {
-  bool operator()(const DexField* a, const DexField* b) const {
+  bool operator()(const DexFieldRef* a, const DexFieldRef* b) const {
     return compare_dexfields(a, b);
   }
 };
@@ -651,18 +681,64 @@ class DexCode {
   friend std::string show(const DexCode*);
 };
 
-class DexMethod {
+/**
+ * A DexMethodRef is a reference to a DexMethod.
+ * A reference may or may not map to a definition.
+ * Consider the following:
+ * class A { public void m() {} }
+ * class B extends A {}
+ * B b = ...;
+ * b.m();
+ * the code compiles to
+ * invoke-virtual {v0} LB;.m:()V
+ * B.m() does not exist and it's a reference.
+ * The type of the reference is effectively the scope where resolution starts.
+ * DexMethodRef are never really materialized and everything is a DexMethod.
+ * The API however returns DexMethodRef for references thus imposing some
+ * kind of resolution to get to a definition if needed.
+ */
+class DexMethodRef {
   friend struct RedexContext;
 
-  DexMethodRef m_ref;
+ protected:
+  DexMethodSpec m_spec;
+  bool m_concrete;
+  bool m_external;
+
+  ~DexMethodRef() {}
+  DexMethodRef(DexType* type, DexString* name, DexProto* proto) :
+       m_spec(type, name, proto) {
+    m_concrete = false;
+    m_external = false;
+  }
+
+ public:
+   bool is_concrete() const { return m_concrete; }
+   bool is_external() const { return m_external; }
+   bool is_def() const { return is_concrete() || is_external(); }
+
+   DexType* get_class() const { return m_spec.cls; }
+   DexString* get_name() const { return m_spec.name; }
+   const char* c_str() const { return get_name()->c_str(); }
+   DexProto* get_proto() const { return m_spec.proto; }
+
+   void gather_types_shallow(std::vector<DexType*>& ltype) const;
+   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
+
+   void change(const DexMethodSpec& ref, bool rename_on_collision = false) {
+     g_redex->mutate_method(this, ref, rename_on_collision);
+   }
+};
+
+class DexMethod : public DexMethodRef {
+  friend struct RedexContext;
+
   /* Concrete method members */
   DexAnnotationSet* m_anno;
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
   DexAccessFlags m_access;
-  bool m_concrete;
   bool m_virtual;
-  bool m_external;
   ParamAnnotations m_param_anno;
   std::string m_deobfuscated_name;
 
@@ -678,9 +754,9 @@ class DexMethod {
 
   // If the DexMethod exists, return it, otherwise create it and return it.
   // See also get_method()
-  static DexMethod* make_method(DexType* type,
-                                DexString* name,
-                                DexProto* proto) {
+  static DexMethodRef* make_method(DexType* type,
+                                   DexString* name,
+                                   DexProto* proto) {
     return g_redex->make_method(type, name, proto);
   }
 
@@ -695,10 +771,10 @@ class DexMethod {
    * This creates everything along the chain of Dex<Member>, so it should
    * be used for members that either exist or would be created anyway.
    */
-  static DexMethod* make_method(const char* cls_name,
-                                const char* meth_name,
-                                const char* rtype_str,
-                                std::vector<const char*> arg_strs) {
+  static DexMethodRef* make_method(const char* cls_name,
+                                   const char* meth_name,
+                                   const char* rtype_str,
+                                   std::vector<const char*> arg_strs) {
     DexType* cls = DexType::make_type(cls_name);
     DexString* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
@@ -714,37 +790,28 @@ class DexMethod {
   /**
    * Get a method using a canonical name: Lcls;.name:(args)rtype
    */
-  static DexMethod* get_method(std::string canon);
+  static DexMethodRef* get_method(std::string canon);
 
   // Return an existing DexMethod or nullptr if one does not exist.
-  static DexMethod* get_method(DexType* type,
-                               DexString* name,
-                               DexProto* proto) {
+  static DexMethodRef* get_method(DexType* type,
+                                  DexString* name,
+                                  DexProto* proto) {
     return g_redex->get_method(type, name, proto);
   }
 
-  static void erase_method(DexMethod* m) {
+  static void erase_method(DexMethodRef* m) {
     return g_redex->erase_method(m);
   }
 
  public:
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
-  DexType* get_class() const { return m_ref.cls; }
-  DexString* get_name() const { return m_ref.name; }
-  const char* c_str() const { return get_name()->c_str(); }
-  DexProto* get_proto() const { return m_ref.proto; }
   const DexCode* get_dex_code() const { return m_dex_code.get(); }
   DexCode* get_dex_code() { return m_dex_code.get(); }
   IRCode* get_code() { return m_code.get(); }
   const IRCode* get_code() const { return m_code.get(); }
   std::unique_ptr<IRCode> release_code();
-  bool is_concrete() const { return m_concrete; }
   bool is_virtual() const { return m_virtual; }
-  bool is_external() const { return m_external; }
-  bool is_def() const {
-    return is_concrete() || is_external();
-  }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;
@@ -798,9 +865,6 @@ class DexMethod {
 
   void make_non_concrete();
 
-  void change(const DexMethodRef& ref, bool rename_on_collision = false) {
-    g_redex->mutate_method(this, ref, rename_on_collision);
-  }
   void become_virtual();
   void clear_annotations() {
     delete m_anno;
@@ -823,12 +887,9 @@ class DexMethod {
                       paramno, SHOW(this));
   }
 
-  void gather_types_shallow(std::vector<DexType*>& ltype) const;
-  void gather_strings_shallow(std::vector<DexString*>& lstring) const;
-
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
 
   /*
@@ -935,6 +996,7 @@ class DexClass {
   DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const { return m_has_class_data; }
   void set_class_data(bool has_class_data) { m_has_class_data = has_class_data; }
+  bool is_def() const { return true; }
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
@@ -972,8 +1034,8 @@ class DexClass {
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 
  private:
   void sort_methods();
@@ -993,7 +1055,7 @@ struct dexclasses_comparator {
 using DexClasses = std::vector<DexClass*>;
 
 /* Non-optimizing DexSpec compliant ordering */
-inline bool compare_dexmethods(const DexMethod* a, const DexMethod* b) {
+inline bool compare_dexmethods(const DexMethodRef* a, const DexMethodRef* b) {
   if (a == nullptr) {
     return b != nullptr;
   } else if (b == nullptr) {
@@ -1009,7 +1071,7 @@ inline bool compare_dexmethods(const DexMethod* a, const DexMethod* b) {
 }
 
 struct dexmethods_comparator {
-  bool operator()(const DexMethod* a, const DexMethod* b) const {
+  bool operator()(const DexMethodRef* a, const DexMethodRef* b) const {
     return compare_dexmethods(a, b);
   }
 };
@@ -1018,7 +1080,9 @@ DISALLOW_DEFAULT_COMPARATOR(DexClass)
 DISALLOW_DEFAULT_COMPARATOR(DexCode)
 DISALLOW_DEFAULT_COMPARATOR(DexDebugInstruction)
 DISALLOW_DEFAULT_COMPARATOR(DexDebugItem)
+DISALLOW_DEFAULT_COMPARATOR(DexFieldRef)
 DISALLOW_DEFAULT_COMPARATOR(DexField)
+DISALLOW_DEFAULT_COMPARATOR(DexMethodRef)
 DISALLOW_DEFAULT_COMPARATOR(DexMethod)
 DISALLOW_DEFAULT_COMPARATOR(DexOutputIdx)
 DISALLOW_DEFAULT_COMPARATOR(DexProto)

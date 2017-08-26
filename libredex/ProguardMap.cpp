@@ -313,7 +313,7 @@ std::string proguard_name(const DexClass* cls) {
   return cls->get_name()->c_str();
 }
 
-std::string proguard_name(const DexMethod* method) {
+std::string proguard_name(const DexMethodRef* method) {
   // Format is <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
   std::stringstream ss;
   ss << proguard_name(method->get_class()) << "." << method->get_name()->c_str()
@@ -330,7 +330,7 @@ std::string proguard_name(const DexMethod* method) {
   return ss.str();
 }
 
-std::string proguard_name(const DexField* field) {
+std::string proguard_name(const DexFieldRef* field) {
   std::stringstream ss;
   ss << proguard_name(field->get_class()) << "." << field->get_name()->c_str()
       << ":" << proguard_name(field->get_type());

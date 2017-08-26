@@ -94,12 +94,8 @@ std::unordered_set<DexMethod*> find_private_methods(
     [](DexMethod*) { return true; },
     [&](DexMethod* caller, IRInstruction* inst) {
       if (!inst->has_method()) return;
-      auto callee = inst->get_method();
-      if (!callee->is_concrete()) {
-        callee = resolve_method(callee, MethodSearch::Any);
-        if (!callee) return;
-      }
-      if (callee->get_class() == caller->get_class()) {
+      auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
+      if (callee == nullptr || callee->get_class() == caller->get_class()) {
         return;
       }
       candidates.erase(callee);
@@ -117,11 +113,8 @@ void fix_call_sites_private(
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* inst) {
       if (!inst->has_method()) return;
-      auto callee = inst->get_method();
-      if (!callee->is_concrete()) {
-        callee = resolve_method(callee, MethodSearch::Any);
-      }
-      if (privates.count(callee)) {
+      auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
+      if (callee != nullptr && privates.count(callee)) {
         inst->set_method(callee);
         if (!is_static(callee)) {
           inst->set_opcode(

@@ -100,7 +100,7 @@ bool type_ok(DexType* type) {
  * Following is a short list of safe methods that are called with frequency
  * and are optimizable.
  */
-bool method_ok(DexType* type, DexMethod* meth) {
+bool method_ok(DexType* type, DexMethodRef* meth) {
   auto meth_name = meth->get_name()->c_str();
   static auto view = DexType::get_type("Landroid/view/View;");
   if (view == type) {
@@ -148,9 +148,9 @@ MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
-    std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
+    std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const Config& config)
-    : resolver(resolver), m_scope(scope), m_config(config) {
+        : resolver(resolve_fn), m_scope(scope), m_config(config) {
   // build the xstores array
   xstores.push_back(std::unordered_set<DexType*>());
   for (const auto& cls : stores[0].get_dexen()[0]) {
@@ -407,8 +407,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(DexMethod* callee,
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
-    auto method = insn->get_method();
-    method = resolver(method, MethodSearch::Direct);
+    auto method = resolver(insn->get_method(), MethodSearch::Direct);
     if (method == nullptr) {
       info.need_vmethod++;
       return true;
@@ -518,8 +517,8 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
     return false;
   }
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
-    auto field = insn->get_field();
-    field = resolve_field(field, is_sfield_op(insn->opcode())
+    auto ref = insn->get_field();
+    DexField* field = resolve_field(ref, is_sfield_op(insn->opcode())
         ? FieldSearch::Static : FieldSearch::Instance);
     if (field == nullptr) {
       info.escaped_field++;
@@ -598,13 +597,13 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
   for (auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (insn->has_field()) {
-      auto field = insn->get_field();
-      auto cls = type_class(field->get_class());
+      auto cls = type_class(insn->get_field()->get_class());
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
       }
-      field = resolve_field(field, is_sfield_op(insn->opcode())
-          ? FieldSearch::Static : FieldSearch::Instance);
+      auto field =
+          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+              ? FieldSearch::Static : FieldSearch::Instance);
       if (field != nullptr && field->is_concrete()) {
         TRACE(MMINL, 6, "changing visibility of %s.%s %s\n",
             SHOW(field->get_class()), SHOW(field->get_name()),
@@ -617,12 +616,11 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
       continue;
     }
     if (insn->has_method()) {
-      auto method = insn->get_method();
-      auto cls = type_class(method->get_class());
+      auto cls = type_class(insn->get_method()->get_class());
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
       }
-      method = resolver(method, opcode_to_search(insn));
+      auto method = resolver(insn->get_method(), opcode_to_search(insn));
       if (method != nullptr && method->is_concrete()) {
         TRACE(MMINL, 6, "changing visibility of %s.%s: %s\n",
             SHOW(method->get_class()), SHOW(method->get_name()),
@@ -698,7 +696,8 @@ void MultiMethodInliner::invoke_direct_to_static() {
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE) {
-          if (m_make_static.count(insn->get_method())) {
+          if (m_make_static.count(
+              static_cast<DexMethod*>(insn->get_method()))) {
             insn->set_opcode(direct_to_static_op(op));
           }
         }

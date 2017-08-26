@@ -21,6 +21,8 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "DexUtil.h"
+#include "Resolver.h"
 #include "Transform.h"
 #include "ParallelWalkers.h"
 
@@ -284,7 +286,9 @@ class LocalDce {
   bool is_required(IRInstruction* inst, const boost::dynamic_bitset<>& bliveness) {
     if (has_side_effects(inst->opcode())) {
       if (is_invoke(inst->opcode())) {
-        if (!is_pure(inst->get_method())) {
+        const auto meth =
+            resolve_method(inst->get_method(), opcode_to_search(inst));
+        if (!is_pure(inst->get_method(), meth)) {
           return true;
         }
         return bliveness.test(bliveness.size() - 1);
@@ -304,11 +308,11 @@ class LocalDce {
     return false;
   }
 
-  bool is_pure(DexMethod* method) {
-    if (assumenosideeffects(method)) {
+  bool is_pure(DexMethodRef* ref, DexMethod* meth) {
+    if (meth != nullptr && assumenosideeffects(meth)) {
       return true;
     }
-    return m_pure_methods.find(method) != m_pure_methods.end();
+    return m_pure_methods.find(ref) != m_pure_methods.end();
   }
 
 
@@ -347,7 +351,7 @@ class LocalDce {
     }
   }
 
-  std::unordered_set<DexMethod*> m_pure_methods;
+  std::unordered_set<DexMethodRef*> m_pure_methods;
   Stats m_stats;
 };
 
