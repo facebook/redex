@@ -299,13 +299,6 @@ class IRCode {
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
-  /*
-   * If end_block_before_throw is false, opcodes that may throw (e.g. invokes,
-   * {get|put}-object, etc) will terminate their basic blocks. If it is true,
-   * they will instead be at the start of the next basic block. As of right
-   * now the only pass that uses the `false` behavior is SimpleInline, and I
-   * would like to remove it eventually.
-   */
   void build_cfg(bool end_block_before_throw = true);
 
   /* Generate DexCode from IRCode */
@@ -385,6 +378,8 @@ class IRCode {
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }
+  FatMethod::const_iterator cbegin() const { return m_fmethod->begin(); }
+  FatMethod::const_iterator cend() const { return m_fmethod->end(); }
   FatMethod::iterator erase(FatMethod::iterator it) {
     return m_fmethod->erase(it);
   }
