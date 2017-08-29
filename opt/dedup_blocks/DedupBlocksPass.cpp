@@ -50,23 +50,8 @@ struct BlockAsKey {
   // Structural equality of opcodes except branch targets are ignored
   // because they are unknown until we sync back to DexInstructions.
   bool same_code(const BlockAsKey& other) const {
-    const auto& iterable1 = InstructionIterable(this->block);
-    const auto& iterable2 = InstructionIterable(other.block);
-    auto it1 = iterable1.begin();
-    auto it2 = iterable2.begin();
-    for (; it1 != iterable1.end() && it2 != iterable2.end(); it1++, it2++) {
-      auto& mie1 = *it1;
-      auto& mie2 = *it2;
-      if (*mie1.insn != *mie2.insn) {
-        return false;
-      }
-    }
-
-    if (!(it1 == iterable1.end() && it2 == iterable2.end())) {
-      // different lengths
-      return false;
-    }
-    return true;
+    return InstructionIterable(block).structural_equals(
+        InstructionIterable(other.block));
   }
 
   // The blocks must also have the exact same successors
@@ -149,10 +134,8 @@ class DedupBlocksImpl {
   }
 
  private:
-  using duplicates_t = std::unordered_map<
-    BlockAsKey,
-    std::unordered_set<Block*>,
-    BlockHasher>;
+  using duplicates_t =
+      std::unordered_map<BlockAsKey, std::unordered_set<Block*>, BlockHasher>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
   const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
   const std::vector<DexClass*>& m_scope;
@@ -387,7 +370,6 @@ class DedupBlocksImpl {
     }
     return result;
   }
-
 
   static void print_dups(duplicates_t dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {\n");
