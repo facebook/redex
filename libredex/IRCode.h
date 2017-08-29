@@ -486,4 +486,6 @@ class InstructionIterable {
   bool empty() const {
     return begin() == end();
   }
+
+  bool structural_equals(const InstructionIterable& other);
 };

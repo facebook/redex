@@ -1868,3 +1868,19 @@ bool IRCode::try_sync(DexCode* code) {
             });
   return true;
 }
+
+bool InstructionIterable::structural_equals(const InstructionIterable& other) {
+  auto it1 = this->begin();
+  auto it2 = other.begin();
+
+  for (; it1 != this->end() && it2 != other.end(); it1++, it2++) {
+    auto& mie1 = *it1;
+    auto& mie2 = *it2;
+
+    if (*mie1.insn != *mie2.insn) {
+      return false;
+    }
+  }
+
+  return it1 == this->end() && it2 == other.end();
+}
