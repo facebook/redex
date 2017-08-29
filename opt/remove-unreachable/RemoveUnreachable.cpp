@@ -51,7 +51,8 @@ enum ReachableObjectType {
 };
 
 /**
- * Represents an object (class, method, or field) that's considered reachable by this pass.
+ * Represents an object (class, method, or field) that's considered reachable
+ * by this pass.
  *
  * Used for logging what retains what so that we can see what things which
  * should be removed aren't being removed.
@@ -60,13 +61,17 @@ struct ReachableObject {
   const ReachableObjectType type;
   const DexAnnotation* anno;
   const DexClass* cls;
-  const DexField* field;
-  const DexMethod* method;
+  const DexFieldRef* field;
+  const DexMethodRef* method;
 
-  explicit ReachableObject(const DexAnnotation* anno) : type{ReachableObjectType::ANNO},   anno{anno} {}
-  explicit ReachableObject(const DexClass* cls) :       type{ReachableObjectType::CLASS},  cls{cls} {}
-  explicit ReachableObject(const DexMethod* method) :   type{ReachableObjectType::METHOD}, method{method} {}
-  explicit ReachableObject(const DexField* field) :     type{ReachableObjectType::FIELD},  field{field} {}
+  explicit ReachableObject(const DexAnnotation* anno) :
+      type{ReachableObjectType::ANNO},   anno{anno} {}
+  explicit ReachableObject(const DexClass* cls) :
+      type{ReachableObjectType::CLASS},  cls{cls} {}
+  explicit ReachableObject(const DexMethodRef* method) :
+      type{ReachableObjectType::METHOD}, method{method} {}
+  explicit ReachableObject(const DexFieldRef* field) :
+      type{ReachableObjectType::FIELD},  field{field} {}
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
   std::string str() const {
@@ -89,11 +94,16 @@ struct ReachableObject {
 struct ReachableObjectHash {
   std::size_t operator()(const ReachableObject obj) const {
     switch (obj.type) {
-      case ReachableObjectType::ANNO:   return std::hash<const DexAnnotation*>{}(obj.anno);
-      case ReachableObjectType::CLASS:  return std::hash<const DexClass*>{}(obj.cls);
-      case ReachableObjectType::FIELD:  return std::hash<const DexField*>{}(obj.field);
-      case ReachableObjectType::METHOD: return std::hash<const DexMethod*>{}(obj.method);
-      case ReachableObjectType::SEED:   return 0;
+      case ReachableObjectType::ANNO:
+        return std::hash<const DexAnnotation*>{}(obj.anno);
+      case ReachableObjectType::CLASS:
+        return std::hash<const DexClass*>{}(obj.cls);
+      case ReachableObjectType::FIELD:
+        return std::hash<const DexFieldRef*>{}(obj.field);
+      case ReachableObjectType::METHOD:
+        return std::hash<const DexMethodRef*>{}(obj.method);
+      case ReachableObjectType::SEED:
+        return 0;
     }
   }
 };
@@ -113,8 +123,11 @@ struct ReachableObjectEq {
   }
 };
 
-using ReachableObjectSet = std::unordered_set<ReachableObject, ReachableObjectHash, ReachableObjectEq>;
-static std::unordered_map<ReachableObject, ReachableObjectSet, ReachableObjectHash, ReachableObjectEq> retainers_of;
+using ReachableObjectSet =
+    std::unordered_set<ReachableObject, ReachableObjectHash, ReachableObjectEq>;
+static std::unordered_map<
+    ReachableObject, ReachableObjectSet,
+    ReachableObjectHash, ReachableObjectEq> retainers_of;
 static ReachableObject SEED_SINGLETON{};
 
 void print_reachable_stack_h(const ReachableObject& obj) {
@@ -163,7 +176,8 @@ void print_reachable_reason(Reachable* reachable) {
  * We use templates to specialize record_reachability(parent, child) such that:
  *
  *  1. It works for all combinations of
- *       parent, child in {DexAnnotation*, DexClass*, DexType*, DexMethod*, DexField*}
+ *       parent, child in
+ *      {DexAnnotation*, DexClass*, DexType*, DexMethod*, DexField*}
  *
  *  2. We record the reachability relationship iff
  *       DEBUG_UNREACHABLE and neither type is DexType
@@ -225,7 +239,9 @@ template<class Seed>
 inline void record_reachability(Seed* seed) { /* Do nothing */ }
 
 template<class Parent, class Object>
-inline void record_reachability(Parent* parent, Object* object) { /* Do nothing */ }
+inline void record_reachability(Parent* parent, Object* object) {
+  /* Do nothing */
+}
 
 #endif
 
@@ -545,7 +561,8 @@ struct UnreachableCodeRemover {
     const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
       for (auto const& anno : annoset->get_annotations()) {
-        if (anno->type() == DexType::get_type("Ldalvik/annotation/MemberClasses;")) {
+        if (anno->type() ==
+            DexType::get_type("Ldalvik/annotation/MemberClasses;")) {
           // Ignore inner-class annotations.
           continue;
         }
@@ -650,7 +667,8 @@ struct UnreachableCodeRemover {
           }
         }
         for (auto const& m : cls->get_vmethods()) {
-          if (root(m) || implements_library_method(m_inheritance_graph, m, cls)) {
+          if (root(m) ||
+              implements_library_method(m_inheritance_graph, m, cls)) {
             TRACE(RMU, 3, "Visiting seed: %s\n", SHOW(m));
             push_cond(m);
           }
