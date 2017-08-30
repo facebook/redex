@@ -64,7 +64,9 @@ void check_if_tracked_sget(DexMethod* src_method,
     std::set<DexField*>& recorded_fields) {
   auto src_cls_name = src_method->get_class()->get_name()->c_str();
   auto target_cls = type_class(target_field->get_class());
-  if (src_set.count(src_cls_name) && classes_to_track.count(target_cls) && !recorded_fields.count(target_field)) {
+  if ((src_set.empty() || src_set.count(src_cls_name))
+    && classes_to_track.count(target_cls)
+    && !recorded_fields.count(target_field)) {
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
     auto value = target_field->get_static_value();
     TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s\n", value, SHOW(target_field), SHOW(src_method));
@@ -104,18 +106,20 @@ void get_sput_in_clinit(DexClass* clazz,
   }
 }
 
-void find_accessed_fields(Scope& fullscope,
+}
+
+void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
     ConfigFiles& cfg,
     std::unordered_set<DexClass*> classes_to_track,
-    std::set<DexField*>& recorded_fields) {
+    std::set<DexField*>& recorded_fields,
+    std::unordered_set<std::string>& classes_to_search) {
   std::set<DexField*> inline_field;
   std::vector<DexClass*> scope;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
 
-  // data structures to track field references from coldstart classes
+  // data structures to track field references from given classes
   size_t num_field_references = 0;
   std::map<DexClass*, int> per_cls_refs;
-  auto coldstart_cls_map = build_cls_set(cfg.get_coldstart_classes());
 
   for (auto clazz : fullscope) {
     std::unordered_map<DexField*, bool> blank_statics;
@@ -145,7 +149,7 @@ void find_accessed_fields(Scope& fullscope,
           if (inline_field.count(field) == 0) return;
           check_if_tracked_sget(method,
             field,
-            coldstart_cls_map,
+            classes_to_search,
             classes_to_track,
             num_field_references,
             per_cls_refs,
@@ -160,7 +164,7 @@ void find_accessed_fields(Scope& fullscope,
   }
 }
 
-std::unordered_set<DexClass*> build_tracked_cls_set(
+std::unordered_set<DexClass*> TrackResourcesPass::build_tracked_cls_set(
     std::vector<std::string>& cls_suffixes,
     const ProguardMap& pg_map) {
   std::unordered_set<DexClass*> tracked_classes;
@@ -171,14 +175,13 @@ std::unordered_set<DexClass*> build_tracked_cls_set(
   return tracked_classes;
 }
 
-}
-
 void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   std::set<DexField*> recorded_fields;
   const auto& pg_map = cfg.get_proguard_map();
   auto tracked_classes = build_tracked_cls_set(m_classes_to_track, pg_map);
   auto scope = build_class_scope(stores);
-  find_accessed_fields(scope, cfg, tracked_classes, recorded_fields);
+  auto coldstart_cls_map = build_cls_set(cfg.get_coldstart_classes());
+  find_accessed_fields(scope, cfg, tracked_classes, recorded_fields, coldstart_cls_map);
   m_tracked_fields_output = cfg.metafile(m_tracked_fields_output);
   write_found_fields(m_tracked_fields_output, recorded_fields);
 }

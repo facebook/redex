@@ -7,10 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <map>
+#include <boost/regex.hpp>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -25,6 +28,8 @@
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
+
+const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
@@ -85,6 +90,110 @@ std::string dotname_to_dexname(const std::string& classname) {
   dexname += ';';
   std::replace(dexname.begin(), dexname.end(), '.', '/');
   return dexname;
+}
+
+void extract_js_sounds(
+    const std::string& file_contents,
+    std::unordered_set<std::string>& result) {
+  static boost::regex sound_regex("\"([^\\\"]+)\\.(m4a|ogg)\"");
+  boost::smatch m;
+  std::string s = file_contents;
+  while (boost::regex_search (s, m, sound_regex)) {
+    if (m.size() > 1) {
+        result.insert(m[1].str());
+    }
+    s = m.suffix().str();
+  }
+}
+
+std::unordered_set<std::string> extract_js_resources(const std::string& file_contents) {
+  std::unordered_set<std::string> result;
+  extract_js_sounds(file_contents, result);
+  // == Below are all TODO ==
+  //extract_js_asset_registrations(file_contents, result);
+  //extract_js_uris(file_contents, result);
+  //extract_js_glyphs(file_contents, result);
+
+  return result;
+}
+
+std::unordered_set<uint32_t> extract_xml_reference_attributes(const std::string& file_contents) {
+  android::ResXMLTree parser;
+  parser.setTo(file_contents.data(), file_contents.size());
+  std::unordered_set<uint32_t> result;
+  if (parser.getError() != android::NO_ERROR) {
+    return result;
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data > PACKAGE_RESID_START) {
+            result.emplace(outValue.data);
+          }
+        }
+      }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+
+  return result;
+}
+
+/**
+ * Follows the reference links for a resource for all configurations.
+ * Returns all the nodes visited, as well as all the string values seen.
+ */
+void walk_references_for_resource(
+    uint32_t resID,
+    std::unordered_set<uint32_t>& nodes_visited,
+    std::unordered_set<std::string>& leaf_string_values,
+    android::ResTable* table) {
+  if (nodes_visited.find(resID) != nodes_visited.end()) {
+    return;
+  }
+  nodes_visited.emplace(resID);
+
+  ssize_t pkg_index = table->getResourcePackageIndex(resID);
+
+  android::Vector<android::Res_value> initial_values;
+  table->getAllValuesForResource(resID, initial_values);
+
+  std::stack<android::Res_value> nodes_to_explore;
+  for (size_t index = 0; index < initial_values.size(); ++index) {
+    nodes_to_explore.push(initial_values[index]);
+  }
+
+  while (!nodes_to_explore.empty()) {
+    android::Res_value r = nodes_to_explore.top();
+    nodes_to_explore.pop();
+
+    if (r.dataType == android::Res_value::TYPE_STRING) {
+      android::String8 str = table->getString8FromIndex(pkg_index, r.data);
+      leaf_string_values.insert(std::string(str.string()));
+      continue;
+    }
+
+    // Skip any non-references or already visited nodes
+    if (r.dataType != android::Res_value::TYPE_REFERENCE
+        || r.data <= PACKAGE_RESID_START
+        || nodes_visited.find(r.data) != nodes_visited.end()) {
+      continue;
+    }
+
+    nodes_visited.insert(r.data);
+    android::Vector<android::Res_value> inner_values;
+    table->getAllValuesForResource(r.data, inner_values);
+    for (size_t index = 0; index < inner_values.size(); ++index) {
+      nodes_to_explore.push(inner_values[index]);
+    }
+  }
 }
 
 /*
@@ -271,6 +380,119 @@ std::unordered_set<std::string> get_manifest_classes(const std::string& filename
     fprintf(stderr, "Unable to read manifest file: %s\n", filename.data());
   }
   return classes;
+}
+
+std::unordered_set<std::string> get_files_by_suffix(
+    const std::string& directory,
+    const std::string& suffix) {
+  std::unordered_set<std::string> files;
+  path_t dir(directory);
+
+  if (exists(dir) && is_directory(dir)) {
+    for (auto it = dir_iterator(dir); it != dir_iterator(); ++it) {
+      auto const& entry = *it;
+      path_t entry_path = entry.path();
+
+      if (is_regular_file(entry_path) &&
+        ends_with(entry_path.string().c_str(), suffix.c_str())) {
+        files.emplace(entry_path.string());
+      }
+
+      if (is_directory(entry_path)) {
+        std::unordered_set<std::string> sub_files = get_files_by_suffix(
+          entry_path.string(),
+          suffix);
+
+        files.insert(sub_files.begin(), sub_files.end());
+      }
+    }
+  }
+  return files;
+}
+
+std::unordered_set<std::string> get_xml_files(const std::string& directory) {
+  return get_files_by_suffix(directory, ".xml");
+}
+
+std::unordered_set<std::string> get_js_files(const std::string& directory) {
+  return get_files_by_suffix(directory, ".js");
+}
+
+std::unordered_set<std::string> get_candidate_js_resources(
+    const std::string& filename) {
+  std::string file_contents = read_entire_file(filename);
+  std::unordered_set<std::string> js_candidate_resources;
+  if (file_contents.size()) {
+    js_candidate_resources = extract_js_resources(file_contents);
+  } else {
+    fprintf(stderr, "Unable to read file: %s\n", filename.data());
+  }
+  return js_candidate_resources;
+}
+
+
+// Not yet fully implemented. This parses the content of all .js files and
+// extracts all resources referenced by them. It is quite expensive
+// (can take in the order of seconds when there are thousands of files to parse).
+std::unordered_set<uint32_t> get_js_resources_by_parsing(
+    const std::string& directory,
+    std::map<std::string, std::vector<uint32_t>> name_to_ids) {
+  std::unordered_set<std::string> js_candidate_resources;
+  std::unordered_set<uint32_t> js_resources;
+
+  for (auto& f : get_js_files(directory)) {
+    auto c = get_candidate_js_resources(f);
+    js_candidate_resources.insert(c.begin(), c.end());
+  }
+
+  // The actual resources are the intersection of the real resources and the
+  // candidate resources (since our current javascript processing produces a lot
+  // of potential resource names that are not actually valid).
+  // Look through the smaller set and compare it to the larger to efficiently
+  // compute the intersection.
+  if (name_to_ids.size() < js_candidate_resources.size()) {
+    for (auto& p : name_to_ids) {
+      if (js_candidate_resources.find(p.first) != js_candidate_resources.end()) {
+        js_resources.insert(p.second.begin(), p.second.end());
+      }
+    }
+  } else {
+    for (auto& name : js_candidate_resources) {
+      if (name_to_ids.find(name) != name_to_ids.end()) {
+        js_resources.insert(name_to_ids[name].begin(), name_to_ids[name].end());
+      }
+    }
+  }
+
+  return js_resources;
+}
+
+std::unordered_set<uint32_t> get_resources_by_name_prefix(
+    std::vector<std::string> prefixes,
+    std::map<std::string, std::vector<uint32_t>> name_to_ids) {
+  std::unordered_set<uint32_t> found_resources;
+
+  for (auto& pair : name_to_ids) {
+    for (auto& prefix : prefixes) {
+      if (boost::algorithm::starts_with(pair.first, prefix)) {
+        found_resources.insert(pair.second.begin(), pair.second.end());
+      }
+    }
+  }
+
+  return found_resources;
+}
+
+std::unordered_set<uint32_t> get_xml_reference_attributes(const std::string& filename) {
+  std::string file_contents = read_entire_file(filename);
+  std::unordered_set<uint32_t> attributes;
+  if (file_contents.size()) {
+    attributes = extract_xml_reference_attributes(file_contents);
+  } else {
+    fprintf(stderr, "Unable to read file: %s\n", filename.data());
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+  return attributes;
 }
 
 std::vector<std::string> find_layout_files(const std::string& apk_directory) {

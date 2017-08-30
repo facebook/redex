@@ -49,6 +49,7 @@
   TM(MORTIROLO)          \
   TM(MTRANS)             \
   TM(OBFUSCATE)          \
+  TM(OPTRES)             \
   TM(ORIGINALNAME)       \
   TM(OUTLINE)            \
   TM(PEEPHOLE)           \
