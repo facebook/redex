@@ -9,8 +9,10 @@
 
 #include "DedupBlocksPass.h"
 
+#include <atomic>
 #include <boost/optional.hpp>
 #include <iterator>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -19,9 +21,9 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "ParallelWalkers.h"
 #include "Resolver.h"
 #include "Transform.h"
-#include "Walkers.h"
 
 /*
  * This pass removes blocks that are duplicates in a method.
@@ -113,7 +115,7 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   void run() {
-    walk_methods(m_scope, [this](DexMethod* method) {
+    walk_methods_parallel_simple(m_scope, [this](DexMethod* method) {
       if (m_config.method_black_list.count(method) != 0) {
         return;
       }
@@ -142,6 +144,10 @@ class DedupBlocksImpl {
   PassManager& m_mgr;
   const DedupBlocksPass::Config& m_config;
 
+  // Stats
+  std::mutex lock;
+  std::atomic_int m_num_eligible_blocks{0};
+  std::atomic_int m_num_blocks_removed{0};
   // map from block size to number of blocks with that size
   std::unordered_map<size_t, size_t> m_dup_sizes;
 
@@ -150,17 +156,14 @@ class DedupBlocksImpl {
     const auto& blocks = code->cfg().blocks();
     duplicates_t duplicates;
 
-    int num_eligible_blocks = 0;
     for (Block* block : blocks) {
-      if (has_opcodes(block) && should_remove(code->cfg(), block)) {
+      if (should_remove(code->cfg(), block)) {
         duplicates[BlockAsKey{code, block}].insert(block);
-        ++num_eligible_blocks;
+        ++m_num_eligible_blocks;
       }
     }
-    m_mgr.incr_metric(METRIC_ELIGIBLE_BLOCKS, num_eligible_blocks);
 
     remove_singletons(duplicates);
-    // the hash function isn't perfect, so check behind with an equals function
     return duplicates;
   }
 
@@ -191,7 +194,7 @@ class DedupBlocksImpl {
           code->remove_debug_line_info(canon);
         } else {
           transform::replace_block(code, block, canon);
-          m_mgr.incr_metric(METRIC_BLOCKS_REMOVED, 1);
+          ++m_num_blocks_removed;
         }
       }
     }
@@ -298,30 +301,21 @@ class DedupBlocksImpl {
   }
 
   void record_stats(const duplicates_t& duplicates) {
+    std::lock_guard<std::mutex> guard{lock};
     for (const auto& entry : duplicates) {
-      bool first = true;
-      bool same_size = true;
-      size_t size = 0;
-      for (Block* block : entry.second) {
-        size_t this_size = num_opcodes(block);
-        if (first) {
-          size = this_size;
-          first = false;
-        } else if (size != this_size) {
-          same_size = false;
-        }
-      }
-      if (same_size && size > 0) {
-        m_dup_sizes[size] += entry.second.size();
-      }
+      std::unordered_set<Block*> blocks = entry.second;
+      // all blocks have the same number of opcodes
+      Block* block = *blocks.begin();
+      m_dup_sizes[num_opcodes(block)] += blocks.size();
     }
   }
 
   void report_stats() {
-    TRACE(DEDUP_BLOCKS,
-          2,
-          "%d eligible_blocks\n",
-          m_mgr.get_metric(METRIC_ELIGIBLE_BLOCKS));
+    int eligible_blocks = m_num_eligible_blocks.load();
+    int removed = m_num_blocks_removed.load();
+    m_mgr.incr_metric(METRIC_ELIGIBLE_BLOCKS, eligible_blocks);
+    m_mgr.incr_metric(METRIC_BLOCKS_REMOVED, removed);
+    TRACE(DEDUP_BLOCKS, 2, "%d eligible_blocks\n", eligible_blocks);
 
     for (const auto& entry : m_dup_sizes) {
       TRACE(DEDUP_BLOCKS,
@@ -331,10 +325,7 @@ class DedupBlocksImpl {
             entry.first);
     }
 
-    TRACE(DEDUP_BLOCKS,
-          1,
-          "%d blocks removed\n",
-          m_mgr.get_metric(METRIC_BLOCKS_REMOVED));
+    TRACE(DEDUP_BLOCKS, 1, "%d blocks removed\n", removed);
   }
 
   // remove sets with only one block
