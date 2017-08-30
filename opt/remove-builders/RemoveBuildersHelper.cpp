@@ -434,6 +434,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   uint16_t regs_size = code->get_registers_size();
   uint16_t next_available_reg = regs_size;
   uint16_t extra_regs = 0;
+  size_t num_builders = 0;
   std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
   ZeroRegs undef_fields_regs;
 
@@ -560,6 +561,11 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
                  opcode == OPCODE_CHECK_CAST) {
         DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
+          if (opcode == OPCODE_NEW_INSTANCE) num_builders++;
+
+          // Safely avoiding the case where multiple builders are initialized.
+          if (num_builders > 1) return false;
+
           deletes.push_back(insn);
           continue;
         }
