@@ -301,8 +301,11 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
       }
       keeper(field);
       if (field->rstate.report_whyareyoukeeping()) {
-        std::cout << "Field " << SHOW(field) << " kept by "
-                  << show_keep(keep_rule) << std::endl;
+        TRACE(PGR,
+              2,
+              "Field %s kept by %s\n",
+              SHOW(field),
+              show_keep(keep_rule).c_str());
       }
       fieldSpecification.count++;
     }
@@ -397,8 +400,11 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
       }
       keeper(method);
       if (method->rstate.report_whyareyoukeeping()) {
-        std::cout << "Method " << SHOW(method) << " kept by "
-                  << show_keep(keep_rule) << std::endl;
+        TRACE(PGR,
+              2,
+              "Method %s kept by %s\n",
+              SHOW(method),
+              show_keep(keep_rule).c_str());
       }
       methodSpecification.count++;
     }
@@ -738,16 +744,16 @@ void process_keep(const ProguardMap& pg_map,
   // may, for instance, forbid renaming of all classes that inherit from a
   // given external class.
   build_extends_or_implements_hierarchy(external_classes, &hierarchy);
-  auto process_single_keep =
-      [&](ClassMatcher& class_match, KeepSpec& keep_rule, DexClass* cls) {
-        // Skip external classes.
-        if (cls == nullptr || cls->is_external()) {
-          return;
-        }
-        if (class_match.match(cls)) {
-          keep_processor(regex_map, keep_rule, cls);
-        }
-      };
+  auto process_single_keep = [&](
+      ClassMatcher& class_match, KeepSpec& keep_rule, DexClass* cls) {
+    // Skip external classes.
+    if (cls == nullptr || cls->is_external()) {
+      return;
+    }
+    if (class_match.match(cls)) {
+      keep_processor(regex_map, keep_rule, cls);
+    }
+  };
   for (auto& keep_rule : keep_rules) {
     ClassMatcher class_match(keep_rule);
 
