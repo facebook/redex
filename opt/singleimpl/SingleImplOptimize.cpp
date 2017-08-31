@@ -257,6 +257,7 @@ void OptimizationImpl::set_method_defs(DexType* intf,
     // we need to make sure it isn't concrete.
     // TODO: this is horrible. After we remove methods, we shouldn't
     // have these zombies lying around.
+    new_meth->clear_annotations();
     new_meth->make_non_concrete();
     new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
     new_meth->rstate = meth->rstate;
@@ -354,6 +355,11 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       new_meth = static_cast<DexMethod*>(
           DexMethod::make_method(
               impl->get_type(), meth->get_name(), meth->get_proto()));
+      // new_meth may not be new, because RedexContext keeps methods around
+      // after they are deleted. clear all pre-existing method state.
+      // See related TODO by searching for "this is horrible" in this file.
+      new_meth->clear_annotations();
+      new_meth->make_non_concrete();
       new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
