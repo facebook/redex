@@ -21,6 +21,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "Inliner.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "DexOutput.h"
@@ -112,7 +113,7 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
       std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
       });
-  IRCode::inline_tail_call(bridge, bridgee, invoke);
+  inliner::inline_tail_call(bridge, bridgee, invoke);
 }
 }
 

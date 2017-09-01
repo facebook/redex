@@ -89,7 +89,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
-	libredex/InlineHelper.cpp \
+	libredex/Inliner.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \

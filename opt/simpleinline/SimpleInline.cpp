@@ -14,7 +14,7 @@
 #include <set>
 
 #include "SimpleInline.h"
-#include "InlineHelper.h"
+#include "Inliner.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "IRCode.h"

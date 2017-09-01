@@ -8,8 +8,8 @@
  */
 
 #include "Deleter.h"
-#include "InlineHelper.h"
 #include "InlineInit.h"
+#include "Inliner.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
