@@ -12,7 +12,7 @@
 #include "DexUtil.h"
 #include "GlobalConstProp.h"
 #include "LocalConstProp.h"
-#include "Walkers.h"
+#include "ParallelWalkers.h"
 
 using std::placeholders::_1;
 using std::string;
@@ -116,7 +116,7 @@ void ConstantPropagationPassV3::run_pass(DexStoresVector& stores,
                                          PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  walk_methods(scope, [&](DexMethod* method) {
+  walk_methods_parallel_simple(scope, [&](DexMethod* method) {
     if (!method->get_code()) {
       return;
     }
