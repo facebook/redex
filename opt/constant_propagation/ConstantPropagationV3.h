@@ -34,5 +34,5 @@ class ConstantPropagationPassV3 : public Pass {
   // stats
   std::mutex m_stats_mutex;
   size_t m_branches_removed;
-  size_t m_move_to_const;
+  size_t m_materialized_consts;
 };

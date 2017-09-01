@@ -87,4 +87,30 @@ public class ConstantPropagationTest {
     }
     assertThat(y).isEqualTo(0);
   }
+
+  // use SimpleInline so that redex sees this constant but `javac` does not
+  private int neg1() {
+    return -1;
+  }
+
+  @Test
+  public void if_plus_one() {
+    int x = neg1();
+    x++;
+    assertThat(x).isEqualTo(0);
+    int y;
+    if (x == 0) {
+      y = 32;
+    } else {
+      y = 0;
+    }
+    assertThat(y).isEqualTo(32);
+  }
+
+  @Test
+  public void overflow() {
+    int x = Integer.MAX_VALUE;
+    x++;
+    assertThat(x).isEqualTo(Integer.MIN_VALUE);
+  }
 }

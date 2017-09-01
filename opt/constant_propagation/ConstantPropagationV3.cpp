@@ -88,7 +88,7 @@ class IntraProcConstantPropagation final
   }
 
   size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
-  size_t move_to_const() const { return m_lcp.num_move_to_const(); }
+  size_t materialized_consts() const { return m_lcp.num_materialized_consts(); }
 
  private:
   mutable LocalConstantPropagation m_lcp;
@@ -99,6 +99,7 @@ class IntraProcConstantPropagation final
 void ConstantPropagationPassV3::configure_pass(const PassConfig& pc) {
   pc.get(
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
+  pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
   vector<string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 
@@ -142,15 +143,15 @@ void ConstantPropagationPassV3::run_pass(DexStoresVector& stores,
     {
       std::lock_guard<std::mutex> lock{m_stats_mutex};
       m_branches_removed += rcp.branches_removed();
-      m_move_to_const += rcp.move_to_const();
+      m_materialized_consts += rcp.materialized_consts();
     }
   });
 
   mgr.incr_metric("num_branch_propagated", m_branches_removed);
-  mgr.incr_metric("num_moves_replaced_by_const_loads", m_move_to_const);
+  mgr.incr_metric("num_materialized_consts", m_materialized_consts);
 
   TRACE(CONSTP, 1, "num_branch_propagated: %d\n", m_branches_removed);
-  TRACE(CONSTP, 1, "num_moves_replaced_by_const_loads: %d\n", m_move_to_const);
+  TRACE(CONSTP, 1, "num_moves_replaced_by_const_loads: %d\n", m_materialized_consts);
 }
 
 static ConstantPropagationPassV3 s_pass;
