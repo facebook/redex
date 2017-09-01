@@ -37,7 +37,8 @@ class IntraProcConstantPropagation final
                                           std::vector<Block*>,
                                           InstructionIterable> {
  public:
-  explicit IntraProcConstantPropagation(ControlFlowGraph& cfg)
+  explicit IntraProcConstantPropagation(
+      ControlFlowGraph& cfg, const ConstPropV3Config& config)
       : ConstantPropFixpointAnalysis<Block*,
                                      MethodItemEntry,
                                      vector<Block*>,
@@ -45,7 +46,8 @@ class IntraProcConstantPropagation final
             cfg.entry_block(),
             cfg.blocks(),
             std::bind(&Block::succs, _1),
-            std::bind(&Block::preds, _1)) {}
+            std::bind(&Block::preds, _1)),
+        m_lcp{config} {}
 
   void simplify_instruction(
       Block* const& block,
@@ -63,7 +65,7 @@ class IntraProcConstantPropagation final
 
   void apply_changes(DexMethod* method) const {
     auto code = method->get_code();
-    for (auto const& p : m_lcp.branch_replacements()) {
+    for (auto const& p : m_lcp.insn_replacements()) {
       IRInstruction* const& old_op = p.first;
       IRInstruction* const& new_op = p.second;
       if (new_op->opcode() == OPCODE_NOP) {
@@ -76,12 +78,17 @@ class IntraProcConstantPropagation final
               "Replacing instruction %s -> %s\n",
               SHOW(old_op),
               SHOW(new_op));
-        code->replace_branch(old_op, new_op);
+        if (is_branch(old_op->opcode())) {
+          code->replace_branch(old_op, new_op);
+        } else {
+          code->replace_opcode(old_op, new_op);
+        }
       }
     }
   }
 
   size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
+  size_t move_to_const() const { return m_lcp.num_move_to_const(); }
 
  private:
   mutable LocalConstantPropagation m_lcp;
@@ -90,6 +97,8 @@ class IntraProcConstantPropagation final
 } // namespace
 
 void ConstantPropagationPassV3::configure_pass(const PassConfig& pc) {
+  pc.get(
+      "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   vector<string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 
@@ -97,7 +106,7 @@ void ConstantPropagationPassV3::configure_pass(const PassConfig& pc) {
     DexType* entry = DexType::get_type(name.c_str());
     if (entry) {
       TRACE(CONSTP, 2, "Blacklisted class: %s\n", SHOW(entry));
-      m_blacklist.insert(entry);
+      m_config.blacklist.insert(entry);
     }
   }
 }
@@ -112,7 +121,7 @@ void ConstantPropagationPassV3::run_pass(DexStoresVector& stores,
       return;
     }
     // Skipping blacklisted classes
-    if (m_blacklist.count(method->get_class()) > 0) {
+    if (m_config.blacklist.count(method->get_class()) > 0) {
       TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
       return;
     }
@@ -125,15 +134,23 @@ void ConstantPropagationPassV3::run_pass(DexStoresVector& stores,
     auto& cfg = code->cfg();
 
     TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
-    IntraProcConstantPropagation rcp(cfg);
+    IntraProcConstantPropagation rcp(cfg, m_config);
     rcp.run(ConstPropEnvironment());
     rcp.simplify();
     rcp.apply_changes(method);
 
-    m_branches_removed += rcp.branches_removed();
+    {
+      std::lock_guard<std::mutex> lock{m_stats_mutex};
+      m_branches_removed += rcp.branches_removed();
+      m_move_to_const += rcp.move_to_const();
+    }
   });
 
   mgr.incr_metric("num_branch_propagated", m_branches_removed);
+  mgr.incr_metric("num_moves_replaced_by_const_loads", m_move_to_const);
+
+  TRACE(CONSTP, 1, "num_branch_propagated: %d\n", m_branches_removed);
+  TRACE(CONSTP, 1, "num_moves_replaced_by_const_loads: %d\n", m_move_to_const);
 }
 
 static ConstantPropagationPassV3 s_pass;

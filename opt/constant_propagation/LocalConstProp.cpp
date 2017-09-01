@@ -16,9 +16,11 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InstructionSelection.h"
 #include "Walkers.h"
 
 /** Local (basic block level) constant propagation.
@@ -308,12 +310,27 @@ void LocalConstantPropagation::simplify_branch(
     replacement = new IRInstruction(OPCODE_NOP);
   }
 
-  m_branch_replacements.emplace_back(inst, replacement);
+  ++m_branch_propagated;
+  m_insn_replacements.emplace_back(inst, replacement);
 }
 
 void LocalConstantPropagation::simplify_instruction(
     IRInstruction*& inst, const ConstPropEnvironment& current_state) {
   switch (inst->opcode()) {
+  case OPCODE_MOVE:
+  case OPCODE_MOVE_FROM16:
+  case OPCODE_MOVE_16:
+    if (m_config.replace_moves_with_consts) {
+      simplify_move(inst, current_state, false /* is_wide */);
+    }
+    break;
+  case OPCODE_MOVE_WIDE:
+  case OPCODE_MOVE_WIDE_FROM16:
+  case OPCODE_MOVE_WIDE_16:
+    if (m_config.replace_moves_with_consts) {
+      simplify_move(inst, current_state, true /* is_wide */);
+    }
+    break;
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
@@ -332,4 +349,30 @@ void LocalConstantPropagation::simplify_instruction(
 
   default: {}
   }
+}
+
+void LocalConstantPropagation::simplify_move(
+    IRInstruction* const& inst,
+    const ConstPropEnvironment& current_state,
+    bool is_wide) {
+  uint16_t src = inst->src(0);
+  uint16_t dst = inst->dest();
+
+  uint64_t value;
+  IRInstruction* replacement = nullptr;
+  if (!is_wide && ConstPropEnvUtil::is_narrow_constant(current_state, src)) {
+    value = ConstPropEnvUtil::get_narrow(current_state, src);
+    replacement = new IRInstruction(OPCODE_CONST);
+  } else if (is_wide &&
+             ConstPropEnvUtil::is_wide_constant(current_state, src)) {
+    value = ConstPropEnvUtil::get_wide(current_state, src);
+    replacement = new IRInstruction(OPCODE_CONST_WIDE);
+  } else {
+    return;
+  }
+
+  replacement->set_literal(value);
+  replacement->set_dest(dst);
+  m_insn_replacements.emplace_back(inst, replacement);
+  ++m_move_to_const;
 }
