@@ -337,7 +337,7 @@ void load_root_dexen(
   // Load all discovered dex files
   for (const auto& dex : dexen) {
     if (verbose) {
-      std::cout << "Loading " << dex.string() << std::endl;
+      TRACE(MAIN, 1, "Loading %s\n", dex.string().c_str());
     }
     // N.B. throaway stats for now
     DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);

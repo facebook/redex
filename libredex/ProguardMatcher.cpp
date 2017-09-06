@@ -303,7 +303,7 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
       if (field->rstate.report_whyareyoukeeping()) {
         TRACE(PGR,
               2,
-              "Field %s kept by %s\n",
+              "whyareyoukeeping Field %s kept by %s\n",
               SHOW(field),
               show_keep(keep_rule).c_str());
       }
@@ -402,7 +402,7 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
       if (method->rstate.report_whyareyoukeeping()) {
         TRACE(PGR,
               2,
-              "Method %s kept by %s\n",
+              "whyareyoukeeping Method %s kept by %s\n",
               SHOW(method),
               show_keep(keep_rule).c_str());
       }
@@ -638,9 +638,12 @@ void mark_class_and_members_for_keep(
     apply_keep_modifiers(keep_rule, cls);
     cls->rstate.set_keep();
     if (cls->rstate.report_whyareyoukeeping()) {
-      std::cout << "Class "
-                << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
-                << " kept by " << show_keep(keep_rule) << std::endl;
+      TRACE(
+          PGR,
+          2,
+          "whyareyoukeeping Class %s kept by %s\n",
+          redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name()).c_str(),
+          show_keep(keep_rule).c_str());
     }
     if (!keep_rule.allowobfuscation) {
       cls->rstate.increment_keep_count();
@@ -868,10 +871,12 @@ void process_proguard_rules(const ProguardMap& pg_map,
     if (is_annotation(cls)) {
       cls->rstate.set_keep();
       if (cls->rstate.report_whyareyoukeeping()) {
-        std::cout
-            << "Class "
-            << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
-            << " kept because it is an annotation class\n";
+        TRACE(PGR,
+              2,
+              "whyareyoukeeping Class %s kept because it is an annotation "
+              "class\n",
+              redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
+                  .c_str());
       }
       cls->rstate.increment_keep_count();
     }
