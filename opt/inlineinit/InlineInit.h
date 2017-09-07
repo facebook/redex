@@ -21,9 +21,7 @@ class InlineInitPass : public Pass {
   MultiMethodInliner::Config m_inliner_config;
 
  public:
-  InlineInitPass() : Pass("InlineInitPass") {
-    m_inliner_config.use_liveness = true;
-  }
+  InlineInitPass() : Pass("InlineInitPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
     std::vector<std::string> black_list;

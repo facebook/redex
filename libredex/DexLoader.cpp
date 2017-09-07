@@ -15,8 +15,8 @@
 #include "DexLoader.h"
 #include "DexDefs.h"
 #include "DexAccess.h"
+#include "IRCode.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

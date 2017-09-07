@@ -236,7 +236,7 @@ class RedundantMoveEliminationImpl final {
   RedundantStats run(Scope scope) {
     using Data = std::nullptr_t;
     using Output = RedundantStats;
-    return walk_methods_parallel<Scope, Data, Output>(
+    return walk_methods_parallel<Data, Output>(
         scope,
         [this](Data&, DexMethod* m) {
           if (m->get_code()) {

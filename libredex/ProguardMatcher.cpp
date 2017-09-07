@@ -15,19 +15,21 @@
 #include <string>
 #include <vector>
 
+#include "ClassHierarchy.h"
 #include "DexAccess.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
-#include "Transform.h"
 
 namespace redex {
 
 namespace {
+
 std::unique_ptr<boost::regex> make_rx(const std::string& s,
                                       bool convert = true) {
   if (s.empty()) return nullptr;
@@ -167,7 +169,8 @@ struct ClassMatcher {
 
   std::unordered_map<const DexClass*, bool> m_extends_result_cache;
 };
-}
+
+} // namespace
 
 // Updates a class, field or method to add keep modifiers.
 template <class DexMember>
@@ -698,32 +701,78 @@ void process_assumenosideeffects(
       });
 }
 
+/*
+ * Build a DAG of class -> subclass and implementors. This is fairly similar to
+ * build_type_hierarchy and friends, but Proguard doesn't distinguish between
+ * subclasses and interface implementors, so this function combines them
+ * together.
+ */
+void build_extends_or_implements_hierarchy(const Scope& scope,
+                                           ClassHierarchy* hierarchy) {
+  for (const auto& cls : scope) {
+    const auto* type = cls->get_type();
+    // ensure an entry for the DexClass is created
+    (*hierarchy)[type];
+    const auto* super = cls->get_super_class();
+    if (super != nullptr) {
+      (*hierarchy)[super].insert(type);
+    }
+    for (const auto& impl : cls->get_interfaces()->get_type_list()) {
+      (*hierarchy)[impl].insert(type);
+    }
+  }
+}
+
 void process_keep(const ProguardMap& pg_map,
                   std::vector<KeepSpec>& keep_rules,
                   std::unordered_map<std::string, boost::regex*>& regex_map,
-                  Scope& classes,
+                  const Scope& classes,
+                  const Scope& external_classes,
                   std::function<void(
                       std::unordered_map<std::string, boost::regex*>& regex_map,
                       KeepSpec&,
                       DexClass*)> keep_processor) {
+  ClassHierarchy hierarchy;
+  build_extends_or_implements_hierarchy(classes, &hierarchy);
+  // We need to include external classes in the hierarchy because keep rules
+  // may, for instance, forbid renaming of all classes that inherit from a
+  // given external class.
+  build_extends_or_implements_hierarchy(external_classes, &hierarchy);
+  auto process_single_keep =
+      [&](ClassMatcher& class_match, KeepSpec& keep_rule, DexClass* cls) {
+        // Skip external classes.
+        if (cls == nullptr || cls->is_external()) {
+          return;
+        }
+        if (class_match.match(cls)) {
+          keep_processor(regex_map, keep_rule, cls);
+        }
+      };
   for (auto& keep_rule : keep_rules) {
     ClassMatcher class_match(keep_rule);
+
     auto const& className = keep_rule.class_spec.className;
     if (!classname_contains_wildcard(className)) {
       DexClass* cls = find_single_class(pg_map, className);
-      if (cls != nullptr && !cls->is_external() && class_match.match(cls)) {
-        keep_processor(regex_map, keep_rule, cls);
+      process_single_keep(class_match, keep_rule, cls);
+      continue;
+    }
+    auto const& extendsClassName = keep_rule.class_spec.extendsClassName;
+    if (extendsClassName != "" &&
+        !classname_contains_wildcard(extendsClassName)) {
+      DexClass* super = find_single_class(pg_map, extendsClassName);
+      if (super != nullptr) {
+        TypeSet children;
+        get_all_children(hierarchy, super->get_type(), children);
+        process_single_keep(class_match, keep_rule, super);
+        for (auto const* type : children) {
+          process_single_keep(class_match, keep_rule, type_class(type));
+        }
       }
       continue;
     }
     for (const auto& cls : classes) {
-      // Skip external classes.
-      if (cls->is_external()) {
-        continue;
-      }
-      if (class_match.match(cls)) {
-        keep_processor(regex_map, keep_rule, cls);
-      }
+      process_single_keep(class_match, keep_rule, cls);
     }
   }
 }
@@ -772,8 +821,9 @@ void filter_duplicate_rules(std::vector<KeepSpec>* keep_rules) {
 }
 
 void process_proguard_rules(const ProguardMap& pg_map,
-                            ProguardConfiguration* pg_config,
-                            Scope& classes) {
+                            const Scope& classes,
+                            const Scope& external_classes,
+                            ProguardConfiguration* pg_config) {
   size_t field_count = 0;
   size_t method_count = 0;
   for (const auto& cls : classes) {
@@ -790,16 +840,19 @@ void process_proguard_rules(const ProguardMap& pg_map,
                pg_config->whyareyoukeeping_rules,
                regex_map,
                classes,
+               external_classes,
                process_whyareyoukeeping);
   process_keep(pg_map,
                pg_config->keep_rules,
                regex_map,
                classes,
+               external_classes,
                mark_class_and_members_for_keep);
   process_keep(pg_map,
                pg_config->assumenosideeffects_rules,
                regex_map,
                classes,
+               external_classes,
                process_assumenosideeffects);
   for (auto& e : regex_map) {
     delete (e.second);

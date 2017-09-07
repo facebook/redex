@@ -20,9 +20,9 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
-#include "Transform.h"
 
 namespace {
 
@@ -127,17 +127,16 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t total_gotos_removed =
-      walk_methods_parallel<Scope, RemoveGotos, size_t>(
-          scope,
-          [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
-            if (!m->get_code()) {
-              return 0;
-            }
-            return rmgotos.process_method(m);
-          },
-          [](size_t a, size_t b) { return a + b; },
-          [](unsigned int /*thread_index*/) { return RemoveGotos(); });
+  size_t total_gotos_removed = walk_methods_parallel<RemoveGotos, size_t>(
+      scope,
+      [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
+        if (!m->get_code()) {
+          return 0;
+        }
+        return rmgotos.process_method(m);
+      },
+      [](size_t a, size_t b) { return a + b; },
+      [](unsigned int /*thread_index*/) { return RemoveGotos(); });
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
   TRACE(RMGOTO,
         1,

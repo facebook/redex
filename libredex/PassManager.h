@@ -36,7 +36,9 @@ class PassManager {
     std::unordered_map<std::string, int> metrics;
   };
 
-  void run_passes(DexStoresVector&, ConfigFiles&);
+  void run_passes(DexStoresVector&,
+                  const Scope& external_classes,
+                  ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);

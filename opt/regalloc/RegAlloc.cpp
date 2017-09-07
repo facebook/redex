@@ -14,6 +14,7 @@
 #include "Dataflow.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "ParallelWalkers.h"
@@ -58,7 +59,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   using Data = std::nullptr_t;
   using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<Scope, Data, Output>(
+  auto stats = walk_methods_parallel<Data, Output>(
       scope,
       [this](Data&, DexMethod* m) { // mapper
         graph_coloring::Allocator::Stats stats;
@@ -89,7 +90,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code);
           graph_coloring::Allocator allocator;
-          allocator.allocate(m_use_splitting, &code);
+          allocator.allocate(m_use_splitting,
+                             m_spill_param_properly,
+                             m_select_spill_later,
+                             &code);
           stats.accumulate(allocator.get_stats());
 
           TRACE(REG,

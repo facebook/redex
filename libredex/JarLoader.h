@@ -26,4 +26,6 @@ using attribute_hook_t =
                        const char* attribute_name,
                        uint8_t* attribute_pointer)>;
 
-bool load_jar_file(const char* location, attribute_hook_t = nullptr);
+bool load_jar_file(const char* location,
+                   Scope* classes = nullptr,
+                   attribute_hook_t = nullptr);

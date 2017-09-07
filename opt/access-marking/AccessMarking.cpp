@@ -12,12 +12,12 @@
 #include <unordered_map>
 
 #include "ClassHierarchy.h"
-#include "VirtualScope.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "Transform.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace {

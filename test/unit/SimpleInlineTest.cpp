@@ -11,40 +11,10 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
-}
-
-TEST(SimpleInlineTest, hasAliasedArgs) {
-  g_redex = new RedexContext();
-  using namespace dex_asm;
-  auto callee = DexMethod::make_method("Lfoo;", "testCallee", "V", {"I", "I"});
-  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  callee->set_code(std::make_unique<IRCode>(callee, 0));
-
-  auto caller = DexMethod::make_method("Lfoo;", "testCaller", "V", {"I", "I"});
-  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  caller->set_code(std::make_unique<IRCode>(caller, 0));
-
-  auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
-  invoke->set_arg_word_count(2);
-  invoke->set_src(0, 0);
-  invoke->set_src(1, 0);
-
-  auto mtcaller = caller->get_code();
-  mtcaller->push_back(invoke);
-  auto invoke_it = std::prev(mtcaller->end());
-  mtcaller->push_back(dasm(OPCODE_RETURN_VOID));
-
-  auto mtcallee = callee->get_code();
-  mtcallee->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
-  mtcallee->push_back(dasm(OPCODE_RETURN_VOID));
-
-  InlineContext inline_context(caller, /* use_liveness */ true);
-  EXPECT_FALSE(IRCode::inline_method(inline_context, callee->get_code(), invoke_it));
-  delete g_redex;
 }
 
 /*
@@ -53,7 +23,6 @@ TEST(SimpleInlineTest, hasAliasedArgs) {
  */
 TEST(SimpleInlineTest, insertMoves) {
   g_redex = new RedexContext();
-  RedexContext::set_assume_regalloc(true);
 
   using namespace dex_asm;
   auto callee = DexMethod::make_method(
@@ -82,7 +51,7 @@ TEST(SimpleInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-  InlineContext inline_context(caller, /* use_liveness */ false);
+  InlineContext inline_context(caller);
   EXPECT_TRUE(IRCode::inline_method(inline_context, callee->get_code(), invoke_it));
 
   auto it = InstructionIterable(caller_code).begin();

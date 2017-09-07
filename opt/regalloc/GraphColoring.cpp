@@ -15,17 +15,20 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "Transform.h"
 #include "VirtualRegistersFile.h"
 
 namespace regalloc {
 
+using BlockFirstUse = std::pair<Block*, FatMethod::iterator>;
+
 // We search for the first uses of param, similar to breadth first search,
 // if current_block don't have any use of param then we search its succ blocks.
 static void find_first_uses_dfs(
-    const std::unordered_map<Block*, LivenessDomain>& block_live_in,
     reg_t param,
     Block* current_block,
-    std::unordered_map<reg_t, std::vector<FatMethod::iterator>>& load_param,
+    std::unordered_map<reg_t, std::vector<BlockFirstUse>>& param_block_use,
     std::unordered_set<Block*>* visited_blocks) {
   visited_blocks->emplace(current_block);
   // Search for first use of param in current_block.
@@ -37,42 +40,17 @@ static void find_first_uses_dfs(
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (insn->src(i) == param) {
         // There exist first use of param in this block, store this iterator
-        // in load_param and stop further discovering.
-        load_param[param].emplace_back(it);
+        // in param_block_use and stop further discovering.
+        param_block_use[param].emplace_back(BlockFirstUse(current_block, it));
         return;
       }
     }
   }
-  // If there are more than one branches contains param, then just load at end
-  // of this block to avoid having many loads uneccessarily.
-  int count = 0;
+  // Search for use of param in succ blocks if succ block has not been
+  // searched before.
   for (auto& s : current_block->succs()) {
-    if (block_live_in.at(s).contains(param) &&
-        visited_blocks->find(s) == visited_blocks->end()) {
-      count += 1;
-    }
-  }
-  if (count > 1) {
-    // There are more than 1 succ blocks we need to visit and find first uses,
-    // load at end of this block. Since for our ControlFlowGraph end of block
-    // is beginning of next block, so we need to check insn before end of block
-    // to make sure we didn't insert load after branches.
-    auto it = current_block->end();
-    auto prev_it = std::prev(it, 1);
-    if (prev_it->type == MFLOW_OPCODE &&
-        (is_branch(prev_it->insn->opcode()) ||
-         opcode::may_throw(prev_it->insn->opcode()))) {
-      it = prev_it;
-    }
-    load_param[param].emplace_back(it);
-    return;
-  }
-  // Search for use of param in succ blocks if live_in of succ block contains
-  // param and succ block has not been searched before.
-  for (auto& s : current_block->succs()) {
-    if (block_live_in.at(s).contains(param) &&
-        visited_blocks->find(s) == visited_blocks->end()) {
-      find_first_uses_dfs(block_live_in, param, s, load_param, visited_blocks);
+    if (visited_blocks->find(s) == visited_blocks->end()) {
+      find_first_uses_dfs(param, s, param_block_use, visited_blocks);
     }
   }
 }
@@ -411,11 +389,17 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
  *
  * Nodes that are used by load-param or range opcodes are ignored.
  *
+ * If select_spill_later is true:
+ *   Nodes that aren't constrained to < 16 bits are partitioned into
+ *   a separate stack so they can be colored separately later.
+ *
  * This is fairly similar to section 8.8 in [Briggs92], except we are using
  * a weight as given by [Smith00] instead of just the node's degree.
  */
-void Allocator::simplify(interference::Graph* ig,
-                         std::stack<reg_t>* select_stack) {
+void Allocator::simplify(bool select_spill_later,
+                         interference::Graph* ig,
+                         std::stack<reg_t>* select_stack,
+                         std::stack<reg_t>* spilled_select_stack) {
   // Nodes of low weight that we know are colorable. Note that even if all
   // the nodes in `low` have a max_vreg of 15, we can still have more than 16
   // of them here since some of them can have zero weight.
@@ -443,7 +427,11 @@ void Allocator::simplify(interference::Graph* ig,
       auto reg = *low.begin();
       const auto& node = ig->get_node(reg);
       TRACE(REG, 6, "Removing %u\n", reg);
-      select_stack->push(reg);
+      if (!select_spill_later || node.max_vreg() < max_unsigned_value(16)) {
+        select_stack->push(reg);
+      } else {
+        spilled_select_stack->push(reg);
+      }
       ig->remove_node(reg);
       low.erase(reg);
       for (auto adj : node.adjacent()) {
@@ -493,7 +481,7 @@ void Allocator::select(const IRCode* code,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
                        SpillPlan* spill_plan) {
-  reg_t vregs_size{0};
+  reg_t vregs_size = reg_transform->size;
   while (!select_stack->empty()) {
     auto reg = select_stack->top();
     select_stack->pop();
@@ -834,18 +822,29 @@ void Allocator::find_split(const interference::Graph& ig,
 }
 
 // Function for finding first uses of params that need to be spilt.
-std::unordered_map<reg_t, std::vector<FatMethod::iterator>>
-Allocator::find_param_first_uses(const LivenessFixpointIterator& fixpoint_iter,
-                                 const std::unordered_set<reg_t>& orig_params,
-                                 IRCode* code) {
-  std::unordered_map<reg_t, std::vector<FatMethod::iterator>> load_param;
+// If spill_param_properly is false, spill all param registers at start of
+// method body.
+std::unordered_map<reg_t, FatMethod::iterator> Allocator::find_param_first_uses(
+    const std::unordered_set<reg_t>& orig_params,
+    bool spill_param_properly,
+    IRCode* code) {
+  std::unordered_map<reg_t, FatMethod::iterator> load_param;
   if (orig_params.size() == 0) {
     return load_param;
   }
-  std::unordered_set<reg_t> params = orig_params;
   // Erase parameter from list if there exist instructions overwriting the
   // symreg.
   auto pend = code->get_param_instructions().end();
+
+  if (!spill_param_properly) {
+    for (auto param : orig_params) {
+      load_param[param] = pend;
+      ++m_stats.params_spill_early;
+    }
+    return load_param;
+  }
+
+  std::unordered_set<reg_t> params = orig_params;
   auto ii = InstructionIterable(code);
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
@@ -857,7 +856,7 @@ Allocator::find_param_first_uses(const LivenessFixpointIterator& fixpoint_iter,
       auto dest = insn->dest();
       if (params.find(dest) != params.end()) {
         params.erase(dest);
-        load_param[dest].emplace_back(pend);
+        load_param[dest] = pend;
         ++m_stats.params_spill_early;
       }
     }
@@ -865,19 +864,37 @@ Allocator::find_param_first_uses(const LivenessFixpointIterator& fixpoint_iter,
   if (params.size() == 0) {
     return load_param;
   }
-  // Get live_in value for each block.
-  std::unordered_map<Block*, LivenessDomain> block_live_in;
   auto& cfg = code->cfg();
   Block* start_block = cfg.entry_block();
-  for (Block* block : cfg.blocks()) {
-    LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
-    block_live_in[block] = live_in;
-  }
+  auto postorder_dominator = cfg.immediate_dominators();
+  std::unordered_map<reg_t, std::vector<BlockFirstUse>> param_block_usage;
   // Find first uses for each param.
   for (auto param : params) {
     std::unordered_set<Block*> visited_blocks;
-    find_first_uses_dfs(
-        block_live_in, param, start_block, load_param, &visited_blocks);
+    find_first_uses_dfs(param, start_block, param_block_usage, &visited_blocks);
+    always_assert(param_block_usage[param].size() != 0);
+    if (param_block_usage[param].size() > 1) {
+      // There are more than 1 first uses for this param register.
+      // Find common dominator that is closest to those blocks where first uses
+      // are so that we can insert spill move at end of this dominator block.
+      Block* idom = param_block_usage[param][0].first;
+      for (size_t index = 1; index < param_block_usage[param].size(); ++index) {
+        idom = cfg.idom_intersect(
+            postorder_dominator, idom, param_block_usage[param][index].first);
+      }
+      // We need to check insn before end of block to make sure we didn't
+      // insert load after branches.
+      auto insn_it = idom->end();
+      auto prev_it = std::prev(insn_it, 1);
+      if (prev_it->type == MFLOW_OPCODE &&
+          (is_branch(prev_it->insn->opcode()) ||
+           opcode::may_throw(prev_it->insn->opcode()))) {
+        insn_it = prev_it;
+      }
+      load_param[param] = insn_it;
+    } else {
+      load_param[param] = param_block_usage[param][0].second;
+    }
   }
   return load_param;
 }
@@ -886,8 +903,7 @@ Allocator::find_param_first_uses(const LivenessFixpointIterator& fixpoint_iter,
 // param instruction lists, or before first uses of param register.
 void Allocator::spill_params(
     const interference::Graph& ig,
-    const std::unordered_map<reg_t, std::vector<FatMethod::iterator>>&
-        load_param,
+    const std::unordered_map<reg_t, FatMethod::iterator>& load_param,
     IRCode* code,
     std::unordered_set<reg_t>* new_temps) {
   auto param_insns = InstructionIterable(code->get_param_instructions());
@@ -904,12 +920,11 @@ void Allocator::spill_params(
   }
   for (auto param_pair : load_param) {
     auto dest = param_pair.first;
-    for (auto first_use_it : param_pair.second) {
-      code->insert_before(
-          first_use_it,
-          gen_move(ig.get_node(dest).type(), dest, param_to_temp.at(dest)));
-      ++m_stats.param_spill_moves;
-    }
+    auto first_use_it = param_pair.second;
+    code->insert_before(
+        first_use_it,
+        gen_move(ig.get_node(dest).type(), dest, param_to_temp.at(dest)));
+    ++m_stats.param_spill_moves;
   }
 }
 
@@ -1008,7 +1023,10 @@ void Allocator::spill(const interference::Graph& ig,
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(bool use_splitting, IRCode* code) {
+void Allocator::allocate(bool use_splitting,
+                         bool spill_param_properly,
+                         bool select_spill_later,
+                         IRCode* code) {
 
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
@@ -1034,8 +1052,8 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
     fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
-    auto ig =
-        interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
+    auto ig = interference::build_graph(
+        fixpoint_iter, select_spill_later, code, initial_regs, range_set);
     if (first) {
       coalesce(&ig, code);
       first = false;
@@ -1054,12 +1072,21 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
 
     std::stack<reg_t> select_stack;
-    simplify(&ig, &select_stack);
+    std::stack<reg_t> spilled_select_stack;
+    simplify(select_spill_later, &ig, &select_stack, &spilled_select_stack);
     select(code, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s\n", SHOW(reg_transform));
     choose_range_promotions(code, ig, spill_plan, &range_set);
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
+    // Select registers for symregs that can be addressed using all 16 bits.
+    // These symregs are typically generated during the spilling and splitting
+    // steps. We want to process them after the range-related symregs because
+    // range-related symregs may also be constrained to use less than 16 bits.
+    // Basically, the registers in `spilled_select_stack` are in the least
+    // constrained category of registers, so it makes sense to allocate them
+    // last.
+    select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
     select_params(code, ig, &reg_transform, &spill_plan);
     TRACE(REG, 5, "Transform after range alloc:\n%s\n", SHOW(reg_transform));
 
@@ -1070,8 +1097,8 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      auto load_param =
-          find_param_first_uses(fixpoint_iter, spill_plan.param_spills, code);
+      auto load_param = find_param_first_uses(
+          spill_plan.param_spills, spill_param_properly, code);
       std::unordered_set<reg_t> new_temps;
       if (load_param.size() > 0) {
         spill_params(ig, load_param, code, &new_temps);

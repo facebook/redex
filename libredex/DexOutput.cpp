@@ -22,11 +22,11 @@
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 

@@ -11,8 +11,8 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
-#include "Transform.h"
 #include "Util.h"
 
 class InlinerTestAliasedInputs : public EquivalenceTest {
@@ -74,7 +74,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         break;
       }
     }
-    InlineContext context(m, true /* use_liveness */);
+    InlineContext context(m);
     IRCode::inline_method(context, m_callee->get_code(), invoke_it);
   }
 };
@@ -146,7 +146,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         break;
       }
     }
-    InlineContext context(m, true /* use_liveness */);
+    InlineContext context(m);
     IRCode::inline_method(context, m_callee->get_code(), invoke_it);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);

@@ -7,24 +7,24 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "SimpleInline.h"
-#include "InlineHelper.h"
-#include "Deleter.h"
-#include "DexClass.h"
-#include "IRInstruction.h"
-#include "DexUtil.h"
-#include "Resolver.h"
-#include "Transform.h"
-#include "Walkers.h"
-#include "ReachableClasses.h"
-#include "VirtualScope.h"
-#include "ClassHierarchy.h"
-
 #include <algorithm>
 #include <string>
 #include <vector>
 #include <map>
 #include <set>
+
+#include "SimpleInline.h"
+#include "InlineHelper.h"
+#include "Deleter.h"
+#include "DexClass.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
+#include "DexUtil.h"
+#include "Resolver.h"
+#include "Walkers.h"
+#include "ReachableClasses.h"
+#include "VirtualScope.h"
+#include "ClassHierarchy.h"
 
 namespace {
 

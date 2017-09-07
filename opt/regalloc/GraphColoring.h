@@ -12,6 +12,7 @@
 #include <stack>
 
 #include "Interference.h"
+#include "IRCode.h"
 #include "Liveness.h"
 #include "Split.h"
 #include "Transform.h"
@@ -92,7 +93,10 @@ class Allocator {
 
   bool coalesce(interference::Graph*, IRCode*);
 
-  void simplify(interference::Graph*, std::stack<reg_t>* select_stack);
+  void simplify(bool select_spill_later,
+                interference::Graph*,
+                std::stack<reg_t>* select_stack,
+                std::stack<reg_t>* spilled_select_stack);
 
   void select(const IRCode*,
               const interference::Graph&,
@@ -127,16 +131,13 @@ class Allocator {
                   SpillPlan*,
                   SplitPlan*);
 
-  std::unordered_map<reg_t, std::vector<FatMethod::iterator>>
-  find_param_first_uses(const LivenessFixpointIterator&,
-                        const std::unordered_set<reg_t>&,
-                        IRCode*);
+  std::unordered_map<reg_t, FatMethod::iterator> find_param_first_uses(
+      const std::unordered_set<reg_t>&, bool spill_param_properly, IRCode*);
 
-  void spill_params(
-      const interference::Graph&,
-      const std::unordered_map<reg_t, std::vector<FatMethod::iterator>>&,
-      IRCode*,
-      std::unordered_set<reg_t>*);
+  void spill_params(const interference::Graph&,
+                    const std::unordered_map<reg_t, FatMethod::iterator>&,
+                    IRCode*,
+                    std::unordered_set<reg_t>*);
 
   void spill(const interference::Graph&,
              const SpillPlan&,
@@ -144,7 +145,10 @@ class Allocator {
              IRCode*,
              std::unordered_set<reg_t>*);
 
-  void allocate(bool, IRCode*);
+  void allocate(bool use_splitting,
+                bool spill_param_properly,
+                bool select_spill_later,
+                IRCode*);
 
   const Stats& get_stats() const { return m_stats; }
 

@@ -379,7 +379,9 @@ void IRInstruction::normalize_registers() {
       ++old_srcs_idx;
     }
     for (size_t args_idx = 0; args_idx < args.size(); ++args_idx) {
-      always_assert(old_srcs_idx < srcs_size());
+      always_assert_log(old_srcs_idx < srcs_size(),
+                        "Invalid arg indices in %s\n",
+                        SHOW(this));
       set_src(srcs_idx++, src(old_srcs_idx));
       old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
@@ -471,4 +473,50 @@ void IRInstruction::srcs_to_range() {
   set_range_base(src(0));
   set_range_size(srcs_size());
   set_arg_word_count(0);
+}
+
+uint64_t IRInstruction::hash() {
+  std::vector<uint64_t> bits;
+  bits.push_back(opcode());
+
+  for (size_t i = 0; i < srcs_size(); i++) {
+    bits.push_back(src(i));
+  }
+
+  if (dests_size() > 0) {
+    bits.push_back(dest());
+  }
+
+  if (has_data()) {
+    size_t size = get_data()->size();
+    const auto& data = get_data()->data();
+    for (size_t i = 0; i < size; i++) {
+      bits.push_back(data[i]);
+    }
+  }
+
+  if (has_type()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_type()));
+  }
+  if (has_field()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_field()));
+  }
+  if (has_method()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_method()));
+  }
+  if (has_string()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_string()));
+  }
+  if (opcode::has_range(opcode())) {
+    bits.push_back(range_base());
+    bits.push_back(range_size());
+  }
+  bits.push_back(literal());
+  // ignore offset because it's not known until sync to DexInstructions
+
+  uint64_t result = 0;
+  for (uint64_t elem : bits) {
+    result ^= elem;
+  }
+  return result;
 }

@@ -13,6 +13,7 @@
 #include <sstream>
 
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "DexClass.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
@@ -20,9 +21,7 @@
 #include "DexOpcode.h"
 #include "DexIdx.h"
 #include "DexUtil.h"
-#include "Creators.h"
-#include "LivenessDeprecated.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 namespace {
 
@@ -1124,16 +1123,6 @@ std::string show(DexIdx* p) {
      << "----------------------------------------\n";
   for (uint32_t i = 0; i < p->m_method_ids_size; i++) {
     ss << show(p->m_method_cache[i]) << "\n";
-  }
-  return ss.str();
-}
-
-std::string show(const Liveness& analysis) {
-  std::stringstream ss;
-  for (size_t i = 0; i < analysis.m_reg_set.size(); i++) {
-    if (analysis.m_reg_set.test(i)) {
-      ss << " " << i;
-    }
   }
   return ss.str();
 }

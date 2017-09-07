@@ -9,9 +9,9 @@
 
 #pragma once
 
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "Pass.h"
-#include "Transform.h"
 
 namespace select_instructions {
 

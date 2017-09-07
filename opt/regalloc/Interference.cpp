@@ -12,7 +12,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 namespace regalloc {
 
@@ -54,6 +54,18 @@ uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
 
 using namespace impl;
 
+// We do selection of symregs requiring less than 16 bits separately from
+// those without this constraint, essentially partitioning the nodes into
+// two categories. This method returns whether two given nodes are in
+// different categories. Nodes in separate categories don't affect each
+// others' weights.
+bool Graph::should_separate_node(const Node& u_node,
+                                 const Node& v_node) const {
+  return m_separate_node &&
+         ((u_node.max_vreg() < max_unsigned_value(16)) ^
+         (v_node.max_vreg() < max_unsigned_value(16)));
+}
+
 void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
   if (u == v) {
     return;
@@ -63,8 +75,10 @@ void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
     auto& v_node = m_nodes.at(v);
     u_node.m_adjacent.push_back(v);
     v_node.m_adjacent.push_back(u);
-    u_node.m_weight += edge_weight(u_node.width(), v_node.width());
-    v_node.m_weight += edge_weight(v_node.width(), u_node.width());
+    if (!should_separate_node(u_node, v_node)) {
+      u_node.m_weight += edge_weight(u_node.width(), v_node.width());
+      v_node.m_weight += edge_weight(v_node.width(), u_node.width());
+    }
   }
   // If we have one instruction that creates a coalesceable edge between two
   // nodes s0 and s1, and another that creates a non-coalesceable edge, those
@@ -102,8 +116,10 @@ void Graph::combine(reg_t u, reg_t v) {
       add_containment_edge(t, u);
     }
   }
-  u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
-  v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
+  if (!should_separate_node(u_node, v_node)) {
+    u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
+    v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
+  }
   u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
   u_node.m_type_domain.meet_with(v_node.m_type_domain);
   u_node.m_props |= v_node.m_props;
@@ -117,7 +133,9 @@ void Graph::remove_node(reg_t u) {
     if (!v_node.is_active()) {
       continue;
     }
-    v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
+    if (!should_separate_node(u_node, v_node)) {
+      v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
+    }
   }
   u_node.m_props.reset(Node::ACTIVE);
 }
@@ -218,10 +236,12 @@ IRInstruction* find_check_cast(const MethodItemEntry& mie) {
  * the move gets inserted, it does not clobber any live registers.
  */
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
+                          bool select_spill_later,
                           IRCode* code,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
+  graph.m_separate_node = select_spill_later;
   for (const auto& mie : InstructionIterable(code)) {
     GraphBuilder::update_node_constraints(mie.insn, range_set, &graph);
   }
@@ -295,7 +315,9 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
     if (reg >= initial_regs) {
       node.m_props.set(Node::SPILL);
     }
-    assert(!node.m_type_domain.is_bottom());
+    assert_log(!node.m_type_domain.is_bottom(),
+               "Type violation in code:\n%s\n",
+               SHOW(code));
   }
   return graph;
 }

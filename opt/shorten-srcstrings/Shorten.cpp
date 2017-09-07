@@ -21,7 +21,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "Transform.h"
+#include "IRCode.h"
 #include "Walkers.h"
 #include "Warning.h"
 

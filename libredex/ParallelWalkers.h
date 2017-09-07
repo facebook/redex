@@ -16,8 +16,8 @@
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
+#include "IRCode.h"
 #include "Match.h"
-#include "Transform.h"
 #include "WorkQueue.h"
 
 /**
@@ -29,14 +29,14 @@
  * of physical cores is half the number of logical cores. Setting num_threads
  * to that number often gets us good results, so that's the default.
  */
-template <class T,
-          class Data,
+template <class Data,
           class Output,
+          class Scope,
           class MethodWalkerFn = Output(Data&, DexMethod*),
           class OutputReducerFn = Output(Output, Output),
           class DataInitializerFn = Data(int)>
 Output walk_methods_parallel(
-    const T& scope,
+    const Scope& scope,
     MethodWalkerFn walker,
     OutputReducerFn reducer,
     DataInitializerFn data_initializer,
@@ -66,10 +66,10 @@ Output walk_methods_parallel(
 }
 
 // The simple version. Call `walker` on all methods in `scope` in parallel.
-template <class T>
+template <class Scope>
 void walk_methods_parallel_simple(
-    const T& scope, const std::function<void(DexMethod*)>& walker) {
-  walk_methods_parallel<std::vector<DexClass*>, std::nullptr_t, std::nullptr_t>(
+    const Scope& scope, const std::function<void(DexMethod*)>& walker) {
+  walk_methods_parallel<std::nullptr_t, std::nullptr_t, Scope>(
       scope,
       [&walker](std::nullptr_t, DexMethod* m) {
         walker(m);

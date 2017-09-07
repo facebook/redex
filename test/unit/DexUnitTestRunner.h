@@ -76,9 +76,10 @@ class DexUnitTestRunner {
     std::vector<Pass*> passes = {pass};
     PassManager manager(passes);
     manager.set_testing_mode();
+    Scope external_classes;
     Json::Value conf_obj = Json::nullValue;
     ConfigFiles dummy_cfg(conf_obj);
-    manager.run_passes(m_stores, dummy_cfg);
+    manager.run_passes(m_stores, external_classes, dummy_cfg);
   }
 
  private:

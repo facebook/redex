@@ -72,6 +72,8 @@ class OatFile {
 
   virtual Status status() = 0;
 
+  virtual bool created_by_oatmeal() const = 0;
+
   // In an OatFile created with parse or parse_dex_files_only, the buffer may have been an
   // ELF file, in which case the parsing starts at the offset of the ELF file's .rodata
   // section. This returns the offset to that data. (Or zero if the buffer was not an elf file.)

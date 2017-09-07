@@ -11,6 +11,8 @@ package com.facebook.redextest;
 
 import static java.lang.Math.*;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 public class PointsToSemantics {
   public interface I { I f(); }
@@ -142,5 +144,24 @@ public class PointsToSemantics {
     Complex y = x.c.c;
     String s = y.b.pick(2);
     return y.c.c.c.c.d;
+  }
+
+  Class[] getClassTest() {
+    Class[] classes = new Class[20];
+    classes[0] = "foo".getClass();
+    classes[1] = nativeMethod().getClass();
+    Set<String> s = new HashSet<>();
+    classes[2] = s.getClass();
+    classes[3] = boolean.class;
+    classes[4] = int.class;
+    classes[5] = short.class;
+    classes[6] = long.class;
+    classes[7] = float.class;
+    classes[8] = double.class;
+    classes[9] = void.class;
+    classes[10] = char.class;
+    classes[11] = java.io.PrintStream.class;
+    classes[12] = A[][][].class;
+    return classes;
   }
 }

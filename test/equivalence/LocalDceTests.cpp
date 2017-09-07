@@ -9,8 +9,8 @@
 
 #include "DexAsm.h"
 #include "LocalDce.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
-#include "Transform.h"
 
 class DceTest : public EquivalenceTest {
   virtual void transform_method(DexMethod* m) {

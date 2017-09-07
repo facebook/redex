@@ -90,9 +90,9 @@ libredex_la_SOURCES = \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
 	libredex/InlineHelper.cpp \
+	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/JarLoader.cpp \
-	libredex/LivenessDeprecated.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/Mutators.cpp \
@@ -100,6 +100,7 @@ libredex_la_SOURCES = \
 	libredex/PassRegistry.cpp \
 	libredex/PluginRegistry.cpp \
 	libredex/PointsToSemantics.cpp \
+	libredex/PointsToSemanticsUtils.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardLexer.cpp \
 	libredex/ProguardMap.cpp \

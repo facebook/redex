@@ -18,10 +18,11 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "Transform.h"
-#include "Walkers.h"
+#include "ParallelWalkers.h"
 
 namespace {
 
@@ -346,21 +347,6 @@ class LocalDce {
     }
   }
 
- public:
-  void run(const Scope& scope) {
-    walk_methods(scope,
-                 [&](DexMethod* m) {
-                   if (!m->get_code()) {
-                     return;
-                   }
-                   dce(m);
-                 });
-    TRACE(DCE, 1, "Dead instructions: %lu\n", m_stats.dead_instruction_count);
-    TRACE(DCE, 1, "Unreachable instructions: %lu\n",
-          m_stats.unreachable_instruction_count);
-  }
-
- private:
   std::unordered_set<DexMethod*> m_pure_methods;
   Stats m_stats;
 };
@@ -380,9 +366,23 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  LocalDce ldce;
-  ldce.run(scope);
-  const auto& stats = ldce.get_stats();
+  auto stats = walk_methods_parallel<std::nullptr_t, LocalDce::Stats>(
+      scope,
+      [&](std::nullptr_t, DexMethod* m) {
+        auto* code = m->get_code();
+        if (code == nullptr) {
+          return LocalDce::Stats();
+        }
+        LocalDce ldce;
+        ldce.dce(m);
+        return ldce.get_stats();
+      },
+      [](LocalDce::Stats a, LocalDce::Stats b) {
+        a.dead_instruction_count += b.dead_instruction_count;
+        a.unreachable_instruction_count += b.unreachable_instruction_count;
+        return a;
+      },
+      [](int) { return nullptr; });
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);

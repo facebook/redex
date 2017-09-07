@@ -8,8 +8,8 @@
  */
 
 #include <algorithm>
-#include <memory>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_set>
 
@@ -17,8 +17,8 @@
 
 #include "DexOutput.h"
 #include "DexLoader.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
-#include "Transform.h"
 
 void EquivalenceTest::generate(DexClass* cls) {
   setup(cls);

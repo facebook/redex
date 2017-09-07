@@ -98,7 +98,7 @@ class ReferencedState {
   // A class marked to be kept from the list of seeds from ProGuard
   void ref_by_seed() { m_seed = true; }
 
-  // ProGuaurd keep information.
+  // ProGuard keep information.
   void set_keep() { m_keep = true; }
 
   void set_includedescriptorclasses() { m_includedescriptorclasses = true; }

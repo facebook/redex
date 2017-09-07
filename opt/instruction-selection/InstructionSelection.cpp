@@ -177,7 +177,7 @@ void InstructionSelectionPass::run_pass(DexStoresVector& stores,
   using Data = std::nullptr_t;
   using Output = InstructionSelection::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<Scope, Data, Output>(
+  auto stats = walk_methods_parallel<Data, Output>(
       scope,
       [](Data&, DexMethod* m) {
         InstructionSelection::Stats stats;

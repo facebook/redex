@@ -40,7 +40,6 @@ struct DexDebugEntry;
 struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
-class Liveness;
 class InstructionIterable;
 
 std::string show(const DexString*);
@@ -64,7 +63,6 @@ std::string show(const MethodItemEntry&);
 std::string show(const ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
-std::string show(const Liveness&);
 std::string show(const InstructionIterable&);
 
 // variants of show that use deobfuscated names

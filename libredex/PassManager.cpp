@@ -18,13 +18,13 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "InterDex.h"
+#include "IRCode.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
-#include "Transform.h"
 
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
@@ -70,7 +70,9 @@ void PassManager::init(const Json::Value& config) {
 
 const std::string PASS_ORDER_KEY = "pass_order";
 
-void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
+void PassManager::run_passes(DexStoresVector& stores,
+                             const Scope& external_classes,
+                             ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
@@ -82,7 +84,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   }
   {
     Timer t("Processing proguard rules");
-    process_proguard_rules(cfg.get_proguard_map(), &m_pg_config, scope);
+    process_proguard_rules(
+        cfg.get_proguard_map(), scope, external_classes, &m_pg_config);
   }
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {

@@ -12,11 +12,11 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "InstructionSelection.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
-#include "Transform.h"
 #include "Show.h"
 
 using namespace select_instructions;

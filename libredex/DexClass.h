@@ -528,7 +528,6 @@ struct DexDebugEntry final {
 };
 
 class DexDebugItem {
-  uint32_t m_line_start;
   std::vector<DexString*> m_param_names;
   std::vector<DexDebugEntry> m_dbg_entries;
   DexDebugItem(DexIdx* idx, uint32_t offset);
@@ -543,7 +542,6 @@ class DexDebugItem {
   void set_entries(std::vector<DexDebugEntry> dbg_entries) {
     m_dbg_entries.swap(dbg_entries);
   }
-  uint32_t get_line_start() const { return m_line_start; }
   std::vector<DexString*>& get_param_names() { return m_param_names; }
   void remove_parameter_names() { m_param_names.clear(); };
   void bind_positions(DexMethod* method, DexString* file);
@@ -714,7 +712,7 @@ class DexMethod {
   }
 
   /**
-   * Get a method using a canonical name: Lcls;.name(args)rtype
+   * Get a method using a canonical name: Lcls;.name:(args)rtype
    */
   static DexMethod* get_method(std::string canon);
 
@@ -905,6 +903,16 @@ class DexClass {
     return nullptr;
   }
 
+  std::vector<DexMethod*> get_ctors() const {
+    std::vector<DexMethod*> ctors;
+    for (auto meth : get_dmethods()) {
+      if (strcmp(meth->get_name()->c_str(), "<init>") == 0) {
+        ctors.push_back(meth);
+      }
+    }
+    return ctors;
+  }
+
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
@@ -915,8 +923,6 @@ class DexClass {
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
-  void sort_methods();
-  void sort_fields();
   DexField* find_field(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();
@@ -968,6 +974,10 @@ class DexClass {
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_fields(std::vector<DexField*>& lfield) const;
   void gather_methods(std::vector<DexMethod*>& lmethod) const;
+
+ private:
+  void sort_methods();
+  void sort_fields();
 };
 
 inline bool compare_dexclasses(const DexClass* a, const DexClass* b) {

@@ -18,7 +18,28 @@
 #include <random>
 #include <thread>
 
-namespace {
+namespace workqueue_impl {
+
+/**
+ * Creates a random ordering of which threads to visit.  This prevents threads
+ * from being prematurely emptied (if everyone targets thread 0, for example)
+ *
+ * Each thread should empty its own queue first, so we explicitly set the
+ * thread's index as the first element of the list.
+ */
+inline std::vector<int> create_permutation(int num, unsigned int thread_idx) {
+  std::vector<int> attempts(num);
+  std::iota(attempts.begin(), attempts.end(), 0);
+  auto seed = std::chrono::system_clock::now().time_since_epoch().count();
+  std::shuffle(
+      attempts.begin(), attempts.end(), std::default_random_engine(seed));
+  std::iter_swap(attempts.begin(),
+                 std::find(attempts.begin(), attempts.end(), thread_idx));
+  return attempts;
+}
+
+} // namespace workqueue_impl
+
 template <class Input, class Data, class Output>
 struct WorkerState {
   std::queue<Input> queue;
@@ -38,26 +59,6 @@ struct WorkerState {
     return false;
   }
 };
-
-/**
- * Creates a random ordering of which threads to visit.  This prevents threads
- * from being prematurely emptied (if everyone targets thread 0, for example)
- *
- * Each thread should empty its own queue first, so we explicitly set the
- * thread's index as the first element of the list.
- */
-std::vector<int> create_permutation(int num, unsigned int thread_idx) {
-  std::vector<int> attempts(num);
-  std::iota(attempts.begin(), attempts.end(), 0);
-  auto seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::shuffle(
-      attempts.begin(), attempts.end(), std::default_random_engine(seed));
-  std::iter_swap(attempts.begin(),
-                 std::find(attempts.begin(), attempts.end(), thread_idx));
-  return attempts;
-}
-
-} // namespace
 
 template <class Input, class Data, class Output>
 class WorkQueue {
@@ -172,7 +173,8 @@ Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
   std::vector<std::thread> all_threads;
   auto worker = [&](WorkerState<Input, Data, Output>* state, size_t state_idx) {
     state->result = init_output;
-    auto attempts = create_permutation(m_num_threads, state_idx);
+    auto attempts =
+        workqueue_impl::create_permutation(m_num_threads, state_idx);
     while (true) {
       auto have_task = false;
       for (auto idx : attempts) {

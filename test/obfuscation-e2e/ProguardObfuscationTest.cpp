@@ -26,8 +26,11 @@ bool ProguardObfuscationTest::configure_proguard(
     return false;
   }
   Scope scope = build_class_scope(dexen);
+  // We aren't loading any external jars for this test, so external_classes is
+  // empty
+  Scope external_classes;
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(proguard_map, &pg_config, scope);
+  process_proguard_rules(proguard_map, scope, external_classes, &pg_config);
   return true;
 }
 

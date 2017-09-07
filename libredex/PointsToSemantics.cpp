@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <deque>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <ostream>
@@ -22,6 +23,7 @@
 #include <utility>
 
 #include <boost/container/flat_set.hpp>
+#include <boost/functional/hash.hpp>
 #include <boost/functional/hash_fwd.hpp>
 #include <boost/optional.hpp>
 
@@ -32,6 +34,7 @@
 #include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "ParallelWalkers.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -39,7 +42,6 @@
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
 #include "Trace.h"
-#include "Transform.h"
 
 size_t hash_value(const PointsToVariable& v) {
   boost::hash<int32_t> hasher;
@@ -233,11 +235,11 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
   const PointsToOperation& op = a.operation();
   switch (op.kind) {
   case PTS_CONST_STRING: {
-    o << a.dest() << " = \"" << op.dex_string->str() << "\"";
+    o << a.dest() << " = " << std::quoted(op.dex_string->str());
     break;
   }
   case PTS_CONST_CLASS: {
-    o << a.dest() << " = " << op.dex_type->get_name()->str();
+    o << a.dest() << " = CLASS<" << op.dex_type->get_name()->str() << ">";
     break;
   }
   case PTS_GET_EXCEPTION: {
@@ -697,7 +699,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_CONST_CLASS: {
       m_semantics->add(PointsToAction::load_operation(
-          PointsToOperation(PTS_CONST_STRING, insn->get_type()),
+          PointsToOperation(PTS_CONST_CLASS, insn->get_type()),
           get_variable_from_anchor(insn)));
       break;
     }
@@ -779,6 +781,16 @@ class PointsToActionGenerator final {
       break;
     }
     case OPCODE_SGET_OBJECT: {
+      // One way to get the java.lang.Class object of a primitive type is by
+      // querying the `TYPE` field of the corresponding wrapper class. We
+      // translate those kind of sget-object instructions into equivalent
+      // PTS_CONST_CLASS operations.
+      if (m_utils.is_primitive_type_class_object_retrieval(insn)) {
+        m_semantics->add(PointsToAction::load_operation(
+            PointsToOperation(PTS_CONST_CLASS, insn->get_field()->get_class()),
+            get_variable_from_anchor(insn)));
+        break;
+      }
       m_semantics->add(PointsToAction::get_operation(
           PointsToOperation(PTS_SGET, insn->get_field()),
           get_variable_from_anchor(insn)));
@@ -1091,10 +1103,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
     o << "= NATIVE";
     break;
   }
-  case PTS_EXTERNAL: {
-    o << "= EXTERNAL";
-    break;
-  }
   case PTS_APK:
   case PTS_STUB: {
     o << "{" << std::endl;
@@ -1131,23 +1139,9 @@ PointsToSemantics::PointsToSemantics(const Scope& scope)
   }
 
   // We generate a system of points-to actions for each Dex method in parallel.
-  using Data = std::nullptr_t;
-  using Output = std::nullptr_t;
-  walk_methods_parallel<Scope, Data, Output>(
-      scope,
-      [this](Data&, DexMethod* dex_method) {
-        // Mapper
-        generate_points_to_actions(dex_method);
-        return nullptr;
-      },
-      [](Output, Output) {
-        // Reducer
-        return nullptr;
-      },
-      [](int) {
-        // Data initializer
-        return nullptr;
-      });
+  walk_methods_parallel_simple(scope, [this](DexMethod* dex_method) {
+    generate_points_to_actions(dex_method);
+  });
 }
 
 const PointsToMethodSemantics& PointsToSemantics::get_method_semantics(
@@ -1173,7 +1167,11 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
     } else if ((access_flags & DexAccessFlags::ACC_NATIVE)) {
       kind = PTS_NATIVE;
     } else {
-      kind = PTS_EXTERNAL;
+      // The definition of a method that is neither abstract nor native should
+      // always have an associated IRCode component.
+      always_assert_log(false,
+                        "Method %s has no associated code component",
+                        SHOW(dex_method->get_name()));
     }
   } else {
     kind = PTS_APK;

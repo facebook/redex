@@ -9,14 +9,14 @@
 
 #pragma once
 
-#include "DexClass.h"
-#include "Transform.h"
-#include "Resolver.h"
-
 #include <functional>
 #include <map>
 #include <set>
 #include <vector>
+
+#include "DexClass.h"
+#include "IRCode.h"
+#include "Resolver.h"
 
 /**
  * Helper class to inline a set of condidates.
@@ -31,9 +31,9 @@ class MultiMethodInliner {
  public:
   struct Config {
     bool throws_inline;
-    bool use_liveness;
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
+    std::unordered_set<DexType*> whitelist_no_method_limit;
   };
 
   MultiMethodInliner(
@@ -161,7 +161,8 @@ class MultiMethodInliner {
    * other constraints that might be worth looking into, e.g. the number of
    * registers.
    */
-  bool caller_too_large(InlineContext& ctx, DexMethod* caller);
+  bool caller_too_large(
+      InlineContext& ctx, DexMethod* caller, DexType* caller_type);
 
   /**
    * Change the visibility of members accessed in a callee as they are moved

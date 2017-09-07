@@ -18,21 +18,21 @@
 #include <utility>
 #include <vector>
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "IRInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "Mutators.h"
-#include "Resolver.h"
+#include "ParallelWalkers.h"
 #include "PassManager.h"
-#include "Transform.h"
 #include "ReachableClasses.h"
-#include "ClassHierarchy.h"
-#include "Walkers.h"
-
+#include "Resolver.h"
 #include "SynthConfig.h"
+
 
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
 constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";
@@ -847,26 +847,32 @@ void do_transform(const ClassHierarchy& ch,
     }
   }
   // check that invokes to promoted static method is correct
-  walk_opcodes(
-      classes,
-      [](DexMethod*) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        auto opcode = insn->opcode();
-        if (opcode != OPCODE_INVOKE_DIRECT &&
-            opcode != OPCODE_INVOKE_DIRECT_RANGE) {
-          return;
-        }
-        auto wrappee = insn->get_method();
-        if (ssms.promoted_to_static.count(wrappee) == 0) {
-          return;
-        }
-        // change the opcode to invoke-static
-        insn->set_opcode(opcode == OPCODE_INVOKE_DIRECT ?
-            OPCODE_INVOKE_STATIC : OPCODE_INVOKE_STATIC_RANGE);
-        TRACE(SYNT, 3,
+  walk_methods_parallel_simple(classes, [&](DexMethod* meth) {
+    auto* code = meth->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    for (auto& mie : InstructionIterable(code)) {
+      auto* insn = mie.insn;
+      auto opcode = insn->opcode();
+      if (opcode != OPCODE_INVOKE_DIRECT &&
+          opcode != OPCODE_INVOKE_DIRECT_RANGE) {
+        continue;
+      }
+      auto wrappee = insn->get_method();
+      if (ssms.promoted_to_static.count(wrappee) == 0) {
+        continue;
+      }
+      // change the opcode to invoke-static
+      insn->set_opcode(opcode == OPCODE_INVOKE_DIRECT
+                           ? OPCODE_INVOKE_STATIC
+                           : OPCODE_INVOKE_STATIC_RANGE);
+      TRACE(SYNT, 3,
             "Updated invoke on promoted to static %s\n in method %s",
-            SHOW(wrappee), SHOW(meth));
-      });
+            SHOW(wrappee),
+            SHOW(meth));
+    }
+  });
   remove_dead_methods(ssms, synthConfig, metrics);
 }
 

@@ -154,7 +154,7 @@ void make_methods_static(const std::unordered_set<DexMethod*>& methods,
 
 bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
-  always_assert(!is_static(method) && code != nullptr);
+  always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
   auto const this_insn = InstructionIterable(code).begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);

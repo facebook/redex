@@ -96,12 +96,6 @@ struct RedexContext {
     g_redex->m_next_release_gate = v;
   }
 
-  /*
-   * This flag should only be set if the RegAlloc pass is enabled.
-   */
-  static bool assume_regalloc() { return g_redex->m_assume_regalloc; }
-  static void set_assume_regalloc(bool v) { g_redex->m_assume_regalloc = v; }
-
  private:
   struct carray_cmp {
     bool operator()(const char* a, const char* b) const {
@@ -141,5 +135,4 @@ struct RedexContext {
   const std::vector<const DexType*> m_empty_types;
 
   bool m_next_release_gate{false};
-  bool m_assume_regalloc{false};
 };

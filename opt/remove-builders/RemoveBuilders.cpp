@@ -14,9 +14,9 @@
 
 #include "Dataflow.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "RemoveBuildersHelper.h"
 #include "Resolver.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 namespace {

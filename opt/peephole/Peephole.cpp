@@ -1307,7 +1307,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
   std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  walk_methods_parallel<Scope, PeepholeOptimizer*, std::nullptr_t>(
+  walk_methods_parallel<PeepholeOptimizer*, std::nullptr_t>(
       scope,
       [](PeepholeOptimizer*& ph, DexMethod* m) { // walker
         ph->run_method(m);

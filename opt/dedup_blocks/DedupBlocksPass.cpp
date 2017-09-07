@@ -9,17 +9,18 @@
 
 #include "DedupBlocksPass.h"
 
-#include "ControlFlow.h"
-#include "DexClass.h"
-#include "DexOutput.h"
-#include "DexUtil.h"
-#include "Transform.h"
-#include "Walkers.h"
-
 #include <boost/optional.hpp>
 #include <iterator>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "ControlFlow.h"
+#include "DexClass.h"
+#include "DexOutput.h"
+#include "DexUtil.h"
+#include "IRCode.h"
+#include "Transform.h"
+#include "Walkers.h"
 
 /*
  * This pass removes blocks that are duplicates in a method.
@@ -31,6 +32,92 @@
  */
 
 namespace {
+
+using hash_t = std::size_t;
+
+struct BlockAsKey {
+  IRCode* code;
+  Block* block;
+
+  BlockAsKey(IRCode* c, Block* b) : code(c), block(b) {}
+
+  bool operator==(const BlockAsKey& other) const {
+    return same_successors(other) && same_try_regions(other) &&
+           same_code(other);
+  }
+
+  // Structural equality of opcodes except branch targets are ignored
+  // because they are unknown until we sync back to DexInstructions.
+  bool same_code(const BlockAsKey& other) const {
+    const auto& iterable1 = InstructionIterable(this->block);
+    const auto& iterable2 = InstructionIterable(other.block);
+    auto it1 = iterable1.begin();
+    auto it2 = iterable2.begin();
+    for (; it1 != iterable1.end() && it2 != iterable2.end(); it1++, it2++) {
+      auto& mie1 = *it1;
+      auto& mie2 = *it2;
+      if (*mie1.insn != *mie2.insn) {
+        return false;
+      }
+    }
+
+    if (!(it1 == iterable1.end() && it2 == iterable2.end())) {
+      // different lengths
+      return false;
+    }
+    return true;
+  }
+
+  // The blocks must also have the exact same successors
+  // (and reached in the same ways)
+  bool same_successors(const BlockAsKey& other) const {
+    const auto& b1_succs = this->block->succs();
+    const auto& b2_succs = other.block->succs();
+    if (b1_succs.size() != b2_succs.size()) {
+      return false;
+    }
+    for (Block* b1_succ : b1_succs) {
+      const auto& in_b2 = std::find(b2_succs.begin(), b2_succs.end(), b1_succ);
+      if (in_b2 == b2_succs.end()) {
+        // b1 has a succ that b2 doesn't
+        return false;
+      }
+
+      if (code->cfg().edge(this->block, b1_succ) !=
+          code->cfg().edge(other.block, *in_b2)) {
+        // successors are the same but the type of connecting
+        // edges are different.
+        // Like so:
+        //
+        // B0: if-eqz v0, B3
+        // B1: return
+        // B2: if eqz v0, B1
+        // B3: add-int v1, 1
+        //
+        // B0's succs are B1 (fallthru) and B3 (branch)
+        // B2's succs are B3 (fallthru) and B1 (branch)
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // return true if in the same try region (or both in no try region at all)
+  bool same_try_regions(const BlockAsKey& other) const {
+    return transform::find_active_catch(code, this->block->begin()) ==
+           transform::find_active_catch(code, other.block->begin());
+  }
+};
+
+struct BlockHasher {
+  hash_t operator()(const BlockAsKey& key) const {
+    hash_t result = 0;
+    for (auto& mie : InstructionIterable(key.block)) {
+      result ^= mie.insn->hash();
+    }
+    return result;
+  }
+};
 
 class DedupBlocksImpl {
  public:
@@ -61,9 +148,12 @@ class DedupBlocksImpl {
   }
 
  private:
-  using hash_t = uint64_t;
-  using duplicates_t = std::unordered_map<hash_t, std::unordered_set<Block*>>;
+  using duplicates_t = std::unordered_map<
+    BlockAsKey,
+    std::unordered_set<Block*>,
+    BlockHasher>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
+  const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
   const std::vector<DexClass*>& m_scope;
   PassManager& m_mgr;
   const DedupBlocksPass::Config& m_config;
@@ -74,16 +164,19 @@ class DedupBlocksImpl {
   // Find blocks with the same exact code
   duplicates_t collect_duplicates(IRCode* code) {
     const auto& blocks = code->cfg().blocks();
-    std::unordered_map<hash_t, std::unordered_set<Block*>> duplicates;
+    duplicates_t duplicates;
+
+    int num_eligible_blocks = 0;
     for (Block* block : blocks) {
       if (has_opcodes(block) && should_remove(code->cfg(), block)) {
-        duplicates[hash(block)].insert(block);
+        duplicates[BlockAsKey{code, block}].insert(block);
+        ++num_eligible_blocks;
       }
     }
+    m_mgr.incr_metric(METRIC_ELIGIBLE_BLOCKS, num_eligible_blocks);
 
     remove_singletons(duplicates);
     // the hash function isn't perfect, so check behind with an equals function
-    remove_invalid_sets(code, duplicates);
     return duplicates;
   }
 
@@ -116,17 +209,6 @@ class DedupBlocksImpl {
           transform::replace_block(code, block, canon);
           m_mgr.incr_metric(METRIC_BLOCKS_REMOVED, 1);
         }
-      }
-    }
-  }
-
-  void remove_invalid_sets(IRCode* code, duplicates_t& dups) {
-    for (auto it = dups.begin(); it != dups.end();) {
-      std::unordered_set<Block*> blocks = it->second;
-      if (!all_equal(blocks) || conflicting_try_regions(code, blocks)) {
-        it = dups.erase(it);
-      } else {
-        ++it;
       }
     }
   }
@@ -182,10 +264,13 @@ class DedupBlocksImpl {
       return false;
     }
 
+    // We can't replace blocks that are involved in a fallthrough because they
+    // depend on their position in the list of instructions. Deduplicating
+    // will involve sending control to a block in a different place.
     for (Block* pred : block->preds()) {
       if (!has_opcodes(pred)) {
-        // Skip these for simplicity's sake. I don't want to go recursively
-        // searching for the previous block with code. But you could! TODO
+        // Skip this case because it's complicated. It should be fixed by
+        // upcoming changes to the CFG
         return false;
       }
 
@@ -218,17 +303,10 @@ class DedupBlocksImpl {
                              Block* pred,
                              Block* succ) {
     always_assert_log(has_opcodes(pred), "need opcodes");
-
     const auto& flags = cfg.edge(pred, succ);
-    if (!(flags[EDGE_GOTO])) {
-      return false;
-    }
-
     const auto& last_of_pred = last_opcode(pred);
-    if (!is_goto(last_of_pred->insn->opcode())) {
-      return true;
-    }
-    return false;
+
+    return flags[EDGE_GOTO] && !is_goto(last_of_pred->insn->opcode());
   }
 
   void record_stats(const duplicates_t& duplicates) {
@@ -252,6 +330,11 @@ class DedupBlocksImpl {
   }
 
   void report_stats() {
+    TRACE(DEDUP_BLOCKS,
+          2,
+          "%d eligible_blocks\n",
+          m_mgr.get_metric(METRIC_ELIGIBLE_BLOCKS));
+
     for (const auto& entry : m_dup_sizes) {
       TRACE(DEDUP_BLOCKS,
             2,
@@ -300,137 +383,11 @@ class DedupBlocksImpl {
     return result;
   }
 
-  // return true if all the blocks don't jump to the same catch handler (or no
-  // catch handler at all)
-  static bool conflicting_try_regions(IRCode* code,
-                                      std::unordered_set<Block*> blocks) {
-    MethodItemEntry* active_catch = nullptr;
-    bool first = true;
-    for (Block* b : blocks) {
-      if (first) {
-        first = false;
-        active_catch = transform::find_active_catch(code, b->begin());
-      } else {
-        if (active_catch != transform::find_active_catch(code, b->begin())) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  static bool all_equal(std::unordered_set<Block*> blocks) {
-    Block* canon = nullptr;
-    for (auto i = blocks.begin(); i != blocks.end(); i++) {
-      if (canon == nullptr) {
-        canon = *i;
-      } else if (!equals(canon, *i)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // Structural equality of opcodes except branches targets are ignored
-  // because they are unknown until we sync back to DexInstructions.
-  //
-  // The blocks must also have the exact same successors
-  static bool equals(Block* b1, Block* b2) {
-
-    if (!same_successors(b1, b2)) {
-      return false;
-    }
-
-    const auto& iterable1 = InstructionIterable(b1);
-    const auto& iterable2 = InstructionIterable(b2);
-    auto it1 = iterable1.begin();
-    auto it2 = iterable2.begin();
-    for (; it1 != iterable1.end() && it2 != iterable2.end(); it1++, it2++) {
-      auto& mie1 = *it1;
-      auto& mie2 = *it2;
-      if (*mie1.insn != *mie2.insn) {
-        return false;
-      }
-    }
-
-    if (!(it1 == iterable1.end() && it2 == iterable2.end())) {
-      // different lengths
-      return false;
-    }
-    return true;
-  }
-
-  static bool same_successors(Block* b1, Block* b2) {
-
-    const auto& b1_succs = b1->succs();
-    const auto& b2_succs = b2->succs();
-    if (b1_succs.size() != b2_succs.size()) {
-      return false;
-    }
-    for (Block* b1_succ : b1_succs) {
-      if (std::find(b2_succs.begin(), b2_succs.end(), b1_succ) ==
-          b2_succs.end()) {
-        // b1 has a succ that b2 doesn't
-        return false;
-      }
-    }
-    return true;
-  }
-
-  static hash_t hash(Block* block) {
-    hash_t result = 0;
-    for (auto& mie : InstructionIterable(block)) {
-      result ^= hash(mie.insn);
-    }
-    return result;
-  }
-
-  static hash_t hash(IRInstruction* insn) {
-    std::vector<hash_t> bits;
-    bits.push_back(insn->opcode());
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      bits.push_back(insn->src(i));
-    }
-    if (insn->dests_size() > 0) {
-      bits.push_back(insn->dest());
-    }
-    if (insn->has_data()) {
-      size_t size = insn->get_data()->size();
-      const auto& data = insn->get_data()->data();
-      for (size_t i = 0; i < size; i++) {
-        bits.push_back(data[i]);
-      }
-    }
-    if (insn->has_type()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_type()));
-    }
-    if (insn->has_field()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_field()));
-    }
-    if (insn->has_method()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_method()));
-    }
-    if (insn->has_string()) {
-      bits.push_back(reinterpret_cast<hash_t>(insn->get_string()));
-    }
-    if (opcode::has_range(insn->opcode())) {
-      bits.push_back(insn->range_base());
-      bits.push_back(insn->range_size());
-    }
-    bits.push_back(insn->literal());
-    // ignore insn->offset because its not known until sync to DexInstructions
-
-    hash_t result = 0;
-    for (hash_t elem : bits) {
-      result ^= elem;
-    }
-    return result;
-  }
 
   static void print_dups(duplicates_t dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {\n");
     for (const auto& entry : dups) {
-      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu\n", entry.first);
+      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu\n", BlockHasher{}(entry.first));
       for (Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %d\n", b->id());
         for (const MethodItemEntry& mie : *b) {

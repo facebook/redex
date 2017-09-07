@@ -16,7 +16,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "Transform.h"
+#include "IRCode.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");

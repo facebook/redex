@@ -11,7 +11,7 @@
 #include <string>
 
 #include "DexInstruction.h"
-#include "Transform.h"
+#include "IRCode.h"
 #include "VerifyUtil.h"
 
 TEST_F(PreVerify, ConstantPropagation) {

@@ -9,6 +9,8 @@
 
 #include "ControlFlow.h"
 
+#include <stack>
+
 ControlFlowGraph::~ControlFlowGraph() {
   for (auto block : m_blocks) {
     delete block;
@@ -207,18 +209,19 @@ Block* ControlFlowGraph::find_block_that_ends_here(
 }
 
 Block* ControlFlowGraph::idom_intersect(
-    const std::unordered_map<Block*, size_t>& postorder_numbers,
-    const std::unordered_map<Block*, Block*>& immediate_dominator,
+    const std::unordered_map<Block*, DominatorInfo>& postorder_dominator,
     Block* block1,
     Block* block2) const {
   auto finger1 = block1;
   auto finger2 = block2;
   while (finger1 != finger2) {
-    while (postorder_numbers.at(finger1) < postorder_numbers.at(finger2)) {
-      finger1 = immediate_dominator.at(finger1);
+    while (postorder_dominator.at(finger1).postorder <
+           postorder_dominator.at(finger2).postorder) {
+      finger1 = postorder_dominator.at(finger1).dom;
     }
-    while (postorder_numbers.at(finger2) < postorder_numbers.at(finger1)) {
-      finger2 = immediate_dominator.at(finger2);
+    while (postorder_dominator.at(finger2).postorder <
+           postorder_dominator.at(finger1).postorder) {
+      finger2 = postorder_dominator.at(finger2).dom;
     }
   }
   return finger1;
@@ -227,53 +230,55 @@ Block* ControlFlowGraph::idom_intersect(
 // Finding immediate dominator for each blocks in ControlFlowGraph.
 // Theory from:
 //    K. D. Cooper et.al. A Simple, Fast Dominance Algorithm.
-std::unordered_map<Block*, Block*> ControlFlowGraph::immediate_dominator()
-    const {
+std::unordered_map<Block*, DominatorInfo>
+ControlFlowGraph::immediate_dominators() const {
   // Get postorder of blocks and create map of block to postorder number.
-  std::unordered_map<Block*, size_t> postorder_numbers;
-  auto postorder = postorder_sort(blocks());
-  for (size_t i = 0; i < postorder.size(); ++i) {
-    postorder_numbers[postorder[i]] = i;
+  std::unordered_map<Block*, DominatorInfo> postorder_dominator;
+  auto postorder_blocks = postorder_sort(blocks());
+  for (size_t i = 0; i < postorder_blocks.size(); ++i) {
+    postorder_dominator[postorder_blocks[i]].postorder = i;
   }
 
-  std::unordered_map<Block*, Block*> immediate_dominator;
-  // Initialize the immediate_dominator. Having value as nullptr means it has
+  // Initialize immediate dominators. Having value as nullptr means it has
   // not been processed yet.
   for (Block* block : blocks()) {
-    immediate_dominator[block] = nullptr;
+    if (block->preds().size() == 0) {
+      // Entry block's immediate dominator is itself.
+      postorder_dominator[block].dom = block;
+    } else {
+      postorder_dominator[block].dom = nullptr;
+    }
   }
-  // B0's immediate_dominator is itself.
-  immediate_dominator[m_blocks[0]] = m_blocks[0];
 
   bool changed = true;
   while (changed) {
     changed = false;
     // Traverse block in reverse postorder.
-    for (auto rit = postorder.rbegin(); rit != postorder.rend(); ++rit) {
+    for (auto rit = postorder_blocks.rbegin(); rit != postorder_blocks.rend();
+         ++rit) {
       Block* ordered_block = *rit;
-      if (ordered_block == entry_block()) {
+      if (ordered_block->preds().size() == 0) {
         continue;
       }
       Block* new_idom = nullptr;
       // Pick one random processed block as starting point.
       for (auto& pred : ordered_block->preds()) {
-        if (immediate_dominator[pred] != nullptr) {
+        if (postorder_dominator[pred].dom != nullptr) {
           new_idom = pred;
           break;
         }
       }
       always_assert(new_idom != nullptr);
       for (auto& pred : ordered_block->preds()) {
-        if (pred != new_idom && immediate_dominator[pred] != nullptr) {
-          new_idom = idom_intersect(
-              postorder_numbers, immediate_dominator, new_idom, pred);
+        if (pred != new_idom && postorder_dominator[pred].dom != nullptr) {
+          new_idom = idom_intersect(postorder_dominator, new_idom, pred);
         }
       }
-      if (immediate_dominator[ordered_block] != new_idom) {
-        immediate_dominator[ordered_block] = new_idom;
+      if (postorder_dominator[ordered_block].dom != new_idom) {
+        postorder_dominator[ordered_block].dom = new_idom;
         changed = true;
       }
     }
   }
-  return immediate_dominator;
+  return postorder_dominator;
 }

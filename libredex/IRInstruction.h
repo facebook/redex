@@ -244,6 +244,9 @@ class IRInstruction final {
     }
   }
 
+  // Compute current instruction's hash.
+  uint64_t hash();
+
  private:
   DexOpcode m_opcode;
   std::vector<uint16_t> m_srcs;

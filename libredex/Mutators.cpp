@@ -8,8 +8,8 @@
  */
 
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Mutators.h"
-#include "Transform.h"
 
 namespace {
 void drop_this(DexMethod* method) {

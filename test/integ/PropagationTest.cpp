@@ -15,9 +15,9 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "Transform.h"
 
 #include "Peephole.h"
 #include "LocalDce.h"
@@ -81,11 +81,12 @@ TEST(PropagationTest1, localDCE1) {
   };
 
   PassManager manager(passes);
+  Scope external_classes;
   manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
+  manager.run_passes(stores, external_classes, dummy_cfg);
 
   TRACE(DCE, 2, "Code after:\n");
   for(const auto& cls : classes) {

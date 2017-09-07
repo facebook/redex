@@ -21,13 +21,13 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "ClassHierarchy.h"
 #include "Walkers.h"
 
@@ -72,24 +72,16 @@ DexMethod* match_pattern(DexMethod* bridge) {
 
 bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
   if (!can_delete(bridgee)) {
-    TRACE(BRIDGE, 5, "Nope nope nope (bridge): %s\nNope nope nope (bridgee): %s\n", SHOW(bridge), SHOW(bridgee));
+    TRACE(BRIDGE, 5,
+          "Cannot delete bridgee! bridge: %s\n bridgee: %s\n",
+          SHOW(bridge),
+          SHOW(bridgee));
     return false;
   }
   if (!bridgee->get_code()) {
     TRACE(BRIDGE, 5, "Rejecting, bridgee has no code: `%s'\n", SHOW(bridge));
     return false;
   }
-  auto bins = sum_param_sizes(bridge->get_code());
-  auto eins = sum_param_sizes(bridgee->get_code());
-  auto eregs = bridgee->get_code()->get_registers_size();
-  if ((eregs + bins - eins) >= 16) {
-    TRACE(BRIDGE, 5, "Rejecting, too many regs to remap: `%s'\n", SHOW(bridge));
-    return false;
-  }
-  always_assert_log(bins >= eins,
-                    "Bridge `%s' takes fewer args than bridgee `%s'",
-                    SHOW(bridge),
-                    SHOW(bridgee));
   return true;
 }
 
@@ -118,7 +110,7 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
       std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
       });
-  IRCode::inline_tail_call(bridge, bridgee, invoke->insn);
+  IRCode::inline_tail_call(bridge, bridgee, invoke);
 }
 }
 

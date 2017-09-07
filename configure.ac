@@ -5,6 +5,10 @@ AC_PREREQ([2.69])
 AC_INIT([redex], [1.0], [not-valid-yet@fb.com])
 AM_INIT_AUTOMAKE(redex, 1.0)
 
+# clear out default cxx flags (was "-O2 -g") so that they don't override
+# the flags defined in AM_CXXFLAGS
+: ${CXXFLAGS=""}
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
@@ -19,8 +23,8 @@ AM_PATH_PYTHON([3.0], [], [AC_MSG_ERROR([Redex requires python3])])
 
 # Checks for libraries.
 AX_PTHREAD
-AX_BOOST_BASE([1.53.0], [], [AC_MSG_ERROR(
-              [Please install boost >= 1.53 (including filesystem)])])
+AX_BOOST_BASE([1.58.0], [], [AC_MSG_ERROR(
+              [Please install boost >= 1.58 (including filesystem)])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AX_BOOST_REGEX

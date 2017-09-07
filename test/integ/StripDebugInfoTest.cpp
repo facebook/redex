@@ -15,9 +15,9 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "PassManager.h"
 #include "RedexContext.h"
-#include "Transform.h"
 
 #include "DelInit.h"
 #include "LocalDce.h"
@@ -70,7 +70,8 @@ void run_test_pass(Pass* pass, DexClassesCallback const& callback) {
   manager.set_testing_mode();
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
+  Scope external_classes;
+  manager.run_passes(stores, external_classes, dummy_cfg);
   callback(classes);
 }
 

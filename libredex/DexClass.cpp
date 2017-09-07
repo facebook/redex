@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <boost/functional/hash.hpp>
+#include <boost/optional.hpp>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -24,8 +25,8 @@
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
-#include "Transform.h"
 #include "Util.h"
 #include "Warning.h"
 #include "Walkers.h"
@@ -82,9 +83,9 @@ DexDebugEntry::~DexDebugEntry() {
  */
 static std::vector<DexDebugEntry> eval_debug_instructions(
     DexDebugItem* dbg,
-    std::vector<std::unique_ptr<DexDebugInstruction>>& insns) {
+    std::vector<std::unique_ptr<DexDebugInstruction>>& insns,
+    uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
-  int32_t absolute_line = int32_t(dbg->get_line_start());
   uint32_t pc = 0;
   for (auto& opcode : insns) {
     auto op = opcode->opcode();
@@ -123,7 +124,7 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
 
 DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
-  m_line_start = read_uleb128(&encdata);
+  uint32_t line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
   while (paramcount--) {
     DexString* str = decode_noindexable_string(idx, encdata);
@@ -135,11 +136,11 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
          nullptr) {
     insns.emplace_back(dbgp);
   }
-  m_dbg_entries = eval_debug_instructions(this, insns);
+  m_dbg_entries = eval_debug_instructions(this, insns, line_start);
 }
 
 DexDebugItem::DexDebugItem(const DexDebugItem& that)
-    : m_line_start(that.m_line_start), m_param_names(that.m_param_names) {
+    : m_param_names(that.m_param_names) {
   std::unordered_map<DexPosition*, DexPosition*> pos_map;
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
@@ -172,10 +173,10 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
-    uint8_t* output) {
+    uint32_t* line_start) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
-  uint32_t prev_line = pos_mapper->get_next_line(debugitem);
+  boost::optional<uint32_t> prev_line;
   auto& entries = debugitem->get_entries();
 
   for (auto it = entries.begin(); it != entries.end(); ++it) {
@@ -205,7 +206,13 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     // only emit the last position entry for a given address
     if (!positions.empty()) {
       auto line = pos_mapper->position_to_line(positions.back());
-      int32_t line_delta = line - prev_line;
+      int32_t line_delta;
+      if (prev_line) {
+        line_delta = line - *prev_line;
+      } else {
+        *line_start = line;
+        line_delta = 0;
+      }
       prev_line = line;
       if (line_delta < DBG_LINE_BASE ||
               line_delta >= (DBG_LINE_RANGE + DBG_LINE_BASE)) {
@@ -243,7 +250,10 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
 int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
     uint8_t* output) {
   uint8_t* encdata = output;
-  encdata = write_uleb128(encdata, pos_mapper->get_next_line(this));
+  uint32_t line_start{0};
+  auto dbgops =
+      generate_debug_instructions(this, dodx, pos_mapper, &line_start);
+  encdata = write_uleb128(encdata, line_start);
   encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {
     if (s == nullptr) {
@@ -253,7 +263,6 @@ int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
     uint32_t idx = dodx->stringidx(s);
     encdata = write_uleb128p1(encdata, idx);
   }
-  auto dbgops = generate_debug_instructions(this, dodx, pos_mapper, encdata);
   for (auto& dbgop : dbgops) {
     dbgop->encode(dodx, encdata);
   }
@@ -720,6 +729,10 @@ int DexClass::encode(DexOutputIdx* dodx,
              m_super_class->get_name()->c_str(),
              m_access_flags);
   }
+
+  sort_fields();
+  sort_methods();
+
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, (uint32_t) m_sfields.size());
   encdata = write_uleb128(encdata, (uint32_t) m_ifields.size());
@@ -729,13 +742,6 @@ int DexClass::encode(DexOutputIdx* dodx,
   idxbase = 0;
   for (auto const& f : m_sfields) {
     uint32_t idx = dodx->fieldidx(f);
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for sfield, need to apply sort. "
-                      "Must be done prior to static value emit."
-                      "\nOffending type: %s"
-                      "\nOffending field: %s",
-                      SHOW(this),
-                      SHOW(f));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, f->get_access());
@@ -743,12 +749,6 @@ int DexClass::encode(DexOutputIdx* dodx,
   idxbase = 0;
   for (auto const& f : m_ifields) {
     uint32_t idx = dodx->fieldidx(f);
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for ifield, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending field: %s",
-                      SHOW(this),
-                      SHOW(f));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, f->get_access());
@@ -763,12 +763,6 @@ int DexClass::encode(DexOutputIdx* dodx,
                       SHOW(this),
                       SHOW(m));
     assert(!m->is_virtual());
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for dmethod, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending method: %s",
-                      SHOW(this),
-                      SHOW(m));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -788,12 +782,6 @@ int DexClass::encode(DexOutputIdx* dodx,
                       SHOW(this),
                       SHOW(m));
     assert(m->is_virtual());
-    always_assert_log(idx >= idxbase,
-                      "Illegal ordering for vmethod, need to apply sort."
-                      "\nOffending type: %s"
-                      "\nOffending method: %s",
-                      SHOW(this),
-                      SHOW(m));
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
