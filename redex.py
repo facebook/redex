@@ -330,7 +330,7 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                     print(line.rstrip(), file=output)
             else:
                 print(line.rstrip(), file=output)
-        for unmangled, mangled in redex_dict.iteritems():
+        for unmangled, mangled in redex_dict.items():
             print('%s -> %s:' % (unmangled, mangled), file=output)
 
 
