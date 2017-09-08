@@ -35,7 +35,9 @@
 
 namespace {
 
-const char* kCreatedByOatmeal = "created_by_oatmeal";
+// "86827de6f1ef3407f8dc98b76382d3a6e0759ab3" is the SHA1 digest for
+// 'created_by_oatmeal'.
+const char* kCreatedByOatmeal = "86827de6f1ef3407f8dc98b76382d3a6e0759ab3";
 
 OatVersion versionInt(const std::string& version_str) {
   if (version_str == "039") {
