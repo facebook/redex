@@ -43,7 +43,7 @@ void walk_references_for_resource(
    std::unordered_set<std::string>& leaf_string_values,
    android::ResTable* table);
 
-std::unordered_set<uint32_t> get_js_resources(
+std::unordered_set<uint32_t> get_js_resources_by_parsing(
    const std::string& directory,
    std::map<std::string, std::vector<uint32_t>> name_to_ids);
 

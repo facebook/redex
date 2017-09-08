@@ -7,6 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <cstdio>
@@ -92,13 +93,13 @@ std::string dotname_to_dexname(const std::string& classname) {
   return dexname;
 }
 
-void extract_js_sounds(
-    const std::string& file_contents,
+void extract_by_pattern(
+    const std::string& string_to_search,
+    boost::regex regex,
     std::unordered_set<std::string>& result) {
-  static boost::regex sound_regex("\"([^\\\"]+)\\.(m4a|ogg)\"");
   boost::smatch m;
-  std::string s = file_contents;
-  while (boost::regex_search (s, m, sound_regex)) {
+  std::string s = string_to_search;
+  while (boost::regex_search (s, m, regex)) {
     if (m.size() > 1) {
         result.insert(m[1].str());
     }
@@ -106,14 +107,58 @@ void extract_js_sounds(
   }
 }
 
+void extract_js_sounds(
+    const std::string& file_contents,
+    std::unordered_set<std::string>& result) {
+  static boost::regex sound_regex("\"([^\\\"]+)\\.(m4a|ogg)\"");
+  extract_by_pattern(file_contents, sound_regex, result);
+}
+
+void extract_js_uris(
+    const std::string& file_contents,
+    std::unordered_set<std::string>& result) {
+  static boost::regex uri_regex("\\buri:\\s*\"([^\\\"]+)\"");
+  extract_by_pattern(file_contents, uri_regex, result);
+}
+
+void extract_js_asset_registrations(
+    const std::string& file_contents,
+    std::unordered_set<std::string>& result) {
+  static boost::regex register_regex("registerAsset\\((.+?)\\)");
+  static boost::regex name_regex("name:\\\"(.+?)\\\"");
+  static boost::regex location_regex("httpServerLocation:\\\"/assets/(.+?)\\\"");
+  static boost::regex special_char_regex("[^a-z0-9_]");
+  std::unordered_set<std::string> registrations;
+  extract_by_pattern(file_contents, register_regex, registrations);
+  for (std::string registration : registrations) {
+    boost::smatch m;
+    if (!boost::regex_search (registration, m, location_regex) || m.size() == 0) {
+      continue;
+    }
+    std::stringstream asset_path;
+    asset_path << m[1].str() << '/'; // location
+    if (!boost::regex_search (registration, m, name_regex) || m.size() == 0) {
+      continue;
+    }
+    asset_path << m[1].str(); // name
+    std::string full_path = asset_path.str();
+    boost::replace_all(full_path, "/", "_");;
+    boost::algorithm::to_lower(full_path);
+
+    std::stringstream stripped_asset_path;
+    std::ostream_iterator<char, char> oi(stripped_asset_path);
+    boost::regex_replace(oi, full_path.begin(), full_path.end(),
+      special_char_regex, "", boost::match_default | boost::format_all);
+
+    result.emplace(stripped_asset_path.str());
+  }
+}
+
 std::unordered_set<std::string> extract_js_resources(const std::string& file_contents) {
   std::unordered_set<std::string> result;
   extract_js_sounds(file_contents, result);
-  // == Below are all TODO ==
-  //extract_js_asset_registrations(file_contents, result);
-  //extract_js_uris(file_contents, result);
-  //extract_js_glyphs(file_contents, result);
-
+  extract_js_uris(file_contents, result);
+  extract_js_asset_registrations(file_contents, result);
   return result;
 }
 
@@ -394,7 +439,7 @@ std::unordered_set<std::string> get_files_by_suffix(
       path_t entry_path = entry.path();
 
       if (is_regular_file(entry_path) &&
-        ends_with(entry_path.string().c_str(), suffix.c_str())) {
+          ends_with(entry_path.string().c_str(), suffix.c_str())) {
         files.emplace(entry_path.string());
       }
 
@@ -431,9 +476,7 @@ std::unordered_set<std::string> get_candidate_js_resources(
 }
 
 
-// Not yet fully implemented. This parses the content of all .js files and
-// extracts all resources referenced by them. It is quite expensive
-// (can take in the order of seconds when there are thousands of files to parse).
+// Parses the content of all .js files and extracts all resources referenced.
 std::unordered_set<uint32_t> get_js_resources_by_parsing(
     const std::string& directory,
     std::map<std::string, std::vector<uint32_t>> name_to_ids) {
@@ -446,8 +489,8 @@ std::unordered_set<uint32_t> get_js_resources_by_parsing(
   }
 
   // The actual resources are the intersection of the real resources and the
-  // candidate resources (since our current javascript processing produces a lot
-  // of potential resource names that are not actually valid).
+  // candidate resources (since our current javascript processing produces
+  // a few potential resource names that are not actually valid).
   // Look through the smaller set and compare it to the larger to efficiently
   // compute the intersection.
   if (name_to_ids.size() < js_candidate_resources.size()) {
