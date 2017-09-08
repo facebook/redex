@@ -92,6 +92,7 @@ libredex_la_SOURCES = \
 	libredex/Inliner.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
+	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
@@ -116,6 +117,7 @@ libredex_la_SOURCES = \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
+	libredex/IRTypeChecker.cpp \
 	libredex/TypeSystem.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \

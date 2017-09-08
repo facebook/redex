@@ -199,6 +199,36 @@ bool is_object(const DexType* type) {
   return (sig == 'L') || (sig == '[');
 }
 
+bool is_integer(const DexType* type) {
+  char sig = type->get_name()->c_str()[0];
+  switch (sig) {
+  case 'Z':
+  case 'B':
+  case 'S':
+  case 'C':
+  case 'I': {
+    return true;
+  }
+  default: { return false; }
+  }
+}
+
+bool is_long(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'J';
+}
+
+bool is_float(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'F';
+}
+
+bool is_double(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'D';
+}
+
+bool is_void(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'V';
+}
+
 uint32_t get_array_level(const DexType* type) {
   auto name = type->get_name()->c_str();
   uint32_t level = 0;

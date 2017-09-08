@@ -177,6 +177,20 @@ bool is_array(const DexType* type);
 bool is_object(const DexType* type);
 
 /**
+ * Return true if the type is a primitive type that fits within a 32-bit
+ * register, i.e., boolean, byte, char, short or int.
+ */
+bool is_integer(const DexType* type);
+
+bool is_long(const DexType* type);
+
+bool is_float(const DexType* type);
+
+bool is_double(const DexType* type);
+
+bool is_void(const DexType* type);
+
+/**
  * Return the level of the array type, that is the number of '[' in the array.
  * int[] => [I
  * int[][] => [[I
