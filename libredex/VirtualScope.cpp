@@ -788,7 +788,6 @@ void get_root_scopes(const SignatureMap& sig_map,
 } // namespace
 
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
-  Timer("Signature Map");
   SignatureMap signature_map;
   build_signature_map(class_hierarchy, get_object_type(), signature_map);
   return signature_map;

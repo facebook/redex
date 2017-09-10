@@ -74,7 +74,6 @@ const TypeSet TypeSystem::empty_set = TypeSet();
 const TypeVector TypeSystem::empty_vec = TypeVector();
 
 TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
-  Timer("TypeSystem");
   load_interface_children(scope, m_intf_children);
   make_instanceof_interfaces_table();
 }
