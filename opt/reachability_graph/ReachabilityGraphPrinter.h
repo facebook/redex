@@ -11,9 +11,9 @@
 
 #include "Pass.h"
 
-class RemoveUnreachablePass : public Pass {
+class ReachabilityGraphPrinterPass : public Pass {
  public:
-  RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
+  ReachabilityGraphPrinterPass() : Pass("ReachabilityGraphPrinterPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("ignore_string_literals", {}, m_ignore_string_literals);
