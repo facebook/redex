@@ -15,31 +15,39 @@ class DexType;
 class DexString;
 class DexProto;
 
-struct DexMethodRef {
-  /* Method Ref related members */
+/**
+ * A specification for a method in order to look it up in the global cache
+ * or to create it. Also used to modify an existing method reference.
+ */
+struct DexMethodSpec {
+  /* Method related members */
   DexType* cls = nullptr;
   DexString* name = nullptr;
   DexProto* proto = nullptr;
-  DexMethodRef() = default;
-  DexMethodRef(DexType* cls, DexString* name, DexProto* proto)
-      : cls(cls), name(name), proto(proto) {}
+  DexMethodSpec() = default;
+  DexMethodSpec(DexType* c, DexString* n, DexProto* p)
+      : cls(c), name(n), proto(p) {}
 
-  bool operator==(const DexMethodRef& r) const {
+  bool operator==(const DexMethodSpec& r) const {
     return cls == r.cls && name == r.name && proto == r.proto;
   }
 };
 
-struct DexFieldRef {
-  /* Field Ref related members */
+/**
+ * A specification for a field in order to look it up in the global cache
+ * or to create it. Also used to modify an existing field reference.
+ */
+struct DexFieldSpec {
+  /* Field related members */
   DexType* cls = nullptr;
   DexString* name = nullptr;
   DexType* type = nullptr;
 
-  DexFieldRef() = default;
-  DexFieldRef(DexType* cls, DexString* name, DexType* type)
-      : cls(cls), name(name), type(type) {}
+  DexFieldSpec() = default;
+  DexFieldSpec(DexType* c, DexString* n, DexType* t)
+      : cls(c), name(n), type(t) {}
 
-  bool operator==(const DexFieldRef& r) const {
+  bool operator==(const DexFieldSpec& r) const {
     return cls == r.cls && name == r.name && type  == r.type;
   };
 };
@@ -47,8 +55,8 @@ struct DexFieldRef {
 namespace std {
 
 template <>
-struct hash<DexMethodRef> {
-  size_t operator()(const DexMethodRef& r) const {
+struct hash<DexMethodSpec> {
+  size_t operator()(const DexMethodSpec& r) const {
     size_t seed = boost::hash<DexType*>()(r.cls);
     boost::hash_combine(seed, r.name);
     boost::hash_combine(seed, r.proto);
@@ -57,8 +65,8 @@ struct hash<DexMethodRef> {
 };
 
 template <>
-struct hash<DexFieldRef> {
-  size_t operator()(const DexFieldRef& r) const {
+struct hash<DexFieldSpec> {
+  size_t operator()(const DexFieldSpec& r) const {
     size_t seed = boost::hash<DexType*>()(r.cls);
     boost::hash_combine(seed, r.name);
     boost::hash_combine(seed, r.type);

@@ -108,7 +108,6 @@ void build_interface_map(InterfaceMap& interfaces,
 }
 
 ClassHierarchy build_type_hierarchy(const Scope& scope) {
-  Timer("Class Hierarchy");
   ClassHierarchy hierarchy;
   // build the type hierarchy
   for (const auto& cls : scope) {
@@ -120,7 +119,6 @@ ClassHierarchy build_type_hierarchy(const Scope& scope) {
 }
 
 InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
-  Timer("Interface Map");
   InterfaceMap interfaces;
   // build the type hierarchy
   for (const auto& cls_it : hierarchy) {

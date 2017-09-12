@@ -37,8 +37,8 @@ constexpr const char* DISPATCH_METHOD_NAME = "$dispatch$throws";
 using outlined_t = std::tuple<DexType*, DexString*>;
 using namespace dex_asm;
 
-DexMethod* get_ctor(DexType* type) {
-  DexMethod* ctor = DexMethod::make_method(
+DexMethodRef* get_ctor(DexType* type) {
+  DexMethodRef* ctor = DexMethod::make_method(
       type,
       DexString::make_string("<init>"),
       DexProto::make_proto(get_void_type(),
@@ -46,7 +46,7 @@ DexMethod* get_ctor(DexType* type) {
   return ctor;
 }
 
-DexMethod* get_dispatch_method() {
+DexMethodRef* get_dispatch_method() {
   auto ex_type = DexType::get_type("Ljava/lang/Exception;");
   auto proto = DexProto::make_proto(
       ex_type, DexTypeList::make_type_list({get_int_type()}));
@@ -114,9 +114,9 @@ void build_dispatcher(DexStoresVector& stores,
   stores[0].get_dexen().rbegin()->emplace_back(dispatch_cls->create());
 }
 
-IRInstruction* make_invoke(const DexMethod* meth, uint16_t v0) {
+IRInstruction* make_invoke(const DexMethodRef* meth, uint16_t v0) {
   auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke->set_method(const_cast<DexMethod*>(meth))
+  invoke->set_method(const_cast<DexMethodRef*>(meth))
       ->set_arg_word_count(1)
       ->set_src(0, v0);
   return invoke;
@@ -146,7 +146,7 @@ void Outliner::run_pass(DexStoresVector& stores,
                         PassManager& mgr) {
   auto scope = build_scope(stores, m_outline_primary_dex);
 
-  DexMethod* dispatch_method = get_dispatch_method();
+  DexMethodRef* dispatch_method = get_dispatch_method();
 
   // Outlining match pattern
   auto exception_type = DexType::get_type("Ljava/lang/Exception;");
@@ -154,7 +154,7 @@ void Outliner::run_pass(DexStoresVector& stores,
   auto match = std::make_tuple(
       m::new_instance(m::opcode_type(m::is_assignable_to(exception_type))),
       m::const_string(),
-      m::invoke_direct(m::opcode_method(m::is_constructor())),
+      m::invoke_direct(m::opcode_method(m::can_be_constructor())),
       m::throwex());
 
   // Collect all throws we should outline

@@ -97,7 +97,7 @@ bool is_wide_type(const DexType* type);
 /**
  * Return true if method signatures (name and proto) match.
  */
-inline bool signatures_match(const DexMethod* a, const DexMethod* b) {
+inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
 
@@ -175,6 +175,20 @@ bool is_array(const DexType* type);
  * Return true if the type is an object type (array types included).
  */
 bool is_object(const DexType* type);
+
+/**
+ * Return true if the type is a primitive type that fits within a 32-bit
+ * register, i.e., boolean, byte, char, short or int.
+ */
+bool is_integer(const DexType* type);
+
+bool is_long(const DexType* type);
+
+bool is_float(const DexType* type);
+
+bool is_double(const DexType* type);
+
+bool is_void(const DexType* type);
 
 /**
  * Return the level of the array type, that is the number of '[' in the array.

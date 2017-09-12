@@ -11,6 +11,7 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
+#include "Inliner.h"
 #include "IRCode.h"
 #include "TestGenerator.h"
 #include "Util.h"
@@ -18,19 +19,19 @@
 class InlinerTestAliasedInputs : public EquivalenceTest {
   DexMethod* m_callee;
  public:
-  virtual std::string test_name() {
+  std::string test_name() override {
     return "InlinerTestAliasedInputs";
   }
 
-  virtual void setup(DexClass* cls) {
+  void setup(DexClass* cls) override {
     auto ret = DexType::make_type("I");
     auto arg = DexType::make_type("I");
     auto args = DexTypeList::make_type_list({arg, arg});
     auto proto = DexProto::make_proto(ret, args); // I(I, I)
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto);
+                               proto));
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 0));
     {
@@ -45,7 +46,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     cls->add_method(m_callee);
   }
 
-  virtual void build_method(DexMethod* m) {
+  void build_method(DexMethod* m) override {
     using namespace dex_asm;
     auto mt = m->get_code();
     mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
@@ -62,7 +63,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     mt->push_back(dasm(OPCODE_RETURN, {1_v}));
   }
 
-  virtual void transform_method(DexMethod* m) {
+  void transform_method(DexMethod* m) override {
     FatMethod::iterator invoke_it;
     auto ii = InstructionIterable(m->get_code());
     auto end = ii.end();
@@ -74,8 +75,8 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         break;
       }
     }
-    InlineContext context(m);
-    IRCode::inline_method(context, m_callee->get_code(), invoke_it);
+    inliner::InlineContext context(m);
+    inliner::inline_method(context, m_callee->get_code(), invoke_it);
   }
 };
 
@@ -86,14 +87,14 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
  protected:
   DexMethod* m_callee;
  public:
-  virtual void setup(DexClass* cls) {
+  void setup(DexClass* cls) override {
     auto ret = DexType::make_type("V");
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // V()
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto);
+                               proto));
     m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 1));
     using namespace dex_asm;
@@ -112,7 +113,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   virtual DexOpcode if_op() = 0;
 
-  virtual void build_method(DexMethod* m) {
+  void build_method(DexMethod* m) override {
     using namespace dex_asm;
     auto mt = m->get_code();
     mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
@@ -134,7 +135,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     m->get_code()->set_registers_size(3);
   }
 
-  virtual void transform_method(DexMethod* m) {
+  void transform_method(DexMethod* m) override {
     FatMethod::iterator invoke_it;
     auto ii = InstructionIterable(m->get_code());
     auto end = ii.end();
@@ -146,8 +147,8 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         break;
       }
     }
-    InlineContext context(m);
-    IRCode::inline_method(context, m_callee->get_code(), invoke_it);
+    inliner::InlineContext context(m);
+    inliner::inline_method(context, m_callee->get_code(), invoke_it);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }

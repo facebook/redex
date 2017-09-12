@@ -28,13 +28,14 @@
  * class E extends U
  */
 
-DexField* make_field_ref(DexType* cls, const char* name, DexType* type) {
+DexFieldRef* make_field_ref(DexType* cls, const char* name, DexType* type) {
   return DexField::make_field(cls, DexString::make_string(name), type);
 }
 
 DexField* make_field_def(DexType* cls, const char* name, DexType* type,
     DexAccessFlags access = ACC_PUBLIC, bool external = false) {
-  auto field = DexField::make_field(cls, DexString::make_string(name), type);
+  auto field = static_cast<DexField*>(
+      DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
     field->set_external();
@@ -100,10 +101,10 @@ TEST(ResolveField, empty) {
   create_scope();
 
   // different cases for int A.f1
-  DexField* fdef = DexField::get_field(DexType::get_type("A"),
+  DexFieldRef* fdef = DexField::get_field(DexType::get_type("A"),
       DexString::get_string("f1"), DexType::get_type("I"));
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
-  DexField* fref = make_field_ref(
+  DexFieldRef* fref = make_field_ref(
       DexType::get_type("A"), "f1", DexType::get_type("I"));
   EXPECT_TRUE(fdef->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);

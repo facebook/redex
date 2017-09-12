@@ -109,11 +109,11 @@ std::unordered_set<DexMethod*> strings_to_dexmethods(
       continue;
     }
     auto method = DexMethod::get_method(classtype, methodname, proto);
-    if (!method) {
+    if (!method || !method->is_def()) {
       opt_warn(COLDSTART_STATIC, "%s\n", mstr.c_str());
       continue;
     }
-    methods.insert(method);
+    methods.insert(static_cast<DexMethod*>(method));
   }
   return methods;
 }
@@ -172,8 +172,11 @@ void remove_primary_dex_refs(
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* insn) {
       if (insn->has_method()) {
-        auto callee = insn->get_method();
-        ref_set.insert(callee);
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn));
+        if (callee != nullptr) {
+          ref_set.insert(callee);
+        }
       }
     }
   );
@@ -184,7 +187,7 @@ void remove_primary_dex_refs(
     statics.end());
 }
 
-bool allow_field_access(DexField* field) {
+bool allow_field_access(DexFieldRef* field) {
   auto fieldcls = type_class(field->get_class());
   if (!field->is_concrete()) {
     return false;
@@ -194,7 +197,7 @@ bool allow_field_access(DexField* field) {
     return false;
   }
   set_public(fieldcls);
-  set_public(field);
+  set_public(static_cast<DexField*>(field));
   return true;
 }
 
@@ -259,8 +262,8 @@ bool illegal_access(DexMethod* method) {
       }
     }
     if (op->has_method()) {
-      auto meth = op->get_method();
-      if (!allow_method_access(meth)) {
+      auto meth = resolve_method(op->get_method(), opcode_to_search(op));
+      if (meth != nullptr && !allow_method_access(meth)) {
         return true;
       }
     }
@@ -306,9 +309,9 @@ DexClass* move_statics_out(
     }
     TRACE(SINK, 2, "sink %s to %s\n", SHOW(meth), SHOW(sink_class));
     type_class(meth->get_class())->remove_method(meth);
-    DexMethodRef ref;
-    ref.cls = sink_class->get_type();
-    meth->change(ref);
+    DexMethodSpec spec;
+    spec.cls = sink_class->get_type();
+    meth->change(spec);
     set_public(meth);
     sink_class->add_method(meth);
     moved_count++;
@@ -340,8 +343,9 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
     },
     [&](DexMethod* m, IRInstruction* insn) {
       if (insn->has_method()) {
-        auto callee = insn->get_method();
-        if (static_set.count(callee)) {
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn));
+        if (callee != nullptr && static_set.count(callee)) {
           statics_to_callers[callee] = type_class(m->get_class());
         }
       }

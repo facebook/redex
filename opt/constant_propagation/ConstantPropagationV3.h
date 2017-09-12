@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <mutex>
+
+#include "ConstPropV3Config.h"
 #include "GlobalConstProp.h"
 #include "IRCode.h"
 #include "LocalConstProp.h"
@@ -24,7 +27,12 @@ class ConstantPropagationPassV3 : public Pass {
                         ConfigFiles& cfg,
                         PassManager& mgr) override;
 
+
  private:
-  std::unordered_set<DexType*> m_blacklist;
+  ConstPropV3Config m_config;
+
+  // stats
+  std::mutex m_stats_mutex;
   size_t m_branches_removed;
+  size_t m_materialized_consts;
 };

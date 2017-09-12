@@ -51,9 +51,9 @@ IRInstruction* dasm(DexOpcode opcode,
                     DexType* type,
                     std::initializer_list<Operand> = {});
 IRInstruction* dasm(DexOpcode opcode,
-                    DexField* field,
+                    DexFieldRef* field,
                     std::initializer_list<Operand> = {});
 IRInstruction* dasm(DexOpcode opcode,
-                    DexMethod* method,
+                    DexMethodRef* method,
                     std::initializer_list<Operand> = {});
 }

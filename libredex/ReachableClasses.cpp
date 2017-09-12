@@ -215,8 +215,8 @@ void init_permanently_reachable_classes(
       m::const_string(/* const-string {vX}, <any string> */),
       m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
                        m::opcode_method(
-                           m::named<DexMethod>("forName") &&
-                           m::on_class<DexMethod>("Ljava/lang/Class;")) &&
+                           m::named<DexMethodRef>("forName") &&
+                           m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
                        m::has_n_args(1)));
 
   walk_matching_opcodes(
@@ -430,13 +430,13 @@ struct SeedsParser {
           "  interned: %s\n",
           line.c_str(), canon_field.c_str(), xlate_name.c_str(),
           SHOW(dex_field));
-    if (!dex_field) {
+    if (!dex_field || !dex_field->is_def()) {
       TRACE(PGR, 2,
             "Seed file contains field not found in dex: %s (obfuscated: %s)\n",
             canon_field.c_str(), xlate_name.c_str());
       return false;
     }
-    mark_reachable_by_seed(dex_field);
+    mark_reachable_by_seed(static_cast<DexField*>(dex_field));
     return true;
   }
 
@@ -497,13 +497,13 @@ struct SeedsParser {
           "  interned: %s\n",
           line.c_str(), canon_method.c_str(), xlate_method.c_str(),
           SHOW(dex_method));
-    if (!dex_method) {
+    if (!dex_method || !dex_method->is_def()) {
       TRACE(PGR, 2,
             "Seed file contains method not found in dex: %s (obfuscated: %s)\n",
             canon_method.c_str(), xlate_method.c_str());
       return false;
     }
-    mark_reachable_by_seed(dex_method);
+    mark_reachable_by_seed(static_cast<DexMethod*>(dex_method));
     return true;
   }
 

@@ -18,10 +18,11 @@
 TEST_F(PreVerify, StripDebugInfo) {
   bool found_prologue_end = false;
   for (const auto& cls : classes) {
-    std::vector<DexMethod*> methods;
+    std::vector<DexMethodRef*> methods;
     cls->gather_methods(methods);
     for (auto dm : methods) {
-      auto code = dm->get_dex_code();
+      if (!dm->is_def()) continue;
+      auto code = static_cast<DexMethod*>(dm)->get_dex_code();
       if (!code) continue;
       auto debug_item = code->get_debug_item();
       if (!debug_item) continue;
@@ -44,10 +45,11 @@ TEST_F(PreVerify, StripDebugInfo) {
 
 TEST_F(PostVerify, StripDebugInfo) {
   for (const auto& cls : classes) {
-    std::vector<DexMethod*> methods;
+    std::vector<DexMethodRef*> methods;
     cls->gather_methods(methods);
     for (auto dm : methods) {
-      auto code = dm->get_dex_code();
+      if (!dm->is_def()) continue;
+      auto code = static_cast<DexMethod*>(dm)->get_dex_code();
       if (!code) {
         continue;
       }

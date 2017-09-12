@@ -179,7 +179,7 @@ class Breadcrumbs {
     return type;
   }
 
-  const DexType* check_method(const DexMethod* method) {
+  const DexType* check_method(const DexMethodRef* method) {
     const auto& proto = method->get_proto();
     auto type = check_type(proto->get_rtype());
     if (type != nullptr) return type;
@@ -253,8 +253,9 @@ class Breadcrumbs {
     } else {
       // the class of the field is around but the field may have
       // been deleted so let's verify the field exists on the class
-      if (field->is_def() && !class_contains(field)) {
-        bad_field_insns[field][method].emplace_back(insn);
+      if (field->is_def() && !class_contains(static_cast<DexField*>(field))) {
+        bad_field_insns[static_cast<DexField*>(field)][method].
+            emplace_back(insn);
         return;
       }
     }
@@ -281,9 +282,12 @@ class Breadcrumbs {
     } else {
       // the class of the method is around but the method may have
       // been deleted so let's verify the method exists on the class
-      if (meth->is_def() && !class_contains(meth)) {
-        bad_meth_insns[meth][method].emplace_back(insn);
-        return;
+      if (meth->is_def()) {
+        const auto meth_def = static_cast<DexMethod*>(meth);
+        if (!class_contains(meth_def)) {
+          bad_meth_insns[meth_def][method].emplace_back(insn);
+          return;
+        }
       }
     }
   }

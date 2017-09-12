@@ -301,8 +301,11 @@ void keep_fields(std::unordered_map<std::string, boost::regex*>& regex_map,
       }
       keeper(field);
       if (field->rstate.report_whyareyoukeeping()) {
-        std::cout << "Field " << SHOW(field) << " kept by "
-                  << show_keep(keep_rule) << std::endl;
+        TRACE(PGR,
+              2,
+              "whyareyoukeeping Field %s kept by %s\n",
+              SHOW(field),
+              show_keep(keep_rule).c_str());
       }
       fieldSpecification.count++;
     }
@@ -397,8 +400,11 @@ void keep_methods(std::unordered_map<std::string, boost::regex*>& regex_map,
       }
       keeper(method);
       if (method->rstate.report_whyareyoukeeping()) {
-        std::cout << "Method " << SHOW(method) << " kept by "
-                  << show_keep(keep_rule) << std::endl;
+        TRACE(PGR,
+              2,
+              "whyareyoukeeping Method %s kept by %s\n",
+              SHOW(method),
+              show_keep(keep_rule).c_str());
       }
       methodSpecification.count++;
     }
@@ -632,9 +638,12 @@ void mark_class_and_members_for_keep(
     apply_keep_modifiers(keep_rule, cls);
     cls->rstate.set_keep();
     if (cls->rstate.report_whyareyoukeeping()) {
-      std::cout << "Class "
-                << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
-                << " kept by " << show_keep(keep_rule) << std::endl;
+      TRACE(
+          PGR,
+          2,
+          "whyareyoukeeping Class %s kept by %s\n",
+          redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name()).c_str(),
+          show_keep(keep_rule).c_str());
     }
     if (!keep_rule.allowobfuscation) {
       cls->rstate.increment_keep_count();
@@ -738,16 +747,16 @@ void process_keep(const ProguardMap& pg_map,
   // may, for instance, forbid renaming of all classes that inherit from a
   // given external class.
   build_extends_or_implements_hierarchy(external_classes, &hierarchy);
-  auto process_single_keep =
-      [&](ClassMatcher& class_match, KeepSpec& keep_rule, DexClass* cls) {
-        // Skip external classes.
-        if (cls == nullptr || cls->is_external()) {
-          return;
-        }
-        if (class_match.match(cls)) {
-          keep_processor(regex_map, keep_rule, cls);
-        }
-      };
+  auto process_single_keep = [&](
+      ClassMatcher& class_match, KeepSpec& keep_rule, DexClass* cls) {
+    // Skip external classes.
+    if (cls == nullptr || cls->is_external()) {
+      return;
+    }
+    if (class_match.match(cls)) {
+      keep_processor(regex_map, keep_rule, cls);
+    }
+  };
   for (auto& keep_rule : keep_rules) {
     ClassMatcher class_match(keep_rule);
 
@@ -862,10 +871,12 @@ void process_proguard_rules(const ProguardMap& pg_map,
     if (is_annotation(cls)) {
       cls->rstate.set_keep();
       if (cls->rstate.report_whyareyoukeeping()) {
-        std::cout
-            << "Class "
-            << redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
-            << " kept because it is an annotation class\n";
+        TRACE(PGR,
+              2,
+              "whyareyoukeeping Class %s kept because it is an annotation "
+              "class\n",
+              redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
+                  .c_str());
       }
       cls->rstate.increment_keep_count();
     }

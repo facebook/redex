@@ -63,7 +63,7 @@ DexType* array_base_type(DexType* type) {
 }
 
 void process_proto(std::unordered_set<const DexType*>* class_references,
-                   DexMethod* meth) {
+                   DexMethodRef* meth) {
   // Types referenced in protos.
   auto const& proto = meth->get_proto();
   class_references->insert(array_base_type(proto->get_rtype()));

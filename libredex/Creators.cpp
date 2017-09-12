@@ -57,7 +57,7 @@ void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
 }
 
 void MethodBlock::invoke(DexOpcode opcode,
-                         DexMethod* meth,
+                         DexMethodRef* meth,
                          const std::vector<Location>& args) {
   always_assert(is_invoke(opcode));
   auto invk = new IRInstruction(opcode);
@@ -592,7 +592,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
                              DexAccessFlags access)
-    : method(DexMethod::make_method(cls, name, proto)) {
+    : method(
+        static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
@@ -647,7 +648,8 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
                                            DexClass* target_cls) {
   assert(!is_static(meth));
   assert(!is_init(meth) && !is_clinit(meth));
-  auto smeth = DexMethod::make_method(target_cls->get_type(), name, proto);
+  auto smeth = static_cast<DexMethod*>(
+      DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(
       meth->get_access() | ACC_STATIC, meth->release_code(), false);
   target_cls->add_method(smeth);

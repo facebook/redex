@@ -18,8 +18,50 @@
 #include "IRCode.h"
 #include "Resolver.h"
 
+namespace inliner {
+
 /**
- * Helper class to inline a set of condidates.
+ * Carry context for multiple inline into a single caller.
+ * In particular, it caches the liveness analysis so that we can reuse it when
+ * multiple callees into the same caller.
+ */
+struct InlineContext {
+  IRCode* caller_code;
+  uint64_t estimated_insn_size{0};
+  explicit InlineContext(DexMethod* caller);
+};
+
+/*
+ * Inline tail-called `callee` into `caller` at `pos`.
+ *
+ * NB: This is NOT a general-purpose inliner; it assumes that the caller does
+ * not do any work after the call, so the only live registers are the
+ * parameters to the callee. This allows it to do inlining by simply renaming
+ * the callee's registers. The more general inline_method instead inserts
+ * move instructions to map the caller's argument registers to the callee's
+ * params.
+ *
+ * In general, use of this method should be considered deprecated. It is
+ * currently only being used by the BridgePass because the insertion of
+ * additional move instructions would confuse SynthPass, which looks for
+ * exact sequences of instructions.
+ */
+void inline_tail_call(DexMethod* caller,
+                      DexMethod* callee,
+                      FatMethod::iterator pos);
+
+/*
+ * Inline `callee` into `context.caller_code` at `pos`.
+ * This is a general-purpose inliner.
+ */
+bool inline_method(InlineContext& context,
+                   IRCode* callee,
+                   FatMethod::iterator pos);
+
+} // namespace inliner
+
+/**
+ * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
  * to find and inline all calls to candidate.
  * A resolver is used to map a method reference to a method definition.
@@ -40,7 +82,7 @@ class MultiMethodInliner {
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethod*, MethodSearch)> resolver,
+      std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const Config& config);
 
   ~MultiMethodInliner() {
@@ -81,7 +123,9 @@ class MultiMethodInliner {
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraint for inlining.
    */
-  bool is_inlinable(InlineContext& ctx, DexMethod* callee, DexMethod* caller);
+  bool is_inlinable(inliner::InlineContext& ctx,
+                    DexMethod* callee,
+                    DexMethod* caller);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -161,8 +205,9 @@ class MultiMethodInliner {
    * other constraints that might be worth looking into, e.g. the number of
    * registers.
    */
-  bool caller_too_large(
-      InlineContext& ctx, DexMethod* caller, DexType* caller_type);
+  bool caller_too_large(inliner::InlineContext& ctx,
+                        DexMethod* caller,
+                        DexType* caller_type);
 
   /**
    * Change the visibility of members accessed in a callee as they are moved
@@ -183,7 +228,7 @@ class MultiMethodInliner {
   /**
    * Resolver function to map a method reference to a method definition.
    */
-  std::function<DexMethod*(DexMethod*, MethodSearch)> resolver;
+  std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver;
 
   /**
    * Set of classes in each logical store that must not be touched

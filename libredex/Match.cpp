@@ -9,6 +9,34 @@
 
 #include "Match.h"
 
+namespace {
+
+bool default_constructor(const DexMethod* meth) {
+  if (!is_static(meth) &&
+          is_constructor(meth) &&
+          has_no_args(meth) &&
+          has_code(meth)) {
+    auto ii = InstructionIterable(meth->get_code());
+    auto it = ii.begin();
+    auto end = ii.end();
+    auto op = it->insn->opcode();
+    if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC_RANGE) {
+      return false;
+    }
+    ++it;
+    if (it->insn->opcode() != OPCODE_RETURN_VOID) {
+      return false;
+    }
+    ++it;
+    if (it != end) {
+      return false;
+    }
+  }
+  return false;
+}
+
+}
+
 namespace m {
 
 match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
@@ -90,27 +118,16 @@ match_t<IRInstruction> throwex() {
 match_t<DexMethod, std::tuple<> > is_default_constructor() {
   return {
     [](const DexMethod* meth) {
-      if (!is_static(meth) &&
-              is_constructor(meth) &&
-              has_no_args(meth) &&
-              has_code(meth)) {
-        auto ii = InstructionIterable(meth->get_code());
-        auto it = ii.begin();
-        auto end = ii.end();
-        auto op = it->insn->opcode();
-        if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC_RANGE) {
-          return false;
-        }
-        ++it;
-        if (it->insn->opcode() != OPCODE_RETURN_VOID) {
-          return false;
-        }
-        ++it;
-        if (it != end) {
-          return false;
-        }
-      }
-      return false;
+      return default_constructor(meth);
+    }
+  };
+}
+
+match_t<DexMethodRef, std::tuple<> > can_be_default_constructor() {
+  return {
+    [](const DexMethodRef* meth) {
+      return meth->is_def() &&
+          default_constructor(static_cast<const DexMethod*>(meth));
     }
   };
 }
@@ -118,6 +135,14 @@ match_t<DexMethod, std::tuple<> > is_default_constructor() {
 match_t<DexMethod, std::tuple<> > is_constructor() {
   return {
     [](const DexMethod* meth) {
+      return is_constructor(meth);
+    }
+  };
+}
+
+match_t<DexMethodRef, std::tuple<> > can_be_constructor() {
+  return {
+    [](const DexMethodRef* meth) {
       return is_constructor(meth);
     }
   };

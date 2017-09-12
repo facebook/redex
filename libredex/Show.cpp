@@ -652,15 +652,15 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
       ss << show(insn->get_type());
       break;
     case opcode::Ref::Field:
-      if (deobfuscated) {
-        ss << show_deobfuscated(insn->get_field());
+      if (deobfuscated && insn->get_field()->is_def()) {
+        ss << show_deobfuscated(static_cast<DexField*>(insn->get_field()));
       } else {
         ss << show(insn->get_field());
       }
       break;
     case opcode::Ref::Method:
-      if (deobfuscated) {
-        ss << show_deobfuscated(insn->get_method());
+      if (deobfuscated && insn->get_method()->is_def()) {
+        ss << show_deobfuscated(static_cast<DexMethod*>(insn->get_method()));
       } else {
         ss << show(insn->get_method());
       }
@@ -684,10 +684,11 @@ std::string show(const DexType* p) {
   return show(p->get_name());
 }
 
-std::string show(const DexField* p) {
+std::string show(const DexFieldRef* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name()) << ":" << show(p->get_type());
+  ss << show(p->get_class()) << "." << show(p->get_name()) << ":"
+      << show(p->get_type());
   return ss.str();
 }
 
@@ -721,8 +722,9 @@ std::string show(const DexProto* p) {
 std::string show(const DexCode* code) {
   if (!code) return "";
   std::stringstream ss;
-  ss << "regs: " << code->get_registers_size() << ", ins: " << code->get_ins_size()
-     << ", outs: " << code->get_outs_size() << "\n";
+  ss << "regs: " << code->get_registers_size()
+      << ", ins: " << code->get_ins_size()
+      << ", outs: " << code->get_outs_size() << "\n";
   if (code->m_insns != nullptr) {
     for (auto const& insn : code->get_instructions()) {
       ss << show(insn) << "\n";
@@ -731,18 +733,20 @@ std::string show(const DexCode* code) {
   return ss.str();
 }
 
-std::string show(const DexMethod* p) {
+std::string show(const DexMethodRef* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name()) << ":" << show(p->get_proto());
+  ss << show(p->get_class()) << "." << show(p->get_name())
+      << ":" << show(p->get_proto());
   return ss.str();
 }
 
 std::string vshow(const DexMethod* p) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->get_access(), true) << humanize(show(p->get_class())) << "."
-     << show(p->get_name()) << show(p->get_proto());
+  ss << accessibility(p->get_access(), true)
+      << humanize(show(p->get_class())) << "."
+      << show(p->get_name()) << show(p->get_proto());
   if (p->get_anno_set()) {
     ss << "\n  annotations:" << show(p->get_anno_set());
   }

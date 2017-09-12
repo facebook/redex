@@ -21,7 +21,8 @@ TEST(IRCode, LoadParamInstructionsDirect) {
 
   g_redex = new RedexContext();
 
-  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();
@@ -37,7 +38,8 @@ TEST(IRCode, LoadParamInstructionsVirtual) {
 
   g_redex = new RedexContext();
 
-  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
   method->make_concrete(ACC_PUBLIC, true);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();

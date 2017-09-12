@@ -40,7 +40,8 @@ class DexUnitTestRunner {
     auto clinit_name = DexString::make_string("<clinit>");
     auto void_args = DexTypeList::make_type_list({});
     auto void_void = DexProto::make_proto(get_void_type(), void_args);
-    auto clinit = DexMethod::make_method(type, clinit_name, void_void);
+    auto clinit = static_cast<DexMethod*>(
+        DexMethod::make_method(type, clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
     clinit->set_code(std::make_unique<IRCode>(clinit, 1));
     cls->add_method(clinit);
@@ -65,7 +66,8 @@ class DexUnitTestRunner {
                                boost::any val) {
     auto container = cls->get_type();
     auto field_name = DexString::make_string(name);
-    auto field = DexField::make_field(container, field_name, type);
+    auto field = static_cast<DexField*>(
+        DexField::make_field(container, field_name, type));
     auto ev = make_ev(type, val);
     field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
     cls->add_field(field);

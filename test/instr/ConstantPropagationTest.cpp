@@ -14,25 +14,49 @@
 #include "IRCode.h"
 #include "VerifyUtil.h"
 
+int count_ifs(IRCode* code) {
+  size_t num_ifs = 0;
+  for (const auto& mie : InstructionIterable(code)) {
+    if (is_conditional_branch(mie.insn->opcode())) {
+      num_ifs++;
+    }
+  }
+  return num_ifs;
+}
+
+int count_ops(IRCode* code, DexOpcode op) {
+  size_t result = 0;
+  for (const auto& mie : InstructionIterable(code)) {
+    if (mie.insn->opcode() == op) {
+      result++;
+    }
+  }
+  return result;
+}
+
 TEST_F(PreVerify, ConstantPropagation) {
   TRACE(CONSTP, 1, "------------- pre ---------------\n");
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
-    if(meth->get_name()->str().find("if") == std::string::npos) {
+    if (meth->get_name()->str().find("if") == std::string::npos) {
       continue;
     }
-    auto code = meth->get_dex_code();
+    IRCode* code = new IRCode(meth);
     EXPECT_NE(code, nullptr);
     bool has_if = false;
-    TRACE(CONSTP, 1, "%s\n", SHOW(meth));
-    TRACE(CONSTP, 1, "%s\n", SHOW(code));
-    for (const auto& insn : code->get_instructions()) {
-      if (is_conditional_branch(insn->opcode())) {
-        has_if = true;
-      }
+    if (meth->get_name()->str().find("plus_one") != std::string::npos) {
+      TRACE(CONSTP, 1, "%s\n", SHOW(meth));
+      TRACE(CONSTP, 1, "%s\n", SHOW(code));
     }
-    EXPECT_TRUE(has_if);
+
+    if (meth->get_name()->str().find("overflow") == std::string::npos) {
+      EXPECT_EQ(1, count_ifs(code));
+    }
+    if (meth->get_name()->str().find("plus_one") != std::string::npos) {
+      size_t num_add_lits = count_ops(code, OPCODE_ADD_INT_LIT8);
+      EXPECT_EQ(1, count_ops(code, OPCODE_ADD_INT_LIT8));
+    }
   }
 }
 
@@ -44,16 +68,21 @@ TEST_F(PostVerify, ConstantPropagation) {
     if(meth->get_name()->str().find("if") == std::string::npos) {
       continue;
     }
-    auto code = meth->get_dex_code();
+    IRCode* code = new IRCode(meth);
     EXPECT_NE(code, nullptr);
-    bool has_if = false;
-    TRACE(CONSTP, 1, "%s\n", SHOW(meth));
-    TRACE(CONSTP, 1, "%s\n", SHOW(code));
-    for (const auto& insn : code->get_instructions()) {
-      if (is_conditional_branch(insn->opcode())) {
-        has_if = true;
-      }
+    if (meth->get_name()->str().find("plus_one") != std::string::npos) {
+      TRACE(CONSTP, 1, "%s\n", SHOW(meth));
+      TRACE(CONSTP, 1, "%s\n", SHOW(code));
     }
-    EXPECT_FALSE(has_if);
+
+    EXPECT_EQ(0, count_ifs(code));
+    if (meth->get_name()->str().find("plus_one") != std::string::npos) {
+      EXPECT_EQ(0, count_ops(code, OPCODE_ADD_INT_LIT8));
+    }
+
+    if (meth->get_name()->str().find("overflow") != std::string::npos) {
+      // make sure we don't fold overflow at compile time
+      EXPECT_EQ(1, count_ops(code, OPCODE_ADD_INT_LIT8));
+    }
   }
 }

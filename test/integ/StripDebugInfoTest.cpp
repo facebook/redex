@@ -43,10 +43,11 @@ typedef std::function<void(const DexClasses& classes)> DexClassesCallback;
 void foreach_method_entry_item(const DexClasses& classes,
                                MethodItemCallback const& callback) {
   for (const auto& cls : classes) {
-    std::vector<DexMethod*> methods;
+    std::vector<DexMethodRef*> methods;
     cls->gather_methods(methods);
     for (auto method : methods) {
-      IRCode* code = method->get_code();
+      if (!method->is_def()) continue;
+      IRCode* code = static_cast<DexMethod*>(method)->get_code();
       if (!code) continue;
       for (const auto& mei : *code)
         callback(mei);

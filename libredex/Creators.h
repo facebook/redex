@@ -109,7 +109,7 @@ struct MethodBlock {
    * function as all references would be known.
    */
   void invoke(DexOpcode opcode,
-              DexMethod* meth,
+              DexMethodRef* meth,
               const std::vector<Location>& args);
 
   /**

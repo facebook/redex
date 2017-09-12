@@ -23,8 +23,8 @@
 
 namespace {
 
-DexMethod* object_array_clone() {
-  static DexMethod* clone = DexMethod::make_method(
+DexMethodRef* object_array_clone() {
+  static DexMethodRef* clone = DexMethod::make_method(
     "[Ljava/lang/Object;",
     "clone",
     "Ljava/lang/Object;",
@@ -32,8 +32,8 @@ DexMethod* object_array_clone() {
   return clone;
 }
 
-DexMethod* object_equals() {
-  static DexMethod* equals = DexMethod::make_method(
+DexMethodRef* object_equals() {
+  static DexMethodRef* equals = DexMethod::make_method(
     "Ljava/lang/Object;",
     "equals",
     "Z",
@@ -41,8 +41,8 @@ DexMethod* object_equals() {
   return equals;
 }
 
-DexMethod* object_hashCode() {
-  static DexMethod* hashCode = DexMethod::make_method(
+DexMethodRef* object_hashCode() {
+  static DexMethodRef* hashCode = DexMethod::make_method(
     "Ljava/lang/Object;",
     "hashCode",
     "I",
@@ -50,8 +50,8 @@ DexMethod* object_hashCode() {
   return hashCode;
 }
 
-DexMethod* object_getClass() {
-  static DexMethod* getClass = DexMethod::make_method(
+DexMethodRef* object_getClass() {
+  static DexMethodRef* getClass = DexMethod::make_method(
     "Ljava/lang/Object;",
     "getClass",
     "Ljava/lang/Class;",
@@ -59,7 +59,7 @@ DexMethod* object_getClass() {
   return getClass;
 }
 
-bool is_object_equals(DexMethod* mref) {
+bool is_object_equals(DexMethodRef* mref) {
   static DexString* equals = DexString::make_string("equals");
   static DexProto* bool_obj = DexProto::make_proto(
     DexType::make_type("Z"),
@@ -67,7 +67,7 @@ bool is_object_equals(DexMethod* mref) {
   return mref->get_name() == equals && mref->get_proto() == bool_obj;
 }
 
-bool is_object_hashCode(DexMethod* mref) {
+bool is_object_hashCode(DexMethodRef* mref) {
   static DexString* hashCode = DexString::make_string("hashCode");
   static DexProto* int_void = DexProto::make_proto(
     get_int_type(),
@@ -75,7 +75,7 @@ bool is_object_hashCode(DexMethod* mref) {
   return mref->get_name() == hashCode && mref->get_proto() == int_void;
 }
 
-bool is_object_getClass(DexMethod* mref) {
+bool is_object_getClass(DexMethodRef* mref) {
   static DexString* getClass = DexString::make_string("getClass");
   static DexProto* cls_void = DexProto::make_proto(
     get_class_type(),
@@ -231,8 +231,8 @@ struct Rebinder {
 
   void rebind_method_opcode(
       IRInstruction* mop,
-      DexMethod* mref,
-      DexMethod* real_ref) {
+      DexMethodRef* mref,
+      DexMethodRef* real_ref) {
     if (!real_ref || real_ref == mref || real_ref->is_external()) {
       return;
     }
@@ -245,20 +245,20 @@ struct Rebinder {
     }
   }
 
-  bool is_array_clone(DexMethod* mref, DexType* mtype) {
+  bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
     static auto clone = DexString::make_string("clone");
     return is_array(mtype) &&
         mref->get_name() == clone &&
         !is_primitive(get_array_type(mtype));
   }
 
-  DexMethod* rebind_array_clone(DexMethod* mref) {
-   DexMethod* real_ref = object_array_clone();
+  DexMethodRef* rebind_array_clone(DexMethodRef* mref) {
+   DexMethodRef* real_ref = object_array_clone();
    m_array_clone_refs.insert(mref, real_ref);
    return real_ref;
   }
 
-  DexMethod* rebind_object_methods(DexMethod* mref) {
+  DexMethodRef* rebind_object_methods(DexMethodRef* mref) {
     if (is_object_equals(mref)) {
       m_equals_refs.insert(mref);
       return object_equals();
@@ -295,17 +295,18 @@ struct Rebinder {
   Scope& m_scope;
   PassManager& m_pass_mgr;
 
-  RefStats<DexField*> m_frefs;
-  RefStats<DexMethod*> m_mrefs;
-  RefStats<DexMethod*> m_array_clone_refs;
-  RefStats<DexMethod*> m_equals_refs;
-  RefStats<DexMethod*> m_hashCode_refs;
-  RefStats<DexMethod*> m_getClass_refs;
+  RefStats<DexFieldRef*> m_frefs;
+  RefStats<DexMethodRef*> m_mrefs;
+  RefStats<DexMethodRef*> m_array_clone_refs;
+  RefStats<DexMethodRef*> m_equals_refs;
+  RefStats<DexMethodRef*> m_hashCode_refs;
+  RefStats<DexMethodRef*> m_getClass_refs;
 };
 
 }
 
-void ReBindRefsPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void ReBindRefsPass::run_pass(
+    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   Rebinder rb(scope, mgr);
   rb.rewrite_refs();

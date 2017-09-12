@@ -39,7 +39,7 @@ namespace {
     // The index of the reg_values is the index of registers
     std::vector<AbstractRegister> reg_values;
     // method_returns keeps track of constant returned by methods
-    std::unordered_map<DexMethod*, int64_t> method_returns;
+    std::unordered_map<DexMethodRef*, int64_t> method_returns;
     // Store dead instructions to be removed
     std::vector<IRInstruction*> dead_instructions;
     // Store pairs of intructions to be replaced

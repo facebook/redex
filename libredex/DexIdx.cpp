@@ -25,8 +25,8 @@ DexIdx::DexIdx(dex_header* dh) {
   m_dexbase = (const uint8_t*)dh;
   INIT_DMAP_ID(string, DexString*);
   INIT_DMAP_ID(type, DexType*);
-  INIT_DMAP_ID(field, DexField*);
-  INIT_DMAP_ID(method, DexMethod*);
+  INIT_DMAP_ID(field, DexFieldRef*);
+  INIT_DMAP_ID(method, DexMethodRef*);
   INIT_DMAP_ID(proto, DexProto*);
 }
 
@@ -57,7 +57,7 @@ DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
   return DexType::make_type(dexstr);
 }
 
-DexField* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
+DexFieldRef* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
   assert(fidx < m_field_ids_size);
   DexType* container = get_typeidx(m_field_ids[fidx].classidx);
   DexType* ftype = get_typeidx(m_field_ids[fidx].typeidx);
@@ -65,7 +65,7 @@ DexField* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
   return DexField::make_field(container, name, ftype);
 }
 
-DexMethod* DexIdx::get_methodidx_fromdex(uint32_t midx) {
+DexMethodRef* DexIdx::get_methodidx_fromdex(uint32_t midx) {
   assert(midx < m_method_ids_size);
   DexType* container = get_typeidx(m_method_ids[midx].classidx);
   DexProto* proto = get_protoidx(m_method_ids[midx].protoidx);

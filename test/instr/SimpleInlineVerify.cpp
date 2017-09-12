@@ -58,7 +58,9 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
   // (which throws an exception) comes after the return opcode... meaning that
   // for the instrumentation test to pass, we must duplicate the caller try
   // item
-  auto callee_insns = invoke->get_method()->get_dex_code()->get_instructions();
+  ASSERT_TRUE(invoke->get_method()->is_def());
+  auto callee_insns = static_cast<DexMethod*>(invoke->get_method())->
+      get_dex_code()->get_instructions();
   auto retop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
       return insn->opcode() == OPCODE_RETURN_VOID;
@@ -102,7 +104,9 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
 
   // verify that the callee has an if-else statement, and that the if block
   // (which throws an exception) comes before the return opcode
-  auto callee_insns = invoke->get_method()->get_dex_code()->get_instructions();
+  ASSERT_TRUE(invoke->get_method()->is_def());
+  auto callee_insns = static_cast<DexMethod*>(invoke->get_method())->
+      get_dex_code()->get_instructions();
   auto ifop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
       return insn->opcode() == OPCODE_IF_NEZ;
@@ -280,9 +284,13 @@ TEST_F(PreVerify, InlineInvokeDirect) {
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto invoke =
       find_invoke(m, OPCODE_INVOKE_DIRECT, "hasNoninlinableInvokeDirect");
+  ASSERT_TRUE(invoke->get_method()->is_def());
   auto noninlinable_invoke_direct =
-      find_invoke(invoke->get_method(), OPCODE_INVOKE_DIRECT, "noninlinable");
-  auto noninlinable = noninlinable_invoke_direct->get_method();
+      find_invoke(static_cast<DexMethod*>(invoke->get_method()),
+          OPCODE_INVOKE_DIRECT, "noninlinable");
+  ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
+  auto noninlinable = static_cast<DexMethod*>(
+      noninlinable_invoke_direct->get_method());
   ASSERT_EQ(show(noninlinable->get_proto()), "()V");
 
   // verify that there are two inlinable() methods in the class. The static
@@ -302,7 +310,9 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   auto noninlinable_invoke_direct =
       find_invoke(m, OPCODE_INVOKE_STATIC, "r$0");
   EXPECT_NE(nullptr, noninlinable_invoke_direct);
-  auto noninlinable = noninlinable_invoke_direct->get_method();
+  ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
+  auto noninlinable = static_cast<DexMethod*>(
+      noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()),
             "(Lcom/facebook/redexinline/SimpleInlineTest;)V");
   EXPECT_EQ(
@@ -333,7 +343,9 @@ TEST_F(PreVerify, testArrayDataInCaller) {
   // check that the callee indeed has a non-terminal if, which will exercise
   // the inliner code path that searches for fopcodes in the caller
   auto callee = find_invoke(m, OPCODE_INVOKE_DIRECT, "calleeWithIf");
-  auto insns = callee->get_method()->get_dex_code()->get_instructions();
+  ASSERT_TRUE(callee->get_method()->is_def());
+  auto insns = static_cast<DexMethod*>(callee->get_method())->
+      get_dex_code()->get_instructions();
   auto ret_it =
       std::find_if(insns.begin(), insns.end(), [&](DexInstruction* insn) {
         return is_return(insn->opcode());

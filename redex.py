@@ -330,7 +330,7 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
                     print(line.rstrip(), file=output)
             else:
                 print(line.rstrip(), file=output)
-        for unmangled, mangled in redex_dict.iteritems():
+        for unmangled, mangled in redex_dict.items():
             print('%s -> %s:' % (unmangled, mangled), file=output)
 
 
@@ -393,6 +393,9 @@ Given an APK, produce a better APK!
             help='Unpack the apk and print the unpacked directories, don\'t '
                     'run any redex passes or repack the apk')
 
+    parser.add_argument('--unpack-dest', nargs=1,
+            help='Specify the base name of the destination directories; works with -u')
+
     parser.add_argument('-w', '--warn', nargs='?',
             help='Control verbosity of warnings')
 
@@ -446,6 +449,29 @@ def remove_comments(lines):
 def run_redex(args):
     debug_mode = args.unpack_only or args.debug
 
+    extracted_apk_dir = None
+    dex_dir = None
+    if args.unpack_only and args.unpack_dest:
+        if args.unpack_dest[0] == '.':
+            # Use APK's name
+            unpack_dir_basename = os.path.splitext(args.input_apk)[0]
+        else:
+            unpack_dir_basename = args.unpack_dest[0]
+        extracted_apk_dir = unpack_dir_basename + '.redex_extracted_apk'
+        dex_dir = unpack_dir_basename + '.redex_dexen'
+        try:
+            os.makedirs(extracted_apk_dir)
+            os.makedirs(dex_dir)
+            extracted_apk_dir = os.path.abspath(extracted_apk_dir)
+            dex_dir = os.path.abspath(dex_dir)
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                print('Error: destination directory already exists!')
+                print('APK: ' + extracted_apk_dir)
+                print('DEX: ' + dex_dir)
+                sys.exit(1)
+            raise e
+
     config = args.config
     binary = args.redex_binary
     log('Using config ' + (config if config is not None else '(default)'))
@@ -465,14 +491,16 @@ def run_redex(args):
             passes_list = config_dict['redex']['passes']
 
     unpack_start_time = timer()
-    extracted_apk_dir = make_temp_dir('.redex_extracted_apk', debug_mode)
+    if not extracted_apk_dir:
+        extracted_apk_dir = make_temp_dir('.redex_extracted_apk', debug_mode)
 
     log('Extracting apk...')
     unzip_apk(args.input_apk, extracted_apk_dir)
 
     dex_mode = unpacker.detect_secondary_dex_mode(extracted_apk_dir)
     log('Detected dex mode ' + str(type(dex_mode).__name__))
-    dex_dir = make_temp_dir('.redex_dexen', debug_mode)
+    if not dex_dir:
+        dex_dir = make_temp_dir('.redex_dexen', debug_mode)
 
     log('Unpacking dex files')
     dex_mode.unpackage(extracted_apk_dir, dex_dir)

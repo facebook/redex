@@ -11,12 +11,13 @@
 
 #include "DexClass.h"
 #include "DexOpcode.h"
+#include "Resolver.h"
 
 bool PointsToSemanticsUtils::is_primitive_type_class_object_retrieval(
     IRInstruction* insn) const {
   always_assert(insn->opcode() == OPCODE_SGET_OBJECT);
-  DexField* dex_field = insn->get_field();
-  DexType* dex_type = dex_field->get_class();
-  return is_primitive_type_wrapper(dex_type) &&
+  DexField* dex_field = resolve_field(insn->get_field(), FieldSearch::Static);
+  return dex_field != nullptr &&
+      is_primitive_type_wrapper(dex_field->get_class()) &&
          (dex_field->get_name() == m_wrapper_class_type_field_name);
 }

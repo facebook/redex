@@ -34,9 +34,9 @@ using FieldList = std::vector<DexField*>;
 using MethodSet = std::unordered_set<DexMethod*>;
 using OpcodeList = std::vector<IRInstruction*>;
 using OpcodeSet = std::unordered_set<IRInstruction*>;
-using FieldRefToOpcodes = std::unordered_map<DexField*, OpcodeList>;
-using MethodToOpcodes = std::unordered_map<DexMethod*, OpcodeSet>;
-using NewMethods = std::unordered_map<DexMethod*, DexMethod*>;
+using FieldRefToOpcodes = std::unordered_map<DexFieldRef*, OpcodeList>;
+using MethodToOpcodes = std::unordered_map<DexMethodRef*, OpcodeSet>;
+using NewMethods = std::unordered_map<DexMethodRef*, DexMethodRef*>;
 using NewVTable = std::vector<std::pair<DexMethod*, DexMethod*>>;
 
 /**

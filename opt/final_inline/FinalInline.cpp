@@ -65,7 +65,7 @@ class FinalInlineImpl {
   }
 
   std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
-    std::vector<DexField*> field_refs;
+    std::vector<DexFieldRef*> field_refs;
     walk_methods(scope,
                  [&](DexMethod* method) { method->gather_fields(field_refs); });
     sort_unique(field_refs);

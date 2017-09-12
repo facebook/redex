@@ -9,7 +9,195 @@
 
 #include "ControlFlow.h"
 
+#include <boost/numeric/conversion/cast.hpp>
 #include <stack>
+
+#include "DexUtil.h"
+#include "Transform.h"
+
+namespace {
+
+bool end_of_block(const IRCode* code,
+                  FatMethod::iterator it,
+                  bool in_try,
+                  bool end_block_before_throw) {
+  auto next = std::next(it);
+  if (next == code->cend()) {
+    return true;
+  }
+  if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||
+      next->type == MFLOW_CATCH) {
+    return true;
+  }
+  if (end_block_before_throw) {
+    if (in_try && it->type == MFLOW_FALLTHROUGH &&
+        it->throwing_mie != nullptr) {
+      return true;
+    }
+  } else {
+    if (in_try && it->type == MFLOW_OPCODE &&
+        opcode::may_throw(it->insn->opcode())) {
+      return true;
+    }
+  }
+  if (it->type != MFLOW_OPCODE) {
+    return false;
+  }
+  if (is_branch(it->insn->opcode()) || is_return(it->insn->opcode()) ||
+      it->insn->opcode() == OPCODE_THROW) {
+    return true;
+  }
+  return false;
+}
+
+void split_may_throw(IRCode* code, FatMethod::iterator it) {
+  auto& mie = *it;
+  if (mie.type == MFLOW_OPCODE && opcode::may_throw(mie.insn->opcode())) {
+    code->insert_before(it, *MethodItemEntry::make_throwing_fallthrough(&mie));
+  }
+}
+
+} // namespace
+
+ControlFlowGraph::ControlFlowGraph(IRCode* code,
+                                   bool end_block_before_throw) {
+  // Find the block boundaries
+  std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
+  std::vector<std::pair<TryEntry*, Block*>> try_ends;
+  std::unordered_map<CatchEntry*, Block*> try_catches;
+  std::vector<Block*> exit_blocks;
+  bool in_try = false;
+
+  auto* block = create_block();
+  always_assert_log(code->count_opcodes() > 0, "FatMethod contains no instructions");
+  block->m_begin = code->begin();
+  set_entry_block(block);
+  // The first block can be a branch target.
+  auto begin = code->begin();
+  if (begin->type == MFLOW_TARGET) {
+    branch_to_targets[begin->target->src].push_back(block);
+  }
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    split_may_throw(code, it);
+  }
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    if (it->type == MFLOW_TRY) {
+      if (it->tentry->type == TRY_START) {
+        in_try = true;
+      } else if (it->tentry->type == TRY_END) {
+        in_try = false;
+      }
+    }
+    if (!end_of_block(code, it, in_try, end_block_before_throw)) {
+      continue;
+    }
+    // End the current block.
+    auto next = std::next(it);
+    block->m_end = next;
+    if (next == code->end()) {
+      break;
+    }
+    // Start a new block at the next MethodItem.
+    block = create_block();
+    block->m_begin = next;
+    // Record branch targets to add edges in the next pass.
+    if (next->type == MFLOW_TARGET) {
+      // If there is a consecutive list of MFLOW_TARGETs, put them all in the
+      // same basic block. Being parsimonious in the number of BBs we generate
+      // is a significant performance win for our analyses.
+      do {
+        branch_to_targets[next->target->src].push_back(block);
+      } while (++next != code->end() && next->type == MFLOW_TARGET);
+      // for the next iteration of the for loop, we want `it` to point to the
+      // last of the series of MFLOW_TARGET mies. Since `next` is currently
+      // pointing to the mie *after* that element, and since `it` will be
+      // incremented on every iteration, we need to decrement by 2 here.
+      it = std::prev(next, 2);
+    // Record try/catch blocks to add edges in the next pass.
+    } else if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
+      try_ends.emplace_back(next->tentry, block);
+    } else if (next->type == MFLOW_CATCH) {
+      // If there is a consecutive list of MFLOW_CATCHes, put them all in the
+      // same basic block.
+      do {
+        try_catches[next->centry] = block;
+      } while (++next != code->end() && next->type == MFLOW_CATCH);
+      it = std::prev(next, 2);
+    }
+  }
+  // Link the blocks together with edges
+  for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
+    // Set outgoing edge if last MIE falls through
+    auto lastmei = (*it)->rbegin();
+    bool fallthrough = true;
+    if (lastmei->type == MFLOW_OPCODE) {
+      auto lastop = lastmei->insn->opcode();
+      if (is_branch(lastop)) {
+        fallthrough = !is_goto(lastop);
+        auto const& targets = branch_to_targets[&*lastmei];
+        for (auto target : targets) {
+          add_edge(
+              *it, target, is_goto(lastop) ? EDGE_GOTO : EDGE_BRANCH);
+        }
+      } else if (is_return(lastop) || lastop == OPCODE_THROW) {
+        fallthrough = false;
+      }
+    }
+    if (fallthrough && std::next(it) != m_blocks.end()) {
+      Block* next = *std::next(it);
+      add_edge(*it, next, EDGE_GOTO);
+    }
+  }
+  /*
+   * Now add the catch edges.  Every block inside a try-start/try-end region
+   * gets an edge to every catch block.  This simplifies dataflow analysis
+   * since you can always get the exception state by looking at successors,
+   * without any additional analysis.
+   *
+   * NB: This algorithm assumes that a try-start/try-end region will consist of
+   * sequentially-numbered blocks, which is guaranteed because catch regions
+   * are contiguous in the bytecode, and we generate blocks in bytecode order.
+   */
+  for (auto tep : try_ends) {
+    auto try_end = tep.first;
+    auto tryendblock = tep.second;
+    size_t bid = tryendblock->id();
+    always_assert(bid > 0);
+    --bid;
+    while (true) {
+      block = m_blocks.at(bid);
+      if (ends_with_may_throw(block, end_block_before_throw)) {
+        for (auto mei = try_end->catch_start;
+             mei != nullptr;
+             mei = mei->centry->next) {
+          auto catchblock = try_catches.at(mei->centry);
+          add_edge(block, catchblock, EDGE_THROW);
+        }
+      }
+      auto block_begin = block->begin();
+      if (block_begin->type == MFLOW_TRY) {
+        auto tentry = block_begin->tentry;
+        if (tentry->type == TRY_START) {
+          always_assert(tentry->catch_start == try_end->catch_start);
+          break;
+        }
+      }
+      always_assert_log(bid > 0, "No beginning of try region found");
+      --bid;
+    }
+  }
+  // Remove edges between unreachable blocks and their succ blocks.
+  std::unordered_set<Block*> visited;
+  transform::visit(m_blocks.at(0), visited);
+  for (size_t i = 1; i < m_blocks.size(); ++i) {
+    auto& b = m_blocks.at(i);
+    if (visited.find(b) != visited.end()) {
+      continue;
+    }
+    transform::remove_succ_edges(b, this);
+  }
+  TRACE(CFG, 5, "%s", SHOW(*this));
+}
 
 ControlFlowGraph::~ControlFlowGraph() {
   for (auto block : m_blocks) {

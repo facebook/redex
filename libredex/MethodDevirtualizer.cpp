@@ -83,11 +83,8 @@ void fix_call_sites_and_drop_this_arg(
       if (!inst->has_method()) {
         continue;
       }
-      auto method = inst->get_method();
-      if (!method->is_concrete()) {
-        method = resolve_method(method, MethodSearch::Any);
-      }
-      if (!statics.count(method)) {
+      auto method = resolve_method(inst->get_method(), MethodSearch::Any);
+      if (method == nullptr || !statics.count(method)) {
         continue;
       }
       patch_call_site(method, inst, metrics);
@@ -124,11 +121,8 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       return;
     }
 
-    auto method = opcode->get_method();
-    if (!method->is_concrete()) {
-      method = resolve_method(method, MethodSearch::Virtual);
-    }
-    if (!target_methods.count(method)) {
+    auto method = resolve_method(opcode->get_method(), MethodSearch::Virtual);
+    if (method == nullptr || !target_methods.count(method)) {
       return;
     }
 

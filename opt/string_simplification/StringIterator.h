@@ -128,8 +128,8 @@ class StringIterator
   IRCode* m_code;
   const DexType* m_string_type;
   const DexType* m_builder_type;
-  DexMethod* m_append_method;
-  DexMethod* m_to_string_method;
+  DexMethodRef* m_append_method;
+  DexMethodRef* m_to_string_method;
 
   size_t m_strings_added;
   size_t m_instructions_added;

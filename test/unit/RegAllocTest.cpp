@@ -104,7 +104,7 @@ TEST_F(RegAllocTest, RegTypeDestWide) {
  */
 TEST_F(RegAllocTest, RegTypeInvoke) {
   using namespace dex_asm;
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
+  DexMethodRef* method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"});
 
   auto insn = dasm(OPCODE_INVOKE_DIRECT, method, {0_v, 1_v});
   EXPECT_EQ(regalloc::src_reg_type(insn, 0), RegisterType::OBJECT);
@@ -116,8 +116,8 @@ TEST_F(RegAllocTest, RegTypeInvoke) {
 
 TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   using namespace dex_asm;
-  DexMethod* method =
-      DexMethod::make_method("Lfoo;", "LiveRangeSingleBlock", "V", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "LiveRangeSingleBlock", "V", {}));
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
@@ -139,8 +139,8 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
 
 TEST_F(RegAllocTest, LiveRange) {
   using namespace dex_asm;
-  DexMethod* method =
-      DexMethod::make_method("Lfoo;", "LiveRange", "V", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "LiveRange", "V", {}));
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
@@ -254,7 +254,8 @@ TEST_F(RegAllocTest, InterferenceWeights) {
 TEST_F(RegAllocTest, BuildInterferenceGraph) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
@@ -306,7 +307,8 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
 TEST_F(RegAllocTest, Coalesce) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
@@ -335,7 +337,8 @@ TEST_F(RegAllocTest, Coalesce) {
 TEST_F(RegAllocTest, MoveWideCoalesce) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
@@ -368,7 +371,8 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
 TEST_F(RegAllocTest, NoCoalesceWide) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
@@ -463,9 +467,9 @@ TEST_F(RegAllocTest, Simplify) {
 TEST_F(RegAllocTest, SelectRange) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method(
-      "Lfoo;", "bar", "I", {"I", "I", "I", "I", "I", "I"});
-  DexMethod* many_args_method = DexMethod::make_method(
+  DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
+      "Lfoo;", "bar", "I", {"I", "I", "I", "I", "I", "I"}));
+  DexMethodRef* many_args_method = DexMethod::make_method(
       "Lfoo;", "baz", "V", {"I", "I", "I", "I", "I", "I"});
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
@@ -515,8 +519,9 @@ TEST_F(RegAllocTest, SelectRange) {
 TEST_F(RegAllocTest, SelectAliasedRange) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "V", {});
-  DexMethod* range_callee =
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {}));
+  DexMethodRef* range_callee =
       DexMethod::make_method("Lfoo;", "baz", "V", {"I", "I"});
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
@@ -546,7 +551,8 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
 TEST_F(RegAllocTest, Spill) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
@@ -594,7 +600,8 @@ TEST_F(RegAllocTest, Spill) {
 TEST_F(RegAllocTest, ContainmentGraph) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
@@ -644,7 +651,8 @@ TEST_F(RegAllocTest, ContainmentGraph) {
 TEST_F(RegAllocTest, FindSplit) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
@@ -681,7 +689,8 @@ TEST_F(RegAllocTest, FindSplit) {
 TEST_F(RegAllocTest, Split) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
@@ -728,7 +737,8 @@ TEST_F(RegAllocTest, Split) {
 TEST_F(RegAllocTest, ParamFirstUse) {
   using namespace dex_asm;
 
-  DexMethod* method = DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"});
+  DexMethod* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
   method->make_concrete(ACC_STATIC, false);
   IRCode code(method, 0);
   EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));

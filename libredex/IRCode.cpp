@@ -102,7 +102,7 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
   }
 }
 
-void MethodItemEntry::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -125,7 +125,7 @@ void MethodItemEntry::gather_methods(std::vector<DexMethod*>& lmethod) const {
   }
 }
 
-void MethodItemEntry::gather_fields(std::vector<DexField*>& lfield) const {
+void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -176,11 +176,6 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-InlineContext::InlineContext(DexMethod* caller)
-    : original_regs(caller->get_code()->get_registers_size()),
-      caller_code(caller->get_code()),
-      estimated_insn_size(caller_code->sum_opcode_sizes()) {}
-
 IRCode::~IRCode() {
   m_fmethod->clear_and_dispose(FatMethodDisposer());
   delete m_fmethod;
@@ -221,13 +216,13 @@ void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_dbg) m_dbg->gather_strings(lstring);
 }
 
-void IRCode::gather_fields(std::vector<DexField*>& lfield) const {
+void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   for (auto& mie : *m_fmethod) {
     mie.gather_fields(lfield);
   }
 }
 
-void IRCode::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto& mie : *m_fmethod) {
     mie.gather_methods(lmethod);
   }
@@ -1098,504 +1093,12 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
   return "";
 }
 
-/*
- * Map the callee's param registers to the argument registers of the caller.
- * Any other callee register N will get mapped to caller_registers_size + N.
- * The resulting callee code can then be appended to the caller's code without
- * any register conflicts.
- */
-void remap_callee_for_tail_call(const IRCode* caller_code,
-                                IRCode* callee_code,
-                                FatMethod::iterator invoke_it) {
-  RegMap reg_map;
-  auto insn = invoke_it->insn;
-  auto callee_reg_start = caller_code->get_registers_size();
-
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
-  auto param_it = param_insns.begin();
-  auto param_end = param_insns.end();
-  insn->range_to_srcs();
-  insn->normalize_registers();
-  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert(param_it != param_end);
-    reg_map[param_it->insn->dest()] = insn->src(i);
-  }
-  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
-    if (reg_map.count(i) != 0) {
-      continue;
-    }
-    reg_map[i] = callee_reg_start + i;
-  }
-  transform::remap_registers(callee_code, reg_map);
-}
-
-/**
- * Create a move instruction given a return instruction in a callee and
- * a move-result instruction in a caller.
- */
-IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
-  auto opcode = res->opcode();
-  always_assert(opcode != OPCODE_RETURN_VOID);
-  IRInstruction* move;
-  if (opcode == OPCODE_RETURN_OBJECT) {
-    move = new IRInstruction(OPCODE_MOVE_OBJECT);
-  } else if (opcode == OPCODE_RETURN_WIDE) {
-    move = new IRInstruction(OPCODE_MOVE_WIDE);
-  } else {
-    always_assert(opcode == OPCODE_RETURN);
-    move = new IRInstruction(OPCODE_MOVE);
-  }
-  move->set_dest(move_res->dest());
-  move->set_src(0, res->src(0));
-  return move;
-}
-
-void cleanup_callee_debug(FatMethod* fcallee) {
-  std::unordered_set<uint16_t> valid_regs;
-  auto it = fcallee->begin();
-  while (it != fcallee->end()) {
-    auto& mei = *it++;
-    if (mei.type == MFLOW_DEBUG) {
-      switch(mei.dbgop->opcode()) {
-      case DBG_SET_PROLOGUE_END:
-        fcallee->erase(fcallee->iterator_to(mei));
-        break;
-      case DBG_START_LOCAL:
-      case DBG_START_LOCAL_EXTENDED: {
-        auto reg = mei.dbgop->uvalue();
-        valid_regs.insert(reg);
-        break;
-      }
-      case DBG_END_LOCAL:
-      case DBG_RESTART_LOCAL: {
-        auto reg = mei.dbgop->uvalue();
-        if (valid_regs.find(reg) == valid_regs.end()) {
-          fcallee->erase(fcallee->iterator_to(mei));
-        }
-        break;
-      }
-      default:
-        break;
-      }
-    }
-  }
-}
-
 } // namespace
 
-/*
- * For splicing a callee's FatMethod into a caller.
- */
-class MethodSplicer {
-  IRCode* m_mtcaller;
-  IRCode* m_mtcallee;
-  // We need a map of MethodItemEntry we have created because a branch
-  // points to another MethodItemEntry which may have been created or not
-  std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
-  // for remapping the parent position pointers
-  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
-  const RegMap& m_callee_reg_map;
-  DexPosition* m_invoke_position;
-  MethodItemEntry* m_active_catch;
-  std::unordered_set<uint16_t> m_valid_dbg_regs;
-
- public:
-  MethodSplicer(IRCode* mtcaller,
-                IRCode* mtcallee,
-                const RegMap& callee_reg_map,
-                DexPosition* invoke_position,
-                MethodItemEntry* active_catch)
-      : m_mtcaller(mtcaller),
-        m_mtcallee(mtcallee),
-        m_callee_reg_map(callee_reg_map),
-        m_invoke_position(invoke_position),
-        m_active_catch(active_catch) {
-    m_entry_map[nullptr] = nullptr;
-    m_pos_map[nullptr] = nullptr;
-  }
-
-  MethodItemEntry* clone(MethodItemEntry* mei) {
-    MethodItemEntry* cloned_mei;
-    auto entry = m_entry_map.find(mei);
-    if (entry != m_entry_map.end()) {
-      return entry->second;
-    }
-    cloned_mei = new MethodItemEntry(*mei);
-    m_entry_map[mei] = cloned_mei;
-    switch (cloned_mei->type) {
-    case MFLOW_TRY:
-      cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-      cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
-      return cloned_mei;
-    case MFLOW_CATCH:
-      cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
-      cloned_mei->centry->next = clone(cloned_mei->centry->next);
-      return cloned_mei;
-    case MFLOW_OPCODE:
-      cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
-      if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-        cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
-      }
-      return cloned_mei;
-    case MFLOW_TARGET:
-      cloned_mei->target = new BranchTarget(*cloned_mei->target);
-      cloned_mei->target->src = clone(cloned_mei->target->src);
-      return cloned_mei;
-    case MFLOW_DEBUG:
-      return cloned_mei;
-    case MFLOW_POSITION:
-      m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
-      cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
-      return cloned_mei;
-    case MFLOW_FALLTHROUGH:
-      return cloned_mei;
-    }
-    not_reached();
-  }
-
-  void operator()(FatMethod::iterator insert_pos,
-                  FatMethod::iterator fcallee_start,
-                  FatMethod::iterator fcallee_end) {
-    auto fcaller = m_mtcaller->m_fmethod;
-    for (auto it = fcallee_start; it != fcallee_end; ++it) {
-      if (should_skip_debug(&*it)) {
-        continue;
-      }
-      if (it->type == MFLOW_OPCODE &&
-          opcode::is_load_param(it->insn->opcode())) {
-        continue;
-      }
-      auto mei = clone(&*it);
-      transform::remap_registers(*mei, m_callee_reg_map);
-      if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
-        auto tentry = mei->tentry;
-        // try ranges cannot be nested, so we flatten them here
-        switch (tentry->type) {
-          case TRY_START:
-            fcaller->insert(insert_pos,
-                *(new MethodItemEntry(TRY_END, m_active_catch)));
-            fcaller->insert(insert_pos, *mei);
-            break;
-          case TRY_END:
-            fcaller->insert(insert_pos, *mei);
-            fcaller->insert(insert_pos,
-                *(new MethodItemEntry(TRY_START, m_active_catch)));
-            break;
-        }
-      } else {
-        if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
-          mei->pos->parent = m_invoke_position;
-        }
-        // if a handler list does not terminate in a catch-all, have it point to
-        // the parent's active catch handler. TODO: Make this more precise by
-        // checking if the parent catch type is a subtype of the callee's.
-        if (mei->type == MFLOW_CATCH && mei->centry->next == nullptr &&
-            mei->centry->catch_type != nullptr) {
-          mei->centry->next = m_active_catch;
-        }
-        fcaller->insert(insert_pos, *mei);
-      }
-    }
-  }
-
- private:
-  /* We need to skip two cases:
-   * Duplicate DBG_SET_PROLOGUE_END
-   * Uninitialized parameters
-   *
-   * The parameter names are part of the debug info for the method.
-   * The technically correct solution would be to make a start
-   * local for each of them.  However, that would also imply another
-   * end local after the tail to correctly set what the register
-   * is at the end.  This would bloat the debug info parameters for
-   * a corner case.
-   *
-   * Instead, we just delete locals lifetime information for parameters.
-   * This is an exceedingly rare case triggered by goofy code that
-   * reuses parameters as locals.
-   */
-  bool should_skip_debug(const MethodItemEntry* mei) {
-    if (mei->type != MFLOW_DEBUG) {
-      return false;
-    }
-    switch (mei->dbgop->opcode()) {
-    case DBG_SET_PROLOGUE_END:
-      return true;
-    case DBG_START_LOCAL:
-    case DBG_START_LOCAL_EXTENDED: {
-      auto reg = mei->dbgop->uvalue();
-      m_valid_dbg_regs.insert(reg);
-      return false;
-    }
-    case DBG_END_LOCAL:
-    case DBG_RESTART_LOCAL: {
-      auto reg = mei->dbgop->uvalue();
-      if (m_valid_dbg_regs.find(reg) == m_valid_dbg_regs.end()) {
-        return true;
-      }
-    }
-    default:
-      return false;
-    }
-  }
-};
-
-RegMap gen_callee_reg_map_for_tail_call(IRCode* caller_code,
-                                        IRCode* callee_code,
-                                        FatMethod::iterator invoke_it) {
-  RegMap reg_map;
-  auto insn = invoke_it->insn;
-  auto callee_reg_start = caller_code->get_registers_size();
-
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
-  auto param_it = param_insns.begin();
-  auto param_end = param_insns.end();
-  insn->range_to_srcs();
-  insn->normalize_registers();
-  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert(param_it != param_end);
-    reg_map[param_it->insn->dest()] = insn->src(i);
-  }
-  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
-    if (reg_map.count(i) != 0) {
-      continue;
-    }
-    reg_map[i] = callee_reg_start + i;
-  }
-  caller_code->set_registers_size(callee_reg_start +
-                                  callee_code->get_registers_size());
-  return reg_map;
+void IRCode::build_cfg(bool end_block_before_throw) {
+  clear_cfg();
+  m_cfg = std::make_unique<ControlFlowGraph>(this, end_block_before_throw);
 }
-
-void IRCode::inline_tail_call(DexMethod* caller,
-                              DexMethod* callee,
-                              FatMethod::iterator pos) {
-  TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
-  auto* caller_code = caller->get_code();
-  auto* callee_code = callee->get_code();
-  auto fcaller = caller_code->m_fmethod;
-  auto fcallee = callee_code->m_fmethod;
-
-  remap_callee_for_tail_call(caller_code, callee_code, pos);
-  caller_code->set_registers_size(caller_code->get_registers_size() +
-                                  callee_code->get_registers_size());
-
-  cleanup_callee_debug(fcallee);
-  auto it = fcallee->begin();
-  while (it != fcallee->end()) {
-    auto& mei = *it++;
-    if (mei.type == MFLOW_OPCODE && opcode::is_load_param(mei.insn->opcode())) {
-      continue;
-    }
-    fcallee->erase(fcallee->iterator_to(mei));
-    fcaller->insert(pos, mei);
-  }
-  // Delete the vestigial tail.
-  while (pos != fcaller->end()) {
-    if (pos->type == MFLOW_OPCODE) {
-      pos = fcaller->erase_and_dispose(pos, FatMethodDisposer());
-    } else {
-      ++pos;
-    }
-  }
-}
-
-/*
- * Expands the caller register file by the size of the callee register file,
- * and allocates the high registers to the callee. E.g. if we have a caller
- * with registers_size of M and a callee with registers_size N, this function
- * will resize the caller's register file to M + N and map register k in the
- * callee to M + k in the caller. It also inserts move instructions to map the
- * callee arguments to the newly allocated registers.
- */
-std::unique_ptr<RegMap> gen_callee_reg_map(InlineContext& context,
-                                           const IRCode* callee_code,
-                                           FatMethod::iterator invoke_it) {
-  auto caller_code = context.caller_code;
-  auto callee_reg_start = caller_code->get_registers_size();
-  auto insn = invoke_it->insn;
-  auto reg_map = std::make_unique<RegMap>();
-
-  // generate the callee register map
-  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
-    reg_map->emplace(i, callee_reg_start + i);
-  }
-
-  // generate and insert the move instructions
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
-  auto param_it = param_insns.begin();
-  auto param_end = param_insns.end();
-  insn->range_to_srcs();
-  insn->normalize_registers();
-  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert(param_it != param_end);
-    auto param_op = param_it->insn->opcode();
-    DexOpcode op;
-    switch (param_op) {
-      case IOPCODE_LOAD_PARAM:
-        op = OPCODE_MOVE;
-        break;
-      case IOPCODE_LOAD_PARAM_OBJECT:
-        op = OPCODE_MOVE_OBJECT;
-        break;
-      case IOPCODE_LOAD_PARAM_WIDE:
-        op = OPCODE_MOVE_WIDE;
-        break;
-      default:
-        always_assert_log("Expected param op, got %s", SHOW(param_op));
-        not_reached();
-    }
-    auto mov =
-        (new IRInstruction(op))
-            ->set_src(0, insn->src(i))
-            ->set_dest(callee_reg_start + param_it->insn->dest());
-    caller_code->insert_before(invoke_it, mov);
-  }
-  caller_code->set_registers_size(callee_reg_start +
-                                  callee_code->get_registers_size());
-  return reg_map;
-}
-
-bool IRCode::inline_method(InlineContext& context,
-                           IRCode* callee_code,
-                           FatMethod::iterator pos) {
-  TRACE(INL, 5, "caller code:\n%s\n", SHOW(context.caller_code));
-  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee_code));
-
-  auto callee_reg_map = gen_callee_reg_map(context, callee_code, pos);
-  auto caller_code = context.caller_code;
-  auto fcaller = caller_code->m_fmethod;
-  auto fcallee = callee_code->m_fmethod;
-
-  // find the move-result after the invoke, if any. Must be the first
-  // instruction after the invoke
-  auto move_res = pos;
-  while (move_res++ != fcaller->end() && move_res->type != MFLOW_OPCODE);
-  if (!is_move_result(move_res->insn->opcode())) {
-    move_res = fcaller->end();
-  }
-
-  // find the last position entry before the invoke.
-  // we need to decrement the reverse iterator because it gets constructed
-  // as pointing to the element preceding pos
-  auto position_it = --FatMethod::reverse_iterator(pos);
-  while (++position_it != fcaller->rend()
-      && position_it->type != MFLOW_POSITION);
-  std::unique_ptr<DexPosition> pos_nullptr;
-  auto& invoke_position =
-    position_it == fcaller->rend() ? pos_nullptr : position_it->pos;
-  if (invoke_position) {
-    TRACE(INL, 3, "Inlining call at %s:%d\n",
-          invoke_position->file->c_str(),
-          invoke_position->line);
-  }
-
-  // check if we are in a try block
-  auto caller_catch = transform::find_active_catch(caller_code, pos);
-
-  // Copy the callee up to the return. Everything else we push at the end
-  // of the caller
-  auto splice = MethodSplicer(caller_code,
-                              callee_code,
-                              *callee_reg_map,
-                              invoke_position.get(),
-                              caller_catch);
-  auto ret_it = std::find_if(
-      fcallee->begin(), fcallee->end(), [](const MethodItemEntry& mei) {
-        return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
-      });
-  splice(pos, fcallee->begin(), ret_it);
-
-  // try items can span across a return opcode
-  auto callee_catch =
-      splice.clone(transform::find_active_catch(callee_code, ret_it));
-  if (callee_catch != nullptr) {
-    fcaller->insert(pos, *(new MethodItemEntry(TRY_END, callee_catch)));
-    if (caller_catch != nullptr) {
-      fcaller->insert(pos, *(new MethodItemEntry(TRY_START, caller_catch)));
-    }
-  }
-
-  if (move_res != fcaller->end() && ret_it != fcallee->end()) {
-    auto ret_insn = std::make_unique<IRInstruction>(*ret_it->insn);
-    transform::remap_registers(ret_insn.get(), *callee_reg_map);
-    IRInstruction* move = move_result(ret_insn.get(), move_res->insn);
-    auto move_mei = new MethodItemEntry(move);
-    fcaller->insert(pos, *move_mei);
-  }
-  // ensure that the caller's code after the inlined method retain their
-  // original position
-  if (invoke_position) {
-    fcaller->insert(pos,
-                    *(new MethodItemEntry(
-                        std::make_unique<DexPosition>(*invoke_position))));
-  }
-
-  // remove invoke
-  fcaller->erase_and_dispose(pos, FatMethodDisposer());
-  // remove move_result
-  if (move_res != fcaller->end()) {
-    fcaller->erase_and_dispose(move_res, FatMethodDisposer());
-  }
-
-  if (ret_it != fcallee->end()) {
-    if (callee_catch != nullptr) {
-      fcaller->push_back(*(new MethodItemEntry(TRY_START, callee_catch)));
-    } else if (caller_catch != nullptr) {
-      fcaller->push_back(*(new MethodItemEntry(TRY_START, caller_catch)));
-    }
-    // Copy the opcodes in the callee after the return and put them at the end
-    // of the caller.
-    splice(fcaller->end(), std::next(ret_it), fcallee->end());
-    if (caller_catch != nullptr) {
-      fcaller->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
-    }
-  }
-  TRACE(INL, 5, "post-inline caller code:\n%s\n", SHOW(context.caller_code));
-  return true;
-}
-
-namespace {
-bool end_of_block(const FatMethod* fm,
-                  FatMethod::iterator it,
-                  bool in_try,
-                  bool end_block_before_throw) {
-  auto next = std::next(it);
-  if (next == fm->end()) {
-    return true;
-  }
-  if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||
-      next->type == MFLOW_CATCH) {
-    return true;
-  }
-  if (end_block_before_throw) {
-    if (in_try && it->type == MFLOW_FALLTHROUGH &&
-        it->throwing_mie != nullptr) {
-      return true;
-    }
-  } else {
-    if (in_try && it->type == MFLOW_OPCODE &&
-        opcode::may_throw(it->insn->opcode())) {
-      return true;
-    }
-  }
-  if (it->type != MFLOW_OPCODE) {
-    return false;
-  }
-  if (is_branch(it->insn->opcode()) || is_return(it->insn->opcode()) ||
-      it->insn->opcode() == OPCODE_THROW) {
-    return true;
-  }
-  return false;
-}
-
-void split_may_throw(FatMethod* fm, FatMethod::iterator it) {
-  auto& mie = *it;
-  if (mie.type == MFLOW_OPCODE && opcode::may_throw(mie.insn->opcode())) {
-    fm->insert(it, *MethodItemEntry::make_throwing_fallthrough(&mie));
-  }
-}
-} // namespace
 
 void IRCode::clear_cfg() {
   m_cfg.reset();
@@ -1608,148 +1111,6 @@ void IRCode::clear_cfg() {
   for (auto it : fallthroughs) {
     m_fmethod->erase_and_dispose(it, FatMethodDisposer());
   }
-}
-
-void IRCode::build_cfg(bool end_block_before_throw) {
-  clear_cfg();
-  m_cfg = std::make_unique<ControlFlowGraph>();
-  // Find the block boundaries
-  std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
-  std::vector<std::pair<TryEntry*, Block*>> try_ends;
-  std::unordered_map<CatchEntry*, Block*> try_catches;
-  std::vector<Block*> exit_blocks;
-  bool in_try = false;
-
-  auto* block = m_cfg->create_block();
-  always_assert_log(count_opcodes() > 0, "FatMethod contains no instructions");
-  block->m_begin = m_fmethod->begin();
-  m_cfg->set_entry_block(block);
-  // The first block can be a branch target.
-  auto begin = m_fmethod->begin();
-  if (begin->type == MFLOW_TARGET) {
-    branch_to_targets[begin->target->src].push_back(block);
-  }
-  for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
-    split_may_throw(m_fmethod, it);
-  }
-  for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
-    if (it->type == MFLOW_TRY) {
-      if (it->tentry->type == TRY_START) {
-        in_try = true;
-      } else if (it->tentry->type == TRY_END) {
-        in_try = false;
-      }
-    }
-    if (!end_of_block(m_fmethod, it, in_try, end_block_before_throw)) {
-      continue;
-    }
-    // End the current block.
-    auto next = std::next(it);
-    block->m_end = next;
-    if (next == m_fmethod->end()) {
-      break;
-    }
-    // Start a new block at the next MethodItem.
-    block = m_cfg->create_block();
-    block->m_begin = next;
-    // Record branch targets to add edges in the next pass.
-    if (next->type == MFLOW_TARGET) {
-      // If there is a consecutive list of MFLOW_TARGETs, put them all in the
-      // same basic block. Being parsimonious in the number of BBs we generate
-      // is a significant performance win for our analyses.
-      do {
-        branch_to_targets[next->target->src].push_back(block);
-      } while (++next != m_fmethod->end() && next->type == MFLOW_TARGET);
-      // for the next iteration of the for loop, we want `it` to point to the
-      // last of the series of MFLOW_TARGET mies. Since `next` is currently
-      // pointing to the mie *after* that element, and since `it` will be
-      // incremented on every iteration, we need to decrement by 2 here.
-      it = std::prev(next, 2);
-    // Record try/catch blocks to add edges in the next pass.
-    } else if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
-      try_ends.emplace_back(next->tentry, block);
-    } else if (next->type == MFLOW_CATCH) {
-      // If there is a consecutive list of MFLOW_CATCHes, put them all in the
-      // same basic block.
-      do {
-        try_catches[next->centry] = block;
-      } while (++next != m_fmethod->end() && next->type == MFLOW_CATCH);
-      it = std::prev(next, 2);
-    }
-  }
-  // Link the blocks together with edges
-  const auto& blocks = m_cfg->blocks();
-  for (auto it = blocks.begin(); it != blocks.end(); ++it) {
-    // Set outgoing edge if last MIE falls through
-    auto lastmei = (*it)->rbegin();
-    bool fallthrough = true;
-    if (lastmei->type == MFLOW_OPCODE) {
-      auto lastop = lastmei->insn->opcode();
-      if (is_branch(lastop)) {
-        fallthrough = !is_goto(lastop);
-        auto const& targets = branch_to_targets[&*lastmei];
-        for (auto target : targets) {
-          m_cfg->add_edge(
-              *it, target, is_goto(lastop) ? EDGE_GOTO : EDGE_BRANCH);
-        }
-      } else if (is_return(lastop) || lastop == OPCODE_THROW) {
-        fallthrough = false;
-      }
-    }
-    if (fallthrough && std::next(it) != blocks.end()) {
-      Block* next = *std::next(it);
-      m_cfg->add_edge(*it, next, EDGE_GOTO);
-    }
-  }
-  /*
-   * Now add the catch edges.  Every block inside a try-start/try-end region
-   * gets an edge to every catch block.  This simplifies dataflow analysis
-   * since you can always get the exception state by looking at successors,
-   * without any additional analysis.
-   *
-   * NB: This algorithm assumes that a try-start/try-end region will consist of
-   * sequentially-numbered blocks, which is guaranteed because catch regions
-   * are contiguous in the bytecode, and we generate blocks in bytecode order.
-   */
-  for (auto tep : try_ends) {
-    auto try_end = tep.first;
-    auto tryendblock = tep.second;
-    size_t bid = tryendblock->id();
-    always_assert(bid > 0);
-    --bid;
-    while (true) {
-      block = blocks.at(bid);
-      if (ends_with_may_throw(block, end_block_before_throw)) {
-        for (auto mei = try_end->catch_start;
-             mei != nullptr;
-             mei = mei->centry->next) {
-          auto catchblock = try_catches.at(mei->centry);
-          m_cfg->add_edge(block, catchblock, EDGE_THROW);
-        }
-      }
-      auto block_begin = block->begin();
-      if (block_begin->type == MFLOW_TRY) {
-        auto tentry = block_begin->tentry;
-        if (tentry->type == TRY_START) {
-          always_assert(tentry->catch_start == try_end->catch_start);
-          break;
-        }
-      }
-      always_assert_log(bid > 0, "No beginning of try region found");
-      --bid;
-    }
-  }
-  // Remove edges between unreachable blocks and their succ blocks.
-  std::unordered_set<Block*> visited;
-  transform::visit(blocks.at(0), visited);
-  for (size_t i = 1; i < blocks.size(); ++i) {
-    auto& b = blocks.at(i);
-    if (visited.find(b) != visited.end()) {
-      continue;
-    }
-    transform::remove_succ_edges(b, m_cfg.get());
-  }
-  TRACE(CFG, 5, "%s", SHOW(*m_cfg));
 }
 
 namespace ir_code_impl {
@@ -2046,4 +1407,20 @@ bool IRCode::try_sync(DexCode* code) {
               return a->m_start_addr < b->m_start_addr;
             });
   return true;
+}
+
+bool InstructionIterable::structural_equals(const InstructionIterable& other) {
+  auto it1 = this->begin();
+  auto it2 = other.begin();
+
+  for (; it1 != this->end() && it2 != other.end(); it1++, it2++) {
+    auto& mie1 = *it1;
+    auto& mie2 = *it2;
+
+    if (*mie1.insn != *mie2.insn) {
+      return false;
+    }
+  }
+
+  return it1 == this->end() && it2 == other.end();
 }

@@ -8,6 +8,9 @@
  */
 
 #include "Transform.h"
+
+#include <stack>
+
 #include "ControlFlow.h"
 
 namespace {
@@ -90,13 +93,21 @@ static size_t remove_block(IRCode* code, Block* b) {
   return insns_removed;
 }
 
-void visit(Block* b, std::unordered_set<Block*>& visited) {
-  if (visited.find(b) != visited.end()) {
-    return;
-  }
-  visited.emplace(b);
-  for (auto& s : b->succs()) {
-    visit(s, visited);
+void visit(Block* start, std::unordered_set<Block*>& visited) {
+  std::stack<Block*> to_visit;
+  to_visit.push(start);
+  while (!to_visit.empty()) {
+    Block* b = to_visit.top();
+    to_visit.pop();
+
+    if (visited.find(b) != visited.end()) {
+      continue;
+    }
+    visited.emplace(b);
+
+    for (auto& s : b->succs()) {
+      to_visit.push(s);
+    }
   }
 }
 

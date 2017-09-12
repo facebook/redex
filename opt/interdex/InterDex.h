@@ -33,8 +33,8 @@ class InterDexPassPlugin {
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below)
   virtual void gather_mrefs(const DexClass* cls,
-                            std::vector<DexMethod*>& mrefs,
-                            std::vector<DexField*>& frefs) = 0;
+                            std::vector<DexMethodRef*>& mrefs,
+                            std::vector<DexFieldRef*>& frefs) = 0;
 
   // Return any new codegened classes should be added to the current dex
   virtual DexClasses additional_classes(const DexClassesVector& outdex,

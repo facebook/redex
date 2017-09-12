@@ -14,7 +14,7 @@
 
 #include "DexClass.h"
 #include "IRCode.h"
-#include "InlineHelper.h"
+#include "Inliner.h"
 #include "Pass.h"
 #include "Resolver.h"
 

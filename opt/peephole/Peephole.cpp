@@ -161,7 +161,7 @@ struct DexPattern {
 
   const union {
     std::nullptr_t const dummy;
-    DexMethod* const method;
+    DexMethodRef* const method;
     String const string;
     Literal const literal;
     Type const type;
@@ -177,13 +177,13 @@ struct DexPattern {
         kind(DexPattern::Kind::none),
         dummy(nullptr) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
-             DexMethod* const method)
-      : opcodes(std::move(opcodes)),
-        srcs(std::move(srcs)),
-        dests(std::move(dests)),
+  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
+             const std::vector<Register>& src_set,
+             const std::vector<Register>& dest_set,
+             DexMethodRef* const method)
+      : opcodes(opcode_set),
+        srcs(src_set),
+        dests(dest_set),
         kind(DexPattern::Kind::method),
         method(method) {}
 

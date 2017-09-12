@@ -30,8 +30,8 @@
 
 namespace {
 
-typedef std::unordered_set<DexMethod*> mrefs_t;
-typedef std::unordered_set<DexField*> frefs_t;
+typedef std::unordered_set<DexMethodRef*> mrefs_t;
+typedef std::unordered_set<DexFieldRef*> frefs_t;
 
 size_t global_dmeth_cnt;
 size_t global_smeth_cnt;
@@ -50,8 +50,8 @@ static void gather_mrefs(InterDexPass* pass,
                          DexClass* cls,
                          mrefs_t& mrefs,
                          frefs_t& frefs) {
-  std::vector<DexMethod*> method_refs;
-  std::vector<DexField*> field_refs;
+  std::vector<DexMethodRef*> method_refs;
+  std::vector<DexFieldRef*> field_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   for (const auto& plugin : pass->m_plugins) {

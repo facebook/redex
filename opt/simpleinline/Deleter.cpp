@@ -15,7 +15,7 @@
 
 size_t delete_methods(
     std::vector<DexClass*>& scope, std::unordered_set<DexMethod*>& removable,
-    std::function<DexMethod*(DexMethod*, MethodSearch search)> resolver) {
+    std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete
   walk_opcodes(scope, [](DexMethod* meth) { return true; },

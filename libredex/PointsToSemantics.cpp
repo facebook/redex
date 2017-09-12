@@ -502,7 +502,7 @@ class AnchorPropagation final
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE: {
-      DexMethod* dex_method = insn->get_method();
+      DexMethodRef* dex_method = insn->get_method();
       if (is_object(dex_method->get_proto()->get_rtype())) {
         // We attach an anchor to a method invocation only if the method returns
         // an object.
@@ -821,7 +821,7 @@ class PointsToActionGenerator final {
 
   void default_invoke_translation(IRInstruction* insn,
                                   const AnchorEnvironment& state) {
-    DexMethod* dex_method = insn->get_method();
+    DexMethodRef* dex_method = insn->get_method();
     DexProto* proto = dex_method->get_proto();
     const auto& signature = proto->get_args()->get_type_list();
     std::vector<std::pair<size_t, PointsToVariable>> args;

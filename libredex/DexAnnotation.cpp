@@ -23,12 +23,13 @@ void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
 }
 
-void DexEncodedValueField::gather_fields(std::vector<DexField*>& lfield) const {
+void DexEncodedValueField::gather_fields(
+    std::vector<DexFieldRef*>& lfield) const {
   lfield.push_back(m_field);
 }
 
 void DexEncodedValueMethod::gather_methods(
-    std::vector<DexMethod*>& lmethod) const {
+    std::vector<DexMethodRef*>& lmethod) const {
   lmethod.push_back(m_method);
 }
 
@@ -45,14 +46,15 @@ void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexEncodedValueArray::gather_fields(std::vector<DexField*>& lfield) const {
+void DexEncodedValueArray::gather_fields(
+    std::vector<DexFieldRef*>& lfield) const {
   for (auto ev : *m_evalues) {
     ev->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueArray::gather_methods(
-    std::vector<DexMethod*>& lmethod) const {
+    std::vector<DexMethodRef*>& lmethod) const {
   for (auto ev : *m_evalues) {
     ev->gather_methods(lmethod);
   }
@@ -75,14 +77,14 @@ void DexEncodedValueAnnotation::gather_types(
 }
 
 void DexEncodedValueAnnotation::gather_fields(
-    std::vector<DexField*>& lfield) const {
+    std::vector<DexFieldRef*>& lfield) const {
   for (auto const& anno : *m_annotations) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueAnnotation::gather_methods(
-    std::vector<DexMethod*>& lmethod) const {
+    std::vector<DexMethodRef*>& lmethod) const {
   for (auto const& anno : *m_annotations) {
     anno.encoded_value->gather_methods(lmethod);
   }
@@ -102,13 +104,13 @@ void DexAnnotation::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexAnnotation::gather_fields(std::vector<DexField*>& lfield) const {
+void DexAnnotation::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
-void DexAnnotation::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexAnnotation::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_methods(lmethod);
   }
@@ -126,13 +128,14 @@ void DexAnnotationSet::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexAnnotationSet::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexAnnotationSet::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
   for (auto const& anno : m_annotations) {
     anno->gather_methods(lmethod);
   }
 }
 
-void DexAnnotationSet::gather_fields(std::vector<DexField*>& lfield) const {
+void DexAnnotationSet::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   for (auto const& anno : m_annotations) {
     anno->gather_fields(lfield);
   }
@@ -438,14 +441,14 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
   case DEVT_FIELD:
   case DEVT_ENUM: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
-    DexField* evfield = idx->get_fieldidx(evidx);
+    DexFieldRef* evfield = idx->get_fieldidx(evidx);
     always_assert_log(evfield != nullptr,
                       "Invalid field idx in annotation element");
     return new DexEncodedValueField(evt, evfield);
   }
   case DEVT_METHOD: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
-    DexMethod* evmethod = idx->get_methodidx(evidx);
+    DexMethodRef* evmethod = idx->get_methodidx(evidx);
     always_assert_log(evmethod != nullptr,
                       "Invalid method idx in annotation element");
     return new DexEncodedValueMethod(evmethod);
@@ -556,8 +559,8 @@ bool method_param_annotation_compare(
   return compare_dexmethods(a.first, b.first);
 }
 
-bool field_annotation_compare(std::pair<DexField*, DexAnnotationSet*> a,
-                              std::pair<DexField*, DexAnnotationSet*> b) {
+bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
+                              std::pair<DexFieldRef*, DexAnnotationSet*> b) {
   return compare_dexfields(a.first, b.first);
 }
 

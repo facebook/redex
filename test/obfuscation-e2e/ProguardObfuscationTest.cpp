@@ -90,7 +90,7 @@ bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
     [](DexMethod*){return true;},
     [&](DexMethod* method, IRInstruction* instr) {
       if (!is_ifield_op(instr->opcode())) return;
-      DexField* field_ref = instr->get_field();
+      DexFieldRef* field_ref = instr->get_field();
       if (field_ref->is_def()) return;
 
       res |= proguard_name(field_ref) == name;

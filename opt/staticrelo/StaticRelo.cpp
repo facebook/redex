@@ -146,7 +146,7 @@ std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
  */
 void build_refs(
     const Scope& scope,
-    refs_t<DexMethod>& dmethod_refs,
+    refs_t<DexMethodRef>& dmethod_refs,
     refs_t<DexClass>& class_refs,
     std::unordered_set<DexClass*>& referenced_types) {
   // Looking for direct/static invokes or class refs
@@ -325,7 +325,7 @@ void add_target_methods(
 DexClass* select_relocation_target(
   const DexMethod* meth,
   DexClass* default_target,
-  const refs_t<DexMethod>& dmethod_refs,
+  const refs_t<DexMethodRef>& dmethod_refs,
   const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
   const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
   std::unordered_map<DexClass*, std::vector<DexMethod*> >& target_methods) {
@@ -442,7 +442,7 @@ void make_references_public(const DexMethod* from_meth) {
  */
  void build_mutations(
   const candidates_t& candidates,
-  const refs_t<DexMethod>& dmethod_refs,
+  const refs_t<DexMethodRef>& dmethod_refs,
   const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
   const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
   const std::unordered_map<size_t, DexClass*>& dex_to_target,
@@ -586,9 +586,9 @@ void do_mutations(PassManager& mgr,
       record_move_data(from_meth, from_cls, to_cls, cfg);
       // Move the method to the target class
       from_cls->remove_method(from_meth);
-      DexMethodRef ref;
-      ref.cls = to_cls->get_type();
-      from_meth->change(ref, true /* rename_on_collision */);
+      DexMethodSpec spec;
+      spec.cls = to_cls->get_type();
+      from_meth->change(spec, true /* rename_on_collision */);
       to_cls->add_method(from_meth);
       // Make the method public and make the target class public. They must
       // be public because the method may have been visible to other other
@@ -647,7 +647,7 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     // Make one pass through all code to find dmethod refs and class refs,
     // needed later on for refining eligibility as well as performing the
     // actual rebinding
-    refs_t<DexMethod> dmethod_refs;
+    refs_t<DexMethodRef> dmethod_refs;
     refs_t<DexClass> class_refs;
     std::unordered_set<DexClass*> referenced_types;
 

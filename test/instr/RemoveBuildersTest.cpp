@@ -30,7 +30,8 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
       DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
     } else if (is_iget(opcode) || is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->get_field();
+      DexFieldRef* field =
+          static_cast<const DexOpcodeField*>(insn)->get_field();
       EXPECT_NE(builder_type, field->get_class());
     }
   }
@@ -250,7 +251,8 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   for (const auto& insn : insns) {
     DexOpcode opcode = insn->opcode();
     if (is_iput(opcode)) {
-      DexField* field = static_cast<const DexOpcodeField*>(insn)->get_field();
+      DexFieldRef* field =
+          static_cast<const DexOpcodeField*>(insn)->get_field();
       if (field->get_class() == car->get_type()) {
         EXPECT_EQ(null_reg, insn->src(0));
       }
@@ -347,4 +349,3 @@ TEST_F(PostVerify, RemoveBPCBuilder) {
     DexType::get_type("Lcom/facebook/redex/test/instr/BPC$Builder");
   check_no_builder(initialize_bpc, builder_type);
 }
-

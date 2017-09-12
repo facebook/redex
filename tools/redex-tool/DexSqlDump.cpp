@@ -98,15 +98,9 @@ void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int me
       }
     }
     if (insn->has_field()) {
-      auto field = insn->get_field();
-      if (!field->is_def()) {
-        field = resolve_field(field);
-        if (!field) {
-          field = insn->get_field();
-        }
-      }
-      if (field_ids.count(field)) {
-        auto field_id = field_ids[insn->get_field()];
+      auto field = resolve_field(insn->get_field());
+      if (field != nullptr && field_ids.count(field)) {
+        auto field_id = field_ids[field];
         fprintf(
           fdout,
           "INSERT INTO %smethod_field_refs VALUES (%d, %d, %d, %d);\n",
@@ -118,15 +112,9 @@ void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int me
       }
     }
     if (insn->has_method()) {
-      auto meth = insn->get_method();
-      if (!meth->is_def()) {
-        meth = resolve_method(meth, MethodSearch::Any);
-        if (!meth) {
-          meth = insn->get_method();
-        }
-      }
-      if (method_ids.count(meth)) {
-        auto method_ref_id = method_ids[insn->get_method()];
+      auto meth = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (meth != nullptr && method_ids.count(meth)) {
+        auto method_ref_id = method_ids[meth];
         fprintf(
           fdout,
           "INSERT INTO %smethod_method_refs VALUES (%d, %d, %d, %d);\n",

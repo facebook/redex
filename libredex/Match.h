@@ -27,17 +27,22 @@
  * - Does NOT distinguish between <init> and <clinit>, will return true
  *   for static class initializers
  */
+
 inline bool is_constructor(const DexMethod* meth) {
   return meth->get_access() & ACC_CONSTRUCTOR;
 }
 
+inline bool is_constructor(const DexMethodRef* meth) {
+  return meth->is_def() && is_constructor(static_cast<const DexMethod*>(meth));
+}
+
 /** Determine if the method takes no arguments. */
-inline bool has_no_args(const DexMethod* meth) {
+inline bool has_no_args(const DexMethodRef* meth) {
   return meth->get_proto()->get_args()->get_type_list().empty();
 }
 
 /** Determine if the method takes exactly n arguments. */
-inline bool has_n_args(const DexMethod* meth, size_t n) {
+inline bool has_n_args(const DexMethodRef* meth, size_t n) {
   return meth->get_proto()->get_args()->get_type_list().size() == n;
 }
 
@@ -47,8 +52,9 @@ inline bool has_n_args(const DexMethod* meth, size_t n) {
  * Notes:
  * - Native methods are not considered to "have code"
  */
-inline bool has_code(const DexMethod* meth) {
-  return meth->get_code() != nullptr;
+inline bool has_code(const DexMethodRef* meth) {
+  return meth->is_def() &&
+      static_cast<const DexMethod*>(meth)->get_code() != nullptr;
 }
 
 /** Determine if the opcode matches any flavor of invoke-direct */
@@ -350,15 +356,13 @@ inline match_t<IRInstruction, std::tuple<DexOpcode> > is_opcode(DexOpcode opcode
 
 /** Matchers that map from IRInstruction -> other types */
 template <typename P>
-match_t<IRInstruction, std::tuple<match_t<DexMethod, P> > >
-  opcode_method(const match_t<DexMethod, P>& p) {
-  return {
-    [](const IRInstruction* insn, const match_t<DexMethod, P>& p) {
-      always_assert(insn->has_method());
-      return p.matches(insn->get_method());
-    },
-    p
-  };
+match_t<IRInstruction, std::tuple<match_t<DexMethodRef, P>>> opcode_method(
+    const match_t<DexMethodRef, P>& predicate) {
+  return {[](const IRInstruction* insn, const match_t<DexMethodRef, P>& p) {
+            always_assert(insn->has_method());
+            return p.matches(insn->get_method());
+          },
+          predicate};
 }
 
 template <typename P>
@@ -419,9 +423,11 @@ template <typename ...T>
 
 /** Match methods that are default constructors */
 match_t<DexMethod, std::tuple<> > is_default_constructor();
+match_t<DexMethodRef, std::tuple<> > can_be_default_constructor();
 
 /** Match methods that are constructors. INCLUDES static constructors! */
 match_t<DexMethod, std::tuple<> > is_constructor();
+match_t<DexMethodRef, std::tuple<> > can_be_constructor();
 
 /** Match classes that are enums */
 match_t<DexClass, std::tuple<> > is_enum();
@@ -618,20 +624,20 @@ match_t<DexClass, std::tuple<match_t<DexField, P> > >
 
 /** Match dex members containing any annotation that matches the given match */
 template <typename T, typename P>
-match_t<T, std::tuple<match_t<DexAnnotation, P> > >
-  any_annos(const match_t<DexAnnotation, P>& p) {
-  return {
-    [](const T* t, const match_t<DexAnnotation, P>& p) {
-      const auto& anno_set = t->get_anno_set();
-      if (!anno_set) return false;
-      for (const auto& anno : anno_set->get_annotations()) {
-        if (p.matches(anno)) {
-          return true;
-        }
-      }
-      return false;
-    },
-    p };
+match_t<T, std::tuple<match_t<DexAnnotation, P>>> any_annos(
+    const match_t<DexAnnotation, P>& predicate) {
+  return {[](const T* t, const match_t<DexAnnotation, P>& p) {
+            if (!t->is_def()) return false;
+            const auto& anno_set = t->get_anno_set();
+            if (!anno_set) return false;
+            for (const auto& anno : anno_set->get_annotations()) {
+              if (p.matches(anno)) {
+                return true;
+              }
+            }
+            return false;
+          },
+          predicate};
 }
 
 /** Match which checks for membership of T in container C via C::find(T) */

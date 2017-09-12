@@ -130,7 +130,7 @@ IRInstruction* dasm(DexOpcode opcode,
 }
 
 IRInstruction* dasm(DexOpcode opcode,
-                    DexField* field,
+                    DexFieldRef* field,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
   insn->set_field(field);
@@ -139,7 +139,7 @@ IRInstruction* dasm(DexOpcode opcode,
 }
 
 IRInstruction* dasm(DexOpcode opcode,
-                    DexMethod* method,
+                    DexMethodRef* method,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
   insn->set_method(method);

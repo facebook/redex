@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "InlineHelper.h"
+#include "Inliner.h"
 #include "Pass.h"
 #include "Resolver.h"
 

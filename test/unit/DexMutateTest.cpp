@@ -13,7 +13,7 @@
 #include "DexClass.h"
 #include "RedexContext.h"
 
-DexField* make_field_ref(DexType* cls, const char* name, DexType* type) {
+DexFieldRef* make_field_ref(DexType* cls, const char* name, DexType* type) {
   return DexField::make_field(cls, DexString::make_string(name), type);
 }
 
@@ -22,7 +22,8 @@ DexField* make_field_def(DexType* cls,
                          DexType* type,
                          DexAccessFlags access = ACC_PUBLIC,
                          bool external = false) {
-  auto field = DexField::make_field(cls, DexString::make_string(name), type);
+  auto field = static_cast<DexField*>(
+      DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
     field->set_access(access);
     field->set_external();
@@ -58,9 +59,9 @@ TEST(RenameMembers, rename) {
   auto cls_A = create_class(a, obj_t, {field}, ACC_PUBLIC, true);
   std::string name_before = field->get_name()->c_str();
   ASSERT_EQ("wombat", name_before);
-  DexFieldRef ref;
-  ref.name = DexString::make_string("numbat");
-  field->change(ref);
+  DexFieldSpec spec;
+  spec.name = DexString::make_string("numbat");
+  field->change(spec);
   std::string name_after = field->get_name()->c_str();
   ASSERT_EQ("numbat", name_after);
 }

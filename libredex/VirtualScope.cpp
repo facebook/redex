@@ -74,76 +74,87 @@ void create_object_class() {
   // an assertion. This only happens in tests when no external jars are
   // available
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  auto method = DexMethod::make_method(type, clone, void_object);
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
-  method = DexMethod::make_method(type, equals, object_bool);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, equals, object_bool));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // protected java.lang.Object.finalize()V
-  method = DexMethod::make_method(type, finalize, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, finalize, void_void));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.getClass()Ljava/lang/Class;
-  method = DexMethod::make_method(type, getClass, void_class);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, getClass, void_class));
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public native java.lang.Object.hashCode()I
-  method = DexMethod::make_method(type, hashCode, void_int);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, hashCode, void_int));
   method->set_access(ACC_PUBLIC | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
-  method = DexMethod::make_method(type, notify, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, notify, void_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.notifyAll()V
-  method = DexMethod::make_method(type, notifyAll, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, notifyAll, void_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public java.lang.Object.toString()Ljava/lang/String;
-  method = DexMethod::make_method(type, toString, void_string);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, toString, void_string));
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait()V
-  method = DexMethod::make_method(type, wait, void_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, wait, void_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait(J)V
-  method = DexMethod::make_method(type, wait, long_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, wait, long_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final native java.lang.Object.wait(JI)V
-  method = DexMethod::make_method(type, wait, long_int_void);
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, wait, long_int_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
@@ -462,7 +473,7 @@ DexMethod* make_miranda(const DexType* type,
   // cache and we may find one we have deleted and it was a def.
   // Come up with a better assert story
   // always_assert(!miranda->is_def());
-  return miranda;
+  return static_cast<DexMethod*>(miranda);
 }
 
 bool load_interfaces_methods(const std::deque<DexType*>&, BaseIntfSigs&);
@@ -777,7 +788,6 @@ void get_root_scopes(const SignatureMap& sig_map,
 } // namespace
 
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
-  Timer("Signature Map");
   SignatureMap signature_map;
   build_signature_map(class_hierarchy, get_object_type(), signature_map);
   return signature_map;

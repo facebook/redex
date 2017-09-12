@@ -17,7 +17,7 @@
 #include <unordered_set>
 
 
-using MethodRefCache = std::unordered_map<DexMethod*, DexMethod*>;
+using MethodRefCache = std::unordered_map<DexMethodRef*, DexMethod*>;
 using MethodSet = std::unordered_set<DexMethod*>;
 
 /**
@@ -130,8 +130,8 @@ DexMethod* resolve_method_ref(
  * If the method is already a definition return itself.
  * If the type the method belongs to is unknown return nullptr.
  */
-inline DexMethod* resolve_method(DexMethod* method, MethodSearch search) {
-  if (method->is_def()) return method;
+inline DexMethod* resolve_method(DexMethodRef* method, MethodSearch search) {
+  if (method->is_def()) return static_cast<DexMethod*>(method);
   auto cls = type_class(method->get_class());
   if (cls == nullptr) return nullptr;
   return resolve_method_ref(cls, method->get_name(), method->get_proto(), search);
@@ -148,8 +148,8 @@ inline DexMethod* resolve_method(DexMethod* method, MethodSearch search) {
  * Clients are responsible for the lifetime of the cache.
  */
 inline DexMethod* resolve_method(
-    DexMethod* method, MethodSearch search, MethodRefCache& ref_cache) {
-  if (method->is_def()) return method;
+    DexMethodRef* method, MethodSearch search, MethodRefCache& ref_cache) {
+  if (method->is_def()) return static_cast<DexMethod*>(method);
   auto def = ref_cache.find(method);
   if (def != ref_cache.end()) {
     return def->second;
@@ -192,9 +192,9 @@ DexField* resolve_field(
  * lookup in the class hierarchy is performed looking for the definition.
  */
 inline DexField* resolve_field(
-    DexField* field, FieldSearch search = FieldSearch::Any) {
+    DexFieldRef* field, FieldSearch search = FieldSearch::Any) {
   if (field->is_def()) {
-    return field;
+    return static_cast<DexField*>(field);
   }
   return resolve_field(
       field->get_class(), field->get_name(), field->get_type(), search);

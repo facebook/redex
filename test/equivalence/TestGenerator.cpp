@@ -25,8 +25,8 @@ void EquivalenceTest::generate(DexClass* cls) {
   auto ret = DexType::make_type("I");
   auto args = DexTypeList::make_type_list({});
   auto proto = DexProto::make_proto(ret, args); // I()
-  DexMethod* before = DexMethod::make_method(
-      cls->get_type(), DexString::make_string("before_" + test_name()), proto);
+  DexMethod* before = static_cast<DexMethod*>(DexMethod::make_method(
+      cls->get_type(), DexString::make_string("before_" + test_name()), proto));
   before->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   before->set_code(std::make_unique<IRCode>(before, 0));
   build_method(before);

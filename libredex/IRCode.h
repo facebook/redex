@@ -156,8 +156,8 @@ struct MethodItemEntry {
 
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 };
 
 using MethodItemMemberListOption =
@@ -175,10 +175,6 @@ struct FatMethodDisposer {
 };
 
 std::string show(const FatMethod*);
-
-struct InlineContext;
-
-class MethodSplicer;
 
 struct Block;
 
@@ -266,46 +262,12 @@ class IRCode {
   void gather_catch_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexField*>& lfield) const;
-  void gather_methods(std::vector<DexMethod*>& lmethod) const;
-
-  /*
-   * Inline tail-called `callee` into `caller` at instruction `invoke`.
-   *
-   * NB: This is NOT a general-purpose inliner; it assumes that the caller does
-   * not do any work after the call, so the only live registers are the
-   * parameters to the callee. This allows it to do inlining by simply renaming
-   * the callee's registers. The more general inline_method instead inserts
-   * move instructions to map the caller's argument registers to the callee's
-   * params.
-   *
-   * In general, use of this method should be considered deprecated. It is
-   * currently only being used by the BridgePass because the insertion of
-   * additional move instructions would confuse SynthPass, which looks for
-   * exact sequences of instructions.
-   */
-  static void inline_tail_call(DexMethod* caller,
-                               DexMethod* callee,
-                               FatMethod::iterator pos);
-
-  /*
-   * Inline `callee` into `caller` at instruction `invoke`. This is a
-   * general-purpose inliner.
-   */
-  static bool inline_method(InlineContext& context,
-                            IRCode* callee,
-                            FatMethod::iterator pos);
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
-  /*
-   * If end_block_before_throw is false, opcodes that may throw (e.g. invokes,
-   * {get|put}-object, etc) will terminate their basic blocks. If it is true,
-   * they will instead be at the start of the next basic block. As of right
-   * now the only pass that uses the `false` behavior is SimpleInline, and I
-   * would like to remove it eventually.
-   */
   void build_cfg(bool end_block_before_throw = true);
 
   /* Generate DexCode from IRCode */
@@ -385,24 +347,25 @@ class IRCode {
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }
+  FatMethod::reverse_iterator rbegin() { return m_fmethod->rbegin(); }
+  FatMethod::reverse_iterator rend() { return m_fmethod->rend(); }
+  FatMethod::const_iterator cbegin() const { return m_fmethod->begin(); }
+  FatMethod::const_iterator cend() const { return m_fmethod->end(); }
+
   FatMethod::iterator erase(FatMethod::iterator it) {
     return m_fmethod->erase(it);
   }
+  FatMethod::iterator erase_and_dispose(FatMethod::iterator it) {
+    return m_fmethod->erase_and_dispose(it, FatMethodDisposer());
+  }
+
+  FatMethod::iterator iterator_to(MethodItemEntry& mie) {
+    return m_fmethod->iterator_to(mie);
+  }
+
   friend std::string show(const IRCode*);
 
   friend class MethodSplicer;
-};
-
-/**
- * Carry context for multiple inline into a single caller.
- * In particular, it caches the liveness analysis so that we can reuse it when
- * multiple callees into the same caller.
- */
-struct InlineContext {
-  uint16_t original_regs;
-  IRCode* caller_code;
-  uint64_t estimated_insn_size{0};
-  InlineContext(DexMethod* caller);
 };
 
 class InstructionIterator {
@@ -491,4 +454,6 @@ class InstructionIterable {
   bool empty() const {
     return begin() == end();
   }
+
+  bool structural_equals(const InstructionIterable& other);
 };

@@ -214,7 +214,7 @@ private:
     m_num_trivial++;
 
     // Get invoked method
-    DexMethod* invoked_meth = insns[0]->get_method();
+    DexMethodRef* invoked_meth = insns[0]->get_method();
 
     // Invoked method name must match
     if (meth->get_name() != invoked_meth->get_name()) {
@@ -247,17 +247,18 @@ private:
       m_num_culled_super_not_def++;
       return nullptr;
     }
+    auto meth_def = static_cast<DexMethod*>(invoked_meth);
     // If invoked method is not public, make it public
-    if (!is_public(invoked_meth)) {
-      if (!invoked_meth->is_concrete()) {
+    if (!is_public(meth_def)) {
+      if (!meth_def->is_concrete()) {
         m_num_culled_super_is_non_public_sdk++;
         return nullptr;
       }
-      set_public(invoked_meth);
+      set_public(meth_def);
       m_num_relaxed_vis++;
     }
 
-    auto cls = type_class(invoked_meth->get_class());
+    auto cls = type_class(meth_def->get_class());
     if (!is_public(cls)) {
       if (cls->is_external()) {
         m_num_culled_super_cls_non_public++;
@@ -267,7 +268,7 @@ private:
       m_num_cls_relaxed_vis++;
     }
 
-    return invoked_meth;
+    return meth_def;
   }
 
 public:
@@ -313,7 +314,11 @@ public:
                    [](DexMethod* meth) { return true; },
                    [&](DexMethod* meth, IRInstruction* insn) {
                      if (is_invoke(insn->opcode())) {
-                       auto method = insn->get_method();
+                       if (!insn->get_method()->is_def()) {
+                         return;
+                       }
+                       auto method =
+                           static_cast<DexMethod*>(insn->get_method());
                        while (m_delmeths.count(method)) {
                          method = m_delmeths.at(method);
                        }

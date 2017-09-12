@@ -488,6 +488,7 @@ public:
     ~ResStringPool();
 
     void setToEmpty();
+    void serialize(Vector<char>& cVec);
     status_t setTo(const void* data, size_t size, bool copyData=false);
 
     status_t getError() const;
@@ -1531,6 +1532,8 @@ public:
 
     status_t getError() const;
 
+    status_t serialize(Vector<char>& cVec, size_t resTableIndex);
+
     void uninit();
 
     struct resource_name
@@ -1811,7 +1814,21 @@ public:
             String8* pTargetPath, String8* pOverlayPath);
 
     void print(bool inclValues) const;
+    void getResourceIds(SortedVector<uint32_t>* sVec) const;
+
+    // Marks the entries (across each config) for the given resource ID as deleted.
+    // Only takes effect during serialization (any deleted rows will be skipped).
+    void deleteResource(uint32_t resID);
+
+    // For the given resource ID, looks across all configurations and returns all
+    // the corresponding Res_value entries (including nested entries within bags).
+    void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
+
+    String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
+
     static String8 normalizeForOutput(const char* input);
+
+    ssize_t getResourcePackageIndex(uint32_t resID) const;
 
 private:
     struct Header;
@@ -1824,8 +1841,6 @@ private:
 
     status_t addInternal(const void* data, size_t size, const void* idmapData, size_t idmapDataSize,
             const int32_t cookie, bool copyData);
-
-    ssize_t getResourcePackageIndex(uint32_t resID) const;
 
     status_t getEntry(
         const PackageGroup* packageGroup, int typeIndex, int entryIndex,

@@ -35,9 +35,9 @@ class PrintMembersPass : public Pass {
     std::vector<std::string> methods;
     pc.get("only_these_methods", {}, methods);
     for (std::string& name : methods) {
-      DexMethod* m = DexMethod::get_method(name);
-      if (m != nullptr) {
-        m_config.only_these_methods.insert(m);
+      DexMethodRef* m = DexMethod::get_method(name);
+      if (m != nullptr && m->is_def()) {
+        m_config.only_these_methods.insert(static_cast<DexMethod*>(m));
       }
     }
   }

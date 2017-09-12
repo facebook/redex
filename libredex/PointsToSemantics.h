@@ -194,8 +194,8 @@ enum SpecialPointsToEdge {
 struct PointsToOperation {
   PointsToOperationKind kind;
   union {
-    DexMethod* dex_method;
-    DexField* dex_field;
+    DexMethodRef* dex_method;
+    DexFieldRef* dex_field;
     DexString* dex_string;
     DexType* dex_type;
     size_t parameter;
@@ -206,10 +206,10 @@ struct PointsToOperation {
 
   explicit PointsToOperation(PointsToOperationKind k) : kind(k) {}
 
-  PointsToOperation(PointsToOperationKind k, DexMethod* m)
+  PointsToOperation(PointsToOperationKind k, DexMethodRef* m)
       : kind(k), dex_method(m) {}
 
-  PointsToOperation(PointsToOperationKind k, DexField* f)
+  PointsToOperation(PointsToOperationKind k, DexFieldRef* f)
       : kind(k), dex_field(f) {}
 
   PointsToOperation(PointsToOperationKind k, DexString* s)
@@ -462,8 +462,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
  */
 class PointsToSemantics final {
  public:
-  using iterator =
-      std::unordered_map<DexMethod*, PointsToMethodSemantics>::const_iterator;
+  using iterator = std::unordered_map<
+      DexMethod*, PointsToMethodSemantics>::const_iterator;
 
   PointsToSemantics() = delete;
 
@@ -500,7 +500,7 @@ class PointsToSemantics final {
   friend std::ostream& operator<<(std::ostream&, const PointsToSemantics&);
 };
 
-std::ostream& operator<<(
-    std::ostream& o, const std::pair<DexMethod*, PointsToMethodSemantics>& p);
+std::ostream& operator<<(std::ostream& o,
+    const std::pair<DexMethod*, PointsToMethodSemantics>& p);
 
 std::ostream& operator<<(std::ostream& o, const PointsToSemantics& s);

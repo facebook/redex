@@ -427,10 +427,8 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
 }
 
 DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
-    : m_ref(type, name, proto) {
-  m_concrete = false;
+    : DexMethodRef(type, name, proto) {
   m_virtual = false;
-  m_external = false;
   m_anno = nullptr;
   m_dex_code = nullptr;
   m_code = nullptr;
@@ -455,7 +453,7 @@ void DexMethod::sync() {
   m_code.reset();
 }
 
-size_t hash_value(const DexMethodRef& r) {
+size_t hash_value(const DexMethodSpec& r) {
   size_t seed = boost::hash<DexType*>()(r.cls);
   boost::hash_combine(seed, r.name);
   boost::hash_combine(seed, r.proto);
@@ -465,7 +463,8 @@ size_t hash_value(const DexMethodRef& r) {
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
                                        DexString* name) {
-  auto m = DexMethod::make_method(target_cls, name, that->get_proto());
+  auto m = static_cast<DexMethod*>(
+      DexMethod::make_method(target_cls, name, that->get_proto()));
   assert(m != that);
   if (that->m_anno) {
     m->m_anno = new DexAnnotationSet(*that->m_anno);
@@ -511,7 +510,7 @@ std::vector<std::string> split_args(std::string args) {
 }
 }
 
-DexMethod* DexMethod::get_method(std::string canon) {
+DexMethodRef* DexMethod::get_method(std::string canon) {
   auto cls_end = canon.find('.');
   auto name_start = cls_end + 1;
   auto name_end = canon.find(':', name_start);
@@ -548,7 +547,7 @@ void DexClass::remove_method(const DexMethod* m) {
 void DexMethod::become_virtual() {
   assert(!m_virtual);
   m_virtual = true;
-  auto cls = type_class(m_ref.cls);
+  auto cls = type_class(m_spec.cls);
   assert(!cls->is_external());
   cls->remove_method(this);
   auto& vmethods = cls->get_vmethods();
@@ -603,7 +602,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
   for (uint32_t i = 0; i < sfield_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
-    DexField* df = idx->get_fieldidx(ndex);
+    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     DexEncodedValue* ev = nullptr;
     if (svalues != nullptr) {
       ev = svalues->pop_next();
@@ -622,7 +621,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
   for (uint32_t i = 0; i < ifield_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
-    DexField* df = idx->get_fieldidx(ndex);
+    DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
   }
@@ -631,7 +630,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
-    DexMethod* dm = idx->get_methodidx(ndex);
+    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
@@ -644,7 +643,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
-    DexMethod* dm = idx->get_methodidx(ndex);
+    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     auto dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
@@ -804,14 +803,14 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
-    DexField* field = idx->get_fieldidx(fidx);
+    DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
     DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
     field->attach_annotation_set(aset);
   }
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
-    DexMethod* method = idx->get_methodidx(midx);
+    DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
     DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
     method->attach_annotation_set(aset);
   }
@@ -819,7 +818,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
     if (xrefoff != 0) {
-      DexMethod* method = idx->get_methodidx(midx);
+      DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
       for (uint32_t j = 0; j < count; j++) {
@@ -1005,7 +1004,7 @@ void DexClass::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_anno) m_anno->gather_strings(lstring);
 }
 
-void DexClass::gather_fields(std::vector<DexField*>& lfield) const {
+void DexClass::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   for (auto const& m : m_dmethods) {
     m->gather_fields(lfield);
   }
@@ -1023,7 +1022,7 @@ void DexClass::gather_fields(std::vector<DexField*>& lfield) const {
   if (m_anno) m_anno->gather_fields(lfield);
 }
 
-void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexClass::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto const& m : m_dmethods) {
     lmethod.push_back(m);
     m->gather_methods(lmethod);
@@ -1039,6 +1038,16 @@ void DexClass::gather_methods(std::vector<DexMethod*>& lmethod) const {
     f->gather_methods(lmethod);
   }
   if (m_anno) m_anno->gather_methods(lmethod);
+}
+
+void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
+  ltype.push_back(m_spec.cls);
+  ltype.push_back(m_spec.type);
+}
+
+void DexFieldRef::gather_strings_shallow(
+    std::vector<DexString*>& lstring) const {
+  lstring.push_back(m_spec.name);
 }
 
 void DexField::gather_types(std::vector<DexType*>& ltype) const {
@@ -1051,27 +1060,18 @@ void DexField::gather_strings(std::vector<DexString*>& lstring) const {
   if (m_anno) m_anno->gather_strings(lstring);
 }
 
-void DexField::gather_fields(std::vector<DexField*>& lfield) const {
+void DexField::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   if (m_value) m_value->gather_fields(lfield);
   if (m_anno) m_anno->gather_fields(lfield);
 }
 
-void DexField::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexField::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_value) m_value->gather_methods(lmethod);
   if (m_anno) m_anno->gather_methods(lmethod);
 }
 
-void DexField::gather_types_shallow(std::vector<DexType*>& ltype) {
-  ltype.push_back(m_ref.cls);
-  ltype.push_back(m_ref.type);
-}
-
-void DexField::gather_strings_shallow(std::vector<DexString*>& lstring) {
-  lstring.push_back(m_ref.name);
-}
-
 void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
-  // We handle m_ref.cls and proto in the first-layer gather.
+  // We handle m_spec.cls and proto in the first-layer gather.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
   auto param_anno = get_param_anno();
@@ -1096,7 +1096,7 @@ void DexMethod::gather_strings(std::vector<DexString*>& lstring) const {
   }
 }
 
-void DexMethod::gather_fields(std::vector<DexField*>& lfield) const {
+void DexMethod::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   if (m_code) m_code->gather_fields(lfield);
   if (m_anno) m_anno->gather_fields(lfield);
   auto param_anno = get_param_anno();
@@ -1108,7 +1108,7 @@ void DexMethod::gather_fields(std::vector<DexField*>& lfield) const {
   }
 }
 
-void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) const {
+void DexMethod::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_code) m_code->gather_methods(lmethod);
   if (m_anno) m_anno->gather_methods(lmethod);
   auto param_anno = get_param_anno();
@@ -1120,14 +1120,15 @@ void DexMethod::gather_methods(std::vector<DexMethod*>& lmethod) const {
   }
 }
 
-void DexMethod::gather_types_shallow(std::vector<DexType*>& ltype) const {
-  ltype.push_back(m_ref.cls);
-  m_ref.proto->gather_types(ltype);
+void DexMethodRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
+  ltype.push_back(m_spec.cls);
+  m_spec.proto->gather_types(ltype);
 }
 
-void DexMethod::gather_strings_shallow(std::vector<DexString*>& lstring) const {
-  lstring.push_back(m_ref.name);
-  m_ref.proto->gather_strings(lstring);
+void DexMethodRef::gather_strings_shallow(
+    std::vector<DexString*>& lstring) const {
+  lstring.push_back(m_spec.name);
+  m_spec.proto->gather_strings(lstring);
 }
 
 uint32_t DexCode::size() const {

@@ -416,8 +416,9 @@ public:
 
 // T - DexField/DexElem - what we're managing
 // R - DexFieldRef/DexElemRef - the ref to what we're managing
+// S - DexFieldSpec/DexElemSpec - the spec to what we're managing
 // K - DexType/DexProto - the type of the key we're using in the map
-template <class T, class R, class K>
+template <class T, class R, class S, class K>
 class DexElemManager {
 protected:
   // Map from class_name -> type -> old_name ->
@@ -427,8 +428,8 @@ protected:
       std::unordered_map<K,
           std::unordered_map<DexString*,
               std::unique_ptr<DexNameWrapper<T>>>>> elements;
-  using RefCtrFn = std::function<R(const std::string&)>;
-  using SigGetFn = std::function<K(T&)>;
+  using RefCtrFn = std::function<S(const std::string&)>;
+  using SigGetFn = std::function<K(R)>;
   using ElemCtrFn = std::function<DexNameWrapper<T>*(T&)>;
   SigGetFn sig_getter_fn;
   RefCtrFn ref_getter_fn;
@@ -455,7 +456,7 @@ public:
       elements[cls][sig].count(name) > 0;
   }
 
-  inline bool contains_elem(T elem) {
+  inline bool contains_elem(R elem) {
     return contains_elem(
         elem->get_class(), sig_getter_fn(elem), elem->get_name());
   }
@@ -499,7 +500,8 @@ public:
           auto elem = wrap->get();
           TRACE(OBFUSCATE, 2,
               "\tRenaming the elem 0x%x (%s) %s%s to %s external: %s can_rename: %s\n",
-              elem, SHOW(sig_getter_fn(elem)), SHOW(elem->get_class()),
+              elem, SHOW(sig_getter_fn(elem)),
+              SHOW(elem->get_class()),
               SHOW(elem->get_name()), wrap->get_name(),
               type_class(wrap->get()->get_class())->is_external() ? "true" :
                 "false", can_rename(elem) ? "true" : "false");
@@ -517,7 +519,7 @@ public:
 
 private:
   // Returns the def for that class and ref if it exists, nullptr otherwise
-  T find_def(T ref, DexType* cls) {
+  T find_def(R ref, DexType* cls) {
     if (cls == nullptr) return nullptr;
     if (contains_elem(cls, sig_getter_fn(ref), ref->get_name())) {
       DexNameWrapper<T>* wrap =
@@ -528,7 +530,7 @@ private:
     return nullptr;
   }
 
-  T lookup_intf(T ref, DexClass* cls) {
+  T lookup_intf(R ref, DexClass* cls) {
     if (cls == nullptr) return nullptr;
     auto found_def = find_def(ref, cls->get_type());
     if (found_def != nullptr) return found_def;
@@ -543,7 +545,7 @@ public:
   // Does a lookup over the fields we renamed in the dex to see what the
  // reference should be reset with. Returns nullptr if there is no mapping.
  // Note: we also have to look in superclasses in the case that this is a ref
- T def_of_ref(T ref) {
+ T def_of_ref(R ref) {
    DexClass* cls = type_class(ref->get_class());
    if (cls == nullptr) return nullptr;
    if (is_interface(cls)) {
@@ -576,15 +578,17 @@ public:
   }
 };
 
-typedef DexElemManager<DexField*, DexFieldRef, DexType*> DexFieldManager;
+typedef DexElemManager<DexField*, DexFieldRef*, DexFieldSpec, DexType*>
+    DexFieldManager;
 DexFieldManager new_dex_field_manager();
-typedef DexElemManager<DexMethod*, DexMethodRef, DexProto*> DexMethodManager;
+typedef DexElemManager<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*>
+    DexMethodManager;
 DexMethodManager new_dex_method_manager();
 
 // Look at a list of members and check if there is a renamable member
-template <class T, class R, class K>
+template <class T, class R, class S, class K>
 bool contains_renamable_elem(const std::vector<T>& elems,
-    DexElemManager<T, R, K>& name_mapping) {
+    DexElemManager<T, R, S, K>& name_mapping) {
   for (T e : elems)
     if (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
         name_mapping[e]->should_rename())
@@ -646,7 +650,7 @@ public:
 };
 
 // State of the renaming that we need to modify as we rename more fields
-template <class T, class R, class K>
+template <class T, class R, class S, class K>
 class ObfuscationState {
 public:
   // Ids that we've used in renaming
@@ -657,12 +661,12 @@ public:
   virtual ~ObfuscationState() = default;
 
   virtual void populate_ids_to_avoid(DexClass* base,
-      DexElemManager<T, R, K>& name_manager, bool visitSubclasses,
+      DexElemManager<T, R, S, K>& name_manager, bool visitSubclasses,
       const ClassHierarchy& ch) = 0;
 };
 
 class FieldObfuscationState :
-    public ObfuscationState<DexField*, DexFieldRef, DexType*> {
+    public ObfuscationState<DexField*, DexFieldRef*, DexFieldSpec, DexType*> {
 public:
   void populate_ids_to_avoid(DexClass* base,
       DexFieldManager& name_manager, bool /* unused */,
@@ -728,7 +732,7 @@ void walk_hierarchy(
 }
 
 class MethodObfuscationState :
-    public ObfuscationState<DexMethod*, DexMethodRef, DexProto*> {
+    public ObfuscationState<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*> {
 public:
   // Essentially what this does is walks the hierarchy collecting names of
   // public methods in superclasses and any methods in this class (and

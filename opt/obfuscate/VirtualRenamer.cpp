@@ -106,21 +106,24 @@ DexMethod* find_method(
 };
 
 // keep a map from defs to all refs resolving to that def
-using RefsMap = std::map<DexMethod*, std::set<DexMethod*>>;
+using RefsMap = std::map<DexMethod*, std::set<DexMethodRef*>>;
 
 /**
  * Rename a given method with the given name.
  */
-void rename(DexMethod* meth, DexString* name) {
+void rename(DexMethodRef* meth, DexString* name) {
   //assert(meth->is_concrete() && !meth->is_external());
-  DexMethodRef ref;
-  ref.cls = meth->get_class();
-  ref.name = name;
-  ref.proto = meth->get_proto();
-  if (meth->get_deobfuscated_name().empty()) {
-    meth->set_deobfuscated_name(meth->get_name()->c_str());
+  DexMethodSpec spec;
+  spec.cls = meth->get_class();
+  spec.name = name;
+  spec.proto = meth->get_proto();
+  if (meth->is_concrete()) {
+    auto def = static_cast<DexMethod*>(meth);
+    if (def->get_deobfuscated_name().empty()) {
+      def->set_deobfuscated_name(meth->get_name()->c_str());
+    }
   }
-  meth->change(ref);
+  meth->change(spec);
 }
 
 /**
