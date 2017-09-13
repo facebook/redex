@@ -17,8 +17,8 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "InterDex.h"
 #include "IRCode.h"
+#include "InterDex.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
@@ -36,7 +36,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          bool verify_none_mode)
     : m_config(config),
       m_registered_passes(passes),
-      m_current_pass_metrics(nullptr),
+      m_current_pass_info(nullptr),
       m_pg_config(empty_pg_config()),
       m_testing_mode(false),
       m_verify_none_mode(verify_none_mode) {
@@ -49,7 +49,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          bool verify_none_mode)
     : m_config(config),
       m_registered_passes(passes),
-      m_current_pass_metrics(nullptr),
+      m_current_pass_info(nullptr),
       m_pg_config(pg_config),
       m_testing_mode(false),
       m_verify_none_mode(verify_none_mode) {
@@ -77,10 +77,8 @@ void PassManager::run_passes(DexStoresVector& stores,
   Scope scope = build_class_scope(it);
   {
     Timer t("Initializing reachable classes");
-    init_reachable_classes(scope,
-                           m_config,
-                           m_pg_config,
-                           cfg.get_no_optimizations_annos());
+    init_reachable_classes(
+        scope, m_config, m_pg_config, cfg.get_no_optimizations_annos());
   }
   {
     Timer t("Processing proguard rules");
@@ -102,44 +100,38 @@ void PassManager::run_passes(DexStoresVector& stores,
     redex::show_configuration(config_file, scope, m_pg_config);
     std::ofstream incoming(cfg.get_printseeds() + ".incoming");
     redex::print_classes(incoming, cfg.get_proguard_map(), scope);
-    std::ofstream shrinking_file(cfg.get_printseeds()  + ".allowshrinking");
-    redex::print_seeds(shrinking_file, cfg.get_proguard_map(), scope, true, false);
+    std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");
+    redex::print_seeds(
+        shrinking_file, cfg.get_proguard_map(), scope, true, false);
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false, true);
+    redex::print_seeds(
+        obfuscation_file, cfg.get_proguard_map(), scope, false, true);
   }
 
   // Count the number of appearances of each pass name.
-  std::unordered_map<std::string, int> pass_counters;
-  m_pass_metrics.resize(m_activated_passes.size());
+  std::unordered_map<const Pass*, size_t> pass_counters;
+  m_pass_info.resize(m_activated_passes.size());
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
-    // This is a special hack to deal with INTERDEX_PASS_NAME pass. Will be
-    // removed later.
-    if (pass->name() == INTERDEX_PASS_NAME) {
-      m_interdex_location = i;
-    }
-    int count = 0;
-    if (pass_counters.find(pass->name()) == pass_counters.end()) {
-      pass_counters[pass->name()] = 1;
-    } else {
-      pass_counters[pass->name()]++;
-    }
-    count = pass_counters[pass->name()];
-    m_pass_metrics[i].name = pass->name() + "#" + std::to_string(count);
-    m_pass_metrics[i].metrics[PASS_ORDER_KEY] = i;
-    m_current_pass_metrics = &m_pass_metrics[i].metrics;
+    const size_t count = pass_counters[pass]++;
+    m_pass_info[i].pass = pass;
+    m_pass_info[i].order = i;
+    m_pass_info[i].repeat = count;
+    m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
+    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+    m_current_pass_info = &m_pass_info[i];
     pass->eval_pass(stores, cfg, *this);
-    m_current_pass_metrics = nullptr;
+    m_current_pass_info = nullptr;
   }
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
-    m_current_pass_metrics = &m_pass_metrics[i].metrics;
+    m_current_pass_info = &m_pass_info[i];
     pass->run_pass(stores, cfg, *this);
-    m_current_pass_metrics = nullptr;
+    m_current_pass_info = nullptr;
   }
 
   if (!cfg.get_printseeds().empty()) {
@@ -165,28 +157,30 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
 }
 
 void PassManager::incr_metric(const std::string& key, int value) {
-  always_assert_log(m_current_pass_metrics != nullptr, "No current pass!");
-  (*m_current_pass_metrics)[key] += value;
+  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+  (m_current_pass_info->metrics)[key] += value;
 }
 
 void PassManager::set_metric(const std::string& key, int value) {
-  always_assert_log(m_current_pass_metrics != nullptr, "No current pass!");
-  (*m_current_pass_metrics)[key] = value;
+  always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+  (m_current_pass_info->metrics)[key] = value;
 }
 
 int PassManager::get_metric(const std::string& key) {
-  return (*m_current_pass_metrics)[key];
+  return (m_current_pass_info->metrics)[key];
 }
 
-std::vector<PassManager::PassMetrics> PassManager::get_metrics()
-    const {
-  return m_pass_metrics;
+const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
+  return m_pass_info;
 }
 
-std::unordered_map<std::string, int> PassManager::get_interdex_metrics() {
-  // Does not have the interdex metrics. Return an empty map.
-  if (m_interdex_location == -1) {
-    return std::unordered_map<std::string, int>{};
+const std::unordered_map<std::string, int>&
+PassManager::get_interdex_metrics() {
+  for (const auto& pass_info : m_pass_info) {
+    if (pass_info.pass->name() == INTERDEX_PASS_NAME) {
+      return pass_info.metrics;
+    }
   }
-  return m_pass_metrics[m_interdex_location].metrics;
+  static std::unordered_map<std::string, int> empty;
+  return empty;
 }

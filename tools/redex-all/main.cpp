@@ -311,15 +311,15 @@ Json::Value get_stats(const dex_stats_t& stats) {
 
 Json::Value get_pass_stats(const PassManager& mgr) {
   Json::Value all(Json::ValueType::objectValue);
-  for (auto pass_metrics : mgr.get_metrics()) {
-    if (pass_metrics.metrics.empty()) {
+  for (const auto& pass_info : mgr.get_pass_info()) {
+    if (pass_info.metrics.empty()) {
       continue;
     }
     Json::Value pass;
-    for (auto pass_metric : pass_metrics.metrics) {
+    for (const auto& pass_metric : pass_info.metrics) {
       pass[pass_metric.first] = pass_metric.second;
     }
-    all[pass_metrics.name] = pass;
+    all[pass_info.name] = pass;
   }
   return all;
 }

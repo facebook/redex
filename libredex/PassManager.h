@@ -31,7 +31,10 @@ class PassManager {
     const Json::Value& config = Json::Value(Json::objectValue),
     bool verify_none_mode = false);
 
-  struct PassMetrics {
+  struct PassInfo {
+    const Pass* pass;
+    size_t order;
+    size_t repeat;
     std::string name;
     std::unordered_map<std::string, int> metrics;
   };
@@ -42,21 +45,23 @@ class PassManager {
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
-  std::vector<PassManager::PassMetrics> get_metrics() const;
+  const std::vector<PassManager::PassInfo>& get_pass_info() const;
   const Json::Value& get_config() const { return m_config; }
   bool verify_none_enabled() const { return m_verify_none_mode; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
-  std::unordered_map<std::string, int> get_interdex_metrics();
-
+  const std::unordered_map<std::string, int>& get_interdex_metrics();
 
   redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
   bool no_proguard_rules() {
     return m_pg_config.keep_rules.empty() && !m_testing_mode;;
   }
+
   // Call set_testing_mode() in tests that need passes to run which
   // do not use ProGuard configuration keep rules.
   void set_testing_mode() { m_testing_mode = true; }
+
+  PassInfo* get_current_pass_info() const { return m_current_pass_info; }
 
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
@@ -67,13 +72,9 @@ class PassManager {
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
 
-  //per-pass metrics
-  std::vector<PassManager::PassMetrics>  m_pass_metrics;
-  std::unordered_map<std::string, int>* m_current_pass_metrics;
-
-  // A temporary hack to remember where the inderdex matrics is store in the
-  // m_pass_metrics vector. Will be removed later.
-  int m_interdex_location = -1;
+  // Per-pass information and metrics
+  std::vector<PassManager::PassInfo> m_pass_info;
+  PassInfo* m_current_pass_info;
 
   redex::ProguardConfiguration m_pg_config;
   bool m_testing_mode;
