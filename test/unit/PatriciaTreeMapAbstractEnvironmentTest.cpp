@@ -32,13 +32,9 @@ bool operator!=(const HashedAbstractEnvironment<T1, T2>& e1,
   return !(e1 == e2);
 }
 
-bool operator==(const Domain& d1, const Domain& d2) {
-  return d1.equals(d2);
-}
+bool operator==(const Domain& d1, const Domain& d2) { return d1.equals(d2); }
 
-bool operator!=(const Domain& d1, const Domain& d2) {
-  return !(d1 == d2);
-}
+bool operator!=(const Domain& d1, const Domain& d2) { return !(d1 == d2); }
 
 class PatriciaTreeMapAbstractEnvironmentTest : public ::testing::Test {
  protected:
@@ -143,10 +139,8 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, destructiveOperations) {
 
   e1.set(2, Domain({"c", "f"})).set(4, Domain({"e", "f", "g"}));
   EXPECT_EQ(3, e1.size());
-  EXPECT_THAT(e1.get(1).elements(),
-              ::testing::UnorderedElementsAre("a", "b"));
-  EXPECT_THAT(e1.get(2).elements(),
-              ::testing::UnorderedElementsAre("c", "f"));
+  EXPECT_THAT(e1.get(1).elements(), ::testing::UnorderedElementsAre("a", "b"));
+  EXPECT_THAT(e1.get(2).elements(), ::testing::UnorderedElementsAre("c", "f"));
   EXPECT_THAT(e1.get(4).elements(),
               ::testing::UnorderedElementsAre("e", "f", "g"));
 
@@ -195,8 +189,21 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, destructiveOperations) {
   EXPECT_EQ(2, e3.size());
   EXPECT_THAT(e3.get(2).elements(),
               ::testing::UnorderedElementsAre("c", "d", "e"));
-  EXPECT_THAT(e3.get(3).elements(),
-              ::testing::UnorderedElementsAre("g", "h"));
+  EXPECT_THAT(e3.get(3).elements(), ::testing::UnorderedElementsAre("g", "h"));
+
+  auto make_bottom = [](const Domain&) { return Domain::bottom(); };
+  Environment e4 = e2;
+  e4.update(1, make_bottom);
+  EXPECT_TRUE(e4.is_bottom());
+  int counter = 0;
+  auto make_e = [&counter](const Domain&) {
+    ++counter;
+    return Domain({"e"});
+  };
+  e4.update(1, make_e).update(2, make_e);
+  EXPECT_TRUE(e4.is_bottom());
+  // Since e4 is Bottom, make_e should have never been called.
+  EXPECT_EQ(0, counter);
 
   auto refine_de = [](const Domain& s) {
     auto copy = s;
@@ -206,11 +213,9 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, destructiveOperations) {
   EXPECT_EQ(2, e2.size());
   e2.update(1, refine_de).update(2, refine_de);
   EXPECT_EQ(3, e2.size());
-  EXPECT_THAT(e2.get(1).elements(),
-              ::testing::UnorderedElementsAre("d", "e"));
+  EXPECT_THAT(e2.get(1).elements(), ::testing::UnorderedElementsAre("d", "e"));
   EXPECT_THAT(e2.get(2).elements(), ::testing::ElementsAre("d"));
-  EXPECT_THAT(e2.get(3).elements(),
-              ::testing::UnorderedElementsAre("g", "h"));
+  EXPECT_THAT(e2.get(3).elements(), ::testing::UnorderedElementsAre("g", "h"));
 }
 
 TEST_F(PatriciaTreeMapAbstractEnvironmentTest, robustness) {

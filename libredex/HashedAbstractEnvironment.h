@@ -90,6 +90,10 @@ class HashedAbstractEnvironment final
   HashedAbstractEnvironment(
       std::initializer_list<std::pair<Variable, Domain>> l) {
     for (const auto& p : l) {
+      if (p.second.is_bottom()) {
+        this->set_to_bottom();
+        return;
+      }
       this->get_value()->insert_binding(p.first, p.second);
     }
     this->normalize();
@@ -135,6 +139,9 @@ class HashedAbstractEnvironment final
 
   HashedAbstractEnvironment& update(const Variable& variable,
                                     std::function<void(Domain*)> operation) {
+    if (this->is_bottom()) {
+      return *this;
+    }
     auto& map = this->get_value()->m_map;
     auto binding = map.find(variable);
     Domain* value;

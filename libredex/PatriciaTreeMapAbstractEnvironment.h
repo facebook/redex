@@ -106,6 +106,9 @@ class PatriciaTreeMapAbstractEnvironment final
   PatriciaTreeMapAbstractEnvironment& update(
       const Variable& variable,
       std::function<Domain(const Domain&)> operation) {
+    if (this->is_bottom()) {
+      return *this;
+    }
     try {
       this->get_value()->m_map.update(
           [&operation](const Domain& x) {
