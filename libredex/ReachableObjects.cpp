@@ -553,8 +553,9 @@ struct Reachable {
 };
 
 void print_reachable_stack_h(const ReachableObject& obj,
-                             ReachableObjectGraph& retainers_of) {
-  TRACE(REACH_DUMP, 1, "    %s\n", obj.str().c_str());
+                             ReachableObjectGraph& retainers_of,
+                             const std::string& dump_tag) {
+  TRACE(REACH_DUMP, 5, "%s    %s\n", dump_tag.c_str(), obj.str().c_str());
   if (obj.type == ReachableObjectType::SEED) {
     return;
   }
@@ -562,46 +563,30 @@ void print_reachable_stack_h(const ReachableObject& obj,
   if (retainer_set.empty()) {
     return; // Shouldn't happen, but...
   }
-  print_reachable_stack_h(*retainer_set.cbegin(), retainers_of);
+  print_reachable_stack_h(*retainer_set.cbegin(), retainers_of, dump_tag);
 }
 
 template <class Reachable>
-void print_reachable_stack(Reachable* r, ReachableObjectGraph& retainers_of) {
+void print_reachable_stack(Reachable* r,
+                           ReachableObjectGraph& retainers_of,
+                           const std::string& dump_tag) {
   ReachableObject obj(r);
-  TRACE(REACH_DUMP, 1, "%s is reachable via\n", obj.str().c_str());
+  TRACE(REACH_DUMP,
+        5,
+        "%s %s is reachable via\n",
+        dump_tag.c_str(),
+        obj.str().c_str());
   auto const& retainer_set = retainers_of[obj];
   if (retainer_set.empty()) {
     return; // Shouldn't happen, but...
   }
-  print_reachable_stack_h(*retainer_set.cbegin(), retainers_of);
-}
-
-void print_graph_edges(const DexClass* cls,
-                       ReachableObjectGraph& retainers_of) {
-  ReachableObject obj(cls);
-  std::string s;
-  s = "\"[" + obj.type_str() + "] " + obj.str() + "\"";
-  while (true) {
-    const auto& set = retainers_of[obj];
-    if (set.empty()) {
-      break;
-    }
-    s = " -> " + s;
-    ReachableObject prev = obj;
-    obj = *begin(set);
-    if (obj.type == ReachableObjectType::SEED) {
-      s = "\"[SEED] " + prev.state_str() + "\"" + s;
-      break;
-    } else {
-      s = "\"[" + obj.type_str() + "] " + obj.str() + "\"" + s;
-    }
-  }
-  TRACE(REACH_DUMP, 1, "EDGE: %s %s;\n", show(cls).c_str(), s.c_str());
+  print_reachable_stack_h(*retainer_set.cbegin(), retainers_of, dump_tag);
 }
 
 template <class Reachable>
 void print_reachable_reason(Reachable* reachable,
-                            ReachableObjectGraph& retainers_of) {
+                            ReachableObjectGraph& retainers_of,
+                            const std::string& dump_tag) {
   ReachableObject obj(reachable);
   bool any_added = false;
   auto retainer_set = retainers_of[obj];
@@ -616,7 +601,41 @@ void print_reachable_reason(Reachable* reachable,
   }
   reason += "]";
 
-  TRACE(REACH_DUMP, 1, "%s\n", reason.c_str());
+  TRACE(REACH_DUMP, 5, "%s %s\n", dump_tag.c_str(), reason.c_str());
+}
+
+void print_graph_edges(const DexClass* cls,
+                       ReachableObjectGraph& retainers_of,
+                       const std::string& dump_tag,
+                       std::ostream& os) {
+  ReachableObject obj(cls);
+  std::string s;
+  s = "\"[" + obj.type_str() + "] " + obj.str() + "\"";
+  while (true) {
+    const auto& set = retainers_of[obj];
+    if (set.empty()) {
+      break;
+    }
+    s = "\t" + s;
+    ReachableObject prev = obj;
+    // NOTE: We only read the first item, but it seems fine. I didn't observe
+    // any case of more than one item in set.
+    obj = *begin(set);
+    if (obj.type == ReachableObjectType::SEED) {
+      s = "\"[SEED] " + prev.state_str() + "\"" + s;
+      break;
+    } else {
+      s = "\"[" + obj.type_str() + "] " + obj.str() + "\"" + s;
+    }
+  }
+
+  os << show(cls) << '\t' << s << std::endl;
+  TRACE(REACH_DUMP,
+        5,
+        "EDGE: %s %s %s;\n",
+        dump_tag.c_str(),
+        show(cls).c_str(),
+        s.c_str());
 }
 } // namespace
 
@@ -629,13 +648,24 @@ ReachableObjects compute_reachable_objects(
       .mark(num_ignore_check_strings);
 }
 
+void dump_reachability(DexStoresVector& stores,
+                       ReachableObjectGraph& retainers_of,
+                       const std::string& dump_tag) {
+  for (const auto& dex : DexStoreClassesIterator(stores)) {
+    for (const auto& cls : dex) {
+      print_reachable_reason(cls, retainers_of, dump_tag);
+      print_reachable_stack(cls, retainers_of, dump_tag);
+    }
+  }
+}
+
 void dump_reachability_graph(DexStoresVector& stores,
-                             ReachableObjectGraph& retainers_of) {
-  for (auto& dex : DexStoreClassesIterator(stores)) {
-    for (auto const& cls : dex) {
-      print_reachable_reason(cls, retainers_of);
-      print_reachable_stack(cls, retainers_of);
-      print_graph_edges(cls, retainers_of);
+                             ReachableObjectGraph& retainers_of,
+                             const std::string& dump_tag,
+                             std::ostream& os) {
+  for (const auto& dex : DexStoreClassesIterator(stores)) {
+    for (const auto& cls : dex) {
+      print_graph_edges(cls, retainers_of, dump_tag, os);
     }
   }
 }

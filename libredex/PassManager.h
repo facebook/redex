@@ -12,29 +12,28 @@
 #include "Pass.h"
 #include "ProguardConfiguration.h"
 
+#include <json/json.h>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <json/json.h>
 
 class PassManager {
  public:
-  PassManager(
-    const std::vector<Pass*>& passes,
-    const Json::Value& config = Json::Value(Json::objectValue),
-    bool verify_none_mode = false);
+  PassManager(const std::vector<Pass*>& passes,
+              const Json::Value& config = Json::Value(Json::objectValue),
+              bool verify_none_mode = false);
 
-  PassManager(
-    const std::vector<Pass*>& passes,
-    const redex::ProguardConfiguration& pg_config,
-    const Json::Value& config = Json::Value(Json::objectValue),
-    bool verify_none_mode = false);
+  PassManager(const std::vector<Pass*>& passes,
+              const redex::ProguardConfiguration& pg_config,
+              const Json::Value& config = Json::Value(Json::objectValue),
+              bool verify_none_mode = false);
 
   struct PassInfo {
     const Pass* pass;
-    size_t order;
-    size_t repeat;
+    size_t order; // zero-based
+    size_t repeat; // zero-based
+    size_t total_repeat;
     std::string name;
     std::unordered_map<std::string, int> metrics;
   };
@@ -54,14 +53,14 @@ class PassManager {
 
   redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
   bool no_proguard_rules() {
-    return m_pg_config.keep_rules.empty() && !m_testing_mode;;
+    return m_pg_config.keep_rules.empty() && !m_testing_mode;
   }
 
   // Call set_testing_mode() in tests that need passes to run which
   // do not use ProGuard configuration keep rules.
   void set_testing_mode() { m_testing_mode = true; }
 
-  PassInfo* get_current_pass_info() const { return m_current_pass_info; }
+  const PassInfo* get_current_pass_info() const { return m_current_pass_info; }
 
  private:
   void activate_pass(const char* name, const Json::Value& cfg);

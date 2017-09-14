@@ -164,8 +164,13 @@ ReachableObjects compute_reachable_objects(
     int* num_ignore_check_strings,
     bool record_reachability);
 
-// Dump the graph to TRACE(REACH_DUMP, 1). We will support dumping to a file
-// soon. As of now, use SHOW_TRACEMODULE="true" and filter by "[REACH_DUMP:1]".
+// Dump reachability information to TRACE(REACH_DUMP, 5).
+void dump_reachability(DexStoresVector& stores,
+                       reachable_objects::ReachableObjectGraph& retainers_of,
+                       const std::string& dump_tag);
+
 void dump_reachability_graph(
     DexStoresVector& stores,
-    reachable_objects::ReachableObjectGraph& retainers_of);
+    reachable_objects::ReachableObjectGraph& retainers_of,
+    const std::string& dump_tag,
+    std::ostream& os);

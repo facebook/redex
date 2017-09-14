@@ -12,6 +12,8 @@
 #include "PassManager.h"
 #include "ReachableObjects.h"
 
+#include <fstream>
+
 void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /*cfg*/,
                                             PassManager& pm) {
@@ -35,9 +37,27 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
   auto reachables = compute_reachable_objects(
       stores, ignore_string_literals_annos, nullptr, true /*generate graph*/);
 
-  // TODO: What if this pass is called multiple times? Need to add prefix or so.
-  // PassManager already has this order information. I will do it soon.
-  dump_reachability_graph(stores, reachables.retainers_of);
+  std::string tag = std::to_string(pm.get_current_pass_info()->repeat + 1);
+
+  if (!m_output_file_name.empty()) {
+    std::string file_name;
+    if (pm.get_current_pass_info()->total_repeat == 1) {
+      file_name = m_output_file_name;
+    } else {
+      file_name = m_output_file_name + "." + tag;
+    }
+    std::ofstream file;
+    file.open(file_name);
+    if (!file.is_open()) {
+      std::cerr << "Unable to open: " << file_name << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    dump_reachability_graph(stores, reachables.retainers_of, tag, file);
+  }
+
+  if (m_dump_detailed_info) {
+    dump_reachability(stores, reachables.retainers_of, "[" + tag + "]");
+  }
 }
 
 static ReachabilityGraphPrinterPass s_pass;

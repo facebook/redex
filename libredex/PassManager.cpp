@@ -109,6 +109,14 @@ void PassManager::run_passes(DexStoresVector& stores,
   }
 
   // Count the number of appearances of each pass name.
+  const auto pass_repeats = [&]() {
+    std::unordered_map<const Pass*, size_t> pass_repeats;
+    for (const auto& pass : m_activated_passes) {
+      ++pass_repeats[pass];
+    }
+    return pass_repeats;
+  }();
+
   std::unordered_map<const Pass*, size_t> pass_counters;
   m_pass_info.resize(m_activated_passes.size());
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
@@ -119,6 +127,7 @@ void PassManager::run_passes(DexStoresVector& stores,
     m_pass_info[i].pass = pass;
     m_pass_info[i].order = i;
     m_pass_info[i].repeat = count;
+    m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
     m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
     m_current_pass_info = &m_pass_info[i];
