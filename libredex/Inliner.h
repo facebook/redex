@@ -20,17 +20,6 @@
 
 namespace inliner {
 
-/**
- * Carry context for multiple inline into a single caller.
- * In particular, it caches the liveness analysis so that we can reuse it when
- * multiple callees into the same caller.
- */
-struct InlineContext {
-  IRCode* caller_code;
-  uint64_t estimated_insn_size{0};
-  explicit InlineContext(DexMethod* caller);
-};
-
 /*
  * Inline tail-called `callee` into `caller` at `pos`.
  *
@@ -51,10 +40,10 @@ void inline_tail_call(DexMethod* caller,
                       FatMethod::iterator pos);
 
 /*
- * Inline `callee` into `context.caller_code` at `pos`.
+ * Inline `callee` into `caller` at `pos`.
  * This is a general-purpose inliner.
  */
-bool inline_method(InlineContext& context,
+void inline_method(IRCode* caller,
                    IRCode* callee,
                    FatMethod::iterator pos);
 
@@ -102,8 +91,7 @@ class MultiMethodInliner {
   }
 
   /**
-   * Inline callees in the caller defined by InlineContext if is_inlinable
-   * below returns true.
+   * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
                       const std::vector<DexMethod*>& callees);
@@ -123,31 +111,31 @@ class MultiMethodInliner {
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraint for inlining.
    */
-  bool is_inlinable(inliner::InlineContext& ctx,
-                    DexMethod* callee,
-                    DexMethod* caller);
+  bool is_inlinable(const DexMethod* caller,
+                    const DexMethod* callee,
+                    size_t estimated_insn_size);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
    * Cannot inline enum methods because they can be called by code we do
    * not own.
    */
-  bool is_blacklisted(DexMethod* callee);
+  bool is_blacklisted(const DexMethod* callee);
 
-  bool caller_is_blacklisted(DexMethod* caller);
+  bool caller_is_blacklisted(const DexMethod* caller);
 
   /**
    * Return true if the callee contains external catch exception types
    * which are not public.
    */
-  bool has_external_catch(DexMethod* callee);
+  bool has_external_catch(const DexMethod* callee);
 
   /**
    * Return true if the callee contains certain opcodes that are difficult
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
    */
-  bool cannot_inline_opcodes(DexMethod* callee, DexMethod* caller);
+  bool cannot_inline_opcodes(const DexMethod* caller, const DexMethod* callee);
 
   /**
    * Return true if inlining would require a method called from the callee
@@ -161,8 +149,8 @@ class MultiMethodInliner {
    * invoke-super can only exist within the class the call lives in.
    */
   bool nonrelocatable_invoke_super(IRInstruction* insn,
-                                   DexMethod* callee,
-                                   DexMethod* caller);
+                                   const DexMethod* callee,
+                                   const DexMethod* caller);
 
   /**
    * Return true if a callee overrides one of the input registers.
@@ -178,8 +166,8 @@ class MultiMethodInliner {
    * was package/protected and we move the call out of context.
    */
   bool unknown_virtual(IRInstruction* insn,
-                       DexMethod* caller,
-                       DexMethod* callee);
+                       const DexMethod* caller,
+                       const DexMethod* callee);
 
   /**
    * Return true if the callee contains a call to an unknown field.
@@ -188,14 +176,14 @@ class MultiMethodInliner {
    * was package/protected and we move the access out of context.
    */
   bool unknown_field(IRInstruction* insn,
-                     DexMethod* callee,
-                     DexMethod* caller);
+                     const DexMethod* callee,
+                     const DexMethod* caller);
 
   /**
    * Return true if a caller is in a DEX in a store and any opcode in callee
    * refers to a DexMember in a different store .
    */
-  bool cross_store_reference(DexMethod* context);
+  bool cross_store_reference(const DexMethod* context);
 
   /**
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
@@ -205,9 +193,9 @@ class MultiMethodInliner {
    * other constraints that might be worth looking into, e.g. the number of
    * registers.
    */
-  bool caller_too_large(inliner::InlineContext& ctx,
-                        DexMethod* caller,
-                        DexType* caller_type);
+  bool caller_too_large(DexType* caller_type,
+                        size_t estimated_insn_size,
+                        const DexMethod* callee);
 
   /**
    * Change the visibility of members accessed in a callee as they are moved
@@ -253,14 +241,13 @@ class MultiMethodInliner {
 
  private:
   /**
-   * Info about inling.
+   * Info about inlining.
    */
   struct InliningInfo {
     size_t calls_inlined{0};
     size_t recursive{0};
     size_t not_found{0};
     size_t blacklisted{0};
-    size_t more_than_16regs{0};
     size_t throws{0};
     size_t multi_ret{0};
     size_t need_vmethod{0};

@@ -53,9 +53,7 @@ TEST(SimpleInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-  inliner::InlineContext inline_context(caller);
-  EXPECT_TRUE(inliner::inline_method(
-      inline_context, callee->get_code(), invoke_it));
+  inliner::inline_method(caller->get_code(), callee->get_code(), invoke_it);
 
   auto it = InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {1_v, 1_L}));
