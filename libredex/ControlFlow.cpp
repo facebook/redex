@@ -22,7 +22,7 @@ bool end_of_block(const IRCode* code,
                   bool in_try,
                   bool end_block_before_throw) {
   auto next = std::next(it);
-  if (next == code->cend()) {
+  if (next == code->end()) {
     return true;
   }
   if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||

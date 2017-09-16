@@ -347,10 +347,12 @@ class IRCode {
 
   FatMethod::iterator begin() { return m_fmethod->begin(); }
   FatMethod::iterator end() { return m_fmethod->end(); }
-  FatMethod::reverse_iterator rbegin() { return m_fmethod->rbegin(); }
-  FatMethod::reverse_iterator rend() { return m_fmethod->rend(); }
+  FatMethod::const_iterator begin() const { return m_fmethod->begin(); }
+  FatMethod::const_iterator end() const { return m_fmethod->end(); }
   FatMethod::const_iterator cbegin() const { return m_fmethod->begin(); }
   FatMethod::const_iterator cend() const { return m_fmethod->end(); }
+  FatMethod::reverse_iterator rbegin() { return m_fmethod->rbegin(); }
+  FatMethod::reverse_iterator rend() { return m_fmethod->rend(); }
 
   FatMethod::iterator erase(FatMethod::iterator it) {
     return m_fmethod->erase(it);
