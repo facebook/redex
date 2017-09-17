@@ -265,6 +265,30 @@ class IRInstruction final {
 };
 
 /*
+ * Iterates over the sources of a denormalized invoke-* instruction or
+ * filled-new-array-instance, whether it is range-based or not.
+ */
+class IRSourceIterator final {
+ public:
+  explicit IRSourceIterator(IRInstruction* insn);
+
+  IRSourceIterator(const IRSourceIterator&) = delete;
+
+  IRSourceIterator& operator=(const IRSourceIterator&) = delete;
+
+  bool empty() const;
+
+  uint16_t get_register();
+
+  uint16_t get_wide_register();
+
+ private:
+  IRInstruction* m_insn;
+  bool m_range;
+  uint16_t m_offset;
+};
+
+/*
  * The number of bits required to encode the given value. I.e. the offset of
  * the most significant bit.
  */

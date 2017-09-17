@@ -132,8 +132,13 @@ class TypeInference;
  * This class takes a method, infers the type of all registers and checks that
  * all operations are well typed. The inferred types are available via the
  * `get_type` method and can be used by optimization/analysis passes that
- * require type information. Note that type checking stops at the first error
+ * require type information. Note that the type checker stops at the first error
  * encountered.
+ *
+ * IMPORTANT: the type checker assumes that invoke-* instructions are in
+ * denormalized form, i.e., wide arguments are explicitly represented by a pair
+ * of consecutive registers. The type checker doesn't modify the IR and hence,
+ * can be used anywhere in Redex.
  */
 class IRTypeChecker final {
  public:
