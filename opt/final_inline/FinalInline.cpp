@@ -213,29 +213,6 @@ class FinalInlineImpl {
     method->get_code()->replace_opcode(from, to);
   }
 
-  void inline_cheap_sget(DexMethod* method, IRInstruction* opfield) {
-    if (!validate_sget(method, opfield)) return;
-    auto dest = opfield->dest();
-    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
-    always_assert_log(field->is_concrete(), "Must be a concrete field");
-    auto value = field->get_static_value();
-    uint32_t v = value != nullptr ? static_cast<uint32_t>(value->value()) : 0;
-    auto opcode = [&] {
-      if ((v & 0xffff) == v) {
-        return OPCODE_CONST_16;
-      } else if ((v & 0xffff0000) == v) {
-        return OPCODE_CONST_HIGH16;
-      }
-      always_assert_log(false,
-                        "Bad inline_cheap_sget queued up, can't fit to"
-                        " CONST_16 or CONST_HIGH16, bailing\n");
-    }();
-
-    auto newopcode =
-        (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
-    replace_opcode(method, opfield, newopcode);
-  }
-
   void inline_sget(DexMethod* method, IRInstruction* opfield) {
     if (!validate_sget(method, opfield)) return;
     auto dest = opfield->dest();
@@ -280,7 +257,6 @@ class FinalInlineImpl {
 
   void inline_field_values() {
     std::unordered_set<DexField*> inline_field;
-    std::unordered_set<DexField*> cheap_inline_field;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
       if (is_cls_blacklisted(clazz)) {
@@ -301,28 +277,17 @@ class FinalInlineImpl {
         if (value != nullptr && !value->is_evtype_primitive()) {
           continue;
         }
-
-        uint64_t v =
-            value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
-        if (!value->is_wide() && ((v & 0xffff) == v || (v & 0xffff0000) == v)) {
-          cheap_inline_field.insert(sfield);
-        }
         inline_field.insert(sfield);
       }
     }
-    std::vector<std::pair<DexMethod*, IRInstruction*>> cheap_rewrites;
-    std::vector<std::pair<DexMethod*, IRInstruction*>> simple_rewrites;
 
+    std::vector<std::pair<DexMethod*, IRInstruction*>> rewrites;
     auto opcode_worker = [&](DexMethod* method, IRInstruction* insn) {
       if (insn->has_field() && is_sget(insn->opcode())) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Static);
         if (field == nullptr || !field->is_concrete()) return;
         if (inline_field.count(field) == 0) return;
-        if (cheap_inline_field.count(field) > 0) {
-          cheap_rewrites.emplace_back(method, insn);
-          return;
-        }
-        simple_rewrites.emplace_back(method, insn);
+        rewrites.emplace_back(method, insn);
       }
     };
     walk_opcodes(m_full_scope,
@@ -330,14 +295,10 @@ class FinalInlineImpl {
                  opcode_worker);
     TRACE(FINALINLINE,
           1,
-          "Method Re-writes Cheap %lu  Simple %lu\n",
-          cheap_rewrites.size(),
-          simple_rewrites.size());
-    for (auto cheapcase : cheap_rewrites) {
-      inline_cheap_sget(cheapcase.first, cheapcase.second);
-    }
-    for (auto simplecase : simple_rewrites) {
-      inline_sget(simplecase.first, simplecase.second);
+          "Method Re-writes %lu\n",
+          rewrites.size());
+    for (auto& pair : rewrites) {
+      inline_sget(pair.first, pair.second);
     }
   }
 
