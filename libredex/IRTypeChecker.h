@@ -148,7 +148,19 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method);
+  /*
+   * TOP represents an undefined value and hence, should never occur as the type
+   * of a register. However, the Android verifier allows one exception, when an
+   * undefined value is used as the operand of a move-* instruction (TOP is
+   * named 'conflict' in the dataflow framework used by the Android verifier):
+   *
+   * http://androidxref.com/7.1.1_r6/xref/art/runtime/verifier/register_line-inl.h#101
+   *
+   * By default, the type checker forbids the use of an undefined value in a
+   * move-* instruction. Setting the flag `verify_moves` to false disables this
+   * check, thus emulating the behavior of the Android verifier.
+   */
+  explicit IRTypeChecker(DexMethod* dex_method, bool verify_moves = true);
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 

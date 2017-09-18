@@ -161,12 +161,13 @@ class TypeInference final
  public:
   using NodeId = Block*;
 
-  explicit TypeInference(const ControlFlowGraph& cfg)
+  explicit TypeInference(const ControlFlowGraph& cfg, bool verify_moves)
       : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
                                   std::bind(&Block::succs, _1),
                                   std::bind(&Block::preds, _1),
                                   cfg.blocks().size()),
         m_cfg(cfg),
+        m_verify_moves(verify_moves),
         m_inference(true) {}
 
   void run(DexMethod* dex_method) {
@@ -274,14 +275,14 @@ class TypeInference final
     case OPCODE_MOVE:
     case OPCODE_MOVE_FROM16:
     case OPCODE_MOVE_16: {
-      assume_scalar(current_state, insn->src(0));
+      assume_scalar(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_OBJECT:
     case OPCODE_MOVE_OBJECT_FROM16:
     case OPCODE_MOVE_OBJECT_16: {
-      assume_reference(current_state, insn->src(0));
+      assume_reference(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
@@ -1011,7 +1012,8 @@ class TypeInference final
 
   void assume_type(TypeEnvironment* state,
                    register_t reg,
-                   IRType expected) const {
+                   IRType expected,
+                   bool ignore_top = false) const {
     if (m_inference) {
       state->update(reg, [expected](const TypeDomain& type) {
         return type.meet(TypeDomain(expected));
@@ -1022,6 +1024,9 @@ class TypeInference final
         return;
       }
       IRType actual = state->get(reg).element();
+      if (ignore_top && actual == TOP) {
+        return;
+      }
       check_type_match(reg, actual, /* expected */ expected);
     }
   }
@@ -1052,12 +1057,22 @@ class TypeInference final
     }
   }
 
-  void assume_reference(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ REFERENCE);
+  void assume_reference(TypeEnvironment* state,
+                        register_t reg,
+                        bool in_move = false) const {
+    assume_type(state,
+                reg,
+                /* expected */ REFERENCE,
+                /* ignore_top */ in_move && !m_verify_moves);
   }
 
-  void assume_scalar(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ SCALAR);
+  void assume_scalar(TypeEnvironment* state,
+                     register_t reg,
+                     bool in_move = false) const {
+    assume_type(state,
+                reg,
+                /* expected */ SCALAR,
+                /* ignore_top */ in_move && !m_verify_moves);
   }
 
   void assume_integer(TypeEnvironment* state, register_t reg) const {
@@ -1202,6 +1217,7 @@ class TypeInference final
   }
 
   const ControlFlowGraph& m_cfg;
+  bool m_verify_moves;
   bool m_inference;
   std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
 
@@ -1212,7 +1228,7 @@ class TypeInference final
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool verify_moves)
     : m_dex_method(dex_method), m_good(true), m_what("OK") {
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
@@ -1224,7 +1240,8 @@ IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
   // We then infer types for all the registers used in the method.
   code->build_cfg();
   const ControlFlowGraph& cfg = code->cfg();
-  m_type_inference = std::make_unique<irtc_impl::TypeInference>(cfg);
+  m_type_inference =
+      std::make_unique<irtc_impl::TypeInference>(cfg, verify_moves);
   m_type_inference->run(dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the

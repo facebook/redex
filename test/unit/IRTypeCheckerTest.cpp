@@ -283,3 +283,21 @@ TEST_F(IRTypeCheckerTest, 2addr) {
   IRTypeChecker checker(m_method);
   EXPECT_TRUE(checker.good()) << checker.what();
 }
+
+TEST_F(IRTypeCheckerTest, verifyMoves) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_MOVE_OBJECT, {1_v, 0_v}),
+      dasm(OPCODE_MOVE, {1_v, 9_v}),
+      dasm(OPCODE_RETURN, {1_v}),
+  };
+  add_code(insns);
+  IRTypeChecker lax_checker(m_method, /* verify_moves */ false);
+  EXPECT_TRUE(lax_checker.good()) << lax_checker.what();
+  IRTypeChecker strict_checker(m_method);
+  EXPECT_TRUE(strict_checker.fail());
+  EXPECT_EQ(
+      "Type error in method testMethod at instruction 'MOVE_OBJECT v1, v0' for "
+      "register v0: expected type REFERENCE, but found TOP instead",
+      strict_checker.what());
+}
