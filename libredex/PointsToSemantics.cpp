@@ -1,0 +1,1218 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#include "PointsToSemantics.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <deque>
+#include <iterator>
+#include <limits>
+#include <ostream>
+#include <sstream>
+#include <tuple>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
+#include <boost/container/flat_set.hpp>
+#include <boost/functional/hash_fwd.hpp>
+#include <boost/optional.hpp>
+
+#include "ControlFlow.h"
+#include "Debug.h"
+#include "DexAccess.h"
+#include "DexClass.h"
+#include "DexOpcode.h"
+#include "DexUtil.h"
+#include "FixpointIterators.h"
+#include "IRInstruction.h"
+#include "ParallelWalkers.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeSetAbstractDomain.h"
+#include "PointsToSemanticsUtils.h"
+#include "RedexContext.h"
+#include "Trace.h"
+#include "Transform.h"
+
+size_t hash_value(const PointsToVariable& v) {
+  boost::hash<int32_t> hasher;
+  return hasher(v.m_id);
+}
+
+bool operator==(const PointsToVariable& v, const PointsToVariable& w) {
+  return v.m_id == w.m_id;
+}
+
+bool operator<(const PointsToVariable& v, const PointsToVariable& w) {
+  return v.m_id < w.m_id;
+}
+
+std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
+  if (v.m_id < 0) {
+    o << "NULL";
+  } else {
+    o << "V" << v.m_id;
+  }
+  return o;
+}
+
+namespace pts_impl {
+
+// A wrapper for a set of variables. We use this structure for the generation of
+// disjunctions.
+class PointsToVariableSet {
+ public:
+  struct Hash {
+    size_t operator()(const PointsToVariableSet& s) const {
+      return boost::hash_range(s.m_set.begin(), s.m_set.end());
+    }
+  };
+
+  struct EqualTo {
+    bool operator()(const PointsToVariableSet& s1,
+                    const PointsToVariableSet& s2) const {
+      return s1.m_set == s2.m_set;
+    }
+  };
+
+  using iterator = boost::container::flat_set<PointsToVariable>::const_iterator;
+
+  PointsToVariableSet() = default;
+
+  template <typename InputIterator>
+  PointsToVariableSet(InputIterator begin, InputIterator end)
+      : m_set(begin, end) {}
+
+  void insert(const PointsToVariable& v) { m_set.insert(v); }
+
+  iterator begin() const { return m_set.begin(); }
+
+  iterator end() const { return m_set.end(); }
+
+ private:
+  // Sets of variables correspond to sets of anchors and are generally small
+  // (most of the time, just a singleton). We use a flat set (i.e., an ordered
+  // associative array) in order to optimize memory usage.
+  boost::container::flat_set<PointsToVariable> m_set;
+};
+
+} // namespace pts_impl
+
+std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
+    const {
+  assert(m_operation.is_invoke() || m_operation.is_disjunction());
+  std::vector<std::pair<size_t, PointsToVariable>> args;
+  for (const auto& binding : m_arguments) {
+    if (binding.first >= 0) {
+      // We filter out special arguments (like the destination variable), which
+      // all have a negative index.
+      args.push_back(binding);
+    }
+  }
+  return args;
+}
+
+PointsToAction PointsToAction::load_operation(
+    const PointsToOperation& operation, PointsToVariable dest) {
+  assert(operation.is_load());
+  return PointsToAction(operation, {{dest_key(), dest}});
+}
+
+PointsToAction PointsToAction::check_cast_operation(
+    const PointsToOperation& operation,
+    PointsToVariable dest,
+    PointsToVariable src) {
+  assert(operation.is_check_cast());
+  return PointsToAction(operation, {{dest_key(), dest}, {src_key(), src}});
+}
+
+PointsToAction PointsToAction::get_operation(
+    const PointsToOperation& operation,
+    PointsToVariable dest,
+    boost::optional<PointsToVariable> instance) {
+  assert(operation.is_get());
+  assert(!(instance && operation.kind == PTS_SPUT));
+  if (instance) {
+    return PointsToAction(operation,
+                          {{dest_key(), dest}, {instance_key(), *instance}});
+  } else {
+    return PointsToAction(operation, {{dest_key(), dest}});
+  }
+}
+
+PointsToAction PointsToAction::put_operation(
+    const PointsToOperation& operation,
+    PointsToVariable rhs,
+    boost::optional<PointsToVariable> lhs) {
+  assert(operation.is_put());
+  assert(!(lhs && operation.kind == PTS_SPUT));
+  if (lhs) {
+    return PointsToAction(operation, {{lhs_key(), *lhs}, {rhs_key(), rhs}});
+  } else {
+    return PointsToAction(operation, {{rhs_key(), rhs}});
+  }
+}
+
+PointsToAction PointsToAction::invoke_operation(
+    const PointsToOperation& operation,
+    boost::optional<PointsToVariable> dest,
+    boost::optional<PointsToVariable> instance,
+    const std::vector<std::pair<size_t, PointsToVariable>>& args) {
+  assert(operation.is_invoke());
+  assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
+  std::vector<std::pair<int32_t, PointsToVariable>> bindings;
+  bindings.reserve(args.size() + 2);
+  if (dest) {
+    bindings.push_back({dest_key(), *dest});
+  }
+  if (instance) {
+    bindings.push_back({instance_key(), *instance});
+  }
+  bindings.insert(bindings.end(), args.begin(), args.end());
+  return PointsToAction(operation, bindings);
+}
+
+PointsToAction PointsToAction::return_operation(
+    const PointsToOperation& operation, PointsToVariable src) {
+  assert(operation.is_return());
+  return PointsToAction(operation, {{src_key(), src}});
+}
+
+template <typename InputIterator>
+PointsToAction PointsToAction::disjunction(PointsToVariable dest,
+                                           InputIterator first,
+                                           InputIterator last) {
+  pts_impl::PointsToVariableSet vars(first, last);
+  std::vector<std::pair<int32_t, PointsToVariable>> args;
+  int32_t arg = 0;
+  for (const auto& var : vars) {
+    args.push_back({arg++, var});
+  }
+  args.push_back({dest_key(), dest});
+  return PointsToAction(PointsToOperation(PTS_DISJUNCTION), args);
+}
+
+PointsToAction::PointsToAction(
+    const PointsToOperation& operation,
+    const std::vector<std::pair<int32_t, PointsToVariable>>& arguments)
+    : m_operation(operation) {
+  for (const auto& binding : arguments) {
+    auto status = m_arguments.insert(binding);
+    // Making sure that there's no duplicate binding in the argument list.
+    assert(status.second);
+  }
+  m_arguments.shrink_to_fit();
+}
+
+PointsToVariable PointsToAction::get_arg(int32_t key) const {
+  auto it = m_arguments.find(key);
+  always_assert(it != m_arguments.end());
+  return it->second;
+}
+
+namespace pts_impl {
+
+std::string special_edge_to_string(SpecialPointsToEdge e) {
+  switch (e) {
+  case PTS_ARRAY_ELEMENT: {
+    return "ARRAY_ELEM";
+  }
+  }
+}
+
+} // namespace pts_impl
+
+std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
+  const PointsToOperation& op = a.operation();
+  switch (op.kind) {
+  case PTS_CONST_STRING: {
+    o << a.dest() << " = \"" << op.dex_string->str() << "\"";
+    break;
+  }
+  case PTS_CONST_CLASS: {
+    o << a.dest() << " = " << op.dex_type->get_name()->str();
+    break;
+  }
+  case PTS_GET_EXCEPTION: {
+    o << a.dest() << " = EXCEPTION";
+    break;
+  }
+  case PTS_NEW_OBJECT: {
+    o << a.dest() << " = NEW " << op.dex_type->get_name()->str();
+    break;
+  }
+  case PTS_LOAD_THIS: {
+    o << a.dest() << " = THIS";
+    break;
+  }
+  case PTS_LOAD_PARAM: {
+    o << a.dest() << " = PARAM " << op.parameter;
+    break;
+  }
+  case PTS_CHECK_CAST: {
+    o << a.dest() << " = CAST<" << op.dex_type->get_name()->str() << ">("
+      << a.src() << ")";
+    break;
+  }
+  case PTS_IGET: {
+    o << a.dest() << " = " << a.instance() << "."
+      << op.dex_field->get_class()->get_name()->str() << "#"
+      << op.dex_field->get_name()->str();
+    break;
+  }
+  case PTS_IGET_SPECIAL: {
+    o << a.dest() << " = " << pts_impl::special_edge_to_string(op.special_edge)
+      << "(" << a.instance() << ")";
+    break;
+  }
+  case PTS_SGET: {
+    o << a.dest() << " = " << op.dex_field->get_class()->get_name()->str()
+      << "#" << op.dex_field->get_name()->str();
+    break;
+  }
+  case PTS_IPUT: {
+    o << a.lhs() << "." << op.dex_field->get_class()->get_name()->str() << "#"
+      << op.dex_field->get_name()->str() << " = " << a.rhs();
+    break;
+  }
+  case PTS_IPUT_SPECIAL: {
+    o << pts_impl::special_edge_to_string(op.special_edge) << "(" << a.lhs()
+      << ") = " << a.rhs();
+    break;
+  }
+  case PTS_SPUT: {
+    o << op.dex_field->get_class()->get_name()->str() << "#"
+      << op.dex_field->get_name()->str() << " = " << a.rhs();
+    break;
+  }
+  case PTS_INVOKE_VIRTUAL:
+  case PTS_INVOKE_SUPER:
+  case PTS_INVOKE_DIRECT:
+  case PTS_INVOKE_INTERFACE:
+  case PTS_INVOKE_STATIC: {
+    if (a.has_dest()) {
+      o << a.dest() << " = ";
+    }
+    if (!op.is_static_call()) {
+      o << a.instance() << ".{";
+      switch (op.kind) {
+      case PTS_INVOKE_VIRTUAL: {
+        o << "V";
+        break;
+      }
+      case PTS_INVOKE_SUPER: {
+        o << "S";
+        break;
+      }
+      case PTS_INVOKE_DIRECT: {
+        o << "D";
+        break;
+      }
+      case PTS_INVOKE_INTERFACE: {
+        o << "I";
+        break;
+      }
+      default: { always_assert(false); }
+      }
+      o << "}";
+    }
+    o << op.dex_method->get_class()->get_name()->str() << "#"
+      << op.dex_method->get_name()->str() << "(";
+    auto args = a.get_arguments();
+    for (auto it = args.begin(); it != args.end(); ++it) {
+      o << it->first << " => " << it->second;
+      if (std::next(it) != args.end()) {
+        o << ", ";
+      }
+    }
+    o << ")";
+    break;
+  }
+  case PTS_RETURN: {
+    o << "RETURN " << a.src();
+    break;
+  }
+  case PTS_DISJUNCTION: {
+    o << a.dest() << " = ";
+    auto args = a.get_arguments();
+    for (auto it = args.begin(); it != args.end(); ++it) {
+      o << it->second;
+      if (std::next(it) != args.end()) {
+        o << " U ";
+      }
+    }
+    break;
+  }
+  }
+  return o;
+}
+
+namespace pts_impl {
+
+/*
+ * In Andersen's approach to points-to analysis, a program is translated into a
+ * system of set constraints by modeling pointers as sets. This model is
+ * flow-insensitive, i.e., control-flow dependencies among statements are
+ * abstracted away. While this makes the analysis more tractable, applying this
+ * approach naively can lead to major precision problems. For example, consider
+ * the following piece of Java code:
+ *
+ *   x = new A();
+ *   x.field1 = new B();
+ *   x.field2 = new C();
+ *
+ * The corresponding Dex code may look like:
+ *
+ *   new-instance v0, LA;
+ *   invoke-direct {v0}, LA;.<init>:()V
+ *   new-instance v1, LB;
+ *   invoke-direct {v1}, LB;.<init>:()V
+ *   iput-object v1, v0, LA;.field1:LB;
+ *   new-instance v1, LC;
+ *   invoke-direct {v1}, LC;.<init>:()V
+ *   iput-object v1, v0, LA;.field2:LC;
+ *
+ * Applying Andersen's approach directly, we would assign a set variable to each
+ * register in the code, thus obtaining the following system of set constraints:
+ *
+ *   V0 = NEW LA;
+ *   V0.{D}LA;#<init>()
+ *   V1 = NEW LB;
+ *   V1.{D}LB;#<init>()
+ *   V1 = NEW LC;
+ *   V1.{D}LB;#<init>()
+ *   V0.LA;#field1 = V1
+ *   V0.LA;#field2 = V1
+ *
+ * This is obviously very bad, as the points-to sets of field1 and field2 are
+ * equated. The problem here is that register v1 is reused in two different
+ * contexts and that information is lost by the flow-insensitive abstraction. In
+ * order to avoid this pitfall, we use the notion of `anchor` introduced in the
+ * following paper:
+ *
+ *   A. Venet. A Scalable Nonuniform Pointer Analysis for Embedded Programs.
+ *   In Proceedings of the International Static Analysis Symposium, 2004.
+ *
+ * Each operation returning a pointer is associated a unique `anchor`. A
+ * preliminary intraprocedural, flow-sensitive analysis assigns a set of anchors
+ * to each register. When the points-to equations are generated, we use the
+ * anchors and not the registers as the basis for creating set variables. Hence,
+ * the points-to equations for the code snippet above would look like:
+ *
+ *   V0 = NEW LA;
+ *   V0.{D}LA;#<init>()
+ *   V1 = NEW LB;
+ *   V1.{D}LB;#<init>()
+ *   V2 = NEW LC;
+ *   V2.{D}LB;#<init>()
+ *   V0.LA;#field1 = V1
+ *   V0.LA;#field2 = V2
+ *
+ * The points-to sets of field1 and field2 are thus kept separate. We get the
+ * same level of precision as if the code were in SSA form, without incurring
+ * the cost of managing the SSA representation.
+ */
+
+using namespace std::placeholders;
+
+using register_t = uint32_t;
+
+// We use this special register to denote the result of a method invocation or a
+// filled-array creation.
+register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
+
+// We represent an anchor by a pointer to the corresponding instruction. An
+// empty anchor set is semantically equivalent to the `null` reference.
+using AnchorDomain = PatriciaTreeSetAbstractDomain<IRInstruction*>;
+
+using AnchorEnvironment =
+    PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
+
+class AnchorPropagation final
+    : public MonotonicFixpointIterator<Block*, AnchorEnvironment> {
+ public:
+  using NodeId = Block*;
+
+  AnchorPropagation(const ControlFlowGraph& cfg, size_t register_count)
+      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
+                                  std::bind(&Block::succs, _1),
+                                  std::bind(&Block::preds, _1),
+                                  cfg.blocks().size()),
+        m_register_count(register_count) {}
+
+  void analyze_node(const NodeId& node,
+                    AnchorEnvironment* current_state) const override {
+    for (const MethodItemEntry& mie : *node) {
+      if (mie.type == MFLOW_OPCODE) {
+        analyze_instruction(mie.insn, current_state);
+      }
+    }
+  }
+
+  AnchorEnvironment analyze_edge(
+      const NodeId& /* source */,
+      const NodeId& /* target */,
+      const AnchorEnvironment& exit_state_at_source) const override {
+    return exit_state_at_source;
+  }
+
+  void analyze_instruction(IRInstruction* insn,
+                           AnchorEnvironment* current_state) const {
+    switch (insn->opcode()) {
+    case IOPCODE_LOAD_PARAM_OBJECT:
+    case OPCODE_MOVE_EXCEPTION:
+    case OPCODE_CONST_STRING:
+    case OPCODE_CONST_STRING_JUMBO:
+    case OPCODE_CONST_CLASS:
+    case OPCODE_CHECK_CAST:
+    case OPCODE_NEW_INSTANCE:
+    case OPCODE_NEW_ARRAY:
+    case OPCODE_AGET_OBJECT:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_SGET_OBJECT: {
+      current_state->set(insn->dest(), AnchorDomain(insn));
+      break;
+    }
+    case OPCODE_FILLED_NEW_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+      current_state->set(RESULT_REGISTER, AnchorDomain(insn));
+      break;
+    }
+    case OPCODE_MOVE_OBJECT:
+    case OPCODE_MOVE_OBJECT_FROM16:
+    case OPCODE_MOVE_OBJECT_16: {
+      current_state->set(insn->dest(), current_state->get(insn->src(0)));
+      break;
+    }
+    case OPCODE_MOVE_RESULT_OBJECT: {
+      current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+      break;
+    }
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_INTERFACE: {
+      DexMethod* dex_method = insn->get_method();
+      if (is_object(dex_method->get_proto()->get_rtype())) {
+        // We attach an anchor to a method invocation only if the method returns
+        // an object.
+        current_state->set(RESULT_REGISTER, AnchorDomain(insn));
+      }
+      break;
+    }
+    default: {
+      // Since registers can be reused in different contexts, we need to
+      // invalidate the corresponding anchor sets. Note that this case also
+      // encompasses the initialization to null, like `const/4 v1, 0`.
+      if (insn->dests_size() > 0) {
+        current_state->set(insn->dest(), AnchorDomain());
+        if (insn->dest_is_wide()) {
+          current_state->set(insn->dest() + 1, AnchorDomain());
+        }
+      }
+    }
+    }
+  }
+
+  void run() { MonotonicFixpointIterator::run(initial_environment()); }
+
+ private:
+  // We initialize all registers to the empty anchor set, i.e. the semantic
+  // equivalent of `null` in our analysis.
+  AnchorEnvironment initial_environment() {
+    AnchorEnvironment env;
+    env.set(RESULT_REGISTER, AnchorDomain());
+    for (size_t reg = 0; reg < m_register_count; ++reg) {
+      env.set(reg, AnchorDomain());
+    }
+    return env;
+  }
+
+  // The number of registers in the local frame of the method.
+  const size_t m_register_count;
+};
+
+// Generates the points-to actions for a single method.
+class PointsToActionGenerator final {
+ public:
+  explicit PointsToActionGenerator(DexMethod* dex_method,
+                                   PointsToMethodSemantics* semantics,
+                                   const TypeSystem& type_system,
+                                   const PointsToSemanticsUtils& utils)
+      : m_dex_method(dex_method),
+        m_semantics(semantics),
+        m_type_system(type_system),
+        m_utils(utils) {}
+
+  void run() {
+    IRCode* code = m_dex_method->get_code();
+    always_assert(code != nullptr);
+    // We expand all register ranges in order to simplify the analysis.
+    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+      IRInstruction* insn = mie.insn;
+      insn->range_to_srcs();
+      insn->normalize_registers();
+    }
+
+    code->build_cfg();
+    ControlFlowGraph& cfg = code->cfg();
+    cfg.calculate_exit_block();
+
+    // We first propagate the anchors across the code.
+    AnchorPropagation analysis(cfg, code->get_registers_size());
+    analysis.run();
+
+    // Then we assign a unique variable to each anchor.
+    name_anchors(cfg);
+
+    // The LOAD_PARAM_* instructions sit next to each other at the beginning of
+    // the entry block. We need to process them first.
+    size_t param_cursor = 0;
+    bool first_param = true;
+    for (const MethodItemEntry& mie : *cfg.entry_block()) {
+      if (mie.type == MFLOW_OPCODE) {
+        IRInstruction* insn = mie.insn;
+        switch (insn->opcode()) {
+        case IOPCODE_LOAD_PARAM_OBJECT: {
+          if (first_param &&
+              !(m_dex_method->get_access() & DexAccessFlags::ACC_STATIC)) {
+            // If the method is not static, the first parameter corresponds to
+            // `this`.
+            first_param = false;
+            m_semantics->add(
+                PointsToAction::load_operation(PointsToOperation(PTS_LOAD_THIS),
+                                               get_variable_from_anchor(insn)));
+          } else {
+            m_semantics->add(PointsToAction::load_operation(
+                PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
+                get_variable_from_anchor(insn)));
+          }
+          break;
+        }
+        case IOPCODE_LOAD_PARAM:
+        case IOPCODE_LOAD_PARAM_WIDE: {
+          // Since we call normalize_registers() before performing the
+          // semantic translation, there is only one IOPCODE_LOAD_PARAM_WIDE
+          // instruction per wide parameter, which references the first register
+          // of the pair.
+          ++param_cursor;
+          break;
+        }
+        default: {
+          // We've reached the end of the LOAD_PARAM_* instruction block and we
+          // simply exit the loop. Note that premature loop exit is probably the
+          // only legitimate use of goto in C++ code.
+          goto done;
+        }
+        }
+      }
+    }
+  done:
+    // We go over each IR instruction and generate the corresponding points-to
+    // actions.
+    for (Block* block : cfg.blocks()) {
+      AnchorEnvironment state = analysis.get_entry_state_at(block);
+      for (const MethodItemEntry& mie : InstructionIterable(*block)) {
+        IRInstruction* insn = mie.insn;
+        generate_action(insn, state);
+        analysis.analyze_instruction(insn, &state);
+      }
+    }
+    m_semantics->shrink();
+  }
+
+ private:
+  // We associate each anchor with a unique points-to variable.
+  void name_anchors(const ControlFlowGraph& cfg) {
+    for (Block* block : cfg.blocks()) {
+      for (const MethodItemEntry& mie : *block) {
+        if (mie.type == MFLOW_OPCODE) {
+          IRInstruction* insn = mie.insn;
+          if (is_anchored_instruction(insn)) {
+            m_anchors.insert({insn, m_semantics->get_new_variable()});
+          }
+        }
+      }
+    }
+  }
+
+  // Each IR instruction that returns a result of reference type is assigned an
+  // anchor.
+  bool is_anchored_instruction(IRInstruction* insn) const {
+    switch (insn->opcode()) {
+    case IOPCODE_LOAD_PARAM_OBJECT:
+    case OPCODE_MOVE_EXCEPTION:
+    case OPCODE_CONST_STRING:
+    case OPCODE_CONST_STRING_JUMBO:
+    case OPCODE_CONST_CLASS:
+    case OPCODE_CHECK_CAST:
+    case OPCODE_NEW_INSTANCE:
+    case OPCODE_NEW_ARRAY:
+    case OPCODE_AGET_OBJECT:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_SGET_OBJECT:
+    case OPCODE_FILLED_NEW_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+      return true;
+    }
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_INTERFACE: {
+      return is_object(insn->get_method()->get_proto()->get_rtype());
+    }
+    default: { return false; }
+    }
+  }
+
+  void generate_action(IRInstruction* insn, const AnchorEnvironment& state) {
+    switch (insn->opcode()) {
+    case OPCODE_MOVE_EXCEPTION: {
+      m_semantics->add(
+          PointsToAction::load_operation(PointsToOperation(PTS_GET_EXCEPTION),
+                                         get_variable_from_anchor(insn)));
+      break;
+    }
+    case OPCODE_RETURN_OBJECT: {
+      m_semantics->add(PointsToAction::return_operation(
+          PointsToOperation(PTS_RETURN),
+          get_variable_from_anchor_set(state.get(insn->src(0)))));
+      break;
+    }
+    case OPCODE_CONST_STRING:
+    case OPCODE_CONST_STRING_JUMBO: {
+      m_semantics->add(PointsToAction::load_operation(
+          PointsToOperation(PTS_CONST_STRING, insn->get_string()),
+          get_variable_from_anchor(insn)));
+      break;
+    }
+    case OPCODE_CONST_CLASS: {
+      m_semantics->add(PointsToAction::load_operation(
+          PointsToOperation(PTS_CONST_STRING, insn->get_type()),
+          get_variable_from_anchor(insn)));
+      break;
+    }
+    case OPCODE_CHECK_CAST: {
+      m_semantics->add(PointsToAction::check_cast_operation(
+          PointsToOperation(PTS_CHECK_CAST, insn->get_type()),
+          get_variable_from_anchor(insn),
+          get_variable_from_anchor_set(state.get(insn->src(0)))));
+      break;
+    }
+    case OPCODE_NEW_INSTANCE: {
+      DexType* dex_type = insn->get_type();
+      if (m_type_system.is_subtype(m_utils.get_throwable_type(), dex_type)) {
+        // If the object created is an exception (i.e., its type inherits from
+        // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
+        // model, the exact identity of an exception is abstracted away for
+        // simplicity. The operation PTS_GET_EXCEPTION can be interpreted as a
+        // nondeterministic choice among all abstract object instances that are
+        // exceptions.
+        m_semantics->add(
+            PointsToAction::load_operation(PointsToOperation(PTS_GET_EXCEPTION),
+                                           get_variable_from_anchor(insn)));
+        break;
+      }
+      // Otherwise, we fall through to the generic case.
+    }
+    case OPCODE_NEW_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+      m_semantics->add(PointsToAction::load_operation(
+          PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
+          get_variable_from_anchor(insn)));
+      break;
+    }
+    case OPCODE_APUT_OBJECT: {
+      PointsToVariable rhs =
+          get_variable_from_anchor_set(state.get(insn->src(0)));
+      PointsToVariable lhs =
+          get_variable_from_anchor_set(state.get(insn->src(1)));
+      m_semantics->add(PointsToAction::put_operation(
+          PointsToOperation(PTS_IPUT_SPECIAL, PTS_ARRAY_ELEMENT),
+          rhs,
+          boost::optional<PointsToVariable>(lhs)));
+      break;
+    }
+    case OPCODE_IPUT_OBJECT: {
+      PointsToVariable rhs =
+          get_variable_from_anchor_set(state.get(insn->src(0)));
+      PointsToVariable lhs =
+          get_variable_from_anchor_set(state.get(insn->src(1)));
+      m_semantics->add(PointsToAction::put_operation(
+          PointsToOperation(PTS_IPUT, insn->get_field()),
+          rhs,
+          boost::optional<PointsToVariable>(lhs)));
+      break;
+    }
+    case OPCODE_SPUT_OBJECT: {
+      m_semantics->add(PointsToAction::put_operation(
+          PointsToOperation(PTS_SPUT, insn->get_field()),
+          get_variable_from_anchor_set(state.get(insn->src(0)))));
+      break;
+    }
+    case OPCODE_AGET_OBJECT: {
+      PointsToVariable instance =
+          get_variable_from_anchor_set(state.get(insn->src(0)));
+      m_semantics->add(PointsToAction::get_operation(
+          PointsToOperation(PTS_IGET_SPECIAL, PTS_ARRAY_ELEMENT),
+          get_variable_from_anchor(insn),
+          boost::optional<PointsToVariable>(instance)));
+      break;
+    }
+    case OPCODE_IGET_OBJECT: {
+      PointsToVariable instance =
+          get_variable_from_anchor_set(state.get(insn->src(0)));
+      m_semantics->add(PointsToAction::get_operation(
+          PointsToOperation(PTS_IGET, insn->get_field()),
+          get_variable_from_anchor(insn),
+          boost::optional<PointsToVariable>(instance)));
+      break;
+    }
+    case OPCODE_SGET_OBJECT: {
+      m_semantics->add(PointsToAction::get_operation(
+          PointsToOperation(PTS_SGET, insn->get_field()),
+          get_variable_from_anchor(insn)));
+      break;
+    }
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_INTERFACE: {
+      translate_invoke(insn, state);
+      break;
+    }
+    default: {
+      // All other instructions are either transparent to points-to analysis or
+      // have already been taken care of (LOAD_PARAM_*).
+    }
+    }
+  }
+
+  // This is where we can provide the semantics of external API calls that are
+  // relevant to points-to analysis and for which the source code is either
+  // unavailable or hard to process automatically (e.g., native methods).
+  void translate_invoke(IRInstruction* insn, const AnchorEnvironment& state) {
+    // For now, we just default to the general translation of method calls.
+    default_invoke_translation(insn, state);
+  }
+
+  void default_invoke_translation(IRInstruction* insn,
+                                  const AnchorEnvironment& state) {
+    DexMethod* dex_method = insn->get_method();
+    DexProto* proto = dex_method->get_proto();
+    const auto& signature = proto->get_args()->get_type_list();
+    std::vector<std::pair<size_t, PointsToVariable>> args;
+    size_t arg_pos = 0;
+    // The first argument is interpreted differently depending on whether the
+    // invoked method is static or not.
+    size_t delta = (insn->opcode() == OPCODE_INVOKE_STATIC) ? 0 : 1;
+    for (DexType* dex_type : signature) {
+      if (is_object(dex_type)) {
+        args.push_back({arg_pos,
+                        get_variable_from_anchor_set(
+                            state.get(insn->src(arg_pos + delta)))});
+      }
+      ++arg_pos;
+    }
+    PointsToOperationKind invoke_kind;
+    switch (insn->opcode()) {
+    case OPCODE_INVOKE_STATIC: {
+      invoke_kind = PTS_INVOKE_STATIC;
+      break;
+    }
+    case OPCODE_INVOKE_VIRTUAL: {
+      invoke_kind = PTS_INVOKE_VIRTUAL;
+      break;
+    }
+    case OPCODE_INVOKE_SUPER: {
+      invoke_kind = PTS_INVOKE_SUPER;
+      break;
+    }
+    case OPCODE_INVOKE_DIRECT: {
+      invoke_kind = PTS_INVOKE_DIRECT;
+      break;
+    }
+    case OPCODE_INVOKE_INTERFACE: {
+      invoke_kind = PTS_INVOKE_INTERFACE;
+      break;
+    }
+    default: {
+      // This function is only called on invoke instructions.
+      always_assert(false);
+    }
+    }
+    boost::optional<PointsToVariable> dest;
+    boost::optional<PointsToVariable> instance;
+    if (is_object(insn->get_method()->get_proto()->get_rtype())) {
+      dest = {get_variable_from_anchor(insn)};
+    }
+    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+      instance = {get_variable_from_anchor_set(state.get(insn->src(0)))};
+    }
+    m_semantics->add(PointsToAction::invoke_operation(
+        PointsToOperation(invoke_kind, insn->get_method()),
+        dest,
+        instance,
+        args));
+  }
+
+  PointsToVariable get_variable_from_anchor(IRInstruction* insn) {
+    auto it = m_anchors.find(insn);
+    always_assert(it != m_anchors.end());
+    return it->second;
+  }
+
+  // If the anchor set is not a singleton, we need to introduce a disjunction
+  // operation.
+  PointsToVariable get_variable_from_anchor_set(const AnchorDomain& s) {
+    // By design, the analysis can't generate the Top value.
+    always_assert(!s.is_top());
+    if (s.is_bottom()) {
+      // This means that some code in the method is unreachable.
+      TRACE(PTA, 2, "Unreachable code in %s\n", SHOW(m_dex_method));
+      return PointsToVariable();
+    }
+    auto anchors = s.elements();
+    if (anchors.size() == 0) {
+      // The denotation of the anchor set is just the `null` reference. This is
+      // represented by a special points-to variable.
+      return PointsToVariable::null_variable();
+    }
+    if (anchors.size() == 1) {
+      // When the anchor set is a singleton, there is no need to introduce a
+      // disjunction.
+      return get_variable_from_anchor(*anchors.begin());
+    }
+    // Otherwise, we need a disjunction.
+    PointsToVariableSet ptv_set;
+    for (IRInstruction* insn : anchors) {
+      ptv_set.insert(get_variable_from_anchor(insn));
+    }
+    auto it = m_anchor_sets.find(ptv_set);
+    if (it != m_anchor_sets.end()) {
+      // The disjunction has already been generated.
+      return it->second;
+    }
+    // Otherwise, we create a new disjunction.
+    PointsToVariable new_v = m_semantics->get_new_variable();
+    m_anchor_sets.emplace(ptv_set, new_v);
+    // We insert the newly created disjunction before its first use.
+    m_semantics->add(
+        PointsToAction::disjunction(new_v, ptv_set.begin(), ptv_set.end()));
+    return new_v;
+  }
+
+  DexMethod* m_dex_method;
+  PointsToMethodSemantics* m_semantics;
+  const TypeSystem& m_type_system;
+  const PointsToSemanticsUtils& m_utils;
+  // We assign each anchor a points-to variable. This map keeps track of the
+  // naming.
+  std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;
+  // A table that keeps track of all disjunctions already created, so that we
+  // only generate one disjuction per anchor set.
+  std::unordered_map<PointsToVariableSet,
+                     PointsToVariable,
+                     PointsToVariableSet::Hash,
+                     PointsToVariableSet::EqualTo>
+      m_anchor_sets;
+};
+
+// Removes points-to equations that have no effect on the computation of the
+// points-to analysis. We compute the dependency graph of the points-to
+// equations and we discard all variables that are not involved in any relevant
+// computation.
+class Shrinker final {
+ public:
+  explicit Shrinker(std::vector<PointsToAction>* pt_actions)
+      : m_pt_actions(pt_actions) {}
+
+  void run() {
+    // We first identify all the variables that we surely need to keep in order
+    // to perform the points-to analysis.
+    find_root_vars();
+    // We then compute the dependency graph: there is an edge v -> w between
+    // points-to variables v and w iff the value of w is needed to compute the
+    // value of v.
+    build_dependency_graph();
+    // We compute the set of variables that are reachable from any one of the
+    // root variables in the dependency graph.
+    collect_reachable_vars();
+    // We remove any points-to equation assigning a value to a variable that
+    // hasn't been marked as reachable in the previous step.
+    shrink_points_to_actions();
+  }
+
+ private:
+  using VariableSet =
+      std::unordered_set<PointsToVariable, boost::hash<PointsToVariable>>;
+
+  // We keep all `put`, `invoke` and `return` operations, since they presumably
+  // have an effect on the analysis.
+  void find_root_vars() {
+    for (const PointsToAction& pt_action : *m_pt_actions) {
+      const PointsToOperation& op = pt_action.operation();
+      if (op.is_put()) {
+        if (!op.is_sput()) {
+          m_root_vars.insert(pt_action.lhs());
+        }
+        m_root_vars.insert(pt_action.rhs());
+        continue;
+      }
+      if (op.is_invoke()) {
+        if (op.is_virtual_call()) {
+          m_root_vars.insert(pt_action.instance());
+        }
+        for (const auto& arg : pt_action.get_arguments()) {
+          m_root_vars.insert(arg.second);
+        }
+        continue;
+      }
+      if (op.is_return()) {
+        m_root_vars.insert(pt_action.src());
+        continue;
+      }
+    }
+  }
+
+  // When building the dependency graph, we are only interested in operations
+  // that assign a value to a variable but don't create any points-to relation
+  // between objects (unlike a `put` operation, for example). We don't consider
+  // `load` operations, because they can't create dependencies among variables.
+  // An edge v -> w in the dependency graph means that computing the value of
+  // variable v requires the value of variable w.
+  void build_dependency_graph() {
+    for (const PointsToAction& pt_action : *m_pt_actions) {
+      const PointsToOperation& op = pt_action.operation();
+      if (op.is_check_cast()) {
+        add_dependency(pt_action.dest(), pt_action.src());
+        continue;
+      }
+      if (op.is_get() && !op.is_sget()) {
+        add_dependency(pt_action.dest(), pt_action.instance());
+        continue;
+      }
+      if (op.is_disjunction()) {
+        for (const auto& arg : pt_action.get_arguments()) {
+          add_dependency(pt_action.dest(), arg.second);
+        }
+        continue;
+      }
+    }
+  }
+
+  void add_dependency(const PointsToVariable& x, const PointsToVariable& y) {
+    m_dependency_graph[x].insert(y);
+  }
+
+  // If there exists a path from any root variable to a variable v, this means
+  // that the value of variable v is required for performing the points-to
+  // analysis. All other variables can safely be discarded. We compute the set
+  // of reachable variables using a simple breadth-first traversal of the graph.
+  void collect_reachable_vars() {
+    std::deque<PointsToVariable> queue(m_root_vars.begin(), m_root_vars.end());
+    while (!queue.empty()) {
+      PointsToVariable v = queue.back();
+      queue.pop_back();
+      // Note that the variables already visited are exactly the variables that
+      // we need to keep.
+      if (m_vars_to_keep.count(v) != 0) {
+        continue;
+      }
+      m_vars_to_keep.insert(v);
+      const auto& deps = m_dependency_graph[v];
+      queue.insert(queue.begin(), deps.begin(), deps.end());
+    }
+  }
+
+  void shrink_points_to_actions() {
+    // Any `load`, `check_cast`, `get` or `disjunction` operation assigning a
+    // value to a variable that hasn't been marked to keep can safely be
+    // discarded.
+    m_pt_actions->erase(
+        std::remove_if(m_pt_actions->begin(),
+                       m_pt_actions->end(),
+                       [this](const PointsToAction& pt_action) {
+                         const PointsToOperation& op = pt_action.operation();
+                         return (op.is_load() || op.is_check_cast() ||
+                                 op.is_get() || op.is_disjunction()) &&
+                                (m_vars_to_keep.count(pt_action.dest()) == 0);
+                       }),
+        m_pt_actions->end());
+    m_pt_actions->shrink_to_fit();
+
+    // We can also safely remove the `dest` variable of a method call if it
+    // hasn't been marked to keep. Computing the return value of a virtual call
+    // during the analysis may entail performing the join of multiple points-to
+    // sets, which is costly. Hence, removing unneeded return values is a
+    // valuable optimization.
+    for (PointsToAction& pt_action : *m_pt_actions) {
+      if (pt_action.operation().is_invoke() && pt_action.has_dest() &&
+          (m_vars_to_keep.count(pt_action.dest()) == 0)) {
+        pt_action.remove_dest();
+      }
+    }
+  }
+
+  std::vector<PointsToAction>* m_pt_actions;
+  std::unordered_map<PointsToVariable,
+                     VariableSet,
+                     boost::hash<PointsToVariable>>
+      m_dependency_graph;
+  VariableSet m_root_vars;
+  VariableSet m_vars_to_keep;
+};
+
+} // namespace pts_impl
+
+void PointsToMethodSemantics::shrink() {
+  pts_impl::Shrinker shrinker(&m_points_to_actions);
+  shrinker.run();
+}
+
+std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
+  switch (s.kind()) {
+  case PTS_ABSTRACT: {
+    o << "= ABSTRACT";
+    break;
+  }
+  case PTS_NATIVE: {
+    o << "= NATIVE";
+    break;
+  }
+  case PTS_EXTERNAL: {
+    o << "= EXTERNAL";
+    break;
+  }
+  case PTS_APK:
+  case PTS_STUB: {
+    o << "{" << std::endl;
+    for (const auto& a : s.get_points_to_actions()) {
+      o << " " << a << std::endl;
+    }
+    o << "}";
+    break;
+  }
+  }
+  return o;
+}
+
+PointsToSemantics::PointsToSemantics(const Scope& scope)
+    : m_type_system(scope) {
+  // We size the hash table so as to fit all the methods in scope.
+  size_t method_count = 0;
+  for (DexClass* dex_class : scope) {
+    method_count +=
+        dex_class->get_dmethods().size() + dex_class->get_vmethods().size();
+  }
+  m_method_semantics.reserve(method_count);
+
+  // We initialize all entries in the hash table, which can then be concurrently
+  // accessed by the workers using the thread-safe find() operation of
+  // std::unordered_map.
+  for (DexClass* dex_class : scope) {
+    for (DexMethod* dmethod : dex_class->get_dmethods()) {
+      initialize_entry(dmethod);
+    }
+    for (DexMethod* vmethod : dex_class->get_vmethods()) {
+      initialize_entry(vmethod);
+    }
+  }
+
+  // We generate a system of points-to actions for each Dex method in parallel.
+  using Data = std::nullptr_t;
+  using Output = std::nullptr_t;
+  walk_methods_parallel<Scope, Data, Output>(
+      scope,
+      [this](Data&, DexMethod* dex_method) {
+        // Mapper
+        generate_points_to_actions(dex_method);
+        return nullptr;
+      },
+      [](Output, Output) {
+        // Reducer
+        return nullptr;
+      },
+      [](int) {
+        // Data initializer
+        return nullptr;
+      });
+}
+
+const PointsToMethodSemantics& PointsToSemantics::get_method_semantics(
+    DexMethod* dex_method) const {
+  auto entry = m_method_semantics.find(dex_method);
+  always_assert(entry != m_method_semantics.end());
+  return entry->second;
+}
+
+PointsToMethodSemantics* PointsToSemantics::get_method_semantics(
+    DexMethod* dex_method) {
+  auto entry = m_method_semantics.find(dex_method);
+  always_assert(entry != m_method_semantics.end());
+  return &entry->second;
+}
+
+void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
+  MethodKind kind;
+  DexAccessFlags access_flags = dex_method->get_access();
+  if (dex_method->get_code() == nullptr) {
+    if ((access_flags & DexAccessFlags::ACC_ABSTRACT)) {
+      kind = PTS_ABSTRACT;
+    } else if ((access_flags & DexAccessFlags::ACC_NATIVE)) {
+      kind = PTS_NATIVE;
+    } else {
+      kind = PTS_EXTERNAL;
+    }
+  } else {
+    kind = PTS_APK;
+  }
+  m_method_semantics.emplace(std::piecewise_construct,
+                             std::forward_as_tuple(dex_method),
+                             std::forward_as_tuple(/* kind */ kind,
+                                                   /* start_var_id */ 0,
+                                                   /* size_hint */ 8));
+}
+
+void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
+  // According to section [container.requirements.dataraces] of the C++ standard
+  // definition document, the find() method of std::unordered_map is
+  // thread-safe. Since this function operates on a single Dex method and the
+  // hash table m_method_semantics is indexed by Dex methods, the following code
+  // is not subject to data races.
+  auto entry = m_method_semantics.find(dex_method);
+  // All hash table entries have been initialized in the constructor.
+  always_assert(entry != m_method_semantics.end());
+  PointsToMethodSemantics* semantics = &entry->second;
+  if (semantics->kind() == PTS_APK) {
+    pts_impl::PointsToActionGenerator generator(
+        dex_method, semantics, m_type_system, m_utils);
+    generator.run();
+  }
+}
+
+std::ostream& operator<<(
+    std::ostream& o, const std::pair<DexMethod*, PointsToMethodSemantics>& p) {
+  DexMethod* m = p.first;
+  o << m->get_class()->get_name()->str() << "#" << m->get_name()->str() << ": "
+    << SHOW(m->get_proto()) << " " << p.second << std::endl;
+  return o;
+}
+
+std::ostream& operator<<(std::ostream& o, const PointsToSemantics& s) {
+  for (const auto& entry : s.m_method_semantics) {
+    o << entry;
+  }
+  return o;
+}

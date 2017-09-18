@@ -1,0 +1,1 @@
+-keep interface com.facebook.redex.examples.proguardexample.Greek

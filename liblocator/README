@@ -1,0 +1,5 @@
+This directory contains a small library that handles encoding and
+decoding "locator strings" that optimize class searches.  We package
+this code as a small, separate, and static library so that we can
+share the logic between the Dalvik native classloader (on device) and
+redex (usually not on device).
