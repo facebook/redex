@@ -43,8 +43,6 @@ class InstructionSelection {
   Stats m_stats;
 };
 
-static std::array<DexOpcode, 3> move_opcode_tuple(DexOpcode op);
-
 DexOpcode select_move_opcode(const IRInstruction* insn);
 
 DexOpcode select_const_opcode(const IRInstruction* insn);
