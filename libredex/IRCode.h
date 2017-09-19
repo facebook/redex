@@ -241,6 +241,8 @@ class IRCode {
 
   ~IRCode();
 
+  bool structural_equals(const IRCode& other);
+
   uint16_t get_registers_size() const { return m_registers_size; }
 
   void set_registers_size(uint16_t sz) { m_registers_size = sz; }
