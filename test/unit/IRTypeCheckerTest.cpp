@@ -301,3 +301,38 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
       "register v0: expected type REFERENCE, but found TOP instead",
       strict_checker.what());
 }
+
+TEST_F(IRTypeCheckerTest, exceptionHandler) {
+  using namespace dex_asm;
+  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
+  auto catch_start = new MethodItemEntry(exception_type);
+  IRCode* code = m_method->get_code();
+  IRInstruction* noexc_return = dasm(OPCODE_RETURN, {1_v});
+  IRInstruction* exc_return = dasm(OPCODE_RETURN, {0_v});
+  code->push_back(dasm(OPCODE_MOVE, {0_v, 9_v}));
+  code->push_back(dasm(OPCODE_CONST, {1_v, 0_L}));
+  code->push_back(dasm(OPCODE_CONST, {2_v, 12_L}));
+  code->push_back(TRY_START, catch_start);
+  code->push_back(dasm(OPCODE_DIV_INT, {2_v, 2_v, 5_v})); // Can throw
+  code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
+  code->push_back(dasm(OPCODE_MOVE, {3_v, 1_v}));
+  code->push_back(TRY_END, catch_start);
+  code->push_back(noexc_return);
+  code->push_back(*catch_start);
+  code->push_back(exc_return);
+  IRTypeChecker checker(m_method);
+  EXPECT_TRUE(checker.good()) << checker.what();
+  EXPECT_EQ(INT, checker.get_type(noexc_return, 0));
+  EXPECT_EQ(CONST, checker.get_type(noexc_return, 1));
+  EXPECT_EQ(INT, checker.get_type(noexc_return, 2));
+  EXPECT_EQ(CONST, checker.get_type(noexc_return, 3));
+  // The exception is thrown by DIV_INT before v2 is modified.
+  EXPECT_EQ(INT, checker.get_type(exc_return, 0));
+  EXPECT_EQ(ZERO, checker.get_type(exc_return, 1));
+  EXPECT_EQ(CONST, checker.get_type(exc_return, 2));
+  EXPECT_EQ(TOP, checker.get_type(exc_return, 3));
+  EXPECT_EQ(INT, checker.get_type(exc_return, 5));
+  // The rest of the type environment, like method parameters, should be
+  // left unchanged in the exception handler.
+  EXPECT_EQ(REFERENCE, checker.get_type(exc_return, 14));
+}
