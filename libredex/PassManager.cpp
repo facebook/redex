@@ -17,8 +17,10 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "InterDex.h"
+#include "IRCode.h"
+#include "IRTypeChecker.h"
+#include "ParallelWalkers.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
@@ -66,6 +68,20 @@ void PassManager::init(const Json::Value& config) {
     // If config isn't set up, run all registered passes.
     m_activated_passes = m_registered_passes;
   }
+}
+
+void PassManager::run_type_checker(const Scope& scope, bool verify_moves) {
+  TRACE(PM, 1, "Running IRTypeChecker...\n");
+  Timer t("IRTypeChecker");
+  walk_methods_parallel_simple(scope, [verify_moves](DexMethod* dex_method) {
+    IRTypeChecker checker(dex_method, verify_moves);
+    if (checker.fail()) {
+      std::string msg = checker.what();
+      fprintf(
+          stderr, "ABORT! Inconsistency found in Dex code. %s", msg.c_str());
+      exit(EXIT_FAILURE);
+    }
+  });
 }
 
 const std::string PASS_ORDER_KEY = "pass_order";
@@ -134,13 +150,30 @@ void PassManager::run_passes(DexStoresVector& stores,
     pass->eval_pass(stores, cfg, *this);
     m_current_pass_info = nullptr;
   }
+
+  // Retrieve the type checker's settings.
+  bool type_checker_enabled = m_config.isMember("ir_type_checker");
+  auto type_checker_args = m_config["ir_type_checker"];
+  bool run_after_each_pass = type_checker_args.get("run_after_each_pass", false).asBool();
+  bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
     pass->run_pass(stores, cfg, *this);
+    if (type_checker_enabled && run_after_each_pass) {
+      scope = build_class_scope(it);
+      run_type_checker(scope, verify_moves);
+    }
     m_current_pass_info = nullptr;
+  }
+
+  // Always run the type checker before generating the optimized dex code.
+  if (type_checker_enabled) {
+    scope = build_class_scope(it);
+    run_type_checker(scope, verify_moves);
   }
 
   if (!cfg.get_printseeds().empty()) {
