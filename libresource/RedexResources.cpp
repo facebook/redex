@@ -162,12 +162,14 @@ std::unordered_set<std::string> extract_js_resources(const std::string& file_con
   return result;
 }
 
-std::unordered_set<uint32_t> extract_xml_reference_attributes(const std::string& file_contents) {
+std::unordered_set<uint32_t> extract_xml_reference_attributes(
+    const std::string& file_contents,
+    const std::string& filename) {
   android::ResXMLTree parser;
   parser.setTo(file_contents.data(), file_contents.size());
   std::unordered_set<uint32_t> result;
   if (parser.getError() != android::NO_ERROR) {
-    return result;
+    throw std::runtime_error("Unable to read file: " + filename);
   }
 
   android::ResXMLParser::event_code_t type;
@@ -176,7 +178,8 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(const std::string&
     if (type == android::ResXMLParser::START_TAG) {
       const size_t attr_count = parser.getAttributeCount();
       for (size_t i = 0; i < attr_count; ++i) {
-        if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE) {
+        if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE ||
+            parser.getAttributeDataType(i) == android::Res_value::TYPE_ATTRIBUTE) {
           android::Res_value outValue;
           parser.getAttributeValue(i, &outValue);
           if (outValue.data > PACKAGE_RESID_START) {
@@ -226,7 +229,8 @@ void walk_references_for_resource(
     }
 
     // Skip any non-references or already visited nodes
-    if (r.dataType != android::Res_value::TYPE_REFERENCE
+    if ((r.dataType != android::Res_value::TYPE_REFERENCE &&
+          r.dataType != android::Res_value::TYPE_ATTRIBUTE)
         || r.data <= PACKAGE_RESID_START
         || nodes_visited.find(r.data) != nodes_visited.end()) {
       continue;
@@ -416,6 +420,13 @@ std::string read_entire_file(const std::string& filename) {
   return sstr.str();
 }
 
+void write_entire_file(
+    const std::string& filename,
+    const std::string& contents) {
+  std::ofstream out(filename, std::ofstream::binary);
+  out << contents;
+}
+
 std::unordered_set<std::string> get_manifest_classes(const std::string& filename) {
   std::string manifest = read_entire_file(filename);
   std::unordered_set<std::string> classes;
@@ -530,12 +541,68 @@ std::unordered_set<uint32_t> get_xml_reference_attributes(const std::string& fil
   std::string file_contents = read_entire_file(filename);
   std::unordered_set<uint32_t> attributes;
   if (file_contents.size()) {
-    attributes = extract_xml_reference_attributes(file_contents);
+    attributes = extract_xml_reference_attributes(file_contents, filename);
   } else {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
     throw std::runtime_error("Unable to read file: " + filename);
   }
   return attributes;
+}
+
+void remap_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
+  std::string file_contents = read_entire_file(filename);
+  bool made_change = false;
+  if (file_contents.size()) {
+    android::ResXMLTree parser;
+    parser.setTo(file_contents.data(), file_contents.size());
+    if (parser.getError() != android::NO_ERROR) {
+      throw std::runtime_error("Unable to read file: " + filename);
+    }
+
+    // Update embedded resource ID array
+    size_t resIdCount = 0;
+    uint32_t* resourceIds = parser.getResourceIds(&resIdCount);
+    for (size_t i = 0; i < resIdCount; ++i) {
+      auto id_search = kept_to_remapped_ids.find(resourceIds[i]);
+      if (id_search != kept_to_remapped_ids.end()) {
+        resourceIds[i] = id_search->second;
+        made_change = true;
+      }
+    }
+
+    android::ResXMLParser::event_code_t type;
+    do {
+      type = parser.next();
+      if (type == android::ResXMLParser::START_TAG) {
+        const size_t attr_count = parser.getAttributeCount();
+        for (size_t i = 0; i < attr_count; ++i) {
+          if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE ||
+              parser.getAttributeDataType(i) == android::Res_value::TYPE_ATTRIBUTE) {
+            android::Res_value outValue;
+            parser.getAttributeValue(i, &outValue);
+            if (outValue.data > PACKAGE_RESID_START &&
+                kept_to_remapped_ids.count(outValue.data)) {
+              uint32_t new_value = kept_to_remapped_ids.at(outValue.data);
+              if (new_value != outValue.data) {
+                parser.setAttributeData(i, new_value);
+                made_change = true;
+              }
+            }
+          }
+        }
+      }
+    } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+             type != android::ResXMLParser::END_DOCUMENT);
+  } else {
+    fprintf(stderr, "Unable to read file: %s\n", filename.data());
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+
+  if (made_change) {
+    write_entire_file(filename, file_contents);
+  }
 }
 
 std::vector<std::string> find_layout_files(const std::string& apk_directory) {

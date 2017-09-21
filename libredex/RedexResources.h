@@ -16,6 +16,7 @@
 #include "androidfw/ResourceTypes.h"
 
 std::string read_entire_file(const std::string& filename);
+void write_entire_file(const std::string& filename, const std::string& contents);
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 bool has_raw_attribute_value(
@@ -32,6 +33,9 @@ std::unordered_set<std::string> get_xml_files(
     const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
+void remap_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
 
 /**
  * Follows the reference links for a resource for all configurations.

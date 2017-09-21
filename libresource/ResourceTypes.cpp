@@ -1316,6 +1316,20 @@ int32_t ResXMLParser::getAttributeData(size_t idx) const
     return 0;
 }
 
+void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
+{
+    if (mEventCode == START_TAG) {
+        const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
+        if (idx < dtohs(tag->attributeCount)) {
+            ResXMLTree_attribute* attr = (ResXMLTree_attribute*)
+                (((const uint8_t*)tag)
+                 + dtohs(tag->attributeStart)
+                 + (dtohs(tag->attributeSize)*idx));
+            attr->typedValue.data = newData;
+        }
+    }
+}
+
 ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
 {
     if (mEventCode == START_TAG) {
@@ -1572,6 +1586,12 @@ ResXMLTree::~ResXMLTree()
     uninit();
 }
 
+uint32_t* ResXMLTree::getResourceIds(size_t* numberOfIds)
+{
+    *numberOfIds = mNumResIds;
+    return mResIds;
+}
+
 status_t ResXMLTree::setTo(const void* data, size_t size, bool copyData)
 {
     uninit();
@@ -1628,7 +1648,7 @@ status_t ResXMLTree::setTo(const void* data, size_t size, bool copyData)
         if (type == RES_STRING_POOL_TYPE) {
             mStrings.setTo(chunk, size);
         } else if (type == RES_XML_RESOURCE_MAP_TYPE) {
-            mResIds = (const uint32_t*)
+            mResIds = (uint32_t*)
                 (((const uint8_t*)chunk)+dtohs(chunk->headerSize));
             mNumResIds = (dtohl(chunk->size)-dtohs(chunk->headerSize))/sizeof(uint32_t);
         } else if (type >= RES_XML_FIRST_CHUNK_TYPE
@@ -2977,19 +2997,71 @@ struct ResTable::Type
     void serialize(Vector<char>& cVec)
     {
         size_t initSize = cVec.size();
-        uint32_t tSize = typeSpec->header.size;
-        for (size_t i = 0; i < tSize; ++i) {
+
+        // Serialize ResourceTableTypeSpec
+        // First, we perform opaque serialization of the header
+        uint32_t tHeaderSize = typeSpec->header.headerSize;
+        for (size_t i = 0; i < tHeaderSize; ++i) {
             cVec.push_back(*((unsigned char*)(typeSpec) + i));
         }
+
+        // Fixup count of rows in header
+        uint32_t newRowCount = entryCount - deletedEntries.size();
+        memcpy((char *)&(cVec[cVec.size() - 4]), (char *)(&newRowCount), 4);
+
+        size_t deletedSpecEntryIndex = 0;
+        unsigned char specFlagChars[4];
+        for (size_t i = 0; i < entryCount; ++i) {
+            while (deletedSpecEntryIndex < deletedEntries.size()
+                  && deletedEntries[deletedSpecEntryIndex] < i) {
+                ++deletedSpecEntryIndex;
+            }
+
+            if (deletedSpecEntryIndex < deletedEntries.size()
+                  && deletedEntries[deletedSpecEntryIndex] == i) {
+                continue;
+            }
+
+            uint32_t flags = dtohl(typeSpecFlags[i]);
+            memcpy(specFlagChars, &flags, 4);
+            for (int a = 0; a < 4; ++a) {
+                cVec.push_back(specFlagChars[a]);
+            }
+        }
+
         rewriteSize(cVec, initSize);
 
+        // Serialize each ResourceTableType
         for (size_t k = 0; k < configs.size(); k++) {
             initSize = cVec.size();
             const ResTable_type* type = configs[k];
+
+            // Opaque serialization of header
             uint32_t headSize = type->header.headerSize;
             for (size_t i = 0; i < headSize; ++i) {
                 cVec.push_back(*((unsigned char*)(type) + i));
             }
+
+            // Fixup entry count and offset to start of entries
+            size_t skippedHeaderFields =
+              2 // type
+              + 2 // header size
+              + 4 // chunk size
+              + 1 // id
+              + 1 // unused field, always 0
+              + 2; // unused field, always 0
+
+            memcpy(
+                (char *)&(cVec[initSize + skippedHeaderFields]),
+                (char *)(&newRowCount),
+                4);
+            uint32_t newOffsetToEntries =
+                (4 * newRowCount)
+                + type->header.headerSize;
+            memcpy(
+                (char *)&(cVec[initSize + skippedHeaderFields + 4]),
+                (char *)(&newOffsetToEntries),
+                4);
 
             Vector<char> entryData;
 
@@ -2999,7 +3071,7 @@ struct ResTable::Type
 
             uint32_t lastRealOffset = ResTable_type::NO_ENTRY;
 
-            // Calculate entry sizes
+            // Calculate (original) entry sizes
             Vector<size_t> entrySizes;
             for (size_t i = 0; i < entryCount; ++i) {
                 uint32_t offset = dtohl(offsets[i]);
@@ -3032,12 +3104,13 @@ struct ResTable::Type
                     ++deletedEntryIndex;
                 }
 
+                bool wasDeleted = deletedEntryIndex < deletedEntries.size()
+                      && deletedEntries[deletedEntryIndex] == i;
+
                 if (offset != ResTable_type::NO_ENTRY) {
                     size_t entrySize = entrySizes[sizeIndex++];
-                    if (deletedEntryIndex < deletedEntries.size()
-                          && deletedEntries[deletedEntryIndex] == i) {
+                    if (wasDeleted) {
                         sumOfDeletedSizes += entrySize;
-                        offset = ResTable_type::NO_ENTRY;
                     } else {
                         const ResTable_entry* const entry = reinterpret_cast<const ResTable_entry*>(
                                 reinterpret_cast<const uint8_t*>(type) + offset + type->entriesStart);
@@ -3052,10 +3125,12 @@ struct ResTable::Type
                     }
                 }
 
-                // Serialize offset
-                memcpy(offsetChars, &offset, 4);
-                for (int a = 0; a < 4; ++a) {
-                    cVec.push_back(offsetChars[a]);
+                if (!wasDeleted) {
+                    // Serialize offset
+                    memcpy(offsetChars, &offset, 4);
+                    for (int a = 0; a < 4; ++a) {
+                        cVec.push_back(offsetChars[a]);
+                    }
                 }
             }
 
@@ -6799,11 +6874,144 @@ void ResTable::deleteResource(uint32_t resID)
     addIfUnique(deleted, entryIndex);
 }
 
+static uint32_t getRemappedEntry(
+    uint32_t reference,
+    SortedVector<uint32_t> originalIds,
+    Vector<uint32_t> newIds)
+{
+    ssize_t index = originalIds.indexOf(reference);
+    if (index < 0) {
+        return reference;
+    }
+
+    return newIds[index];
+}
+
+// For the given resource ID, looks across all configurations and remaps all
+// reference and attribute Res_value entries based on the given
+// originalIds -> newIds mapping. The entries in the inputs are expected to
+// align based on index.
+void ResTable::remapReferenceValuesForResource(
+    uint32_t resID,
+    SortedVector<uint32_t> originalIds,
+    Vector<uint32_t> newIds)
+{
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        if ((((uint64_t)type) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue; // Non-integer
+        }
+        String8 configStr = type->config.toString();
+        uint32_t entriesStart = dtohl(type->entriesStart);
+        if ((entriesStart & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue; // Non-integer
+        }
+        uint32_t typeSize = dtohl(type->header.size);
+        if ((typeSize & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue; // Non-integer
+        }
+        const uint32_t* const eindex = (const uint32_t*)
+            (((const uint8_t*)type) + dtohs(type->header.headerSize));
+
+        uint32_t thisOffset = dtohl(eindex[entryIndex]);
+        if (thisOffset == ResTable_type::NO_ENTRY) {
+            continue;
+        }
+
+        resource_name resName;
+        if (!this->getResourceName(resID, true, &resName)) {
+            continue;
+        }
+        if ((thisOffset & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue; // Non-integer
+        }
+        if ((thisOffset + sizeof(ResTable_entry)) > typeSize) {
+            continue;
+        }
+
+        const ResTable_entry* ent = (const ResTable_entry*)
+            (((const uint8_t*)type) + entriesStart + thisOffset);
+        if (((entriesStart + thisOffset) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue;
+        }
+
+        uintptr_t esize = dtohs(ent->size);
+        if ((esize & Res_value::COMPLEX_RADIX_MASK) != 0) {
+            continue; // Non-integer
+        }
+        if ((thisOffset + esize) > typeSize) {
+            continue;
+        }
+
+        Res_value* valuePtr = nullptr;
+        ResTable_map_entry* bagPtr = nullptr;
+        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+            bagPtr = (ResTable_map_entry*)ent;
+        } else {
+            valuePtr = (Res_value*)
+                (((const uint8_t*)ent) + esize);
+        }
+
+        if (valuePtr != nullptr &&
+               (valuePtr->dataType == Res_value::TYPE_REFERENCE ||
+                valuePtr->dataType == Res_value::TYPE_ATTRIBUTE)) {
+            uint32_t valueData = valuePtr->data;
+            uint32_t remapped = getRemappedEntry(valueData, originalIds, newIds);
+            if (valueData != remapped) {
+                valuePtr->data = remapped;
+            }
+        } else if (bagPtr != nullptr) {
+            const int N = dtohl(bagPtr->count);
+            const uint8_t* baseMapPtr = (const uint8_t*)ent;
+            size_t mapOffset = esize;
+            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            const uint32_t parent = dtohl(bagPtr->parent.ident);
+            uint32_t remapped = getRemappedEntry(parent, originalIds, newIds);
+            if (parent != remapped) {
+                bagPtr->parent.ident = remapped;
+            }
+
+            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+                Res_value mapValue = mapPtr->value;
+                if (mapValue.dataType == Res_value::TYPE_REFERENCE ||
+                    mapValue.dataType == Res_value::TYPE_ATTRIBUTE) {
+                    uint32_t valueData = mapValue.data;
+                    remapped = getRemappedEntry(valueData, originalIds, newIds);
+                    if (valueData != remapped) {
+                        mapPtr->value.data = remapped;
+                    }
+                }
+
+                uint32_t key = mapPtr->name.ident;
+                remapped = getRemappedEntry(key, originalIds, newIds);
+                if (key != remapped) {
+                    mapPtr->name.ident = remapped;
+                }
+
+                const size_t size = dtohs(mapValue.size);
+                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
+                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            }
+        }
+    }
+}
+
 // For the given resource ID, looks across all configurations and returns all
 // the corresponding Res_value entries. This is much more reliable than
 // ResTable::getResource, which fails for roughly 20% of resources and does not
 // handle complex (bag) values well. Note that we also return the parent of
-// bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship.
+// bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
+// along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
 void ResTable::getAllValuesForResource(uint32_t resID, Vector<Res_value>& values) const
 {
     const ssize_t pgIndex = getResourcePackageIndex(resID);
@@ -6868,6 +7076,7 @@ void ResTable::getAllValuesForResource(uint32_t resID, Vector<Res_value>& values
         const Res_value* valuePtr = nullptr;
         const ResTable_map_entry* bagPtr = nullptr;
         Res_value value;
+        Res_value virtualValue;
         if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
             bagPtr = (const ResTable_map_entry*)ent;
         } else {
@@ -6887,13 +7096,16 @@ void ResTable::getAllValuesForResource(uint32_t resID, Vector<Res_value>& values
 
             // Convert parent to virtual Res_value.
             // Leave size as 0 to indicate this is not a 'real' Res_value.
-            value.dataType = Res_value::TYPE_REFERENCE;
-            value.data = parent;
-            values.add(value);
+            virtualValue.dataType = Res_value::TYPE_REFERENCE;
+            virtualValue.data = parent;
+            values.add(virtualValue);
 
             for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
                 value.copyFrom_dtoh(mapPtr->value);
                 values.add(value);
+                virtualValue.dataType = Res_value::TYPE_ATTRIBUTE;
+                virtualValue.data = mapPtr->name.ident;
+                values.add(virtualValue);
                 const size_t size = dtohs(mapPtr->value.size);
                 mapOffset += size + sizeof(*mapPtr)-sizeof(mapPtr->value);
                 mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
