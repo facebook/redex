@@ -36,11 +36,11 @@ class DexInstruction : public Gatherable {
   } m_ref_type{REF_NONE};
 
  private:
-  uint16_t m_opcode;
-  uint16_t m_arg[MAX_ARG_COUNT];
+  uint16_t m_opcode = OPCODE_NOP;
+  uint16_t m_arg[MAX_ARG_COUNT] = {};
 
  protected:
-  uint16_t m_count;
+  uint16_t m_count = 0;
 
   // use clone() instead
   DexInstruction(const DexInstruction&) = default;
