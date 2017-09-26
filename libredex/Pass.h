@@ -19,10 +19,6 @@
 #include "ConfigFiles.h"
 #include "PassRegistry.h"
 
-class DexClass;
-class DexStore;
-using DexClassesVector = std::vector<DexClasses>;
-using DexStoresVector = std::vector<DexStore>;
 class PassManager;
 
 class PassConfig {

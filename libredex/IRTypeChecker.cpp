@@ -161,12 +161,13 @@ class TypeInference final
  public:
   using NodeId = Block*;
 
-  explicit TypeInference(const ControlFlowGraph& cfg)
+  explicit TypeInference(const ControlFlowGraph& cfg, bool verify_moves)
       : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
                                   std::bind(&Block::succs, _1),
                                   std::bind(&Block::preds, _1),
                                   cfg.blocks().size()),
         m_cfg(cfg),
+        m_verify_moves(verify_moves),
         m_inference(true) {}
 
   void run(DexMethod* dex_method) {
@@ -274,14 +275,14 @@ class TypeInference final
     case OPCODE_MOVE:
     case OPCODE_MOVE_FROM16:
     case OPCODE_MOVE_16: {
-      assume_scalar(current_state, insn->src(0));
+      assume_scalar(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_OBJECT:
     case OPCODE_MOVE_OBJECT_FROM16:
     case OPCODE_MOVE_OBJECT_16: {
-      assume_reference(current_state, insn->src(0));
+      assume_reference(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
@@ -385,7 +386,8 @@ class TypeInference final
       set_reference(current_state, insn->dest());
       break;
     }
-    case OPCODE_FILLED_NEW_ARRAY: {
+    case OPCODE_FILLED_NEW_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
       const DexType* type = get_array_type(insn->get_type());
       // We assume that structural constraints on the bytecode are satisfied,
       // i.e., the type is indeed an array type.
@@ -396,8 +398,9 @@ class TypeInference final
       // here as a safeguard.
       always_assert_log(
           !is_object(type), "Unexpected instruction '%s'", SHOW(insn));
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        assume_scalar(current_state, insn->src(i));
+      IRSourceIterator src_it(insn);
+      while (!src_it.empty()) {
+        assume_scalar(current_state, src_it.get_register());
       }
       set_reference(current_state, RESULT_REGISTER);
       break;
@@ -636,34 +639,40 @@ class TypeInference final
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_INTERFACE: {
+    case OPCODE_INVOKE_INTERFACE:
+    case OPCODE_INVOKE_VIRTUAL_RANGE:
+    case OPCODE_INVOKE_SUPER_RANGE:
+    case OPCODE_INVOKE_DIRECT_RANGE:
+    case OPCODE_INVOKE_STATIC_RANGE:
+    case OPCODE_INVOKE_INTERFACE_RANGE: {
       DexMethodRef* dex_method = insn->get_method();
       auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
-      size_t src_reg = 0;
-      if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+      IRSourceIterator src_it(insn);
+      if (!(insn->opcode() == OPCODE_INVOKE_STATIC ||
+            insn->opcode() == OPCODE_INVOKE_STATIC_RANGE)) {
         // The first argument is a reference to the object instance on which the
         // method is invoked.
-        assume_reference(current_state, insn->src(src_reg++));
+        assume_reference(current_state, src_it.get_register());
       }
       for (DexType* arg_type : arg_types) {
         if (is_object(arg_type)) {
-          assume_reference(current_state, insn->src(src_reg++));
+          assume_reference(current_state, src_it.get_register());
           continue;
         }
         if (is_integer(arg_type)) {
-          assume_integer(current_state, insn->src(src_reg++));
+          assume_integer(current_state, src_it.get_register());
           continue;
         }
         if (is_long(arg_type)) {
-          assume_long(current_state, insn->src(src_reg++));
+          assume_long(current_state, src_it.get_wide_register());
           continue;
         }
         if (is_float(arg_type)) {
-          assume_float(current_state, insn->src(src_reg++));
+          assume_float(current_state, src_it.get_register());
           continue;
         }
         always_assert(is_double(arg_type));
-        assume_double(current_state, insn->src(src_reg++));
+        assume_double(current_state, src_it.get_wide_register());
       }
       DexType* return_type = dex_method->get_proto()->get_rtype();
       if (is_void(return_type)) {
@@ -835,6 +844,61 @@ class TypeInference final
       set_double(current_state, insn->dest());
       break;
     }
+    // In 2addr instructions, the destination and the source registers are
+    // identical. Hence, there's no need to update the type of the destination
+    // register.
+    case OPCODE_ADD_INT_2ADDR:
+    case OPCODE_SUB_INT_2ADDR:
+    case OPCODE_MUL_INT_2ADDR:
+    case OPCODE_DIV_INT_2ADDR:
+    case OPCODE_REM_INT_2ADDR:
+    case OPCODE_AND_INT_2ADDR:
+    case OPCODE_OR_INT_2ADDR:
+    case OPCODE_XOR_INT_2ADDR:
+    case OPCODE_SHL_INT_2ADDR:
+    case OPCODE_SHR_INT_2ADDR:
+    case OPCODE_USHR_INT_2ADDR: {
+      assume_integer(current_state, insn->src(0));
+      assume_integer(current_state, insn->src(1));
+      break;
+    }
+    case OPCODE_ADD_LONG_2ADDR:
+    case OPCODE_SUB_LONG_2ADDR:
+    case OPCODE_MUL_LONG_2ADDR:
+    case OPCODE_DIV_LONG_2ADDR:
+    case OPCODE_REM_LONG_2ADDR:
+    case OPCODE_AND_LONG_2ADDR:
+    case OPCODE_OR_LONG_2ADDR:
+    case OPCODE_XOR_LONG_2ADDR: {
+      assume_long(current_state, insn->src(0));
+      assume_long(current_state, insn->src(1));
+      break;
+    }
+    case OPCODE_SHL_LONG_2ADDR:
+    case OPCODE_SHR_LONG_2ADDR:
+    case OPCODE_USHR_LONG_2ADDR: {
+      assume_long(current_state, insn->src(0));
+      assume_integer(current_state, insn->src(1));
+      break;
+    }
+    case OPCODE_ADD_FLOAT_2ADDR:
+    case OPCODE_SUB_FLOAT_2ADDR:
+    case OPCODE_MUL_FLOAT_2ADDR:
+    case OPCODE_DIV_FLOAT_2ADDR:
+    case OPCODE_REM_FLOAT_2ADDR: {
+      assume_float(current_state, insn->src(0));
+      assume_float(current_state, insn->src(1));
+      break;
+    }
+    case OPCODE_ADD_DOUBLE_2ADDR:
+    case OPCODE_SUB_DOUBLE_2ADDR:
+    case OPCODE_MUL_DOUBLE_2ADDR:
+    case OPCODE_DIV_DOUBLE_2ADDR:
+    case OPCODE_REM_DOUBLE_2ADDR: {
+      assume_double(current_state, insn->src(0));
+      assume_double(current_state, insn->src(1));
+      break;
+    }
     case OPCODE_ADD_INT_LIT16:
     case OPCODE_RSUB_INT:
     case OPCODE_MUL_INT_LIT16:
@@ -858,58 +922,23 @@ class TypeInference final
       set_integer(current_state, insn->dest());
       break;
     }
-    case OPCODE_ADD_INT_2ADDR:
-    case OPCODE_SUB_INT_2ADDR:
-    case OPCODE_MUL_INT_2ADDR:
-    case OPCODE_DIV_INT_2ADDR:
-    case OPCODE_REM_INT_2ADDR:
-    case OPCODE_AND_INT_2ADDR:
-    case OPCODE_OR_INT_2ADDR:
-    case OPCODE_XOR_INT_2ADDR:
-    case OPCODE_SHL_INT_2ADDR:
-    case OPCODE_SHR_INT_2ADDR:
-    case OPCODE_USHR_INT_2ADDR:
-    case OPCODE_ADD_LONG_2ADDR:
-    case OPCODE_SUB_LONG_2ADDR:
-    case OPCODE_MUL_LONG_2ADDR:
-    case OPCODE_DIV_LONG_2ADDR:
-    case OPCODE_REM_LONG_2ADDR:
-    case OPCODE_AND_LONG_2ADDR:
-    case OPCODE_OR_LONG_2ADDR:
-    case OPCODE_XOR_LONG_2ADDR:
-    case OPCODE_SHL_LONG_2ADDR:
-    case OPCODE_SHR_LONG_2ADDR:
-    case OPCODE_USHR_LONG_2ADDR:
-    case OPCODE_ADD_FLOAT_2ADDR:
-    case OPCODE_SUB_FLOAT_2ADDR:
-    case OPCODE_MUL_FLOAT_2ADDR:
-    case OPCODE_DIV_FLOAT_2ADDR:
-    case OPCODE_REM_FLOAT_2ADDR:
-    case OPCODE_ADD_DOUBLE_2ADDR:
-    case OPCODE_SUB_DOUBLE_2ADDR:
-    case OPCODE_MUL_DOUBLE_2ADDR:
-    case OPCODE_DIV_DOUBLE_2ADDR:
-    case OPCODE_REM_DOUBLE_2ADDR:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE:
     case FOPCODE_PACKED_SWITCH:
     case FOPCODE_SPARSE_SWITCH:
     case FOPCODE_FILLED_ARRAY: {
-      // 2addr (resp. range) instructions have been converted to their non-2addr
-      // (resp. non-range) counterparts. Pseudo-opcodes (FOPCODE_*) have been
-      // simplified away by the IR.
+      // Pseudo-opcodes have been simplified away by the IR.
       always_assert_log(false, "Unexpected instruction: %s", SHOW(insn));
     }
     }
   }
 
   void print(std::ostream& output) const {
-    for (const auto& binding : m_type_envs) {
-      output << SHOW(binding.first) << " -- " << binding.second << std::endl;
+    for (Block* block : m_cfg.blocks()) {
+      for (auto& mie : InstructionIterable(block)) {
+        IRInstruction* insn = mie.insn;
+        auto it = m_type_envs.find(insn);
+        always_assert(it != m_type_envs.end());
+        output << SHOW(insn) << " -- " << it->second << std::endl;
+      }
     }
   }
 
@@ -983,7 +1012,8 @@ class TypeInference final
 
   void assume_type(TypeEnvironment* state,
                    register_t reg,
-                   IRType expected) const {
+                   IRType expected,
+                   bool ignore_top = false) const {
     if (m_inference) {
       state->update(reg, [expected](const TypeDomain& type) {
         return type.meet(TypeDomain(expected));
@@ -994,6 +1024,9 @@ class TypeInference final
         return;
       }
       IRType actual = state->get(reg).element();
+      if (ignore_top && actual == TOP) {
+        return;
+      }
       check_type_match(reg, actual, /* expected */ expected);
     }
   }
@@ -1024,12 +1057,22 @@ class TypeInference final
     }
   }
 
-  void assume_reference(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ REFERENCE);
+  void assume_reference(TypeEnvironment* state,
+                        register_t reg,
+                        bool in_move = false) const {
+    assume_type(state,
+                reg,
+                /* expected */ REFERENCE,
+                /* ignore_top */ in_move && !m_verify_moves);
   }
 
-  void assume_scalar(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ SCALAR);
+  void assume_scalar(TypeEnvironment* state,
+                     register_t reg,
+                     bool in_move = false) const {
+    assume_type(state,
+                reg,
+                /* expected */ SCALAR,
+                /* ignore_top */ in_move && !m_verify_moves);
   }
 
   void assume_integer(TypeEnvironment* state, register_t reg) const {
@@ -1114,8 +1157,8 @@ class TypeInference final
       }
       std::ostringstream out;
       print_register(out, reg1) << " and ";
-      print_register(out, reg2)
-          << ": incompatible types in comparison " << t1 << " and " << t2;
+      print_register(out, reg2) << ": incompatible types in comparison " << t1
+                                << " and " << t2;
       throw TypeCheckingException(out.str());
     }
   }
@@ -1156,9 +1199,9 @@ class TypeInference final
     if (!(TypeDomain(actual1).leq(TypeDomain(expected1)) &&
           TypeDomain(actual2).leq(TypeDomain(expected2)))) {
       std::ostringstream out;
-      print_register(out, reg)
-          << ": expected type (" << expected1 << ", " << expected2
-          << "), but found (" << actual1 << ", " << actual2 << ") instead";
+      print_register(out, reg) << ": expected type (" << expected1 << ", "
+                               << expected2 << "), but found (" << actual1
+                               << ", " << actual2 << ") instead";
       throw TypeCheckingException(out.str());
     }
   }
@@ -1174,6 +1217,7 @@ class TypeInference final
   }
 
   const ControlFlowGraph& m_cfg;
+  bool m_verify_moves;
   bool m_inference;
   std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
 
@@ -1184,26 +1228,20 @@ class TypeInference final
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool verify_moves)
     : m_dex_method(dex_method), m_good(true), m_what("OK") {
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
-    // If the method has no associated code, type checking trivially succeeds.
+    // If the method has no associated code, the type checking trivially
+    // succeeds.
     return;
-  }
-
-  // We expand all register ranges in order to simplify the analysis. We also
-  // normalize wide registers in invoke-* instructions.
-  for (const MethodItemEntry& mie : InstructionIterable(code)) {
-    IRInstruction* insn = mie.insn;
-    insn->range_to_srcs();
-    insn->normalize_registers();
   }
 
   // We then infer types for all the registers used in the method.
   code->build_cfg();
   const ControlFlowGraph& cfg = code->cfg();
-  m_type_inference = std::make_unique<irtc_impl::TypeInference>(cfg);
+  m_type_inference =
+      std::make_unique<irtc_impl::TypeInference>(cfg, verify_moves);
   m_type_inference->run(dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the

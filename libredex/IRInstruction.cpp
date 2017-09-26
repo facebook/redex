@@ -426,6 +426,32 @@ void IRInstruction::range_to_srcs() {
   m_opcode = opcode_no_range_version(m_opcode);
 }
 
+IRSourceIterator::IRSourceIterator(IRInstruction* insn)
+    : m_insn(insn), m_range(opcode::has_range(insn->opcode())), m_offset(0) {
+  always_assert_log(is_invoke(insn->opcode()) ||
+                        is_filled_new_array(insn->opcode()),
+                    "Unexpected instruction '%s'",
+                    SHOW(insn));
+}
+
+bool IRSourceIterator::empty() const {
+  return m_offset >= (m_range ? m_insn->range_size() : m_insn->srcs_size());
+}
+
+uint16_t IRSourceIterator::get_register() {
+  always_assert(!empty());
+  return m_range ? (m_insn->range_base() + m_offset++)
+                 : m_insn->src(m_offset++);
+}
+
+uint16_t IRSourceIterator::get_wide_register() {
+  always_assert(!empty());
+  uint16_t reg =
+      m_range ? (m_insn->range_base() + m_offset) : m_insn->src(m_offset);
+  m_offset += 2;
+  return reg;
+}
+
 bit_width_t required_bit_width(uint16_t v) {
   bit_width_t result {1};
   while (v >>= 1) {

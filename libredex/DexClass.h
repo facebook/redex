@@ -1053,6 +1053,7 @@ struct dexclasses_comparator {
 };
 
 using DexClasses = std::vector<DexClass*>;
+using DexClassesVector = std::vector<DexClasses>;
 
 /* Non-optimizing DexSpec compliant ordering */
 inline bool compare_dexmethods(const DexMethodRef* a, const DexMethodRef* b) {

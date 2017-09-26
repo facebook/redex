@@ -10,10 +10,11 @@
 #include "ReachableClasses.h"
 
 #include <chrono>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <string>
 #include <unordered_set>
-#include <fstream>
-#include <string>
 
 #include "Walkers.h"
 #include "DexClass.h"
@@ -534,4 +535,25 @@ unsigned int init_seed_classes(
   TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
         std::chrono::duration<double>(end - start).count());
   return count;
+}
+
+std::string ReferencedState::str() const {
+  std::stringstream s;
+  s << m_bytype;
+  s << m_bystring;
+  s << ' ';
+  s << m_computed;
+  s << m_seed;
+  s << m_keep;
+  s << m_includedescriptorclasses;
+  s << ' ';
+  s << m_allowshrinking;
+  s << m_allowoptimization;
+  s << m_allowobfuscation;
+  s << ' ';
+  s << m_assumenosideeffects;
+  s << m_blanket_keep;
+  s << m_keep_count;
+  s << m_whyareyoukeeping;
+  return s.str();
 }

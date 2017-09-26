@@ -760,6 +760,7 @@ public:
 
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
+    void setAttributeData(size_t idx, uint32_t newData);
     ssize_t getAttributeValue(size_t idx, Res_value* outValue) const;
 
     ssize_t indexOfAttribute(const char* ns, const char* attr) const;
@@ -796,6 +797,8 @@ public:
     ResXMLTree();
     ~ResXMLTree();
 
+    uint32_t* getResourceIds(size_t* numberOfIds);
+
     status_t setTo(const void* data, size_t size, bool copyData=false);
 
     status_t getError() const;
@@ -815,7 +818,7 @@ private:
     size_t                      mSize;
     const uint8_t*              mDataEnd;
     ResStringPool               mStrings;
-    const uint32_t*             mResIds;
+    uint32_t*                   mResIds;
     size_t                      mNumResIds;
     const ResXMLTree_node*      mRootNode;
     const void*                 mRootExt;
@@ -1820,8 +1823,21 @@ public:
     // Only takes effect during serialization (any deleted rows will be skipped).
     void deleteResource(uint32_t resID);
 
+    // For the given resource ID, looks across all configurations and remaps all
+    // reference and attribute Res_value entries based on the given
+    // originalIds -> newIds mapping. The entries in the inputs are expected to
+    // align based on index.
+    void remapReferenceValuesForResource(
+        uint32_t resID,
+        SortedVector<uint32_t> originalIds,
+        Vector<uint32_t> newIds);
+
     // For the given resource ID, looks across all configurations and returns all
-    // the corresponding Res_value entries (including nested entries within bags).
+    // the corresponding Res_value entries. This is much more reliable than
+    // ResTable::getResource, which fails for roughly 20% of resources and does not
+    // handle complex (bag) values well. Note that we also return the parent of
+    // bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
+    // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
     void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
 
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;

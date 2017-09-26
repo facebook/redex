@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <string>
+
 class ReferencedState {
  private:
   bool m_bytype{false};
@@ -47,6 +49,9 @@ class ReferencedState {
 
  public:
   ReferencedState() = default;
+
+  std::string str() const;
+
   bool can_delete() const { return !m_bytype && (!m_keep || m_allowshrinking); }
   bool can_rename() const {
     return !m_bystring &&

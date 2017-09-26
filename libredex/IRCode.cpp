@@ -181,6 +181,32 @@ IRCode::~IRCode() {
   delete m_fmethod;
 }
 
+bool IRCode::structural_equals(const IRCode& other) {
+  auto it1 = this->begin();
+  auto it2 = other.begin();
+
+  for (; it1 != this->end() && it2 != other.end(); it1++, it2++) {
+    if (it1->type != it2->type) {
+      return false;
+    }
+
+    if (it1->type == MFLOW_OPCODE) {
+      if (*it1->insn != *it2->insn) {
+        return false;
+      }
+    } else if (it1->type == MFLOW_TARGET) {
+      auto branch_target1 = static_cast<BranchTarget*>(it1->target);
+      auto branch_target2 = static_cast<BranchTarget*>(it2->target);
+
+      if (branch_target1->index != branch_target2->index) {
+        return false;
+      }
+    }
+  }
+
+  return it1 == this->end() && it2 == other.end();
+}
+
 boost::sub_range<FatMethod> IRCode::get_param_instructions() const {
   auto params_end = std::find_if_not(
       m_fmethod->begin(), m_fmethod->end(), [&](const MethodItemEntry& mie) {

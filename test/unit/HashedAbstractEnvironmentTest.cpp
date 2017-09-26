@@ -27,9 +27,13 @@ TEST(HashedAbstractEnvironmentTest, latticeOperations) {
   Environment e2({{"v0", Domain({"c", "f"})},
                   {"v2", Domain({"c", "d"})},
                   {"v3", Domain({"d", "e", "g", "h"})}});
+  Environment e3({{"v0", Domain({"c", "d"})},
+                  {"v2", Domain::bottom()},
+                  {"v3", Domain({"a", "f", "g"})}});
 
   EXPECT_EQ(4, e1.size());
   EXPECT_EQ(3, e2.size());
+  EXPECT_TRUE(e3.is_bottom());
 
   EXPECT_TRUE(Environment::bottom().leq(e1));
   EXPECT_FALSE(e1.leq(Environment::bottom()));
@@ -132,6 +136,20 @@ TEST(HashedAbstractEnvironmentTest, destructiveOperations) {
               ::testing::UnorderedElementsAre("c", "d", "e"));
   EXPECT_THAT(e3.get("v3").elements(),
               ::testing::UnorderedElementsAre("g", "h"));
+
+  auto make_bottom = [](Domain* s) { s->set_to_bottom(); };
+  Environment e4 = e2;
+  e4.update("v1", make_bottom);
+  EXPECT_TRUE(e4.is_bottom());
+  int counter = 0;
+  auto make_e = [&counter](Domain* s) {
+    ++counter;
+    *s = Domain({"e"});
+  };
+  e4.update("v1", make_e).update("v2", make_e);
+  EXPECT_TRUE(e4.is_bottom());
+  // Since e4 is Bottom, make_e should have never been called.
+  EXPECT_EQ(0, counter);
 
   auto refine_de = [](Domain* s) { s->meet_with(Domain({"d", "e"})); };
   EXPECT_EQ(2, e2.size());

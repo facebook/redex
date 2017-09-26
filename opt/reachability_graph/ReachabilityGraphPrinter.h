@@ -11,16 +11,20 @@
 
 #include "Pass.h"
 
-class RemoveUnreachablePass : public Pass {
+class ReachabilityGraphPrinterPass : public Pass {
  public:
-  RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
+  ReachabilityGraphPrinterPass() : Pass("ReachabilityGraphPrinterPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override {
+    pc.get("output_file_name", "", m_output_file_name);
+    pc.get("dump_detailed_info", false, m_dump_detailed_info);
     pc.get("ignore_string_literals", {}, m_ignore_string_literals);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  private:
-    std::vector<std::string> m_ignore_string_literals;
+ private:
+  std::string m_output_file_name;
+  bool m_dump_detailed_info{false};
+  std::vector<std::string> m_ignore_string_literals;
 };

@@ -13,6 +13,9 @@
 #include <cstring>
 #include "DexClass.h"
 
+class DexStore;
+using DexStoresVector = std::vector<DexStore>;
+
 class DexMetadata {
   std::string id;
   std::vector<std::string> dependencies;

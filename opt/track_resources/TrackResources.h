@@ -25,7 +25,7 @@ class TrackResourcesPass : public Pass {
   static void find_accessed_fields(Scope& fullscope,
       ConfigFiles& cfg,
       std::unordered_set<DexClass*> classes_to_track,
-      std::set<DexField*>& recorded_fields,
+      std::unordered_set<DexField*>& recorded_fields,
       std::unordered_set<std::string>& classes_to_search);
 
   static std::unordered_set<DexClass*> build_tracked_cls_set(

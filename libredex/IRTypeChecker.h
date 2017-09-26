@@ -132,8 +132,13 @@ class TypeInference;
  * This class takes a method, infers the type of all registers and checks that
  * all operations are well typed. The inferred types are available via the
  * `get_type` method and can be used by optimization/analysis passes that
- * require type information. Note that type checking stops at the first error
+ * require type information. Note that the type checker stops at the first error
  * encountered.
+ *
+ * IMPORTANT: the type checker assumes that invoke-* instructions are in
+ * denormalized form, i.e., wide arguments are explicitly represented by a pair
+ * of consecutive registers. The type checker doesn't modify the IR and hence,
+ * can be used anywhere in Redex.
  */
 class IRTypeChecker final {
  public:
@@ -143,7 +148,19 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method);
+  /*
+   * TOP represents an undefined value and hence, should never occur as the type
+   * of a register. However, the Android verifier allows one exception, when an
+   * undefined value is used as the operand of a move-* instruction (TOP is
+   * named 'conflict' in the dataflow framework used by the Android verifier):
+   *
+   * http://androidxref.com/7.1.1_r6/xref/art/runtime/verifier/register_line-inl.h#101
+   *
+   * By default, the type checker forbids the use of an undefined value in a
+   * move-* instruction. Setting the flag `verify_moves` to false disables this
+   * check, thus emulating the behavior of the Android verifier.
+   */
+  explicit IRTypeChecker(DexMethod* dex_method, bool verify_moves = true);
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 

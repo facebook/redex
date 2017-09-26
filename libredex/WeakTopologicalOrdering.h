@@ -109,6 +109,11 @@ class WtoComponent final {
     m_next_component_offset = position - next_component_position;
   }
 
+  // Correct iteration depends on these objects being in one contiguous piece of
+  // memory. Make sure users don't accidentally copy these objects
+  WtoComponent(WtoComponent&& that) = default;
+  WtoComponent(const WtoComponent& that) = delete;
+
   /*
    * If the component is not strongly connected, this method returns the single
    * node contained inside a Vertex component.

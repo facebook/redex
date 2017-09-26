@@ -56,6 +56,8 @@
   TM(PGR)                \
   TM(PM)                 \
   TM(PTA)                \
+  TM(REACH)              \
+  TM(REACH_DUMP)         \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \

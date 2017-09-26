@@ -111,6 +111,7 @@ libredex_la_SOURCES = \
 	libredex/ProguardRegex.cpp \
 	libredex/ProguardReporting.cpp \
 	libredex/ReachableClasses.cpp \
+	libredex/ReachableObjects.cpp \
 	libredex/RedexContext.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
@@ -176,6 +177,7 @@ redex_all_SOURCES = \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
+	opt/reachability_graph/ReachabilityGraphPrinter.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/redundant_move_elimination/AliasedRegisters.cpp \
 	opt/redundant_move_elimination/RedundantMoveEliminationPass.cpp \

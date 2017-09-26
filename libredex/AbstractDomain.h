@@ -241,11 +241,12 @@ class AbstractValue {
  * constructs a full-fledged abstract domain, handling all the logic for Top and
  * Bottom. It takes a poset and adds the two extremal elements Top and Bottom.
  * If the poset contains a Top and/or Bottom element, then those should be
- * coalesced with the extremal elements added by AbstractDomainScaffolding. This
- * is the purpose of the normalize() operation. It also explains why the lattice
- * operations return an AbstractValueKind: the scaffolding must be able to
- * identify when the result of one of these operations is an extremal element
- * that must be coalesced.
+ * coalesced with the extremal elements added by AbstractDomainScaffolding. It
+ * also explains why the lattice operations return an AbstractValueKind: the
+ * scaffolding must be able to identify when the result of one of these
+ * operations is an extremal element that must be coalesced. While the helper
+ * method `normalize()` can be used to automatically coalesce the Top elements,
+ * Bottom should be handled separately in each operation of the abstract domain.
  *
  * Sample usage:
  *
@@ -376,12 +377,26 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
     m_value = value;
   }
 
-  // This method is used to normalize the representation when the abstract value
-  // can denote Top and/or Bottom.
+  // In some implementations, the data structure chosen to represent an abstract
+  // value can also denote Top (e.g., when using a map to represent an abstract
+  // environment, the empty map commonly denotes Top). This method is used to
+  // keep the internal representation and the m_kind flag in sync after
+  // performing an operation. It should never be used to infer Bottom from the
+  // internal representation of an abstract value. Bottom should always be
+  // treated as a special case in every operation of the abstract domain.
   void normalize() {
+    if (m_kind == AbstractValueKind::Bottom) {
+      return;
+    }
+    // Consider an abstract environment represented as a map. After removing
+    // some bindings from the environment, the internal map might become empty
+    // and the m_kind flag must be set to AbstractValueKind::Top. Conversely,
+    // after adding a binding to the abstract environment Top, the internal map
+    // is no longer empty and m_kind must be set to AbstractValueKind::Value.
+    // This step synchronizes both representations.
     m_kind = m_value.kind();
-    if (m_kind == AbstractValueKind::Bottom ||
-        m_kind == AbstractValueKind::Top) {
+    if (m_kind == AbstractValueKind::Top) {
+      // We can discard any leftover data from the internal representation.
       m_value.clear();
     }
   }
@@ -439,13 +454,9 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
   AbstractDomainReverseAdaptor() = default;
   explicit AbstractDomainReverseAdaptor(Domain domain) : m_domain(domain) {}
 
-  bool is_bottom() const override {
-    return m_domain.is_top();
-  }
+  bool is_bottom() const override { return m_domain.is_top(); }
 
-  bool is_top() const override {
-    return m_domain.is_bottom();
-  }
+  bool is_top() const override { return m_domain.is_bottom(); }
 
   bool leq(const Derived& other) const override {
     return m_domain.equals(other.m_domain) || !m_domain.leq(other.m_domain);
@@ -455,13 +466,9 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
     return m_domain.equals(other.m_domain);
   }
 
-  void set_to_bottom() override {
-    m_domain.set_to_top();
-  }
+  void set_to_bottom() override { m_domain.set_to_top(); }
 
-  void set_to_top() override {
-    m_domain.set_to_bottom();
-  }
+  void set_to_top() override { m_domain.set_to_bottom(); }
 
   void join_with(const Derived& other) override {
     m_domain.meet_with(other.m_domain);
@@ -479,16 +486,13 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
     m_domain.widen_with(other.m_domain);
   }
 
-  static Derived bottom() {
-    return Derived(Domain::top());
-  }
+  static Derived bottom() { return Derived(Domain::top()); }
 
-  static Derived top() {
-    return Derived(Domain::bottom());
-  }
+  static Derived top() { return Derived(Domain::bottom()); }
 
   Domain& unwrap() { return m_domain; }
   const Domain& unwrap() const { return m_domain; }
+
  private:
   Domain m_domain;
 };
