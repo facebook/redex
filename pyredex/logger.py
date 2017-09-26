@@ -64,7 +64,7 @@ def strip_trace_tag(env):
             trace.pop(ALL)
         else:
             trace_str = ''
-        trace_str += ','.join(k + ':' + str(v) for k, v in trace.iteritems())
+        trace_str += ','.join(k + ':' + str(v) for k, v in trace.items())
         env['TRACE'] = trace_str
     except KeyError:
         pass
