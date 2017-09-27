@@ -105,6 +105,7 @@ TEST_F(DedupBlocksTest, simplestCase) {
   ASSERT_NE(code, nullptr);
 
   // A
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
   code->push_back(dasm(OPCODE_MUL_INT, {0_v, 0_v, 0_v}));
   code->push_back(*A_if_D.source);
 
@@ -146,6 +147,8 @@ TEST_F(DedupBlocksTest, simplestCase) {
   auto mie = code->begin();
 
   // A
+  EXPECT_EQ(OPCODE_CONST, mie->insn->opcode());
+  ++mie;
   EXPECT_EQ(OPCODE_MUL_INT, mie->insn->opcode());
   ++mie;
   EXPECT_EQ(OPCODE_IF_EQZ, mie->insn->opcode());
@@ -208,6 +211,7 @@ TEST_F(DedupBlocksTest, noFallthrough) {
   ASSERT_FALSE(code == nullptr);
 
   // A
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
   code->push_back(*A_if_D.source);
 

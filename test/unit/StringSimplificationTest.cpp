@@ -201,6 +201,8 @@ TEST(StringSimplification, testInterleavedInstructions) {
 
   code->push_back(make_const_string(11, "ONE"));
 
+  code->push_back(dasm(OPCODE_CONST, {54_v, 1_L}));
+  code->push_back(dasm(OPCODE_CONST, {55_v, 23_L}));
   code->push_back(make_noise_instructions(54, 54, 55));
 
   code->push_back(make_stringbuilder(4));
@@ -258,6 +260,7 @@ TEST(StringSimplification, testBranching) {
   code->push_back(make_constructor(4));
 
   code->push_back(make_append_instruction(4, 13));
+  code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
   insn->set_arg_word_count(1);
@@ -344,6 +347,7 @@ TEST(StringSimplification, passStringBuilderInMethod) {
   code->push_back(make_stringbuilder(3));
   code->push_back(make_constructor(3));
   code->push_back(make_append_instruction(3, 2));
+  code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
   insn->set_arg_word_count(2);
@@ -360,7 +364,7 @@ TEST(StringSimplification, passStringBuilderInMethod) {
 
   code->set_registers_size(9001);
   runner.run(new StringSimplificationPass());
-  EXPECT_EQ(9, code->count_opcodes());
+  EXPECT_EQ(10, code->count_opcodes());
   for (auto& mie : InstructionIterable(code)) {
     if ((mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          mie.insn->opcode() == OPCODE_INVOKE_DIRECT) &&
@@ -390,6 +394,7 @@ TEST(StringSimplification, oneKnownOneUnkownBuilder) {
 
   code->push_back(make_stringbuilder(5));
   code->push_back(make_constructor(5));
+  code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   code->push_back(make_append_instruction(4, 1));
   code->push_back(make_append_instruction(5, 6));
@@ -443,8 +448,9 @@ TEST(StringSimplification, modificationOfBaseVariable) {
   code->push_back(make_const_string(1, "TEST STRING ONE "));
   code->push_back(make_stringbuilder(3));
   code->push_back(make_constructor(3));
+  code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
-  auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+  auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);  
   insn->set_arg_word_count(1);
   insn->set_src(0, 6);
   insn->set_method(DexMethod::make_method(
@@ -475,7 +481,7 @@ TEST(StringSimplification, modificationOfBaseVariable) {
 
   code->build_cfg();
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
-  EXPECT_EQ(12, code->count_opcodes());
+  EXPECT_EQ(13, code->count_opcodes());
 }
 
 // Check that the pointer aliasing is supported. (a stringbuilder

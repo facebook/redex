@@ -153,7 +153,6 @@ void PassManager::run_passes(DexStoresVector& stores,
   }
 
   // Retrieve the type checker's settings.
-  bool type_checker_enabled = m_config.isMember("ir_type_checker");
   auto type_checker_args = m_config["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
@@ -170,8 +169,7 @@ void PassManager::run_passes(DexStoresVector& stores,
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
     pass->run_pass(stores, cfg, *this);
-    if (type_checker_enabled &&
-        (run_after_each_pass || trigger_passes.count(pass->name()) > 0)) {
+    if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
       scope = build_class_scope(it);
       run_type_checker(scope, verify_moves);
     }
@@ -179,10 +177,8 @@ void PassManager::run_passes(DexStoresVector& stores,
   }
 
   // Always run the type checker before generating the optimized dex code.
-  if (type_checker_enabled) {
-    scope = build_class_scope(it);
-    run_type_checker(scope, verify_moves);
-  }
+  scope = build_class_scope(it);
+  run_type_checker(scope, verify_moves);
 
   if (!cfg.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
