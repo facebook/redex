@@ -459,11 +459,17 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
 
 /*
  * This represents the points-to semantics of all methods inside a given scope.
+ *
+ * IMPORTANT: the procedure used to generate the points-to sematics assumes that
+ * invoke-* instructions are in denormalized form, i.e., wide arguments are
+ * explicitly represented by a pair of consecutive registers. The generation of
+ * the points-to semantics doesn't modify the IR and hence, can be used anywhere
+ * in Redex.
  */
 class PointsToSemantics final {
  public:
-  using iterator = std::unordered_map<
-      DexMethod*, PointsToMethodSemantics>::const_iterator;
+  using iterator =
+      std::unordered_map<DexMethod*, PointsToMethodSemantics>::const_iterator;
 
   PointsToSemantics() = delete;
 
