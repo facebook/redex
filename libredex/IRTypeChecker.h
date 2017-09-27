@@ -14,6 +14,7 @@
 #include <ostream>
 #include <string>
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 
@@ -148,6 +149,32 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
+  explicit IRTypeChecker(DexMethod* dex_method);
+
+  IRTypeChecker(const IRTypeChecker&) = delete;
+
+  IRTypeChecker& operator=(const IRTypeChecker&) = delete;
+
+  /*
+   * The Android verifier doesn't consider constants to be polymorphic. For
+   * example, the following piece of code doesn't pass verification:
+   *
+   *   const v0, 0
+   *   check-cast v0, Ljava/lang/String;
+   *   add-int-2addr v1, v0
+   *
+   * After the check-cast instruction, v0 is assumed to contain a reference and
+   * cannot be used in an arithmetic operation. By default, the type checker
+   * complies with the Android verifier. Calling this method mutes the check.
+   * This is useful when the verify_none mode is enabled, for example.
+   */
+  void enable_polymorphic_constants() {
+    if (!m_complete) {
+      // We can only set this parameter before running the type checker.
+      m_enable_polymorphic_constants = true;
+    }
+  }
+
   /*
    * TOP represents an undefined value and hence, should never occur as the type
    * of a register. However, the Android verifier allows one exception, when an
@@ -156,25 +183,38 @@ class IRTypeChecker final {
    *
    * http://androidxref.com/7.1.1_r6/xref/art/runtime/verifier/register_line-inl.h#101
    *
-   * By default, the type checker forbids the use of an undefined value in a
-   * move-* instruction. Setting the flag `verify_moves` to false disables this
-   * check, thus emulating the behavior of the Android verifier.
+   * By default, the type checker complies with the Android verifier. Calling
+   * this method enables a stricter check of move-* instructions: using a
+   * register holding an undefined value in a move-* will result into a type
+   * error.
    */
-  explicit IRTypeChecker(DexMethod* dex_method, bool verify_moves = true);
+  void verify_moves() {
+    if (!m_complete) {
+      // We can only set this parameter before running the type checker.
+      m_verify_moves = true;
+    }
+  }
 
-  IRTypeChecker(const IRTypeChecker&) = delete;
+  void run();
 
-  IRTypeChecker& operator=(const IRTypeChecker&) = delete;
+  bool good() const {
+    check_completion();
+    return m_good;
+  }
 
-  bool good() const { return m_good; }
-
-  bool fail() const { return !m_good; }
+  bool fail() const {
+    check_completion();
+    return !m_good;
+  }
 
   /*
    * Returns a legible description of the type error, or "OK" otherwise. Note
    * that type checking aborts at the first error encountered.
    */
-  std::string what() const { return m_what; }
+  std::string what() const {
+    check_completion();
+    return m_what;
+  }
 
   /*
    * Returns the type of a register at the given instruction. Note that the type
@@ -189,7 +229,16 @@ class IRTypeChecker final {
   IRType get_type(IRInstruction* insn, uint16_t reg) const;
 
  private:
+  void check_completion() const {
+    always_assert_log(m_complete,
+                      "The type checker did not run on method %s.\n",
+                      m_dex_method->get_deobfuscated_name().c_str());
+  }
+
   DexMethod* m_dex_method;
+  bool m_complete;
+  bool m_enable_polymorphic_constants;
+  bool m_verify_moves;
   bool m_good;
   std::string m_what;
   std::unique_ptr<irtc_impl::TypeInference> m_type_inference;

@@ -71,15 +71,24 @@ void PassManager::init(const Json::Value& config) {
   }
 }
 
-void PassManager::run_type_checker(const Scope& scope, bool verify_moves) {
+void PassManager::run_type_checker(const Scope& scope,
+                                   bool polymorphic_constants,
+                                   bool verify_moves) {
   TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
-  walk_methods_parallel_simple(scope, [verify_moves](DexMethod* dex_method) {
-    IRTypeChecker checker(dex_method, verify_moves);
+  walk_methods_parallel_simple(scope, [=](DexMethod* dex_method) {
+    IRTypeChecker checker(dex_method);
+    if (polymorphic_constants) {
+      checker.enable_polymorphic_constants();
+    }
+    if (verify_moves) {
+      checker.verify_moves();
+    }
+    checker.run();
     if (checker.fail()) {
       std::string msg = checker.what();
       fprintf(
-          stderr, "ABORT! Inconsistency found in Dex code. %s", msg.c_str());
+          stderr, "ABORT! Inconsistency found in Dex code. %s\n", msg.c_str());
       exit(EXIT_FAILURE);
     }
   });
@@ -156,6 +165,10 @@ void PassManager::run_passes(DexStoresVector& stores,
   auto type_checker_args = m_config["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
+  // When verify_none is enabled, it's OK to have polymorphic constants.
+  bool polymorphic_constants =
+      type_checker_args.get("polymorphic_constants", false).asBool() ||
+      verify_none_enabled();
   bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
   std::unordered_set<std::string> trigger_passes;
 
@@ -171,22 +184,22 @@ void PassManager::run_passes(DexStoresVector& stores,
     pass->run_pass(stores, cfg, *this);
     if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
       scope = build_class_scope(it);
-      run_type_checker(scope, verify_moves);
+      run_type_checker(scope, polymorphic_constants, verify_moves);
     }
     m_current_pass_info = nullptr;
   }
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, verify_moves);
+  run_type_checker(scope, polymorphic_constants, verify_moves);
 
   if (!cfg.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
             ".outgoing");
     // Recompute the scope.
     scope = build_class_scope(it);
-    std::ofstream outgoig(cfg.get_printseeds() + ".outgoing");
-    redex::print_classes(outgoig, cfg.get_proguard_map(), scope);
+    std::ofstream outgoing(cfg.get_printseeds() + ".outgoing");
+    redex::print_classes(outgoing, cfg.get_proguard_map(), scope);
     redex::alert_seeds(std::cerr, scope);
   }
 }

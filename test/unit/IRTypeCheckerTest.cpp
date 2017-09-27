@@ -69,6 +69,7 @@ TEST_F(IRTypeCheckerTest, arrayRead) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
   EXPECT_EQ(SCALAR, checker.get_type(insns[2], 1));
@@ -85,6 +86,7 @@ TEST_F(IRTypeCheckerTest, arrayReadWide) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ(SCALAR1, checker.get_type(insns[2], 1));
   EXPECT_EQ(SCALAR2, checker.get_type(insns[2], 2));
@@ -109,6 +111,7 @@ TEST_F(IRTypeCheckerTest, multipleDefinitions) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ(REFERENCE, checker.get_type(insns[1], 0));
   EXPECT_EQ(SCALAR, checker.get_type(insns[2], 0));
@@ -129,6 +132,7 @@ TEST_F(IRTypeCheckerTest, referenceFromInteger) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'AGET v0, v0, v5' for "
@@ -145,6 +149,7 @@ TEST_F(IRTypeCheckerTest, misalignedLong) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'NEG_LONG v1, v1' for "
@@ -163,6 +168,7 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
@@ -197,6 +203,7 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
                        {0_v}));
   code->push_back(dasm(OPCODE_RETURN, {9_v}));
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
@@ -216,6 +223,7 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, v5, "
@@ -233,6 +241,7 @@ TEST_F(IRTypeCheckerTest, invokeRange) {
   std::vector<IRInstruction*> insns = {invoke, dasm(OPCODE_RETURN, {9_v})};
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
 }
 
@@ -245,6 +254,7 @@ TEST_F(IRTypeCheckerTest, signatureMismatchRange) {
   std::vector<IRInstruction*> insns = {invoke, dasm(OPCODE_RETURN, {9_v})};
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'INVOKE_STATIC_RANGE "
@@ -262,6 +272,7 @@ TEST_F(IRTypeCheckerTest, comparisonOperation) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'CMP_LONG v0, v7, v0' "
@@ -281,6 +292,7 @@ TEST_F(IRTypeCheckerTest, 2addr) {
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
 }
 
@@ -292,9 +304,12 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
       dasm(OPCODE_RETURN, {1_v}),
   };
   add_code(insns);
-  IRTypeChecker lax_checker(m_method, /* verify_moves */ false);
+  IRTypeChecker lax_checker(m_method);
+  lax_checker.run();
   EXPECT_TRUE(lax_checker.good()) << lax_checker.what();
   IRTypeChecker strict_checker(m_method);
+  strict_checker.verify_moves();
+  strict_checker.run();
   EXPECT_TRUE(strict_checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'MOVE_OBJECT v1, v0' for "
@@ -321,6 +336,7 @@ TEST_F(IRTypeCheckerTest, exceptionHandler) {
   code->push_back(*catch_start);
   code->push_back(exc_return);
   IRTypeChecker checker(m_method);
+  checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ(INT, checker.get_type(noexc_return, 0));
   EXPECT_EQ(CONST, checker.get_type(noexc_return, 1));
@@ -335,4 +351,68 @@ TEST_F(IRTypeCheckerTest, exceptionHandler) {
   // The rest of the type environment, like method parameters, should be
   // left unchanged in the exception handler.
   EXPECT_EQ(REFERENCE, checker.get_type(exc_return, 14));
+}
+
+TEST_F(IRTypeCheckerTest, polymorphicConstants1) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_CONST, {0_v, 128_L}),
+      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 0_v}),
+      dasm(OPCODE_MUL_FLOAT_2ADDR, {13_v, 0_v}),
+  };
+  add_code(insns);
+  IRTypeChecker polymorphic_checker(m_method);
+  polymorphic_checker.enable_polymorphic_constants();
+  polymorphic_checker.run();
+  EXPECT_TRUE(polymorphic_checker.good()) << polymorphic_checker.what();
+  IRTypeChecker regular_checker(m_method);
+  regular_checker.run();
+  EXPECT_TRUE(regular_checker.fail());
+  EXPECT_EQ(
+      "Type error in method testMethod at instruction 'MUL_FLOAT_2ADDR v13, "
+      "v13, v0' for register v0: expected type FLOAT, but found INT instead",
+      regular_checker.what());
+}
+
+TEST_F(IRTypeCheckerTest, polymorphicConstants2) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_CONST_WIDE, {0_v, 128_L}),
+      dasm(OPCODE_ADD_LONG_2ADDR, {7_v, 0_v}),
+      dasm(OPCODE_MUL_DOUBLE_2ADDR, {10_v, 0_v}),
+  };
+  add_code(insns);
+  IRTypeChecker polymorphic_checker(m_method);
+  polymorphic_checker.enable_polymorphic_constants();
+  polymorphic_checker.run();
+  EXPECT_TRUE(polymorphic_checker.good()) << polymorphic_checker.what();
+  IRTypeChecker regular_checker(m_method);
+  regular_checker.run();
+  EXPECT_TRUE(regular_checker.fail());
+  EXPECT_EQ(
+      "Type error in method testMethod at instruction 'MUL_DOUBLE_2ADDR v10, "
+      "v10, v0' for register v0: expected type (DOUBLE1, DOUBLE2), but found "
+      "(LONG1, LONG2) instead",
+      regular_checker.what());
+}
+
+TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_CONST, {0_v, 0_L}),
+      dasm(OPCODE_AGET, {1_v, 0_v, 5_v}),
+      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 0_v}),
+  };
+  add_code(insns);
+  IRTypeChecker polymorphic_checker(m_method);
+  polymorphic_checker.enable_polymorphic_constants();
+  polymorphic_checker.run();
+  EXPECT_TRUE(polymorphic_checker.good()) << polymorphic_checker.what();
+  IRTypeChecker regular_checker(m_method);
+  regular_checker.run();
+  EXPECT_TRUE(regular_checker.fail());
+  EXPECT_EQ(
+      "Type error in method testMethod at instruction 'ADD_INT_2ADDR v5, v5, "
+      "v0' for register v0: expected type INT, but found REFERENCE instead",
+      regular_checker.what());
 }

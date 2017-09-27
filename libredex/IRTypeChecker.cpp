@@ -161,12 +161,15 @@ class TypeInference final
  public:
   using NodeId = Block*;
 
-  explicit TypeInference(const ControlFlowGraph& cfg, bool verify_moves)
+  TypeInference(const ControlFlowGraph& cfg,
+                bool enable_polymorphic_constants,
+                bool verify_moves)
       : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
                                   std::bind(&Block::succs, _1),
                                   std::bind(&Block::preds, _1),
                                   cfg.blocks().size()),
         m_cfg(cfg),
+        m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),
         m_inference(true) {}
 
@@ -397,7 +400,7 @@ class TypeInference final
       // the Dex compiler seems to never generate that case. The assert is used
       // here as a safeguard.
       always_assert_log(
-          !is_object(type), "Unexpected instruction '%s'", SHOW(insn));
+          !is_object(type), "Unexpected instruction '%s'.\n", SHOW(insn));
       IRSourceIterator src_it(insn);
       while (!src_it.empty()) {
         assume_scalar(current_state, src_it.get_register());
@@ -926,7 +929,7 @@ class TypeInference final
     case FOPCODE_SPARSE_SWITCH:
     case FOPCODE_FILLED_ARRAY: {
       // Pseudo-opcodes have been simplified away by the IR.
-      always_assert_log(false, "Unexpected instruction: %s", SHOW(insn));
+      always_assert_log(false, "Unexpected instruction: %s.\n", SHOW(insn));
     }
     }
   }
@@ -1010,13 +1013,31 @@ class TypeInference final
     }
   }
 
+  TypeDomain refine_type(const TypeDomain& type,
+                         IRType expected,
+                         IRType const_type,
+                         IRType scalar_type) const {
+    auto refined_type = type.meet(TypeDomain(expected));
+    // If constants are not considered polymorphic (the default behavior of the
+    // Android verifier), we lift the constant to the type expected in the given
+    // context. This only makes sense if the expected type is fully determined
+    // by the context, i.e., is not a scalar type (SCALAR/SCALAR1/SCALAR2).
+    if (type.leq(TypeDomain(const_type)) && expected != scalar_type) {
+      return (m_enable_polymorphic_constants || refined_type.is_bottom())
+                 ? refined_type
+                 : TypeDomain(expected);
+    }
+    return refined_type;
+  }
+
   void assume_type(TypeEnvironment* state,
                    register_t reg,
                    IRType expected,
                    bool ignore_top = false) const {
     if (m_inference) {
-      state->update(reg, [expected](const TypeDomain& type) {
-        return type.meet(TypeDomain(expected));
+      state->update(reg, [this, expected](const TypeDomain& type) {
+        return refine_type(
+            type, expected, /* const_type */ CONST, /* scalar_type */ SCALAR);
       });
     } else {
       if (state->is_bottom()) {
@@ -1036,11 +1057,17 @@ class TypeInference final
                         IRType expected1,
                         IRType expected2) const {
     if (m_inference) {
-      state->update(reg, [expected1](const TypeDomain& type) {
-        return type.meet(TypeDomain(expected1));
+      state->update(reg, [this, expected1](const TypeDomain& type) {
+        return refine_type(type,
+                           expected1,
+                           /* const_type */ CONST1,
+                           /* scalar_type */ SCALAR1);
       });
-      state->update(reg + 1, [expected2](const TypeDomain& type) {
-        return type.meet(TypeDomain(expected2));
+      state->update(reg + 1, [this, expected2](const TypeDomain& type) {
+        return refine_type(type,
+                           expected2,
+                           /* const_type */ CONST2,
+                           /* scalar_type */ SCALAR2);
       });
     } else {
       if (state->is_bottom()) {
@@ -1217,6 +1244,7 @@ class TypeInference final
   }
 
   const ControlFlowGraph& m_cfg;
+  bool m_enable_polymorphic_constants;
   bool m_verify_moves;
   bool m_inference;
   std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
@@ -1228,21 +1256,34 @@ class TypeInference final
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool verify_moves)
-    : m_dex_method(dex_method), m_good(true), m_what("OK") {
-  IRCode* code = dex_method->get_code();
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
+    : m_dex_method(dex_method),
+      m_complete(false),
+      m_enable_polymorphic_constants(false),
+      m_verify_moves(false),
+      m_good(true),
+      m_what("OK") {}
+
+void IRTypeChecker::run() {
+  IRCode* code = m_dex_method->get_code();
+  if (m_complete) {
+    // The type checker can only be run once on any given method.
+    return;
+  }
+
   if (code == nullptr) {
     // If the method has no associated code, the type checking trivially
     // succeeds.
+    m_complete = true;
     return;
   }
 
   // We then infer types for all the registers used in the method.
   code->build_cfg();
   const ControlFlowGraph& cfg = code->cfg();
-  m_type_inference =
-      std::make_unique<irtc_impl::TypeInference>(cfg, verify_moves);
-  m_type_inference->run(dex_method);
+  m_type_inference = std::make_unique<irtc_impl::TypeInference>(
+      cfg, m_enable_polymorphic_constants, m_verify_moves);
+  m_type_inference->run(m_dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the
   // method. We stop at the first type error encountered.
@@ -1259,12 +1300,15 @@ IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool verify_moves)
       out << "Type error in method " << m_dex_method->get_deobfuscated_name()
           << " at instruction '" << SHOW(insn) << "' for " << e.what();
       m_what = out.str();
+      m_complete = true;
       return;
     }
   }
+  m_complete = true;
 }
 
 IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
+  check_completion();
   auto& type_envs = m_type_inference->m_type_envs;
   auto it = type_envs.find(insn);
   if (it == type_envs.end()) {

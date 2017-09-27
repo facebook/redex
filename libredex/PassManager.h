@@ -67,7 +67,9 @@ class PassManager {
 
   void init(const Json::Value& config);
 
-  static void run_type_checker(const Scope& scope, bool verify_moves);
+  static void run_type_checker(const Scope& scope,
+                               bool polymorphic_constants,
+                               bool verify_moves);
 
   Json::Value m_config;
   std::vector<Pass*> m_registered_passes;
