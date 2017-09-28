@@ -626,69 +626,69 @@ class ListPattern final : public Pattern {
 
 } // namespace s_expr_impl
 
-s_expr::s_expr() : m_component(std::make_shared<s_expr_impl::List>()) {}
+inline s_expr::s_expr() : m_component(std::make_shared<s_expr_impl::List>()) {}
 
-s_expr::s_expr(int32_t n)
+inline s_expr::s_expr(int32_t n)
     : m_component(std::make_shared<s_expr_impl::Int32Atom>(n)) {}
 
-s_expr::s_expr(const std::string& s)
+inline s_expr::s_expr(const std::string& s)
     : m_component(std::make_shared<s_expr_impl::StringAtom>(s)) {}
 
-s_expr::s_expr(std::initializer_list<s_expr> l)
+inline s_expr::s_expr(std::initializer_list<s_expr> l)
     : m_component(std::make_shared<s_expr_impl::List>(l.begin(), l.end())) {}
 
-s_expr::s_expr(const std::vector<s_expr>& l)
+inline s_expr::s_expr(const std::vector<s_expr>& l)
     : m_component(std::make_shared<s_expr_impl::List>(l.begin(), l.end())) {}
 
 template <typename InputIterator>
-s_expr::s_expr(InputIterator first, InputIterator last)
+inline s_expr::s_expr(InputIterator first, InputIterator last)
     : m_component(std::make_shared<s_expr_impl::List>(first, last)) {}
 
-bool s_expr::is_nil() const { return is_list() && (size() == 0); }
+inline bool s_expr::is_nil() const { return is_list() && (size() == 0); }
 
-bool s_expr::is_atom() const { return !is_list(); }
+inline bool s_expr::is_atom() const { return !is_list(); }
 
-bool s_expr::is_int32() const {
+inline bool s_expr::is_int32() const {
   return m_component->kind() == s_expr_impl::ComponentKind::Int32Atom;
 }
 
-bool s_expr::is_string() const {
+inline bool s_expr::is_string() const {
   return m_component->kind() == s_expr_impl::ComponentKind::StringAtom;
 }
 
-bool s_expr::is_list() const {
+inline bool s_expr::is_list() const {
   return m_component->kind() == s_expr_impl::ComponentKind::List;
 }
 
-int32_t s_expr::get_int32() const {
+inline int32_t s_expr::get_int32() const {
   always_assert(is_int32());
   return std::static_pointer_cast<s_expr_impl::Int32Atom>(m_component)
       ->get_value();
 }
 
-const std::string& s_expr::get_string() const {
+inline const std::string& s_expr::get_string() const {
   always_assert(is_string());
   return std::static_pointer_cast<s_expr_impl::StringAtom>(m_component)
       ->get_string();
 }
 
-size_t s_expr::size() const {
+inline size_t s_expr::size() const {
   always_assert(is_list());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)->size();
 }
 
-s_expr s_expr::operator[](size_t index) const {
+inline s_expr s_expr::operator[](size_t index) const {
   always_assert(is_list());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)
       ->get_element(index);
 }
 
-s_expr s_expr::tail(size_t index) const {
+inline s_expr s_expr::tail(size_t index) const {
   always_assert(is_list());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)->tail(index);
 }
 
-bool s_expr::equals(const s_expr& other) const {
+inline bool s_expr::equals(const s_expr& other) const {
   if (m_component == other.m_component) {
     // Since S-expressions can share structure, checking for pointer equality
     // prevents unnecessary computations.
@@ -697,23 +697,25 @@ bool s_expr::equals(const s_expr& other) const {
   return m_component->equals(other.m_component);
 }
 
-size_t s_expr::hash_value() const { return m_component->hash_value(); }
+inline size_t s_expr::hash_value() const { return m_component->hash_value(); }
 
-void s_expr::print(std::ostream& output) const { m_component->print(output); }
+inline void s_expr::print(std::ostream& output) const {
+  m_component->print(output);
+}
 
-std::string s_expr::str() const {
+inline std::string s_expr::str() const {
   std::ostringstream out;
   print(out);
   return out.str();
 }
 
-void s_expr::add_element(const s_expr& element) {
+inline void s_expr::add_element(const s_expr& element) {
   always_assert(m_component->kind() == s_expr_impl::ComponentKind::List);
   auto list = std::static_pointer_cast<s_expr_impl::List>(m_component);
   list->add_element(element);
 }
 
-s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
+inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
   for (;;) {
     skip_white_spaces();
     if (!m_input.good()) {
@@ -802,7 +804,7 @@ s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
   }
 }
 
-void s_expr_istream::skip_white_spaces() {
+inline void s_expr_istream::skip_white_spaces() {
   for (;;) {
     char c = m_input.peek();
     if (m_input.good() && std::isspace(c)) {
@@ -813,36 +815,37 @@ void s_expr_istream::skip_white_spaces() {
   }
 }
 
-void s_expr_istream::set_status(Status status, const std::string& what_arg) {
+inline void s_expr_istream::set_status(Status status,
+                                       const std::string& what_arg) {
   m_status = status;
   m_what = what_arg;
 }
 
-s_patn::s_patn()
+inline s_patn::s_patn()
     : m_pattern(std::make_shared<s_expr_impl::WildcardPattern>()) {}
 
-s_patn::s_patn(s_expr& placeholder)
+inline s_patn::s_patn(s_expr& placeholder)
     : m_pattern(
           std::make_shared<s_expr_impl::PlaceholderPattern>(placeholder)) {}
 
-s_patn::s_patn(int32_t n)
+inline s_patn::s_patn(int32_t n)
     : m_pattern(std::make_shared<s_expr_impl::Int32Pattern>(n)) {}
 
-s_patn::s_patn(int32_t* placeholder)
+inline s_patn::s_patn(int32_t* placeholder)
     : m_pattern(std::make_shared<s_expr_impl::Int32Pattern>(placeholder)) {}
 
-s_patn::s_patn(const std::string& s)
+inline s_patn::s_patn(const std::string& s)
     : m_pattern(std::make_shared<s_expr_impl::StringPattern>(s)) {}
 
-s_patn::s_patn(std::string* placeholder)
+inline s_patn::s_patn(std::string* placeholder)
     : m_pattern(std::make_shared<s_expr_impl::StringPattern>(placeholder)) {}
 
-s_patn::s_patn(std::initializer_list<s_patn> heads)
+inline s_patn::s_patn(std::initializer_list<s_patn> heads)
     : m_pattern(std::make_shared<s_expr_impl::ListPattern>(heads)) {}
 
-s_patn::s_patn(std::initializer_list<s_patn> heads, s_expr& tail)
+inline s_patn::s_patn(std::initializer_list<s_patn> heads, s_expr& tail)
     : m_pattern(std::make_shared<s_expr_impl::ListPattern>(heads, tail)) {}
 
-bool s_patn::match_with(const s_expr& expr) {
+inline bool s_patn::match_with(const s_expr& expr) {
   return m_pattern->match_with(expr);
 }
