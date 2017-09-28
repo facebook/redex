@@ -29,7 +29,10 @@ constexpr const char* METRIC_METHODPARAM_ASETS_TOTAL = "num_methodparam_total";
 constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
 
-AnnoKill::AnnoKill(Scope& scope, const AnnoNames& keep, const AnnoNames& kill)
+AnnoKill::AnnoKill(Scope& scope,
+                   const AnnoNames& keep,
+                   const AnnoNames& kill,
+                   const AnnoNames& force_kill)
     : m_scope(scope) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
@@ -51,6 +54,18 @@ AnnoKill::AnnoKill(Scope& scope, const AnnoNames& keep, const AnnoNames& kill)
     if (anno) {
       TRACE(ANNO, 2, "Kill anno: %s\n", SHOW(anno));
       m_kill.insert(anno);
+    } else {
+      TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+    }
+  }
+
+  // Load annotations we know and want dead.
+  for (auto const& anno_name : force_kill) {
+    DexType* anno = DexType::get_type(anno_name.c_str());
+    TRACE(ANNO, 2, "Force kill annotation type string %s\n", anno_name.c_str());
+    if (anno) {
+      TRACE(ANNO, 2, "Force kill anno: %s\n", SHOW(anno));
+      m_force_kill.insert(anno);
     } else {
       TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
     }
@@ -331,6 +346,18 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       return true;
     }
 
+    if (m_force_kill.count(anno_type) > 0) {
+      TRACE(ANNO,
+            3,
+            "Annotation instance (type: %s) marked for forced removal, "
+            "annotation: %s\n",
+            SHOW(anno_type),
+            SHOW(da));
+      m_stats.annotations_killed++;
+      delete da;
+      return true;
+    }
+
     if (!da->system_visible()) {
       TRACE(ANNO, 3, "Killing annotation instance %s\n", SHOW(da));
       m_stats.annotations_killed++;
@@ -478,7 +505,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  AnnoKill ak(scope, m_keep_annos, m_kill_annos);
+  AnnoKill ak(scope, m_keep_annos, m_kill_annos, m_force_kill_annos);
   bool classes_removed = ak.kill_annotations();
 
   if (classes_removed) {
