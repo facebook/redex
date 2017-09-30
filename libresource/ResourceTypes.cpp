@@ -1316,38 +1316,53 @@ int32_t ResXMLParser::getAttributeData(size_t idx) const
     return 0;
 }
 
-void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
+ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
 {
     if (mEventCode == START_TAG) {
         const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
         if (idx < dtohs(tag->attributeCount)) {
-            ResXMLTree_attribute* attr = (ResXMLTree_attribute*)
+            return (ResXMLTree_attribute*)
                 (((const uint8_t*)tag)
                  + dtohs(tag->attributeStart)
                  + (dtohs(tag->attributeSize)*idx));
-            attr->typedValue.data = newData;
         }
+    }
+
+    return nullptr;
+}
+
+// Replaces an entire XML attribute (data and type).
+// This function assumes that the size of the attribute is not changing.
+void ResXMLParser::setAttribute(size_t idx, Res_value newAttribute)
+{
+    ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr != nullptr) {
+        attr->typedValue = newAttribute;
+    }
+}
+
+// Replaces the data of an XML attribute.
+void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
+{
+    ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr != nullptr) {
+        attr->typedValue.data = newData;
     }
 }
 
 ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
 {
-    if (mEventCode == START_TAG) {
-        const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
-        if (idx < dtohs(tag->attributeCount)) {
-            const ResXMLTree_attribute* attr = (const ResXMLTree_attribute*)
-                (((const uint8_t*)tag)
-                 + dtohs(tag->attributeStart)
-                 + (dtohs(tag->attributeSize)*idx));
-            outValue->copyFrom_dtoh(attr->typedValue);
-            if (mTree.mDynamicRefTable != NULL &&
-                    mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
-                return BAD_TYPE;
-            }
-            return sizeof(Res_value);
-        }
+    const ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr == nullptr) {
+        return BAD_TYPE;
     }
-    return BAD_TYPE;
+
+    outValue->copyFrom_dtoh(attr->typedValue);
+    if (mTree.mDynamicRefTable != NULL &&
+            mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
+        return BAD_TYPE;
+    }
+    return sizeof(Res_value);
 }
 
 ssize_t ResXMLParser::indexOfAttribute(const char* ns, const char* attr) const
@@ -6744,13 +6759,23 @@ String8 ResTable::getString8FromIndex(
     const TypeList& typeList = pg->types[0];
     const Type* typeConfigs = typeList[0];
     const Package* pkg = typeConfigs->package;
-    size_t len;
-    const char* str8 = pkg->header->values.string8At(stringIndex, &len);
-    if (str8 == nullptr) {
-        // This is either a null string or a string16, ignore either way.
-        return String8();
+    return pkg->header->values.string8ObjectAt(stringIndex);
+}
+
+void ResTable::getTypeNamesForPackage(
+    ssize_t packageIndex,
+    Vector<String8>* typeNames) const
+{
+    const PackageGroup* pg = mPackageGroups[packageIndex];
+    const TypeList& typeList = pg->types[0];
+    const Type* typeConfigs = typeList[0];
+    const Package* pkg = typeConfigs->package;
+    for (size_t index = 0; index < pkg->typeStrings.size(); ++index) {
+        String8 str8 = pkg->typeStrings.string8ObjectAt(index);
+        if (str8.size() != 0) {
+            typeNames->add(str8);
+        }
     }
-    return String8(str8, len);
 }
 
 void ResTable::print_value(const Package* pkg, const Res_value& value) const

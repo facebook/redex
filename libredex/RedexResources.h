@@ -33,6 +33,9 @@ std::unordered_set<std::string> get_xml_files(
     const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
+int inline_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, android::Res_value>& id_to_inline_value);
 void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);

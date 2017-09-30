@@ -537,68 +537,116 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
-std::unordered_set<uint32_t> get_xml_reference_attributes(const std::string& filename) {
-  std::string file_contents = read_entire_file(filename);
-  std::unordered_set<uint32_t> attributes;
-  if (file_contents.size()) {
-    attributes = extract_xml_reference_attributes(file_contents, filename);
-  } else {
+void ensure_file_contents(
+    const std::string& file_contents,
+    const std::string& filename) {
+  if (!file_contents.size()) {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
     throw std::runtime_error("Unable to read file: " + filename);
   }
-  return attributes;
+}
+
+std::unordered_set<uint32_t> get_xml_reference_attributes(
+    const std::string& filename) {
+  std::string file_contents = read_entire_file(filename);
+  ensure_file_contents(file_contents, filename);
+  return extract_xml_reference_attributes(file_contents, filename);
+}
+
+int inline_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, android::Res_value>& id_to_inline_value) {
+  int num_values_inlined = 0;
+  std::string file_contents = read_entire_file(filename);
+  ensure_file_contents(file_contents, filename);
+  bool made_change = false;
+
+  android::ResXMLTree parser;
+  parser.setTo(file_contents.data(), file_contents.size());
+  if (parser.getError() != android::NO_ERROR) {
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data <= PACKAGE_RESID_START) {
+            continue;
+          }
+
+          auto p = id_to_inline_value.find(outValue.data);
+          if (p != id_to_inline_value.end()) {
+            android::Res_value new_value = p->second;
+            parser.setAttribute(i, new_value);
+            ++num_values_inlined;
+            made_change = true;
+          }
+        }
+      }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+
+  if (made_change) {
+    write_entire_file(filename, file_contents);
+  }
+
+  return num_values_inlined;
 }
 
 void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
   std::string file_contents = read_entire_file(filename);
+  ensure_file_contents(file_contents, filename);
   bool made_change = false;
-  if (file_contents.size()) {
-    android::ResXMLTree parser;
-    parser.setTo(file_contents.data(), file_contents.size());
-    if (parser.getError() != android::NO_ERROR) {
-      throw std::runtime_error("Unable to read file: " + filename);
-    }
 
-    // Update embedded resource ID array
-    size_t resIdCount = 0;
-    uint32_t* resourceIds = parser.getResourceIds(&resIdCount);
-    for (size_t i = 0; i < resIdCount; ++i) {
-      auto id_search = kept_to_remapped_ids.find(resourceIds[i]);
-      if (id_search != kept_to_remapped_ids.end()) {
-        resourceIds[i] = id_search->second;
-        made_change = true;
-      }
-    }
+  android::ResXMLTree parser;
+  parser.setTo(file_contents.data(), file_contents.size());
+  if (parser.getError() != android::NO_ERROR) {
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
 
-    android::ResXMLParser::event_code_t type;
-    do {
-      type = parser.next();
-      if (type == android::ResXMLParser::START_TAG) {
-        const size_t attr_count = parser.getAttributeCount();
-        for (size_t i = 0; i < attr_count; ++i) {
-          if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE ||
-              parser.getAttributeDataType(i) == android::Res_value::TYPE_ATTRIBUTE) {
-            android::Res_value outValue;
-            parser.getAttributeValue(i, &outValue);
-            if (outValue.data > PACKAGE_RESID_START &&
-                kept_to_remapped_ids.count(outValue.data)) {
-              uint32_t new_value = kept_to_remapped_ids.at(outValue.data);
-              if (new_value != outValue.data) {
-                parser.setAttributeData(i, new_value);
-                made_change = true;
-              }
+  // Update embedded resource ID array
+  size_t resIdCount = 0;
+  uint32_t* resourceIds = parser.getResourceIds(&resIdCount);
+  for (size_t i = 0; i < resIdCount; ++i) {
+    auto id_search = kept_to_remapped_ids.find(resourceIds[i]);
+    if (id_search != kept_to_remapped_ids.end()) {
+      resourceIds[i] = id_search->second;
+      made_change = true;
+    }
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE ||
+            parser.getAttributeDataType(i) == android::Res_value::TYPE_ATTRIBUTE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data > PACKAGE_RESID_START &&
+              kept_to_remapped_ids.count(outValue.data)) {
+            uint32_t new_value = kept_to_remapped_ids.at(outValue.data);
+            if (new_value != outValue.data) {
+              parser.setAttributeData(i, new_value);
+              made_change = true;
             }
           }
         }
       }
-    } while (type != android::ResXMLParser::BAD_DOCUMENT &&
-             type != android::ResXMLParser::END_DOCUMENT);
-  } else {
-    fprintf(stderr, "Unable to read file: %s\n", filename.data());
-    throw std::runtime_error("Unable to read file: " + filename);
-  }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
 
   if (made_change) {
     write_entire_file(filename, file_contents);

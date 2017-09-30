@@ -510,7 +510,8 @@ def run_redex(args):
     store_files = []
     store_metadata_dir = make_temp_dir('.application_module_metadata', debug_mode)
     for module in application_modules:
-        log('found module: ' + module.get_name() + ' ' + module.get_canary_prefix())
+        canary_prefix = module.get_canary_prefix()
+        log('found module: ' + module.get_name() + ' ' + (canary_prefix if canary_prefix is not None else '(no canary prefix)'))
         store_path = os.path.join(dex_dir, module.get_name())
         os.mkdir(store_path)
         module.unpackage(extracted_apk_dir, store_path)

@@ -41,6 +41,7 @@
   TM(IDEX)               \
   TM(INL)                \
   TM(INLINIT)            \
+  TM(INLRES)             \
   TM(INTF)               \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \

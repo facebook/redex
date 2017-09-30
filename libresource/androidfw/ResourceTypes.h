@@ -760,7 +760,14 @@ public:
 
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
+
+    // Replaces an entire XML attribute (data and type).
+    // This function assumes that the size of the attribute is not changing.
+    void setAttribute(size_t idx, Res_value newAttribute);
+
+    // Replaces the data of an XML attribute.
     void setAttributeData(size_t idx, uint32_t newData);
+
     ssize_t getAttributeValue(size_t idx, Res_value* outValue) const;
 
     ssize_t indexOfAttribute(const char* ns, const char* attr) const;
@@ -778,6 +785,8 @@ private:
     friend class ResXMLTree;
 
     event_code_t nextNode();
+
+    ResXMLTree_attribute* getAttributePointer(size_t idx) const;
 
     const ResXMLTree&           mTree;
     event_code_t                mEventCode;
@@ -1841,6 +1850,10 @@ public:
     void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
 
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
+
+    void getTypeNamesForPackage(
+        ssize_t packageIndex,
+        Vector<String8>* typeNames) const;
 
     static String8 normalizeForOutput(const char* input);
 
