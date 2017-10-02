@@ -245,12 +245,14 @@ void init_permanently_reachable_classes(
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
+  bool legacy_xml_reachability;
 
   pc.get("apk_dir", "", apk_dir);
   pc.get("keep_packages", {}, reflected_package_names);
   pc.get("keep_annotations", {}, annotations);
   pc.get("keep_class_members", {}, class_members);
   pc.get("keep_methods", {}, methods);
+  pc.get("legacy_xml_reachability", true, legacy_xml_reachability);
 
   std::unordered_set<DexType*> annotation_types(
     no_optimizations_anno.begin(),
@@ -266,19 +268,21 @@ void init_permanently_reachable_classes(
   keep_methods(scope, methods);
 
   if (apk_dir.size()) {
-    // Classes present in manifest
-    std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
-    for (std::string classname : get_manifest_classes(manifest)) {
-      TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
-      mark_reachable_by_classname(classname, false);
-    }
+    if (legacy_xml_reachability) {
+      // Classes present in manifest
+      std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+      for (std::string classname : get_manifest_classes(manifest)) {
+        TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
+        mark_reachable_by_classname(classname, false);
+      }
 
-    // Classes present in XML layouts
-    for (std::string classname : get_layout_classes(apk_dir)) {
-      TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
-      mark_reachable_by_classname(classname, false);
+      // Classes present in XML layouts
+      for (std::string classname : get_layout_classes(apk_dir)) {
+        TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
+        mark_reachable_by_classname(classname, false);
+      }
     }
-
+    
     // Classnames present in native libraries (lib/*/*.so)
     for (std::string classname : get_native_classes(apk_dir)) {
       auto type = DexType::get_type(classname.c_str());
