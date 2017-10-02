@@ -301,12 +301,15 @@ class DedupBlocksImpl {
   }
 
   void record_stats(const duplicates_t& duplicates) {
-    std::lock_guard<std::mutex> guard{lock};
-    for (const auto& entry : duplicates) {
-      std::unordered_set<Block*> blocks = entry.second;
-      // all blocks have the same number of opcodes
-      Block* block = *blocks.begin();
-      m_dup_sizes[num_opcodes(block)] += blocks.size();
+    // avoid the expensive lock if we won't actually print the information
+    if (traceEnabled(RME, 2)) {
+      std::lock_guard<std::mutex> guard{lock};
+      for (const auto& entry : duplicates) {
+        std::unordered_set<Block*> blocks = entry.second;
+        // all blocks have the same number of opcodes
+        Block* block = *blocks.begin();
+        m_dup_sizes[num_opcodes(block)] += blocks.size();
+      }
     }
   }
 
