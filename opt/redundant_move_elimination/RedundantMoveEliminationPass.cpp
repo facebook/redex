@@ -54,9 +54,7 @@
  * us.
  *
  * Possible additions: (TODO?)
- *   wide registers
- *     I tried it, with registers only it's a tiny help. With
- *     constants it causes spurious verify errors at install time. --jhendrick
+ *   wide registers (I tried it. it's only a tiny help. --jhendrick)
  */
 
 namespace {
@@ -294,6 +292,16 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /* unused */,
                                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
+
+  if (m_config.eliminate_const_literals && !mgr.verify_none_enabled()) {
+    // This option is not safe with the verifier
+    m_config.eliminate_const_literals = false;
+    TRACE(RME,
+          1,
+          "Ignoring eliminate_const_literals because verify-none is not "
+          "enabled.\n");
+  }
+
   RedundantMoveEliminationImpl impl(m_config);
   auto stats = impl.run(scope);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
