@@ -150,7 +150,7 @@ struct OptimizationImpl {
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
-  EscapeReason can_optimize(DexType* intf, SingleImplData& data);
+  EscapeReason can_optimize(DexType* intf, SingleImplData& data, bool rename);
   void do_optimize(DexType* intf, SingleImplData& data);
   EscapeReason check_field_collision(DexType* intf, SingleImplData& data);
   EscapeReason check_method_collision(DexType* intf, SingleImplData& data);
@@ -163,6 +163,7 @@ struct OptimizationImpl {
   void set_method_refs(DexType* intf, SingleImplData& data);
   void rewrite_interface_methods(DexType* intf, SingleImplData& data);
   void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
+  void rename_possible_collisions(DexType* intf, SingleImplData& data);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -501,15 +502,87 @@ void OptimizationImpl::drop_single_impl_collision(DexType* intf,
  * 2- there is no collision in methods rewrite
  */
 EscapeReason OptimizationImpl::can_optimize(DexType* intf,
-                                            SingleImplData& data) {
+                                            SingleImplData& data,
+                                            bool rename) {
   auto escape = check_field_collision(intf, data);
   if (escape != EscapeReason::NO_ESCAPE) return escape;
   escape = check_method_collision(intf, data);
-  if (escape != EscapeReason::NO_ESCAPE) return escape;
+  if (escape != EscapeReason::NO_ESCAPE) {
+    if (rename) {
+      rename_possible_collisions(intf, data);
+      escape = check_method_collision(intf, data);
+    }
+    if (escape != EscapeReason::NO_ESCAPE) return escape;
+  }
   for (auto method : data.methoddefs) {
     drop_single_impl_collision(intf, data, method);
   }
   return NO_ESCAPE;
+}
+
+/**
+ * Remove any chance for collisions.
+ */
+void OptimizationImpl::rename_possible_collisions(
+    DexType* intf, SingleImplData& data) {
+
+  const auto& rename = [](DexMethodRef* meth, DexString* name) {
+    DexMethodSpec spec;
+    spec.cls = meth->get_class();
+    spec.name = name;
+    spec.proto = meth->get_proto();
+    meth->change(spec, false);
+  };
+
+  TRACE(INTF, 9, "Changing name related to %s\n", SHOW(intf));
+  for (const auto& meth : data.methoddefs) {
+    if (!can_rename(meth)) {
+      TRACE(INTF, 9, "Changing name but cannot rename %s, give up\n",
+          SHOW(meth));
+      return;
+    }
+  }
+
+  std::unordered_map<DexString*, DexString*> names;
+  const auto new_name = [&](DexString* name) {
+    const auto& name_it = names.find(name);
+    if (name_it != names.end()) {
+      return name_it->second;
+    }
+    DexString* possible_name = nullptr;
+    static std::string sufx("$r");
+    static int intf_id = 0;
+    while(true) {
+      const auto& str = name->str() + sufx + std::to_string(intf_id++);
+      possible_name = DexString::get_string(str.c_str());
+      if (possible_name == nullptr) {
+        possible_name = DexString::make_string(str.c_str());
+        break;
+      }
+    }
+    names[name] = possible_name;
+    return possible_name;
+  };
+
+  for (const auto& meth : data.methoddefs) {
+    if (is_constructor(meth)) continue;
+    auto name = new_name(meth->get_name());
+    TRACE(INTF, 9, "Changing name for %s to %s\n", SHOW(meth), SHOW(name));
+    rename(meth, name);
+  }
+  for (const auto& refs_it : data.methodrefs) {
+    if (refs_it.first->is_def()) continue;
+    static auto init = DexString::make_string("<init>");
+    always_assert(refs_it.first->get_name() != init);
+    auto name = new_name(refs_it.first->get_name());
+    TRACE(INTF, 9, "Changing name for %s to %s\n",
+        SHOW(refs_it.first), SHOW(name));
+    if (names.count(refs_it.first->get_name()) == 0) {
+      TRACE(INTF, 9, "Changing name on missing method def %s",
+          SHOW(refs_it.first));
+    }
+    rename(refs_it.first, name);
+  }
 }
 
 /**
@@ -536,7 +609,7 @@ size_t OptimizationImpl::optimize(
     auto& intf_data = single_impls->get_single_impl_data(intf);
     TRACE(INTF, 3, "(OPT) %s => %s\n", SHOW(intf), SHOW(intf_data.cls));
     if (intf_data.is_escaped()) continue;
-    auto escape = can_optimize(intf, intf_data);
+    auto escape = can_optimize(intf, intf_data, config.rename_on_collision);
     if (escape != EscapeReason::NO_ESCAPE) {
       single_impls->escape_interface(intf, escape);
       continue;
