@@ -81,7 +81,8 @@
   TM(BRCR)               \
   TM(SWIN)               \
   TM(SWCL)               \
-  TM(SW)
+  TM(SW)                 \
+  TM(UNREF_INTF)
 
 enum TraceModule : int {
 #define TM(x) x,

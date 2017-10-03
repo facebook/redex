@@ -58,6 +58,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/track_resources \
+	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/opt/virtual_scope \
@@ -211,6 +212,7 @@ redex_all_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/track_resources/TrackResources.cpp \
+	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \
