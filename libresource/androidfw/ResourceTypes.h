@@ -1842,6 +1842,10 @@ public:
 
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
 
+    void getTypeNamesForPackage(
+        ssize_t packageIndex,
+        Vector<String8>* typeNames) const;
+
     static String8 normalizeForOutput(const char* input);
 
     ssize_t getResourcePackageIndex(uint32_t resID) const;

@@ -6753,6 +6753,22 @@ String8 ResTable::getString8FromIndex(
     return String8(str8, len);
 }
 
+void ResTable::getTypeNamesForPackage(
+    ssize_t packageIndex,
+    Vector<String8>* typeNames) const
+{
+    const PackageGroup* pg = mPackageGroups[packageIndex];
+    const TypeList& typeList = pg->types[0];
+    const Type* typeConfigs = typeList[0];
+    const Package* pkg = typeConfigs->package;
+    for (size_t index = 0; index < pkg->typeStrings.size(); ++index) {
+        String8 str8 = pkg->typeStrings.string8ObjectAt(index);
+        if (str8.size() != 0) {
+            typeNames->add(str8);
+        }
+    }
+}
+
 void ResTable::print_value(const Package* pkg, const Res_value& value) const
 {
     if (value.dataType == Res_value::TYPE_NULL) {
