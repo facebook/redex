@@ -1744,11 +1744,12 @@ private:
 OatFile::~OatFile() = default;
 
 static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
-                                                   ConstBuffer buf) {
+						   ConstBuffer oatfile_buffer,
+						   const std::vector<DexInput>& dexes) {
   size_t oat_offset = 0;
-  if (buf.len >= sizeof(Elf32_Ehdr)) {
+  if (oatfile_buffer.len >= sizeof(Elf32_Ehdr)) {
     Elf32_Ehdr header;
-    memcpy(&header, buf.ptr, sizeof(Elf32_Ehdr));
+    memcpy(&header, oatfile_buffer.ptr, sizeof(Elf32_Ehdr));
     if (header.e_ident[0] == 0x7f &&
         header.e_ident[1] == 'E' &&
         header.e_ident[2] == 'L' &&
@@ -1757,45 +1758,39 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
       // If there are any where this isn't true, we'll have to actually read
       // out the offset of .rodata.
       oat_offset = 0x1000;
-      buf = buf.slice(0x1000);
+      oatfile_buffer = oatfile_buffer.slice(0x1000);
     }
   }
 
-  auto header = OatHeader_Common::parse(buf);
+  auto header = OatHeader_Common::parse(oatfile_buffer);
 
   // TODO: do we need to handle endian-ness? I think all platforms we
   // care about are little-endian.
   if (header.magic != kOatMagicNum) {
-    return OatFile_Bad::parse(buf);
+    return OatFile_Bad::parse(oatfile_buffer);
   }
 
   switch (static_cast<OatVersion>(header.version)) {
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
-      return OatFile_064::parse(dex_files_only, buf, oat_offset);
+      return OatFile_064::parse(dex_files_only, oatfile_buffer, oat_offset);
     case OatVersion::V_079:
     case OatVersion::V_088:
       // 079 and 088 are the same as far as I can tell.
-      return OatFile_079::parse(dex_files_only, buf, oat_offset);
+      return OatFile_079::parse(dex_files_only, oatfile_buffer, oat_offset);
     case OatVersion::V_124:
     case OatVersion::UNKNOWN:
-      return OatFile_Unknown::parse(buf);
+      return OatFile_Unknown::parse(oatfile_buffer);
   }
   fprintf(stderr, "Unhandled oat version 0x%08x\n", header.version);
   return std::unique_ptr<OatFile>(nullptr);
 }
 
-std::unique_ptr<OatFile> OatFile::parse(ConstBuffer buf) {
-  return parse_oatfile_impl(false, buf);
-}
-
-std::unique_ptr<OatFile> OatFile::parse_dex_files_only(ConstBuffer buf) {
-  return parse_oatfile_impl(true, buf);
-}
-
-std::unique_ptr<OatFile> OatFile::parse_dex_files_only(void* ptr, size_t len) {
-  return parse_dex_files_only(ConstBuffer { reinterpret_cast<char*>(ptr), len });
+std::unique_ptr<OatFile> OatFile::parse(ConstBuffer oatfile_buffer,
+					const std::vector<DexInput>& dex_files,
+					bool dex_files_only) {
+  return parse_oatfile_impl(dex_files_only, oatfile_buffer, dex_files);
 }
 
 ////////// building

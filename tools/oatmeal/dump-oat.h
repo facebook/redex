@@ -60,12 +60,10 @@ class OatFile {
   UNCOPYABLE(OatFile);
   virtual ~OatFile();
 
-  // reads magic number, returns correct oat file implementation.
-  static std::unique_ptr<OatFile> parse(ConstBuffer buf);
-
-  // Like parse, but stops after parsing the dex file listing and dex headers.
-  static std::unique_ptr<OatFile> parse_dex_files_only(ConstBuffer buf);
-  static std::unique_ptr<OatFile> parse_dex_files_only(void* ptr, size_t len);
+  // Reads magic number, returns correct oat file implementation.
+  static std::unique_ptr<OatFile> parse(ConstBuffer oatfile_buffer,
+					const std::vector<DexInput>& dexes,
+					bool dex_files_only);
 
   virtual std::vector<OatDexFile> get_oat_dexfiles() = 0;
 
