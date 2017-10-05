@@ -119,7 +119,8 @@ class MemoryAccounterImpl : public MemoryAccounter {
   static std::vector<std::unique_ptr<MemoryAccounter>> accounter_stack_;
 
   void markRangeImpl(uint32_t begin, uint32_t end) {
-    CHECK(begin <= end && end <= buf_.len);
+    CHECK(begin <= end);
+    CHECK(end <= buf_.len);
     consumed_ranges_.emplace_back(begin, end);
   }
 };

@@ -24,6 +24,7 @@ enum class OatVersion : uint32_t {
   V_064 = 0x00343630, // 6.0, api level 23
   V_079 = 0x00393730, // 7.0, api level 24
   V_088 = 0x00383830, // 7.1, api level 25
+  V_124 = 0x00343231  // 8.0, api level 26
 };
 
 struct DexInput {

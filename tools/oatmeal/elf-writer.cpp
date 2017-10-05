@@ -105,6 +105,7 @@ void ElfWriter::build(InstructionSet isa,
       add_shstrtab();
       break;
 
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       CHECK(false, "Illegal OatVersion 0x%08x", static_cast<uint32_t>(oat_version_));
       break;
@@ -148,6 +149,7 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
       // oatdata, oatlastword, oatbss, oatbsslastword
       return 5;
 
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       break;
   }
@@ -230,7 +232,6 @@ void ElfWriter::add_bss(Elf32_Word bss_size) {
 
 static int get_strtab_alignment(OatVersion version) {
   switch (version) {
-    case OatVersion::UNKNOWN:
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
@@ -238,24 +239,32 @@ static int get_strtab_alignment(OatVersion version) {
     case OatVersion::V_079:
     case OatVersion::V_088:
       return 0x1000;
+    case OatVersion::UNKNOWN:
+    case OatVersion::V_124:
+    default: {
+    fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
+    return 1;
   }
-  fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
-  return 1;
+  }
 }
 
 static Elf32_Word get_str_entsize(OatVersion version) {
   switch (version) {
-    case OatVersion::UNKNOWN:
     case OatVersion::V_039:
     case OatVersion::V_045:
       return 1;
     case OatVersion::V_064:
     case OatVersion::V_079:
     case OatVersion::V_088:
+
       return 0;
+    case OatVersion::UNKNOWN:
+    case OatVersion::V_124:
+  default: {
+    fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
+    return 0;
   }
-  fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
-  return 0;
+  }
 }
 
 void ElfWriter::add_dynstr() {
@@ -534,6 +543,7 @@ void ElfWriter::write_hash(FileHandle& fh) {
       hash.push_back(0);  // Last symbol terminates the chain.
       break;
     }
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       break;
   }
@@ -598,6 +608,7 @@ unsigned int ElfWriter::get_num_program_headers() const {
     case OatVersion::V_088:
       return 6;
 
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       break;
   }
@@ -652,10 +663,8 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
       });
       break;
     }
-
     case OatVersion::V_079:
     case OatVersion::V_088: {
-
       // LOAD bss
       prog_headers.push_back(Elf32_Phdr {
           PT_LOAD,
@@ -683,6 +692,7 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
       });
       break;
     }
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       break;
   }

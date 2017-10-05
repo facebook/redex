@@ -1778,6 +1778,7 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
     case OatVersion::V_088:
       // 079 and 088 are the same as far as I can tell.
       return OatFile_079::parse(dex_files_only, buf, oat_offset);
+    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       return OatFile_Unknown::parse(buf);
   }
