@@ -49,8 +49,6 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -71,7 +69,8 @@ MethodItemEntry::~MethodItemEntry() {
     case MFLOW_POSITION:
       pos.~unique_ptr<DexPosition>();
       break;
-    default:
+    case MFLOW_OPCODE:
+    case MFLOW_FALLTHROUGH:
       /* nothing to delete */
       break;
   }
@@ -97,8 +96,6 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -120,8 +117,6 @@ void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const 
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -143,8 +138,6 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -169,8 +162,6 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -518,8 +509,6 @@ static void associate_debug_entries(FatMethod* fm,
       case DexDebugEntryType::Position:
         mentry = new MethodItemEntry(std::move(entry.pos));
         break;
-      default:
-        not_reached();
     }
     fm->insert(fm->iterator_to(*insert_point), *mentry);
   }
@@ -701,8 +690,8 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
       case MFLOW_POSITION:
         copy_item_entry->pos = std::move(old_position_to_new[mie.pos.get()]);
         break;
-      default:
-        not_reached();
+      case MFLOW_FALLTHROUGH:
+        break;
     }
 
     old_mentry_to_new[&mie] = copy_item_entry;
@@ -731,9 +720,8 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
       case MFLOW_OPCODE:
       case MFLOW_DEBUG:
       case MFLOW_POSITION:
+      case MFLOW_FALLTHROUGH:
         break;
-      default:
-        not_reached();
     }
 
     fmethod->push_back(*copy_item_entry);

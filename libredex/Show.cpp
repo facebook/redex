@@ -109,7 +109,6 @@ std::string show(DexAnnotationVisibility vis) {
   case DAV_SYSTEM:
     return "system";
   }
-  not_reached();
 }
 
 std::string show_opcode(const DexInstruction* insn) {
@@ -1013,7 +1012,6 @@ std::string show(TryEntryType t) {
   case TRY_END:
     return "TRY_END";
   }
-  not_reached();
 }
 
 std::string show(const MethodItemEntry& mei) {
@@ -1047,7 +1045,6 @@ std::string show(const MethodItemEntry& mei) {
     ss << "FALLTHROUGH: " << mei.throwing_mie;
     return ss.str();
   }
-  not_reached();
 }
 
 std::string show(const FatMethod* fm) {
