@@ -89,6 +89,7 @@ void PassManager::run_type_checker(const Scope& scope,
       std::string msg = checker.what();
       fprintf(
           stderr, "ABORT! Inconsistency found in Dex code. %s\n", msg.c_str());
+      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
       exit(EXIT_FAILURE);
     }
   });

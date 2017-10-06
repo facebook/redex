@@ -59,6 +59,65 @@ class IRTypeCheckerTest : public ::testing::Test {
   DexMethod* m_method;
 };
 
+TEST_F(IRTypeCheckerTest, load_param) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 6_v}),
+      dasm(IOPCODE_LOAD_PARAM, {5_v}),
+  };
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_EQ("Encountered load-param instruction not at the start of the method",
+            checker.what());
+}
+
+TEST_F(IRTypeCheckerTest, move_result) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_FILLED_NEW_ARRAY, DexType::make_type("I"))
+          ->set_arg_word_count(1)
+          ->set_src(0, 5),
+      dasm(OPCODE_ADD_INT, {5_v, 5_v, 5_v}),
+      dasm(OPCODE_MOVE_RESULT, {0_v}),
+  };
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_EQ(
+      "Encountered move-result instruction without appropriate prefix "
+      "instruction. Expected invoke or filled-new-array, got ADD_INT v5, v5, "
+      "v5",
+      checker.what());
+}
+
+TEST_F(IRTypeCheckerTest, move_result_at_start) {
+  using namespace dex_asm;
+  // Construct a new method because we don't want any load-param opcodes in
+  // this one
+  auto args = DexTypeList::make_type_list({});
+  auto proto = DexProto::make_proto(get_boolean_type(), args);
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method(DexType::make_type("Lbar;"),
+                             DexString::make_string("testMethod2"),
+                             proto));
+  method->set_deobfuscated_name("testMethod2");
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(std::make_unique<IRCode>(method, 0));
+
+  IRCode* code = method->get_code();
+  code->push_back(dasm(OPCODE_MOVE_RESULT, {0_v}));
+  code->push_back(dasm(OPCODE_ADD_INT, {5_v, 5_v, 5_v}));
+
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_EQ("Encountered move-result instruction at start of method",
+            checker.what());
+}
+
 TEST_F(IRTypeCheckerTest, arrayRead) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {

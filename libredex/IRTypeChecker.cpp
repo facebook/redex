@@ -1254,6 +1254,82 @@ class TypeInference final
 
 } // namespace irtc_impl
 
+namespace {
+
+class Result final {
+ public:
+  static Result Ok() { return Result(); }
+
+  static Result make_error(const std::string& s) {
+    return Result(s);
+  }
+
+  const std::string& error_message() const {
+    always_assert(!is_ok);
+    return m_error_message;
+  }
+
+  bool operator==(const Result& that) const {
+    return is_ok == that.is_ok && m_error_message == that.m_error_message;
+  }
+
+  bool operator!=(const Result& that) const { return !(*this == that); }
+
+ private:
+  bool is_ok{true};
+  std::string m_error_message;
+  Result(const std::string& s): is_ok(false), m_error_message(s) {}
+  Result() = default;
+};
+
+/*
+ * Do a linear pass to sanity-check the structure of the bytecode.
+ */
+Result check_structure(const IRCode* code) {
+  bool has_seen_non_load_param_opcode{false};
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    // XXX we are using FatMethod::iterator instead of InstructionIterator here
+    // because the latter does not support reverse iteration
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto* insn = it->insn;
+    auto op = insn->opcode();
+
+    if (has_seen_non_load_param_opcode && opcode::is_load_param(op)) {
+      return Result::make_error(
+          "Encountered load-param instruction not at the start of the method");
+    }
+    has_seen_non_load_param_opcode = !opcode::is_load_param(op);
+
+    // The instruction immediately before a move-result instruction must be
+    // either an invoke-* or a filled-new-array instruction.
+    if (is_move_result(op)) {
+      auto prev = it;
+      while (prev != code->begin()) {
+        --prev;
+        if (prev->type == MFLOW_OPCODE) {
+          break;
+        }
+      }
+      if (it == code->begin() || prev->type != MFLOW_OPCODE) {
+        return Result::make_error(
+            "Encountered move-result instruction at start of method");
+      }
+      auto prev_op = prev->insn->opcode();
+      if (!(is_invoke(prev_op) || is_filled_new_array(prev_op))) {
+        return Result::make_error(
+            "Encountered move-result instruction without appropriate prefix "
+            "instruction. Expected invoke or filled-new-array, got " +
+            show(prev->insn));
+      }
+    }
+  }
+  return Result::Ok();
+}
+
+} // namespace
+
 IRTypeChecker::~IRTypeChecker() {}
 
 IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
@@ -1275,6 +1351,14 @@ void IRTypeChecker::run() {
     // If the method has no associated code, the type checking trivially
     // succeeds.
     m_complete = true;
+    return;
+  }
+
+  auto result = check_structure(code);
+  if (result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = result.error_message();
     return;
   }
 
