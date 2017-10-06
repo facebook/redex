@@ -18,83 +18,43 @@ using std::placeholders::_1;
 using std::string;
 using std::vector;
 
-namespace {
+void IntraProcConstantPropagation::simplify_instruction(
+    Block* const& block,
+    MethodItemEntry& mie,
+    const ConstPropEnvironment& current_state) const {
+  auto insn = mie.insn;
+  m_lcp.simplify_instruction(insn, current_state);
+}
 
-/** Intraprocedural Constant propagation
- * This code leverages the analysis built by LocalConstantPropagation
- * with works at the basic block level and extends its capabilities by
- * leveraging the Abstract Interpretation Framework's FixPointIterator
- * and HashedAbstractEnvironment facilities.
- *
- * By running the fix point iterator, instead of having no knowledge at
- * the start of a basic block, we can now run the analsys with constants
- * that have been propagated beyond the basic block boundary making this
- * more powerful than its predecessor pass.
- */
-class IntraProcConstantPropagation final
-    : public ConstantPropFixpointAnalysis<Block*,
-                                          MethodItemEntry,
-                                          std::vector<Block*>,
-                                          InstructionIterable> {
- public:
-  explicit IntraProcConstantPropagation(
-      ControlFlowGraph& cfg, const ConstPropV3Config& config)
-      : ConstantPropFixpointAnalysis<Block*,
-                                     MethodItemEntry,
-                                     vector<Block*>,
-                                     InstructionIterable>(
-            cfg.entry_block(),
-            cfg.blocks(),
-            std::bind(&Block::succs, _1),
-            std::bind(&Block::preds, _1)),
-        m_lcp{config} {}
+void IntraProcConstantPropagation::analyze_instruction(
+    const MethodItemEntry& mie, ConstPropEnvironment* current_state) const {
+  auto insn = mie.insn;
+  m_lcp.analyze_instruction(insn, current_state);
+}
 
-  void simplify_instruction(
-      Block* const& block,
-      MethodItemEntry& mie,
-      const ConstPropEnvironment& current_state) const override {
-    auto insn = mie.insn;
-    m_lcp.simplify_instruction(insn, current_state);
-  }
-
-  void analyze_instruction(const MethodItemEntry& mie,
-                           ConstPropEnvironment* current_state) const override {
-    auto insn = mie.insn;
-    m_lcp.analyze_instruction(insn, current_state);
-  }
-
-  void apply_changes(DexMethod* method) const {
-    auto code = method->get_code();
-    for (auto const& p : m_lcp.insn_replacements()) {
-      IRInstruction* const& old_op = p.first;
-      IRInstruction* const& new_op = p.second;
-      if (new_op->opcode() == OPCODE_NOP) {
-        TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(old_op));
-        code->remove_opcode(old_op);
-        delete new_op;
+void IntraProcConstantPropagation::apply_changes(DexMethod* method) const {
+  auto code = method->get_code();
+  for (auto const& p : m_lcp.insn_replacements()) {
+    IRInstruction* const& old_op = p.first;
+    IRInstruction* const& new_op = p.second;
+    if (new_op->opcode() == OPCODE_NOP) {
+      TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(old_op));
+      code->remove_opcode(old_op);
+      delete new_op;
+    } else {
+      TRACE(CONSTP,
+            4,
+            "Replacing instruction %s -> %s\n",
+            SHOW(old_op),
+            SHOW(new_op));
+      if (is_branch(old_op->opcode())) {
+        code->replace_branch(old_op, new_op);
       } else {
-        TRACE(CONSTP,
-              4,
-              "Replacing instruction %s -> %s\n",
-              SHOW(old_op),
-              SHOW(new_op));
-        if (is_branch(old_op->opcode())) {
-          code->replace_branch(old_op, new_op);
-        } else {
-          code->replace_opcode(old_op, new_op);
-        }
+        code->replace_opcode(old_op, new_op);
       }
     }
   }
-
-  size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
-  size_t materialized_consts() const { return m_lcp.num_materialized_consts(); }
-
- private:
-  mutable LocalConstantPropagation m_lcp;
-};
-
-} // namespace
+}
 
 void ConstantPropagationPassV3::configure_pass(const PassConfig& pc) {
   pc.get(
