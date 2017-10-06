@@ -1849,6 +1849,12 @@ public:
     // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
     void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
 
+    // As above, but if onlyDefault is true, only considers the 'default' column.
+    void getAllValuesForResource(
+        uint32_t resourceId,
+        Vector<Res_value>& values,
+        bool onlyDefault) const;
+
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
 
     void getTypeNamesForPackage(
@@ -1867,6 +1873,11 @@ private:
     struct PackageGroup;
     struct bag_set;
     typedef Vector<Type*> TypeList;
+
+    bool tryGetConfigEntry(
+        int entryIndex,
+        const ResTable_type* type,
+        const ResTable_entry** ent) const;
 
     status_t addInternal(const void* data, size_t size, const void* idmapData, size_t idmapDataSize,
             const int32_t cookie, bool copyData);
