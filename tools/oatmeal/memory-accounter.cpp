@@ -32,15 +32,20 @@ public:
   void memcpyAndMark(void* dest, const char* src, size_t count) override {
     memcpy(dest, src, count);
   }
-  void markRangeConsumed(uint32_t, uint32_t) override {}
+
   void markRangeConsumed(const char*, uint32_t) override {}
   void markBufferConsumed(ConstBuffer) override {}
+  void addBuffer(ConstBuffer) override {}
 };
+
+class MultiBufferMemoryAccounter;
 
 class MemoryAccounterImpl : public MemoryAccounter {
  friend class ::MemoryAccounterScope;
+ friend class ::MultiBufferMemoryAccounter;
  public:
   UNCOPYABLE(MemoryAccounterImpl);
+  MOVABLE(MemoryAccounterImpl);
 
   MemoryAccounterImpl(ConstBuffer buf) : buf_(buf) {
     // mark end to avoid special case in print.
@@ -74,6 +79,10 @@ class MemoryAccounterImpl : public MemoryAccounter {
     }
   }
 
+  void addBuffer(ConstBuffer) override {
+    CHECK(false, "Shouldn't do this here");
+  }
+
   void memcpyAndMark(void* dest, const char* src, size_t count) override {
     CHECK(src >= buf_.ptr);
     uint32_t begin = src - buf_.ptr;
@@ -83,19 +92,19 @@ class MemoryAccounterImpl : public MemoryAccounter {
     memcpy(dest, src, count);
   }
 
-  void markRangeConsumed(uint32_t begin, uint32_t count) override {
-    uint32_t end = begin + count;
-    markRangeImpl(begin, end);
-  }
-
   void markRangeConsumed(const char* ptr, uint32_t count) override {
+    CHECK(buf_.ptr <= ptr);
+
     uint32_t begin = ptr - buf_.ptr;
     uint32_t end = begin + count;
     markRangeImpl(begin, end);
   }
 
   void markBufferConsumed(ConstBuffer subBuffer) override {
-    markRangeConsumed(subBuffer.ptr - buf_.ptr, subBuffer.len);
+    CHECK(subBuffer.ptr >= buf_.ptr);
+    CHECK(subBuffer.ptr <= buf_.ptr + buf_.len);
+
+    markRangeConsumed(subBuffer.ptr, subBuffer.len);
   }
 
   static MemoryAccounter* Cur() {
@@ -125,10 +134,90 @@ class MemoryAccounterImpl : public MemoryAccounter {
   }
 };
 
+class MultiBufferMemoryAccounter : public MemoryAccounter {
+public:
+  MultiBufferMemoryAccounter() = delete;
+  MOVABLE(MultiBufferMemoryAccounter);
+  UNCOPYABLE(MultiBufferMemoryAccounter);
+
+  MultiBufferMemoryAccounter(ConstBuffer buf) {
+    accounters_.emplace_back(buf);
+  }
+
+  void print() override;
+
+  void memcpyAndMark(void* dest, const char* src, size_t count) override;
+
+  void markRangeConsumed(const char* ptr, uint32_t count) override;
+  void markBufferConsumed(ConstBuffer subBuffer) override;
+  void addBuffer(ConstBuffer buf) override;
+
+  virtual ~MultiBufferMemoryAccounter() = default;
+
+private:
+  std::vector<MemoryAccounterImpl> accounters_;
+};
+
+
+void MultiBufferMemoryAccounter::memcpyAndMark(void* dest, const char* src, size_t count) {
+  for (auto& a : accounters_) {
+    auto ptr = a.buf_.ptr;
+    char* dst_ptr = reinterpret_cast<char*>(dest);
+    if (ptr <= dest && dest <= dst_ptr + count) {
+      a.memcpyAndMark(dest, src, count);
+      return;
+    }
+  }
+  CHECK(false, "Can't find memory location");
+}
+
+void MultiBufferMemoryAccounter::markRangeConsumed(const char* ptr, uint32_t count) {
+  for (auto& a : accounters_) {
+    auto base_ptr = a.buf_.ptr;
+    if (base_ptr <= ptr && ptr + count <= base_ptr + a.buf_.len) {
+      a.markRangeConsumed(ptr, count);
+      return;
+    }
+  }
+  CHECK(false, "Can't find memory location");
+}
+
+void MultiBufferMemoryAccounter::markBufferConsumed(ConstBuffer subBuffer) {
+  for (auto& a : accounters_) {
+    auto base_ptr = a.buf_.ptr;
+    auto base_len = a.buf_.len;
+
+    auto subbuf_ptr = subBuffer.ptr;
+    auto subbuf_len = subBuffer.len;
+
+    if (base_ptr <= subbuf_ptr && subbuf_ptr + subbuf_len <= base_ptr + base_len) {
+      a.markBufferConsumed(subBuffer);
+      return;
+    }
+  }
+  CHECK(false, "Can't find memory location");
+}
+
+void MultiBufferMemoryAccounter::print() {
+  for (auto& a : accounters_) {
+    a.print();
+  }
+}
+
+void MultiBufferMemoryAccounter::addBuffer(ConstBuffer buf) { 
+  // Make sure this is no-ones sub-buffer in the currently accounted set.
+  for (const auto& a : accounters_) {
+    auto a_end = a.buf_.ptr + a.buf_.len;
+    CHECK(a.buf_.ptr < buf.ptr || a.buf_.ptr > buf.ptr);
+    CHECK(a_end < buf.ptr || a_end > buf.ptr + buf.len);
+  }
+
+  accounters_.emplace_back(buf);
+}
+
 NilMemoryAccounterImpl MemoryAccounterImpl::nil_accounter_;
 std::vector<std::unique_ptr<MemoryAccounter>> MemoryAccounterImpl::accounter_stack_;
-
-}
+} // namespace
 
 MemoryAccounter::~MemoryAccounter() = default;
 
@@ -142,7 +231,7 @@ MemoryAccounter* MemoryAccounter::Cur() {
 
 MemoryAccounterScope::MemoryAccounterScope(ConstBuffer buf) {
   MemoryAccounterImpl::accounter_stack_.push_back(
-    std::unique_ptr<MemoryAccounterImpl>(new MemoryAccounterImpl(buf))
+    std::unique_ptr<MultiBufferMemoryAccounter>(new MultiBufferMemoryAccounter(buf))
   );
 }
 
