@@ -1841,6 +1841,14 @@ public:
         SortedVector<uint32_t> originalIds,
         Vector<uint32_t> newIds);
 
+    // For the given resource ID, looks across all configurations and inlines
+    // all reference Res_value entries based on the given keys -> inline_values
+    // mapping. The entries in the inputs are expected to align based on index.
+    void inlineReferenceValuesForResource(
+        uint32_t resID,
+        SortedVector<uint32_t> inlineable_ids,
+        Vector<Res_value> inline_values);
+
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than
     // ResTable::getResource, which fails for roughly 20% of resources and does not

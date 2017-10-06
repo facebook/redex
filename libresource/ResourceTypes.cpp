@@ -6921,6 +6921,11 @@ void ResTable::remapReferenceValuesForResource(
     SortedVector<uint32_t> originalIds,
     Vector<uint32_t> newIds)
 {
+    resource_name resName;
+    if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
+        return;
+    }
+
     const ssize_t pgIndex = getResourcePackageIndex(resID);
     const int typeIndex = Res_GETTYPE(resID);
     const int entryIndex = Res_GETENTRY(resID);
@@ -6933,50 +6938,13 @@ void ResTable::remapReferenceValuesForResource(
     const size_t NTC = typeConfigs->configs.size();
     for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
         const ResTable_type* type = typeConfigs->configs[configIndex];
-        if ((((uint64_t)type) & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        String8 configStr = type->config.toString();
-        uint32_t entriesStart = dtohl(type->entriesStart);
-        if ((entriesStart & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        uint32_t typeSize = dtohl(type->header.size);
-        if ((typeSize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        const uint32_t* const eindex = (const uint32_t*)
-            (((const uint8_t*)type) + dtohs(type->header.headerSize));
-
-        uint32_t thisOffset = dtohl(eindex[entryIndex]);
-        if (thisOffset == ResTable_type::NO_ENTRY) {
-            continue;
-        }
-
-        resource_name resName;
-        if (!this->getResourceName(resID, true, &resName)) {
-            continue;
-        }
-        if ((thisOffset & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + sizeof(ResTable_entry)) > typeSize) {
-            continue;
-        }
-
-        const ResTable_entry* ent = (const ResTable_entry*)
-            (((const uint8_t*)type) + entriesStart + thisOffset);
-        if (((entriesStart + thisOffset) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
             continue;
         }
 
         uintptr_t esize = dtohs(ent->size);
-        if ((esize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + esize) > typeSize) {
-            continue;
-        }
+        uint32_t typeSize = dtohl(type->header.size);
 
         Res_value* valuePtr = nullptr;
         ResTable_map_entry* bagPtr = nullptr;
@@ -7007,13 +6975,13 @@ void ResTable::remapReferenceValuesForResource(
             }
 
             for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
-                Res_value mapValue = mapPtr->value;
+                Res_value& mapValue = mapPtr->value;
                 if (mapValue.dataType == Res_value::TYPE_REFERENCE ||
                     mapValue.dataType == Res_value::TYPE_ATTRIBUTE) {
                     uint32_t valueData = mapValue.data;
                     remapped = getRemappedEntry(valueData, originalIds, newIds);
                     if (valueData != remapped) {
-                        mapPtr->value.data = remapped;
+                        mapValue.data = remapped;
                     }
                 }
 
@@ -7079,6 +7047,79 @@ bool ResTable::tryGetConfigEntry(
     *entPtr = ent;
 
     return true;
+}
+
+void ResTable::inlineReferenceValuesForResource(
+    uint32_t resID,
+    SortedVector<uint32_t> inlineable_ids,
+    Vector<Res_value> inline_values)
+{
+    resource_name resName;
+    if (!this->getResourceName(resID, true, &resName)) {
+        return;
+    }
+
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
+            continue;
+        }
+
+        uintptr_t esize = dtohs(ent->size);
+        uint32_t typeSize = dtohl(type->header.size);
+
+        Res_value* valuePtr = nullptr;
+        ResTable_map_entry* bagPtr = nullptr;
+        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+            bagPtr = (ResTable_map_entry*)ent;
+        } else {
+            valuePtr = (Res_value*)
+                (((const uint8_t*)ent) + esize);
+        }
+
+        if (valuePtr != nullptr &&
+               (valuePtr->dataType == Res_value::TYPE_REFERENCE)) {
+            uint32_t valueData = valuePtr->data;
+            ssize_t idx = inlineable_ids.indexOf(valueData);
+            if (idx >= 0) {
+                Res_value inline_value = inline_values[idx];
+                valuePtr->data = inline_value.data;
+                valuePtr->dataType = inline_value.dataType;
+            }
+        } else if (bagPtr != nullptr) {
+            const int N = dtohl(bagPtr->count);
+            const uint8_t* baseMapPtr = (const uint8_t*)ent;
+            size_t mapOffset = esize;
+            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+
+            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+                Res_value mapValue = mapPtr->value;
+                if (mapValue.dataType == Res_value::TYPE_REFERENCE) {
+                    uint32_t valueData = mapValue.data;
+                    ssize_t idx = inlineable_ids.indexOf(valueData);
+                    if (idx >= 0) {
+                        Res_value inline_value = inline_values[idx];
+                        mapPtr->value = inline_value;
+                    }
+                }
+
+                const size_t size = dtohs(mapValue.size);
+                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
+                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            }
+        }
+    }
 }
 
 // For the given resource ID, looks across all configurations and returns all
