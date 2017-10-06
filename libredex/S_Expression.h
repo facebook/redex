@@ -439,6 +439,11 @@ class StringAtom final : public Component {
   }
 
   void print(std::ostream& output) const {
+    if (m_string.empty()) {
+      // The empty string needs to be explicitly represented.
+      output << "\"\"";
+      return;
+    }
     if (std::find_if(m_string.begin(), m_string.end(), [](char c) {
           return !is_symbol_char(c);
         }) == m_string.end()) {
