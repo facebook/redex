@@ -62,8 +62,12 @@ class OatFile {
 
   // Reads magic number, returns correct oat file implementation.
   static std::unique_ptr<OatFile> parse(ConstBuffer oatfile_buffer,
-					const std::vector<DexInput>& dexes,
-					bool dex_files_only);
+                                        const std::vector<DexInput>& dexes,
+                                        bool dex_files_only);
+
+  // Like parse, but stops after parsing the dex file listing and dex headers.
+  static std::unique_ptr<OatFile> parse_dex_files_only(ConstBuffer buf);
+  static std::unique_ptr<OatFile> parse_dex_files_only(void* ptr, size_t len);
 
   virtual std::vector<OatDexFile> get_oat_dexfiles() = 0;
 

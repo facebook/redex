@@ -1954,8 +1954,8 @@ private:
 OatFile::~OatFile() = default;
 
 static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
-						   ConstBuffer oatfile_buffer,
-						   const std::vector<DexInput>& dexes) {
+                                                   ConstBuffer oatfile_buffer,
+                                                   const std::vector<DexInput>& dexes) {
   size_t oat_offset = 0;
   if (oatfile_buffer.len >= sizeof(Elf32_Ehdr)) {
     Elf32_Ehdr header;
@@ -1998,9 +1998,17 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
 }
 
 std::unique_ptr<OatFile> OatFile::parse(ConstBuffer oatfile_buffer,
-					const std::vector<DexInput>& dex_files,
-					bool dex_files_only) {
+                                        const std::vector<DexInput>& dex_files,
+                                        bool dex_files_only) {
   return parse_oatfile_impl(dex_files_only, oatfile_buffer, dex_files);
+}
+
+std::unique_ptr<OatFile> OatFile::parse_dex_files_only(ConstBuffer buf) {
+  return parse_oatfile_impl(true, buf, std::vector<DexInput>());
+}
+
+std::unique_ptr<OatFile> OatFile::parse_dex_files_only(void* ptr, size_t len) {
+  return parse_dex_files_only(ConstBuffer { reinterpret_cast<char*>(ptr), len });
 }
 
 ////////// building
