@@ -385,7 +385,6 @@ IRInstruction* make_iget(DexField* field, uint8_t dest, uint8_t src) {
     not_reached();
   }();
 
-  if (dest > 15 || src > 15) return nullptr;
   return (new IRInstruction(opcode))
       ->set_field(field)
       ->set_dest(dest)
@@ -421,7 +420,7 @@ IRInstruction* make_sget(DexField* field, uint8_t dest) {
   return (new IRInstruction(opcode))->set_field(field)->set_dest(dest);
 }
 
-bool replace_getter_wrapper(IRCode* transform,
+void replace_getter_wrapper(IRCode* transform,
                             IRInstruction* insn,
                             IRInstruction* move_result,
                             DexField* field) {
@@ -434,12 +433,10 @@ bool replace_getter_wrapper(IRCode* transform,
   auto new_get = is_static(field)
                 ? make_sget(field, move_result_dest)
                 : make_iget(field, move_result_dest, insn->src(0));
-  if (!new_get) return false;
   TRACE(SYNT, 2, "Created instruction: %s\n", SHOW(new_get));
 
   transform->replace_opcode(insn, new_get);
   transform->remove_opcode(move_result);
-  return true;
 }
 
 void update_invoke(IRCode* transform,
@@ -703,10 +700,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   auto code = caller_method->get_code();
   for (auto g : getter_calls) {
     using std::get;
-    if (!replace_getter_wrapper(&*code, get<0>(g), get<1>(g), get<2>(g))) {
-      always_assert(get<0>(g)->get_method()->is_def());
-      ssms.keepers.emplace(static_cast<DexMethod*>(get<0>(g)->get_method()));
-    }
+    replace_getter_wrapper(code, get<0>(g), get<1>(g), get<2>(g));
   }
   for (auto wpair : wrapper_calls) {
     auto call_inst = wpair.first;
@@ -865,7 +859,7 @@ void do_transform(const ClassHierarchy& ch,
           opcode != OPCODE_INVOKE_DIRECT_RANGE) {
         continue;
       }
-      auto wrappee = 
+      auto wrappee =
             resolve_method(insn->get_method(), MethodSearch::Direct);
       if (wrappee == nullptr || ssms.promoted_to_static.count(wrappee) == 0) {
         continue;
