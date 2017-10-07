@@ -108,6 +108,9 @@ void Graph::combine(reg_t u, reg_t v) {
     if (!t_node.is_active()) {
       continue;
     }
+    if (!should_separate_node(t_node, v_node)) {
+      t_node.m_weight -= edge_weight(t_node.width(), v_node.width());
+    }
     add_edge(u, t, is_coalesceable(v, t));
     if (has_containment_edge(v, t)) {
       add_containment_edge(u, t);
@@ -115,10 +118,6 @@ void Graph::combine(reg_t u, reg_t v) {
     if (has_containment_edge(t, v)) {
       add_containment_edge(t, u);
     }
-  }
-  if (!should_separate_node(u_node, v_node)) {
-    u_node.m_weight -= edge_weight(u_node.width(), v_node.width());
-    v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
   }
   u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
   u_node.m_type_domain.meet_with(v_node.m_type_domain);

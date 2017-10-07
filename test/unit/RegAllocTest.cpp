@@ -304,6 +304,62 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   }
 }
 
+TEST_F(RegAllocTest, CombineNonAdjacentNodes) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 1, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 2, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 3, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::add_edge(&ig, 0, 1);
+  GraphBuilder::add_edge(&ig, 0, 2);
+  GraphBuilder::add_edge(&ig, 2, 3);
+  // +---+
+  // | 1 |
+  // +---+
+  //   |
+  // +---+     +---+    +---+
+  // | 0 | --- | 2 | -- | 3 |
+  // +---+     +---+    +---+
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(2).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  ig.combine(1, 2);
+  EXPECT_EQ(ig.get_node(0).weight(), 1);
+  EXPECT_EQ(ig.get_node(1).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  EXPECT_FALSE(ig.get_node(2).is_active());
+}
+
+TEST_F(RegAllocTest, CombineAdjacentNodes) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 1, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 2, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 3, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::add_edge(&ig, 0, 1);
+  GraphBuilder::add_edge(&ig, 0, 2);
+  GraphBuilder::add_edge(&ig, 2, 3);
+  // +---+
+  // | 1 |
+  // +---+
+  //   |
+  // +---+     +---+    +---+
+  // | 0 | --- | 2 | -- | 3 |
+  // +---+     +---+    +---+
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(2).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  ig.combine(0, 2);
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  EXPECT_FALSE(ig.get_node(2).is_active());
+}
+
 TEST_F(RegAllocTest, Coalesce) {
   using namespace dex_asm;
 
