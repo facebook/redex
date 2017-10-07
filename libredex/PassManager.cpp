@@ -18,6 +18,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "InstructionLowering.h"
 #include "InterDex.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"

@@ -97,6 +97,15 @@ bool has_range(DexOpcode op) {
   return false;
 }
 
+bool is_commutative(DexOpcode op) {
+  return op == OPCODE_ADD_INT || op == OPCODE_MUL_INT ||
+         (op >= OPCODE_AND_INT && op <= OPCODE_XOR_INT) ||
+         op == OPCODE_ADD_LONG || op == OPCODE_MUL_LONG ||
+         (op >= OPCODE_AND_LONG && op <= OPCODE_XOR_LONG) ||
+         op == OPCODE_ADD_FLOAT || op == OPCODE_MUL_FLOAT ||
+         op == OPCODE_ADD_DOUBLE || op == OPCODE_MUL_DOUBLE;
+}
+
 bool may_throw(DexOpcode op) {
   switch (op) {
   case OPCODE_CONST_STRING:

@@ -14,12 +14,10 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InstructionSelection.h"
+#include "InstructionLowering.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "Show.h"
-
-using namespace select_instructions;
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
@@ -35,6 +33,7 @@ std::ostream& operator<<(std::ostream& os, const DexOpcode& to_show) {
 }
 
 TEST(IRInstruction, RoundTrip) {
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   DexType* ty = DexType::make_type("Lfoo;");
@@ -129,8 +128,7 @@ IRInstruction* select_instruction(IRInstruction* insn) {
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(insn);
-  InstructionSelection select;
-  select.select_instructions(code.get());
+  instruction_lowering::lower(code.get());
   return code->begin()->insn;
 }
 
@@ -168,8 +166,7 @@ TEST(IRInstruction, SelectCheckCast) {
   method->make_concrete(ACC_STATIC, 0);
   auto code = std::make_unique<IRCode>(method, 0);
   code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));
-  InstructionSelection select;
-  select.select_instructions(code.get());
+  instruction_lowering::lower(code.get());
 
   // check that we inserted a move opcode before the check-cast
   auto it = InstructionIterable(code.get()).begin();
@@ -182,6 +179,7 @@ TEST(IRInstruction, SelectCheckCast) {
 
 TEST(IRInstruction, SelectMove) {
   using namespace dex_asm;
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   EXPECT_EQ(OPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
@@ -202,6 +200,7 @@ TEST(IRInstruction, SelectMove) {
 
 TEST(IRInstruction, SelectConst) {
   using namespace dex_asm;
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   auto insn = dasm(OPCODE_CONST, {0_v});

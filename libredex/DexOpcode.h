@@ -334,6 +334,8 @@ bool may_throw(DexOpcode);
 // if an opcode has a /range counterpart
 bool has_range_form(DexOpcode);
 
+bool is_commutative(DexOpcode op);
+
 bool is_load_param(DexOpcode);
 
 } // namespace opcode

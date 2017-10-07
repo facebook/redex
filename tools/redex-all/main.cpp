@@ -35,6 +35,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "PassManager.h"
 #include "PassRegistry.h"
@@ -324,6 +325,13 @@ Json::Value get_pass_stats(const PassManager& mgr) {
   return all;
 }
 
+Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
+  Json::Value obj(Json::ValueType::objectValue);
+  obj["num_2addr_instructions"] = Json::UInt(stats.to_2addr);
+  obj["num_move_added_for_check_cast"] = Json::UInt(stats.move_for_check_cast);
+  return obj;
+}
+
 Json::Value get_detailed_stats(
     const std::vector<dex_stats_t>& dexes_stats) {
   Json::Value dexes;
@@ -352,13 +360,16 @@ Json::Value get_input_stats(const dex_stats_t& stats,
   return d;
 }
 
-Json::Value get_output_stats(const dex_stats_t& stats,
-                             const std::vector<dex_stats_t>& dexes_stats,
-                             PassManager& mgr) {
+Json::Value get_output_stats(
+    const dex_stats_t& stats,
+    const std::vector<dex_stats_t>& dexes_stats,
+    const PassManager& mgr,
+    const instruction_lowering::Stats& instruction_lowering_stats) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
+  d["lowering_stats"] = get_lowering_stats(instruction_lowering_stats);
   return d;
 }
 
@@ -528,9 +539,11 @@ int main(int argc, char* argv[]) {
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode);
+    instruction_lowering::Stats instruction_lowering_stats;
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, external_classes, cfg);
+      instruction_lowering_stats = instruction_lowering::run(stores);
     }
 
     TRACE(MAIN, 1, "Writing out new DexClasses...\n");
@@ -589,7 +602,10 @@ int main(int argc, char* argv[]) {
           cfg.metafile(args.config.get("method_move_map", "").asString());
       pos_mapper->write_map();
       stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
-      stats["output_stats"] = get_output_stats(output_totals, output_dexes_stats, manager);
+      stats["output_stats"] = get_output_stats(output_totals,
+                                               output_dexes_stats,
+                                               manager,
+                                               instruction_lowering_stats);
       output_moved_methods_map(method_move_map.c_str(), cfg);
       print_warning_summary();
     }

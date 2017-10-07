@@ -7,10 +7,10 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "InstructionSelection.h"
+#include "InstructionLowering.h"
 #include "ParallelWalkers.h"
 
-namespace select_instructions {
+namespace instruction_lowering {
 
 /*
  * Returns whether the given value can fit in an integer of :width bits.
@@ -35,7 +35,7 @@ static bool signed_int_fits_high16(int64_t v) {
 }
 
 /*
- * Helpers for select_instructions
+ * Helpers for lower()
  */
 
 /*
@@ -61,6 +61,8 @@ static std::array<DexOpcode, 3> move_opcode_tuple(DexOpcode op) {
     not_reached();
   }
 }
+
+namespace impl {
 
 DexOpcode select_move_opcode(const IRInstruction* insn) {
   auto move_tuple = move_opcode_tuple(insn->opcode());
@@ -112,46 +114,9 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   }
 }
 
-void InstructionSelection::select_instructions(IRCode* code) {
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto* insn = it->insn;
-    auto op = insn->opcode();
-    m_stats.to_2addr += try_2addr_conversion(insn);
-    if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
-      // convert check-cast v0, v1 into
-      //
-      //   move v0, v1
-      //   check-cast v0
-      auto* mov = new IRInstruction(OPCODE_MOVE_OBJECT_16);
-      mov->set_dest(insn->dest());
-      mov->set_src(0, insn->src(0));
-      mov->set_opcode(select_move_opcode(mov));
-      insn->set_src(0, insn->dest());
-      code->insert_before(it.unwrap(), mov);
-      ++m_stats.move_for_check_cast;
-    } else if (is_move(op)) {
-      insn->set_opcode(select_move_opcode(insn));
-    } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
-      insn->set_opcode(select_const_opcode(insn));
-    }
-    // TODO: /lit8 and /lit16 instructions
-  }
-}
-
-bool is_commutative(DexOpcode op) {
-  return op == OPCODE_ADD_INT || op == OPCODE_MUL_INT ||
-         (op >= OPCODE_AND_INT && op <= OPCODE_XOR_INT) ||
-         op == OPCODE_ADD_LONG || op == OPCODE_MUL_LONG ||
-         (op >= OPCODE_AND_LONG && op <= OPCODE_XOR_LONG) ||
-         op == OPCODE_ADD_FLOAT || op == OPCODE_MUL_FLOAT ||
-         op == OPCODE_ADD_DOUBLE || op == OPCODE_MUL_DOUBLE;
-}
-
 bool try_2addr_conversion(IRInstruction* insn) {
   auto op = insn->opcode();
-  if (is_commutative(op) && insn->dest() == insn->src(1) &&
+  if (opcode::is_commutative(op) && insn->dest() == insn->src(1) &&
       insn->dest() <= 0xf && insn->src(0) <= 0xf) {
     uint16_t reg_temp = insn->src(0);
     insn->set_src(0, insn->src(1));
@@ -167,36 +132,59 @@ bool try_2addr_conversion(IRInstruction* insn) {
   return false;
 }
 
-} // namespace select_instructions
+} // namespace impl
 
-using namespace select_instructions;
+using namespace impl;
 
-void InstructionSelectionPass::run_pass(DexStoresVector& stores,
-                                        ConfigFiles&,
-                                        PassManager& mgr) {
+Stats lower(IRCode* code) {
+  auto ii = InstructionIterable(code);
+  auto end = ii.end();
+  Stats stats;
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto* insn = it->insn;
+    auto op = insn->opcode();
+    stats.to_2addr += try_2addr_conversion(insn);
+    if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
+      // convert check-cast v0, v1 into
+      //
+      //   move v0, v1
+      //   check-cast v0
+      auto* mov = new IRInstruction(OPCODE_MOVE_OBJECT_16);
+      mov->set_dest(insn->dest());
+      mov->set_src(0, insn->src(0));
+      mov->set_opcode(select_move_opcode(mov));
+      insn->set_src(0, insn->dest());
+      code->insert_before(it.unwrap(), mov);
+      ++stats.move_for_check_cast;
+    } else if (is_move(op)) {
+      insn->set_opcode(select_move_opcode(insn));
+    } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
+      insn->set_opcode(select_const_opcode(insn));
+    }
+    // TODO: /lit8 and /lit16 instructions
+  }
+  return stats;
+}
+
+Stats run(DexStoresVector& stores) {
   using Data = std::nullptr_t;
-  using Output = InstructionSelection::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<Data, Output>(
+  return walk_methods_parallel<Data, Stats>(
       scope,
       [](Data&, DexMethod* m) {
-        InstructionSelection::Stats stats;
+        Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
         }
         auto code = m->get_code();
-        InstructionSelection select;
-        select.select_instructions(code);
-        stats.accumulate(select.get_stats());
+        stats.accumulate(lower(code));
         return stats;
       },
-      [](Output a, Output b) {
+      [](Stats a, Stats b) {
         a.accumulate(b);
         return a;
       },
       [&](unsigned int) { return nullptr; });
-  mgr.incr_metric("num_instruction_to_2addr", stats.to_2addr);
-  mgr.incr_metric("num_move_added_for_check_cast", stats.move_for_check_cast);
 }
 
-static InstructionSelectionPass s_pass;
+} // namespace instruction_lowering
