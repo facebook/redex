@@ -23,6 +23,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "ParallelWalkers.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -194,26 +195,6 @@ class FinalInlineImpl {
     }
   }
 
-  void replace_opcode(DexMethod* method,
-                      IRInstruction* from,
-                      IRInstruction* to) {
-    method->get_code()->replace_opcode(from, to);
-  }
-
-  void inline_sget(DexMethod* method, IRInstruction* opfield) {
-    if (!validate_sget(method, opfield)) return;
-    auto dest = opfield->dest();
-    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
-    always_assert_log(field->is_concrete(), "Must be a concrete field");
-    auto value = field->get_static_value();
-    auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
-    uint64_t v = value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
-
-    auto newopcode =
-        (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
-    replace_opcode(method, opfield, newopcode);
-  }
-
   /*
    * There's no "good way" to differentiate blank vs. non-blank finals.
    * So, we just scan the code in the CL-init.  If it's sput there, then it's
@@ -268,22 +249,39 @@ class FinalInlineImpl {
       }
     }
 
-    std::vector<std::pair<DexMethod*, IRInstruction*>> rewrites;
-    auto opcode_worker = [&](DexMethod* method, IRInstruction* insn) {
-      if (insn->has_field() && is_sget(insn->opcode())) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-        if (field == nullptr || !field->is_concrete()) return;
-        if (inline_field.count(field) == 0) return;
-        rewrites.emplace_back(method, insn);
+    walk_methods_parallel_simple(m_full_scope, [&](DexMethod* m) {
+      auto* code = m->get_code();
+      if (!code) {
+        return;
       }
-    };
-    walk_opcodes(m_full_scope,
-                 [](DexMethod* /* unused */) { return true; },
-                 opcode_worker);
-    TRACE(FINALINLINE, 2, "Method Re-writes %lu\n", rewrites.size());
-    for (auto& pair : rewrites) {
-      inline_sget(pair.first, pair.second);
-    }
+      std::vector<FatMethod::iterator> rewrites;
+      auto ii = InstructionIterable(code);
+      for (auto it = ii.begin(); it != ii.end(); ++it) {
+        auto* insn = it->insn;
+        if (!is_sget(insn->opcode())) {
+          continue;
+        }
+        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        if (field == nullptr || !field->is_concrete()) continue;
+        if (inline_field.count(field) == 0) continue;
+        if (!validate_sget(m, insn)) continue;
+        rewrites.push_back(it.unwrap());
+      }
+      for (auto it : rewrites) {
+        auto* insn = it->insn;
+        auto dest = insn->dest();
+        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        auto value = field->get_static_value();
+        auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
+        uint64_t v =
+            value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
+        auto newopcode =
+            (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
+
+        code->insert_before(it, newopcode);
+        code->remove_opcode(it);
+      }
+    });
   }
 
   /*
