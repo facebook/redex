@@ -24,21 +24,14 @@ const IRInstruction* NULL_INSN = nullptr;
 
 void fields_mapping(const IRInstruction* insn,
                     FieldsRegs* fregs,
-                    DexClass* builder,
-                    bool is_setter) {
+                    DexClass* builder) {
   always_assert(insn != nullptr);
   always_assert(fregs != nullptr);
   always_assert(builder != nullptr);
 
-  bool new_builder = false;
-  if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-    if (insn->get_type() == builder->get_type()) {
-      new_builder = true;
-    }
-  }
-
-  // Set fields to UNDEFINED if new builder instance.
-  if (new_builder) {
+  if (insn->opcode() == OPCODE_NEW_INSTANCE &&
+      insn->get_type() == builder->get_type()) {
+    // Set fields to UNDEFINED if new builder instance.
     for (auto& pair : fregs->field_to_reg) {
       fregs->field_to_reg[pair.first] = FieldOrRegStatus::UNDEFINED;
       fregs->field_to_iput_insns[pair.first].clear();
@@ -62,17 +55,14 @@ void fields_mapping(const IRInstruction* insn,
     }
   }
 
-  if ((is_setter && is_iput(insn->opcode())) ||
-      (!is_setter && is_iget(insn->opcode()))) {
+  if (is_iput(insn->opcode())) {
     auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
 
     if (field != nullptr && field->get_class() == builder->get_type()) {
-      uint16_t current = is_setter ? insn->src(0) : insn->dest();
+      uint16_t current = insn->src(0);
       fregs->field_to_reg[field] = current;
-      if (is_setter) {
-        fregs->field_to_iput_insns[field].clear();
-        fregs->field_to_iput_insns[field].emplace(insn);
-      }
+      fregs->field_to_iput_insns[field].clear();
+      fregs->field_to_iput_insns[field].emplace(insn);
     }
   }
 }
@@ -89,7 +79,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
 
   std::function<void(const IRInstruction*, FieldsRegs*)> trans = [&](
       const IRInstruction* insn, FieldsRegs* fregs) {
-    fields_mapping(insn, fregs, builder, true);
+    fields_mapping(insn, fregs, builder);
   };
 
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
