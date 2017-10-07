@@ -55,6 +55,9 @@ struct Arguments {
   std::string art_image_location;
 
   bool test_is_oatmeal = false;
+
+  // generate samsung compatible oat file.
+  bool samsung_mode = false;
 };
 
 #ifndef ANDROID
@@ -92,6 +95,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"arch", required_argument, nullptr, 'a'},
                              {"art-image-location", required_argument, nullptr, 0},
                              {"test-is-oatmeal", no_argument, nullptr, 1},
+                             {"samsung-oatformat", no_argument, nullptr, 2},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -168,6 +172,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 1:
       ret.test_is_oatmeal = true;
+      break;
+
+    case 2:
+      ret.samsung_mode = true;
       break;
 
     case ':':
@@ -277,7 +285,7 @@ int build(const Arguments& args) {
   }
 
   OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch,
-      args.write_elf, args.art_image_location);
+      args.write_elf, args.art_image_location, args.samsung_mode);
 
   return 0;
 }

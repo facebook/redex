@@ -78,12 +78,16 @@ class OatFile {
   // section. This returns the offset to that data. (Or zero if the buffer was not an elf file.)
   virtual size_t oat_offset() const = 0;
 
+  // Return true if we've detected samsung customizations to the oatfile format.
+  virtual bool is_samsung() const = 0;
+
   static Status build(const std::string& oat_file,
                       const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,
                       const std::string& arch,
                       bool write_elf,
-                      const std::string& art_image_location);
+                      const std::string& art_image_location,
+                      bool samsung_mode);
 };
 
 enum class InstructionSet {
