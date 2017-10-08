@@ -269,7 +269,7 @@ class FinalInlineImpl {
       }
       for (auto it : rewrites) {
         auto* insn = it->insn;
-        auto dest = insn->dest();
+        auto dest = move_result_pseudo_of(it)->dest();
         auto field = resolve_field(insn->get_field(), FieldSearch::Static);
         auto value = field->get_static_value();
         auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
@@ -581,6 +581,10 @@ class FinalInlineImpl {
         continue;
       }
 
+      auto sget_move_result = move_result_pseudo_of(it.unwrap());
+      // skip the move-result-pseudo
+      ++it;
+
       // Check for sput to static final
       auto next_insn = std::next(it)->insn;
       if (!validate_sput_for_encoded_value(clazz, next_insn)) {
@@ -593,13 +597,13 @@ class FinalInlineImpl {
       }
 
       // Check that dst register for sget is src register for sput
-      if (sget_op->dest() != sput_op->src(0)) {
+      if (sget_move_result->dest() != sput_op->src(0)) {
         continue;
       }
 
-      if (reg_reused(sget_op->dest(), it, end) ||
+      if (reg_reused(sget_move_result->dest(), it, end) ||
           (sget_op->opcode() == OPCODE_SGET_WIDE &&
-           reg_reused(sget_op->dest() + 1, it, end))) {
+           reg_reused(sget_move_result->dest() + 1, it, end))) {
         TRACE(FINALINLINE,
               2,
               "Cannot propagate %s to %s. Source register reused.\n",
@@ -614,7 +618,7 @@ class FinalInlineImpl {
             "Field %s depends on %s\n",
             SHOW(dst_field),
             SHOW(src_field));
-      deps[src_field].emplace_back(clinit, it->insn, next_insn, dst_field);
+      deps[src_field].emplace_back(clinit, sget_op, sput_op, dst_field);
     }
   }
 };
