@@ -350,6 +350,8 @@ bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
     case MFLOW_POSITION:
     case MFLOW_DEBUG:
       break;
+    case MFLOW_DEX_OPCODE:
+      always_assert_log(false, "DexInstructions not expected here");
     }
   }
   return false;

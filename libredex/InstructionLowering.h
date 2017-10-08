@@ -25,15 +25,16 @@ struct Stats {
 };
 
 /*
- * Pick the smallest opcode that can address its operands.
+ * Convert IRInstructions to DexInstructions while doing the following:
  *
- * Also insert move instructions as necessary for check-cast instructions that
- * have different src and dest registers.
- *
- * Record the number of instructions converted to /2ddr form, also the number
- * of move instruction inserted because of check-cast.
+ *   - Check consistency of load-param opcodes
+ *   - Pick the smallest opcode that can address its operands.
+ *   - Insert move instructions as necessary for check-cast instructions that
+ *     have different src and dest registers.
+ *   - Record the number of instructions converted to /2ddr form, also the
+ *     number of move instruction inserted because of check-cast.
  */
-Stats lower(IRCode* code);
+Stats lower(DexMethod*);
 
 Stats run(DexStoresVector&);
 
@@ -43,7 +44,7 @@ DexOpcode select_move_opcode(const IRInstruction* insn);
 
 DexOpcode select_const_opcode(const IRInstruction* insn);
 
-bool try_2addr_conversion(IRInstruction*);
+bool try_2addr_conversion(MethodItemEntry*);
 
 } // namespace impl
 

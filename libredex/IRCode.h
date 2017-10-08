@@ -75,6 +75,7 @@ enum MethodItemType {
   MFLOW_TRY,
   MFLOW_CATCH,
   MFLOW_OPCODE,
+  MFLOW_DEX_OPCODE,
   MFLOW_TARGET,
   MFLOW_DEBUG,
   MFLOW_POSITION,
@@ -121,12 +122,19 @@ struct MethodItemEntry {
     TryEntry* tentry;
     CatchEntry* centry;
     IRInstruction* insn;
+    // dex_insn should only ever be used by the instruction lowering / output
+    // code. Do NOT use it in passes!
+    DexInstruction* dex_insn;
     BranchTarget* target;
     std::unique_ptr<DexDebugInstruction> dbgop;
     std::unique_ptr<DexPosition> pos;
     MethodItemEntry* throwing_mie;
   };
   explicit MethodItemEntry(const MethodItemEntry&);
+  MethodItemEntry(DexInstruction* dex_insn) {
+    this->type = MFLOW_DEX_OPCODE;
+    this->dex_insn = dex_insn;
+  }
   MethodItemEntry(IRInstruction* insn) {
     this->type = MFLOW_OPCODE;
     this->insn = insn;
@@ -153,6 +161,16 @@ struct MethodItemEntry {
   }
 
   ~MethodItemEntry();
+
+  /*
+   * This should only ever be used by the instruction lowering step. Do NOT use
+   * it in passes!
+   */
+  void replace_ir_with_dex(DexInstruction* dex_insn) {
+    always_assert(type == MFLOW_OPCODE);
+    this->type = MFLOW_DEX_OPCODE;
+    this->dex_insn = dex_insn;
+  }
 
   void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -193,7 +211,7 @@ class IRCode {
    * This method fixes the goto branches when the instruction is removed or
    * replaced by another instruction.
    */
-  void remove_branch_target(IRInstruction *branch_inst);
+  void remove_branch_targets(IRInstruction *branch_inst);
 
   void clear_cfg();
 

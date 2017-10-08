@@ -114,19 +114,25 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   }
 }
 
-bool try_2addr_conversion(IRInstruction* insn) {
+bool try_2addr_conversion(MethodItemEntry* mie) {
+  auto* insn = mie->dex_insn;
   auto op = insn->opcode();
   if (opcode::is_commutative(op) && insn->dest() == insn->src(1) &&
       insn->dest() <= 0xf && insn->src(0) <= 0xf) {
-    uint16_t reg_temp = insn->src(0);
-    insn->set_src(0, insn->src(1));
-    insn->set_src(1, reg_temp);
-    insn->set_opcode(convert_3to2addr(op));
+    auto* new_insn = new DexInstruction(convert_3to2addr(op));
+    new_insn->set_dest(insn->dest());
+    new_insn->set_src(1, insn->src(0));
+    delete mie->dex_insn;
+    mie->dex_insn = new_insn;
     return true;
   } else if (op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE &&
              insn->dest() == insn->src(0) && insn->dest() <= 0xf &&
              insn->src(1) <= 0xf) {
-    insn->set_opcode(convert_3to2addr(op));
+    auto* new_insn = new DexInstruction(convert_3to2addr(op));
+    new_insn->set_dest(insn->dest());
+    new_insn->set_src(1, insn->src(1));
+    delete mie->dex_insn;
+    mie->dex_insn = new_insn;
     return true;
   }
   return false;
@@ -136,32 +142,176 @@ bool try_2addr_conversion(IRInstruction* insn) {
 
 using namespace impl;
 
-Stats lower(IRCode* code) {
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
+/*
+ * Checks that the load-param opcodes are consistent with the method prototype.
+ */
+static void check_load_params(DexMethod* method) {
+  auto* code = method->get_code();
+  auto param_ops = InstructionIterable(code->get_param_instructions());
+  if (param_ops.empty()) {
+    return;
+  }
+  auto& args_list = method->get_proto()->get_args()->get_type_list();
+  auto it = param_ops.begin();
+  auto end = param_ops.end();
+  uint16_t next_ins = it->insn->dest();
+  if (!is_static(method)) {
+    auto op = it->insn->opcode();
+    always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
+    it.reset(code->erase(it.unwrap()));
+    ++next_ins;
+  }
+  auto args_it = args_list.begin();
+  for (; it != end; ++it) {
+    auto op = it->insn->opcode();
+    // check that the param registers are contiguous
+    always_assert(next_ins == it->insn->dest());
+    // TODO: have load param opcodes store the actual type of the param and
+    // check that they match the method prototype here
+    always_assert(args_it != args_list.end());
+    if (is_wide_type(*args_it)) {
+      always_assert(op == IOPCODE_LOAD_PARAM_WIDE);
+    } else if (is_primitive(*args_it)) {
+      always_assert(op == IOPCODE_LOAD_PARAM);
+    } else {
+      always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
+    }
+    ++args_it;
+    next_ins += it->insn->dest_is_wide() ? 2 : 1;
+  }
+  always_assert(args_it == args_list.end());
+  // check that the params are at the end of the frame
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->dests_size()) {
+      always_assert(insn->dest() < next_ins);
+    }
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      always_assert(insn->src(i) < next_ins);
+    }
+  }
+}
+
+static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
+  switch (opcode::ref(insn->opcode())) {
+    case opcode::Ref::None:
+    case opcode::Ref::Data:
+      return new DexInstruction(insn->opcode());
+    case opcode::Ref::String:
+      return new DexOpcodeString(insn->opcode(), insn->get_string());
+    case opcode::Ref::Type:
+      return new DexOpcodeType(insn->opcode(), insn->get_type());
+    case opcode::Ref::Field:
+      return new DexOpcodeField(insn->opcode(), insn->get_field());
+    case opcode::Ref::Method:
+      return new DexOpcodeMethod(insn->opcode(), insn->get_method());
+  }
+}
+
+/*
+ * Returns the number of DexInstructions added during lowering (not including
+ * the check-cast).
+ */
+static size_t lower_check_cast(IRCode* code, FatMethod::iterator it) {
+  const auto* insn = it->insn;
+  size_t extra_instructions{0};
+  if (insn->dest() != insn->src(0)) {
+    // convert check-cast v0, v1 into
+    //
+    //   move v0, v1
+    //   check-cast v0
+    // TODO: factor this code a little
+    auto mov = std::make_unique<IRInstruction>(OPCODE_MOVE_OBJECT_16);
+    mov->set_dest(insn->dest());
+    mov->set_src(0, insn->src(0));
+    mov->set_opcode(select_move_opcode(mov.get()));
+    auto* dex_mov = new DexInstruction(mov->opcode());
+    dex_mov->set_dest(insn->dest());
+    dex_mov->set_src(0, insn->src(0));
+    code->insert_before(it, dex_mov);
+    ++extra_instructions;
+  }
+  auto* dex_insn = new DexOpcodeType(OPCODE_CHECK_CAST, insn->get_type());
+  dex_insn->set_src(0, insn->dest());
+  it->replace_ir_with_dex(dex_insn);
+
+  return extra_instructions;
+}
+
+static void lower_fill_array_data(IRCode* code, FatMethod::iterator it) {
+  const auto* insn = it->insn;
+  auto* dex_insn = new DexInstruction(OPCODE_FILL_ARRAY_DATA);
+  dex_insn->set_src(0, insn->src(0));
+  auto* bt = new BranchTarget();
+  bt->type = BRANCH_SIMPLE;
+  bt->src = &*it;
+  code->push_back(bt);
+  code->push_back(insn->get_data());
+  it->replace_ir_with_dex(dex_insn);
+}
+
+void lower_simple_instruction(IRCode* code, FatMethod::iterator it) {
+  const auto* insn = it->insn;
+  auto op = insn->opcode();
+
+  DexInstruction* dex_insn;
+  if (is_move(op)) {
+    dex_insn = new DexInstruction(select_move_opcode(insn));
+  } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
+    dex_insn = new DexInstruction(select_const_opcode(insn));
+  } else {
+    dex_insn = create_dex_instruction(insn);
+  }
+
+  if (insn->dests_size()) {
+    dex_insn->set_dest(insn->dest());
+  }
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    dex_insn->set_src(i, insn->src(i));
+  }
+  if (opcode::has_literal(op)) {
+    dex_insn->set_literal(insn->literal());
+  }
+  if (dex_insn->has_arg_word_count()) {
+    dex_insn->set_arg_word_count(insn->srcs_size());
+  }
+  if (opcode::has_range(op)) {
+    dex_insn->set_range_base(insn->range_base());
+    dex_insn->set_range_size(insn->range_size());
+  }
+  it->replace_ir_with_dex(dex_insn);
+}
+
+Stats lower(DexMethod* method) {
   Stats stats;
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto* insn = it->insn;
+  auto* code = method->get_code();
+  always_assert(code != nullptr);
+  // Check the load-param opcodes make sense before removing them
+  check_load_params(method);
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    const auto* insn = it->insn;
     auto op = insn->opcode();
-    stats.to_2addr += try_2addr_conversion(insn);
-    if (op == OPCODE_CHECK_CAST && insn->dest() != insn->src(0)) {
-      // convert check-cast v0, v1 into
-      //
-      //   move v0, v1
-      //   check-cast v0
-      auto* mov = new IRInstruction(OPCODE_MOVE_OBJECT_16);
-      mov->set_dest(insn->dest());
-      mov->set_src(0, insn->src(0));
-      mov->set_opcode(select_move_opcode(mov));
-      insn->set_src(0, insn->dest());
-      code->insert_before(it.unwrap(), mov);
-      ++stats.move_for_check_cast;
-    } else if (is_move(op)) {
-      insn->set_opcode(select_move_opcode(insn));
-    } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
-      insn->set_opcode(select_const_opcode(insn));
+
+    if (opcode::is_load_param(op)) {
+      code->remove_opcode(it);
+    } else if (op == OPCODE_CHECK_CAST) {
+      stats.move_for_check_cast += lower_check_cast(code, it);
+    } else if (op == OPCODE_FILL_ARRAY_DATA) {
+      lower_fill_array_data(code, it);
+    } else {
+      lower_simple_instruction(code, it);
     }
     // TODO: /lit8 and /lit16 instructions
+  }
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    always_assert(it->type != MFLOW_OPCODE);
+    if (it->type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    stats.to_2addr += try_2addr_conversion(&*it);
   }
   return stats;
 }
@@ -176,8 +326,7 @@ Stats run(DexStoresVector& stores) {
         if (m->get_code() == nullptr) {
           return stats;
         }
-        auto code = m->get_code();
-        stats.accumulate(lower(code));
+        stats.accumulate(lower(m));
         return stats;
       },
       [](Stats a, Stats b) {

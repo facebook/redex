@@ -1021,6 +1021,9 @@ std::string show(const MethodItemEntry& mei) {
   case MFLOW_OPCODE:
     ss << "OPCODE: " << show(mei.insn);
     return ss.str();
+  case MFLOW_DEX_OPCODE:
+    ss << "DEX_OPCODE: " << show(mei.dex_insn);
+    return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
       ss << "TARGET: MULTI " << mei.target->index << " ";
