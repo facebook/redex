@@ -51,14 +51,15 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   code->build_cfg();
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
-  std::function<void(const IRInstruction*, TaintedRegs*)> trans = [&](
-      const IRInstruction* insn, TaintedRegs* tregs) {
-    if (insn == this_insn) {
-      tregs->m_reg_set[insn->dest()] = 1;
-    } else {
-      transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
-    }
-  };
+  std::function<void(FatMethod::iterator, TaintedRegs*)> trans =
+      [&](FatMethod::iterator it, TaintedRegs* tregs) {
+        auto* insn = it->insn;
+        if (insn == this_insn) {
+          tregs->m_reg_set[insn->dest()] = 1;
+        } else {
+          transfer_object_reach(this_cls, regs_size, insn, tregs->m_reg_set);
+        }
+      };
   auto taint_map = forwards_dataflow(blocks, TaintedRegs(regs_size + 1), trans);
   return tainted_reg_escapes(
       this_cls, method, *taint_map, enable_buildee_constr_change);
