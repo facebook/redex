@@ -1046,8 +1046,7 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
 size_t IRCode::count_opcodes() const {
   size_t count {0};
   for (const auto& mie : *m_fmethod) {
-    if (mie.type == MFLOW_OPCODE &&
-        !opcode::is_load_param(mie.insn->opcode())) {
+    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
       ++count;
     }
   }

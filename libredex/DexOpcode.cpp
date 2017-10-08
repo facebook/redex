@@ -210,6 +210,10 @@ bool has_range_form(DexOpcode op) {
   }
 }
 
+bool is_internal(DexOpcode op) {
+  return format(op) == FMT_iopcode;
+}
+
 bool is_load_param(DexOpcode op) {
   return op >= IOPCODE_LOAD_PARAM && op <= IOPCODE_LOAD_PARAM_WIDE;
 }
