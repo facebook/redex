@@ -153,7 +153,9 @@ void Outliner::run_pass(DexStoresVector& stores,
   always_assert(exception_type);
   auto match = std::make_tuple(
       m::new_instance(m::opcode_type(m::is_assignable_to(exception_type))),
+      m::move_result_pseudo(),
       m::const_string(),
+      m::move_result_pseudo(),
       m::invoke_direct(m::opcode_method(m::can_be_constructor())),
       m::throwex());
 
@@ -167,16 +169,18 @@ void Outliner::run_pass(DexStoresVector& stores,
           Block* bb,
           size_t n,
           IRInstruction** insns) {
-        always_assert(n == 4);
+        always_assert(n == 6);
 
         auto new_instance = insns[0];
-        auto const_string = insns[1];
-        auto invoke_direct = insns[2];
-        IRInstruction* throwex = insns[3];
+        auto new_instance_result = insns[1];
+        auto const_string = insns[2];
+        auto const_string_result = insns[3];
+        auto invoke_direct = insns[4];
+        IRInstruction* throwex = insns[5];
         if (invoke_direct->srcs_size() == 2 &&
-            new_instance->dest() == invoke_direct->src(0) &&
-            const_string->dest() == invoke_direct->src(1) &&
-            new_instance->dest() == throwex->src(0)) {
+            new_instance_result->dest() == invoke_direct->src(0) &&
+            const_string_result->dest() == invoke_direct->src(1) &&
+            new_instance_result->dest() == throwex->src(0)) {
           TRACE(OUTLINE,
                 1,
                 "Found pattern in %s (%p):\n  %s\n  %s\n  %s\n  %s\n",
@@ -188,10 +192,10 @@ void Outliner::run_pass(DexStoresVector& stores,
                 SHOW(throwex));
 
           auto const_int_extype = dasm(OPCODE_CONST,
-                                       {{VREG, new_instance->dest()},
+                                       {{VREG, new_instance_result->dest()},
                                         {LITERAL, outlined_throws.size()}});
           IRInstruction* invoke_static =
-              make_invoke(dispatch_method, new_instance->dest());
+              make_invoke(dispatch_method, new_instance_result->dest());
 
           /*
               Nice code you got there. Be a shame if someone ever put an
