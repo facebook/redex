@@ -760,7 +760,10 @@ class AnchorPropagation final
                            AnchorEnvironment* current_state) const {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT:
-    case OPCODE_MOVE_EXCEPTION:
+    case OPCODE_MOVE_EXCEPTION: {
+      current_state->set(insn->dest(), AnchorDomain(insn));
+      break;
+    }
     case OPCODE_CONST_STRING:
     case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS:
@@ -770,7 +773,7 @@ class AnchorPropagation final
     case OPCODE_AGET_OBJECT:
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT: {
-      current_state->set(insn->dest(), AnchorDomain(insn));
+      current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY:
@@ -784,7 +787,8 @@ class AnchorPropagation final
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case OPCODE_MOVE_RESULT_OBJECT: {
+    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
+    case OPCODE_MOVE_RESULT_OBJECT:
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
