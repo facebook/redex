@@ -96,6 +96,14 @@ match_t<IRInstruction> const_string() {
   };
 }
 
+match_t<IRInstruction> move_result_pseudo() {
+  return {
+    [](const IRInstruction* insn) {
+      return opcode::is_move_result_pseudo(insn->opcode());
+    }
+  };
+}
+
 match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   new_instance() {
     return new_instance(any<IRInstruction>());

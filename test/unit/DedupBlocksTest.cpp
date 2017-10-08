@@ -110,7 +110,7 @@ TEST_F(DedupBlocksTest, simplestCase) {
   code->push_back(*A_if_D.source);
 
   // B
-  code->push_back(dasm(OPCODE_DIV_INT, {0_v, 0_v, 0_v}));
+  code->push_back(dasm(OPCODE_MUL_INT, {0_v, 0_v, 0_v}));
   code->push_back(*B_goto_C.source);
 
   // E
@@ -156,9 +156,7 @@ TEST_F(DedupBlocksTest, simplestCase) {
   ++mie;
 
   // B
-  EXPECT_EQ(MFLOW_FALLTHROUGH, mie->type);
-  ++mie;
-  EXPECT_EQ(OPCODE_DIV_INT, mie->insn->opcode());
+  EXPECT_EQ(OPCODE_MUL_INT, mie->insn->opcode());
   ++mie;
   EXPECT_EQ(OPCODE_GOTO, mie->insn->opcode());
   auto b_c = mie;

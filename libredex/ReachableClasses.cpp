@@ -214,6 +214,7 @@ void init_permanently_reachable_classes(
 
   auto match = std::make_tuple(
       m::const_string(/* const-string {vX}, <any string> */),
+      m::move_result_pseudo(/* const-string {vX}, <any string> */),
       m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
                        m::opcode_method(
                            m::named<DexMethodRef>("forName") &&
@@ -225,12 +226,13 @@ void init_permanently_reachable_classes(
       match,
       [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
         auto const_string = insns[0];
-        auto invoke_static = insns[1];
+        auto move_result_pseudo = insns[1];
+        auto invoke_static = insns[2];
         // Make sure that the registers agree
         auto src = opcode::has_range(invoke_static->opcode())
                        ? invoke_static->range_base()
                        : invoke_static->src(0);
-        if (const_string->dest() == src) {
+        if (move_result_pseudo->dest() == src) {
           auto classname = JavaNameUtil::external_to_internal(
               const_string->get_string()->c_str());
           TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
@@ -282,7 +284,7 @@ void init_permanently_reachable_classes(
         mark_reachable_by_classname(classname, false);
       }
     }
-    
+
     // Classnames present in native libraries (lib/*/*.so)
     for (std::string classname : get_native_classes(apk_dir)) {
       auto type = DexType::get_type(classname.c_str());
