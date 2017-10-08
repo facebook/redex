@@ -152,9 +152,11 @@ void update_liveness(const IRInstruction* inst,
       bliveness.reset(inst->dest() + 1);
     }
   }
+  auto op = inst->opcode();
   // The destination of an `invoke` is its return value, which is encoded as
   // the max position in the bitvector.
-  if (is_invoke(inst->opcode()) || is_filled_new_array(inst->opcode())) {
+  if (is_invoke(op) || is_filled_new_array(op) ||
+      inst->has_move_result_pseudo()) {
     bliveness.reset(bliveness.size() - 1);
   }
   // Source registers are live.
@@ -163,17 +165,18 @@ void update_liveness(const IRInstruction* inst,
   }
   // `invoke-range` instructions need special handling since their sources
   // are encoded as a range.
-  if (opcode::has_range(inst->opcode())) {
+  if (opcode::has_range(op)) {
     for (size_t i = 0; i < inst->range_size(); i++) {
       bliveness.set(inst->range_base() + i);
     }
   }
   // The source of a `move-result` is the return value of the prior call,
   // which is encoded as the max position in the bitvector.
-  if (is_move_result(inst->opcode())) {
+  if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
     bliveness.set(bliveness.size() - 1);
   }
 }
+
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -204,10 +207,14 @@ void LocalDce::dce(DexMethod* method) {
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
-        if (s->id() == b->id()) {
+        if(s->id() == b->id()) {
           bliveness |= prev_liveness;
         }
-        TRACE(DCE, 5, "  S%lu: %s\n", s->id(), show(liveness[s->id()]).c_str());
+        TRACE(DCE,
+              5,
+              "  S%lu: %s\n",
+              s->id(),
+              show(liveness[s->id()]).c_str());
         bliveness |= liveness[s->id()];
       }
 
@@ -221,7 +228,11 @@ void LocalDce::dce(DexMethod* method) {
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
-          dead_instructions.push_back(std::prev(it.base()));
+          // move-result-pseudo instructions will be automatically removed
+          // when their primary instruction is deleted.
+          if (!opcode::is_move_result_pseudo(it->insn->opcode())) {
+            dead_instructions.push_back(std::prev(it.base()));
+          }
         }
         TRACE(CFG,
               5,
@@ -281,9 +292,10 @@ bool LocalDce::is_required(IRInstruction* inst,
       result |= bliveness.test(inst->dest() + 1);
     }
     return result;
-  } else if (is_filled_new_array(inst->opcode())) {
-    // filled-new-array passes its dest via the return-value slot, but isn't
-    // inherently live like the invoke-* instructions.
+  } else if (is_filled_new_array(inst->opcode()) ||
+             inst->has_move_result_pseudo()) {
+    // These instructions pass their dests via the return-value slot, but
+    // aren't inherently live like the invoke-* instructions.
     return bliveness.test(bliveness.size() - 1);
   }
   return false;
