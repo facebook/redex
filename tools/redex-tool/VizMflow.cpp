@@ -22,15 +22,14 @@ namespace {
 void dump_viz(
   const Scope& scope,
   const char* cls_filter,
-  const char* meth_filter,
-  bool end_block_before_throw) {
+  const char* meth_filter) {
   walk_methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
         if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
         if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
         auto mt = meth->get_code();
-        mt->build_cfg(end_block_before_throw);
+        mt->build_cfg();
         const auto& blocks = mt->cfg().blocks();
         fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
         for (const auto& block : blocks) {
@@ -78,8 +77,7 @@ class VizMflow : public Tool {
       options["class-filter"].as<std::string>().c_str() : nullptr;
     const char* method_filter = options.count("method-filter") ?
       options["method-filter"].as<std::string>().c_str() : nullptr;
-    bool end_block_before_throw = options["end-block-before-throw"].as<bool>();
-    dump_viz(scope, class_filter, method_filter, end_block_before_throw);
+    dump_viz(scope, class_filter, method_filter);
   }
 
  private:

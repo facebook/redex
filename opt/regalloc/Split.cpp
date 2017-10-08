@@ -461,32 +461,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
                                   &block_load_info);
     // For each instruction in block in reverse order
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      // special case for check-cast
-      // if a fallthrough go to checkcast with split value
-      // split the live range around fallthrough
-      if (it->type == MFLOW_FALLTHROUGH) {
-        auto check_cast = find_check_cast(*it);
-        if (check_cast != nullptr) {
-          auto dest = check_cast->dest();
-          auto split_it = split_plan.split_around.find(dest);
-          if (split_it != split_plan.split_around.end()) {
-            for (auto l : split_it->second) {
-              if (!live_out.contains(l)) {
-                continue;
-              }
-              auto temp = code->allocate_temp();
-              auto mov_store = gen_move(ig.get_node(l).type(), temp, l);
-              code->insert_before(--(it.base()), mov_store);
-              ++split_move;
-              auto mov_load = gen_move(ig.get_node(l).type(), l, temp);
-              code->insert_after(--(it.base()), mov_load);
-              ++split_move;
-              ++it;
-            }
-          }
-        }
-        continue;
-      } else if (it->type != MFLOW_OPCODE) {
+      if (it->type != MFLOW_OPCODE) {
         continue;
       }
 

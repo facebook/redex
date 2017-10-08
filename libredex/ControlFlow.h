@@ -71,14 +71,7 @@ class ControlFlowGraph {
 
   ControlFlowGraph() {}
 
-  /*
-   * If end_block_before_throw is false, opcodes that may throw (e.g. invokes,
-   * {get|put}-object, etc) will terminate their basic blocks. If it is true,
-   * they will instead be at the start of the next basic block. As of right
-   * now the only pass that uses the `false` behavior is SimpleInline, and I
-   * would like to remove it eventually.
-   */
-  ControlFlowGraph(IRCode* code, bool end_block_before_throw = true);
+  explicit ControlFlowGraph(IRCode* code);
   ~ControlFlowGraph();
 
   const std::vector<Block*>& blocks() const { return m_blocks; }
@@ -130,8 +123,6 @@ class ControlFlowGraph {
 };
 
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
-
-bool ends_with_may_throw(Block* b, bool end_block_before_throw = true);
 
 /*
  * Build a postorder sorted vector of blocks from the given CFG. Uses a

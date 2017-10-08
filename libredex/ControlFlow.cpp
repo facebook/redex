@@ -19,8 +19,7 @@ namespace {
 
 bool end_of_block(const IRCode* code,
                   FatMethod::iterator it,
-                  bool in_try,
-                  bool end_block_before_throw) {
+                  bool in_try) {
   auto next = std::next(it);
   if (next == code->end()) {
     return true;
@@ -29,16 +28,9 @@ bool end_of_block(const IRCode* code,
       next->type == MFLOW_CATCH) {
     return true;
   }
-  if (end_block_before_throw) {
-    if (in_try && it->type == MFLOW_FALLTHROUGH &&
-        it->throwing_mie != nullptr) {
-      return true;
-    }
-  } else {
-    if (in_try && it->type == MFLOW_OPCODE &&
-        opcode::may_throw(it->insn->opcode())) {
-      return true;
-    }
+  if (in_try && it->type == MFLOW_OPCODE &&
+      opcode::may_throw(it->insn->opcode())) {
+    return true;
   }
   if (it->type != MFLOW_OPCODE) {
     return false;
@@ -50,17 +42,20 @@ bool end_of_block(const IRCode* code,
   return false;
 }
 
-void split_may_throw(IRCode* code, FatMethod::iterator it) {
-  auto& mie = *it;
-  if (mie.type == MFLOW_OPCODE && opcode::may_throw(mie.insn->opcode())) {
-    code->insert_before(it, *MethodItemEntry::make_throwing_fallthrough(&mie));
+bool ends_with_may_throw(Block* p) {
+  for (auto last = p->rbegin(); last != p->rend(); ++last) {
+    if (last->type != MFLOW_OPCODE) {
+      continue;
+    }
+    return last->insn->opcode() == OPCODE_THROW ||
+           opcode::may_throw(last->insn->opcode());
   }
+  return false;
 }
 
 } // namespace
 
-ControlFlowGraph::ControlFlowGraph(IRCode* code,
-                                   bool end_block_before_throw) {
+ControlFlowGraph::ControlFlowGraph(IRCode* code) {
   // Find the block boundaries
   std::unordered_map<MethodItemEntry*, std::vector<Block*>> branch_to_targets;
   std::vector<std::pair<TryEntry*, Block*>> try_ends;
@@ -78,9 +73,6 @@ ControlFlowGraph::ControlFlowGraph(IRCode* code,
     branch_to_targets[begin->target->src].push_back(block);
   }
   for (auto it = code->begin(); it != code->end(); ++it) {
-    split_may_throw(code, it);
-  }
-  for (auto it = code->begin(); it != code->end(); ++it) {
     if (it->type == MFLOW_TRY) {
       if (it->tentry->type == TRY_START) {
         in_try = true;
@@ -88,7 +80,7 @@ ControlFlowGraph::ControlFlowGraph(IRCode* code,
         in_try = false;
       }
     }
-    if (!end_of_block(code, it, in_try, end_block_before_throw)) {
+    if (!end_of_block(code, it, in_try)) {
       continue;
     }
     // End the current block.
@@ -166,7 +158,7 @@ ControlFlowGraph::ControlFlowGraph(IRCode* code,
     --bid;
     while (true) {
       block = m_blocks.at(bid);
-      if (ends_with_may_throw(block, end_block_before_throw)) {
+      if (ends_with_may_throw(block)) {
         for (auto mei = try_end->catch_start;
              mei != nullptr;
              mei = mei->centry->next) {
@@ -319,42 +311,6 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
   };
   visit(cfg.entry_block());
   return exit_blocks;
-}
-
-bool ends_with_may_throw(Block* p, bool end_block_before_throw) {
-  if (!end_block_before_throw) {
-    for (auto last = p->rbegin(); last != p->rend(); ++last) {
-      if (last->type != MFLOW_OPCODE) {
-        continue;
-      }
-      return last->insn->opcode() == OPCODE_THROW ||
-             opcode::may_throw(last->insn->opcode());
-    }
-  }
-  for (auto last = p->rbegin(); last != p->rend(); ++last) {
-    switch (last->type) {
-    case MFLOW_FALLTHROUGH:
-      if (last->throwing_mie) {
-        return true;
-      }
-      break;
-    case MFLOW_OPCODE:
-      if (last->insn->opcode() == OPCODE_THROW) {
-        return true;
-      } else {
-        return false;
-      }
-    case MFLOW_TRY:
-    case MFLOW_CATCH:
-    case MFLOW_TARGET:
-    case MFLOW_POSITION:
-    case MFLOW_DEBUG:
-      break;
-    case MFLOW_DEX_OPCODE:
-      always_assert_log(false, "DexInstructions not expected here");
-    }
-  }
-  return false;
 }
 
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {

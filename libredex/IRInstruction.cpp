@@ -212,81 +212,6 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   return insn;
 }
 
-bool IRInstruction::dest_is_wide() const {
-  switch (opcode()) {
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
-  case OPCODE_MOVE_RESULT_WIDE:
-    return true;
-
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
-  case OPCODE_CONST_WIDE:
-  case OPCODE_CONST_WIDE_HIGH16:
-    return true;
-
-  case OPCODE_AGET_WIDE:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_SGET_WIDE:
-    return true;
-
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_INT_TO_LONG:
-  case OPCODE_INT_TO_DOUBLE:
-  case OPCODE_LONG_TO_DOUBLE:
-  case OPCODE_FLOAT_TO_LONG:
-  case OPCODE_FLOAT_TO_DOUBLE:
-  case OPCODE_DOUBLE_TO_LONG:
-    return true;
-
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
-    return true;
-
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-    return false;
-  case IOPCODE_LOAD_PARAM_WIDE:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
 bool IRInstruction::src_is_wide(size_t i) const {
   switch (opcode()) {
   case OPCODE_MOVE_WIDE:
@@ -354,14 +279,6 @@ bool IRInstruction::src_is_wide(size_t i) const {
 
   default:
     return false;
-  }
-}
-
-bit_width_t IRInstruction::dest_bit_width() const {
-  if (m_opcode == OPCODE_CHECK_CAST) {
-    return 4;
-  } else {
-    return opcode_impl::dest_bit_width(m_opcode);
   }
 }
 

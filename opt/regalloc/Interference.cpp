@@ -139,9 +139,25 @@ void Graph::remove_node(reg_t u) {
   u_node.m_props.reset(Node::ACTIVE);
 }
 
-void GraphBuilder::update_node_constraints(const IRInstruction* insn,
+size_t dest_bit_width(FatMethod::iterator it) {
+  auto insn = it->insn;
+  auto op = insn->opcode();
+  if (opcode::is_move_result_pseudo(op)) {
+    auto primary_op = primary_instruction_of_move_result_pseudo(it)->opcode();
+    if (primary_op == OPCODE_CHECK_CAST) {
+      return 4;
+    } else {
+      return opcode_impl::dest_bit_width(primary_op);
+    }
+  } else {
+    return opcode_impl::dest_bit_width(op);
+  }
+}
+
+void GraphBuilder::update_node_constraints(FatMethod::iterator it,
                                            const RangeSet& range_set,
                                            Graph* graph) {
+  auto insn = it->insn;
   auto op = insn->opcode();
   if (insn->dests_size()) {
     auto dest = insn->dest();
@@ -151,7 +167,7 @@ void GraphBuilder::update_node_constraints(const IRInstruction* insn,
     }
     node.m_type_domain.meet_with(RegisterTypeDomain(dest_reg_type(insn)));
     node.m_max_vreg =
-        std::min(node.m_max_vreg, max_unsigned_value(insn->dest_bit_width()));
+        std::min(node.m_max_vreg, max_unsigned_value(dest_bit_width(it)));
     node.m_width = insn->dest_is_wide() ? 2 : 1;
   }
 
@@ -182,31 +198,21 @@ void GraphBuilder::update_node_constraints(const IRInstruction* insn,
   }
 }
 
-IRInstruction* find_check_cast(const MethodItemEntry& mie) {
-  always_assert(mie.type == MFLOW_FALLTHROUGH);
-  if (mie.throwing_mie != nullptr &&
-      mie.throwing_mie->insn->opcode() == OPCODE_CHECK_CAST) {
-    return mie.throwing_mie->insn;
-  } else {
-    return nullptr;
-  }
-}
-
 /*
  * Build the interference graph by adding edges between nodes that are
  * simultaneously live.
  *
  * check-cast instructions have to be handled specially. They are represented
- * with both a dest and a src in our IR. However, in actual Dex bytecode, it
- * only takes a single operand which acts as both src and dest. So when
- * converting IR to Dex bytecode, we need to insert a move instruction if the
- * src and dest operands differ. We must insert the move before, not after, the
- * check-cast. Suppose we did not:
+ * with both a dest (via a move-result-pseudo) and a src in our IR. However, in
+ * actual Dex bytecode, it only takes a single operand which acts as both src
+ * and dest. So when converting IR to Dex bytecode, we need to insert a move
+ * instruction if the src and dest operands differ. We must insert the move
+ * before, not after, the check-cast. Suppose we did not:
  *
  *        IR                  |           Dex
  *   sget-object v0 LFoo;     |  sget-object v0 LFoo;
- *   check-cast v1 v0 LBar;   |  check-cast v0 LBar;
- *                            |  move-object v1 v0
+ *   check-cast v0 LBar;      |  check-cast v0 LBar;
+ *   move-result-pseudo v1    |  move-object v1 v0
  *   invoke-static v0 LFoo.a; |  invoke-static v0 LFoo.a; // v0 is of type Bar!
  *
  * However, inserting before the check-cast is tricky to get right. If the
@@ -217,8 +223,9 @@ IRInstruction* find_check_cast(const MethodItemEntry& mie) {
  *     load-param v1 Ljava/lang/Object;
  *     TRY_START
  *     const/4 v0 123
+ *     check-cast v1 LFoo;
  *   B1:
- *     check-cast v0, v1 LFoo;
+ *     move-result-pseudo v0
  *     return v0
  *     TRY_END
  *   B2:
@@ -241,24 +248,16 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
                           const RangeSet& range_set) {
   Graph graph;
   graph.m_separate_node = select_spill_later;
-  for (const auto& mie : InstructionIterable(code)) {
-    GraphBuilder::update_node_constraints(mie.insn, range_set, &graph);
+  auto ii = InstructionIterable(code);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    GraphBuilder::update_node_constraints(it.unwrap(), range_set, &graph);
   }
 
   auto& cfg = code->cfg();
   for (Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type == MFLOW_FALLTHROUGH) {
-        auto check_cast = find_check_cast(*it);
-        if (check_cast != nullptr) {
-          for (auto reg : live_out.elements()) {
-            graph.add_edge(check_cast->dest(), reg);
-            graph.add_containment_edge(check_cast->dest(), reg);
-          }
-        }
-        continue;
-      } else if (it->type != MFLOW_OPCODE) {
+      if (it->type != MFLOW_OPCODE) {
         continue;
       }
       auto insn = it->insn;
@@ -291,6 +290,12 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
           }
         }
       }
+      if (op == OPCODE_CHECK_CAST) {
+        auto move_result_pseudo = std::prev(it)->insn;
+        for (auto reg : live_out.elements()) {
+          graph.add_edge(move_result_pseudo->dest(), reg);
+        }
+      }
       // adding containment edge between liverange defined in insn and elements
       // in live-out set of insn
       if (insn->dests_size()) {
@@ -315,7 +320,8 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       node.m_props.set(Node::SPILL);
     }
     assert_log(!node.m_type_domain.is_bottom(),
-               "Type violation in code:\n%s\n",
+               "Type violation of v%u in code:\n%s\n",
+               reg,
                SHOW(code));
   }
   return graph;

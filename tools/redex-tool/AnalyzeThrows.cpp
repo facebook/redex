@@ -180,7 +180,7 @@ void find_throwing_block(const Scope& scope) {
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
         auto mt = meth->get_code();
-        mt->build_cfg(false);
+        mt->build_cfg();
         const auto& cfg = mt->cfg();
         for (const auto& block : cfg.blocks()) {
           if (is_throw_block(meth, block)) {

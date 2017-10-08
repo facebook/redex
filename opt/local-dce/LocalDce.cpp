@@ -129,10 +129,8 @@ void remove_empty_try_regions(IRCode* code) {
         try_start = &mie;
       } else if (!encloses_throw /* && tentry->type == TRY_END */) {
         try_start->type = MFLOW_FALLTHROUGH;
-        try_start->throwing_mie = nullptr;
         try_start = nullptr;
         mie.type = MFLOW_FALLTHROUGH;
-        mie.throwing_mie = nullptr;
       }
     } else if (mie.type == MFLOW_OPCODE) {
       auto op = mie.insn->opcode();

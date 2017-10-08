@@ -121,8 +121,10 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
 TEST_F(IRTypeCheckerTest, arrayRead) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("[I"), {0_v, 14_v}),
-      dasm(OPCODE_AGET, {1_v, 0_v, 5_v}),
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("[I"), {14_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
+      dasm(OPCODE_AGET, {0_v, 5_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {1_v}),
       dasm(OPCODE_ADD_INT, {2_v, 1_v, 5_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
@@ -131,15 +133,17 @@ TEST_F(IRTypeCheckerTest, arrayRead) {
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
-  EXPECT_EQ(SCALAR, checker.get_type(insns[2], 1));
-  EXPECT_EQ(INT, checker.get_type(insns[3], 1));
+  EXPECT_EQ(SCALAR, checker.get_type(insns[4], 1));
+  EXPECT_EQ(INT, checker.get_type(insns[5], 1));
 }
 
 TEST_F(IRTypeCheckerTest, arrayReadWide) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("[D"), {0_v, 14_v}),
-      dasm(OPCODE_AGET_WIDE, {1_v, 0_v, 5_v}),
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("[D"), {14_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
+      dasm(OPCODE_AGET_WIDE, {0_v, 5_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_WIDE, {1_v}),
       dasm(OPCODE_ADD_DOUBLE, {3_v, 1_v, 10_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
@@ -147,21 +151,24 @@ TEST_F(IRTypeCheckerTest, arrayReadWide) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
-  EXPECT_EQ(SCALAR1, checker.get_type(insns[2], 1));
-  EXPECT_EQ(SCALAR2, checker.get_type(insns[2], 2));
-  EXPECT_EQ(DOUBLE1, checker.get_type(insns[3], 3));
-  EXPECT_EQ(DOUBLE2, checker.get_type(insns[3], 4));
+  EXPECT_EQ(SCALAR1, checker.get_type(insns[4], 1));
+  EXPECT_EQ(SCALAR2, checker.get_type(insns[4], 2));
+  EXPECT_EQ(DOUBLE1, checker.get_type(insns[5], 3));
+  EXPECT_EQ(DOUBLE2, checker.get_type(insns[5], 4));
 }
 
 TEST_F(IRTypeCheckerTest, multipleDefinitions) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("[I"), {0_v, 14_v}),
-      dasm(OPCODE_AGET, {0_v, 0_v, 5_v}),
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("[I"), {14_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
+      dasm(OPCODE_AGET, {0_v, 5_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
       dasm(OPCODE_INT_TO_FLOAT, {0_v, 0_v}),
       dasm(OPCODE_NEG_FLOAT, {0_v, 0_v}),
       dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}),
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("Lfoo;"), {0_v, 0_v}),
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("Lfoo;"), {0_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
       dasm(OPCODE_INVOKE_VIRTUAL,
            DexMethod::make_method("LFoo;", "bar", "J", {"S"}),
            {0_v, 12_v}),
@@ -172,21 +179,22 @@ TEST_F(IRTypeCheckerTest, multipleDefinitions) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[1], 0));
-  EXPECT_EQ(SCALAR, checker.get_type(insns[2], 0));
-  EXPECT_EQ(FLOAT, checker.get_type(insns[3], 0));
-  EXPECT_EQ(FLOAT, checker.get_type(insns[4], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[5], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[6], 0));
-  EXPECT_EQ(LONG1, checker.get_type(insns[8], 0));
-  EXPECT_EQ(LONG2, checker.get_type(insns[8], 1));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[2], 0));
+  EXPECT_EQ(SCALAR, checker.get_type(insns[4], 0));
+  EXPECT_EQ(FLOAT, checker.get_type(insns[5], 0));
+  EXPECT_EQ(FLOAT, checker.get_type(insns[6], 0));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[7], 0));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[9], 0));
+  EXPECT_EQ(LONG1, checker.get_type(insns[11], 0));
+  EXPECT_EQ(LONG2, checker.get_type(insns[11], 1));
 }
 
 TEST_F(IRTypeCheckerTest, referenceFromInteger) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_MOVE, {0_v, 5_v}),
-      dasm(OPCODE_AGET, {0_v, 0_v, 5_v}),
+      dasm(OPCODE_AGET, {0_v, 5_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
   add_code(insns);
@@ -194,7 +202,7 @@ TEST_F(IRTypeCheckerTest, referenceFromInteger) {
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
-      "Type error in method testMethod at instruction 'AGET v0, v0, v5' for "
+      "Type error in method testMethod at instruction 'AGET v0, v5' for "
       "register v0: expected type REFERENCE, but found INT instead",
       checker.what());
 }
@@ -249,8 +257,9 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
   IRCode* code = m_method->get_code();
   code->push_back(*if_mie); // branch to target1
   code->push_back(dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {0_v}));
   code->push_back(
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {0_v, 0_v}));
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   code->push_back(*goto_mie); // branch to target2
   code->push_back(target1);
   code->push_back(dasm(OPCODE_MOVE, {0_v, 12_v}));
@@ -274,7 +283,8 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
 TEST_F(IRTypeCheckerTest, signatureMismatch) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {0_v, 14_v}),
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {14_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
       dasm(OPCODE_INVOKE_VIRTUAL,
            DexMethod::make_method("Lbar;", "foo", "V", {"I", "J", "Z"}),
            {0_v, 5_v, 7_v, 8_v, 13_v}),
@@ -387,7 +397,8 @@ TEST_F(IRTypeCheckerTest, exceptionHandler) {
   code->push_back(dasm(OPCODE_CONST, {1_v, 0_L}));
   code->push_back(dasm(OPCODE_CONST, {2_v, 12_L}));
   code->push_back(TRY_START, catch_start);
-  code->push_back(dasm(OPCODE_DIV_INT, {2_v, 2_v, 5_v})); // Can throw
+  code->push_back(dasm(OPCODE_DIV_INT, {5_v, 5_v})); // Can throw
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO, {2_v}));
   code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   code->push_back(dasm(OPCODE_MOVE, {3_v, 1_v}));
   code->push_back(TRY_END, catch_start);
@@ -459,7 +470,8 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_CONST, {0_v, 0_L}),
-      dasm(OPCODE_AGET, {1_v, 0_v, 5_v}),
+      dasm(OPCODE_AGET, {0_v, 5_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {1_v}),
       dasm(OPCODE_ADD_INT_2ADDR, {5_v, 0_v}),
   };
   add_code(insns);

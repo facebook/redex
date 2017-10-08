@@ -79,29 +79,6 @@ enum MethodItemType {
   MFLOW_TARGET,
   MFLOW_DEBUG,
   MFLOW_POSITION,
-
-  /*
-   * We insert one MFLOW_FALLTHROUGH before every MFLOW_OPCODE that
-   * could potentially throw, and set the throwing_mie field to point to that
-   * opcode. The MFLOW_FALLTHROUGH will then be at the end of its basic block
-   * and the MFLOW_OPCODE will be at the start of the next one. build_cfg
-   * will treat the MFLOW_FALLTHROUGH as potentially throwing and add edges
-   * from its BB to the BB of any catch handler, but it will treat the
-   * MFLOW_OPCODE is non-throwing. This is desirable for dataflow analysis since
-   * we do not want to e.g. consider a register to be defined if the opcode
-   * that is supposed to define it ends up throwing an exception. E.g. suppose
-   * we have the opcodes
-   *
-   *   const v0, 123
-   *   new-array v0, v1
-   *
-   * If new-array throws an OutOfMemoryError and control flow jumps to some
-   * handler within the same method, then v0 will still contain the value 123
-   * instead of an array reference. So we want the control flow edge to be
-   * placed before the new-array instruction. Placing that edge right at the
-   * const instruction would be strange -- `const` doesn't throw -- so we
-   * insert the MFLOW_FALLTHROUGH entry to make it clearer.
-   */
   MFLOW_FALLTHROUGH,
 };
 
@@ -119,7 +96,7 @@ struct MethodItemEntry {
   MethodItemType type;
 
   union {
-    TryEntry* tentry;
+    TryEntry* tentry{nullptr};
     CatchEntry* centry;
     IRInstruction* insn;
     // dex_insn should only ever be used by the instruction lowering / output
@@ -128,7 +105,6 @@ struct MethodItemEntry {
     BranchTarget* target;
     std::unique_ptr<DexDebugInstruction> dbgop;
     std::unique_ptr<DexPosition> pos;
-    MethodItemEntry* throwing_mie;
   };
   explicit MethodItemEntry(const MethodItemEntry&);
   MethodItemEntry(DexInstruction* dex_insn) {
@@ -152,14 +128,7 @@ struct MethodItemEntry {
   MethodItemEntry(std::unique_ptr<DexPosition> pos)
       : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
-  MethodItemEntry(): type(MFLOW_FALLTHROUGH), throwing_mie(nullptr) {}
-  static MethodItemEntry* make_throwing_fallthrough(
-      MethodItemEntry* throwing_mie) {
-    auto ret = new MethodItemEntry();
-    ret->throwing_mie = throwing_mie;
-    return ret;
-  }
-
+  MethodItemEntry(): type(MFLOW_FALLTHROUGH) {}
   ~MethodItemEntry();
 
   /*
@@ -288,13 +257,17 @@ class IRCode {
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
-  void build_cfg(bool end_block_before_throw = true);
+  void build_cfg();
 
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);
+
+  /* Passes memory ownership of "from" to callee.  It will delete it. */
+  void replace_opcode(IRInstruction* to_delete,
+                      std::vector<IRInstruction*> replacements);
 
   /*
    * Does exactly what it says and you SHOULD be afraid. This is mainly useful
@@ -319,7 +292,14 @@ class IRCode {
     m_fmethod->push_back(mie);
   }
 
-  /* position = nullptr means at the head */
+  /*
+   * Insert after instruction :position.
+   *
+   * position = nullptr means we insert at the head
+   *
+   * If position is an instruction that has a move-result-pseudo suffix, we
+   * will do the insertion after the move-result-pseudo.
+   */
   void insert_after(IRInstruction* position, const std::vector<IRInstruction*>& opcodes);
 
   FatMethod::iterator insert_before(const FatMethod::iterator& position,
@@ -349,7 +329,13 @@ class IRCode {
   /* Memory ownership of "insn" passes to callee, it will delete it. */
   void remove_opcode(IRInstruction* insn);
 
-  void remove_opcode(const FatMethod::iterator&);
+  /*
+   * Remove the instruction that :it points to.
+   *
+   * If :it points to an instruction that has a move-result-pseudo suffix, we
+   * remove both that instruction and the move-result-pseudo that follows.
+   */
+  void remove_opcode(const FatMethod::iterator& it);
 
   /* This method will delete the switch case where insn resides. */
   void remove_switch_case(IRInstruction* insn);
@@ -479,3 +465,8 @@ class InstructionIterable {
 
   bool structural_equals(const InstructionIterable& other);
 };
+
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    FatMethod::iterator it);
+
+IRInstruction* move_result_pseudo_of(FatMethod::iterator it);

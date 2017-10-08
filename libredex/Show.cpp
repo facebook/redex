@@ -902,8 +902,14 @@ std::string show(DexOpcode opcode) {
     return "IOPCODE_LOAD_PARAM_OBJECT";
   case IOPCODE_LOAD_PARAM_WIDE:
     return "IOPCODE_LOAD_PARAM_WIDE";
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+    return "IOPCODE_MOVE_RESULT_PSEUDO";
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT";
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+    return "IOPCODE_MOVE_RESULT_PSEUDO_WIDE";
   }
-  always_assert_log(false, "Unknown opcode");
+  always_assert_log(false, "Unknown opcode 0x%x", opcode);
   return "";
 }
 
@@ -1045,8 +1051,7 @@ std::string show(const MethodItemEntry& mei) {
     ss << "POSITION: " << show(mei.pos);
     return ss.str();
   case MFLOW_FALLTHROUGH:
-    ss << "FALLTHROUGH: " << mei.throwing_mie;
-    return ss.str();
+    return "FALLTHROUGH";
   }
 }
 

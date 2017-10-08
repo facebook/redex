@@ -600,6 +600,71 @@ void generate_load_params(const DexMethod* method,
   code->set_registers_size(param_reg);
 }
 
+MethodItemEntry* insert_ir_for_dex(const DexInstruction* dex_insn,
+                                   FatMethod* fmethod) {
+  auto op = dex_insn->opcode();
+  auto* insn = new IRInstruction(op);
+  always_assert(!is_fopcode(op));
+
+  IRInstruction* move_result_pseudo{nullptr};
+  if (insn->dests_size()) {
+    insn->set_dest(dex_insn->dest());
+  } else if (opcode::may_throw(op)) {
+    if (op == OPCODE_CHECK_CAST) {
+      move_result_pseudo = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      move_result_pseudo->set_dest(dex_insn->src(0));
+    } else if (dex_insn->dests_size()) {
+      DexOpcode move_op;
+      if (opcode_impl::dest_is_wide(op)) {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+      } else if (opcode_impl::dest_is_object(op)) {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+      } else {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO;
+      }
+      move_result_pseudo = new IRInstruction(move_op);
+      move_result_pseudo->set_dest(dex_insn->dest());
+    }
+  }
+
+  insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
+  for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
+    insn->set_src(i, dex_insn->src(i));
+  }
+  if (opcode::dest_is_src(op)) {
+    insn->set_opcode(convert_2to3addr(op));
+  }
+  if (opcode::has_literal(op)) {
+    insn->set_literal(dex_insn->literal());
+  }
+  if (opcode::has_offset(op)) {
+    insn->set_offset(dex_insn->offset());
+  }
+  if (opcode::has_range(op)) {
+    insn->set_range_base(dex_insn->range_base());
+    insn->set_range_size(dex_insn->range_size());
+  }
+  if (dex_insn->has_string()) {
+    insn->set_string(
+        static_cast<const DexOpcodeString*>(dex_insn)->get_string());
+  } else if (dex_insn->has_type()) {
+    insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
+  } else if (dex_insn->has_field()) {
+    insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+  } else if (dex_insn->has_method()) {
+    insn->set_method(
+        static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+  }
+
+  auto mei = new MethodItemEntry(insn);
+  fmethod->push_back(*mei);
+  if (move_result_pseudo != nullptr) {
+    fmethod->push_back(*(new MethodItemEntry(move_result_pseudo)));
+  }
+
+  return mei;
+}
+
 void balloon(DexMethod* method, FatMethod* fmethod) {
   auto dex_code = method->get_dex_code();
   auto instructions = dex_code->release_instructions();
@@ -619,10 +684,10 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
       if (is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       }
+      fmethod->push_back(*mei);
     } else {
-      mei = new MethodItemEntry(new IRInstruction(insn));
+      mei = insert_ir_for_dex(insn, fmethod);
     }
-    fmethod->push_back(*mei);
     bm.insert(EntryAddrBiMap::relation(mei, addr));
     TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     addr += insn->size();
@@ -788,7 +853,6 @@ void IRCode::remove_branch_targets(IRInstruction *branch_inst) {
       if (btmei->insn == branch_inst) {
         mentry->type = MFLOW_FALLTHROUGH;
         delete mentry->target;
-        mentry->throwing_mie = nullptr;
       }
     }
   }
@@ -841,29 +905,31 @@ void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
       SHOW(to));
 }
 
+void IRCode::replace_opcode(IRInstruction* to_delete,
+                            std::vector<IRInstruction*> replacements) {
+  auto it = m_fmethod->begin();
+  for (; it != m_fmethod->end(); it++) {
+    if (it->type == MFLOW_OPCODE && it->insn == to_delete) {
+      break;
+    }
+  }
+  always_assert_log(it != m_fmethod->end(),
+                    "No match found while replacing '%s'",
+                    SHOW(to_delete));
+  for (auto insn : replacements) {
+    insert_before(it, insn);
+  }
+  remove_opcode(it);
+}
+
 void IRCode::replace_opcode(IRInstruction* from, IRInstruction* to) {
   always_assert_log(!is_branch(to->opcode()),
                     "You may want replace_branch instead");
-  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
-    MethodItemEntry* mentry = &*miter;
-    if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
-      if (is_branch(from->opcode())) {
-        remove_branch_targets(from);
-      }
-      mentry->insn = to;
-      delete from;
-      return;
-    }
-  }
-  always_assert_log(
-      false,
-      "No match found while replacing '%s' with '%s'",
-      SHOW(from),
-      SHOW(to));
+  replace_opcode(from, std::vector<IRInstruction*>{to});
 }
 
 void IRCode::insert_after(IRInstruction* position,
-                                   const std::vector<IRInstruction*>& opcodes) {
+                          const std::vector<IRInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
    *if
    * a method has a branch target as it's first instruction.
@@ -875,11 +941,16 @@ void IRCode::insert_after(IRInstruction* position,
   for (auto const& mei : *m_fmethod) {
     if (mei.type == MFLOW_OPCODE &&
         (position == nullptr || mei.insn == position)) {
-      auto insertat = m_fmethod->iterator_to(mei);
-      if (position != nullptr) insertat++;
+      auto insert_at = m_fmethod->iterator_to(mei);
+      if (position != nullptr) {
+        insert_at++;
+        if (position->has_move_result_pseudo()) {
+          insert_at++;
+        }
+      }
       for (auto* opcode : opcodes) {
         MethodItemEntry* mentry = new MethodItemEntry(opcode);
-        m_fmethod->insert(insertat, *mentry);
+        m_fmethod->insert(insert_at, *mentry);
       }
       return;
     }
@@ -970,7 +1041,6 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
 
   target_mei->type = MFLOW_FALLTHROUGH;
   delete target_mei->target;
-  target_mei->throwing_mie = nullptr;
 }
 
 size_t IRCode::count_opcodes() const {
@@ -997,18 +1067,17 @@ size_t IRCode::sum_opcode_sizes() const {
 void IRCode::remove_opcode(const FatMethod::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  if (opcode::may_throw(insn->opcode())) {
-    for (auto rev = --FatMethod::reverse_iterator(it);
-         rev != m_fmethod->rend();
-         ++rev) {
-      if (rev->type == MFLOW_FALLTHROUGH && rev->throwing_mie) {
-        assert(rev->throwing_mie == &*it);
-        rev->throwing_mie = nullptr;
-        break;
-      } else if (rev->type == MFLOW_OPCODE) {
-        break;
-      }
-    }
+  always_assert(!opcode::is_move_result_pseudo(insn->opcode()));
+  if (insn->has_move_result_pseudo()) {
+    auto move_it = std::next(it);
+    always_assert_log(
+        move_it->type == MFLOW_OPCODE &&
+            opcode::is_move_result_pseudo(move_it->insn->opcode()),
+        "No move-result-pseudo found for %s",
+        SHOW(insn));
+    delete move_it->insn;
+    move_it->type = MFLOW_FALLTHROUGH;
+    move_it->insn = nullptr;
   }
   if (is_branch(insn->opcode())) {
     remove_branch_targets(insn);
@@ -1130,9 +1199,9 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
 
 } // namespace
 
-void IRCode::build_cfg(bool end_block_before_throw) {
+void IRCode::build_cfg() {
   clear_cfg();
-  m_cfg = std::make_unique<ControlFlowGraph>(this, end_block_before_throw);
+  m_cfg = std::make_unique<ControlFlowGraph>(this);
 }
 
 void IRCode::clear_cfg() {
@@ -1256,9 +1325,7 @@ bool IRCode::try_sync(DexCode* code) {
         if (branch_offset == 1) {
           needs_resync = true;
           branch_op_mie->type = MFLOW_FALLTHROUGH;
-          branch_op_mie->throwing_mie = nullptr;
           mentry->type = MFLOW_FALLTHROUGH;
-          mentry->throwing_mie = nullptr;
         } else {
           needs_resync |=
               !encode_offset(m_fmethod, branch_op_mie, branch_offset);
@@ -1435,4 +1502,19 @@ bool InstructionIterable::structural_equals(const InstructionIterable& other) {
   }
 
   return it1 == this->end() && it2 == other.end();
+}
+
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    FatMethod::iterator it) {
+  --it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                it->insn->has_move_result_pseudo());
+  return it->insn;
+}
+
+IRInstruction* move_result_pseudo_of(FatMethod::iterator it) {
+  ++it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                opcode::is_move_result_pseudo(it->insn->opcode()));
+  return it->insn;
 }

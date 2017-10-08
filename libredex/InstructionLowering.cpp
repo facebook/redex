@@ -208,32 +208,47 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   }
 }
 
+// IRCode::remove_opcode doesn't support removal of move-result-pseudo
+// instructions in isolation -- it only removes them when the caller calls it
+// with the associated 'primary' prefix instruction -- so we use this function
+// specifically for this purpose.
+static void remove_move_result_pseudo(FatMethod::iterator it) {
+  always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
+  delete it->insn;
+  it->insn = nullptr;
+  it->type = MFLOW_FALLTHROUGH;
+}
+
 /*
  * Returns the number of DexInstructions added during lowering (not including
  * the check-cast).
  */
-static size_t lower_check_cast(IRCode* code, FatMethod::iterator it) {
+static size_t lower_check_cast(IRCode* code, FatMethod::iterator* it_) {
+  auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
-  if (insn->dest() != insn->src(0)) {
-    // convert check-cast v0, v1 into
+  auto move = move_result_pseudo_of(it);
+  if (move->dest() != insn->src(0)) {
+    // convert check-cast v1; move-result-pseudo v0 into
     //
     //   move v0, v1
     //   check-cast v0
     // TODO: factor this code a little
-    auto mov = std::make_unique<IRInstruction>(OPCODE_MOVE_OBJECT_16);
-    mov->set_dest(insn->dest());
-    mov->set_src(0, insn->src(0));
-    mov->set_opcode(select_move_opcode(mov.get()));
-    auto* dex_mov = new DexInstruction(mov->opcode());
-    dex_mov->set_dest(insn->dest());
+    auto move_template =
+        std::make_unique<IRInstruction>(OPCODE_MOVE_OBJECT_16);
+    move_template->set_dest(move->dest());
+    move_template->set_src(0, insn->src(0));
+    move_template->set_opcode(select_move_opcode(move_template.get()));
+    auto* dex_mov = new DexInstruction(move_template->opcode());
+    dex_mov->set_dest(move->dest());
     dex_mov->set_src(0, insn->src(0));
     code->insert_before(it, dex_mov);
     ++extra_instructions;
   }
   auto* dex_insn = new DexOpcodeType(OPCODE_CHECK_CAST, insn->get_type());
-  dex_insn->set_src(0, insn->dest());
+  dex_insn->set_src(0, move->dest());
   it->replace_ir_with_dex(dex_insn);
+  remove_move_result_pseudo(++it);
 
   return extra_instructions;
 }
@@ -250,7 +265,8 @@ static void lower_fill_array_data(IRCode* code, FatMethod::iterator it) {
   it->replace_ir_with_dex(dex_insn);
 }
 
-void lower_simple_instruction(IRCode* code, FatMethod::iterator it) {
+static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
+  auto& it = *it_;
   const auto* insn = it->insn;
   auto op = insn->opcode();
 
@@ -262,9 +278,10 @@ void lower_simple_instruction(IRCode* code, FatMethod::iterator it) {
   } else {
     dex_insn = create_dex_instruction(insn);
   }
-
   if (insn->dests_size()) {
     dex_insn->set_dest(insn->dest());
+  } else if (insn->has_move_result_pseudo()) {
+    dex_insn->set_dest(move_result_pseudo_of(it)->dest());
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     dex_insn->set_src(i, insn->src(i));
@@ -280,6 +297,9 @@ void lower_simple_instruction(IRCode* code, FatMethod::iterator it) {
     dex_insn->set_range_size(insn->range_size());
   }
   it->replace_ir_with_dex(dex_insn);
+  if (insn->has_move_result_pseudo()) {
+    remove_move_result_pseudo(++it);
+  }
 }
 
 Stats lower(DexMethod* method) {
@@ -298,11 +318,11 @@ Stats lower(DexMethod* method) {
     if (opcode::is_load_param(op)) {
       code->remove_opcode(it);
     } else if (op == OPCODE_CHECK_CAST) {
-      stats.move_for_check_cast += lower_check_cast(code, it);
+      stats.move_for_check_cast += lower_check_cast(code, &it);
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       lower_fill_array_data(code, it);
     } else {
-      lower_simple_instruction(code, it);
+      lower_simple_instruction(code, &it);
     }
     // TODO: /lit8 and /lit16 instructions
   }

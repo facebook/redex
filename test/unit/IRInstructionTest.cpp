@@ -220,7 +220,8 @@ TEST(IRInstruction, SelectCheckCast) {
   method->make_concrete(ACC_STATIC, 0);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto code = method->get_code();
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   instruction_lowering::lower(method);
 
   // check that we inserted a move opcode before the check-cast

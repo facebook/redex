@@ -347,7 +347,13 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     if (!is_move(op) && !has_2addr_form(op) && op != OPCODE_CHECK_CAST) {
       continue;
     }
-    auto dest = aliases.find_set(insn->dest());
+    reg_t dest;
+    if (insn->has_move_result_pseudo()) {
+      dest = move_result_pseudo_of(it.unwrap())->dest();
+    } else {
+      dest = insn->dest();
+    }
+    dest = aliases.find_set(dest);
     auto src = aliases.find_set(insn->src(0));
     if (dest == src) {
       if (is_move(op)) {
@@ -366,6 +372,8 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       }
       // Merge the child's node into the parent's
       ig->combine(parent, child);
+      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n",
+            parent, child, SHOW(insn));
       if (is_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
@@ -673,7 +681,7 @@ void Allocator::spill_costs(const IRCode* code,
     }
     if (insn->dests_size()) {
       auto dest = insn->dest();
-      auto max_value = max_unsigned_value(insn->dest_bit_width());
+      auto max_value = max_unsigned_value(dest_bit_width(it.unwrap()));
       auto sp_it = spill_plan->global_spills.find(dest);
       if (sp_it != spill_plan->global_spills.end() &&
           sp_it->second > max_value) {
@@ -996,7 +1004,7 @@ void Allocator::spill(const interference::Graph& ig,
         auto dest = insn->dest();
         auto sp_it = spill_plan.global_spills.find(dest);
         if (sp_it != spill_plan.global_spills.end() &&
-            sp_it->second > max_unsigned_value(insn->dest_bit_width())) {
+            sp_it->second > max_unsigned_value(dest_bit_width(it.unwrap()))) {
           auto temp = code->allocate_temp();
           insn->set_dest(temp);
           it.reset(code->insert_after(
@@ -1054,6 +1062,7 @@ void Allocator::allocate(bool use_splitting,
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
     auto ig = interference::build_graph(
         fixpoint_iter, select_spill_later, code, initial_regs, range_set);
+    TRACE(REG, 7, "IG:\n%s", SHOW(ig));
     if (first) {
       coalesce(&ig, code);
       first = false;

@@ -299,18 +299,21 @@ class TypeInference final
                current_state->get(insn->src(0) + 1));
       break;
     }
+    case IOPCODE_MOVE_RESULT_PSEUDO:
     case OPCODE_MOVE_RESULT: {
       assume_scalar(current_state, RESULT_REGISTER);
       set_type(
           current_state, insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
+    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
       assume_reference(current_state, RESULT_REGISTER);
       set_type(
           current_state, insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
+    case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     case OPCODE_MOVE_RESULT_WIDE: {
       assume_wide_scalar(current_state, RESULT_REGISTER);
       set_type(
@@ -361,7 +364,7 @@ class TypeInference final
     case OPCODE_CONST_STRING:
     case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS: {
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_MONITOR_ENTER:
@@ -371,22 +374,22 @@ class TypeInference final
     }
     case OPCODE_CHECK_CAST: {
       assume_reference(current_state, insn->src(0));
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_INSTANCE_OF:
     case OPCODE_ARRAY_LENGTH: {
       assume_reference(current_state, insn->src(0));
-      set_integer(current_state, insn->dest());
+      set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_NEW_ARRAY: {
       assume_integer(current_state, insn->src(0));
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY:
@@ -473,7 +476,7 @@ class TypeInference final
     case OPCODE_AGET: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      set_scalar(current_state, insn->dest());
+      set_scalar(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_AGET_BOOLEAN:
@@ -482,19 +485,19 @@ class TypeInference final
     case OPCODE_AGET_SHORT: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      set_integer(current_state, insn->dest());
+      set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_AGET_WIDE: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      set_wide_scalar(current_state, insn->dest());
+      set_wide_scalar(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_AGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_APUT: {
@@ -528,9 +531,9 @@ class TypeInference final
       assume_reference(current_state, insn->src(0));
       const DexType* type = insn->get_field()->get_type();
       if (is_float(type)) {
-        set_float(current_state, insn->dest());
+        set_float(current_state, RESULT_REGISTER);
       } else {
-        set_integer(current_state, insn->dest());
+        set_integer(current_state, RESULT_REGISTER);
       }
       break;
     }
@@ -539,22 +542,22 @@ class TypeInference final
     case OPCODE_IGET_CHAR:
     case OPCODE_IGET_SHORT: {
       assume_reference(current_state, insn->src(0));
-      set_integer(current_state, insn->dest());
+      set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_IGET_WIDE: {
       assume_reference(current_state, insn->src(0));
       const DexType* type = insn->get_field()->get_type();
       if (is_double(type)) {
-        set_double(current_state, insn->dest());
+        set_double(current_state, RESULT_REGISTER);
       } else {
-        set_long(current_state, insn->dest());
+        set_long(current_state, RESULT_REGISTER);
       }
       break;
     }
     case OPCODE_IGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_IPUT: {
@@ -588,9 +591,9 @@ class TypeInference final
     case OPCODE_SGET: {
       DexType* type = insn->get_field()->get_type();
       if (is_float(type)) {
-        set_float(current_state, insn->dest());
+        set_float(current_state, RESULT_REGISTER);
       } else {
-        set_integer(current_state, insn->dest());
+        set_integer(current_state, RESULT_REGISTER);
       }
       break;
     }
@@ -598,20 +601,20 @@ class TypeInference final
     case OPCODE_SGET_BYTE:
     case OPCODE_SGET_CHAR:
     case OPCODE_SGET_SHORT: {
-      set_integer(current_state, insn->dest());
+      set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_SGET_WIDE: {
       DexType* type = insn->get_field()->get_type();
       if (is_double(type)) {
-        set_double(current_state, insn->dest());
+        set_double(current_state, RESULT_REGISTER);
       } else {
-        set_long(current_state, insn->dest());
+        set_long(current_state, RESULT_REGISTER);
       }
       break;
     }
     case OPCODE_SGET_OBJECT: {
-      set_reference(current_state, insn->dest());
+      set_reference(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_SPUT: {
@@ -793,8 +796,6 @@ class TypeInference final
     case OPCODE_ADD_INT:
     case OPCODE_SUB_INT:
     case OPCODE_MUL_INT:
-    case OPCODE_DIV_INT:
-    case OPCODE_REM_INT:
     case OPCODE_AND_INT:
     case OPCODE_OR_INT:
     case OPCODE_XOR_INT:
@@ -806,17 +807,29 @@ class TypeInference final
       set_integer(current_state, insn->dest());
       break;
     }
+    case OPCODE_DIV_INT:
+    case OPCODE_REM_INT: {
+      assume_integer(current_state, insn->src(0));
+      assume_integer(current_state, insn->src(1));
+      set_integer(current_state, RESULT_REGISTER);
+      break;
+    }
     case OPCODE_ADD_LONG:
     case OPCODE_SUB_LONG:
     case OPCODE_MUL_LONG:
-    case OPCODE_DIV_LONG:
-    case OPCODE_REM_LONG:
     case OPCODE_AND_LONG:
     case OPCODE_OR_LONG:
     case OPCODE_XOR_LONG: {
       assume_long(current_state, insn->src(0));
       assume_long(current_state, insn->src(1));
       set_long(current_state, insn->dest());
+      break;
+    }
+    case OPCODE_DIV_LONG:
+    case OPCODE_REM_LONG: {
+      assume_long(current_state, insn->src(0));
+      assume_long(current_state, insn->src(1));
+      set_long(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_SHL_LONG:
@@ -905,16 +918,12 @@ class TypeInference final
     case OPCODE_ADD_INT_LIT16:
     case OPCODE_RSUB_INT:
     case OPCODE_MUL_INT_LIT16:
-    case OPCODE_DIV_INT_LIT16:
-    case OPCODE_REM_INT_LIT16:
     case OPCODE_AND_INT_LIT16:
     case OPCODE_OR_INT_LIT16:
     case OPCODE_XOR_INT_LIT16:
     case OPCODE_ADD_INT_LIT8:
     case OPCODE_RSUB_INT_LIT8:
     case OPCODE_MUL_INT_LIT8:
-    case OPCODE_DIV_INT_LIT8:
-    case OPCODE_REM_INT_LIT8:
     case OPCODE_AND_INT_LIT8:
     case OPCODE_OR_INT_LIT8:
     case OPCODE_XOR_INT_LIT8:
@@ -923,6 +932,14 @@ class TypeInference final
     case OPCODE_USHR_INT_LIT8: {
       assume_integer(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
+      break;
+    }
+    case OPCODE_DIV_INT_LIT16:
+    case OPCODE_REM_INT_LIT16:
+    case OPCODE_DIV_INT_LIT8:
+    case OPCODE_REM_INT_LIT8: {
+      assume_integer(current_state, insn->src(0));
+      set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case FOPCODE_PACKED_SWITCH:
