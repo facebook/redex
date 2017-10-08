@@ -48,7 +48,8 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
   }
   while (it != end) {
     if (it->insn->opcode() != OPCODE_CHECK_CAST) break;
-    ++it;
+    // skip past the move-result-pseudo opcode
+    std::advance(it, 2);
   }
   always_assert_log(it != end, "In %s", SHOW(bridge));
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT &&
