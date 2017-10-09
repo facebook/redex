@@ -234,13 +234,14 @@ void MethodDevirtualizer::verify_and_split(
       TRACE(VIRT, 2, "failed to devirt method %s: keep %d\n", SHOW(m), keep(m));
       continue;
     }
-    if (m->is_external() || is_abstract(m)) {
+    if (m->is_external() || is_abstract(m) || is_native(m)) {
       TRACE(VIRT,
             2,
-            "failed to devirt method %s: external %d abstract %d\n",
+            "failed to devirt method %s: external %d, abstract %d, native %d\n",
             SHOW(m),
             m->is_external(),
-            is_abstract(m));
+            is_abstract(m),
+            is_native(m));
       continue;
     }
     if (uses_this(m)) {
