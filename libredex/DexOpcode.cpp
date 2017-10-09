@@ -223,6 +223,40 @@ bool is_move_result_pseudo(DexOpcode op) {
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
 }
 
+DexOpcode move_result_pseudo_for_iget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_IGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_IGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
+DexOpcode move_result_pseudo_for_sget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_SHORT:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_SGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_SGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
 } // namespace opcode
 
 namespace opcode_impl {
