@@ -313,9 +313,10 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
         redex_dict = {}
         for line in redex_map:
             match_obj = cls_regex.match(line)
-            unmangled = match_obj.group(1)
-            mangled = match_obj.group(2)
-            redex_dict[unmangled] = mangled
+            if match_obj:
+                unmangled = match_obj.group(1)
+                mangled = match_obj.group(2)
+                redex_dict[unmangled] = mangled
         for line in pg_map:
             match_obj = cls_regex.match(line)
             if match_obj:
