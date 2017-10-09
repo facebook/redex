@@ -412,8 +412,7 @@ struct Reachable {
   void record_is_seed(Seed* seed) {
     if (m_record_reachability) {
       assert(seed != nullptr);
-      ReachableObject seed_object(seed);
-      m_retainers_of[seed_object].insert(SEED_SINGLETON);
+      m_retainers_of[ReachableObject(seed)].emplace(SEED_SINGLETON);
     }
   }
 
@@ -423,38 +422,41 @@ struct Reachable {
                                     const Object* object,
                                     ReachableObjectGraph& retainers_of) {
       assert(parent != nullptr && object != nullptr);
-      ReachableObject reachable_obj(object);
-      retainers_of[reachable_obj].emplace(parent);
+      retainers_of[ReachableObject(object)].emplace(parent);
     }
   };
 
-  template <class Object>
-  struct RecordImpl<DexType, Object> {
-    static void record_reachability(const DexType* parent,
-                                    const Object* object,
-                                    ReachableObjectGraph& reachable_of) {
-      DexClass* parent_cls = type_class(get_array_type_or_self(parent));
-      // If parent_class is null then it's not ours (e.g. String), so skip it.
-      if (parent_cls) {
-        RecordImpl<DexClass, Object>::record_reachability(
-            parent_cls, object, reachable_of);
-      }
-    }
-  };
-
-  template <class Parent>
-  struct RecordImpl<Parent, DexType> {
-    static void record_reachability(const Parent* parent,
-                                    const DexType* object,
-                                    ReachableObjectGraph&& reachable_of) {
-      DexClass* object_cls = type_class(get_array_type_or_self(object));
-      // If object_class is null then it's not ours (e.g. String), so skip it.
-      if (object_cls) {
-        RecordImpl<Parent, DexClass>::record_reachability(
-            parent, object_cls, reachable_of);
-      }
-    }
-  };
+  // template <class Object>
+  // struct RecordImpl<DexType, Object> {
+  //   static void record_reachability(const DexType* parent,
+  //                                   const Object* object,
+  //                                   const ReachableObjectGraph&&
+  //                                   reachable_of) {
+  //     DexClass* parent_cls = type_class(get_array_type_or_self(parent));
+  //     // If parent_class is null then it's not ours (e.g. String), so skip
+  //     it.
+  //     if (parent_cls) {
+  //       RecordImpl<DexClass, Object>::record_reachability(
+  //           parent_cls, object, reachable_of);
+  //     }
+  //   }
+  // };
+  //
+  // template <class Parent>
+  // struct RecordImpl<Parent, DexType> {
+  //   static void record_reachability(const Parent* parent,
+  //                                   const DexType* object,
+  //                                   const ReachableObjectGraph& reachable_of)
+  //                                   {
+  //     DexClass* object_cls = type_class(get_array_type_or_self(object));
+  //     // If object_class is null then it's not ours (e.g. String), so skip
+  //     it.
+  //     if (object_cls) {
+  //       RecordImpl<Parent, DexClass>::record_reachability(
+  //           parent, object_cls, reachable_of);
+  //     }
+  //   }
+  // };
 
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object) {
@@ -630,7 +632,7 @@ void print_graph_edges(const DexClass* cls,
     }
   }
 
-  os << cls->get_deobfuscated_name() << '\t' << s << std::endl;
+  os << cls->get_deobfuscated_name() << "\t" << s << std::endl;
   TRACE(REACH_DUMP,
         5,
         "EDGE: %s %s %s;\n",
