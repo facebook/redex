@@ -42,7 +42,7 @@ Our only hard-and-fast coding style rules are:
 * 2 spaces for indentation rather than tabs
 * 80 character line length
 
-In general, if you use our .clang-format file in the root of this repo, no one
+In general, if you use our [.clang-format file](https://github.com/facebook/redex/blob/master/.clang-format), no one
 will complain.
 
 ## License
