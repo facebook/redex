@@ -53,13 +53,13 @@ struct ReachableObject {
   std::string str() const {
     switch (type) {
     case ReachableObjectType::ANNO:
-      return show(anno);
+      return show_deobfuscated(anno);
     case ReachableObjectType::CLASS:
-      return show(cls);
+      return show_deobfuscated(cls);
     case ReachableObjectType::FIELD:
-      return show(field);
+      return show_deobfuscated(field);
     case ReachableObjectType::METHOD:
-      return show(method);
+      return show_deobfuscated(method);
     case ReachableObjectType::SEED:
       return std::string("<SEED>");
     }

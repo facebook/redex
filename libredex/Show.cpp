@@ -651,15 +651,15 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
       ss << show(insn->get_type());
       break;
     case opcode::Ref::Field:
-      if (deobfuscated && insn->get_field()->is_def()) {
-        ss << show_deobfuscated(static_cast<DexField*>(insn->get_field()));
+      if (deobfuscated) {
+        ss << show_deobfuscated(insn->get_field());
       } else {
         ss << show(insn->get_field());
       }
       break;
     case opcode::Ref::Method:
-      if (deobfuscated && insn->get_method()->is_def()) {
-        ss << show_deobfuscated(static_cast<DexMethod*>(insn->get_method()));
+      if (deobfuscated) {
+        ss << show_deobfuscated(insn->get_method());
       } else {
         ss << show(insn->get_method());
       }
@@ -671,7 +671,22 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
   return ss.str();
 }
 
+std::string show_helper(const DexAnnotation* anno, bool deobfuscated) {
+  if (!anno) {
+    return "";
+  }
+  std::stringstream ss;
+  ss << "type:" << show(anno->type()) << " visibility:" << show(anno->viz())
+     << " annotations:";
+  if (deobfuscated) {
+    ss << show_deobfuscated(&anno->anno_elems());
+  } else {
+    ss << show(&anno->anno_elems());
+  }
+  return ss.str();
 }
+
+} // namespace
 
 std::string show(const DexString* p) {
   if (!p) return "";
@@ -795,57 +810,19 @@ std::string show(const DexEncodedValue* value) {
   return value->show();
 }
 
-std::string DexEncodedValue::show() const {
-  std::stringstream ss;
-  ss << m_value;
-  return ss.str();
+std::string show(const DexAnnotation* anno) {
+  return show_helper(anno, false);
 }
 
-std::string DexEncodedValueArray::show() const {
-  std::stringstream ss;
-  ss << (m_static_val ? "(static) " : "");
-  if (m_evalues) {
-    bool first = true;
-    for (auto const evalue : *m_evalues) {
-      if (!first) ss << ' ';
-      ss << evalue->show();
-      first = false;
-    }
-  }
-  return ss.str();
-}
-
-std::string DexEncodedValueAnnotation::show() const {
-  std::stringstream ss;
-  ss << "type:" << ::show(m_type) << " annotations:" << ::show(m_annotations);
-  return ss.str();
-}
-
-std::string show(const EncodedAnnotations* annos) {
-  if (!annos) return "";
-  std::stringstream ss;
-  bool first = true;
-  for (auto const pair : *annos) {
-    if (!first) ss << ", ";
-    ss << show(pair.string) << ":" << pair.encoded_value->show();
-    first = false;
-  }
-  return ss.str();
-}
-
-std::string show(const DexAnnotation* p) {
-  if (!p) return "";
-  std::stringstream ss;
-  ss << "type:" << show(p->m_type) << " visibility:" << show(p->m_viz)
-     << " annotations:" << show(&p->m_anno_elems);
-  return ss.str();
+std::string show_deobfuscated(const DexAnnotation* anno) {
+  return show_helper(anno, true);
 }
 
 std::string show(const DexAnnotationSet* p) {
   if (!p) return "";
   std::stringstream ss;
   bool first = true;
-  for (auto const anno : p->m_annotations) {
+  for (auto const anno : p->get_annotations()) {
     if (!first) ss << ", ";
     ss << show(anno);
     first = false;
@@ -1148,22 +1125,42 @@ std::string show(const InstructionIterable& it) {
   return ss.str();
 }
 
-std::string show_deobfuscated(const DexField* field) {
-  const auto& name = field->get_deobfuscated_name();
-  if (name.empty()) {
-    return show(field);
+std::string show_deobfuscated(const DexClass* cls) {
+  if (!cls) {
+    return "";
   }
-  return name;
+  return cls->get_deobfuscated_name();
 }
 
-std::string show_deobfuscated(const DexMethod* method) {
-  const auto& name = method->get_deobfuscated_name();
-  if (name.empty()) {
-    return show(method);
+std::string show_deobfuscated(const DexFieldRef* ref) {
+  if (ref->is_def()) {
+    const auto& name =
+        static_cast<const DexField*>(ref)->get_deobfuscated_name();
+    if (!name.empty()) {
+      return name;
+    }
   }
-  return name;
+  return show(ref);
+}
+
+std::string show_deobfuscated(const DexMethodRef* ref) {
+  if (ref->is_def()) {
+    const auto& name =
+        static_cast<const DexMethod*>(ref)->get_deobfuscated_name();
+    if (!name.empty()) {
+      return name;
+    }
+  }
+  return show(ref);
 }
 
 std::string show_deobfuscated(const IRInstruction* insn) {
   return show_insn(insn, true);
+}
+
+std::string show_deobfuscated(const DexEncodedValue* ev) {
+  if (ev == nullptr) {
+    return "";
+  }
+  return ev->show_deobfuscated();
 }
