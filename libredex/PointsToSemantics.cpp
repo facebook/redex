@@ -1539,8 +1539,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
   return o;
 }
 
-PointsToSemantics::PointsToSemantics(const Scope& scope)
-    : m_type_system(scope) {
+PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
+    : m_generate_stubs(generate_stubs), m_type_system(scope) {
   // We size the hash table so as to fit all the methods in scope.
   size_t method_count = 0;
   for (DexClass* dex_class : scope) {
@@ -1567,18 +1567,41 @@ PointsToSemantics::PointsToSemantics(const Scope& scope)
   });
 }
 
-const PointsToMethodSemantics& PointsToSemantics::get_method_semantics(
-    DexMethod* dex_method) const {
-  auto entry = m_method_semantics.find(dex_method);
-  always_assert(entry != m_method_semantics.end());
-  return entry->second;
+void PointsToSemantics::load_stubs(const std::string& file_name) {
+  std::ifstream file_input(file_name);
+  s_expr_istream s_expr_input(file_input);
+  while (s_expr_input.good()) {
+    s_expr expr;
+    s_expr_input >> expr;
+    if (s_expr_input.eoi()) {
+      break;
+    }
+    always_assert_log(
+        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+    auto semantics_opt = PointsToMethodSemantics::from_s_expr(expr);
+    always_assert_log(
+        semantics_opt, "Couldn't parse S-expression: %s\n", expr.str().c_str());
+    DexMethodRef* dex_method = semantics_opt->get_method();
+    auto it = m_method_semantics.find(dex_method);
+    if (it == m_method_semantics.end()) {
+      m_method_semantics.emplace(dex_method, *semantics_opt);
+    } else {
+      TRACE(PTA, 2, "Collision with stub for method %s\n", SHOW(dex_method));
+    }
+  }
 }
 
-PointsToMethodSemantics* PointsToSemantics::get_method_semantics(
-    DexMethod* dex_method) {
+boost::optional<PointsToMethodSemantics*>
+PointsToSemantics::get_method_semantics(DexMethodRef* dex_method) {
   auto entry = m_method_semantics.find(dex_method);
-  always_assert(entry != m_method_semantics.end());
-  return &entry->second;
+  if (entry == m_method_semantics.end()) {
+    return {};
+  }
+  return boost::optional<PointsToMethodSemantics*>(&entry->second);
+}
+
+MethodKind PointsToSemantics::default_method_kind() const {
+  return m_generate_stubs ? PTS_STUB : PTS_APK;
 }
 
 void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
@@ -1597,7 +1620,7 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
                         SHOW(dex_method->get_name()));
     }
   } else {
-    kind = PTS_APK;
+    kind = default_method_kind();
   }
   m_method_semantics.emplace(std::piecewise_construct,
                              std::forward_as_tuple(dex_method),
@@ -1617,7 +1640,7 @@ void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
   // All hash table entries have been initialized in the constructor.
   always_assert(entry != m_method_semantics.end());
   PointsToMethodSemantics* semantics = &entry->second;
-  if (semantics->kind() == PTS_APK) {
+  if (semantics->kind() == default_method_kind()) {
     pts_impl::PointsToActionGenerator generator(
         dex_method, semantics, m_type_system, m_utils);
     generator.run();

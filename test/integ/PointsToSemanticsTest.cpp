@@ -315,7 +315,8 @@ TEST(PointsToSemanticsTest, semanticActionGeneration) {
   std::set<std::string> pt_output;
   for (const auto& pt_entry : pt_semantics) {
     std::ostringstream out;
-    out << pt_entry.second;
+    EXPECT_NE(PTS_STUB, pt_entry.second.kind());
+    out << pt_entry.second;    
     pt_output.insert(out.str());
   }
   EXPECT_THAT(pt_output, ::testing::ContainerEq(method_semantics));

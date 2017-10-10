@@ -438,6 +438,8 @@ class PointsToMethodSemantics {
                           size_t start_var_id,
                           size_t size_hint);
 
+  DexMethodRef* get_method() const { return m_dex_method; }
+
   MethodKind kind() const { return m_kind; }
 
   PointsToVariable get_new_variable() {
@@ -487,8 +489,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
  */
 class PointsToSemantics final {
  public:
-  using iterator =
-      std::unordered_map<DexMethod*, PointsToMethodSemantics>::const_iterator;
+  using iterator = std::unordered_map<DexMethodRef*,
+                                      PointsToMethodSemantics>::const_iterator;
 
   PointsToSemantics() = delete;
 
@@ -498,9 +500,18 @@ class PointsToSemantics final {
 
   /*
    * The constructor generates points-to actions for all methods in the given
-   * scope. The generation is performed in parallel using a pool of threads.
+   * scope. The generation is performed in parallel using a pool of threads. If
+   * the flag `generate_stubs` is set to true, all methods in the scope are
+   * interpreted as stubs.
    */
-  explicit PointsToSemantics(const Scope& scope);
+  PointsToSemantics(const Scope& scope, bool generate_stubs = false);
+
+  /*
+   * The stubs are stored in the specified text file as S-expressions. In case
+   * of a collision between a method in the APK and a stub, the stub is
+   * discarded.
+   */
+  void load_stubs(const std::string& file_name);
 
   iterator begin() { return m_method_semantics.begin(); }
 
@@ -508,19 +519,20 @@ class PointsToSemantics final {
 
   const TypeSystem& get_type_system() { return m_type_system; }
 
-  const PointsToMethodSemantics& get_method_semantics(
-      DexMethod* dex_method) const;
-
-  PointsToMethodSemantics* get_method_semantics(DexMethod* dex_method);
+  boost::optional<PointsToMethodSemantics*> get_method_semantics(
+      DexMethodRef* dex_method);
 
  private:
+  MethodKind default_method_kind() const;
+  
   void initialize_entry(DexMethod* dex_method);
 
   void generate_points_to_actions(DexMethod* dex_method);
 
+  bool m_generate_stubs;
   TypeSystem m_type_system;
   PointsToSemanticsUtils m_utils;
-  std::unordered_map<DexMethod*, PointsToMethodSemantics> m_method_semantics;
+  std::unordered_map<DexMethodRef*, PointsToMethodSemantics> m_method_semantics;
 
   friend std::ostream& operator<<(std::ostream&, const PointsToSemantics&);
 };

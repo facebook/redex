@@ -66,6 +66,9 @@ class DexIdx {
   }
 
   DexType* get_typeidx(uint32_t typeidx) {
+    if (typeidx == DEX_NO_INDEX) {
+      return nullptr;
+    }
     if (m_type_cache[typeidx] == nullptr) {
       m_type_cache[typeidx] = get_typeidx_fromdex(typeidx);
     }
