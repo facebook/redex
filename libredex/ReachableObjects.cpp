@@ -77,7 +77,7 @@ struct InheritanceGraph {
     }
   }
 
-  const std::unordered_set<DexType*>& get_descendants(DexType* type) {
+  const std::set<DexType*, dextypes_comparator>& get_descendants(DexType* type) {
     return m_inheritors[type];
   }
 
@@ -99,7 +99,8 @@ struct InheritanceGraph {
   }
 
  private:
-  std::unordered_map<DexType*, std::unordered_set<DexType*>> m_inheritors;
+  std::unordered_map<DexType*, std::set<DexType*, dextypes_comparator>>
+      m_inheritors;
 };
 
 bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
