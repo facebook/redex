@@ -121,17 +121,21 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
+  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
 
   code->build_cfg();
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 1_v}),
+    dasm(OPCODE_CONST, {0_v})->set_literal(0),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
   EXPECT_EQ(code->get_registers_size(), 3);
@@ -144,35 +148,45 @@ TEST_F(RegAllocTest, LiveRange) {
   method->make_concrete(ACC_STATIC, false);
   method->set_code(std::make_unique<IRCode>(method, 1));
   auto code = method->get_code();
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
+  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 0_v}));
   code->push_back(*if_);
 
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
+  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   auto target = new BranchTarget();
   target->type = BRANCH_SIMPLE;
   target->src = if_;
   code->push_back(target);
 
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
 
   code->build_cfg();
   live_range::renumber_registers(code);
 
   InstructionList expected_insns {
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {0_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 1_v}),
+    dasm(OPCODE_CONST, {0_v})->set_literal(0),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
     dasm(OPCODE_IF_EQ, {2_v, 2_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {3_v}),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type(), {4_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v, 4_v}),
+    dasm(OPCODE_CONST, {3_v})->set_literal(0),
+    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {4_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {4_v}),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
     // target of if-eq
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {5_v, 2_v}),
+    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v}),
+    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
   };
   EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
   EXPECT_EQ(code->get_registers_size(), 6);
@@ -302,6 +316,62 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
       EXPECT_TRUE(ig.is_adjacent(adj, reg));
     }
   }
+}
+
+TEST_F(RegAllocTest, CombineNonAdjacentNodes) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 1, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 2, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 3, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::add_edge(&ig, 0, 1);
+  GraphBuilder::add_edge(&ig, 0, 2);
+  GraphBuilder::add_edge(&ig, 2, 3);
+  // +---+
+  // | 1 |
+  // +---+
+  //   |
+  // +---+     +---+    +---+
+  // | 0 | --- | 2 | -- | 3 |
+  // +---+     +---+    +---+
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(2).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  ig.combine(1, 2);
+  EXPECT_EQ(ig.get_node(0).weight(), 1);
+  EXPECT_EQ(ig.get_node(1).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  EXPECT_FALSE(ig.get_node(2).is_active());
+}
+
+TEST_F(RegAllocTest, CombineAdjacentNodes) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 1, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 2, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::make_node(&ig, 3, RegisterType::NORMAL, /* max_vreg */ 3);
+  GraphBuilder::add_edge(&ig, 0, 1);
+  GraphBuilder::add_edge(&ig, 0, 2);
+  GraphBuilder::add_edge(&ig, 2, 3);
+  // +---+
+  // | 1 |
+  // +---+
+  //   |
+  // +---+     +---+    +---+
+  // | 0 | --- | 2 | -- | 3 |
+  // +---+     +---+    +---+
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(2).weight(), 2);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  ig.combine(0, 2);
+  EXPECT_EQ(ig.get_node(0).weight(), 2);
+  EXPECT_EQ(ig.get_node(1).weight(), 1);
+  EXPECT_EQ(ig.get_node(3).weight(), 1);
+  EXPECT_FALSE(ig.get_node(2).is_active());
 }
 
 TEST_F(RegAllocTest, Coalesce) {

@@ -174,7 +174,6 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block) {
       break;
     case MFLOW_TARGET:
       it->type = MFLOW_FALLTHROUGH;
-      it->throwing_mie = nullptr;
       if (new_block == nullptr) {
         delete it->target;
       } // else, new_block takes ownership of the targets

@@ -399,6 +399,12 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return RegisterType::OBJECT;
   case IOPCODE_LOAD_PARAM_WIDE:
     return RegisterType::WIDE;
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+    return RegisterType::NORMAL;
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return RegisterType::OBJECT;
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+    return RegisterType::WIDE;
   default:
     always_assert_log(false, "Unknown opcode %02x\n", op);
   }
@@ -737,6 +743,10 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
+    always_assert_log(false, "No src");
+    not_reached();
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     always_assert_log(false, "No src");
     not_reached();
   default:

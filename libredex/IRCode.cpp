@@ -38,6 +38,9 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
   case MFLOW_OPCODE:
     insn = that.insn;
     break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn = that.dex_insn;
+    break;
   case MFLOW_TARGET:
     target = that.target;
     break;
@@ -49,8 +52,6 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -71,7 +72,9 @@ MethodItemEntry::~MethodItemEntry() {
     case MFLOW_POSITION:
       pos.~unique_ptr<DexPosition>();
       break;
-    default:
+    case MFLOW_OPCODE:
+    case MFLOW_DEX_OPCODE:
+    case MFLOW_FALLTHROUGH:
       /* nothing to delete */
       break;
   }
@@ -86,6 +89,9 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
   case MFLOW_OPCODE:
     insn->gather_strings(lstring);
     break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_strings(lstring);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
@@ -97,8 +103,6 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -111,6 +115,9 @@ void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const 
   case MFLOW_OPCODE:
     insn->gather_methods(lmethod);
     break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_methods(lmethod);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
@@ -120,8 +127,6 @@ void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const 
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -134,6 +139,9 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   case MFLOW_OPCODE:
     insn->gather_fields(lfield);
     break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_fields(lfield);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
@@ -143,8 +151,6 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -160,6 +166,9 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
   case MFLOW_OPCODE:
     insn->gather_types(ltype);
     break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_types(ltype);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
@@ -169,8 +178,6 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
-  default:
-    not_reached();
   }
 }
 
@@ -357,12 +364,12 @@ static void insert_branch_target(FatMethod* fm,
 bool encode_offset(FatMethod* fm,
                    MethodItemEntry* branch_op_mie,
                    int32_t offset) {
-  DexOpcode bop = branch_op_mie->insn->opcode();
+  DexOpcode bop = branch_op_mie->dex_insn->opcode();
   if (is_goto(bop)) {
     DexOpcode goto_op = goto_for_offset(offset);
     if (goto_op != bop) {
-      auto insn = branch_op_mie->insn;
-      branch_op_mie->insn = new IRInstruction(goto_op);
+      auto insn = branch_op_mie->dex_insn;
+      branch_op_mie->dex_insn = new DexInstruction(goto_op);
       delete insn;
       return false;
     }
@@ -380,12 +387,12 @@ bool encode_offset(FatMethod* fm,
     //   label:
     //   nop
     if (bytecount(offset) > 2) {
-      auto insn = branch_op_mie->insn;
-      branch_op_mie->insn = new IRInstruction(OPCODE_GOTO_32);
+      auto insn = branch_op_mie->dex_insn;
+      branch_op_mie->dex_insn = new DexInstruction(OPCODE_GOTO_32);
 
       DexOpcode inverted = invert_conditional_branch(bop);
-      MethodItemEntry* mei = new MethodItemEntry(new IRInstruction(inverted));
-      mei->insn->set_src(0, insn->src(0));
+      MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
+      mei->dex_insn->set_src(0, insn->src(0));
       fm->insert(fm->iterator_to(*branch_op_mie), *mei);
 
       // this iterator should always be valid -- an if-* instruction cannot
@@ -397,9 +404,11 @@ bool encode_offset(FatMethod* fm,
       return false;
     }
   } else {
-    always_assert_log(false, "Unexpected opcode %s", SHOW(*branch_op_mie));
+    always_assert_log(bop == OPCODE_FILL_ARRAY_DATA,
+                      "Unexpected opcode %s",
+                      SHOW(*branch_op_mie));
   }
-  branch_op_mie->insn->set_offset(offset);
+  branch_op_mie->dex_insn->set_offset(offset);
   return true;
 }
 
@@ -518,8 +527,6 @@ static void associate_debug_entries(FatMethod* fm,
       case DexDebugEntryType::Position:
         mentry = new MethodItemEntry(std::move(entry.pos));
         break;
-      default:
-        not_reached();
     }
     fm->insert(fm->iterator_to(*insert_point), *mentry);
   }
@@ -593,6 +600,71 @@ void generate_load_params(const DexMethod* method,
   code->set_registers_size(param_reg);
 }
 
+MethodItemEntry* insert_ir_for_dex(const DexInstruction* dex_insn,
+                                   FatMethod* fmethod) {
+  auto op = dex_insn->opcode();
+  auto* insn = new IRInstruction(op);
+  always_assert(!is_fopcode(op));
+
+  IRInstruction* move_result_pseudo{nullptr};
+  if (insn->dests_size()) {
+    insn->set_dest(dex_insn->dest());
+  } else if (opcode::may_throw(op)) {
+    if (op == OPCODE_CHECK_CAST) {
+      move_result_pseudo = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      move_result_pseudo->set_dest(dex_insn->src(0));
+    } else if (dex_insn->dests_size()) {
+      DexOpcode move_op;
+      if (opcode_impl::dest_is_wide(op)) {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+      } else if (opcode_impl::dest_is_object(op)) {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+      } else {
+        move_op = IOPCODE_MOVE_RESULT_PSEUDO;
+      }
+      move_result_pseudo = new IRInstruction(move_op);
+      move_result_pseudo->set_dest(dex_insn->dest());
+    }
+  }
+
+  insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
+  for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
+    insn->set_src(i, dex_insn->src(i));
+  }
+  if (opcode::dest_is_src(op)) {
+    insn->set_opcode(convert_2to3addr(op));
+  }
+  if (opcode::has_literal(op)) {
+    insn->set_literal(dex_insn->literal());
+  }
+  if (opcode::has_offset(op)) {
+    insn->set_offset(dex_insn->offset());
+  }
+  if (opcode::has_range(op)) {
+    insn->set_range_base(dex_insn->range_base());
+    insn->set_range_size(dex_insn->range_size());
+  }
+  if (dex_insn->has_string()) {
+    insn->set_string(
+        static_cast<const DexOpcodeString*>(dex_insn)->get_string());
+  } else if (dex_insn->has_type()) {
+    insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
+  } else if (dex_insn->has_field()) {
+    insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+  } else if (dex_insn->has_method()) {
+    insn->set_method(
+        static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+  }
+
+  auto mei = new MethodItemEntry(insn);
+  fmethod->push_back(*mei);
+  if (move_result_pseudo != nullptr) {
+    fmethod->push_back(*(new MethodItemEntry(move_result_pseudo)));
+  }
+
+  return mei;
+}
+
 void balloon(DexMethod* method, FatMethod* fmethod) {
   auto dex_code = method->get_dex_code();
   auto instructions = dex_code->release_instructions();
@@ -612,10 +684,10 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
       if (is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       }
+      fmethod->push_back(*mei);
     } else {
-      mei = new MethodItemEntry(new IRInstruction(insn));
+      mei = insert_ir_for_dex(insn, fmethod);
     }
-    fmethod->push_back(*mei);
     bm.insert(EntryAddrBiMap::relation(mei, addr));
     TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     addr += insn->size();
@@ -701,8 +773,10 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
       case MFLOW_POSITION:
         copy_item_entry->pos = std::move(old_position_to_new[mie.pos.get()]);
         break;
-      default:
-        not_reached();
+      case MFLOW_FALLTHROUGH:
+        break;
+      case MFLOW_DEX_OPCODE:
+        always_assert_log(false, "DexInstruction not expected here!");
     }
 
     old_mentry_to_new[&mie] = copy_item_entry;
@@ -731,9 +805,10 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
       case MFLOW_OPCODE:
       case MFLOW_DEBUG:
       case MFLOW_POSITION:
+      case MFLOW_FALLTHROUGH:
         break;
-      default:
-        not_reached();
+      case MFLOW_DEX_OPCODE:
+        always_assert_log(false, "DexInstruction not expected here!");
     }
 
     fmethod->push_back(*copy_item_entry);
@@ -767,7 +842,7 @@ IRCode::IRCode(const IRCode& code) {
   }
 }
 
-void IRCode::remove_branch_target(IRInstruction *branch_inst) {
+void IRCode::remove_branch_targets(IRInstruction *branch_inst) {
   always_assert_log(is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
@@ -775,11 +850,9 @@ void IRCode::remove_branch_target(IRInstruction *branch_inst) {
     if (mentry->type == MFLOW_TARGET) {
       BranchTarget* bt = mentry->target;
       auto btmei = bt->src;
-      if(btmei->insn == branch_inst) {
+      if (btmei->insn == branch_inst) {
         mentry->type = MFLOW_FALLTHROUGH;
         delete mentry->target;
-        mentry->throwing_mie = nullptr;
-        break;
       }
     }
   }
@@ -818,7 +891,7 @@ void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
       if (is_branch(from->opcode())) {
-        remove_branch_target(from);
+        remove_branch_targets(from);
       }
       mentry->insn = to;
       delete from;
@@ -830,31 +903,33 @@ void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
       "No match found while replacing '%s' with '%s'",
       SHOW(from),
       SHOW(to));
+}
+
+void IRCode::replace_opcode(IRInstruction* to_delete,
+                            std::vector<IRInstruction*> replacements) {
+  auto it = m_fmethod->begin();
+  for (; it != m_fmethod->end(); it++) {
+    if (it->type == MFLOW_OPCODE && it->insn == to_delete) {
+      break;
+    }
+  }
+  always_assert_log(it != m_fmethod->end(),
+                    "No match found while replacing '%s'",
+                    SHOW(to_delete));
+  for (auto insn : replacements) {
+    insert_before(it, insn);
+  }
+  remove_opcode(it);
 }
 
 void IRCode::replace_opcode(IRInstruction* from, IRInstruction* to) {
   always_assert_log(!is_branch(to->opcode()),
                     "You may want replace_branch instead");
-  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
-    MethodItemEntry* mentry = &*miter;
-    if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
-      if (is_branch(from->opcode())) {
-        remove_branch_target(from);
-      }
-      mentry->insn = to;
-      delete from;
-      return;
-    }
-  }
-  always_assert_log(
-      false,
-      "No match found while replacing '%s' with '%s'",
-      SHOW(from),
-      SHOW(to));
+  replace_opcode(from, std::vector<IRInstruction*>{to});
 }
 
 void IRCode::insert_after(IRInstruction* position,
-                                   const std::vector<IRInstruction*>& opcodes) {
+                          const std::vector<IRInstruction*>& opcodes) {
   /* The nullptr case handling is strange-ish..., this will not work as expected
    *if
    * a method has a branch target as it's first instruction.
@@ -866,11 +941,16 @@ void IRCode::insert_after(IRInstruction* position,
   for (auto const& mei : *m_fmethod) {
     if (mei.type == MFLOW_OPCODE &&
         (position == nullptr || mei.insn == position)) {
-      auto insertat = m_fmethod->iterator_to(mei);
-      if (position != nullptr) insertat++;
+      auto insert_at = m_fmethod->iterator_to(mei);
+      if (position != nullptr) {
+        insert_at++;
+        if (position->has_move_result_pseudo()) {
+          insert_at++;
+        }
+      }
       for (auto* opcode : opcodes) {
         MethodItemEntry* mentry = new MethodItemEntry(opcode);
-        m_fmethod->insert(insertat, *mentry);
+        m_fmethod->insert(insert_at, *mentry);
       }
       return;
     }
@@ -961,14 +1041,12 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
 
   target_mei->type = MFLOW_FALLTHROUGH;
   delete target_mei->target;
-  target_mei->throwing_mie = nullptr;
 }
 
 size_t IRCode::count_opcodes() const {
   size_t count {0};
   for (const auto& mie : *m_fmethod) {
-    if (mie.type == MFLOW_OPCODE &&
-        !opcode::is_load_param(mie.insn->opcode())) {
+    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
       ++count;
     }
   }
@@ -988,21 +1066,20 @@ size_t IRCode::sum_opcode_sizes() const {
 void IRCode::remove_opcode(const FatMethod::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  if (opcode::may_throw(insn->opcode())) {
-    for (auto rev = --FatMethod::reverse_iterator(it);
-         rev != m_fmethod->rend();
-         ++rev) {
-      if (rev->type == MFLOW_FALLTHROUGH && rev->throwing_mie) {
-        assert(rev->throwing_mie == &*it);
-        rev->throwing_mie = nullptr;
-        break;
-      } else if (rev->type == MFLOW_OPCODE) {
-        break;
-      }
-    }
+  always_assert(!opcode::is_move_result_pseudo(insn->opcode()));
+  if (insn->has_move_result_pseudo()) {
+    auto move_it = std::next(it);
+    always_assert_log(
+        move_it->type == MFLOW_OPCODE &&
+            opcode::is_move_result_pseudo(move_it->insn->opcode()),
+        "No move-result-pseudo found for %s",
+        SHOW(insn));
+    delete move_it->insn;
+    move_it->type = MFLOW_FALLTHROUGH;
+    move_it->insn = nullptr;
   }
   if (is_branch(insn->opcode())) {
-    remove_branch_target(insn);
+    remove_branch_targets(insn);
   }
   it->type = MFLOW_FALLTHROUGH;
   it->insn = nullptr;
@@ -1121,9 +1198,9 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
 
 } // namespace
 
-void IRCode::build_cfg(bool end_block_before_throw) {
+void IRCode::build_cfg() {
   clear_cfg();
-  m_cfg = std::make_unique<ControlFlowGraph>(this, end_block_before_throw);
+  m_cfg = std::make_unique<ControlFlowGraph>(this);
 }
 
 void IRCode::clear_cfg() {
@@ -1143,8 +1220,11 @@ namespace ir_code_impl {
 
 static uint16_t calc_outs_size(const IRCode* code) {
   uint16_t size {0};
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
+  for (auto& mie : *code) {
+    if (mie.type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    auto insn = mie.dex_insn;
     if (is_invoke_range(insn->opcode())) {
       size = std::max(size, boost::numeric_cast<uint16_t>(insn->range_size()));
     } else if (is_invoke(insn->opcode())) {
@@ -1154,61 +1234,21 @@ static uint16_t calc_outs_size(const IRCode* code) {
   return size;
 }
 
-/*
- * Check that load-param opcodes are all at the end of the register frame and
- * match the method proto, then remove those opcodes.
- *
- * Set the ins_size accordingly.
- */
-static void sync_load_params(const DexMethod* method,
-                             IRCode* code,
-                             DexCode* dex_code) {
-  auto param_ops = InstructionIterable(code->get_param_instructions());
-  if (param_ops.empty()) {
-    return;
-  }
+static void calculate_ins_size(const DexMethod* method,
+                               DexCode* dex_code) {
   auto& args_list = method->get_proto()->get_args()->get_type_list();
-  auto it = param_ops.begin();
-  auto end = param_ops.end();
-  uint16_t ins_start = it->insn->dest();
-  uint16_t next_ins = ins_start;
+  uint16_t ins_size{0};
   if (!is_static(method)) {
-    auto op = it->insn->opcode();
-    always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
-    it.reset(code->erase(it.unwrap()));
-    ++next_ins;
+    ++ins_size;
   }
-  auto args_it = args_list.begin();
-  while (it != end) {
-    auto op = it->insn->opcode();
-    // check that the param registers are contiguous
-    always_assert(next_ins == it->insn->dest());
-    // TODO: have load param opcodes store the actual type of the param and
-    // check that they match the method prototype here
-    always_assert(args_it != args_list.end());
-    if (is_wide_type(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM_WIDE);
-    } else if (is_primitive(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM);
+  for (auto arg : args_list) {
+    if (is_wide_type(arg)) {
+      ins_size += 2;
     } else {
-      always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
-    }
-    ++args_it;
-    next_ins += it->insn->dest_is_wide() ? 2 : 1;
-    it.reset(code->erase(it.unwrap()));
-  }
-  always_assert(args_it == args_list.end());
-  // check that the params are at the end of the frame
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (insn->dests_size()) {
-      always_assert(insn->dest() < next_ins);
-    }
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      always_assert(insn->src(i) < next_ins);
+      ++ins_size;
     }
   }
-  dex_code->set_ins_size(next_ins - ins_start);
+  dex_code->set_ins_size(ins_size);
 }
 
 } // namespace ir_code_impl
@@ -1218,7 +1258,7 @@ using namespace ir_code_impl;
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   auto dex_code = std::make_unique<DexCode>();
   try {
-    sync_load_params(method, this, &*dex_code);
+    calculate_ins_size(method, &*dex_code);
     dex_code->set_registers_size(m_registers_size);
     dex_code->set_outs_size(calc_outs_size(this));
     dex_code->set_debug_item(std::move(m_dbg));
@@ -1241,12 +1281,18 @@ bool IRCode::try_sync(DexCode* code) {
     MethodItemEntry* mentry = &*miter;
     TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
     entry_to_addr[mentry] = addr;
-    if (mentry->type == MFLOW_OPCODE) {
+    if (mentry->type == MFLOW_DEX_OPCODE) {
       TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
-      addr += mentry->insn->size();
+      addr += mentry->dex_insn->size();
     }
   }
-  // Step 2, recalculate branches..., save off multi-branch data.
+  // Step 2, Branch relaxation: calculate branch offsets for if-* and goto
+  // opcodes, resizing them where necessary. Since resizing opcodes affects
+  // address offsets, we need to iterate this to a fixed point.
+  //
+  // For instructions that use address offsets but never need resizing (i.e.
+  // switch and fill-array-data opcodes), we calculate their offsets after
+  // we have reached the fixed point.
   TRACE(MTRANS, 5, "Recalculating branches\n");
   std::vector<MethodItemEntry*> multi_branches;
   std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
@@ -1257,8 +1303,8 @@ bool IRCode::try_sync(DexCode* code) {
     if (entry_to_addr.find(mentry) == entry_to_addr.end()) {
       continue;
     }
-    if (mentry->type == MFLOW_OPCODE) {
-      auto opcode = mentry->insn->opcode();
+    if (mentry->type == MFLOW_DEX_OPCODE) {
+      auto opcode = mentry->dex_insn->opcode();
       if (is_multi_branch(opcode)) {
         multi_branches.push_back(mentry);
       }
@@ -1270,13 +1316,15 @@ bool IRCode::try_sync(DexCode* code) {
         multi_targets[bt] = entry_to_addr.at(mentry);
         // We can't fix the primary switch opcodes address until we emit
         // the fopcode, which comes later.
-      } else if (bt->type == BRANCH_SIMPLE) {
+      } else if (bt->type == BRANCH_SIMPLE &&
+                 is_branch(bt->src->dex_insn->opcode())) {
         MethodItemEntry* branch_op_mie = bt->src;
         int32_t branch_offset =
             entry_to_addr.at(mentry) - entry_to_addr.at(branch_op_mie);
         if (branch_offset == 1) {
           needs_resync = true;
-          remove_opcode(branch_op_mie->insn);
+          branch_op_mie->type = MFLOW_FALLTHROUGH;
+          mentry->type = MFLOW_FALLTHROUGH;
         } else {
           needs_resync |=
               !encode_offset(m_fmethod, branch_op_mie, branch_offset);
@@ -1287,19 +1335,42 @@ bool IRCode::try_sync(DexCode* code) {
   if (needs_resync) {
     return false;
   }
+
+  size_t num_align_nops{0};
   auto& opout = code->reset_instructions();
-  std::unordered_map<IRInstruction*, DexInstruction*> ir_to_dex_insn;
-  for (auto& mie : InstructionIterable(this)) {
-    TRACE(MTRANS, 6, "Emitting insn %s\n", SHOW(mie.insn));
-    auto dex_insn = mie.insn->to_dex_instruction();
-    opout.push_back(dex_insn);
-    ir_to_dex_insn.emplace(mie.insn, dex_insn);
+  for (auto& mie : *m_fmethod) {
+    // We are assuming that fill-array-data-payload opcodes are always at
+    // the end of the opcode stream (we enforce that during instruction
+    // lowering). I.e. they are only followed by other fill-array-data-payload
+    // opcodes. So adjusting their addresses here does not require re-running
+    // branch relaxation.
+    entry_to_addr.at(&mie) += num_align_nops;
+    if (mie.type == MFLOW_TARGET &&
+        mie.target->src->dex_insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      // This MFLOW_TARGET is right before a fill-array-data-payload opcode,
+      // so we should make sure its address is aligned
+      if (entry_to_addr.at(&mie) & 1) {
+        opout.push_back(new DexInstruction(OPCODE_NOP));
+        ++entry_to_addr.at(&mie);
+        ++num_align_nops;
+      }
+      mie.target->src->dex_insn->set_offset(entry_to_addr.at(&mie) -
+                                            entry_to_addr.at(mie.target->src));
+      continue;
+    }
+    if (mie.type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    TRACE(MTRANS, 6, "Emitting insn %s\n", SHOW(mie.dex_insn));
+    opout.push_back(mie.dex_insn);
   }
+  addr += num_align_nops;
+
   TRACE(MTRANS, 5, "Emitting multi-branches\n");
   // Step 3, generate multi-branch fopcodes
   for (auto multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
-    auto multi_insn = ir_to_dex_insn.at(multiopcode->insn);
+    auto multi_insn = multiopcode->dex_insn;
     std::sort(targets.begin(), targets.end(), multi_target_compare_index);
     always_assert_log(!targets.empty(), "need to have targets");
     if (multi_contains_gaps(targets)) {
@@ -1317,7 +1388,7 @@ bool IRCode::try_sync(DexCode* code) {
       }
       // Emit align nop
       if (addr & 1) {
-        DexInstruction* nop = new DexInstruction(0);
+        DexInstruction* nop = new DexInstruction(OPCODE_NOP);
         opout.push_back(nop);
         addr++;
       }
@@ -1354,25 +1425,6 @@ bool IRCode::try_sync(DexCode* code) {
       multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
       multi_insn->set_opcode(OPCODE_PACKED_SWITCH);
       addr += count;
-    }
-  }
-
-  TRACE(MTRANS, 5, "Emitting filled array data\n");
-  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
-    MethodItemEntry* mentry = &*miter;
-    if (mentry->type != MFLOW_OPCODE) {
-      continue;
-    }
-    auto insn = ir_to_dex_insn.at(mentry->insn);
-    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      if (addr & 1) {
-        opout.push_back(new DexInstruction(OPCODE_NOP));
-        ++addr;
-      }
-      insn->set_offset(addr - entry_to_addr.at(mentry));
-      auto fopcode = mentry->insn->get_data();
-      opout.push_back(fopcode);
-      addr += fopcode->size();
     }
   }
 
@@ -1449,4 +1501,19 @@ bool InstructionIterable::structural_equals(const InstructionIterable& other) {
   }
 
   return it1 == this->end() && it2 == other.end();
+}
+
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    FatMethod::iterator it) {
+  --it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                it->insn->has_move_result_pseudo());
+  return it->insn;
+}
+
+IRInstruction* move_result_pseudo_of(FatMethod::iterator it) {
+  ++it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                opcode::is_move_result_pseudo(it->insn->opcode()));
+  return it->insn;
 }

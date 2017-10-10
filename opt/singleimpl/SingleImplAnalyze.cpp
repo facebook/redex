@@ -123,7 +123,8 @@ void AnalysisImpl::filter_list(
 
   for (const auto intf_it : single_impls) {
     const auto intf = intf_it.first;
-    const auto intf_name = intf->get_name()->c_str();
+    const auto intf_cls = type_class(intf);
+    const auto intf_name = intf_cls->get_deobfuscated_name().c_str();
     bool match = find_in_list(intf_name);
     if (match && keep_match) continue;
     if (!match && !keep_match) continue;

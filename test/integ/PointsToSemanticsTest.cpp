@@ -315,10 +315,33 @@ TEST(PointsToSemanticsTest, semanticActionGeneration) {
   std::set<std::string> pt_output;
   for (const auto& pt_entry : pt_semantics) {
     std::ostringstream out;
-    out << pt_entry;
+    out << pt_entry.second;
     pt_output.insert(out.str());
   }
   EXPECT_THAT(pt_output, ::testing::ContainerEq(method_semantics));
+
+  // Testing the serialization mechanism based on S-expressions.
+  std::stringstream serialization;
+  for (const auto& pt_entry : pt_semantics) {
+    auto e = pt_entry.second.to_s_expr();
+    serialization << e;
+  }
+  s_expr_istream input(serialization);
+  std::set<std::string> deserialization;
+  while (input.good()) {
+    s_expr e;
+    input >> e;
+    if (input.eoi()) {
+      break;
+    }
+    ASSERT_TRUE(!input.fail()) << input.what();
+    auto semantics_opt = PointsToMethodSemantics::from_s_expr(e);
+    ASSERT_TRUE(semantics_opt) << e;
+    std::ostringstream out;
+    out << *semantics_opt;
+    deserialization.insert(out.str());
+  }
+  EXPECT_THAT(deserialization, ::testing::ContainerEq(method_semantics));
 
   delete g_redex;
 }

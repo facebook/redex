@@ -14,12 +14,10 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InstructionSelection.h"
+#include "InstructionLowering.h"
 #include "OpcodeList.h"
 #include "RegAlloc.h"
 #include "Show.h"
-
-using namespace select_instructions;
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
@@ -35,15 +33,36 @@ std::ostream& operator<<(std::ostream& os, const DexOpcode& to_show) {
 }
 
 TEST(IRInstruction, RoundTrip) {
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   DexType* ty = DexType::make_type("Lfoo;");
   DexString* str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
-  DexMethodRef* method = DexMethod::make_method(
-      ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({})));
+  auto* method = static_cast<DexMethod*>(DexMethod::make_method(
+      ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({}))));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   for (DexOpcode op : all_opcodes) {
+    // XXX we currently aren't testing these opcodes because they change when
+    // we do the round-trip conversion. For example, `const v0` gets converted
+    // to `const/4 v0`. To prevent these changes from happening, we can set the
+    // operands to the largest values that can be encoded for a given opcode.
+    if (is_move(op) ||
+        (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16)) {
+      continue;
+    }
+    // XXX we can test these opcodes if we create a corresponding data payload
+    if (op == OPCODE_FILL_ARRAY_DATA) {
+      continue;
+    }
+    // XXX we eliminate NOPs, so no point testing them. As for opcodes with
+    // offsets, they are tricky to test as sync() can change them depending on
+    // the size of the offset.
+    if (op == OPCODE_NOP || opcode::has_offset(op)) {
+      continue;
+    }
+
     auto insn = DexInstruction::make_instruction(op);
     // populate the instruction args with non-zero values so we can check
     // if we have copied everything correctly
@@ -52,9 +71,6 @@ TEST(IRInstruction, RoundTrip) {
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, i + 1);
-    }
-    if (opcode::has_offset(op)) {
-      insn->set_offset(0xf);
     }
     if (opcode::has_literal(op)) {
       insn->set_literal(0xface);
@@ -76,9 +92,13 @@ TEST(IRInstruction, RoundTrip) {
       static_cast<DexOpcodeMethod*>(insn)->set_method(method);
     }
 
-    auto ir_insn = new IRInstruction(insn);
-    try_2addr_conversion(ir_insn);
-    EXPECT_EQ(*ir_insn->to_dex_instruction(), *insn) << "at " << show(op);
+    method->set_dex_code(std::make_unique<DexCode>());
+    method->get_dex_code()->get_instructions().push_back(insn);
+    method->balloon();
+    instruction_lowering::lower(method);
+    method->sync();
+    EXPECT_EQ(*method->get_dex_code()->get_instructions().at(0), *insn)
+        << "at " << show(op);
 
     delete insn;
   }
@@ -127,10 +147,10 @@ IRInstruction* select_instruction(IRInstruction* insn) {
   DexMethod* method = static_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
-  auto code = std::make_unique<IRCode>(method, 0);
+  method->set_code(std::make_unique<IRCode>(method, 0));
+  auto code = method->get_code();
   code->push_back(insn);
-  InstructionSelection select;
-  select.select_instructions(code.get());
+  instruction_lowering::lower(method);
   return code->begin()->insn;
 }
 
@@ -138,24 +158,56 @@ TEST(IRInstruction, TwoAddr) {
   using namespace dex_asm;
   g_redex = new RedexContext();
 
-  // check that we recognize IRInstructions that can be converted to 2addr form
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v})),
-            *dasm(OPCODE_ADD_INT_2ADDR, {0_v, 1_v}));
+  auto* method = static_cast<DexMethod*>(
+      DexMethod::make_method("Lfoo;", "bar", "V", {}));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  auto do_test = [&](IRInstruction* insn, DexInstruction* expected) {
+    method->set_code(std::make_unique<IRCode>(method, 0));
+    method->get_code()->push_back(insn);
+    instruction_lowering::lower(method);
+    EXPECT_EQ(*method->get_code()->begin()->dex_insn, *expected);
+  };
+
+  // Check that we recognize IRInstructions that can be converted to 2addr form
+  do_test(
+      dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
+      (new DexInstruction(OPCODE_ADD_INT_2ADDR))->set_src(0, 0)->set_src(1, 1));
+
   // IRInstructions that have registers beyond 4 bits can't benefit, however
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v})),
-            *dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v}));
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v})),
-            *dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v}));
-  // check converting to 2addr form work for add-int v1,v0,v1
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {1_v, 0_v, 1_v})),
-            *dasm(OPCODE_ADD_INT_2ADDR, {1_v, 0_v}));
-  // check only commutative instruction can be converted to 2addr
-  // for form OPCODE v1,v0,v1
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v})),
-            *dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v}));
+  do_test(dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v}),
+          (new DexInstruction(OPCODE_ADD_INT))
+              ->set_dest(17)
+              ->set_src(0, 17)
+              ->set_src(1, 1));
+
+  do_test(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v}),
+          (new DexInstruction(OPCODE_ADD_INT))
+              ->set_dest(0)
+              ->set_src(0, 0)
+              ->set_src(1, 17));
+
+  // Check that we take advantage of commutativity
+  do_test(dasm(OPCODE_ADD_INT, {1_v, 0_v, 1_v}),
+          (new DexInstruction(OPCODE_ADD_INT_2ADDR))
+              ->set_src(0, 1)
+              ->set_src(1, 0));
+
+  // Check that we don't abuse commutativity if the operators aren't
+  // commutative
+  do_test(dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v}),
+          (new DexInstruction(OPCODE_SUB_INT))
+              ->set_dest(1)
+              ->set_src(0, 0)
+              ->set_src(1, 1));
+
   // check registers beyond 4 bits can't benefit
-  EXPECT_EQ(*select_instruction(dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v})),
-            *dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v}));
+  do_test(dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v}),
+          (new DexInstruction(OPCODE_ADD_INT))
+              ->set_dest(17)
+              ->set_src(0, 1)
+              ->set_src(1, 17));
+
   delete g_redex;
 }
 
@@ -166,22 +218,28 @@ TEST(IRInstruction, SelectCheckCast) {
   DexMethod* method = static_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
-  auto code = std::make_unique<IRCode>(method, 0);
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 1_v}));
-  InstructionSelection select;
-  select.select_instructions(code.get());
+  method->set_code(std::make_unique<IRCode>(method, 0));
+  auto code = method->get_code();
+  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  instruction_lowering::lower(method);
 
   // check that we inserted a move opcode before the check-cast
-  auto it = InstructionIterable(code.get()).begin();
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE_OBJECT, {0_v, 1_v}));
+  auto it = code->begin();
+  EXPECT_EQ(
+      *it->dex_insn,
+      *(new DexInstruction(OPCODE_MOVE_OBJECT))->set_dest(0)->set_src(0, 1));
   ++it;
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v, 0_v}));
+  EXPECT_EQ(*it->dex_insn,
+            *(new DexOpcodeType(OPCODE_CHECK_CAST, get_object_type()))
+                 ->set_src(0, 0));
 
   delete g_redex;
 }
 
 TEST(IRInstruction, SelectMove) {
   using namespace dex_asm;
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   EXPECT_EQ(OPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
@@ -202,6 +260,7 @@ TEST(IRInstruction, SelectMove) {
 
 TEST(IRInstruction, SelectConst) {
   using namespace dex_asm;
+  using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
   auto insn = dasm(OPCODE_CONST, {0_v});

@@ -109,7 +109,6 @@ std::string show(DexAnnotationVisibility vis) {
   case DAV_SYSTEM:
     return "system";
   }
-  not_reached();
 }
 
 std::string show_opcode(const DexInstruction* insn) {
@@ -903,8 +902,14 @@ std::string show(DexOpcode opcode) {
     return "IOPCODE_LOAD_PARAM_OBJECT";
   case IOPCODE_LOAD_PARAM_WIDE:
     return "IOPCODE_LOAD_PARAM_WIDE";
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+    return "IOPCODE_MOVE_RESULT_PSEUDO";
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT";
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+    return "IOPCODE_MOVE_RESULT_PSEUDO_WIDE";
   }
-  always_assert_log(false, "Unknown opcode");
+  always_assert_log(false, "Unknown opcode 0x%x", opcode);
   return "";
 }
 
@@ -1013,7 +1018,6 @@ std::string show(TryEntryType t) {
   case TRY_END:
     return "TRY_END";
   }
-  not_reached();
 }
 
 std::string show(const MethodItemEntry& mei) {
@@ -1022,6 +1026,9 @@ std::string show(const MethodItemEntry& mei) {
   switch (mei.type) {
   case MFLOW_OPCODE:
     ss << "OPCODE: " << show(mei.insn);
+    return ss.str();
+  case MFLOW_DEX_OPCODE:
+    ss << "DEX_OPCODE: " << show(mei.dex_insn);
     return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
@@ -1044,10 +1051,8 @@ std::string show(const MethodItemEntry& mei) {
     ss << "POSITION: " << show(mei.pos);
     return ss.str();
   case MFLOW_FALLTHROUGH:
-    ss << "FALLTHROUGH: " << mei.throwing_mie;
-    return ss.str();
+    return "FALLTHROUGH";
   }
-  not_reached();
 }
 
 std::string show(const FatMethod* fm) {

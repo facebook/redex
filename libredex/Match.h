@@ -256,6 +256,9 @@ match_t<IRInstruction> has_type();
 /** const-string flavors */
 match_t<IRInstruction> const_string();
 
+/** move-result-pseudo flavors */
+match_t<IRInstruction> move_result_pseudo();
+
 /** new-instance flavors */
 template <typename P>
 match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >

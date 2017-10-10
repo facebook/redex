@@ -54,9 +54,7 @@
  * us.
  *
  * Possible additions: (TODO?)
- *   wide registers
- *     I tried it, with registers only it's a tiny help. With
- *     constants it causes spurious verify errors at install time. --jhendrick
+ *   wide registers (I tried it. it's only a tiny help. --jhendrick)
  */
 
 namespace {
@@ -102,18 +100,32 @@ class AliasFixpointIterator final
    * An instruction can be removed if we know the source and destination are
    * aliases
    */
-  void run_on_block(Block* const& block,
+  void run_on_block(Block* block,
                     AliasedRegisters& aliases,
                     std::vector<IRInstruction*>* deletes) const {
 
-    for (auto& mei : InstructionIterable(block)) {
-      const RegisterValue& src = get_src_value(mei.insn);
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto insn = it->insn;
+      auto op = insn->opcode();
+      RegisterValue src;
+      if (opcode::is_move_result_pseudo(op)) {
+        src = get_src_value(primary_instruction_of_move_result_pseudo(it));
+      } else if (!insn->has_move_result_pseudo()) {
+        src = get_src_value(insn);
+      }
       if (src != RegisterValue::none()) {
         // either a move or a constant load into `dst`
-        RegisterValue dst{mei.insn->dest()};
+        RegisterValue dst = RegisterValue{insn->dest()};
         if (aliases.are_aliases(dst, src)) {
           if (deletes != nullptr) {
-            deletes->push_back(mei.insn);
+            if (opcode::is_move_result_pseudo(op)) {
+              deletes->push_back(primary_instruction_of_move_result_pseudo(it));
+            } else {
+              deletes->push_back(insn);
+            }
           }
         } else {
           aliases.break_alias(dst);
@@ -121,16 +133,16 @@ class AliasFixpointIterator final
         }
       } else {
         if (m_config.replace_with_representative && deletes != nullptr) {
-          replace_with_representative(mei.insn, aliases);
+          replace_with_representative(insn, aliases);
         }
-        if (mei.insn->dests_size() > 0) {
+        if (insn->dests_size() > 0) {
           // dest is being written to but not by a simple move from another
           // register or a constant load. Break its aliases because we don't
           // know what its value is.
-          RegisterValue dst{mei.insn->dest()};
+          RegisterValue dst{insn->dest()};
           aliases.break_alias(dst);
-          if (mei.insn->dest_is_wide()) {
-            Register wide_reg = mei.insn->dest() + 1;
+          if (insn->dest_is_wide()) {
+            Register wide_reg = insn->dest() + 1;
             RegisterValue wide{wide_reg};
             aliases.break_alias(wide);
           }
@@ -294,6 +306,16 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /* unused */,
                                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
+
+  if (m_config.eliminate_const_literals && !mgr.verify_none_enabled()) {
+    // This option is not safe with the verifier
+    m_config.eliminate_const_literals = false;
+    TRACE(RME,
+          1,
+          "Ignoring eliminate_const_literals because verify-none is not "
+          "enabled.\n");
+  }
+
   RedundantMoveEliminationImpl impl(m_config);
   auto stats = impl.run(scope);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);

@@ -22,7 +22,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "InstructionSelection.h"
+#include "InstructionLowering.h"
 #include "Walkers.h"
 
 /** Local (basic block level) constant propagation.

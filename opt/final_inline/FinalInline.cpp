@@ -23,24 +23,12 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "ParallelWalkers.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
 namespace {
-
-struct FieldDependency {
-  DexMethod* clinit;
-  IRInstruction* sget;
-  IRInstruction* sput;
-  DexField* field;
-
-  FieldDependency(DexMethod* clinit,
-                  IRInstruction* sget,
-                  IRInstruction* sput,
-                  DexField* field)
-      : clinit(clinit), sget(sget), sput(sput), field(field) {}
-};
 
 class FinalInlineImpl {
  public:
@@ -207,26 +195,6 @@ class FinalInlineImpl {
     }
   }
 
-  void replace_opcode(DexMethod* method,
-                      IRInstruction* from,
-                      IRInstruction* to) {
-    method->get_code()->replace_opcode(from, to);
-  }
-
-  void inline_sget(DexMethod* method, IRInstruction* opfield) {
-    if (!validate_sget(method, opfield)) return;
-    auto dest = opfield->dest();
-    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
-    always_assert_log(field->is_concrete(), "Must be a concrete field");
-    auto value = field->get_static_value();
-    auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
-    uint64_t v = value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
-
-    auto newopcode =
-        (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
-    replace_opcode(method, opfield, newopcode);
-  }
-
   /*
    * There's no "good way" to differentiate blank vs. non-blank finals.
    * So, we just scan the code in the CL-init.  If it's sput there, then it's
@@ -281,25 +249,39 @@ class FinalInlineImpl {
       }
     }
 
-    std::vector<std::pair<DexMethod*, IRInstruction*>> rewrites;
-    auto opcode_worker = [&](DexMethod* method, IRInstruction* insn) {
-      if (insn->has_field() && is_sget(insn->opcode())) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-        if (field == nullptr || !field->is_concrete()) return;
-        if (inline_field.count(field) == 0) return;
-        rewrites.emplace_back(method, insn);
+    walk_methods_parallel_simple(m_full_scope, [&](DexMethod* m) {
+      auto* code = m->get_code();
+      if (!code) {
+        return;
       }
-    };
-    walk_opcodes(m_full_scope,
-                 [](DexMethod* /* unused */) { return true; },
-                 opcode_worker);
-    TRACE(FINALINLINE,
-          1,
-          "Method Re-writes %lu\n",
-          rewrites.size());
-    for (auto& pair : rewrites) {
-      inline_sget(pair.first, pair.second);
-    }
+      std::vector<FatMethod::iterator> rewrites;
+      auto ii = InstructionIterable(code);
+      for (auto it = ii.begin(); it != ii.end(); ++it) {
+        auto* insn = it->insn;
+        if (!is_sget(insn->opcode())) {
+          continue;
+        }
+        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        if (field == nullptr || !field->is_concrete()) continue;
+        if (inline_field.count(field) == 0) continue;
+        if (!validate_sget(m, insn)) continue;
+        rewrites.push_back(it.unwrap());
+      }
+      for (auto it : rewrites) {
+        auto* insn = it->insn;
+        auto dest = move_result_pseudo_of(it)->dest();
+        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        auto value = field->get_static_value();
+        auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
+        uint64_t v =
+            value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
+        auto newopcode =
+            (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
+
+        code->insert_before(it, newopcode);
+        code->remove_opcode(it);
+      }
+    });
   }
 
   /*
@@ -330,7 +312,8 @@ class FinalInlineImpl {
   /*
    * Verify that we can convert the field in the sput into an encoded value.
    */
-  bool validate_sput_for_encoded_value(DexClass* clazz, IRInstruction* insn) {
+  bool validate_sput_for_encoded_value(const DexClass* clazz,
+                                       IRInstruction* insn) {
     if (!(insn->has_field() && is_sput(insn->opcode()))) {
       return false;
     }
@@ -370,14 +353,30 @@ class FinalInlineImpl {
       ++it;
       if (it == end) {
         if (first_op->opcode() != OPCODE_RETURN_VOID) {
+          TRACE(FINALINLINE,
+                8,
+                "Can't replace: %s :: Last opcode is not return void\n",
+                SHOW(clinit));
           return false;
         }
         break;
       }
       auto sput_op = it->insn;
-      if (!(validate_const_for_encoded_value(first_op) &&
-            validate_sput_for_encoded_value(clazz, sput_op) &&
-            (first_op->dest() == sput_op->src(0)))) {
+      bool condition_const = validate_const_for_encoded_value(first_op);
+      bool condition_sput =
+          condition_const && validate_sput_for_encoded_value(clazz, sput_op);
+      bool condition_register_match =
+          condition_sput && first_op->dest() == sput_op->src(0);
+      if (!condition_register_match) {
+        TRACE(FINALINLINE,
+              8,
+              "Can't replace: %s :: Can't validate :: const :: %s :: sput :: "
+              "%s :: register match :: %s\n",
+              SHOW(clinit),
+              condition_const ? "True" : "False",
+              condition_sput ? "True" : "False",
+              condition_register_match ? "True" : "False");
+        TRACE(FINALINLINE, 8, "%s\n", SHOW(clinit->get_code()));
         return false;
       }
       const_sputs.emplace_back(first_op, sput_op);
@@ -497,71 +496,8 @@ class FinalInlineImpl {
   size_t propagate_constants() {
     // Build dependency map (static -> [statics] that depend on it)
     TRACE(FINALINLINE, 2, "Building dependency map\n");
-    std::unordered_map<DexField*, std::vector<FieldDependency>> deps;
-    for (auto clazz : m_full_scope) {
-      if (is_cls_blacklisted(clazz)) {
-        continue;
-      }
-      auto clinit = clazz->get_clinit();
-      if (clinit == nullptr) {
-        continue;
-      }
-      auto code = clinit->get_code();
-      auto ii = InstructionIterable(code);
-      auto end = ii.end();
-      for (auto it = ii.begin(); it != end; ++it) {
-        // Check for sget from static final
-        if (!it->insn->has_field()) {
-          continue;
-        }
-        auto sget_op = it->insn;
-        if (!check_sget(sget_op)) {
-          continue;
-        }
-        auto src_field =
-            resolve_field(sget_op->get_field(), FieldSearch::Static);
-        if ((src_field == nullptr) ||
-            !(is_static(src_field) && is_final(src_field))) {
-          continue;
-        }
-
-        // Check for sput to static final
-        auto next_insn = std::next(it)->insn;
-        if (!validate_sput_for_encoded_value(clazz, next_insn)) {
-          continue;
-        }
-        auto sput_op = next_insn;
-        auto dst_field =
-            resolve_field(sput_op->get_field(), FieldSearch::Static);
-        if (!(is_static(dst_field) && is_final(dst_field))) {
-          continue;
-        }
-
-        // Check that dst register for sget is src register for sput
-        if (sget_op->dest() != sput_op->src(0)) {
-          continue;
-        }
-
-        if (reg_reused(sget_op->dest(), it, end) ||
-            (sget_op->opcode() == OPCODE_SGET_WIDE &&
-             reg_reused(sget_op->dest() + 1, it, end))) {
-          TRACE(FINALINLINE,
-                2,
-                "Cannot propagate %s to %s. Source register reused.\n",
-                SHOW(src_field),
-                SHOW(dst_field));
-          continue;
-        }
-
-        // Yay, we found a dependency!
-        TRACE(FINALINLINE,
-              2,
-              "Field %s depends on %s\n",
-              SHOW(dst_field),
-              SHOW(src_field));
-        deps[src_field].emplace_back(clinit, it->insn, next_insn, dst_field);
-      }
-    }
+    std::unordered_map<DexField*, std::vector<FieldDependency>> deps =
+        find_dependencies(m_full_scope);
 
     // Collect static finals whose values are known. These serve as the starting
     // point of the dependency resolution process.
@@ -584,6 +520,7 @@ class FinalInlineImpl {
     size_t nresolved = 0;
     while (!resolved.empty()) {
       auto cur = resolved.front();
+      TRACE(FINALINLINE, 2, "Resolving deps of %s\n", SHOW(cur));
       resolved.pop_front();
       if (deps.count(cur) == 0) {
         continue;
@@ -604,6 +541,85 @@ class FinalInlineImpl {
           "Resolved %lu static finals via const prop\n",
           nresolved);
     return nresolved;
+  }
+
+  std::unordered_map<DexField*, std::vector<FieldDependency>> find_dependencies(
+      const Scope& scope) {
+    std::unordered_map<DexField*, std::vector<FieldDependency>> result;
+    for (auto clazz : scope) {
+      if (is_cls_blacklisted(clazz)) {
+        continue;
+      }
+      auto clinit = clazz->get_clinit();
+      if (clinit == nullptr) {
+        continue;
+      }
+      find_dependencies(clazz, clinit, result);
+    }
+    return result;
+  };
+
+  void find_dependencies(
+      const DexClass* clazz,
+      DexMethod* clinit,
+      std::unordered_map<DexField*, std::vector<FieldDependency>>& deps) {
+    auto code = clinit->get_code();
+    auto ii = InstructionIterable(code);
+    auto end = ii.end();
+    for (auto it = ii.begin(); it != end; ++it) {
+      // Check for sget from static final
+      if (!it->insn->has_field()) {
+        continue;
+      }
+      auto sget_op = it->insn;
+      if (!check_sget(sget_op)) {
+        continue;
+      }
+      auto src_field = resolve_field(sget_op->get_field(), FieldSearch::Static);
+      if ((src_field == nullptr) ||
+          !(is_static(src_field) && is_final(src_field))) {
+        continue;
+      }
+
+      auto sget_move_result = move_result_pseudo_of(it.unwrap());
+      // skip the move-result-pseudo
+      ++it;
+
+      // Check for sput to static final
+      auto next_insn = std::next(it)->insn;
+      if (!validate_sput_for_encoded_value(clazz, next_insn)) {
+        continue;
+      }
+      auto sput_op = next_insn;
+      auto dst_field = resolve_field(sput_op->get_field(), FieldSearch::Static);
+      if (!(is_static(dst_field) && is_final(dst_field))) {
+        continue;
+      }
+
+      // Check that dst register for sget is src register for sput
+      if (sget_move_result->dest() != sput_op->src(0)) {
+        continue;
+      }
+
+      if (reg_reused(sget_move_result->dest(), it, end) ||
+          (sget_op->opcode() == OPCODE_SGET_WIDE &&
+           reg_reused(sget_move_result->dest() + 1, it, end))) {
+        TRACE(FINALINLINE,
+              2,
+              "Cannot propagate %s to %s. Source register reused.\n",
+              SHOW(src_field),
+              SHOW(dst_field));
+        continue;
+      }
+
+      // Yay, we found a dependency!
+      TRACE(FINALINLINE,
+            2,
+            "Field %s depends on %s\n",
+            SHOW(dst_field),
+            SHOW(src_field));
+      deps[src_field].emplace_back(clinit, sget_op, sput_op, dst_field);
+    }
   }
 };
 }
@@ -659,6 +675,22 @@ void FinalInlinePass::inline_fields(const Scope& scope) {
   FinalInlineImpl impl(scope, config);
   impl.inline_field_values();
   impl.remove_unused_fields();
+}
+
+void FinalInlinePass::inline_fields(const Scope& scope,
+                                    FinalInlinePass::Config& config) {
+  FinalInlineImpl impl(scope, config);
+  impl.inline_field_values();
+}
+
+const std::unordered_map<DexField*, std::vector<FieldDependency>>
+FinalInlinePass::find_dependencies(const Scope& scope,
+                                   DexMethod* method,
+                                   FinalInlinePass::Config& config) {
+  FinalInlineImpl impl(scope, config);
+  std::unordered_map<DexField*, std::vector<FieldDependency>> result;
+  impl.find_dependencies(type_class(method->get_class()), method, result);
+  return result;
 }
 
 static FinalInlinePass s_pass;

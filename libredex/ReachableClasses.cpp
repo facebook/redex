@@ -214,6 +214,7 @@ void init_permanently_reachable_classes(
 
   auto match = std::make_tuple(
       m::const_string(/* const-string {vX}, <any string> */),
+      m::move_result_pseudo(/* const-string {vX}, <any string> */),
       m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
                        m::opcode_method(
                            m::named<DexMethodRef>("forName") &&
@@ -225,12 +226,13 @@ void init_permanently_reachable_classes(
       match,
       [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
         auto const_string = insns[0];
-        auto invoke_static = insns[1];
+        auto move_result_pseudo = insns[1];
+        auto invoke_static = insns[2];
         // Make sure that the registers agree
         auto src = opcode::has_range(invoke_static->opcode())
                        ? invoke_static->range_base()
                        : invoke_static->src(0);
-        if (const_string->dest() == src) {
+        if (move_result_pseudo->dest() == src) {
           auto classname = JavaNameUtil::external_to_internal(
               const_string->get_string()->c_str());
           TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
@@ -245,12 +247,14 @@ void init_permanently_reachable_classes(
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
+  bool legacy_xml_reachability;
 
   pc.get("apk_dir", "", apk_dir);
   pc.get("keep_packages", {}, reflected_package_names);
   pc.get("keep_annotations", {}, annotations);
   pc.get("keep_class_members", {}, class_members);
   pc.get("keep_methods", {}, methods);
+  pc.get("legacy_xml_reachability", true, legacy_xml_reachability);
 
   std::unordered_set<DexType*> annotation_types(
     no_optimizations_anno.begin(),
@@ -266,17 +270,19 @@ void init_permanently_reachable_classes(
   keep_methods(scope, methods);
 
   if (apk_dir.size()) {
-    // Classes present in manifest
-    std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
-    for (std::string classname : get_manifest_classes(manifest)) {
-      TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
-      mark_reachable_by_classname(classname, false);
-    }
+    if (legacy_xml_reachability) {
+      // Classes present in manifest
+      std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+      for (std::string classname : get_manifest_classes(manifest)) {
+        TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
+        mark_reachable_by_classname(classname, false);
+      }
 
-    // Classes present in XML layouts
-    for (std::string classname : get_layout_classes(apk_dir)) {
-      TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
-      mark_reachable_by_classname(classname, false);
+      // Classes present in XML layouts
+      for (std::string classname : get_layout_classes(apk_dir)) {
+        TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
+        mark_reachable_by_classname(classname, false);
+      }
     }
 
     // Classnames present in native libraries (lib/*/*.so)
@@ -541,19 +547,17 @@ std::string ReferencedState::str() const {
   std::stringstream s;
   s << m_bytype;
   s << m_bystring;
-  s << ' ';
   s << m_computed;
   s << m_seed;
   s << m_keep;
   s << m_includedescriptorclasses;
-  s << ' ';
   s << m_allowshrinking;
   s << m_allowoptimization;
   s << m_allowobfuscation;
-  s << ' ';
   s << m_assumenosideeffects;
   s << m_blanket_keep;
-  s << m_keep_count;
   s << m_whyareyoukeeping;
+  s << ' ';
+  s << m_keep_count;
   return s.str();
 }

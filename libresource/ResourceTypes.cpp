@@ -1316,38 +1316,53 @@ int32_t ResXMLParser::getAttributeData(size_t idx) const
     return 0;
 }
 
-void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
+ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
 {
     if (mEventCode == START_TAG) {
         const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
         if (idx < dtohs(tag->attributeCount)) {
-            ResXMLTree_attribute* attr = (ResXMLTree_attribute*)
+            return (ResXMLTree_attribute*)
                 (((const uint8_t*)tag)
                  + dtohs(tag->attributeStart)
                  + (dtohs(tag->attributeSize)*idx));
-            attr->typedValue.data = newData;
         }
+    }
+
+    return nullptr;
+}
+
+// Replaces an entire XML attribute (data and type).
+// This function assumes that the size of the attribute is not changing.
+void ResXMLParser::setAttribute(size_t idx, Res_value newAttribute)
+{
+    ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr != nullptr) {
+        attr->typedValue = newAttribute;
+    }
+}
+
+// Replaces the data of an XML attribute.
+void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
+{
+    ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr != nullptr) {
+        attr->typedValue.data = newData;
     }
 }
 
 ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
 {
-    if (mEventCode == START_TAG) {
-        const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
-        if (idx < dtohs(tag->attributeCount)) {
-            const ResXMLTree_attribute* attr = (const ResXMLTree_attribute*)
-                (((const uint8_t*)tag)
-                 + dtohs(tag->attributeStart)
-                 + (dtohs(tag->attributeSize)*idx));
-            outValue->copyFrom_dtoh(attr->typedValue);
-            if (mTree.mDynamicRefTable != NULL &&
-                    mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
-                return BAD_TYPE;
-            }
-            return sizeof(Res_value);
-        }
+    const ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr == nullptr) {
+        return BAD_TYPE;
     }
-    return BAD_TYPE;
+
+    outValue->copyFrom_dtoh(attr->typedValue);
+    if (mTree.mDynamicRefTable != NULL &&
+            mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
+        return BAD_TYPE;
+    }
+    return sizeof(Res_value);
 }
 
 ssize_t ResXMLParser::indexOfAttribute(const char* ns, const char* attr) const
@@ -6744,13 +6759,7 @@ String8 ResTable::getString8FromIndex(
     const TypeList& typeList = pg->types[0];
     const Type* typeConfigs = typeList[0];
     const Package* pkg = typeConfigs->package;
-    size_t len;
-    const char* str8 = pkg->header->values.string8At(stringIndex, &len);
-    if (str8 == nullptr) {
-        // This is either a null string or a string16, ignore either way.
-        return String8();
-    }
-    return String8(str8, len);
+    return pkg->header->values.string8ObjectAt(stringIndex);
 }
 
 void ResTable::getTypeNamesForPackage(
@@ -6912,6 +6921,11 @@ void ResTable::remapReferenceValuesForResource(
     SortedVector<uint32_t> originalIds,
     Vector<uint32_t> newIds)
 {
+    resource_name resName;
+    if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
+        return;
+    }
+
     const ssize_t pgIndex = getResourcePackageIndex(resID);
     const int typeIndex = Res_GETTYPE(resID);
     const int entryIndex = Res_GETENTRY(resID);
@@ -6924,50 +6938,13 @@ void ResTable::remapReferenceValuesForResource(
     const size_t NTC = typeConfigs->configs.size();
     for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
         const ResTable_type* type = typeConfigs->configs[configIndex];
-        if ((((uint64_t)type) & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        String8 configStr = type->config.toString();
-        uint32_t entriesStart = dtohl(type->entriesStart);
-        if ((entriesStart & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        uint32_t typeSize = dtohl(type->header.size);
-        if ((typeSize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        const uint32_t* const eindex = (const uint32_t*)
-            (((const uint8_t*)type) + dtohs(type->header.headerSize));
-
-        uint32_t thisOffset = dtohl(eindex[entryIndex]);
-        if (thisOffset == ResTable_type::NO_ENTRY) {
-            continue;
-        }
-
-        resource_name resName;
-        if (!this->getResourceName(resID, true, &resName)) {
-            continue;
-        }
-        if ((thisOffset & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + sizeof(ResTable_entry)) > typeSize) {
-            continue;
-        }
-
-        const ResTable_entry* ent = (const ResTable_entry*)
-            (((const uint8_t*)type) + entriesStart + thisOffset);
-        if (((entriesStart + thisOffset) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
             continue;
         }
 
         uintptr_t esize = dtohs(ent->size);
-        if ((esize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + esize) > typeSize) {
-            continue;
-        }
+        uint32_t typeSize = dtohl(type->header.size);
 
         Res_value* valuePtr = nullptr;
         ResTable_map_entry* bagPtr = nullptr;
@@ -6998,13 +6975,13 @@ void ResTable::remapReferenceValuesForResource(
             }
 
             for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
-                Res_value mapValue = mapPtr->value;
+                Res_value& mapValue = mapPtr->value;
                 if (mapValue.dataType == Res_value::TYPE_REFERENCE ||
                     mapValue.dataType == Res_value::TYPE_ATTRIBUTE) {
                     uint32_t valueData = mapValue.data;
                     remapped = getRemappedEntry(valueData, originalIds, newIds);
                     if (valueData != remapped) {
-                        mapPtr->value.data = remapped;
+                        mapValue.data = remapped;
                     }
                 }
 
@@ -7022,14 +6999,153 @@ void ResTable::remapReferenceValuesForResource(
     }
 }
 
+bool ResTable::tryGetConfigEntry(
+    int entryIndex,
+    const ResTable_type* type,
+    const ResTable_entry** entPtr) const
+{
+    if ((((uint64_t)type) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false; // Non-integer
+    }
+    uint32_t entriesStart = dtohl(type->entriesStart);
+    if ((entriesStart & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false; // Non-integer
+    }
+    uint32_t typeSize = dtohl(type->header.size);
+    if ((typeSize & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false; // Non-integer
+    }
+    const uint32_t* const eindex = (const uint32_t*)
+        (((const uint8_t*)type) + dtohs(type->header.headerSize));
+
+    uint32_t thisOffset = dtohl(eindex[entryIndex]);
+    if (thisOffset == ResTable_type::NO_ENTRY) {
+        return false;
+    }
+
+    if ((thisOffset & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false; // Non-integer
+    }
+    if ((thisOffset + sizeof(ResTable_entry)) > typeSize) {
+        return false;
+    }
+
+    const ResTable_entry* ent = (const ResTable_entry*)
+        (((const uint8_t*)type) + entriesStart + thisOffset);
+    if (((entriesStart + thisOffset) & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false;
+    }
+
+    uintptr_t esize = dtohs(ent->size);
+    if ((esize & Res_value::COMPLEX_RADIX_MASK) != 0) {
+        return false; // Non-integer
+    }
+    if ((thisOffset + esize) > typeSize) {
+        return false;
+    }
+
+    *entPtr = ent;
+
+    return true;
+}
+
+void ResTable::inlineReferenceValuesForResource(
+    uint32_t resID,
+    SortedVector<uint32_t> inlineable_ids,
+    Vector<Res_value> inline_values)
+{
+    resource_name resName;
+    if (!this->getResourceName(resID, true, &resName)) {
+        return;
+    }
+
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
+            continue;
+        }
+
+        uintptr_t esize = dtohs(ent->size);
+        uint32_t typeSize = dtohl(type->header.size);
+
+        Res_value* valuePtr = nullptr;
+        ResTable_map_entry* bagPtr = nullptr;
+        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+            bagPtr = (ResTable_map_entry*)ent;
+        } else {
+            valuePtr = (Res_value*)
+                (((const uint8_t*)ent) + esize);
+        }
+
+        if (valuePtr != nullptr &&
+               (valuePtr->dataType == Res_value::TYPE_REFERENCE)) {
+            uint32_t valueData = valuePtr->data;
+            ssize_t idx = inlineable_ids.indexOf(valueData);
+            if (idx >= 0) {
+                Res_value inline_value = inline_values[idx];
+                valuePtr->data = inline_value.data;
+                valuePtr->dataType = inline_value.dataType;
+            }
+        } else if (bagPtr != nullptr) {
+            const int N = dtohl(bagPtr->count);
+            const uint8_t* baseMapPtr = (const uint8_t*)ent;
+            size_t mapOffset = esize;
+            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+
+            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+                Res_value mapValue = mapPtr->value;
+                if (mapValue.dataType == Res_value::TYPE_REFERENCE) {
+                    uint32_t valueData = mapValue.data;
+                    ssize_t idx = inlineable_ids.indexOf(valueData);
+                    if (idx >= 0) {
+                        Res_value inline_value = inline_values[idx];
+                        mapPtr->value = inline_value;
+                    }
+                }
+
+                const size_t size = dtohs(mapValue.size);
+                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
+                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            }
+        }
+    }
+}
+
 // For the given resource ID, looks across all configurations and returns all
 // the corresponding Res_value entries. This is much more reliable than
 // ResTable::getResource, which fails for roughly 20% of resources and does not
 // handle complex (bag) values well. Note that we also return the parent of
 // bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
 // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
-void ResTable::getAllValuesForResource(uint32_t resID, Vector<Res_value>& values) const
+void ResTable::getAllValuesForResource(
+    uint32_t resID,
+    Vector<Res_value>& values) const
 {
+    this->getAllValuesForResource(resID, values, /* onlyDefault */ false);
+}
+
+// As above, but if onlyDefault is true, only considers the 'default' column.
+void ResTable::getAllValuesForResource(
+    uint32_t resID,
+    Vector<Res_value>& values,
+    bool onlyDefault) const
+{
+    resource_name resName;
+    if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
+        return;
+    }
+
     const ssize_t pgIndex = getResourcePackageIndex(resID);
     const int typeIndex = Res_GETTYPE(resID);
     const int entryIndex = Res_GETENTRY(resID);
@@ -7042,52 +7158,22 @@ void ResTable::getAllValuesForResource(uint32_t resID, Vector<Res_value>& values
     }
     const Type* typeConfigs = typeList[0];
     const size_t NTC = typeConfigs->configs.size();
+
     for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
         const ResTable_type* type = typeConfigs->configs[configIndex];
-        if ((((uint64_t)type) & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        String8 configStr = type->config.toString();
-        uint32_t entriesStart = dtohl(type->entriesStart);
-        if ((entriesStart & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        uint32_t typeSize = dtohl(type->header.size);
-        if ((typeSize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        const uint32_t* const eindex = (const uint32_t*)
-            (((const uint8_t*)type) + dtohs(type->header.headerSize));
-
-        uint32_t thisOffset = dtohl(eindex[entryIndex]);
-        if (thisOffset == ResTable_type::NO_ENTRY) {
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
             continue;
         }
 
-        resource_name resName;
-        if (!this->getResourceName(resID, true, &resName)) {
-            continue;
-        }
-        if ((thisOffset & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + sizeof(ResTable_entry)) > typeSize) {
-            continue;
-        }
-
-        const ResTable_entry* ent = (const ResTable_entry*)
-            (((const uint8_t*)type) + entriesStart + thisOffset);
-        if (((entriesStart + thisOffset) & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue;
+        if (onlyDefault) {
+            if (type->config.toString().size() > 0) {
+                continue;
+            }
         }
 
         uintptr_t esize = dtohs(ent->size);
-        if ((esize & Res_value::COMPLEX_RADIX_MASK) != 0) {
-            continue; // Non-integer
-        }
-        if ((thisOffset + esize) > typeSize) {
-            continue;
-        }
+        uint32_t typeSize = dtohl(type->header.size);
 
         const Res_value* valuePtr = nullptr;
         const ResTable_map_entry* bagPtr = nullptr;

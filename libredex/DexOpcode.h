@@ -308,6 +308,10 @@ OPS
   IOPCODE_LOAD_PARAM = 0xf000,
   IOPCODE_LOAD_PARAM_OBJECT = 0xf100,
   IOPCODE_LOAD_PARAM_WIDE = 0xf200,
+
+  IOPCODE_MOVE_RESULT_PSEUDO = 0xf300,
+  IOPCODE_MOVE_RESULT_PSEUDO_OBJECT = 0xf400,
+  IOPCODE_MOVE_RESULT_PSEUDO_WIDE = 0xf500,
 };
 
 std::string show(DexOpcode);
@@ -334,7 +338,13 @@ bool may_throw(DexOpcode);
 // if an opcode has a /range counterpart
 bool has_range_form(DexOpcode);
 
+bool is_commutative(DexOpcode op);
+
+bool is_internal(DexOpcode);
+
 bool is_load_param(DexOpcode);
+
+bool is_move_result_pseudo(DexOpcode);
 
 } // namespace opcode
 
@@ -348,6 +358,10 @@ unsigned dests_size(DexOpcode);
 // we can't tell the srcs size from the opcode alone -- format 35c opcodes
 // encode that separately. So this just returns the minimum.
 unsigned min_srcs_size(DexOpcode);
+
+bool dest_is_wide(DexOpcode);
+
+bool dest_is_object(DexOpcode);
 
 // the number of bits an opcode has available to encode a given register
 bit_width_t src_bit_width(DexOpcode, uint16_t i);

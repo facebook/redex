@@ -11,6 +11,19 @@
 
 #include "Pass.h"
 
+struct FieldDependency {
+  DexMethod* clinit;
+  IRInstruction* sget;
+  IRInstruction* sput;
+  DexField* field;
+
+  FieldDependency(DexMethod* clinit,
+                  IRInstruction* sget,
+                  IRInstruction* sput,
+                  DexField* field)
+      : clinit(clinit), sget(sget), sput(sput), field(field) {}
+};
+
 class FinalInlinePass : public Pass {
  public:
   FinalInlinePass() : Pass("FinalInlinePass") {}
@@ -71,4 +84,9 @@ class FinalInlinePass : public Pass {
   } m_config;
 
   static void inline_fields(const Scope& scope);
+  static void inline_fields(const Scope& scope, Config& config);
+  static const std::unordered_map<DexField*, std::vector<FieldDependency>>
+  find_dependencies(const Scope& scope,
+                    DexMethod* method,
+                    FinalInlinePass::Config& config);
 };

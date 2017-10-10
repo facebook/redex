@@ -41,6 +41,7 @@
   TM(IDEX)               \
   TM(INL)                \
   TM(INLINIT)            \
+  TM(INLRES)             \
   TM(INTF)               \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
@@ -80,7 +81,8 @@
   TM(BRCR)               \
   TM(SWIN)               \
   TM(SWCL)               \
-  TM(SW)
+  TM(SW)                 \
+  TM(UNREF_INTF)
 
 enum TraceModule : int {
 #define TM(x) x,

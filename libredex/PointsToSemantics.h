@@ -23,6 +23,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "PointsToSemanticsUtils.h"
+#include "S_Expression.h"
 #include "TypeSystem.h"
 
 /*
@@ -111,6 +112,10 @@ class PointsToVariable final {
   static PointsToVariable null_variable() {
     return PointsToVariable(null_var_id());
   }
+
+  s_expr to_s_expr() const;
+
+  static boost::optional<PointsToVariable> from_s_expr(const s_expr& e);
 
  private:
   static constexpr int32_t null_var_id() { return -1; }
@@ -277,6 +282,10 @@ struct PointsToOperation {
   bool is_return() const { return kind == PTS_RETURN; }
 
   bool is_disjunction() const { return kind == PTS_DISJUNCTION; }
+
+  s_expr to_s_expr() const;
+
+  static boost::optional<PointsToOperation> from_s_expr(const s_expr& e);
 };
 
 /*
@@ -368,6 +377,10 @@ class PointsToAction final {
                                     InputIterator first,
                                     InputIterator last);
 
+  s_expr to_s_expr() const;
+
+  static boost::optional<PointsToAction> from_s_expr(const s_expr& e);
+
  private:
   static constexpr int32_t lhs_key() { return -1; }
   static constexpr int32_t rhs_key() { return -2; }
@@ -420,12 +433,10 @@ enum MethodKind {
  */
 class PointsToMethodSemantics {
  public:
-  PointsToMethodSemantics(MethodKind kind,
+  PointsToMethodSemantics(DexMethodRef* dex_method,
+                          MethodKind kind,
                           size_t start_var_id,
-                          size_t size_hint)
-      : m_kind(kind), m_variable_counter(start_var_id) {
-    m_points_to_actions.reserve(size_hint);
-  }
+                          size_t size_hint);
 
   MethodKind kind() const { return m_kind; }
 
@@ -447,23 +458,37 @@ class PointsToMethodSemantics {
    */
   void shrink();
 
+  s_expr to_s_expr() const;
+
+  static boost::optional<PointsToMethodSemantics> from_s_expr(const s_expr& e);
+
  private:
+  DexMethodRef* m_dex_method;
   MethodKind m_kind;
   // The variable counter allows us to generate new variables when we need to
   // modify the system of points-to actions (e.g., for inlining method calls).
   size_t m_variable_counter;
   std::vector<PointsToAction> m_points_to_actions;
+
+  friend std::ostream& operator<<(std::ostream&,
+                                  const PointsToMethodSemantics&);
 };
 
 std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
 
 /*
  * This represents the points-to semantics of all methods inside a given scope.
+ *
+ * IMPORTANT: the procedure used to generate the points-to sematics assumes that
+ * invoke-* instructions are in denormalized form, i.e., wide arguments are
+ * explicitly represented by a pair of consecutive registers. The generation of
+ * the points-to semantics doesn't modify the IR and hence, can be used anywhere
+ * in Redex.
  */
 class PointsToSemantics final {
  public:
-  using iterator = std::unordered_map<
-      DexMethod*, PointsToMethodSemantics>::const_iterator;
+  using iterator =
+      std::unordered_map<DexMethod*, PointsToMethodSemantics>::const_iterator;
 
   PointsToSemantics() = delete;
 
@@ -499,8 +524,5 @@ class PointsToSemantics final {
 
   friend std::ostream& operator<<(std::ostream&, const PointsToSemantics&);
 };
-
-std::ostream& operator<<(std::ostream& o,
-    const std::pair<DexMethod*, PointsToMethodSemantics>& p);
 
 std::ostream& operator<<(std::ostream& o, const PointsToSemantics& s);

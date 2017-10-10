@@ -153,6 +153,16 @@ TEST(S_ExpressionTest, basicOperations) {
   s_expr e6 = parse("(123#123()abc\"def\"\"gh()i\")");
   EXPECT_EQ("(123 #123 () abc def \"gh()i\")", e6.str());
 
+  s_expr e7 = s_expr({s_expr("A"), s_expr("")});
+  EXPECT_EQ("(A \"\")", e7.str());
+  {
+    std::istringstream str_input(e7.str());
+    s_expr_istream input(str_input);
+    s_expr i;
+    input >> i;
+    EXPECT_EQ(e7, i);
+  }
+
   std::string error;
   erroneous_parse("((a) b ()", 1, error);
   EXPECT_EQ("Incomplete S-expression", error);

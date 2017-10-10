@@ -72,8 +72,10 @@ void MethodBlock::invoke(DexOpcode opcode,
 
 void MethodBlock::new_instance(DexType* type, Location& dst) {
   auto insn = new IRInstruction(OPCODE_NEW_INSTANCE);
-  insn->set_type(type)->set_dest(dst.get_reg());
+  insn->set_type(type);
   push_instruction(insn);
+  push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                       ->set_dest(dst.get_reg()));
 }
 
 void MethodBlock::throwex(Location ex) {
@@ -154,6 +156,23 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
   ifield_op(opcode, field, obj, src);
 }
 
+static DexOpcode move_result_pseudo_for_iget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_IGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_IGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
 void MethodBlock::ifield_op(DexOpcode opcode,
                             DexField* field,
                             Location obj,
@@ -161,10 +180,12 @@ void MethodBlock::ifield_op(DexOpcode opcode,
   always_assert(is_ifield_op(opcode));
   if (is_iget(opcode)) {
     auto iget = new IRInstruction(opcode);
-    iget->set_field(field)->set_dest(src_or_dst.get_reg());
+    iget->set_field(field);
     src_or_dst.type = field->get_class();
     iget->set_src(0, obj.get_reg());
     push_instruction(iget);
+    push_instruction((new IRInstruction(move_result_pseudo_for_iget(opcode)))
+                         ->set_dest(src_or_dst.get_reg()));
   } else {
     auto iput = new IRInstruction(opcode);
     iput->set_field(field);
@@ -252,9 +273,11 @@ void MethodBlock::sfield_op(DexOpcode opcode,
   always_assert(is_sfield_op(opcode));
   if (is_sget(opcode)) {
     auto sget = new IRInstruction(opcode);
-    sget->set_field(field)->set_dest(src_or_dst.get_reg());
+    sget->set_field(field);
     src_or_dst.type = field->get_class();
     push_instruction(sget);
+    push_instruction((new IRInstruction(move_result_pseudo_for_iget(opcode)))
+                         ->set_dest(src_or_dst.get_reg()));
   } else {
     auto sput = new IRInstruction(opcode);
     sput->set_field(field)->set_src(0, src_or_dst.get_reg());
@@ -301,18 +324,21 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
 void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
   IRInstruction* check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   auto reg = src_and_dst.get_reg();
-  check_cast->set_type(type)->set_src(0, reg)->set_dest(reg);
+  check_cast->set_type(type)->set_src(0, reg);
   push_instruction(check_cast);
+  push_instruction(
+      (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))->set_dest(reg));
 }
 
 void MethodBlock::instance_of(Location& obj, Location& dst, DexType* type) {
   always_assert(obj.is_ref());
   always_assert(dst.type == get_boolean_type());
   IRInstruction* insn = new IRInstruction(OPCODE_INSTANCE_OF);
-  insn->set_dest(dst.get_reg());
   insn->set_src(0, obj.get_reg());
   insn->set_type(type);
   push_instruction(insn);
+  push_instruction(
+      (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO))->set_dest(dst.get_reg()));
 }
 
 void MethodBlock::ret(Location loc) {
@@ -363,18 +389,24 @@ void MethodBlock::load_const(Location& loc, DexString* value) {
   always_assert(!loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(value);
-  load->set_dest(loc.get_reg());
-  loc.type = get_string_type();
   push_instruction(load);
+  IRInstruction* move_result_pseudo =
+      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  loc.type = get_string_type();
+  move_result_pseudo->set_dest(loc.get_reg());
+  push_instruction(move_result_pseudo);
 }
 
 void MethodBlock::load_const(Location& loc, DexType* value) {
   always_assert(!loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_CLASS);
   load->set_type(value);
-  load->set_dest(loc.get_reg());
-  loc.type = get_class_type();
   push_instruction(load);
+  IRInstruction* move_result_pseudo =
+      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  loc.type = get_class_type();
+  move_result_pseudo->set_dest(loc.get_reg());
+  push_instruction(move_result_pseudo);
 }
 
 void MethodBlock::load_null(Location& loc) {

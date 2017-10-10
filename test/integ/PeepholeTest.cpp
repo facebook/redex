@@ -80,6 +80,17 @@ static IRInstructionList op_lit(DexOpcode opcode,
   };
 }
 
+static IRInstructionList op_lit_move_result_pseudo(DexOpcode opcode,
+                                                   int64_t literal,
+                                                   unsigned dst_reg = 1) {
+  using namespace dex_asm;
+  // note: args to dasm() go as dst, src, literal
+  return IRInstructionList{
+      dasm(OPCODE_CONST_16, {0_v, 42_L}),
+      dasm(opcode, {0_v, Operand{LITERAL, static_cast<uint64_t>(literal)}}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {Operand{VREG, dst_reg}})};
+}
+
 // Builds arithmetic involving an opcode like MOVE or NEG
 static IRInstructionList op_unary(DexOpcode opcode) {
   using namespace dex_asm;
@@ -177,8 +188,12 @@ TEST_F(PeepholeTest, Arithmetic) {
   test_1("mult8_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT8, -1), negate);
   test_1("mult16_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT16, -1), negate);
 
-  test_1("div8_neg1_to_neg", op_lit(OPCODE_DIV_INT_LIT8, -1), negate);
-  test_1("div16_neg1_to_neg", op_lit(OPCODE_DIV_INT_LIT16, -1), negate);
+  test_1("div8_neg1_to_neg",
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, -1),
+         negate);
+  test_1("div16_neg1_to_neg",
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, -1),
+         negate);
 
   // These should result in no changes
   test_1_nochange("add8_15", op_lit(OPCODE_ADD_INT_LIT8, 15));

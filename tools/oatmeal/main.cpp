@@ -55,6 +55,9 @@ struct Arguments {
   std::string art_image_location;
 
   bool test_is_oatmeal = false;
+
+  // generate samsung compatible oat file.
+  bool samsung_mode = false;
 };
 
 #ifndef ANDROID
@@ -92,6 +95,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"arch", required_argument, nullptr, 'a'},
                              {"art-image-location", required_argument, nullptr, 0},
                              {"test-is-oatmeal", no_argument, nullptr, 1},
+                             {"samsung-oatformat", no_argument, nullptr, 2},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -170,6 +174,10 @@ Arguments parse_args(int argc, char* argv[]) {
       ret.test_is_oatmeal = true;
       break;
 
+    case 2:
+      ret.samsung_mode = true;
+      break;
+
     case ':':
       fprintf(stderr, "ERROR: %s requires an argument\n", argv[optind - 1]);
       exit(1);
@@ -214,8 +222,8 @@ int dump(const Arguments& args) {
     return 1;
   }
 
-  auto file = FileHandle(fopen(args.oat_file.c_str(), "r"));
-  if (file.get() == nullptr) {
+  auto oat_file = FileHandle(fopen(args.oat_file.c_str(), "r"));
+  if (oat_file.get() == nullptr) {
     fprintf(stderr,
             "failed to open file %s %s\n",
             args.oat_file.c_str(),
@@ -223,34 +231,34 @@ int dump(const Arguments& args) {
     return 1;
   }
 
-  auto file_size = get_filesize(file);
+  auto oat_file_size = get_filesize(oat_file);
 
   // We don't run dumping during install on device, so it is allowed to consume
-  // lots
-  // of memory.
-  std::unique_ptr<char[]> file_contents(new char[file_size]);
-  auto bytesRead = fread(file_contents.get(), 1, file_size, file.get());
-  if (bytesRead != file_size) {
+  // lots of memory.
+  auto oat_file_contents = std::make_unique<char[]>(oat_file_size);
+  auto oatFileBytesRead = fread(oat_file_contents.get(), 1, oat_file_size, oat_file.get());
+  if (oatFileBytesRead != oat_file_size) {
     fprintf(stderr,
             "Failed to read file %s (%zd)\n",
             std::strerror(errno),
-            bytesRead);
+            oatFileBytesRead);
     return 1;
   }
 
-  ConstBuffer buf{file_contents.get(), file_size};
-  auto ma_scope = MemoryAccounter::NewScope(buf);
+  ConstBuffer oatfile_buffer{oat_file_contents.get(), oat_file_size};
+  auto ma_scope = MemoryAccounter::NewScope(oatfile_buffer);
 
-  if (args.test_is_oatmeal) {
-    auto oatfile = OatFile::parse_dex_files_only(buf);
-    if (oatfile->created_by_oatmeal()) {
-      return 0;
-    } else {
-      return 1;
-    }
+  auto oatfile = OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
+
+  if (!oatfile) {
+    fprintf(stderr, "Cannot open .oat file %s\n", args.oat_file.c_str());
+    return 1;
   }
 
-  auto oatfile = OatFile::parse(buf);
+  if (args.test_is_oatmeal) {
+    return oatfile->created_by_oatmeal();
+  }
+
   oatfile->print(args.dump_classes, args.dump_tables, args.print_unverified_classes);
 
   if (args.dump_memory_usage) {
@@ -277,7 +285,7 @@ int build(const Arguments& args) {
   }
 
   OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch,
-      args.write_elf, args.art_image_location);
+      args.write_elf, args.art_image_location, args.samsung_mode);
 
   return 0;
 }

@@ -21,21 +21,79 @@
  *
  * 2. 2addr opcodes no longer exist. They are converted to the non-2addr form.
  *
- * 3. check-cast has both a src and a dest operand. check-cast has a side
+ * 3. Any Dex opcode that can both throw and write to a dest register is split
+ *    into two separate pieces in our IR: one piece that may throw but does not
+ *    write to a dest, and one move-result-pseudo instruction that writes to a
+ *    dest but does not throw. This makes accurate liveness analysis easy.
+ *    This is elaborated further below.
+ *
+ * 4. check-cast also has a move-result-pseudo suffix. check-cast has a side
  *    effect in the runtime verifier when the cast succeeds. The runtime
  *    verifier updates the type in the source register to its more specific
  *    type. As such, for many analyses, it is semantically equivalent to
  *    creating a new value. By representing the opcode in our IR as having a
- *    dest field, these analyses can be simplified by not having to treat
- *    check-cast as a special case.
+ *    dest field via move-result-pseudo, these analyses can be simplified by
+ *    not having to treat check-cast as a special case.
  *
  *    See this link for the relevant verifier code:
  *    androidxref.com/7.1.1_r6/xref/art/runtime/verifier/method_verifier.cc#2383
  *
- * 4. pseudo-instructions no longer exist. fill-array-data-payload is attached
+ * 5. payload instructions no longer exist. fill-array-data-payload is attached
  *    directly to the fill-array-data instruction that references it.
  *    {packed, sparse}-switch-payloads are represented by MFLOW_TARGET entries
  *    in the IRCode instruction stream.
+ *
+ * Background behind move-result-pseudo
+ * ====================================
+ * Opcodes that write to a register (say v0) but may also throw are somewhat
+ * tricky to handle. Our dataflow analyses must consider v0 to be written
+ * only if the opcode does not end up throwing.
+ *
+ * For example, say we have the following Dex code:
+ *
+ *   sget-object v1 <some field of type LQux;>
+ *   const/4 v0 #0
+ *   start try block
+ *   iget-object v0 v1 LQux;.a:LFoo;
+ *   return-void
+ *   // end try block
+ *
+ *   // exception handler
+ *   invoke-static {v0} LQux;.a(LFoo;)V
+ *
+ * If `iget-object` throws, it will not have written to v0, so the `const/4` is
+ * necessary to ensure that v0 is always initialized when control flow reaches
+ * B2. In other words, v0 must be live-out at const/4.
+ *
+ * Prior to this diff, we dealt with this by putting any potentially throwing
+ * opcodes in the subsequent basic block when converting from Dex to IR:
+ *
+ *   B0:
+ *     sget-object v1 <some field of type LQux;>
+ *     const/4 v0 #0
+ *   B1: <throws to B2> // v1 is live-in here
+ *     iget-object v0 v1 LQux;.a:LFoo;
+ *     return-void
+ *   B2: <catches exceptions from B1>
+ *     invoke-static {v0} LQux;.a(LFoo;)V
+ *
+ * This way, straightforward liveness analysis will consider v0 to be
+ * live-out at const/4. Obviously, this is still somewhat inaccurate: we end
+ * up considering v1 as live-in at B1 when it should really be dead. Being
+ * conservative about liveness generally doesn't create wrong behavior, but
+ * can result in poorer optimizations.
+ *
+ * With move-result-pseudo, the above example will be represented as follows:
+ *
+ *   B0:
+ *     sget-object v1 <some field of type LQux;>
+ *     const/4 v0 #0
+ *     iget-object v1 LQux;.a:LFoo;
+ *   B1: <throws to B2> // no registers are live-in here
+ *     move-result-pseudo-object v0
+ *     return-void
+ *   B2: <catches exceptions from B1>
+ *     invoke-static {v0} LQux;.a(LFoo;)V
  */
 class IRInstruction final {
  public:
@@ -84,29 +142,33 @@ class IRInstruction final {
    * Number of registers used.
    */
   size_t dests_size() const {
-    return m_opcode == OPCODE_CHECK_CAST ? 1
-                                         : opcode_impl::dests_size(m_opcode);
+    return opcode_impl::dests_size(m_opcode) && !opcode::may_throw(m_opcode);
   }
   size_t srcs_size() const { return m_srcs.size(); }
+
+  bool has_move_result_pseudo() const {
+    return m_opcode == OPCODE_CHECK_CAST ||
+           (opcode_impl::dests_size(m_opcode) && opcode::may_throw(m_opcode));
+  }
 
   /*
    * Information about operands.
    */
   bool src_is_wide(size_t i) const;
-  bool dest_is_wide() const;
+  bool dest_is_wide() const {
+    return opcode_impl::dest_is_wide(m_opcode);
+  }
   bool is_wide() const {
     return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
   }
   bit_width_t src_bit_width(uint16_t i) const;
-  bit_width_t dest_bit_width() const;
 
   /*
    * Accessors for logical parts of the instruction.
    */
   DexOpcode opcode() const { return m_opcode; }
   uint16_t dest() const {
-    always_assert(m_opcode == OPCODE_CHECK_CAST ||
-                  opcode_impl::dests_size(m_opcode));
+    always_assert_log(dests_size(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }
@@ -131,6 +193,7 @@ class IRInstruction final {
     return this;
   }
   IRInstruction* set_dest(uint16_t vreg) {
+    always_assert(dests_size());
     m_dest = vreg;
     return this;
   }

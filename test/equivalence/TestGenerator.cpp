@@ -17,6 +17,7 @@
 
 #include "DexOutput.h"
 #include "DexLoader.h"
+#include "InstructionLowering.h"
 #include "IRCode.h"
 #include "TestGenerator.h"
 
@@ -68,6 +69,13 @@ int main(int argc, char* argv[]) {
   Json::Value json(Json::objectValue);
   ConfigFiles cfg(json);
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
+
+  DexStore store("classes");
+  store.add_classes(classes);
+  DexStoresVector stores;
+  stores.emplace_back(std::move(store));
+  instruction_lowering::run(stores);
+
   write_classes_to_dex(dex,
                        &classes,
                        nullptr /* LocatorIndex* */,

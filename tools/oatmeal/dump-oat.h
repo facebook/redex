@@ -24,6 +24,7 @@ enum class OatVersion : uint32_t {
   V_064 = 0x00343630, // 6.0, api level 23
   V_079 = 0x00393730, // 7.0, api level 24
   V_088 = 0x00383830, // 7.1, api level 25
+  V_124 = 0x00343231  // 8.0, api level 26
 };
 
 struct DexInput {
@@ -59,8 +60,10 @@ class OatFile {
   UNCOPYABLE(OatFile);
   virtual ~OatFile();
 
-  // reads magic number, returns correct oat file implementation.
-  static std::unique_ptr<OatFile> parse(ConstBuffer buf);
+  // Reads magic number, returns correct oat file implementation.
+  static std::unique_ptr<OatFile> parse(ConstBuffer oatfile_buffer,
+                                        const std::vector<DexInput>& dexes,
+                                        bool dex_files_only);
 
   // Like parse, but stops after parsing the dex file listing and dex headers.
   static std::unique_ptr<OatFile> parse_dex_files_only(ConstBuffer buf);
@@ -79,12 +82,16 @@ class OatFile {
   // section. This returns the offset to that data. (Or zero if the buffer was not an elf file.)
   virtual size_t oat_offset() const = 0;
 
+  // Return true if we've detected samsung customizations to the oatfile format.
+  virtual bool is_samsung() const = 0;
+
   static Status build(const std::string& oat_file,
                       const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,
                       const std::string& arch,
                       bool write_elf,
-                      const std::string& art_image_location);
+                      const std::string& art_image_location,
+                      bool samsung_mode);
 };
 
 enum class InstructionSet {

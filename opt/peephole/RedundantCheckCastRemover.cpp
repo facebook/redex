@@ -36,7 +36,8 @@ void remove_instructions(
 void RedundantCheckCastRemover::run() {
   auto match = std::make_tuple(m::invoke(),
                                m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
-                               m::is_opcode(OPCODE_CHECK_CAST));
+                               m::is_opcode(OPCODE_CHECK_CAST),
+                               m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT));
 
   std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
@@ -66,14 +67,15 @@ void RedundantCheckCastRemover::run() {
 
 bool RedundantCheckCastRemover::can_remove_check_cast(IRInstruction** insns,
                                                       size_t size) {
-  always_assert(size == 3);
+  always_assert(size == 4);
   IRInstruction* invoke_op = insns[0];
   IRInstruction* move_result_op = insns[1];
   IRInstruction* check_cast_op = insns[2];
+  IRInstruction* move_result_pseudo = insns[3];
 
   auto invoke_return = invoke_op->get_method()->get_proto()->get_rtype();
   auto check_type = check_cast_op->get_type();
   return move_result_op->dest() == check_cast_op->src(0) &&
-         check_cast_op->dest() == check_cast_op->src(0) &&
+         move_result_pseudo->dest() == check_cast_op->src(0) &&
          check_cast(invoke_return, check_type);
 }

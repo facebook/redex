@@ -91,7 +91,15 @@ for d in $dex_dirs; do
   dex_files_arg=`echo $dex_files | xargs -n1 | sed 's/^/-x /' | xargs`
   dex_locations_args=`echo $dex_files | xargs -n1 | sed 's/^.*\//-l /' | xargs`
 
-  for version in 064 079 088; do
+  for version in samsung5 039 045 064 079 088; do
+
+    if [ "$version" == "samsung5" ]; then
+      version_arg=039
+      samsung_flag="--samsung-oatformat"
+    else
+      version_arg=$version
+      samsung_flag=""
+    fi
 
     actual=$test_output_dir/$d.$version.actual.oat.rodata.out
     expected=$d.$version.expected.oat.rodata.out
@@ -99,7 +107,7 @@ for d in $dex_dirs; do
 
     if [ -z "$UPDATE_OATMEAL_TESTDATA" ]; then
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary $samsung_flag -v ${version_arg} -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $actual
       cat $tmp_oat.output >> $actual
@@ -114,7 +122,7 @@ for d in $dex_dirs; do
 
       new_output=`mktemp`
       tmp_oat=`mktemp`
-      $oatmeal_binary -v $version -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
+      $oatmeal_binary $samsung_flag -v ${version_arg} -a x86 -b -e -o $tmp_oat $dex_files_arg $dex_locations_args > $tmp_oat.output 2>&1 || \
         echo -e "==============\nExit status $?" >> $tmp_oat.output 2>&1
       xxd $tmp_oat | awk '{ printf "%08x", strtonum("0x" $1); $1=""; printf ":%s\n", $0 }' > $new_output
       cat $tmp_oat.output >> $new_output

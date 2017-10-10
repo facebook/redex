@@ -620,21 +620,22 @@ void print_graph_edges(const DexClass* cls,
     ReachableObject prev = obj;
     // NOTE: We only read the first item, but it seems fine. I didn't observe
     // any case of more than one item in set.
+    assert(set.size() == 1);
     obj = *begin(set);
     if (obj.type == ReachableObjectType::SEED) {
-      s = "\"[SEED] " + prev.state_str() + "\"" + s;
+      s = "\"[SEED] " + prev.str() + " " + prev.state_str() + "\"" + s;
       break;
     } else {
       s = "\"[" + obj.type_str() + "] " + obj.str() + "\"" + s;
     }
   }
 
-  os << show(cls) << '\t' << s << std::endl;
+  os << cls->get_deobfuscated_name() << '\t' << s << std::endl;
   TRACE(REACH_DUMP,
         5,
         "EDGE: %s %s %s;\n",
         dump_tag.c_str(),
-        show(cls).c_str(),
+        cls->get_deobfuscated_name().c_str(),
         s.c_str());
 }
 } // namespace

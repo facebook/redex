@@ -32,7 +32,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/final_inline \
 	-I$(top_srcdir)/opt/hotness-score \
 	-I$(top_srcdir)/opt/inlineinit \
-	-I$(top_srcdir)/opt/instruction-selection \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/obfuscate \
@@ -58,6 +57,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/track_resources \
+	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/opt/virtual_scope \
@@ -90,6 +90,7 @@ libredex_la_SOURCES = \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
 	libredex/Inliner.cpp \
+	libredex/InstructionLowering.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/IRTypeChecker.cpp \
@@ -166,7 +167,6 @@ redex_all_SOURCES = \
 	opt/final_inline/FinalInline.cpp \
 	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
-	opt/instruction-selection/InstructionSelection.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \
@@ -211,6 +211,7 @@ redex_all_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/track_resources/TrackResources.cpp \
+	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \

@@ -11,6 +11,7 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "InstructionLowering.h"
 #include "IRCode.h"
 #include "LocalDce.h"
 
@@ -63,6 +64,7 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
+  instruction_lowering::lower(m_method);
   m_method->sync();
 
   // check that the dead const/16 opcode is removed, but that the try item
@@ -98,6 +100,7 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
+  instruction_lowering::lower(m_method);
   m_method->sync();
 
   EXPECT_EQ(m_method->get_dex_code()->get_instructions().size(), 2);
@@ -127,6 +130,7 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
+  instruction_lowering::lower(m_method);
   m_method->sync();
 
   EXPECT_EQ(m_method->get_dex_code()->get_instructions().size(), 1);
@@ -157,6 +161,7 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 
   LocalDcePass().run(m_method);
+  instruction_lowering::lower(m_method);
   m_method->sync();
 
   EXPECT_EQ(m_method->get_dex_code()->get_instructions().size(), 3);

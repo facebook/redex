@@ -52,9 +52,9 @@ class MemoryAccounter {
   virtual void memcpyAndMark(void* dest, const char* src, size_t count) = 0;
 
   // Manually mark ranges of the buffer consumed.
-  virtual void markRangeConsumed(uint32_t begin, uint32_t count) = 0;
   virtual void markRangeConsumed(const char* ptr, uint32_t count) = 0;
   virtual void markBufferConsumed(ConstBuffer subBuffer) = 0;
+  virtual void addBuffer(ConstBuffer buf) = 0;
 };
 
 inline MemoryAccounter* cur_ma() { return MemoryAccounter::Cur(); }

@@ -968,6 +968,8 @@ class MethodSplicer {
       return cloned_mei;
     case MFLOW_FALLTHROUGH:
       return cloned_mei;
+    case MFLOW_DEX_OPCODE:
+      always_assert_log(false, "DexInstructions not expected here");
     }
     not_reached();
   }

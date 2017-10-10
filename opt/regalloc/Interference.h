@@ -250,6 +250,8 @@ class Graph {
   friend class impl::GraphBuilder;
 };
 
+size_t dest_bit_width(FatMethod::iterator it);
+
 namespace impl {
 
 /* Returns ⌈a/b⌉ */
@@ -260,7 +262,7 @@ inline uint32_t div_ceil(uint32_t a, uint32_t b) { return (a + b - 1) / b; }
  * limited public interface.
  */
 class GraphBuilder {
-  static void update_node_constraints(const IRInstruction*,
+  static void update_node_constraints(FatMethod::iterator,
                                       const RangeSet&,
                                       Graph*);
 
@@ -280,8 +282,6 @@ class GraphBuilder {
 uint32_t edge_weight(uint8_t, uint8_t);
 
 } // namespace impl
-
-IRInstruction* find_check_cast(const MethodItemEntry& mie);
 
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
                          bool select_spill_later,

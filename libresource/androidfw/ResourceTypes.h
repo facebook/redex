@@ -760,7 +760,14 @@ public:
 
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
+
+    // Replaces an entire XML attribute (data and type).
+    // This function assumes that the size of the attribute is not changing.
+    void setAttribute(size_t idx, Res_value newAttribute);
+
+    // Replaces the data of an XML attribute.
     void setAttributeData(size_t idx, uint32_t newData);
+
     ssize_t getAttributeValue(size_t idx, Res_value* outValue) const;
 
     ssize_t indexOfAttribute(const char* ns, const char* attr) const;
@@ -778,6 +785,8 @@ private:
     friend class ResXMLTree;
 
     event_code_t nextNode();
+
+    ResXMLTree_attribute* getAttributePointer(size_t idx) const;
 
     const ResXMLTree&           mTree;
     event_code_t                mEventCode;
@@ -1832,6 +1841,14 @@ public:
         SortedVector<uint32_t> originalIds,
         Vector<uint32_t> newIds);
 
+    // For the given resource ID, looks across all configurations and inlines
+    // all reference Res_value entries based on the given keys -> inline_values
+    // mapping. The entries in the inputs are expected to align based on index.
+    void inlineReferenceValuesForResource(
+        uint32_t resID,
+        SortedVector<uint32_t> inlineable_ids,
+        Vector<Res_value> inline_values);
+
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than
     // ResTable::getResource, which fails for roughly 20% of resources and does not
@@ -1839,6 +1856,12 @@ public:
     // bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
     // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
     void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
+
+    // As above, but if onlyDefault is true, only considers the 'default' column.
+    void getAllValuesForResource(
+        uint32_t resourceId,
+        Vector<Res_value>& values,
+        bool onlyDefault) const;
 
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
 
@@ -1858,6 +1881,11 @@ private:
     struct PackageGroup;
     struct bag_set;
     typedef Vector<Type*> TypeList;
+
+    bool tryGetConfigEntry(
+        int entryIndex,
+        const ResTable_type* type,
+        const ResTable_entry** ent) const;
 
     status_t addInternal(const void* data, size_t size, const void* idmapData, size_t idmapDataSize,
             const int32_t cookie, bool copyData);
