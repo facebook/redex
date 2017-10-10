@@ -161,8 +161,9 @@ struct ReachableObjects {
 ReachableObjects compute_reachable_objects(
     DexStoresVector& stores,
     const std::unordered_set<const DexType*>& ignore_string_literals_annos,
+    const std::unordered_set<const DexType*>& ignore_system_annos,
     int* num_ignore_check_strings,
-    bool record_reachability);
+    bool record_reachability = false);
 
 // Dump reachability information to TRACE(REACH_DUMP, 5).
 void dump_reachability(DexStoresVector& stores,
