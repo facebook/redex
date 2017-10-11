@@ -1095,9 +1095,59 @@ public:
   static void write(const std::vector<DexFileListing_079::DexFile_079>& dex_files,
                     FileHandle& cksum_fh);
 
-private:
+protected:
   std::vector<DexClasses> classes_;
 };
+
+class OatClasses_124 : public OatClasses_079 {
+public:
+  OatClasses_124() = default;
+  OatClasses_124(
+    const DexFileListing_079& dex_file_listing,
+    const DexFiles& dex_files,
+    ConstBuffer oat_buf,
+    ConstBuffer dex_buf);
+};
+
+OatClasses_124::OatClasses_124(
+  const DexFileListing_079& dex_file_listing,
+  const DexFiles& dex_files,
+  ConstBuffer oat_buf,
+  ConstBuffer dex_buf){
+  foreach_pair(
+      dex_file_listing.dex_files(),
+      dex_files.headers(),
+      [&](const DexFileListing_079::DexFile_079& listing,
+          const DexFileHeader& header) {
+
+        auto classes_offset = listing.classes_offset;
+
+        DexClasses dex_classes;
+        dex_classes.dex_file = listing.location;
+
+        DexIdBufs id_bufs(dex_buf, listing.file_offset, header);
+
+        // classes_offset points to an array of pointers (offsets) to
+        // ClassInfo
+        for (unsigned int i = 0; i < header.class_defs_size; i++) {
+
+          ClassInfo info;
+          uint32_t info_offset;
+          cur_ma()->memcpyAndMark(
+              &info_offset,
+              oat_buf.slice(classes_offset + i * sizeof(uint32_t)).ptr,
+              sizeof(uint32_t));
+          cur_ma()->memcpyAndMark(
+              &info, oat_buf.slice(info_offset).ptr, sizeof(ClassInfo));
+
+          // TODO: Handle compiled classes. Need to read method bitmap size,
+          // and method bitmap.
+          dex_classes.class_info.push_back(info);
+          dex_classes.class_names.push_back(id_bufs.get_class_name(i));
+        }
+        classes_.push_back(dex_classes);
+      });
+}
 
 class OatClasses_064 : public OatClasses {
 public:
@@ -1883,6 +1933,161 @@ class OatFile_079 : public OatFile {
   size_t oat_offset_;
 };
 
+// OatFile format for 124.
+// Key difference is the parsing of OAT and DEX has to be done in different files instead on a single
+// everything.oat file.
+class OatFile_124 : public OatFile {
+ public:
+  UNCOPYABLE(OatFile_124);
+  MOVABLE(OatFile_124);
+
+  static std::unique_ptr<OatFile> parse(bool dex_files_only, ConstBuffer buf,
+                                        size_t oat_offset, const std::vector<DexInput>& dexes) {
+    if (dexes.size() != 1) {
+      fprintf(stderr, "V124 odex files must come accompained with one and only one vdex file\n");
+      return nullptr;
+    }
+
+    auto header = OatHeader::parse(buf);
+    auto key_value_store = KeyValueStore(
+        buf.slice(header.size()).truncate(header.key_value_store_size));
+
+    auto rest = buf.slice(header.size() + header.key_value_store_size);
+    DexFileListing_079 dfl(header.dex_file_count, rest);
+
+    auto dex_file_name = dexes[0].filename;
+    auto dex_file = FileHandle(fopen(dex_file_name.c_str(), "r"));
+    if (dex_file.get() == nullptr) {
+      fprintf(stderr,
+	      "failed to open dex file %s %s\n",
+	      dex_file_name.c_str(),
+	      std::strerror(errno));
+      return nullptr;
+    }
+
+    auto dex_file_size = get_filesize(dex_file);
+
+    // We don't run dumping during install on device, so it is allowed to consume
+    // lots of memory.
+    auto dex_file_contents = std::make_unique<char[]>(dex_file_size);
+    auto dexFileBytesRead = fread(dex_file_contents.get(), 1, dex_file_size, dex_file.get());
+    if (dexFileBytesRead != dex_file_size) {
+      fprintf(stderr,
+	      "Failed to read dex file %s (%zd)\n",
+	      std::strerror(errno),
+	      dexFileBytesRead);
+      return nullptr;
+    }
+
+    ConstBuffer dex_file_buf{dex_file_contents.get(), dex_file_size};
+    cur_ma()->addBuffer(dex_file_buf);
+    DexFiles dex_files(dfl, dex_file_buf);
+
+    if (dex_files_only) {
+      return std::unique_ptr<OatFile>(new OatFile_124(header,
+                                                      key_value_store,
+                                                      std::move(dfl),
+                                                      std::move(dex_files),
+                                                      oat_offset));
+    }
+
+    LookupTables lookup_tables(dfl, dex_files, buf);
+    OatClasses_124 oat_classes(dfl, dex_files, buf, dex_file_buf);
+
+    return std::unique_ptr<OatFile>(new OatFile_124(header,
+                                                    key_value_store,
+                                                    std::move(dfl),
+                                                    std::move(dex_files),
+                                                    std::move(lookup_tables),
+                                                    std::move(oat_classes),
+                                                    oat_offset));
+  }
+
+  void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
+    printf("Header:\n");
+    header_.print();
+    printf("Key/Value store:\n");
+    key_value_store_.print();
+    printf("Dex File Listing:\n");
+    dex_file_listing_.print();
+    printf("Dex Files:\n");
+    dex_files_.print();
+
+    if (dump_tables) {
+      printf("LookupTables:\n");
+      lookup_tables_.print();
+    }
+    if (dump_classes) {
+      printf("Classes:\n");
+      oat_classes_.print();
+    }
+    if (print_unverified_classes) {
+      oat_classes_.print_unverified_classes();
+    }
+  }
+
+  bool is_samsung() const override { return false; }
+
+  Status status() override { return Status::PARSE_SUCCESS; }
+
+  static Status build(const std::string& oat_file_name,
+                      const std::vector<DexInput>& dex_input,
+                      const OatVersion oat_version,
+                      InstructionSet isa,
+                      bool write_elf,
+                      const std::string& art_image_location);
+
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    std::vector<OatDexFile> ret;
+    ret.reserve(dex_file_listing_.dex_files().size());
+    for (const auto& dex : dex_file_listing_.dex_files()) {
+      ret.emplace_back(dex.location, dex.location_checksum, dex.file_offset);
+    }
+    return ret;
+  }
+
+  size_t oat_offset() const override { return oat_offset_; }
+
+  bool created_by_oatmeal() const override {
+    return key_value_store_.has_key(kCreatedByOatmeal);
+  }
+
+ private:
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFileListing_079 dfl,
+              DexFiles dex_files,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_file_listing_(std::move(dfl)),
+        dex_files_(std::move(dex_files)),
+        oat_offset_(oat_data_offset) {}
+
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFileListing_079 dfl,
+              DexFiles dex_files,
+              LookupTables lt,
+              OatClasses_124 oat_classes,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_file_listing_(std::move(dfl)),
+        dex_files_(std::move(dex_files)),
+        lookup_tables_(std::move(lt)),
+        oat_classes_(std::move(oat_classes)),
+        oat_offset_(oat_data_offset) {}
+
+  OatHeader header_;
+  KeyValueStore key_value_store_;
+  DexFileListing_079 dex_file_listing_;
+  DexFiles dex_files_;
+  LookupTables lookup_tables_;
+  OatClasses_124 oat_classes_;
+  size_t oat_offset_;
+};
+
 class OatFile_Unknown : public OatFile {
 public:
   void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) override {
@@ -1990,6 +2195,7 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
       // 079 and 088 are the same as far as I can tell.
       return OatFile_079::parse(dex_files_only, oatfile_buffer, oat_offset);
     case OatVersion::V_124:
+      return OatFile_124::parse(dex_files_only, oatfile_buffer, oat_offset, dexes);
     case OatVersion::UNKNOWN:
       return OatFile_Unknown::parse(oatfile_buffer);
   }
