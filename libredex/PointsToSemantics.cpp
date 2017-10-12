@@ -85,6 +85,7 @@ namespace pts_impl {
     OP_STRING(PTS_CONST_STRING),        \
     OP_STRING(PTS_CONST_CLASS),         \
     OP_STRING(PTS_NEW_OBJECT),          \
+    OP_STRING(PTS_GET_CLASS),           \
     OP_STRING(PTS_CHECK_CAST),          \
     OP_STRING(PTS_GET_EXCEPTION),       \
     OP_STRING(PTS_LOAD_THIS),           \
@@ -198,6 +199,7 @@ s_expr PointsToOperation::to_s_expr() const {
         {op_kind_to_s_expr(kind), s_expr(dex_type->get_name()->str())});
   }
   case PTS_GET_EXCEPTION:
+  case PTS_GET_CLASS:
   case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
@@ -263,6 +265,7 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
         PointsToOperation(op_kind, DexType::make_type(dex_type_str.c_str()))};
   }
   case PTS_GET_EXCEPTION:
+  case PTS_GET_CLASS:
   case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
@@ -366,7 +369,7 @@ class PointsToVariableSet {
 
 std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
     const {
-  assert(m_operation.is_invoke() || m_operation.is_disjunction());
+  always_assert(m_operation.is_invoke() || m_operation.is_disjunction());
   std::vector<std::pair<size_t, PointsToVariable>> args;
   for (const auto& binding : m_arguments) {
     if (binding.first >= 0) {
@@ -380,24 +383,29 @@ std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
 
 PointsToAction PointsToAction::load_operation(
     const PointsToOperation& operation, PointsToVariable dest) {
-  assert(operation.is_load());
+  always_assert(operation.is_load());
   return PointsToAction(operation, {{dest_key(), dest}});
 }
 
-PointsToAction PointsToAction::check_cast_operation(
-    const PointsToOperation& operation,
-    PointsToVariable dest,
-    PointsToVariable src) {
-  assert(operation.is_check_cast());
-  return PointsToAction(operation, {{dest_key(), dest}, {src_key(), src}});
+PointsToAction PointsToAction::get_class_operation(PointsToVariable dest,
+                                                   PointsToVariable src) {
+  return PointsToAction(PointsToOperation(PTS_GET_CLASS),
+                        {{dest_key(), dest}, {src_key(), src}});
+}
+
+PointsToAction PointsToAction::check_cast_operation(DexType* dex_type,
+                                                    PointsToVariable dest,
+                                                    PointsToVariable src) {
+  return PointsToAction(PointsToOperation(PTS_CHECK_CAST, dex_type),
+                        {{dest_key(), dest}, {src_key(), src}});
 }
 
 PointsToAction PointsToAction::get_operation(
     const PointsToOperation& operation,
     PointsToVariable dest,
     boost::optional<PointsToVariable> instance) {
-  assert(operation.is_get());
-  assert(!(instance && operation.kind == PTS_SPUT));
+  always_assert(operation.is_get());
+  always_assert(!(instance && operation.kind == PTS_SPUT));
   if (instance) {
     return PointsToAction(operation,
                           {{dest_key(), dest}, {instance_key(), *instance}});
@@ -410,8 +418,8 @@ PointsToAction PointsToAction::put_operation(
     const PointsToOperation& operation,
     PointsToVariable rhs,
     boost::optional<PointsToVariable> lhs) {
-  assert(operation.is_put());
-  assert(!(lhs && operation.kind == PTS_SPUT));
+  always_assert(operation.is_put());
+  always_assert(!(lhs && operation.kind == PTS_SPUT));
   if (lhs) {
     return PointsToAction(operation, {{lhs_key(), *lhs}, {rhs_key(), rhs}});
   } else {
@@ -424,8 +432,8 @@ PointsToAction PointsToAction::invoke_operation(
     boost::optional<PointsToVariable> dest,
     boost::optional<PointsToVariable> instance,
     const std::vector<std::pair<size_t, PointsToVariable>>& args) {
-  assert(operation.is_invoke());
-  assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
+  always_assert(operation.is_invoke());
+  always_assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
   std::vector<std::pair<int32_t, PointsToVariable>> bindings;
   bindings.reserve(args.size() + 2);
   if (dest) {
@@ -438,10 +446,8 @@ PointsToAction PointsToAction::invoke_operation(
   return PointsToAction(operation, bindings);
 }
 
-PointsToAction PointsToAction::return_operation(
-    const PointsToOperation& operation, PointsToVariable src) {
-  assert(operation.is_return());
-  return PointsToAction(operation, {{src_key(), src}});
+PointsToAction PointsToAction::return_operation(PointsToVariable src) {
+  return PointsToAction(PointsToOperation(PTS_RETURN), {{src_key(), src}});
 }
 
 template <typename InputIterator>
@@ -465,7 +471,7 @@ PointsToAction::PointsToAction(
   for (const auto& binding : arguments) {
     auto status = m_arguments.insert(binding);
     // Making sure that there's no duplicate binding in the argument list.
-    assert(status.second);
+    always_assert(status.second);
   }
   m_arguments.shrink_to_fit();
 }
@@ -547,6 +553,10 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
   }
   case PTS_LOAD_PARAM: {
     o << a.dest() << " = PARAM " << op.parameter;
+    break;
+  }
+  case PTS_GET_CLASS: {
+    o << a.dest() << " = GET_CLASS(" << a.src() << ")";
     break;
   }
   case PTS_CHECK_CAST: {
@@ -979,7 +989,6 @@ class PointsToActionGenerator final {
     }
     case OPCODE_RETURN_OBJECT: {
       m_semantics->add(PointsToAction::return_operation(
-          PointsToOperation(PTS_RETURN),
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
     }
@@ -998,7 +1007,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_CHECK_CAST: {
       m_semantics->add(PointsToAction::check_cast_operation(
-          PointsToOperation(PTS_CHECK_CAST, insn->get_type()),
+          insn->get_type(),
           get_variable_from_anchor(insn),
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
@@ -1124,7 +1133,15 @@ class PointsToActionGenerator final {
   // relevant to points-to analysis and for which the source code is either
   // unavailable or hard to process automatically (e.g., native methods).
   void translate_invoke(IRInstruction* insn, const AnchorEnvironment& state) {
-    // For now, we just default to the general translation of method calls.
+    // Calls to java.lang.Object#getClass() are converted to a points-to
+    // operation in order to simplify the analysis.
+    if (m_utils.is_get_class_invocation(insn)) {
+      m_semantics->add(PointsToAction::get_class_operation(
+          get_variable_from_anchor(insn),
+          get_variable_from_anchor_set(state.get(insn->src(0)))));
+      return;
+    }
+    // Otherwise, we default to the general translation of method calls.
     default_invoke_translation(insn, state);
   }
 
@@ -1339,7 +1356,7 @@ class Shrinker final {
   void build_dependency_graph() {
     for (const PointsToAction& pt_action : *m_pt_actions) {
       const PointsToOperation& op = pt_action.operation();
-      if (op.is_check_cast()) {
+      if (op.is_get_class() || op.is_check_cast()) {
         add_dependency(pt_action.dest(), pt_action.src());
         continue;
       }

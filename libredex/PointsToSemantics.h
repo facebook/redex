@@ -153,7 +153,9 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
  * precisely. The `PTS_GET_EXCEPTION` operation stands for `move-exception`, but
  * assumes that any exception can be caught. This also explains why we have no
  * operation corresponding to `throw`. As for the disjuction, it's simply the
- * union of points-to variables (V = V1 U V2 U ... U Vn).
+ * union of points-to variables (V = V1 U V2 U ... U Vn). We also introduce a
+ * special operation `PTS_GET_CLASS` for java.lang.Object#getClass(), since
+ * java.lang.Class objects need to be handled specially by the analyzer.
  */
 
 //                              is_load  is_get  is_put  is_invoke
@@ -164,6 +166,7 @@ I  PTS_OP(PTS_GET_EXCEPTION,    true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_NEW_OBJECT,       true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_LOAD_THIS,        true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_LOAD_PARAM,       true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_GET_CLASS,        false,   false,  false,  false    ) \
 I  PTS_OP(PTS_CHECK_CAST,       false,   false,  false,  false    ) \
 I  PTS_OP(PTS_IGET,             false,   true ,  false,  false    ) \
 I  PTS_OP(PTS_IGET_SPECIAL,     false,   true ,  false,  false    ) \
@@ -238,6 +241,8 @@ struct PointsToOperation {
 #undef PTS_OP
     return load_operations[kind];
   }
+
+  bool is_get_class() const { return kind == PTS_GET_CLASS; }
 
   bool is_check_cast() const { return kind == PTS_CHECK_CAST; }
 
@@ -326,9 +331,14 @@ class PointsToAction final {
                                        PointsToVariable dest);
 
   /*
+   * Used to build a PTS_GET_CLASS action.
+   */
+  static PointsToAction get_class_operation(PointsToVariable dest,
+                                            PointsToVariable src);
+  /*
    * Used to build a PTS_CHECK_CAST action.
    */
-  static PointsToAction check_cast_operation(const PointsToOperation& operation,
+  static PointsToAction check_cast_operation(DexType* dex_type,
                                              PointsToVariable dest,
                                              PointsToVariable src);
 
@@ -366,8 +376,7 @@ class PointsToAction final {
   /*
    * Used to build a PTS_RETURN action.
    */
-  static PointsToAction return_operation(const PointsToOperation& operation,
-                                         PointsToVariable src);
+  static PointsToAction return_operation(PointsToVariable src);
 
   /*
    * Used to build a disjunction of variables v = v1 + ... + vn.
