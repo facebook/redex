@@ -8,7 +8,11 @@
  */
 
 #include <algorithm>
+#include <cstring>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <gtest/gtest.h>
+#include <sstream>
 
 #include "VerifyUtil.h"
 
@@ -79,4 +83,27 @@ IRInstruction* find_instruction(
       return true;
     });
   return it == end ? nullptr : (*it).insn;
+}
+
+// Given a semicolon delimited list of extracted files from the APK, return a
+// map of the original APK's file path to its path on disk.
+ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
+  ResourceFiles files;
+  std::istringstream input;
+  input.str(location);
+  for (std::string file_path; std::getline(input, file_path, ':'); ) {
+    auto r = file_path.rfind("/");
+    auto l = file_path.rfind("/", r - 1);
+    auto escaped = file_path.substr(l + 1, r - l - 1);
+    if (boost::algorithm::ends_with(escaped, suffix)) {
+      auto original_name =
+        escaped.substr(0, escaped.length() - std::strlen(suffix));
+        // Undo simple escaping at buck_imports/redex_utils
+        boost::replace_all(original_name, "zC", ":");
+        boost::replace_all(original_name, "zS", "/");
+        boost::replace_all(original_name, "zZ", "z");
+        files.emplace(original_name, file_path);
+    }
+  }
+  return files;
 }

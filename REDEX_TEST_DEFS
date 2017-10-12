@@ -1,3 +1,5 @@
+import os
+
 include_defs("//native/redex/REDEX_DEFS")
 include_defs("//buck_imports/redex_utils")
 
@@ -12,6 +14,8 @@ def redex_instr_test(
     verify_srcs=None,
     gen_dex_artifacts=False,
     native_outlining=False,
+    extracted_res_deps=None,
+    manifest=None,
 ):
   deps = java_deps + [
       "//third-party/java/fest:fest",
@@ -33,14 +37,18 @@ def redex_instr_test(
     deps = deps
   )
 
+  if manifest is None:
+    manifest = '%s:AndroidManifest.xml' % REDEX_INSTR_ROOT
+
   android_binary(
     name = name + '_non_redex',
     android_sdk_proguard_config = "default",
-    manifest = '%s:AndroidManifest.xml' % REDEX_INSTR_ROOT,
+    manifest = manifest,
     keystore = '//keystores:prod',
     package_type = 'release',
     proguard_config = proguard_config,
     deps = [':' + name],
+    aapt_mode = 'aapt2',
   )
 
   redex_extra_args = []
@@ -54,7 +62,7 @@ def redex_instr_test(
   android_binary(
     name = android_binary_name,
     android_sdk_proguard_config = "default",
-    manifest = '%s:AndroidManifest.xml' % REDEX_INSTR_ROOT,
+    manifest = manifest,
     keystore = '//keystores:prod',
     package_type = 'release',
     proguard_config = proguard_config,
@@ -62,6 +70,7 @@ def redex_instr_test(
     redex_config = config,
     redex_extra_args = redex_extra_args,
     deps = [':' + name],
+    aapt_mode = 'aapt2',
   )
 
   if native_outlining:
@@ -98,6 +107,31 @@ def redex_instr_test(
       cmd = 'unzip -p $(location :%s_redex) classes.dex > $OUT' % name,
     )
 
+  extracted_res_targets = []
+  if extracted_res_deps is not None:
+    # Extract some non-dex files for verification
+    for f in extracted_res_deps:
+      escaped = escape_path(f)
+      out_name = os.path.basename(f)
+
+      rule_name = escaped + '_pre'
+      genrule(
+        name = rule_name,
+        out = out_name,
+        cmd = 'unzip -p $(location :%s_non_redex) %s > $OUT' % (name, f),
+      )
+      extracted_res_targets.append(':' + rule_name)
+
+      rule_name = escaped + '_post'
+      genrule(
+        name = rule_name,
+        out = out_name,
+        cmd = 'unzip -p $(location :%s_redex) %s > $OUT' % (name, f),
+      )
+      extracted_res_targets.append(':' + rule_name)
+
+  extracted_res_outputs = list(map(lambda x: '$(location %s)' % x, extracted_res_targets))
+
   # For debugging purpose to get dexdump easily.
   if gen_dex_artifacts is True:
     # dexdump
@@ -123,10 +157,13 @@ def redex_instr_test(
         'dex_pre': '$(location :%s_dex_pre)' % name,
         'dex_post': '$(location :%s_dex_post)' % name,
         'apk': '$(location :%s)' % android_binary_name,
-        },
-      deps = [
-        ':%s_dex_post' % name, REDEX_LIB,
-        '%s:verify-util' % REDEX_INSTR_ROOT],
+        'extracted_resources': ':'.join(extracted_res_outputs),
+      },
+      deps = extracted_res_targets + [
+        ':%s_dex_post' % name,
+        REDEX_LIB,
+        '%s:verify-util' % REDEX_INSTR_ROOT
+      ],
     )
 
 
