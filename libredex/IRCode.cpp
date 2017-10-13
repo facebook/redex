@@ -627,7 +627,7 @@ void translate_dex_to_ir(
       insn->set_opcode(convert_2to3addr(op));
     }
     if (opcode::has_literal(op)) {
-      insn->set_literal(dex_insn->literal());
+      insn->set_literal(dex_insn->get_literal());
     }
     if (opcode::has_range(op)) {
       insn->set_range_base(dex_insn->range_base());

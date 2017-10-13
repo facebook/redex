@@ -86,7 +86,7 @@ IRInstruction::IRInstruction(const DexInstruction* insn) {
     m_opcode = convert_2to3addr(m_opcode);
   }
   if (opcode::has_literal(m_opcode)) {
-    m_literal = insn->literal();
+    m_literal = insn->get_literal();
   }
   if (opcode::has_range(m_opcode)) {
     m_range =
@@ -171,6 +171,9 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
     case opcode::Ref::Data:
       insn = new DexInstruction(opcode());
       break;
+    case opcode::Ref::Literal:
+      insn = (new DexInstruction(opcode()))->set_literal(get_literal());
+      break;
     case opcode::Ref::String:
       insn = new DexOpcodeString(opcode(), m_string);
       break;
@@ -192,9 +195,6 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   }
   for (size_t i = 0; i < srcs_size(); ++i) {
     insn->set_src(i, src(i));
-  }
-  if (opcode::has_literal(insn->opcode())) {
-    insn->set_literal(literal());
   }
   if (insn->has_arg_word_count()) {
     insn->set_arg_word_count(srcs_size());
@@ -444,11 +444,13 @@ uint64_t IRInstruction::hash() {
   if (has_string()) {
     bits.push_back(reinterpret_cast<uint64_t>(get_string()));
   }
+  if (has_literal()) {
+    bits.push_back(get_literal());
+  }
   if (opcode::has_range(opcode())) {
     bits.push_back(range_base());
     bits.push_back(range_size());
   }
-  bits.push_back(literal());
   // ignore offset because it's not known until sync to DexInstructions
 
   uint64_t result = 0;

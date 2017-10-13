@@ -346,7 +346,7 @@ class TypeInference final
     case OPCODE_CONST_16:
     case OPCODE_CONST:
     case OPCODE_CONST_HIGH16: {
-      if (insn->literal() == 0) {
+      if (insn->get_literal() == 0) {
         set_type(current_state, insn->dest(), TypeDomain(ZERO));
       } else {
         set_type(current_state, insn->dest(), TypeDomain(CONST));

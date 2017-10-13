@@ -67,6 +67,7 @@ namespace opcode {
 
 enum class Ref {
   None,
+  Literal,
   String,
   Type,
   Field,
@@ -95,14 +96,14 @@ enum class Ref {
   OP(RETURN                       , 0x0f, f11x_s, Ref::None)    \
   OP(RETURN_WIDE                  , 0x10, f11x_s, Ref::None)    \
   OP(RETURN_OBJECT                , 0x11, f11x_s, Ref::None)    \
-  OP(CONST_4                      , 0x12, f11n, Ref::None)      \
-  OP(CONST_16                     , 0x13, f21s, Ref::None)      \
-  OP(CONST                        , 0x14, f31i, Ref::None)      \
-  OP(CONST_HIGH16                 , 0x15, f21h, Ref::None)      \
-  OP(CONST_WIDE_16                , 0x16, f21s, Ref::None)      \
-  OP(CONST_WIDE_32                , 0x17, f31i, Ref::None)      \
-  OP(CONST_WIDE                   , 0x18, f51l, Ref::None)      \
-  OP(CONST_WIDE_HIGH16            , 0x19, f21h, Ref::None)      \
+  OP(CONST_4                      , 0x12, f11n, Ref::Literal)   \
+  OP(CONST_16                     , 0x13, f21s, Ref::Literal)   \
+  OP(CONST                        , 0x14, f31i, Ref::Literal)   \
+  OP(CONST_HIGH16                 , 0x15, f21h, Ref::Literal)   \
+  OP(CONST_WIDE_16                , 0x16, f21s, Ref::Literal)   \
+  OP(CONST_WIDE_32                , 0x17, f31i, Ref::Literal)   \
+  OP(CONST_WIDE                   , 0x18, f51l, Ref::Literal)   \
+  OP(CONST_WIDE_HIGH16            , 0x19, f21h, Ref::Literal)   \
   OP(CONST_STRING                 , 0x1a, f21c_d, Ref::String)  \
   OP(CONST_STRING_JUMBO           , 0x1b, f31c, Ref::String)    \
   OP(CONST_CLASS                  , 0x1c, f21c_d, Ref::Type)    \
@@ -276,25 +277,25 @@ enum class Ref {
   OP(MUL_DOUBLE_2ADDR             , 0xcd, f12x_2, Ref::None)    \
   OP(DIV_DOUBLE_2ADDR             , 0xce, f12x_2, Ref::None)    \
   OP(REM_DOUBLE_2ADDR             , 0xcf, f12x_2, Ref::None)    \
-  OP(ADD_INT_LIT16                , 0xd0, f22s, Ref::None)      \
-  OP(RSUB_INT                     , 0xd1, f22s, Ref::None)      \
-  OP(MUL_INT_LIT16                , 0xd2, f22s, Ref::None)      \
-  OP(DIV_INT_LIT16                , 0xd3, f22s, Ref::None)      \
-  OP(REM_INT_LIT16                , 0xd4, f22s, Ref::None)      \
-  OP(AND_INT_LIT16                , 0xd5, f22s, Ref::None)      \
-  OP(OR_INT_LIT16                 , 0xd6, f22s, Ref::None)      \
-  OP(XOR_INT_LIT16                , 0xd7, f22s, Ref::None)      \
-  OP(ADD_INT_LIT8                 , 0xd8, f22b, Ref::None)      \
-  OP(RSUB_INT_LIT8                , 0xd9, f22b, Ref::None)      \
-  OP(MUL_INT_LIT8                 , 0xda, f22b, Ref::None)      \
-  OP(DIV_INT_LIT8                 , 0xdb, f22b, Ref::None)      \
-  OP(REM_INT_LIT8                 , 0xdc, f22b, Ref::None)      \
-  OP(AND_INT_LIT8                 , 0xdd, f22b, Ref::None)      \
-  OP(OR_INT_LIT8                  , 0xde, f22b, Ref::None)      \
-  OP(XOR_INT_LIT8                 , 0xdf, f22b, Ref::None)      \
-  OP(SHL_INT_LIT8                 , 0xe0, f22b, Ref::None)      \
-  OP(SHR_INT_LIT8                 , 0xe1, f22b, Ref::None)      \
-  OP(USHR_INT_LIT8                , 0xe2, f22b, Ref::None)
+  OP(ADD_INT_LIT16                , 0xd0, f22s, Ref::Literal)   \
+  OP(RSUB_INT                     , 0xd1, f22s, Ref::Literal)   \
+  OP(MUL_INT_LIT16                , 0xd2, f22s, Ref::Literal)   \
+  OP(DIV_INT_LIT16                , 0xd3, f22s, Ref::Literal)   \
+  OP(REM_INT_LIT16                , 0xd4, f22s, Ref::Literal)   \
+  OP(AND_INT_LIT16                , 0xd5, f22s, Ref::Literal)   \
+  OP(OR_INT_LIT16                 , 0xd6, f22s, Ref::Literal)   \
+  OP(XOR_INT_LIT16                , 0xd7, f22s, Ref::Literal)   \
+  OP(ADD_INT_LIT8                 , 0xd8, f22b, Ref::Literal)   \
+  OP(RSUB_INT_LIT8                , 0xd9, f22b, Ref::Literal)   \
+  OP(MUL_INT_LIT8                 , 0xda, f22b, Ref::Literal)   \
+  OP(DIV_INT_LIT8                 , 0xdb, f22b, Ref::Literal)   \
+  OP(REM_INT_LIT8                 , 0xdc, f22b, Ref::Literal)   \
+  OP(AND_INT_LIT8                 , 0xdd, f22b, Ref::Literal)   \
+  OP(OR_INT_LIT8                  , 0xde, f22b, Ref::Literal)   \
+  OP(XOR_INT_LIT8                 , 0xdf, f22b, Ref::Literal)   \
+  OP(SHL_INT_LIT8                 , 0xe0, f22b, Ref::Literal)   \
+  OP(SHR_INT_LIT8                 , 0xe1, f22b, Ref::Literal)   \
+  OP(USHR_INT_LIT8                , 0xe2, f22b, Ref::Literal)
 
 enum DexOpcode : uint16_t {
 #define OP(op, code, ...) OPCODE_ ## op = code,

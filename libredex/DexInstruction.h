@@ -108,7 +108,7 @@ class DexInstruction : public Gatherable {
   uint16_t arg_word_count() const;
   uint16_t range_base() const;
   uint16_t range_size() const;
-  int64_t literal() const;
+  int64_t get_literal() const;
   int32_t offset() const;
 
   /*
@@ -401,6 +401,10 @@ inline bool is_conditional_branch(DexOpcode op) {
 
 inline bool is_multi_branch(DexOpcode op) {
   return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
+}
+
+inline bool is_literal_const(DexOpcode op) {
+  return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16;
 }
 
 inline bool is_const(DexOpcode op) {

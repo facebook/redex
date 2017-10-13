@@ -634,10 +634,6 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << "range_base: " << insn->range_base() << ", "
        << "range_size: " << insn->range_size();
   }
-  if (opcode::has_literal(insn->opcode())) {
-    if (!first) ss << ", ";
-    ss << insn->literal();
-  }
   if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
     ss << ", ";
   }
@@ -663,6 +659,9 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
       } else {
         ss << show(insn->get_method());
       }
+      break;
+    case opcode::Ref::Literal:
+      ss << insn->get_literal();
       break;
     case opcode::Ref::Data:
       ss << "<data>"; // TODO: print something more informative
@@ -906,7 +905,7 @@ std::string show(const DexInstruction* insn) {
   }
   if (opcode::has_literal(insn->opcode())) {
     if (!first) ss << ",";
-    ss << " " << insn->literal();
+    ss << " " << insn->get_literal();
     first = false;
   }
   return ss.str();

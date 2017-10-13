@@ -137,6 +137,9 @@ class IRInstruction final {
   bool has_method() const {
     return opcode::ref(m_opcode) == opcode::Ref::Method;
   }
+  bool has_literal() const {
+    return opcode::ref(m_opcode) == opcode::Ref::Literal;
+  }
 
   /*
    * Number of registers used.
@@ -182,7 +185,6 @@ class IRInstruction final {
     always_assert(opcode::has_range(m_opcode));
     return m_range.second;
   }
-  int64_t literal() const { return m_literal; }
 
   /*
    * Setters for logical parts of the instruction.
@@ -214,7 +216,14 @@ class IRInstruction final {
     m_srcs.resize(count);
     return this;
   }
+
+  int64_t get_literal() const {
+    always_assert(has_literal());
+    return m_literal;
+  }
+
   IRInstruction* set_literal(int64_t literal) {
+    always_assert(has_literal());
     m_literal = literal;
     return this;
   }
@@ -310,14 +319,16 @@ class IRInstruction final {
   std::vector<uint16_t> m_srcs;
   uint16_t m_dest {0};
   union {
-    DexString* m_string {nullptr};
+    // Zero-initialize this union with the uint64_t member instead of a
+    // pointer-type member so that it works properly even on 32-bit machines
+    uint64_t m_literal{0};
+    DexString* m_string;
     DexType* m_type;
     DexFieldRef* m_field;
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
 
-  uint64_t m_literal {0};
   std::pair<uint16_t, uint16_t> m_range {0, 0};
 };
 

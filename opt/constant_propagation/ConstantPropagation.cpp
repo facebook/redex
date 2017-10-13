@@ -210,7 +210,7 @@ namespace {
       if (inst->opcode() == OPCODE_CONST_4 ||
           inst->opcode() == OPCODE_CONST_16) {
           reg_values[inst->dest()].known = true;
-          reg_values[inst->dest()].val = inst->literal();
+          reg_values[inst->dest()].val = inst->get_literal();
       } else {
         reg_values[inst->dest()].known = false;
       }

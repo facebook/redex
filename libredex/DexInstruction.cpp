@@ -455,7 +455,7 @@ int64_t signext(uint64_t uv) {
   return int64_t(uint64_t(uv) << shift) >> shift;
 }
 
-int64_t DexInstruction::literal() const {
+int64_t DexInstruction::get_literal() const {
   assert(opcode::has_literal(opcode()));
   auto format = opcode::format(opcode());
   switch (format) {
@@ -651,7 +651,7 @@ void DexInstruction::verify_encoding() const {
     test->set_range_size(range_size());
   }
   if (has_arg_word_count()) test->set_arg_word_count(arg_word_count());
-  if (opcode::has_literal(op)) test->set_literal(literal());
+  if (opcode::has_literal(op)) test->set_literal(get_literal());
   if (opcode::has_offset(op)) test->set_offset(offset());
 
   assert_log(m_opcode == test->m_opcode, "%x %x\n", m_opcode, test->m_opcode);

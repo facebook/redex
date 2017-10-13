@@ -403,13 +403,13 @@ namespace {
       case OPCODE_CONST_HIGH16:
       case OPCODE_CONST_4:
       case OPCODE_CONST_16:
-        reg_values.put(inst->literal(), inst->dest());
+        reg_values.put(inst->get_literal(), inst->dest());
         break;
       case OPCODE_CONST_WIDE_16:
       case OPCODE_CONST_WIDE_32:
       case OPCODE_CONST_WIDE:
       case OPCODE_CONST_WIDE_HIGH16:
-        reg_values.put_wide(inst->literal(), inst->dest());
+        reg_values.put_wide(inst->get_literal(), inst->dest());
         break;
       default:
         if (inst->dest_is_wide()) {

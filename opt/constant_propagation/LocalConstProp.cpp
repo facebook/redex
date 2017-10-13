@@ -156,8 +156,8 @@ void LocalConstantPropagation::analyze_instruction(
           5,
           "Discovered new narrow constant for reg: %d, value: %d\n",
           inst->dest(),
-          inst->literal());
-    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->literal());
+          inst->get_literal());
+    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->get_literal());
     break;
   }
   case OPCODE_CONST_WIDE_16:
@@ -169,8 +169,8 @@ void LocalConstantPropagation::analyze_instruction(
           "Discovered new wide constant for regs: %d, %d, value: %ld\n",
           inst->dest(),
           inst->dest() + 1,
-          inst->literal());
-    ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->literal());
+          inst->get_literal());
+    ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
     break;
   }
   case OPCODE_MOVE_FROM16:
@@ -211,7 +211,7 @@ void LocalConstantPropagation::analyze_instruction(
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
     if (m_config.fold_arithmetic) {
-      int32_t lit = inst->literal();
+      int32_t lit = inst->get_literal();
       auto add_in_bounds = [lit](int32_t v) -> boost::optional<int32_t> {
         if (addition_out_of_bounds(lit, v)) {
           return boost::none;

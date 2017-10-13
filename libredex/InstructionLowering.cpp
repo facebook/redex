@@ -81,7 +81,7 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   auto op = insn->opcode();
   auto dest_width = required_bit_width(insn->dest());
   always_assert(dest_width <= 8);
-  auto literal = insn->literal();
+  auto literal = insn->get_literal();
   switch (op) {
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
@@ -197,6 +197,8 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     case opcode::Ref::None:
     case opcode::Ref::Data:
       return new DexInstruction(insn->opcode());
+    case opcode::Ref::Literal:
+      return new DexInstruction(insn->opcode());
     case opcode::Ref::String:
       return new DexOpcodeString(insn->opcode(), insn->get_string());
     case opcode::Ref::Type:
@@ -286,8 +288,8 @@ static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     dex_insn->set_src(i, insn->src(i));
   }
-  if (opcode::has_literal(op)) {
-    dex_insn->set_literal(insn->literal());
+  if (insn->has_literal()) {
+    dex_insn->set_literal(insn->get_literal());
   }
   if (dex_insn->has_arg_word_count()) {
     dex_insn->set_arg_word_count(insn->srcs_size());
