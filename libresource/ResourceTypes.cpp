@@ -7145,6 +7145,52 @@ void ResTable::getAllValuesForResource(
     this->getAllValuesForResource(resID, values, /* onlyDefault */ false);
 }
 
+void ResTable::collectValuesInConfig(
+    Vector<Res_value>& values,
+    const ResTable_entry* ent,
+    uint32_t typeSize) const
+{
+    uintptr_t esize = dtohs(ent->size);
+    const Res_value* valuePtr = nullptr;
+    const ResTable_map_entry* bagPtr = nullptr;
+    Res_value value;
+    Res_value virtualValue;
+    if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+        bagPtr = (const ResTable_map_entry*)ent;
+    } else {
+        valuePtr = (const Res_value*)
+            (((const uint8_t*)ent) + esize);
+        value.copyFrom_dtoh(*valuePtr);
+    }
+
+    if (valuePtr != nullptr) {
+        values.add(value);
+    } else if (bagPtr != nullptr) {
+        const int N = dtohl(bagPtr->count);
+        const uint8_t* baseMapPtr = (const uint8_t*)ent;
+        size_t mapOffset = esize;
+        const ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+        const uint32_t parent = dtohl(bagPtr->parent.ident);
+
+        // Convert parent to virtual Res_value.
+        // Leave size as 0 to indicate this is not a 'real' Res_value.
+        virtualValue.dataType = Res_value::TYPE_REFERENCE;
+        virtualValue.data = parent;
+        values.add(virtualValue);
+
+        for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+            value.copyFrom_dtoh(mapPtr->value);
+            values.add(value);
+            virtualValue.dataType = Res_value::TYPE_ATTRIBUTE;
+            virtualValue.data = mapPtr->name.ident;
+            values.add(virtualValue);
+            const size_t size = dtohs(mapPtr->value.size);
+            mapOffset += size + sizeof(*mapPtr)-sizeof(mapPtr->value);
+            mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+        }
+    }
+}
+
 // As above, but if onlyDefault is true, only considers the 'default' column.
 void ResTable::getAllValuesForResource(
     uint32_t resID,
@@ -7182,48 +7228,79 @@ void ResTable::getAllValuesForResource(
             }
         }
 
-        uintptr_t esize = dtohs(ent->size);
+        uint32_t typeSize = dtohl(type->header.size);
+        collectValuesInConfig(values, ent, typeSize);
+    }
+}
+
+// Returns true if the given resource ID's are of the same type and have
+// the same entries in the same configurations.
+bool ResTable::areResourceValuesIdentical(
+    uint32_t resourceId1,
+    uint32_t resourceId2) const
+{
+    resource_name resName;
+    if (!this->getResourceName(resourceId1, /* allowUtf8 */ true, &resName)
+          || !this->getResourceName(resourceId2, /* allowUtf8 */ true, &resName)) {
+        return false;
+    }
+
+    const ssize_t pgIndex = getResourcePackageIndex(resourceId1);
+    if (pgIndex != getResourcePackageIndex(resourceId2)) {
+      return false;
+    }
+
+    const int typeIndex = Res_GETTYPE(resourceId1);
+    if (typeIndex != Res_GETTYPE(resourceId2)) {
+      return false;
+    }
+
+    const int entryIndex1 = Res_GETENTRY(resourceId1);
+    const int entryIndex2 = Res_GETENTRY(resourceId2);
+
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return false;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        const ResTable_entry* ent1;
+        const ResTable_entry* ent2;
+        bool ent1Exists = tryGetConfigEntry(entryIndex1, type, &ent1);
+        bool ent2Exists = tryGetConfigEntry(entryIndex2, type, &ent2);
+        if (!ent1Exists && !ent2Exists) {
+          continue;
+        }
+
+        if (ent1Exists ^ ent2Exists) {
+          return false;
+        }
+
         uint32_t typeSize = dtohl(type->header.size);
 
-        const Res_value* valuePtr = nullptr;
-        const ResTable_map_entry* bagPtr = nullptr;
-        Res_value value;
-        Res_value virtualValue;
-        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
-            bagPtr = (const ResTable_map_entry*)ent;
-        } else {
-            valuePtr = (const Res_value*)
-                (((const uint8_t*)ent) + esize);
-            value.copyFrom_dtoh(*valuePtr);
+        Vector<Res_value> values1;
+        Vector<Res_value> values2;
+        collectValuesInConfig(values1, ent1, typeSize);
+        collectValuesInConfig(values2, ent2, typeSize);
+        if (values1.size() != values2.size()) {
+          return false;
         }
 
-        if (valuePtr != nullptr) {
-            values.add(value);
-        } else if (bagPtr != nullptr) {
-            const int N = dtohl(bagPtr->count);
-            const uint8_t* baseMapPtr = (const uint8_t*)ent;
-            size_t mapOffset = esize;
-            const ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-            const uint32_t parent = dtohl(bagPtr->parent.ident);
-
-            // Convert parent to virtual Res_value.
-            // Leave size as 0 to indicate this is not a 'real' Res_value.
-            virtualValue.dataType = Res_value::TYPE_REFERENCE;
-            virtualValue.data = parent;
-            values.add(virtualValue);
-
-            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
-                value.copyFrom_dtoh(mapPtr->value);
-                values.add(value);
-                virtualValue.dataType = Res_value::TYPE_ATTRIBUTE;
-                virtualValue.data = mapPtr->name.ident;
-                values.add(virtualValue);
-                const size_t size = dtohs(mapPtr->value.size);
-                mapOffset += size + sizeof(*mapPtr)-sizeof(mapPtr->value);
-                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-            }
+        for (size_t i = 0; i < values1.size(); ++i) {
+          Res_value a = values1[i];
+          Res_value b = values2[i];
+          if (a.dataType != b.dataType || a.data != b.data) {
+            return false;
+          }
         }
     }
+
+    return true;
 }
 
 void ResTable::print(bool inclValues) const

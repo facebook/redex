@@ -82,6 +82,24 @@ class PassConfig {
     }
   }
 
+  void get(
+    const char* name,
+    const std::vector<std::string>& dflt,
+    std::unordered_set<std::string>& param
+  ) const {
+    auto it = m_config[name];
+    param.clear();
+    if (it == Json::nullValue) {
+      param.insert(
+          dflt.begin(),
+          dflt.end());
+    } else {
+      for (auto const& str : it) {
+        param.emplace(str.asString());
+      }
+    }
+  }
+
   private:
     Json::Value m_config;
 };

@@ -32,6 +32,7 @@
   TM(DC)                 \
   TM(DCE)                \
   TM(DEDUP_BLOCKS)       \
+  TM(DEDUP_RES)          \
   TM(DELINIT)            \
   TM(DELMET)             \
   TM(DRAC)               \
