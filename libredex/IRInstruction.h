@@ -183,7 +183,6 @@ class IRInstruction final {
     return m_range.second;
   }
   int64_t literal() const { return m_literal; }
-  int32_t offset() const { return m_offset; }
 
   /*
    * Setters for logical parts of the instruction.
@@ -217,10 +216,6 @@ class IRInstruction final {
   }
   IRInstruction* set_literal(int64_t literal) {
     m_literal = literal;
-    return this;
-  }
-  IRInstruction* set_offset(int32_t offset) {
-    m_offset = offset;
     return this;
   }
 
@@ -323,7 +318,6 @@ class IRInstruction final {
   };
 
   uint64_t m_literal {0};
-  int32_t m_offset {0};
   std::pair<uint16_t, uint16_t> m_range {0, 0};
 };
 

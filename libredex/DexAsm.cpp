@@ -89,9 +89,6 @@ void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
     case LITERAL:
       insn->set_literal(arg->v);
       break;
-    case OFFSET:
-      insn->set_offset(arg->v);
-      break;
     case VREG:
     default:
       always_assert_log(false, "Encountered unexpected tag 0x%x", arg->tag);

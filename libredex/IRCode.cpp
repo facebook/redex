@@ -337,7 +337,7 @@ static MethodItemEntry* get_target(
     const MethodItemEntry* mei,
     const EntryAddrBiMap& bm) {
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
-  int offset = mei->insn->offset();
+  int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
   always_assert_log(
       bm.by<Addr>().count(target) != 0,
@@ -480,8 +480,8 @@ static void generate_branch_targets(
     const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
   for (auto miter = fm->begin(); miter != fm->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
-    if (mentry->type == MFLOW_OPCODE) {
-      auto insn = mentry->insn;
+    if (mentry->type == MFLOW_DEX_OPCODE) {
+      auto insn = mentry->dex_insn;
       if (is_branch(insn->opcode())) {
         if (is_multi_branch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
@@ -494,22 +494,6 @@ static void generate_branch_targets(
           insert_branch_target(fm, target, mentry);
         }
       }
-    }
-  }
-}
-
-/*
- * Attach the pseudo opcodes representing fill-array-data-payload to the
- * fill-array-data instructions that reference them.
- */
-void gather_array_data(
-    FatMethod* fm,
-    const EntryAddrBiMap& bm,
-    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
-  for (MethodItemEntry& mie : InstructionIterable(fm)) {
-    auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      insn->set_data(entry_to_data.at(get_target(&mie, bm)));
     }
   }
 }
@@ -600,69 +584,76 @@ void generate_load_params(const DexMethod* method,
   code->set_registers_size(param_reg);
 }
 
-MethodItemEntry* insert_ir_for_dex(const DexInstruction* dex_insn,
-                                   FatMethod* fmethod) {
-  auto op = dex_insn->opcode();
-  auto* insn = new IRInstruction(op);
-  always_assert(!is_fopcode(op));
+void translate_dex_to_ir(
+    FatMethod* fmethod,
+    const EntryAddrBiMap& bm,
+    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
+  for (auto it = fmethod->begin(); it != fmethod->end(); ++it) {
+    if (it->type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    auto* dex_insn = it->dex_insn;
+    auto op = dex_insn->opcode();
+    auto* insn = new IRInstruction(op);
+    always_assert(!is_fopcode(op));
 
-  IRInstruction* move_result_pseudo{nullptr};
-  if (insn->dests_size()) {
-    insn->set_dest(dex_insn->dest());
-  } else if (opcode::may_throw(op)) {
-    if (op == OPCODE_CHECK_CAST) {
-      move_result_pseudo = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-      move_result_pseudo->set_dest(dex_insn->src(0));
-    } else if (dex_insn->dests_size()) {
-      DexOpcode move_op;
-      if (opcode_impl::dest_is_wide(op)) {
-        move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-      } else if (opcode_impl::dest_is_object(op)) {
-        move_op = IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-      } else {
-        move_op = IOPCODE_MOVE_RESULT_PSEUDO;
+    IRInstruction* move_result_pseudo{nullptr};
+    if (insn->dests_size()) {
+      insn->set_dest(dex_insn->dest());
+    } else if (opcode::may_throw(op)) {
+      if (op == OPCODE_CHECK_CAST) {
+        move_result_pseudo =
+            new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        move_result_pseudo->set_dest(dex_insn->src(0));
+      } else if (dex_insn->dests_size()) {
+        DexOpcode move_op;
+        if (opcode_impl::dest_is_wide(op)) {
+          move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+        } else if (opcode_impl::dest_is_object(op)) {
+          move_op = IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+        } else {
+          move_op = IOPCODE_MOVE_RESULT_PSEUDO;
+        }
+        move_result_pseudo = new IRInstruction(move_op);
+        move_result_pseudo->set_dest(dex_insn->dest());
       }
-      move_result_pseudo = new IRInstruction(move_op);
-      move_result_pseudo->set_dest(dex_insn->dest());
+    }
+
+    insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
+    for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
+      insn->set_src(i, dex_insn->src(i));
+    }
+    if (opcode::dest_is_src(op)) {
+      insn->set_opcode(convert_2to3addr(op));
+    }
+    if (opcode::has_literal(op)) {
+      insn->set_literal(dex_insn->literal());
+    }
+    if (opcode::has_range(op)) {
+      insn->set_range_base(dex_insn->range_base());
+      insn->set_range_size(dex_insn->range_size());
+    }
+    if (dex_insn->has_string()) {
+      insn->set_string(
+          static_cast<const DexOpcodeString*>(dex_insn)->get_string());
+    } else if (dex_insn->has_type()) {
+      insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
+    } else if (dex_insn->has_field()) {
+      insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+    } else if (dex_insn->has_method()) {
+      insn->set_method(
+          static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+    } else if (op == OPCODE_FILL_ARRAY_DATA) {
+      insn->set_data(entry_to_data.at(get_target(&*it, bm)));
+    }
+
+    it->type = MFLOW_OPCODE;
+    it->insn = insn;
+    if (move_result_pseudo != nullptr) {
+      it = fmethod->insert(std::next(it),
+                           *(new MethodItemEntry(move_result_pseudo)));
     }
   }
-
-  insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
-  for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
-    insn->set_src(i, dex_insn->src(i));
-  }
-  if (opcode::dest_is_src(op)) {
-    insn->set_opcode(convert_2to3addr(op));
-  }
-  if (opcode::has_literal(op)) {
-    insn->set_literal(dex_insn->literal());
-  }
-  if (opcode::has_offset(op)) {
-    insn->set_offset(dex_insn->offset());
-  }
-  if (opcode::has_range(op)) {
-    insn->set_range_base(dex_insn->range_base());
-    insn->set_range_size(dex_insn->range_size());
-  }
-  if (dex_insn->has_string()) {
-    insn->set_string(
-        static_cast<const DexOpcodeString*>(dex_insn)->get_string());
-  } else if (dex_insn->has_type()) {
-    insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
-  } else if (dex_insn->has_field()) {
-    insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
-  } else if (dex_insn->has_method()) {
-    insn->set_method(
-        static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
-  }
-
-  auto mei = new MethodItemEntry(insn);
-  fmethod->push_back(*mei);
-  if (move_result_pseudo != nullptr) {
-    fmethod->push_back(*(new MethodItemEntry(move_result_pseudo)));
-  }
-
-  return mei;
 }
 
 void balloon(DexMethod* method, FatMethod* fmethod) {
@@ -684,10 +675,10 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
       if (is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       }
-      fmethod->push_back(*mei);
     } else {
-      mei = insert_ir_for_dex(insn, fmethod);
+      mei = new MethodItemEntry(insn);
     }
+    fmethod->push_back(*mei);
     bm.insert(EntryAddrBiMap::relation(mei, addr));
     TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
     addr += insn->size();
@@ -695,8 +686,8 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
   bm.insert(EntryAddrBiMap::relation(&*fmethod->end(), addr));
 
   generate_branch_targets(fmethod, bm, entry_to_data);
-  gather_array_data(fmethod, bm, entry_to_data);
   associate_try_items(fmethod, *dex_code, bm);
+  translate_dex_to_ir(fmethod, bm, entry_to_data);
   auto debugitem = dex_code->get_debug_item();
   if (debugitem) {
     associate_debug_entries(fmethod, *debugitem, bm);
@@ -886,8 +877,8 @@ void IRCode::remove_debug_line_info(Block* block) {
 
 void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
   IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
-  to->set_offset(0);
-  for (auto miter = m_fmethod->begin(); miter != m_fmethod->end(); miter++) {
+  auto miter = m_fmethod->begin();
+  for (; miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
       if (is_branch(from->opcode())) {
@@ -895,14 +886,18 @@ void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
       }
       mentry->insn = to;
       delete from;
-      return;
+      break;
     }
   }
   always_assert_log(
-      false,
+      miter != m_fmethod->end(),
       "No match found while replacing '%s' with '%s'",
       SHOW(from),
       SHOW(to));
+  auto target = new BranchTarget();
+  target->type = BRANCH_SIMPLE;
+  target->src = &*miter;
+  m_fmethod->insert(miter, *(new MethodItemEntry(target)));
 }
 
 void IRCode::replace_opcode(IRInstruction* to_delete,

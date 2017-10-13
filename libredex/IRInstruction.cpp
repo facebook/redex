@@ -88,9 +88,6 @@ IRInstruction::IRInstruction(const DexInstruction* insn) {
   if (opcode::has_literal(m_opcode)) {
     m_literal = insn->literal();
   }
-  if (opcode::has_offset(m_opcode)) {
-    m_offset = insn->offset();
-  }
   if (opcode::has_range(m_opcode)) {
     m_range =
         std::pair<uint16_t, uint16_t>(insn->range_base(), insn->range_size());
@@ -198,9 +195,6 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   }
   if (opcode::has_literal(insn->opcode())) {
     insn->set_literal(literal());
-  }
-  if (opcode::has_offset(insn->opcode())) {
-    insn->set_offset(offset());
   }
   if (insn->has_arg_word_count()) {
     insn->set_arg_word_count(srcs_size());

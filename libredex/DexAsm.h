@@ -22,7 +22,6 @@ namespace dex_asm {
 
 enum OperandTag {
   VREG,
-  OFFSET,
   LITERAL
 };
 
@@ -33,10 +32,6 @@ struct Operand {
 
 inline Operand operator "" _v(unsigned long long v) {
   return {VREG, v};
-}
-
-inline Operand operator "" _off(unsigned long long v) {
-  return {OFFSET, v};
 }
 
 inline Operand operator "" _L(unsigned long long v) {
