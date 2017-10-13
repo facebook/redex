@@ -1295,9 +1295,18 @@ class Result final {
  private:
   bool is_ok{true};
   std::string m_error_message;
-  Result(const std::string& s): is_ok(false), m_error_message(s) {}
+  explicit Result(const std::string& s) : is_ok(false), m_error_message(s) {}
   Result() = default;
 };
+
+static bool has_move_result_pseudo(const MethodItemEntry& mie) {
+  return mie.type == MFLOW_OPCODE && mie.insn->has_move_result_pseudo();
+}
+
+static bool is_move_result_pseudo(const MethodItemEntry& mie) {
+  return mie.type == MFLOW_OPCODE &&
+         opcode::is_move_result_pseudo(mie.insn->opcode());
+}
 
 /*
  * Do a linear pass to sanity-check the structure of the bytecode.
@@ -1314,8 +1323,8 @@ Result check_structure(const IRCode* code) {
     auto op = insn->opcode();
 
     if (has_seen_non_load_param_opcode && opcode::is_load_param(op)) {
-      return Result::make_error(
-          "Encountered load-param instruction not at the start of the method");
+      return Result::make_error("Encountered " + show(*it) +
+                                " not at the start of the method");
     }
     has_seen_non_load_param_opcode = !opcode::is_load_param(op);
 
@@ -1330,16 +1339,27 @@ Result check_structure(const IRCode* code) {
         }
       }
       if (it == code->begin() || prev->type != MFLOW_OPCODE) {
-        return Result::make_error(
-            "Encountered move-result instruction at start of method");
+        return Result::make_error("Encountered " + show(*it) +
+                                  " at start of the method");
       }
       auto prev_op = prev->insn->opcode();
       if (!(is_invoke(prev_op) || is_filled_new_array(prev_op))) {
         return Result::make_error(
-            "Encountered move-result instruction without appropriate prefix "
+            "Encountered " + show(*it) +
+            " without appropriate prefix "
             "instruction. Expected invoke or filled-new-array, got " +
             show(prev->insn));
       }
+    } else if (opcode::is_move_result_pseudo(insn->opcode()) &&
+               (it == code->begin() ||
+                !has_move_result_pseudo(*std::prev(it)))) {
+      return Result::make_error("Encountered " + show(*it) +
+                                " without appropriate prefix "
+                                "instruction");
+    } else if (insn->has_move_result_pseudo() &&
+               (it == code->end() || !is_move_result_pseudo(*std::next(it)))) {
+      return Result::make_error("Did not find move-result-pseudo after " +
+                                show(*it));
     }
   }
   return Result::Ok();
