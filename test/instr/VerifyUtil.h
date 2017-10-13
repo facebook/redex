@@ -35,7 +35,7 @@ struct PreVerify : public Verify {
         classes(load_classes_from_dex(std::getenv("dex_pre"),
                                       /* balloon */ false)),
         resources(decode_resource_paths(std::getenv("extracted_resources"),
-                                        "_pre")) {}
+                                        "pre")) {}
 };
 
 struct PostVerify : public Verify {
@@ -46,7 +46,7 @@ struct PostVerify : public Verify {
         classes(load_classes_from_dex(std::getenv("dex_post"),
                                       /* balloon */ false)),
         resources(decode_resource_paths(std::getenv("extracted_resources"),
-                                        "_post")) {}
+                                        "post")) {}
 };
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);

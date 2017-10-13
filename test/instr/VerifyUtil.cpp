@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include <sstream>
 
+#include "Debug.h"
 #include "VerifyUtil.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
@@ -91,18 +92,17 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
   ResourceFiles files;
   std::istringstream input;
   input.str(location);
-  for (std::string file_path; std::getline(input, file_path, ':'); ) {
-    auto r = file_path.rfind("/");
-    auto l = file_path.rfind("/", r - 1);
-    auto escaped = file_path.substr(l + 1, r - l - 1);
-    if (boost::algorithm::ends_with(escaped, suffix)) {
-      auto original_name =
-        escaped.substr(0, escaped.length() - std::strlen(suffix));
-        // Undo simple escaping at buck_imports/redex_utils
-        boost::replace_all(original_name, "zC", ":");
-        boost::replace_all(original_name, "zS", "/");
-        boost::replace_all(original_name, "zZ", "z");
-        files.emplace(original_name, file_path);
+  for (std::string file_path; std::getline(input, file_path, ':');) {
+    auto pos = file_path.rfind("/");
+    always_assert(pos >= 0 && pos + 1 < file_path.length());
+    auto directory = file_path.substr(0, pos);
+    if (boost::algorithm::ends_with(directory, suffix)) {
+      auto original_name = file_path.substr(pos + 1);
+      // Undo simple escaping at buck_imports/redex_utils
+      boost::replace_all(original_name, "zC", ":");
+      boost::replace_all(original_name, "zS", "/");
+      boost::replace_all(original_name, "zZ", "z");
+      files.emplace(original_name, file_path);
     }
   }
   return files;

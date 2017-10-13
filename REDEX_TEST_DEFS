@@ -1,5 +1,3 @@
-import os
-
 include_defs("//native/redex/REDEX_DEFS")
 include_defs("//buck_imports/redex_utils")
 
@@ -112,20 +110,19 @@ def redex_instr_test(
     # Extract some non-dex files for verification
     for f in extracted_res_deps:
       escaped = escape_path(f)
-      out_name = os.path.basename(f)
 
-      rule_name = escaped + '_pre'
+      rule_name = '%s_%s_pre' % (name, escaped)
       genrule(
         name = rule_name,
-        out = out_name,
+        out = escaped,
         cmd = 'unzip -p $(location :%s_non_redex) %s > $OUT' % (name, f),
       )
       extracted_res_targets.append(':' + rule_name)
 
-      rule_name = escaped + '_post'
+      rule_name = '%s_%s_post' % (name, escaped)
       genrule(
         name = rule_name,
-        out = out_name,
+        out = escaped,
         cmd = 'unzip -p $(location :%s_redex) %s > $OUT' % (name, f),
       )
       extracted_res_targets.append(':' + rule_name)
