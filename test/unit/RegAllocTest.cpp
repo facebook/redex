@@ -259,10 +259,10 @@ TEST_F(RegAllocTest, InterferenceWeights) {
 
   // Check that our optimized edge_weight calculation is consistent with the
   // slower division-based method
-  EXPECT_EQ(fp_div_ceil(1, 1), edge_weight(1, 1));
-  EXPECT_EQ(fp_div_ceil(1, 2), edge_weight(2, 1));
-  EXPECT_EQ(fp_div_ceil(2, 1), edge_weight(1, 2));
-  EXPECT_EQ(fp_div_ceil(2, 2), edge_weight(2, 2));
+  EXPECT_EQ(fp_div_ceil(1, 1), edge_weight_helper(1, 1));
+  EXPECT_EQ(fp_div_ceil(1, 2), edge_weight_helper(2, 1));
+  EXPECT_EQ(fp_div_ceil(2, 1), edge_weight_helper(1, 2));
+  EXPECT_EQ(fp_div_ceil(2, 2), edge_weight_helper(2, 2));
 }
 
 TEST_F(RegAllocTest, BuildInterferenceGraph) {

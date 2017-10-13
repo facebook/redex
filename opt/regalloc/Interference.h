@@ -221,7 +221,7 @@ class Graph {
   std::ostream& write_dot_format(std::ostream&) const;
 
  private:
-  bool should_separate_node(const Node&, const Node&) const;
+  uint32_t edge_weight(const Node&, const Node&) const;
 
   using ContainmentEdge = std::pair<reg_t, reg_t>;
   Graph() = default;
@@ -279,7 +279,7 @@ class GraphBuilder {
   static void add_edge(Graph*, reg_t, reg_t);
 };
 
-uint32_t edge_weight(uint8_t, uint8_t);
+uint32_t edge_weight_helper(uint8_t, uint8_t);
 
 } // namespace impl
 

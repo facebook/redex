@@ -46,7 +46,7 @@ namespace impl {
  * for those inputs.
  */
 
-uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
+uint32_t edge_weight_helper(uint8_t u_width, uint8_t v_width) {
   return ((v_width - 1) >> (u_width - 1)) + 1;
 }
 
@@ -54,16 +54,19 @@ uint32_t edge_weight(uint8_t u_width, uint8_t v_width) {
 
 using namespace impl;
 
-// We do selection of symregs requiring less than 16 bits separately from
-// those without this constraint, essentially partitioning the nodes into
-// two categories. This method returns whether two given nodes are in
-// different categories. Nodes in separate categories don't affect each
-// others' weights.
-bool Graph::should_separate_node(const Node& u_node,
-                                 const Node& v_node) const {
-  return m_separate_node &&
-         ((u_node.max_vreg() < max_unsigned_value(16)) ^
-         (v_node.max_vreg() < max_unsigned_value(16)));
+uint32_t Graph::edge_weight(const Node& u_node, const Node& v_node) const {
+  // We do selection of symregs requiring < 16 bits separately from those
+  // without this constraint, since the selection of the latter will never
+  // induce a spill. This essentially partitions the graph into two subgraphs.
+  // We still need interference edges between nodes in different partitions,
+  // but we don't want a node in one partition affecting the selection order of
+  // nodes in the other.  As such, nodes in separate partitions don't affect
+  // each others' weights.
+  auto same_partition =
+      !m_separate_node || ((u_node.max_vreg() < max_unsigned_value(16)) ==
+                           (v_node.max_vreg() < max_unsigned_value(16)));
+  return same_partition ? edge_weight_helper(u_node.width(), v_node.width())
+                        : 0;
 }
 
 void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
@@ -75,10 +78,8 @@ void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
     auto& v_node = m_nodes.at(v);
     u_node.m_adjacent.push_back(v);
     v_node.m_adjacent.push_back(u);
-    if (!should_separate_node(u_node, v_node)) {
-      u_node.m_weight += edge_weight(u_node.width(), v_node.width());
-      v_node.m_weight += edge_weight(v_node.width(), u_node.width());
-    }
+    u_node.m_weight += edge_weight(u_node, v_node);
+    v_node.m_weight += edge_weight(v_node, u_node);
   }
   // If we have one instruction that creates a coalesceable edge between two
   // nodes s0 and s1, and another that creates a non-coalesceable edge, those
@@ -108,9 +109,7 @@ void Graph::combine(reg_t u, reg_t v) {
     if (!t_node.is_active()) {
       continue;
     }
-    if (!should_separate_node(t_node, v_node)) {
-      t_node.m_weight -= edge_weight(t_node.width(), v_node.width());
-    }
+    t_node.m_weight -= edge_weight(t_node, v_node);
     add_edge(u, t, is_coalesceable(v, t));
     if (has_containment_edge(v, t)) {
       add_containment_edge(u, t);
@@ -132,9 +131,7 @@ void Graph::remove_node(reg_t u) {
     if (!v_node.is_active()) {
       continue;
     }
-    if (!should_separate_node(u_node, v_node)) {
-      v_node.m_weight -= edge_weight(v_node.width(), u_node.width());
-    }
+    v_node.m_weight -= edge_weight(v_node, u_node);
   }
   u_node.m_props.reset(Node::ACTIVE);
 }
