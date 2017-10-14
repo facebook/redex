@@ -41,35 +41,6 @@ struct RegAllocTest : testing::Test {
   ~RegAllocTest() { delete g_redex; }
 };
 
-class InstructionList {
-  std::vector<std::unique_ptr<IRInstruction>> m_insns;
- public:
-  InstructionList(std::initializer_list<IRInstruction*> insns) {
-    for (auto insn : insns) {
-      m_insns.emplace_back(insn);
-    }
-  }
-  ::testing::AssertionResult matches(InstructionIterable ii) {
-    auto it = ii.begin();
-    auto end = ii.end();
-    auto match_it = m_insns.begin();
-    auto match_end = m_insns.end();
-    auto idx {0};
-    for (; it != end && match_it != match_end; ++it, ++match_it) {
-      if (*it->insn != **match_it) {
-        return ::testing::AssertionFailure() << "Expected " << show(&**match_it)
-                                             << " at index " << idx << ", got "
-                                             << show(it->insn);
-      }
-      ++idx;
-    }
-    if (it == end && match_it == match_end) {
-      return ::testing::AssertionSuccess();
-    }
-    return ::testing::AssertionFailure() << "Length mismatch";
-  }
-};
-
 /*
  * Check that we pick the most pessimistic move instruction (of the right type)
  * that can address arbitrarily large registers -- we will shrink it down later
@@ -131,14 +102,17 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   code->build_cfg();
   live_range::renumber_registers(code.get());
 
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST, {0_v})->set_literal(0),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v1)
+     (check-cast v1 "Ljava/lang/Object;")
+     (move-result-pseudo-object v2)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 3);
 }
 
@@ -168,23 +142,28 @@ TEST_F(RegAllocTest, LiveRange) {
   code->build_cfg();
   live_range::renumber_registers(code.get());
 
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST, {0_v})->set_literal(0),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-    dasm(OPCODE_IF_EQ, {2_v, 2_v}),
-    dasm(OPCODE_CONST, {3_v})->set_literal(0),
-    dasm(OPCODE_NEW_INSTANCE, get_object_type()),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {4_v}),
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {4_v}),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-    // target of if-eq
-    dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v}),
-    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v1)
+     (check-cast v1 "Ljava/lang/Object;")
+     (move-result-pseudo-object v2)
+     (if-eq v2 v2 :if-true-label)
+
+     (const v3 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v4)
+     (check-cast v4 "Ljava/lang/Object;")
+     (move-result-pseudo-object v2)
+
+     (:if-true-label)
+     (check-cast v2 "Ljava/lang/Object;")
+     (move-result-pseudo-object v5)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 6);
 }
 
@@ -394,12 +373,16 @@ TEST_F(RegAllocTest, Coalesce) {
       fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, code.get());
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST_4, {0_v, 0_L}),
-    // move opcode was coalesced
-    dasm(OPCODE_RETURN, {0_v})
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 0)
+     ; move opcode was coalesced
+     (return v0)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, MoveWideCoalesce) {
@@ -428,12 +411,16 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
 
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, code.get());
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
-    // move-wide opcode was coalesced
-    dasm(OPCODE_RETURN_WIDE, {0_v})
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const-wide v0 0)
+     ; move-wide opcode was coalesced
+     (return-wide v0)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, NoCoalesceWide) {
@@ -442,12 +429,15 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const-wide v0 0)
-     (move-wide v1 v0)
+     (move-wide v1 v0) ; This move can't be coalesced away due to the
+                       ; long-to-double instruction below
      (long-to-double v1 v0)
      (return-wide v0)
     )
 )");
   code->set_registers_size(2);
+  auto original_code_s_expr = assembler::to_s_expr(code.get());
+
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
@@ -463,15 +453,8 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
 
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, code.get());
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
-    // This move can't be coalesced away due to the long-to-double instruction
-    // below
-    dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
-    dasm(OPCODE_LONG_TO_DOUBLE, {1_v, 0_v}),
-    dasm(OPCODE_RETURN_WIDE, {0_v})
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()), original_code_s_expr);
 }
 
 static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
@@ -649,20 +632,23 @@ TEST_F(RegAllocTest, Spill) {
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
 
-  InstructionList expected_insns {
-    dasm(OPCODE_CONST_4, {3_v, 1_L}),
-    dasm(OPCODE_MOVE_16, {0_v, 3_v}),
-    dasm(OPCODE_CONST_4, {4_v, 1_L}),
-    dasm(OPCODE_MOVE_16, {1_v, 4_v}),
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v3 1)
+     (move/16 v0 v3)
+     (const/4 v4 1)
+     (move/16 v1 v4)
 
-    // srcs not spilled -- add-int can address up to 8-bit-sized operands
-    dasm(OPCODE_ADD_INT, {5_v, 0_v, 1_v}),
-    dasm(OPCODE_MOVE_16, {2_v, 5_v}),
+     (add-int v5 v0 v1) ; srcs not spilled -- add-int can address up to
+                        ; 8-bit-sized operands
+     (move/16 v2 v5)
 
-    dasm(OPCODE_MOVE_16, {6_v, 2_v}),
-    dasm(OPCODE_RETURN, {6_v})
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+     (move/16 v6 v2)
+     (return v6)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, ContainmentGraph) {
@@ -707,12 +693,18 @@ TEST_F(RegAllocTest, ContainmentGraph) {
 
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, code.get());
-  InstructionList expected_insns{dasm(IOPCODE_LOAD_PARAM, {0_v}),
-                                 dasm(IOPCODE_LOAD_PARAM, {1_v}),
-                                 // move opcode was coalesced
-                                 dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
-                                 dasm(OPCODE_RETURN, {0_v})};
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     ; move opcodes were coalesced
+     (add-int v0 v0 v1)
+     (return v0)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
 }
@@ -788,17 +780,23 @@ TEST_F(RegAllocTest, Split) {
   std::unordered_set<reg_t> new_temps;
   allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
   split(fixpoint_iter, split_plan, split_costs, ig, code.get());
-  InstructionList expected_insns{dasm(OPCODE_CONST_4, {0_v, 1_L}),
-                                 dasm(OPCODE_MOVE_16, {5_v, 0_v}),
 
-                                 dasm(OPCODE_CONST_4, {1_v, 1_L}),
-                                 dasm(OPCODE_MOVE, {2_v, 1_v}),
-                                 dasm(OPCODE_MOVE, {4_v, 1_v}),
-                                 dasm(OPCODE_MOVE_16, {0_v, 5_v}),
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 1)
+     (move/16 v5 v0)
 
-                                 dasm(OPCODE_MOVE, {3_v, 0_v}),
-                                 dasm(OPCODE_RETURN, {3_v})};
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+     (const/4 v1 1)
+     (move v2 v1)
+     (move v4 v1)
+     (move/16 v0 v5)
+
+     (move v3 v0)
+     (return v3)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, ParamFirstUse) {
@@ -833,20 +831,24 @@ TEST_F(RegAllocTest, ParamFirstUse) {
       spill_plan.param_spills, true, code.get());
   allocator.spill_params(ig, load_param, code.get(), &new_temps);
 
-  InstructionList expected_insns {
-    dasm(IOPCODE_LOAD_PARAM, {4_v}),
-    dasm(IOPCODE_LOAD_PARAM, {5_v}),
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v4)
+     (load-param v5)
 
-    // Because v1 is getting overwritten, spill move is inserted at
-    // beginning of method body.
-    dasm(OPCODE_MOVE_16, {1_v, 5_v}),
-    dasm(OPCODE_CONST_4, {1_v}),
-    dasm(OPCODE_CONST_4, {2_v}),
+     ; Since v1 was getting overwritten in the original code, we insert a load
+     ; immediately after the load-param instructions
+     (move/16 v1 v5)
+     (const/4 v1 0)
+     (const/4 v2 0)
 
-    // Move is inserted before first use.
-    dasm(OPCODE_MOVE_16, {0_v, 4_v}),
-    dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}),
-    dasm(OPCODE_RETURN, {3_v}),
-  };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
+     ; Since v0 did not get overwritten in the original code, we are able to
+     ; insert the load before its first use
+     (move/16 v0 v4)
+     (add-int v3 v0 v2)
+     (return v3)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }

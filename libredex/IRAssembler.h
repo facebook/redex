@@ -14,6 +14,8 @@
 
 namespace assembler {
 
+s_expr to_s_expr(const IRCode* code);
+
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr&);
 
 std::unique_ptr<IRCode> ircode_from_string(const std::string&);

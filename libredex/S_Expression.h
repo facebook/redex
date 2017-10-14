@@ -58,7 +58,7 @@ class Pattern;
  * Examples of S-expressions:
  *   #12
  *   "a string\n"
- *   (a (b c) d)
+ *   (a (b c) d) ; a comment
  *   ((#-1 "a, b, c") (#0 d) (#1 ()))
  *
  * Note that a number that is not prefixed with the `#` character is interpreted
@@ -792,6 +792,10 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
         return *this;
       }
       m_stack.top().add_element(atom);
+      break;
+    }
+    case ';': {
+      m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       break;
     }
     default: {

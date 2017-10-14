@@ -9,9 +9,24 @@
 
 #include "IRAssembler.h"
 
+#include <boost/functional/hash.hpp>
 #include <sstream>
+#include <string>
 
 namespace {
+
+#define OP(OP, CODE, FORMAT, KIND, STR) {OPCODE_##OP, STR},
+std::unordered_map<DexOpcode, std::string, boost::hash<DexOpcode>>
+    opcode_to_string_table = {
+        OPS
+        {IOPCODE_LOAD_PARAM, "load-param"},
+        {IOPCODE_LOAD_PARAM_OBJECT, "load-param-object"},
+        {IOPCODE_LOAD_PARAM_WIDE, "load-param-wide"},
+        {IOPCODE_MOVE_RESULT_PSEUDO, "move-result-pseudo"},
+        {IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, "move-result-pseudo-object"},
+        {IOPCODE_MOVE_RESULT_PSEUDO_WIDE, "move-result-pseudo-wide"},
+};
+#undef OP
 
 #define OP(OP, CODE, FORMAT, KIND, STR) {STR, OPCODE_##OP},
 std::unordered_map<std::string, DexOpcode> string_to_opcode_table = {
@@ -33,6 +48,46 @@ uint16_t reg_from_str(const std::string& reg_str) {
   uint16_t reg;
   sscanf(&reg_str.c_str()[1], "%hu", &reg);
   return reg;
+}
+
+std::string reg_to_str(uint16_t reg) {
+  return "v" + std::to_string(reg);
+}
+
+s_expr to_s_expr(const IRInstruction* insn,
+                 const std::unordered_map<const IRInstruction*, std::string>&
+                     insn_to_label) {
+  auto op = insn->opcode();
+  auto opcode_str = opcode_to_string_table.at(op);
+  std::vector<s_expr> s_exprs{s_expr(opcode_str)};
+  if (insn->dests_size()) {
+    s_exprs.emplace_back(reg_to_str(insn->dest()));
+  }
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    s_exprs.emplace_back(reg_to_str(insn->src(i)));
+  }
+  switch (opcode::ref(op)) {
+    case opcode::Ref::None:
+      break;
+    case opcode::Ref::Field:
+    case opcode::Ref::Method:
+    case opcode::Ref::Data:
+      always_assert_log(false, "Not yet supported");
+      break;
+    case opcode::Ref::String:
+      s_exprs.emplace_back(insn->get_string()->str());
+      break;
+    case opcode::Ref::Literal:
+      s_exprs.emplace_back(std::to_string(insn->get_literal()));
+      break;
+    case opcode::Ref::Type:
+      s_exprs.emplace_back(insn->get_type()->get_name()->str());
+      break;
+  }
+  if (opcode::has_offset(op)) {
+    s_exprs.emplace_back(insn_to_label.at(insn));
+  }
+  return s_expr(s_exprs);
 }
 
 std::unique_ptr<IRInstruction> instruction_from_s_expr(
@@ -127,6 +182,51 @@ void handle_labels(IRCode* code,
 } // namespace
 
 namespace assembler {
+
+s_expr to_s_expr(const IRCode* code) {
+  std::vector<s_expr> insn_exprs;
+  std::unordered_map<const IRInstruction*, std::string> insn_to_label;
+  size_t label_ctr{0};
+  auto generate_label_name = [&]() {
+    return ":L" + std::to_string(label_ctr++);
+  };
+  // Gather jump targets and give them string names
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    switch (it->type) {
+      case MFLOW_TARGET: {
+        auto bt = it->target;
+        always_assert_log(bt->type == BRANCH_SIMPLE, "Not yet implemented");
+        insn_to_label.emplace(bt->src->insn, generate_label_name());
+        break;
+      }
+      case MFLOW_CATCH:
+        always_assert_log(false, "Not yet implemented");
+        break;
+      default:
+        break;
+    }
+  }
+  // Now emit the exprs
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    switch (it->type) {
+      case MFLOW_OPCODE:
+        insn_exprs.emplace_back(::to_s_expr(it->insn, insn_to_label));
+        break;
+      case MFLOW_TRY:
+      case MFLOW_CATCH:
+      case MFLOW_DEBUG:
+      case MFLOW_POSITION:
+        always_assert_log(false, "Not yet implemented");
+        break;
+      case MFLOW_TARGET:
+      case MFLOW_FALLTHROUGH:
+        break;
+      case MFLOW_DEX_OPCODE:
+        not_reached();
+    }
+  }
+  return s_expr(insn_exprs);
+}
 
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   s_expr insns_expr;
