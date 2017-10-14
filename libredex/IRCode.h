@@ -211,6 +211,11 @@ class IRCode {
   friend struct MethodCreator;
 
  public:
+  // This creates an "empty" IRCode, one that contains no load-param opcodes or
+  // debug info. If you attach it to a method, you need to insert the
+  // appropriate load-param opcodes yourself. Mostly used for testing purposes.
+  IRCode();
+
   explicit IRCode(DexMethod*);
   /*
    * Construct an IRCode for a DexMethod that has no DexCode (that is, a new

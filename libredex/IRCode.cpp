@@ -810,6 +810,8 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
 
 } // namespace
 
+IRCode::IRCode(): m_fmethod(new FatMethod()) {}
+
 IRCode::IRCode(DexMethod* method): m_fmethod(new FatMethod()) {
   auto* dc = method->get_dex_code();
   generate_load_params(

@@ -91,6 +91,7 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
+	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/IRTypeChecker.cpp \

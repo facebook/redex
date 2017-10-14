@@ -14,6 +14,7 @@
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Interference.h"
@@ -116,19 +117,19 @@ TEST_F(RegAllocTest, RegTypeInvoke) {
 
 TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   using namespace dex_asm;
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "LiveRangeSingleBlock", "V", {}));
-  method->make_concrete(ACC_STATIC, false);
-  method->set_code(std::make_unique<IRCode>(method, 1));
-  auto code = method->get_code();
-  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+    )
+)");
+  code->set_registers_size(1);
 
   code->build_cfg();
-  live_range::renumber_registers(code);
+  live_range::renumber_registers(code.get());
 
   InstructionList expected_insns {
     dasm(OPCODE_CONST, {0_v})->set_literal(0),
@@ -137,40 +138,35 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
     dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}),
     dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
   EXPECT_EQ(code->get_registers_size(), 3);
 }
 
 TEST_F(RegAllocTest, LiveRange) {
   using namespace dex_asm;
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "LiveRange", "V", {}));
-  method->make_concrete(ACC_STATIC, false);
-  method->set_code(std::make_unique<IRCode>(method, 1));
-  auto code = method->get_code();
-  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-  auto if_ = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 0_v}));
-  code->push_back(*if_);
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+     (if-eq v0 v0 :if-true-label)
 
-  code->push_back(dasm(OPCODE_CONST, {0_v})->set_literal(0));
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, get_object_type()));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = if_;
-  code->push_back(target);
+     (const v0 0)
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
 
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {0_v}));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+     (:if-true-label)
+     (check-cast v0 "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+    )
+)");
 
   code->build_cfg();
-  live_range::renumber_registers(code);
+  live_range::renumber_registers(code.get());
 
   InstructionList expected_insns {
     dasm(OPCODE_CONST, {0_v})->set_literal(0),
@@ -188,7 +184,7 @@ TEST_F(RegAllocTest, LiveRange) {
     dasm(OPCODE_CHECK_CAST, get_object_type(), {2_v}),
     dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
   EXPECT_EQ(code->get_registers_size(), 6);
 }
 
@@ -268,25 +264,26 @@ TEST_F(RegAllocTest, InterferenceWeights) {
 TEST_F(RegAllocTest, BuildInterferenceGraph) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
-  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
-  code.push_back(dasm(OPCODE_CONST_4, {2_v}));
-  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}));
-  code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(4);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (const/4 v2 0)
+     (add-int v3 v0 v2)
+     (return v3)
+    )
+)");
+  code->set_registers_size(4);
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
   // +---+
   // | 1 |
   // +---+
@@ -377,94 +374,95 @@ TEST_F(RegAllocTest, CombineAdjacentNodes) {
 TEST_F(RegAllocTest, Coalesce) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
-  code.push_back(dasm(OPCODE_MOVE, {1_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN, {1_v}));
-  code.set_registers_size(2);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 0)
+     (move v1 v0)
+     (return v1)
+    )
+)");
+  code->set_registers_size(2);
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
   graph_coloring::Allocator allocator;
-  allocator.coalesce(&ig, &code);
+  allocator.coalesce(&ig, code.get());
   InstructionList expected_insns {
     dasm(OPCODE_CONST_4, {0_v, 0_L}),
     // move opcode was coalesced
     dasm(OPCODE_RETURN, {0_v})
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
 
 TEST_F(RegAllocTest, MoveWideCoalesce) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
-  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN_WIDE, {1_v}));
-  code.set_registers_size(2);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const-wide v0 0)
+     (move-wide v1 v0)
+     (return-wide v1)
+    )
+)");
+  code->set_registers_size(2);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   EXPECT_TRUE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
 
   graph_coloring::Allocator allocator;
-  allocator.coalesce(&ig, &code);
+  allocator.coalesce(&ig, code.get());
   InstructionList expected_insns {
     dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
     // move-wide opcode was coalesced
     dasm(OPCODE_RETURN_WIDE, {0_v})
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
 
 TEST_F(RegAllocTest, NoCoalesceWide) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
-  code.push_back(dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}));
-  code.push_back(dasm(OPCODE_LONG_TO_DOUBLE, {1_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN_WIDE, {0_v}));
-  code.set_registers_size(2);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const-wide v0 0)
+     (move-wide v1 v0)
+     (long-to-double v1 v0)
+     (return-wide v0)
+    )
+)");
+  code->set_registers_size(2);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   EXPECT_FALSE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
 
   graph_coloring::Allocator allocator;
-  allocator.coalesce(&ig, &code);
+  allocator.coalesce(&ig, code.get());
   InstructionList expected_insns {
     dasm(OPCODE_CONST_WIDE, {0_v, 0_L}),
     // This move can't be coalesced away due to the long-to-double instruction
@@ -473,7 +471,7 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
     dasm(OPCODE_LONG_TO_DOUBLE, {1_v, 0_v}),
     dasm(OPCODE_RETURN_WIDE, {0_v})
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
 
 static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
@@ -621,24 +619,24 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
 TEST_F(RegAllocTest, Spill) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
-  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
-  code.push_back(dasm(OPCODE_ADD_INT, {2_v, 0_v, 1_v}));
-  code.push_back(dasm(OPCODE_RETURN, {2_v}));
-  code.set_registers_size(3);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 1)
+     (const/4 v1 1)
+     (add-int v2 v0 v1)
+     (return v2)
+    )
+)");
+  code->set_registers_size(3);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
@@ -649,7 +647,7 @@ TEST_F(RegAllocTest, Spill) {
   };
   std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  allocator.spill(ig, spill_plan, range_set, &code, &new_temps);
+  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
 
   InstructionList expected_insns {
     dasm(OPCODE_CONST_4, {3_v, 1_L}),
@@ -664,32 +662,33 @@ TEST_F(RegAllocTest, Spill) {
     dasm(OPCODE_MOVE_16, {6_v, 2_v}),
     dasm(OPCODE_RETURN, {6_v})
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
 
 TEST_F(RegAllocTest, ContainmentGraph) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
-  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
-  code.push_back(dasm(OPCODE_MOVE, {2_v, 0_v}));
-  code.push_back(dasm(OPCODE_MOVE, {3_v, 1_v}));
-  code.push_back(dasm(OPCODE_ADD_INT, {4_v, 2_v, 3_v}));
-  code.push_back(dasm(OPCODE_RETURN, {4_v}));
-  code.set_registers_size(5);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (move v2 v0)
+     (move v3 v1)
+     (add-int v4 v2 v3)
+     (return v4)
+    )
+)");
+
+  code->set_registers_size(5);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(1, 2));
@@ -707,40 +706,38 @@ TEST_F(RegAllocTest, ContainmentGraph) {
   EXPECT_FALSE(ig.has_containment_edge(4, 1));
 
   graph_coloring::Allocator allocator;
-  allocator.coalesce(&ig, &code);
+  allocator.coalesce(&ig, code.get());
   InstructionList expected_insns{dasm(IOPCODE_LOAD_PARAM, {0_v}),
                                  dasm(IOPCODE_LOAD_PARAM, {1_v}),
                                  // move opcode was coalesced
                                  dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
                                  dasm(OPCODE_RETURN, {0_v})};
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
 }
 
 TEST_F(RegAllocTest, FindSplit) {
-  using namespace dex_asm;
-
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
-  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
-  code.push_back(dasm(OPCODE_MOVE, {2_v, 1_v}));
-  code.push_back(dasm(OPCODE_MOVE, {4_v, 1_v}));
-  code.push_back(dasm(OPCODE_MOVE, {3_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(5);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 1)
+     (const/4 v1 1)
+     (move v2 v1)
+     (move v4 v1)
+     (move v3 v0)
+     (return v3)
+    )
+)");
+  code->set_registers_size(5);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -749,8 +746,8 @@ TEST_F(RegAllocTest, FindSplit) {
   graph_coloring::RegisterTransform reg_transform;
   reg_transform.map = transform::RegMap{{0, 0}, {2, 1}, {4, 1}, {3, 1}};
   graph_coloring::Allocator allocator;
-  allocator.spill_costs(&code, ig, range_set, &spill_plan);
-  calc_split_costs(fixpoint_iter, &code, &split_costs);
+  allocator.spill_costs(code.get(), ig, range_set, &spill_plan);
+  calc_split_costs(fixpoint_iter, code.get(), &split_costs);
   allocator.find_split(
       ig, split_costs, &reg_transform, &spill_plan, &split_plan);
   EXPECT_EQ(split_plan.split_around.at(1), std::unordered_set<reg_t>{0});
@@ -759,26 +756,26 @@ TEST_F(RegAllocTest, FindSplit) {
 TEST_F(RegAllocTest, Split) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_4, {0_v, 1_L}));
-  code.push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
-  code.push_back(dasm(OPCODE_MOVE, {2_v, 1_v}));
-  code.push_back(dasm(OPCODE_MOVE, {4_v, 1_v}));
-  code.push_back(dasm(OPCODE_MOVE, {3_v, 0_v}));
-  code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(5);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 1)
+     (const/4 v1 1)
+     (move v2 v1)
+     (move v4 v1)
+     (move v3 v0)
+     (return v3)
+    )
+)");
+  code->set_registers_size(5);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -789,8 +786,8 @@ TEST_F(RegAllocTest, Split) {
           {1, std::unordered_set<reg_t>{0}}};
   graph_coloring::Allocator allocator;
   std::unordered_set<reg_t> new_temps;
-  allocator.spill(ig, spill_plan, range_set, &code, &new_temps);
-  split(fixpoint_iter, split_plan, split_costs, ig, &code);
+  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  split(fixpoint_iter, split_plan, split_costs, ig, code.get());
   InstructionList expected_insns{dasm(OPCODE_CONST_4, {0_v, 1_L}),
                                  dasm(OPCODE_MOVE_16, {5_v, 0_v}),
 
@@ -801,40 +798,40 @@ TEST_F(RegAllocTest, Split) {
 
                                  dasm(OPCODE_MOVE, {3_v, 0_v}),
                                  dasm(OPCODE_RETURN, {3_v})};
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
 
 TEST_F(RegAllocTest, ParamFirstUse) {
   using namespace dex_asm;
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "I", {"I", "I"}));
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  EXPECT_EQ(*code.begin()->insn, *dasm(IOPCODE_LOAD_PARAM, {0_v}));
-  EXPECT_EQ(*std::next(code.begin())->insn, *dasm(IOPCODE_LOAD_PARAM, {1_v}));
-  code.push_back(dasm(OPCODE_CONST_4, {1_v}));
-  code.push_back(dasm(OPCODE_CONST_4, {2_v}));
-  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}));
-  code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(4);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (const/4 v1 0)
+     (const/4 v2 0)
+     (add-int v3 v0 v2)
+     (return v3)
+    )
+)");
+  code->set_registers_size(4);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, true, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, true, code.get(), code->get_registers_size(), range_set);
 
   graph_coloring::SpillPlan spill_plan;
   spill_plan.param_spills = std::unordered_set<reg_t>{0, 1};
   std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
   auto load_param = allocator.find_param_first_uses(
-      spill_plan.param_spills, true, &code);
-  allocator.spill_params(ig, load_param, &code, &new_temps);
+      spill_plan.param_spills, true, code.get());
+  allocator.spill_params(ig, load_param, code.get(), &new_temps);
 
   InstructionList expected_insns {
     dasm(IOPCODE_LOAD_PARAM, {4_v}),
@@ -851,5 +848,5 @@ TEST_F(RegAllocTest, ParamFirstUse) {
     dasm(OPCODE_ADD_INT, {3_v, 0_v, 2_v}),
     dasm(OPCODE_RETURN, {3_v}),
   };
-  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code)));
+  EXPECT_TRUE(expected_insns.matches(InstructionIterable(code.get())));
 }
