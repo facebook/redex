@@ -62,9 +62,8 @@ uint32_t Graph::edge_weight(const Node& u_node, const Node& v_node) const {
   // but we don't want a node in one partition affecting the selection order of
   // nodes in the other.  As such, nodes in separate partitions don't affect
   // each others' weights.
-  auto same_partition =
-      !m_separate_node || ((u_node.max_vreg() < max_unsigned_value(16)) ==
-                           (v_node.max_vreg() < max_unsigned_value(16)));
+  auto same_partition = (u_node.max_vreg() < max_unsigned_value(16)) ==
+                        (v_node.max_vreg() < max_unsigned_value(16));
   return same_partition ? edge_weight_helper(u_node.width(), v_node.width())
                         : 0;
 }
@@ -239,12 +238,10 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
  * the move gets inserted, it does not clobber any live registers.
  */
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
-                          bool select_spill_later,
                           IRCode* code,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
-  graph.m_separate_node = select_spill_later;
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     GraphBuilder::update_node_constraints(it.unwrap(), range_set, &graph);
