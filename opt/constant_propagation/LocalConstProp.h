@@ -11,7 +11,7 @@
 
 #include <boost/optional.hpp>
 
-#include "ConstPropV3Config.h"
+#include "ConstPropConfig.h"
 #include "GlobalConstProp.h"
 #include "Pass.h"
 
@@ -20,7 +20,7 @@ class LocalConstantPropagation {
   using InsnReplaceVector =
       std::vector<std::pair<IRInstruction*, IRInstruction*>>;
 
-  explicit LocalConstantPropagation(const ConstPropV3Config& config)
+  explicit LocalConstantPropagation(const ConstPropConfig& config)
       : m_branch_propagated{0},
         m_materialized_consts{0},
         m_config{config} {}
@@ -65,7 +65,7 @@ class LocalConstantPropagation {
   InsnReplaceVector m_insn_replacements;
   size_t m_branch_propagated;
   size_t m_materialized_consts;
-  const ConstPropV3Config& m_config;
+  const ConstPropConfig& m_config;
 };
 
 // Must be IEEE 754

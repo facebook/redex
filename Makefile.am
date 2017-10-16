@@ -158,8 +158,6 @@ redex_all_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
-	opt/constant_propagation/ConstantPropagationV2.cpp \
-	opt/constant_propagation/ConstantPropagationV3.cpp \
 	opt/constant_propagation/GlobalConstProp.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
