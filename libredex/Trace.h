@@ -25,6 +25,7 @@
   TM(COMP_BUILDERS)      \
   TM(CFG)                \
   TM(CFP)                \
+  TM(CLP_GQL)            \
   TM(CPG)                \
   TM(CONSTP)             \
   TM(CUSTOMSORT)         \
