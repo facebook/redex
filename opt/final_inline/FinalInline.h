@@ -9,17 +9,18 @@
 
 #pragma once
 
+#include "IRCode.h"
 #include "Pass.h"
 
 struct FieldDependency {
   DexMethod* clinit;
-  IRInstruction* sget;
-  IRInstruction* sput;
+  FatMethod::iterator sget;
+  FatMethod::iterator sput;
   DexField* field;
 
   FieldDependency(DexMethod* clinit,
-                  IRInstruction* sget,
-                  IRInstruction* sput,
+                  FatMethod::iterator sget,
+                  FatMethod::iterator sput,
                   DexField* field)
       : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };

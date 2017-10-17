@@ -529,6 +529,8 @@ class FinalInlineImpl {
       for (const auto& dep : deps[cur]) {
         dep.field->make_concrete(dep.field->get_access(), val);
         auto code = dep.clinit->get_code();
+        TRACE(FINALINLINE, 5, "Removing %s\n", SHOW(dep.sget->insn));
+        TRACE(FINALINLINE, 5, "Removing %s\n", SHOW(dep.sput->insn));
         code->remove_opcode(dep.sget);
         code->remove_opcode(dep.sput);
         ++nresolved;
@@ -572,6 +574,7 @@ class FinalInlineImpl {
         continue;
       }
       auto sget_op = it->insn;
+      FatMethod::iterator sget_op_iterator = it.unwrap();
       if (!check_sget(sget_op)) {
         continue;
       }
@@ -586,7 +589,9 @@ class FinalInlineImpl {
       ++it;
 
       // Check for sput to static final
-      auto next_insn = std::next(it)->insn;
+      auto next_it = std::next(it);
+      auto next_insn = next_it->insn;
+      auto sput_op_iterator = next_it.unwrap();
       if (!validate_sput_for_encoded_value(clazz, next_insn)) {
         continue;
       }
@@ -618,7 +623,8 @@ class FinalInlineImpl {
             "Field %s depends on %s\n",
             SHOW(dst_field),
             SHOW(src_field));
-      deps[src_field].emplace_back(clinit, sget_op, sput_op, dst_field);
+      deps[src_field].emplace_back(
+          clinit, sget_op_iterator, sput_op_iterator, dst_field);
     }
   }
 };
