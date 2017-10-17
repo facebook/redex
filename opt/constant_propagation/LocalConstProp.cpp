@@ -149,7 +149,7 @@ bool addition_out_of_bounds(int32_t a, int32_t b) {
 }
 
 void LocalConstantPropagation::analyze_instruction(
-    IRInstruction* const& inst, ConstPropEnvironment* current_state) {
+    const IRInstruction* inst, ConstPropEnvironment* current_state) {
   TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
   switch (inst->opcode()) {
   case OPCODE_CONST:
@@ -250,7 +250,7 @@ void LocalConstantPropagation::analyze_instruction(
 // We can use this function for moves and arithmetic instructions because a move
 // is just an arithmetic instruction with identity as its transform function
 void LocalConstantPropagation::analyze_non_branch(
-    IRInstruction* const& inst,
+    const IRInstruction* inst,
     ConstPropEnvironment* current_state,
     bool is_wide,
     value_transform_t value_transform, // default is identity
@@ -422,7 +422,7 @@ void LocalConstantPropagation::simplify_instruction(
 // evaluated. So, `current_state[dst]` holds the _new_ value of the destination
 // register
 void LocalConstantPropagation::simplify_non_branch(
-    IRInstruction* const& inst,
+    IRInstruction* inst,
     const ConstPropEnvironment& current_state,
     bool is_wide) {
   uint16_t dst = inst->dest();

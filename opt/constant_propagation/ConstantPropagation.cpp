@@ -35,8 +35,8 @@ void IntraProcConstantPropagation::analyze_instruction(
 void IntraProcConstantPropagation::apply_changes(DexMethod* method) const {
   auto code = method->get_code();
   for (auto const& p : m_lcp.insn_replacements()) {
-    IRInstruction* const& old_op = p.first;
-    IRInstruction* const& new_op = p.second;
+    IRInstruction* old_op = p.first;
+    IRInstruction* new_op = p.second;
     if (new_op->opcode() == OPCODE_NOP) {
       TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(old_op));
       code->remove_opcode(old_op);

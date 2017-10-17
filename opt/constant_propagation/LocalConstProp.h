@@ -25,7 +25,7 @@ class LocalConstantPropagation {
         m_materialized_consts{0},
         m_config{config} {}
 
-  void analyze_instruction(IRInstruction* const& insn,
+  void analyze_instruction(const IRInstruction* insn,
                            ConstPropEnvironment* current_state);
   void simplify_instruction(IRInstruction*& insn,
                             const ConstPropEnvironment& current_state);
@@ -49,14 +49,14 @@ class LocalConstantPropagation {
   static boost::optional<int64_t> wide_identity(int64_t v) { return v; }
 
   void analyze_non_branch(
-      IRInstruction* const& inst,
+      const IRInstruction* inst,
       ConstPropEnvironment* current_state,
       bool is_wide,
       value_transform_t value_transform = identity,
       wide_value_transform_t wide_value_transform = wide_identity);
 
   void simplify_non_branch(
-      IRInstruction* const& inst,
+      IRInstruction* inst,
       const ConstPropEnvironment& current_state,
       bool is_wide);
 
