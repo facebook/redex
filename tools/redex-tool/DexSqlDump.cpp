@@ -401,13 +401,15 @@ class DexSqlDump : public Tool {
       options["dexendir"].as<std::string>());
     ProguardMap pgmap(options.count("proguard-map") ?
       options["proguard-map"].as<std::string>() : "/dev/null");
-    auto filename = options["output"].as<std::string>().c_str();
+    const std::string& filename = options["output"].as<std::string>();
     FILE* fdout = options.count("output") ?
-      fopen(filename, "w") : stdout;
+      fopen(filename.c_str(), "w") : stdout;
     std::string prefix = options.count("table-prefix") ?
       options["table-prefix"].as<std::string>() : "";
     if (!fdout) {
-      fprintf(stderr, "Could not open %s for writing; terminating\n", filename);
+      fprintf(stderr,
+              "Could not open %s for writing; terminating\n",
+              filename.c_str());
       exit(EXIT_FAILURE);
     }
     auto* pfx_cstr = prefix.c_str();
