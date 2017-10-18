@@ -21,13 +21,21 @@
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
+#ifdef _MSC_VER
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
-#include <boost/iostreams/device/file.hpp>
+#include <boost/filesystem.hpp>
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <boost/iostreams/filtering_stream.hpp> // uses deprecated auto_ptr
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 #include <json/json.h>
 
 #include "CommentFilter.h"
@@ -282,14 +290,14 @@ int parse_args(int argc, char* argv[], Arguments& args) {
 }
 
 bool dir_is_writable(const std::string& dir) {
-  struct stat buf;
-  if (stat(dir.c_str(), &buf) != 0) {
+  if (!boost::filesystem::is_directory(dir)) {
     return false;
   }
-  if (!(buf.st_mode & S_IFDIR)) {
-    return false;
-  }
+#ifdef _MSC_VER
+  return _access(dir.c_str(), 2) == 0;
+#else
   return access(dir.c_str(), W_OK) == 0;
+#endif
 }
 
 Json::Value get_stats(const dex_stats_t& stats) {
@@ -411,7 +419,9 @@ void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
+#ifndef _MSC_VER
   signal(SIGBUS, crash_backtrace_handler);
+#endif
 
   std::string stats_output_path;
   Json::Value stats;
@@ -620,7 +630,7 @@ int main(int argc, char* argv[]) {
   stats["output_stats"]["time_stats"] = get_times();
   Json::StyledStreamWriter writer;
   {
-    std::ofstream out(stats_output_path.c_str());
+    std::ofstream out(stats_output_path);
     writer.write(out, stats);
   }
 

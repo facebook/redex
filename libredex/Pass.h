@@ -54,7 +54,9 @@ class PassConfig {
       }
     } else if (val.isString()) {
       auto str = val.asString();
-      std::transform(str.begin(), str.end(), str.begin(), static_cast<int(*)(int)>(std::tolower));
+      std::transform(str.begin(), str.end(), str.begin(), [](auto c) {
+        return ::tolower(c);
+      });
       if (str == "0" || str == "false" || str == "off" || str == "no") {
         param = false;
         return;

@@ -10,18 +10,20 @@
 #include <sys/mman.h>
 #endif
 #include <arpa/inet.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <stdint.h>
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <zlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
+#include <zlib.h>
+
+#include "Creators.h"
 #include "DexClass.h"
 #include "JarLoader.h"
-#include "Creators.h"
+#include "Util.h"
 
 /******************
  * Begin Class Loading code.
@@ -493,7 +495,7 @@ static const int kSignatureSize = 4;
 static const uint16_t kCompMethodDeflate (8);
 static const uint8_t kCDFile[] = {'P', 'K', 0x01, 0x02};
 
-struct __attribute__((packed)) pk_cd_file {
+PACKED(struct pk_cd_file {
   uint32_t signature;
   uint16_t vmade;
   uint16_t vextract;
@@ -511,7 +513,7 @@ struct __attribute__((packed)) pk_cd_file {
   uint16_t interal_attr;
   uint32_t external_attr;
   uint32_t disk_offset;
-};
+});
 
 /* CDirEnd:
  * End of central directory record structures.
@@ -519,7 +521,7 @@ struct __attribute__((packed)) pk_cd_file {
 static const int kMaxCDirEndSearch = 100;
 static const uint8_t kCDirEnd[] = {'P', 'K', 0x05, 0x06};
 
-struct __attribute__((packed)) pk_cdir_end {
+PACKED(struct pk_cdir_end {
   uint32_t signature;
   uint16_t diskno;
   uint16_t cd_diskno;
@@ -528,7 +530,7 @@ struct __attribute__((packed)) pk_cdir_end {
   uint32_t cd_size;
   uint32_t cd_disk_offset;
   uint16_t comment_len;
-};
+});
 
 /* LFile:
  * Local file header structures.
@@ -536,7 +538,7 @@ struct __attribute__((packed)) pk_cdir_end {
  */
 static const uint8_t kLFile[] = {'P', 'K', 0x03, 0x04};
 
-struct __attribute__((packed)) pk_lfile {
+PACKED(struct pk_lfile {
   uint32_t signature;
   uint16_t vextract;
   uint16_t flags;
@@ -548,7 +550,7 @@ struct __attribute__((packed)) pk_lfile {
   uint32_t ucomp_size;
   uint16_t fname_len;
   uint16_t extra_len;
-};
+});
 
 struct jar_entry {
   struct pk_cd_file cd_entry;

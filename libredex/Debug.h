@@ -19,6 +19,17 @@ constexpr bool debug =
 #endif // NDEBUG
     ;
 
+#ifdef _MSC_VER
+#define DEBUG_ONLY
+
+#define not_reached() \
+  do {                \
+    __assume(false)   \
+  } while (true)
+
+#define assert_fail_impl(e, msg, ...) \
+  assert_fail(#e, __FILE__, __LINE__, __func__, msg, ##__VA_ARGS__)
+#else
 #define DEBUG_ONLY __attribute__((unused))
 
 #define not_reached()        \
@@ -27,18 +38,19 @@ constexpr bool debug =
     __builtin_unreachable(); \
   } while (true)
 
-void assert_fail(const char* expr,
-                 const char* file,
-                 unsigned line,
-                 const char* func,
-                 const char* fmt,
-                 ...) __attribute__((noreturn));
+#define assert_fail_impl(e, msg, ...) \
+  assert_fail(#e, __FILE__, __LINE__, __PRETTY_FUNCTION__, msg, ##__VA_ARGS__)
+#endif
+
+[[noreturn]] void assert_fail(const char* expr,
+                              const char* file,
+                              unsigned line,
+                              const char* func,
+                              const char* fmt,
+                              ...);
 
 #define assert_impl(cond, fail) \
   ((cond) ? static_cast<void>(0) : ((fail), static_cast<void>(0)))
-
-#define assert_fail_impl(e, msg, ...) \
-  assert_fail(#e, __FILE__, __LINE__, __PRETTY_FUNCTION__, msg, ##__VA_ARGS__)
 
 #define always_assert(e) assert_impl(e, assert_fail_impl(e, ""))
 #define always_assert_log(e, msg, ...) \

@@ -15,7 +15,6 @@
 #include <list>
 #include <map>
 #include <mutex>
-#include <pthread.h>
 #include <unordered_map>
 #include <functional>
 

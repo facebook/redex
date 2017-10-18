@@ -82,3 +82,12 @@ struct fake_dependency : public std::false_type {};
         #klass " must not use default pointer comparison in std::multiset"); \
   };                                                                         \
   }
+
+#ifdef __GNUC__
+#define PACKED(class_to_pack) class_to_pack __attribute__((packed))
+#elif _MSC_VER
+#define PACKED(class_to_pack) \
+  __pragma(pack(push, 1)) class_to_pack __pragma(pack(pop))
+#else
+#error "Please define PACKED"
+#endif
