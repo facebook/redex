@@ -231,6 +231,7 @@ class DexOpcodeData : public DexInstruction {
   uint16_t* m_data;
 
  public:
+  // This size refers to the whole instruction, not just the data portion
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
   virtual DexOpcodeData* clone() const { return new DexOpcodeData(*this); }
@@ -259,6 +260,8 @@ class DexOpcodeData : public DexInstruction {
   ~DexOpcodeData() { delete[] m_data; }
 
   const uint16_t* data() { return m_data; }
+  // This size refers to just the length of the data array
+  const uint16_t data_size() { return m_data_count; }
 };
 
 /**

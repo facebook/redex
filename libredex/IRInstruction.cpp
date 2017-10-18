@@ -425,7 +425,7 @@ uint64_t IRInstruction::hash() {
   }
 
   if (has_data()) {
-    size_t size = get_data()->size();
+    size_t size = get_data()->data_size();
     const auto& data = get_data()->data();
     for (size_t i = 0; i < size; i++) {
       bits.push_back(data[i]);
@@ -451,7 +451,6 @@ uint64_t IRInstruction::hash() {
     bits.push_back(range_base());
     bits.push_back(range_size());
   }
-  // ignore offset because it's not known until sync to DexInstructions
 
   uint64_t result = 0;
   for (uint64_t elem : bits) {
