@@ -14,43 +14,85 @@
 
 #include "IRCode.h"
 
-enum EdgeType {
-  EDGE_GOTO,
-  EDGE_BRANCH,
-  EDGE_THROW,
-  EDGE_TYPE_SIZE
-};
+/**
+ * A Control Flow Graph is a directed graph of Basic Blocks.
+ *
+ * Each `Block` has some number of successors and predecessors. `Block`s are
+ * connected to their predecessors and successors by `EdgeType`s that specify
+ * the type of connection.
+ *
+ * Right now there are two types of CFGs. Editable and non-editable:
+ * A non editable CFG's blocks have begin and end pointers into the big linear
+ * FatMethod in IRCode.
+ * An editable CFG's blocks each own a small FatMethod (with MethodItemEntries
+ * taken from IRCode)
+ *
+ * TODO: Add useful CFG editing methods
+ * TODO: phase out edits to the IRCode and move them all to the editable CFG
+ * TODO: remove non-editable CFG option
+ */
+
+enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
 
 // Forward declare friend function of Block to handle cyclic dependency
 namespace transform {
-  void replace_block(IRCode*, Block*, Block*);
+void replace_block(IRCode*, Block*, Block*);
 }
 
-struct Block {
-  explicit Block(size_t id) : m_id(id) {}
+// A piece of "straight-line" code. Targets are only at the beginning of a block
+// and branches (throws, gotos, switches, etc) are only at the end of a block.
+class Block {
+ public:
+  explicit Block(const ControlFlowGraph* parent, size_t id)
+      : m_id(id), m_parent(parent) {}
 
   size_t id() const { return m_id; }
   const std::vector<Block*>& preds() const { return m_preds; }
   const std::vector<Block*>& succs() const { return m_succs; }
-  FatMethod::iterator begin() { return m_begin; }
-  FatMethod::iterator end() { return m_end; }
+  FatMethod::iterator begin();
+  FatMethod::iterator end();
   FatMethod::reverse_iterator rbegin() {
-    return FatMethod::reverse_iterator(m_end);
+    return FatMethod::reverse_iterator(end());
   }
   FatMethod::reverse_iterator rend() {
-    return FatMethod::reverse_iterator(m_begin);
+    return FatMethod::reverse_iterator(begin());
   }
 
  private:
   friend class ControlFlowGraph;
-  friend class IRCode;
   friend void transform::replace_block(IRCode*, Block*, Block*);
 
+  // return an iterator to the goto in this block (if there is one)
+  // otherwise, return m_entries.end()
+  FatMethod::iterator get_goto();
+
+  // returns a vector of all MFLOW_TARGETs in this block
+  std::vector<FatMethod::iterator> get_targets();
+
   size_t m_id;
+
+  // MethodItemEntries get moved from IRCode into here (if m_editable)
+  // otherwise, this is empty.
+  FatMethod m_entries;
+
+  // TODO delete these
+  // These refer into the IRCode fatmethod
+  // These are only used in non-editable mode.
   FatMethod::iterator m_begin;
   FatMethod::iterator m_end;
+
   std::vector<Block*> m_preds;
   std::vector<Block*> m_succs;
+
+  // This is the successor taken in the
+  // non-exception, if false, or switch default situations
+  Block* m_default_successor = nullptr;
+
+  // nullptr if not in try region
+  MethodItemEntry* m_catch_start = nullptr;
+
+  // the graph that this block belongs to
+  const ControlFlowGraph* m_parent = nullptr;
 };
 
 inline bool is_catch(Block* b) {
@@ -71,10 +113,21 @@ class ControlFlowGraph {
 
   ControlFlowGraph() {}
 
-  explicit ControlFlowGraph(IRCode* code);
+  /*
+   * if editable is false, changes to the CFG aren't reflected in the output dex
+   * instructions.
+   */
+  ControlFlowGraph(FatMethod* fm,
+                   bool editable = false);
   ~ControlFlowGraph();
 
-  const std::vector<Block*>& blocks() const { return m_blocks; }
+  /*
+   * convert from the graph representation to a list of MethodItemEntries
+   */
+  FatMethod* linearize();
+
+  std::vector<Block*> blocks() const;
+
   Block* create_block();
   const Block* entry_block() const { return m_entry_block; }
   const Block* exit_block() const { return m_exit_block; }
@@ -111,15 +164,81 @@ class ControlFlowGraph {
   // Finding immediate dominator for each blocks in ControlFlowGraph.
   std::unordered_map<Block*, DominatorInfo> immediate_dominators() const;
 
+  void remove_succ_edges(Block* b);
+
+  // Do writes to this CFG propagate back to IR and Dex code?
+  bool editable() const { return m_editable; }
+
  private:
+  using BranchToTargets =
+      std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
+  using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
+  using TryCatches = std::unordered_map<CatchEntry*, Block*>;
+  using Boundaries =
+      std::unordered_map<Block*,
+                         std::pair<FatMethod::iterator, FatMethod::iterator>>;
+  using Blocks = std::map<size_t, Block*>;
+
   EdgeFlags& mutable_edge(Block* pred, Block* succ) {
     return m_edges[IdPair(pred->id(), succ->id())];
   }
 
-  std::vector<Block*> m_blocks;
+  // Find block boundaries in IRCode and create the blocks
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void find_block_boundaries(FatMethod* fm,
+                             BranchToTargets& branch_to_targets,
+                             TryEnds& try_ends,
+                             TryCatches& try_catches,
+                             Boundaries& boundaries);
+
+  // Add edges between blocks created by `find_block_boundaries`
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void connect_blocks(BranchToTargets& branch_to_targets);
+
+  // Add edges from try blocks to their catch handlers.
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void add_catch_edges(TryEnds& try_ends, TryCatches& try_catches);
+
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void remove_unreachable_succ_edges();
+
+  // Move MethodItemEntries from fm into their blocks
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void fill_blocks(FatMethod* fm, Boundaries& boundaries);
+
+  // add an explicit goto to the implicit fallthroughs so that we can
+  // re-arrange blocks safely.
+  // For use by the constructor. You probably don't want to call this from
+  // elsewhere
+  void add_fallthru_gotos();
+
+  // SIGABORT if the internal state of the CFG is invalid
+  void sanity_check();
+
+  // remove all TRY START and ENDs because we may reorder the blocks
+  // Assumes m_editable is true
+  void remove_try_markers();
+
+  // Targets point to branches. If a branch is deleted then we need to clean up
+  // the targets that pointed to that branch
+  // TODO: This isn't in use yet. Either use it or delete it.
+  void clean_dangling_targets();
+
+  // choose an order of blocks for output
+  std::vector<Block*> order();
+
+  void remove_fallthru_gotos(const std::vector<Block*> ordering);
+
+  Blocks m_blocks;
   std::unordered_map<IdPair, EdgeFlags, boost::hash<IdPair>> m_edges;
-  Block* m_entry_block {nullptr};
-  Block* m_exit_block {nullptr};
+  Block* m_entry_block{nullptr};
+  Block* m_exit_block{nullptr};
+  bool m_editable;
 };
 
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);

@@ -1041,7 +1041,7 @@ std::string show(const FatMethod* fm) {
 }
 
 std::string show(const ControlFlowGraph& cfg) {
-  auto& blocks = cfg.blocks();
+  const auto& blocks = cfg.blocks();
   std::stringstream ss;
   ss << "CFG:\n";
   for (auto& b : blocks) {

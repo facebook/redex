@@ -21,6 +21,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "Transform.h"
@@ -178,6 +179,17 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
     break;
   case MFLOW_FALLTHROUGH:
     break;
+  }
+}
+
+opcode::Branchingness MethodItemEntry::branchingness() const {
+  switch (type) {
+  case MFLOW_OPCODE:
+    return opcode::branchingness(insn->opcode());
+  case MFLOW_DEX_OPCODE:
+    return opcode::branchingness(dex_insn->opcode());
+  default:
+    return opcode::BRANCH_NONE;
   }
 }
 
@@ -704,18 +716,26 @@ get_old_to_new_position_copies(FatMethod* fmethod) {
       old_position_to_new;
   for (auto& mie : *fmethod) {
     if (mie.type == MFLOW_POSITION) {
-      old_position_to_new[mie.pos.get()] =
-          std::make_unique<DexPosition>(*mie.pos);
+      old_position_to_new.emplace(mie.pos.get(),
+                                  std::make_unique<DexPosition>(*mie.pos));
     }
   }
 
   for (auto& old_to_new : old_position_to_new) {
-    DexPosition* old_position = old_to_new.first;
+    DexPosition* old_pos = old_to_new.first;
     auto new_pos = old_to_new.second.get();
 
-    new_pos->parent = old_position->parent
-                          ? old_position_to_new[old_position->parent].get()
-                          : nullptr;
+    // There may be dangling pointers to parent positions that have been deleted
+    // So, we can't use the [] operator here because it would add
+    // nullptr as a value in the map which would cause a segfault on a later
+    // iteration of the loop. `.at()` is also not an option for the same reason.
+    new_pos->parent = nullptr;
+    if (old_pos->parent != nullptr) {
+      auto search = old_position_to_new.find(old_pos->parent);
+      if (search != old_position_to_new.end()) {
+        new_pos->parent = search->second.get();
+      }
+    }
   }
 
   return old_position_to_new;
@@ -728,81 +748,57 @@ FatMethod* deep_copy_fmethod(FatMethod* old_fmethod) {
   std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
       old_position_to_new = get_old_to_new_position_copies(old_fmethod);
 
-  // Create a clone for each of the entries.
+  // Create a clone for each of the entries
+  // and a mapping from old pointers to new pointers.
   std::unordered_map<MethodItemEntry*, MethodItemEntry*> old_mentry_to_new;
   for (auto& mie : *old_fmethod) {
-
-    // Since fallthorough entries are recomputed for the cfg, we can
-    // skip those for now.
-    if (mie.type == MFLOW_FALLTHROUGH) {
-      continue;
-    }
-
-    MethodItemEntry* copy_item_entry = new MethodItemEntry();
-    copy_item_entry->type = mie.type;
-
-    switch (mie.type) {
-      case MFLOW_TRY:
-        copy_item_entry->tentry =
-            new TryEntry(mie.tentry->type, mie.tentry->catch_start);
-        break;
-      case MFLOW_CATCH:
-        copy_item_entry->centry = new CatchEntry(mie.centry->catch_type);
-        break;
-      case MFLOW_TARGET:
-        copy_item_entry->target = new BranchTarget();
-        copy_item_entry->target->type = mie.target->type;
-        copy_item_entry->target->index = mie.target->index;
-        break;
-      case MFLOW_OPCODE:
-        copy_item_entry->insn = new IRInstruction(*mie.insn);
-        break;
-      case MFLOW_DEBUG:
-        new (&copy_item_entry->dbgop)
-            std::unique_ptr<DexDebugInstruction>(mie.dbgop->clone());
-        break;
-      case MFLOW_POSITION:
-        copy_item_entry->pos = std::move(old_position_to_new[mie.pos.get()]);
-        break;
-      case MFLOW_FALLTHROUGH:
-        break;
-      case MFLOW_DEX_OPCODE:
-        always_assert_log(false, "DexInstruction not expected here!");
-    }
-
-    old_mentry_to_new[&mie] = copy_item_entry;
+    MethodItemEntry* copy_mie = new MethodItemEntry();
+    copy_mie->type = mie.type;
+    old_mentry_to_new[&mie] = copy_mie;
   }
 
-  // Preserve mapping between entries.
+  // now fill the fields of the `copy_mie`s
   for (auto& mie : *old_fmethod) {
-    if (mie.type == MFLOW_FALLTHROUGH) {
-      continue;
-    }
 
-    MethodItemEntry* copy_item_entry = old_mentry_to_new[&mie];
+    auto copy_mie = old_mentry_to_new.at(&mie);
     switch (mie.type) {
-      case MFLOW_TRY:
-        copy_item_entry->tentry->catch_start =
-           mie.tentry->catch_start ? old_mentry_to_new[mie.tentry->catch_start]
-                                   : nullptr;
-        break;
-      case MFLOW_CATCH:
-        copy_item_entry->centry->next =
+    case MFLOW_TRY:
+      copy_mie->tentry =
+          new TryEntry(mie.tentry->type,
+                       mie.tentry->catch_start
+                           ? old_mentry_to_new[mie.tentry->catch_start]
+                           : nullptr);
+      break;
+    case MFLOW_CATCH:
+      copy_mie->centry = new CatchEntry(mie.centry->catch_type);
+      copy_mie->centry->next =
           mie.centry->next ? old_mentry_to_new[mie.centry->next] : nullptr;
-        break;
-      case MFLOW_TARGET:
-        copy_item_entry->target->src = old_mentry_to_new[mie.target->src];
-        break;
-      case MFLOW_OPCODE:
-      case MFLOW_DEBUG:
-      case MFLOW_POSITION:
-      case MFLOW_FALLTHROUGH:
-        break;
-      case MFLOW_DEX_OPCODE:
-        always_assert_log(false, "DexInstruction not expected here!");
+      break;
+    case MFLOW_TARGET:
+      copy_mie->target = new BranchTarget();
+      copy_mie->target->type = mie.target->type;
+      copy_mie->target->index = mie.target->index;
+      copy_mie->target->src = old_mentry_to_new[mie.target->src];
+      break;
+    case MFLOW_OPCODE:
+      copy_mie->insn = new IRInstruction(*mie.insn);
+      break;
+    case MFLOW_DEBUG:
+      new (&copy_mie->dbgop)
+          std::unique_ptr<DexDebugInstruction>(mie.dbgop->clone());
+      break;
+    case MFLOW_POSITION:
+      copy_mie->pos = std::move(old_position_to_new[mie.pos.get()]);
+      break;
+    case MFLOW_FALLTHROUGH:
+      break;
+    case MFLOW_DEX_OPCODE:
+      always_assert_log(false, "DexInstruction not expected here!");
+    default:
+      not_reached();
     }
 
-    fmethod->push_back(*copy_item_entry);
+    fmethod->push_back(*copy_mie);
   }
 
   return fmethod;
@@ -871,8 +867,8 @@ void IRCode::replace_branch(IRInstruction* from, IRInstruction* to) {
 void IRCode::remove_debug_line_info(Block* block) {
   for (MethodItemEntry& mie : *block) {
     if (mie.type == MFLOW_POSITION) {
-      mie.type = MFLOW_FALLTHROUGH;
       mie.pos.release();
+      mie.type = MFLOW_FALLTHROUGH;
     }
   }
 }
@@ -1195,12 +1191,16 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
 
 } // namespace
 
-void IRCode::build_cfg() {
+void IRCode::build_cfg(bool editable) {
   clear_cfg();
-  m_cfg = std::make_unique<ControlFlowGraph>(this);
+  m_cfg = std::make_unique<ControlFlowGraph>(m_fmethod, editable);
 }
 
 void IRCode::clear_cfg() {
+  if (m_cfg && m_cfg->editable()) {
+    m_fmethod = m_cfg->linearize();
+  }
+
   m_cfg.reset();
   std::vector<FatMethod::iterator> fallthroughs;
   for (auto it = m_fmethod->begin(); it != m_fmethod->end(); ++it) {
@@ -1316,8 +1316,11 @@ bool IRCode::try_sync(DexCode* code) {
       } else if (bt->type == BRANCH_SIMPLE &&
                  is_branch(bt->src->dex_insn->opcode())) {
         MethodItemEntry* branch_op_mie = bt->src;
-        int32_t branch_offset =
-            entry_to_addr.at(mentry) - entry_to_addr.at(branch_op_mie);
+        auto branch_addr = entry_to_addr.find(branch_op_mie);
+        always_assert_log(branch_addr != entry_to_addr.end(),
+                          "%s refers to nonexistent branch instruction",
+                          SHOW(*mentry));
+        int32_t branch_offset = entry_to_addr.at(mentry) - branch_addr->second;
         if (branch_offset == 1) {
           needs_resync = true;
           branch_op_mie->type = MFLOW_FALLTHROUGH;
@@ -1458,8 +1461,13 @@ bool IRCode::try_sync(DexCode* code) {
     auto try_start = active_try;
     active_try = nullptr;
 
-    always_assert(try_end->tentry->catch_start ==
-                  try_start->tentry->catch_start);
+    always_assert_log(
+        try_start != nullptr, "unopened try_end found: %s", SHOW(*try_end));
+    always_assert_log(try_start->tentry->catch_start ==
+                          try_end->tentry->catch_start,
+                      "mismatched try start (%s) and end (%s)",
+                      SHOW(*try_start),
+                      SHOW(*try_end));
     auto insn_count = entry_to_addr.at(try_end) - entry_to_addr.at(try_start);
     if (insn_count == 0) {
       continue;

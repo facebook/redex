@@ -350,6 +350,17 @@ bool is_move_result_pseudo(DexOpcode);
 DexOpcode move_result_pseudo_for_iget(DexOpcode op);
 DexOpcode move_result_pseudo_for_sget(DexOpcode op);
 
+enum Branchingness {
+  BRANCH_NONE,
+  BRANCH_RETURN,
+  BRANCH_GOTO,
+  BRANCH_IF,
+  BRANCH_SWITCH,
+  BRANCH_THROW // both always throw and may_throw
+};
+
+Branchingness branchingness(DexOpcode op);
+
 } // namespace opcode
 
 /*

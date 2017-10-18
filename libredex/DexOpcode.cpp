@@ -196,6 +196,44 @@ bool may_throw(DexOpcode op) {
   }
 }
 
+Branchingness branchingness(DexOpcode op) {
+  if (may_throw(op)) {
+    return BRANCH_THROW;
+  }
+
+  switch (op) {
+  case OPCODE_RETURN_VOID:
+  case OPCODE_RETURN:
+  case OPCODE_RETURN_WIDE:
+  case OPCODE_RETURN_OBJECT:
+    return BRANCH_RETURN;
+  case OPCODE_THROW:
+    return BRANCH_THROW;
+  case OPCODE_GOTO:
+  case OPCODE_GOTO_16:
+  case OPCODE_GOTO_32:
+    return BRANCH_GOTO;
+  case OPCODE_PACKED_SWITCH:
+  case OPCODE_SPARSE_SWITCH:
+    return BRANCH_SWITCH;
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE:
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+    return BRANCH_IF;
+  default:
+    return BRANCH_NONE;
+  }
+}
+
 bool has_range_form(DexOpcode op) {
   switch (op) {
   case OPCODE_INVOKE_DIRECT:

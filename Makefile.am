@@ -56,6 +56,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/string_simplification \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
+	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
@@ -209,6 +210,7 @@ redex_all_SOURCES = \
 	opt/string_simplification/StringSimplification.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
+	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \

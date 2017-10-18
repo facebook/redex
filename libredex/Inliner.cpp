@@ -859,7 +859,8 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
   insn->range_to_srcs();
   insn->normalize_registers();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert(param_it != param_end);
+    always_assert_log(
+        param_it != param_end, "no param insns\n%s", SHOW(callee_code));
     reg_map[param_it->insn->dest()] = insn->src(i);
   }
   for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
