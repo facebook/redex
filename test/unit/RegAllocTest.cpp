@@ -61,8 +61,8 @@ TEST_F(RegAllocTest, MoveGen) {
 TEST_F(RegAllocTest, RegTypeDestWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
-    if (opcode_impl::dests_size(op) && !opcode::dest_is_src(op)) {
-      auto insn = std::make_unique<IRInstruction>(op);
+    auto insn = std::make_unique<IRInstruction>(op);
+    if (insn->dests_size() && !opcode::dest_is_src(op)) {
       EXPECT_EQ(insn->dest_is_wide(),
                 regalloc::dest_reg_type(insn.get()) == RegisterType::WIDE)
           << "mismatch for " << show(op);

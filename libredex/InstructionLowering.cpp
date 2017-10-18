@@ -184,10 +184,22 @@ static void check_load_params(DexMethod* method) {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
-      always_assert(insn->dest() < next_ins);
+      always_assert_log(insn->dest() < next_ins,
+                        "Instruction %s refers to a register (v%u) >= size (%u)"
+                        "in method %s\n",
+                        SHOW(insn),
+                        insn->dest(),
+                        next_ins,
+                        SHOW(method));
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      always_assert(insn->src(i) < next_ins);
+      always_assert_log(insn->src(i) < next_ins,
+                        "Instruction %s refers to a register (v%u) >= size (%u)"
+                        "in method %s\n",
+                        SHOW(insn),
+                        insn->src(i),
+                        next_ins,
+                        SHOW(method));
     }
   }
 }

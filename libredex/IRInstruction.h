@@ -154,15 +154,29 @@ class IRInstruction final {
            (opcode_impl::dests_size(m_opcode) && opcode::may_throw(m_opcode));
   }
 
+
   /*
    * Information about operands.
    */
+
+  // Invoke instructions treat wide registers differently than *-wide
+  // instructions. They explicitly refer to both halves of a pair, rather than
+  // just the lower half. This method returns true on both lower and upper
+  // halves.
+  bool invoke_src_is_wide(size_t i) const;
+
   bool src_is_wide(size_t i) const;
   bool dest_is_wide() const {
+    always_assert(dests_size());
     return opcode_impl::dest_is_wide(m_opcode);
   }
   bool is_wide() const {
-    return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
+    for (size_t i = 0; i < srcs_size(); i++) {
+      if (src_is_wide(i)) {
+        return true;
+      }
+    }
+    return dests_size() && dest_is_wide();
   }
   bit_width_t src_bit_width(uint16_t i) const;
 
