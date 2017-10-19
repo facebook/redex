@@ -352,7 +352,7 @@ class KeyValueStore {
     }
   }
 
-  void print() {
+  void print() const {
     for (const auto& e : kv_pairs_) {
       printf("  %s: %s\n", e.first.c_str(), e.second.c_str());
     }
@@ -381,6 +381,16 @@ class KeyValueStore {
       }
     }
     return false;
+  }
+
+  // return value remains valid as long as *this isn't destroyed.
+  const char* get(const std::string& key) const {
+    for (const auto& kv : kv_pairs_) {
+      if (kv.first == key) {
+        return kv.second.c_str();
+      }
+    }
+    return nullptr;
   }
 
  private:
@@ -1768,6 +1778,12 @@ class OatFile_064 : public OatFile {
     return ret;
   }
 
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    auto img_loc = key_value_store_.get("image-location");
+    if (img_loc == nullptr) { return nullptr; }
+    return std::unique_ptr<std::string>(new std::string(img_loc));
+  }
+
   bool created_by_oatmeal() const override {
     return key_value_store_.has_key(kCreatedByOatmeal);
   }
@@ -1892,6 +1908,12 @@ class OatFile_079 : public OatFile {
   // Samsung has no custom modifications (that i know of) on 079 and up, so
   // there's nothing to detect.
   bool is_samsung() const override { return false; }
+
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    auto img_loc = key_value_store_.get("image-location");
+    if (img_loc == nullptr) { return nullptr; }
+    return std::unique_ptr<std::string>(new std::string(img_loc));
+  }
 
   bool created_by_oatmeal() const override {
     return key_value_store_.has_key(kCreatedByOatmeal);
@@ -2048,6 +2070,12 @@ class OatFile_124 : public OatFile {
 
   size_t oat_offset() const override { return oat_offset_; }
 
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    auto img_loc = key_value_store_.get("image-location");
+    if (img_loc == nullptr) { return nullptr; }
+    return std::unique_ptr<std::string>(new std::string(img_loc));
+  }
+
   bool created_by_oatmeal() const override {
     return key_value_store_.has_key(kCreatedByOatmeal);
   }
@@ -2107,6 +2135,10 @@ public:
     return std::vector<OatDexFile>();
   }
 
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    return nullptr;
+  }
+
   bool created_by_oatmeal() const override {
     return false;
   }
@@ -2138,6 +2170,10 @@ public:
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     return std::vector<OatDexFile>();
+  }
+
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    return nullptr;
   }
 
   bool created_by_oatmeal() const override {
