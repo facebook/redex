@@ -24,7 +24,8 @@ constexpr bool debug =
 
 #define not_reached() \
   do {                \
-    __assume(false)   \
+    assert(false);    \
+    __assume(false);  \
   } while (true)
 
 #define assert_fail_impl(e, msg, ...) \

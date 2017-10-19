@@ -224,6 +224,7 @@ redex_all_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
+	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	-lpthread
 
 redex_all_LDFLAGS = \
