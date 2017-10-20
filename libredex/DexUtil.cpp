@@ -407,3 +407,13 @@ dex_stats_t&
   lhs.num_instructions += rhs.num_instructions;
   return lhs;
 }
+
+void relocate_method(DexMethod* method, DexType* to_type) {
+  auto from_cls = type_class(method->get_class());
+  auto to_cls = type_class(to_type);
+  from_cls->remove_method(method);
+  DexMethodSpec spec;
+  spec.cls = to_type;
+  method->change(spec, true);
+  to_cls->add_method(method);
+}
