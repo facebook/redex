@@ -295,6 +295,37 @@ DexOpcode move_result_pseudo_for_sget(DexOpcode op) {
   }
 }
 
+DexOpcode invert_conditional_branch(DexOpcode op) {
+  switch (op) {
+  case OPCODE_IF_EQ:
+    return OPCODE_IF_NE;
+  case OPCODE_IF_NE:
+    return OPCODE_IF_EQ;
+  case OPCODE_IF_LT:
+    return OPCODE_IF_GE;
+  case OPCODE_IF_GE:
+    return OPCODE_IF_LT;
+  case OPCODE_IF_GT:
+    return OPCODE_IF_LE;
+  case OPCODE_IF_LE:
+    return OPCODE_IF_GT;
+  case OPCODE_IF_EQZ:
+    return OPCODE_IF_NEZ;
+  case OPCODE_IF_NEZ:
+    return OPCODE_IF_EQZ;
+  case OPCODE_IF_LTZ:
+    return OPCODE_IF_GEZ;
+  case OPCODE_IF_GEZ:
+    return OPCODE_IF_LTZ;
+  case OPCODE_IF_GTZ:
+    return OPCODE_IF_LEZ;
+  case OPCODE_IF_LEZ:
+    return OPCODE_IF_GTZ;
+  default:
+    always_assert_log(false, "Invalid conditional opcode %s", SHOW(op));
+  }
+}
+
 } // namespace opcode
 
 namespace opcode_impl {

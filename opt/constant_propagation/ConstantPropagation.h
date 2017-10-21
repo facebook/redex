@@ -27,7 +27,7 @@ using std::vector;
  * and HashedAbstractEnvironment facilities.
  *
  * By running the fix point iterator, instead of having no knowledge at
- * the start of a basic block, we can now run the analsys with constants
+ * the start of a basic block, we can now run the analysis with constants
  * that have been propagated beyond the basic block boundary making this
  * more powerful than its predecessor pass.
  */
@@ -47,7 +47,14 @@ class IntraProcConstantPropagation final
             cfg.blocks(),
             std::bind(&Block::succs, _1),
             std::bind(&Block::preds, _1)),
-        m_lcp{config} {}
+        m_config(config),
+        m_lcp{config},
+        m_cfg(cfg) {}
+
+  ConstPropEnvironment analyze_edge(
+      Block* const& source,
+      Block* const& destination,
+      const ConstPropEnvironment& exit_state_at_source) const override;
 
   void simplify_instruction(
       Block* const& block,
@@ -55,13 +62,15 @@ class IntraProcConstantPropagation final
       const ConstPropEnvironment& current_state) const override;
   void analyze_instruction(const MethodItemEntry& mie,
                            ConstPropEnvironment* current_state) const override;
-  void apply_changes(DexMethod* method) const;
+  void apply_changes(IRCode*) const;
 
   size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
   size_t materialized_consts() const { return m_lcp.num_materialized_consts(); }
 
  private:
+  const ConstPropConfig m_config;
   mutable LocalConstantPropagation m_lcp;
+  const ControlFlowGraph& m_cfg;
 };
 
 class ConstantPropagationPass : public Pass {

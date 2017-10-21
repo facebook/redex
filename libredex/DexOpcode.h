@@ -347,6 +347,8 @@ bool is_load_param(DexOpcode);
 
 bool is_move_result_pseudo(DexOpcode);
 
+DexOpcode invert_conditional_branch(DexOpcode op);
+
 DexOpcode move_result_pseudo_for_iget(DexOpcode op);
 DexOpcode move_result_pseudo_for_sget(DexOpcode op);
 

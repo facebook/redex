@@ -14,6 +14,7 @@
 #include "LocalConstProp.h"
 #include "ParallelWalkers.h"
 
+using namespace constant_propagation_impl;
 using std::placeholders::_1;
 using std::string;
 using std::vector;
@@ -32,8 +33,123 @@ void IntraProcConstantPropagation::analyze_instruction(
   m_lcp.analyze_instruction(insn, current_state);
 }
 
-void IntraProcConstantPropagation::apply_changes(DexMethod* method) const {
-  auto code = method->get_code();
+/*
+ * If we can determine that a branch is not taken based on the constants in the
+ * environment, set the environment to bottom upon entry into the unreachable
+ * block.
+ */
+static void analyze_if(const IRInstruction* inst,
+                       ConstPropEnvironment* current_state,
+                       bool is_true_branch) {
+  // Inverting the conditional here means that we only need to consider the
+  // "true" case of the if-* opcode
+  auto op = !is_true_branch ? opcode::invert_conditional_branch(inst->opcode())
+                            : inst->opcode();
+  // We handle if-eq(z) cases specially since we can infer useful information
+  // even if only one operand is constant
+  if (op == OPCODE_IF_EQ) {
+    auto left_value = current_state->get(inst->src(0));
+    auto right_value = current_state->get(inst->src(1));
+    auto refined_value = left_value.meet(right_value);
+    current_state->set(inst->src(0), refined_value);
+    current_state->set(inst->src(1), refined_value);
+    return;
+  } else if (op == OPCODE_IF_EQZ) {
+    auto value = current_state->get(inst->src(0));
+    auto refined_value = value.meet(
+        ConstantDomain::value(0, ConstantValue::ConstantType::NARROW));
+    current_state->set(inst->src(0), refined_value);
+    return;
+  }
+
+  int32_t left_value;
+  int32_t right_value;
+  if (!get_constant_value_at_src(*current_state,
+                                 inst,
+                                 /* src_idx */ 0,
+                                 /* default_value */ 0,
+                                 left_value)) {
+    return;
+  }
+  if (!get_constant_value_at_src(*current_state,
+                                 inst,
+                                 /* src_idx */ 1,
+                                 /* default_value */ 0,
+                                 right_value)) {
+    return;
+  }
+
+  switch (op) {
+    case OPCODE_IF_NE:
+    case OPCODE_IF_NEZ:
+      if (left_value == right_value) {
+        current_state->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_LT:
+    case OPCODE_IF_LTZ:
+      if (left_value >= right_value) {
+        current_state->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_GE:
+    case OPCODE_IF_GEZ:
+      if (left_value < right_value) {
+        current_state->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_GT:
+    case OPCODE_IF_GTZ:
+      if (left_value <= right_value) {
+        current_state->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_LE:
+    case OPCODE_IF_LEZ:
+      if (left_value > right_value) {
+        current_state->set_to_bottom();
+      }
+      break;
+    default:
+      always_assert_log(false, "expected if-* opcode");
+      not_reached();
+  }
+}
+
+static IRInstruction* find_last_instruction(Block* block) {
+  for (auto it = block->rbegin(); it != block->rend(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      return it->insn;
+    }
+  }
+  return nullptr;
+}
+
+ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
+    Block* const& source,
+    Block* const& destination,
+    const ConstPropEnvironment& exit_state_at_source) const {
+  auto current_state = exit_state_at_source;
+  if (!m_config.propagate_conditions) {
+    return current_state;
+  }
+
+  IRInstruction* last_insn = find_last_instruction(source);
+  if (last_insn == nullptr) {
+    return current_state;
+  }
+
+  auto op = last_insn->opcode();
+  if (is_conditional_branch(op)) {
+    analyze_if(
+        last_insn,
+        &current_state,
+        /* if_true_branch */ m_cfg.edge(source, destination)[EDGE_BRANCH]);
+  }
+  return current_state;
+}
+
+void IntraProcConstantPropagation::apply_changes(IRCode* code) const {
   for (auto const& p : m_lcp.insn_replacements()) {
     IRInstruction* old_op = p.first;
     IRInstruction* new_op = p.second;
@@ -60,6 +176,7 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
   pc.get(
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
+  pc.get("propagate_conditions", false, m_config.propagate_conditions);
   vector<string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 
@@ -98,7 +215,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
     IntraProcConstantPropagation rcp(cfg, m_config);
     rcp.run(ConstPropEnvironment());
     rcp.simplify();
-    rcp.apply_changes(method);
+    rcp.apply_changes(code);
 
     {
       std::lock_guard<std::mutex> lock{m_stats_mutex};

@@ -169,12 +169,20 @@ void handle_labels(IRCode* code,
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {
       auto target_mie = label_defs.at(label_refs.at(insn));
-      // Currently we can only jump once to a given label
-      always_assert(target_mie->type == MFLOW_FALLTHROUGH);
-      target_mie->type = MFLOW_TARGET;
-      target_mie->target = new BranchTarget();
-      target_mie->target->type = BRANCH_SIMPLE;
-      target_mie->target->src = &mie;
+      auto target = new BranchTarget();
+      target->type = BRANCH_SIMPLE;
+      target->src = &mie;
+      // Since one label can be the target of multiple branches, but one
+      // MFLOW_TARGET can only point to one branching opcode, we may need to
+      // create additional MFLOW_TARGET items here.
+      if (target_mie->type == MFLOW_FALLTHROUGH) {
+        target_mie->type = MFLOW_TARGET;
+        target_mie->target = target;
+      } else {
+        always_assert(target_mie->type == MFLOW_TARGET);
+        auto new_target_mie = new MethodItemEntry(target);
+        code->insert_before(code->iterator_to(*target_mie), *new_target_mie);
+      }
     }
   }
 }

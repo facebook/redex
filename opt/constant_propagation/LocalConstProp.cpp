@@ -39,36 +39,9 @@
  * block level.
  */
 
+using namespace constant_propagation_impl;
+
 namespace {
-
-template <typename Integral>
-bool get_constant_value(const ConstPropEnvironment& env,
-                        int16_t reg,
-                        Integral& result);
-
-template <>
-bool get_constant_value(const ConstPropEnvironment& env,
-                        int16_t reg,
-                        int64_t& result) {
-  if (ConstPropEnvUtil::is_wide_constant(env, reg)) {
-    result = ConstPropEnvUtil::get_wide(env, reg);
-    return true;
-  } else {
-    return false;
-  }
-}
-
-template <>
-bool get_constant_value(const ConstPropEnvironment& env,
-                        int16_t reg,
-                        int32_t& result) {
-  if (ConstPropEnvUtil::is_narrow_constant(env, reg)) {
-    result = ConstPropEnvUtil::get_narrow(env, reg);
-    return true;
-  } else {
-    return false;
-  }
-}
 
 template <typename Out, typename In>
 // reinterpret the long's bits as a double
@@ -339,21 +312,21 @@ void LocalConstantPropagation::simplify_branch(
     IRInstruction*& inst, const ConstPropEnvironment& current_state) {
   int32_t left_value;
   int32_t right_value;
-
-  auto left = get_constant_value(current_state, inst->src(0), left_value);
-  if (!left) {
+  // if-*Z vA        is the same as
+  // if-*  vA, 0
+  if (!get_constant_value_at_src(current_state,
+                                 inst,
+                                 /* src_idx */ 0,
+                                 /* default_value */ 0,
+                                 left_value)) {
     return;
   }
-
-  if (inst->srcs_size() == 2) {
-    auto right = get_constant_value(current_state, inst->src(1), right_value);
-    if (!right) {
-      return;
-    }
-  } else {
-    // if-*Z vA        is the same as
-    // if-*  vA, 0
-    right_value = 0;
+  if (!get_constant_value_at_src(current_state,
+                                 inst,
+                                 /* src_idx */ 1,
+                                 /* default_value */ 0,
+                                 right_value)) {
+    return;
   }
 
   bool branch_result = eval_if(inst->opcode(), left_value, right_value);
