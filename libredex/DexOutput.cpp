@@ -18,6 +18,19 @@
 #include <exception>
 #include <assert.h>
 
+#ifdef _MSC_VER
+// TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
+#include <io.h>
+#define open _open
+#define write _write
+#define close _close
+#define fstat _fstat64i32
+#define stat _stat64i32
+#define O_CREAT _O_CREAT
+#define O_TRUNC _O_TRUNC
+#define O_WRONLY _O_WRONLY
+#endif
+
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexOutput.h"

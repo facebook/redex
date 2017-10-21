@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -71,11 +72,16 @@ struct Tracer {
     }
     std::lock_guard<std::mutex> guard(TraceContext::s_trace_mutex);
     if (m_show_timestamps) {
-      char buf[26];
-      auto t = time(nullptr);
-      ctime_r(&t, buf);
-      buf[strlen(buf) - 1] = '\0';
-      fprintf(m_file, "[%s]", buf);
+      auto t = std::time(nullptr);
+      struct tm local_tm;
+#ifdef _MSC_VER
+      localtime_s(&local_tm, &t);
+#else
+      localtime_r(&t, &local_tm);
+#endif
+      std::array<char, 40> buf;
+      std::strftime(buf.data(), sizeof(buf), "%c", &local_tm);
+      fprintf(m_file, "[%s]", buf.data());
       if (!m_show_tracemodule) {
         fprintf(m_file, " ");
       }

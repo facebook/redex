@@ -135,6 +135,8 @@ s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
   case PTS_ARRAY_ELEMENT: {
     return s_expr("PTS_ARRAY_ELEMENT");
   }
+  default:
+    not_reached();
   }
 }
 
@@ -230,6 +232,8 @@ s_expr PointsToOperation::to_s_expr() const {
   case PTS_INVOKE_STATIC: {
     return s_expr({op_kind_to_s_expr(kind), dex_method_to_s_expr(dex_method)});
   }
+  default:
+    not_reached();
   }
 }
 
@@ -322,6 +326,8 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     }
     return {PointsToOperation(op_kind, *dex_method_opt)};
   }
+  default:
+    not_reached();
   }
 }
 
@@ -431,7 +437,7 @@ PointsToAction PointsToAction::invoke_operation(
     const PointsToOperation& operation,
     boost::optional<PointsToVariable> dest,
     boost::optional<PointsToVariable> instance,
-    const std::vector<std::pair<size_t, PointsToVariable>>& args) {
+    const std::vector<std::pair<int32_t, PointsToVariable>>& args) {
   always_assert(operation.is_invoke());
   always_assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
   std::vector<std::pair<int32_t, PointsToVariable>> bindings;
@@ -523,6 +529,8 @@ std::string special_edge_to_string(SpecialPointsToEdge e) {
   case PTS_ARRAY_ELEMENT: {
     return "ARRAY_ELEM";
   }
+  default:
+    not_reached();
   }
 }
 
@@ -1150,7 +1158,7 @@ class PointsToActionGenerator final {
     DexMethodRef* dex_method = insn->get_method();
     DexProto* proto = dex_method->get_proto();
     const auto& signature = proto->get_args()->get_type_list();
-    std::vector<std::pair<size_t, PointsToVariable>> args;
+    std::vector<std::pair<int32_t, PointsToVariable>> args;
     IRSourceIterator src_it(insn);
 
     // Allocate a variable for the returned object if any.
@@ -1170,7 +1178,7 @@ class PointsToActionGenerator final {
     }
 
     // Process the arguments of the method invocation.
-    size_t arg_pos = 0;
+    int32_t arg_pos = 0;
     for (DexType* dex_type : signature) {
       if (is_object(dex_type)) {
         args.push_back(

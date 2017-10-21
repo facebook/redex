@@ -780,7 +780,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   auto reg_map = std::make_unique<RegMap>();
 
   // generate the callee register map
-  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
+  for (auto i = 0; i < callee_code->get_registers_size(); ++i) {
     reg_map->emplace(i, callee_reg_start + i);
   }
 
@@ -902,6 +902,7 @@ void cleanup_callee_debug(IRCode* callee_code) {
     }
   }
 }
+} // namespace
 
 /*
  * For splicing a callee's FatMethod into a caller.
@@ -1060,8 +1061,6 @@ class MethodSplicer {
     }
   }
 };
-
-} // anonymous namespace
 
 namespace inliner {
 

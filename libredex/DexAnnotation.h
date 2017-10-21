@@ -10,6 +10,7 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
+#include <deque>
 #include <list>
 #include <map>
 #include <sstream>

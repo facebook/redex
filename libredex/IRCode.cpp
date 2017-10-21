@@ -1375,8 +1375,8 @@ bool IRCode::try_sync(DexCode* code) {
     always_assert_log(!targets.empty(), "need to have targets");
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
-      unsigned long count = (targets.size() * 4) + 2;
-      uint16_t sparse_payload[count];
+      const size_t count = (targets.size() * 4) + 2;
+      auto sparse_payload = std::make_unique<uint16_t[]>(count);
       sparse_payload[0] = FOPCODE_SPARSE_SWITCH;
       sparse_payload[1] = targets.size();
       uint32_t* spkeys = (uint32_t*)&sparse_payload[2];
@@ -1393,7 +1393,8 @@ bool IRCode::try_sync(DexCode* code) {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop = new DexOpcodeData(sparse_payload, (int)(count - 1));
+      DexInstruction* fop =
+          new DexOpcodeData(sparse_payload.get(), (int)(count - 1));
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
@@ -1402,8 +1403,8 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      unsigned long count = (targets.size() * 2) + 4;
-      uint16_t packed_payload[count];
+      const size_t count = (targets.size() * 2) + 4;
+      auto packed_payload = std::make_unique<uint16_t[]>(count);
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
       packed_payload[1] = targets.size();
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
@@ -1418,7 +1419,8 @@ bool IRCode::try_sync(DexCode* code) {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop = new DexOpcodeData(packed_payload, (int) (count - 1));
+      DexInstruction* fop =
+          new DexOpcodeData(packed_payload.get(), (int)(count - 1));
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.

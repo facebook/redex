@@ -91,3 +91,8 @@ struct fake_dependency : public std::false_type {};
 #else
 #error "Please define PACKED"
 #endif
+
+#ifdef _MSC_VER
+#include <BaseTsd.h>
+using ssize_t = SSIZE_T;
+#endif

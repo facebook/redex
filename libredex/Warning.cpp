@@ -46,7 +46,7 @@ void print_warning_summary() {
     size_t count = s_warning_counts[i];
     if (count > 0) {
       fprintf(stderr,
-              "Optimization warning: %s: %lu occurrences\n",
+              "Optimization warning: %s: %zu occurrences\n",
               s_warning_text[i],
               count);
     }

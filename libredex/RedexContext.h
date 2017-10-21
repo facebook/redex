@@ -10,13 +10,14 @@
 #pragma once
 
 #include <array>
-#include <vector>
 #include <cstring>
+#include <deque>
+#include <functional>
 #include <list>
 #include <map>
 #include <mutex>
 #include <unordered_map>
-#include <functional>
+#include <vector>
 
 #include "DexMemberRefs.h"
 

@@ -371,7 +371,7 @@ class PointsToAction final {
       const PointsToOperation& operation,
       boost::optional<PointsToVariable> dest,
       boost::optional<PointsToVariable> instance,
-      const std::vector<std::pair<size_t, PointsToVariable>>& args);
+      const std::vector<std::pair<int32_t, PointsToVariable>>& args);
 
   /*
    * Used to build a PTS_RETURN action.

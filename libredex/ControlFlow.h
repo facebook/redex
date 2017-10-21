@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <bitset>
 #include <boost/functional/hash.hpp>
 #include <utility>
 
