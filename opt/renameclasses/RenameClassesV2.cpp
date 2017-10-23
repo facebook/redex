@@ -10,20 +10,19 @@
 #include "RenameClassesV2.h"
 
 #include <algorithm>
-#include <arpa/inet.h>
 #include <map>
 #include <string>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
 
-#include "Warning.h"
-#include "Walkers.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
+#include "Walkers.h"
+#include "Warning.h"
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (62)

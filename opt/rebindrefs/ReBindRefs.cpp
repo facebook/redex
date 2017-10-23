@@ -15,10 +15,11 @@
 
 #include "Debug.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
-#include "Resolver.h"
+#include "IRInstruction.h"
 #include "PassManager.h"
+#include "Resolver.h"
+#include "Util.h"
 #include "Walkers.h"
 
 namespace {

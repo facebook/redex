@@ -382,7 +382,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   }
 
   transform::RegMap reg_map;
-  for (size_t i = 0; i < code->get_registers_size(); ++i) {
+  for (auto i = 0; i < code->get_registers_size(); ++i) {
     reg_map.emplace(i, aliases.find_set(i));
   }
   transform::remap_registers(code, reg_map);

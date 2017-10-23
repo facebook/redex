@@ -161,7 +161,6 @@ class PowersetAbstractDomain
       return this->get_value()->contains(e);
     }
     }
-    not_reached();
   }
 };
 

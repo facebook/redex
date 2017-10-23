@@ -26,13 +26,13 @@ DexType* get_concrete_type(SingleImpls& single_impls, DexType* type) {
       return concrete;
     }
     const auto base_name = concrete->get_name()->c_str();
-    uint32_t size = (uint32_t) (array_level + strlen(base_name));
-    char array_name[size];
-    char* p = array_name;
+    const uint32_t size = (uint32_t)(array_level + strlen(base_name));
+    auto array_name = std::make_unique<char[]>(size);
+    char* p = array_name.get();
     while (array_level--)
       *p++ = '[';
     strcpy(p, concrete->get_name()->c_str());
-    auto array_type = DexType::get_type(array_name, size);
+    auto array_type = DexType::get_type(array_name.get(), size);
     return array_type;
   }
   return nullptr;

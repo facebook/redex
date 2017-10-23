@@ -11,6 +11,10 @@
 
 #include "Pass.h"
 
+#include <set>
+#include <string>
+#include <unordered_map>
+
 class CreateReferenceGraphPass : public Pass {
  public:
   CreateReferenceGraphPass() : Pass("CreateReferenceGraphPass") {}

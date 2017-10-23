@@ -135,8 +135,6 @@ s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
   case PTS_ARRAY_ELEMENT: {
     return s_expr("PTS_ARRAY_ELEMENT");
   }
-  default:
-    not_reached();
   }
 }
 
@@ -232,8 +230,6 @@ s_expr PointsToOperation::to_s_expr() const {
   case PTS_INVOKE_STATIC: {
     return s_expr({op_kind_to_s_expr(kind), dex_method_to_s_expr(dex_method)});
   }
-  default:
-    not_reached();
   }
 }
 
@@ -326,8 +322,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     }
     return {PointsToOperation(op_kind, *dex_method_opt)};
   }
-  default:
-    not_reached();
   }
 }
 

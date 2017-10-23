@@ -60,6 +60,7 @@ std::string show(RegisterType type) {
   case RegisterType::SIZE:
     not_reached();
   }
+  not_reached();
 }
 
 static DexOpcode move_op_for_type(RegisterType type) {
@@ -78,6 +79,7 @@ static DexOpcode move_op_for_type(RegisterType type) {
   case RegisterType::SIZE:
     not_reached();
   }
+  not_reached();
 }
 
 IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src) {

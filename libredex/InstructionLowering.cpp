@@ -220,7 +220,6 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     case opcode::Ref::Method:
       return new DexOpcodeMethod(insn->opcode(), insn->get_method());
   }
-  not_reached();
 }
 
 // IRCode::remove_opcode doesn't support removal of move-result-pseudo

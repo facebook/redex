@@ -9,10 +9,14 @@
 
 #pragma once
 
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
+#endif
 #include <boost/graph/adjacency_list.hpp>
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 #include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 

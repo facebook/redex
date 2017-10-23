@@ -1131,5 +1131,4 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
     return this_->get_method() == that_->get_method();
   }
   }
-  not_reached();
 }

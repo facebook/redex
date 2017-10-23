@@ -254,16 +254,17 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  // -h, --help handling must be the first.
+  if (vm.count("help")) {
+    od.print(std::cout);
+    exit(EXIT_SUCCESS);
+  }
+
   if (vm.count("dex-files")) {
     args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
   } else {
     std::cerr << "error: no input dex files" << std::endl << std::endl;
     print_usage();
-    exit(EXIT_SUCCESS);
-  }
-
-  if (vm.count("help")) {
-    od.print(std::cout);
     exit(EXIT_SUCCESS);
   }
 

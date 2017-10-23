@@ -10,6 +10,17 @@
 #include "LocalConstProp.h"
 
 #include <boost/optional.hpp>
+
+ // Note: MSVC STL didn't implement std::isnan(Integral arg). We need to provide
+ // an override of fpclassify for integral types.
+#ifdef _MSC_VER
+#include <type_traits>
+template <typename T>
+std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
+  return x == 0 ? FP_ZERO : FP_NORMAL;
+}
+#endif
+
 #include <cmath>
 #include <functional>
 #include <limits>
