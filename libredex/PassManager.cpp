@@ -207,10 +207,18 @@ void PassManager::run_passes(DexStoresVector& stores,
 }
 
 void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
+  std::string name_str(name);
+
+  // Names may or may not have a "#<id>" suffix to indicate their order in the
+  // pass list, which needs to be removed for matching.
+  std::string pass_name = name_str.substr(0, name_str.find("#"));
   for (auto pass : m_registered_passes) {
-    if (name == pass->name()) {
+    if (pass_name == pass->name()) {
       m_activated_passes.push_back(pass);
-      pass->configure_pass(PassConfig(cfg[pass->name()]));
+
+      // Retrieving the configuration specific to this particular run
+      // of the pass.
+      pass->configure_pass(PassConfig(cfg[name_str]));
       return;
     }
   }
