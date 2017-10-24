@@ -84,6 +84,16 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
   ConstantType m_type;
 };
 
+// Add operator overloading for == so that 3rd-party code that depends on it
+// (like gtest's EXPECT_EQ) will work
+inline bool operator==(const ConstantValue& v1, const ConstantValue& v2) {
+  return v1.equals(v2);
+}
+
+inline bool operator!=(const ConstantValue& v1, const ConstantValue& v2) {
+  return !(v1 == v2);
+}
+
 std::ostream& operator<<(std::ostream& o, const ConstantValue& cv);
 
 class ConstantDomain final
