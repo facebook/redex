@@ -90,6 +90,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IRAssembler.cpp \
