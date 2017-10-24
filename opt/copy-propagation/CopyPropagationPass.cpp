@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "RedundantMoveEliminationPass.h"
+#include "CopyPropagationPass.h"
 
 #include <boost/optional.hpp>
 
@@ -59,34 +59,35 @@
 
 namespace {
 
-struct RedundantStats {
+struct Stats {
   size_t moves_eliminated{0};
   size_t replaced_sources{0};
 
-  RedundantStats() = default;
-  RedundantStats(size_t elim, size_t replaced) : moves_eliminated(elim), replaced_sources(replaced) {}
+  Stats() = default;
+  Stats(size_t elim, size_t replaced)
+      : moves_eliminated(elim), replaced_sources(replaced) {}
 
-  RedundantStats operator+(const RedundantStats& other);
+  Stats operator+(const Stats& other);
 };
 
-RedundantStats RedundantStats::operator+(const RedundantStats& other) {
-  return RedundantStats{moves_eliminated + other.moves_eliminated,
+Stats Stats::operator+(const Stats& other) {
+  return Stats{moves_eliminated + other.moves_eliminated,
                         replaced_sources + other.replaced_sources};
 }
 
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<Block*, AliasDomain> {
  public:
-  const RedundantMoveEliminationPass::Config& m_config;
-  RedundantStats& m_stats;
+  const CopyPropagationPass::Config& m_config;
+  Stats& m_stats;
 
   using BlockToListFunc = std::function<std::vector<Block*>(Block* const&)>;
 
   AliasFixpointIterator(Block* start_block,
                         BlockToListFunc succ,
                         BlockToListFunc pred,
-                        const RedundantMoveEliminationPass::Config& config,
-                        RedundantStats& stats)
+                        const CopyPropagationPass::Config& config,
+                        Stats& stats)
       : MonotonicFixpointIterator<Block*, AliasDomain>(start_block, succ, pred),
         m_config(config),
         m_stats(stats) {}
@@ -239,33 +240,32 @@ class AliasFixpointIterator final
   }
 };
 
-class RedundantMoveEliminationImpl final {
+class CopyPropagationImpl final {
  public:
-  explicit RedundantMoveEliminationImpl(
-      const RedundantMoveEliminationPass::Config& config)
+  explicit CopyPropagationImpl(const CopyPropagationPass::Config& config)
       : m_config(config) {}
 
-  RedundantStats run(Scope scope) {
+  Stats run(Scope scope) {
     using Data = std::nullptr_t;
-    using Output = RedundantStats;
+    using Output = Stats;
     return walk_methods_parallel<Data, Output>(
         scope,
         [this](Data&, DexMethod* m) {
           if (m->get_code()) {
             return run_on_method(m);
           }
-          return RedundantStats();
+          return Stats();
         },
         [](Output a, Output b) { return a + b; },
         [](unsigned int /*thread_index*/) { return nullptr; });
   }
 
  private:
-  const RedundantMoveEliminationPass::Config& m_config;
+  const CopyPropagationPass::Config& m_config;
 
-  RedundantStats run_on_method(DexMethod* method) {
+  Stats run_on_method(DexMethod* method) {
     std::vector<IRInstruction*> deletes;
-    RedundantStats stats;
+    Stats stats;
 
     auto code = method->get_code();
     code->build_cfg();
@@ -302,9 +302,9 @@ class RedundantMoveEliminationImpl final {
 };
 }
 
-void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
-                                            ConfigFiles& /* unused */,
-                                            PassManager& mgr) {
+void CopyPropagationPass::run_pass(DexStoresVector& stores,
+                                   ConfigFiles& /* unused */,
+                                   PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   if (m_config.eliminate_const_literals && !mgr.verify_none_enabled()) {
@@ -316,7 +316,7 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
           "enabled.\n");
   }
 
-  RedundantMoveEliminationImpl impl(m_config);
+  CopyPropagationImpl impl(m_config);
   auto stats = impl.run(scope);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
@@ -331,4 +331,4 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
         mgr.get_metric("source_regs_replaced_with_representative"));
 }
 
-static RedundantMoveEliminationPass s_pass;
+static CopyPropagationPass s_pass;

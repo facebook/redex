@@ -11,9 +11,9 @@
 
 #include "Pass.h"
 
-class RedundantMoveEliminationPass : public Pass {
+class CopyPropagationPass : public Pass {
  public:
-  RedundantMoveEliminationPass() : Pass("RedundantMoveEliminationPass") {}
+  CopyPropagationPass() : Pass("CopyPropagationPass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

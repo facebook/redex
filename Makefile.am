@@ -161,6 +161,8 @@ redex_all_SOURCES = \
 	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/constant_propagation/GlobalConstProp.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \
+	opt/copy-propagation/AliasedRegisters.cpp \
+	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
@@ -179,8 +181,6 @@ redex_all_SOURCES = \
 	opt/print-members/PrintMembers.cpp \
 	opt/reachability_graph/ReachabilityGraphPrinter.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
-	opt/redundant_move_elimination/AliasedRegisters.cpp \
-	opt/redundant_move_elimination/RedundantMoveEliminationPass.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
 	opt/regalloc/LiveRange.cpp \
