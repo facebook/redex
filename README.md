@@ -200,3 +200,5 @@ likely to be addressed.
 # License
 
 ReDex is BSD-licensed.  We also provide an additional patent grant.
+
+Redex Readme
