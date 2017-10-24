@@ -227,6 +227,8 @@ s_expr to_s_expr(const IRCode* code) {
         always_assert_log(false, "Not yet implemented");
         break;
       case MFLOW_TARGET:
+        insn_exprs.emplace_back(insn_to_label.at(it->target->src->insn));
+        break;
       case MFLOW_FALLTHROUGH:
         break;
       case MFLOW_DEX_OPCODE:
@@ -246,9 +248,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
 
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
-    s_expr tail;
-    always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
-    if (keyword[0] == ':') {
+    if (s_patn(&keyword).match_with(insns_expr[i])) {
+      always_assert_log(keyword[0] == ':', "Labels must start with ':'");
       auto label = keyword;
       always_assert_log(
           label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
@@ -258,6 +259,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
       label_defs.emplace(label, maybe_target);
       code->push_back(*maybe_target);
     } else {
+      s_expr tail;
+      always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
       auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
       always_assert(insn != nullptr);
       code->push_back(insn.release());

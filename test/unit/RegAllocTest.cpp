@@ -133,7 +133,7 @@ TEST_F(RegAllocTest, LiveRange) {
      (check-cast v0 "Ljava/lang/Object;")
      (move-result-pseudo-object v0)
 
-     (:if-true-label)
+     :if-true-label
      (check-cast v0 "Ljava/lang/Object;")
      (move-result-pseudo-object v0)
     )
@@ -157,7 +157,7 @@ TEST_F(RegAllocTest, LiveRange) {
      (check-cast v4 "Ljava/lang/Object;")
      (move-result-pseudo-object v2)
 
-     (:if-true-label)
+     :if-true-label
      (check-cast v2 "Ljava/lang/Object;")
      (move-result-pseudo-object v5)
     )

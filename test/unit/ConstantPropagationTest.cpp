@@ -28,7 +28,7 @@ TEST(ConstantPropagation, IfToGoto) {
      (if-eqz v0 :if-true-label)
      (const/4 v0 1)
 
-     (:if-true-label)
+     :if-true-label
      (const/4 v0 2)
     )
 )");
@@ -44,7 +44,7 @@ TEST(ConstantPropagation, IfToGoto) {
      (goto :if-true-label)
      (const/4 v0 1)
 
-     (:if-true-label)
+     :if-true-label
      (const/4 v0 2)
     )
 )");
@@ -61,11 +61,11 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
      (if-eqz v0 :if-true-label-1)
      (const/4 v1 1) ; the preceding opcode always jumps, so this is unreachable
 
-     (:if-true-label-1)
+     :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is always true
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -82,11 +82,11 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
      (goto :if-true-label-1)
      (const/4 v1 1)
 
-     (:if-true-label-1)
+     :if-true-label-1
      (goto :if-true-label-2)
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -103,11 +103,11 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
      (if-eqz v0 :if-true-label-1)
      (const/4 v1 0) ; the preceding opcode never jumps, so this is always
                     ; executed
-     (:if-true-label-1)
+     :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is always true
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -126,7 +126,7 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
      (goto :if-true-label-2)
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -143,11 +143,11 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
      (if-lt v0 v1 :if-true-label-1)
      (const/4 v1 0) ; the preceding opcode always jumps, so this is never
                     ; executed
-     (:if-true-label-1)
+     :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is never true
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -164,7 +164,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
      (goto :if-true-label-1)
      (const/4 v1 0)
 
-     (:if-true-label-1)
+     :if-true-label-1
      (const/4 v1 2)
 
      (return-void)
@@ -183,11 +183,11 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
      (if-lt v0 v1 :if-true-label-1)
      (const/4 v0 0) ; the preceding opcode never jumps, so this is always
                     ; executed
-     (:if-true-label-1)
+     :if-true-label-1
      (if-eqz v0 :if-true-label-2) ; therefore this is always true
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -206,7 +206,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
      (goto :if-true-label-2)
      (const/4 v1 2)
 
-     (:if-true-label-2)
+     :if-true-label-2
      (return-void)
     )
 )");
@@ -224,7 +224,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
 
      (const/4 v0 1)
 
-     (:exit)
+     :exit
      (return-void)
     )
 )");
@@ -242,7 +242,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
 
      (const/4 v0 1)
 
-     (:exit)
+     :exit
      (return-void)
     )
 )");
