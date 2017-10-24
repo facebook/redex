@@ -1191,10 +1191,11 @@ bool BuilderTransform::inline_methods(
 
     for (const auto& inlinable : to_inline) {
       if (!inlinable->get_code()) {
-        fprintf(stderr,
-                "[BUILDERS]: Trying to inline abstract / native etc method: %s in %s\n",
-                SHOW(inlinable),
-                SHOW(method));
+        TRACE(BUILDERS,
+              2,
+              "Trying to inline abstract / native etc method: %s in %s\n",
+              SHOW(inlinable),
+              SHOW(method));
         return false;
       }
     }
