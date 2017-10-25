@@ -338,9 +338,12 @@ void IRInstruction::normalize_registers() {
       ++old_srcs_idx;
     }
     for (size_t args_idx = 0; args_idx < args.size(); ++args_idx) {
-      always_assert_log(old_srcs_idx < srcs_size(),
-                        "Invalid arg indices in %s\n",
-                        SHOW(this));
+      always_assert_log(
+          old_srcs_idx < srcs_size(),
+          "Invalid arg indices in %s args_idx %d old_srcs_idx %d\n",
+          SHOW(this),
+          args_idx,
+          old_srcs_idx);
       set_src(srcs_idx++, src(old_srcs_idx));
       old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
