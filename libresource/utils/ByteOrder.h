@@ -21,9 +21,9 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#ifdef HAVE_WINSOCK
+#if defined(HAVE_WINSOCK)
 #include <winsock2.h>
-#else
+#elif !defined(_MSC_VER)
 #include <netinet/in.h>
 #endif
 

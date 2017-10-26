@@ -112,6 +112,8 @@ struct __assertChar16Size {
  *
  * The PNG chunk type is "npTc".
  */
+
+#pragma pack(push, 1)
 struct alignas(uintptr_t) Res_png_9patch
 {
     Res_png_9patch() : wasDeserialized(false), xDivsOffset(0),
@@ -175,7 +177,9 @@ struct alignas(uintptr_t) Res_png_9patch
         return reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(this) + colorsOffset);
     }
 
-} __attribute__((packed));
+};
+#pragma pack(pop)
+
 
 /** ********************************************************************
  *  Base Types
@@ -464,7 +468,7 @@ struct ResStringPool_header
  */
 struct ResStringPool_span
 {
-    enum {
+    enum : uint32_t {
         END = 0xFFFFFFFF
     };
 
@@ -1301,7 +1305,7 @@ struct ResTable_type
 {
     struct ResChunk_header header;
 
-    enum {
+    enum : uint32_t {
         NO_ENTRY = 0xFFFFFFFF
     };
 

@@ -27,6 +27,10 @@
 #include <limits>
 #include <type_traits>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "androidfw/ByteBucketArray.h"
 #include "androidfw/ResourceTypes.h"
 #include "androidfw/TypeWrappers.h"

@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "cutils/log.h"
 
 #include "utils/SortedVector.h"

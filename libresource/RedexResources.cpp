@@ -20,6 +20,10 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "androidfw/ResourceTypes.h"
 #include "utils/String16.h"
 #include "utils/String8.h"

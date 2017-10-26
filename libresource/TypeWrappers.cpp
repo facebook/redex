@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "androidfw/TypeWrappers.h"
 
 namespace android {

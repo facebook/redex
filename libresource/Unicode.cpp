@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "utils/Unicode.h"
 
 #include <stddef.h>
 
-#ifdef HAVE_WINSOCK
+#if defined(HAVE_WINSOCK) || defined(_MSC_VER)
 # undef  nhtol
 # undef  htonl
 # undef  nhtos

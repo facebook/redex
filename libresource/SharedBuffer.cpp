@@ -17,6 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "utils/SharedBuffer.h"
 #include "utils/Atomic.h"
 

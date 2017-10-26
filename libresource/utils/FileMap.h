@@ -116,6 +116,9 @@ private:
 #if defined(__MINGW32__)
     HANDLE      mFileHandle;    // Win32 file handle
     HANDLE      mFileMapping;   // Win32 file mapping handle
+#elif defined(_MSC_VER)
+    void*       mFileHandle;
+    void*       mFileMapping;
 #endif
 
     static long mPageSize;

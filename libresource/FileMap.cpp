@@ -33,8 +33,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if !defined(__MINGW32__)
+#if !defined(__MINGW32__) && !defined(_MSC_VER)
 #include <sys/mman.h>
+#endif
+
+#if defined(_MSC_VER)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#define strdup _strdup
 #endif
 
 #include <string.h>
@@ -59,9 +66,9 @@ FileMap::~FileMap(void)
     if (mFileName != NULL) {
         free(mFileName);
     }
-#if defined(__MINGW32__)
+#if defined(__MINGW32__) || defined(_MSC_VER)
     if (mBasePtr && UnmapViewOfFile(mBasePtr) == 0) {
-        ALOGD("UnmapViewOfFile(%p) failed, error = %" PRId32 "\n", mBasePtr,
+        ALOGD("UnmapViewOfFile(%p) failed, error = %" PRIu32 "\n", mBasePtr,
               GetLastError() );
     }
     if (mFileMapping != INVALID_HANDLE_VALUE) {
@@ -84,7 +91,7 @@ FileMap::~FileMap(void)
 bool FileMap::create(const char* origFileName, int fd, off64_t offset, size_t length,
         bool readOnly)
 {
-#if defined(__MINGW32__)
+#if defined(__MINGW32__) || defined(_MSC_VER)
     int     adjust;
     off64_t adjOffset;
     size_t  adjLength;
