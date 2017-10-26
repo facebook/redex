@@ -12,14 +12,29 @@
 #include "IRAssembler.h"
 
 TEST(IRAssembler, disassemble) {
+  g_redex = new RedexContext();
+
   auto code = assembler::ircode_from_string(R"(
     (
      (const/4 v0 0)
      :foo-label
      (if-eqz v0 :foo-label)
+     (invoke-virtual (v0 v1) "LFoo;.bar:(II)V")
+     (sget-object "LFoo;.qux:LBar;")
+     (move-result-pseudo-object v0)
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_string(code.get()),
-            "((const/4 v0 0) :L0 (if-eqz v0 :L0) (return-void))");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s,
+            "((const/4 v0 0) "
+            ":L0 "
+            "(if-eqz v0 :L0) "
+            "(invoke-virtual (v0 v1) \"LFoo;.bar:(II)V\") "
+            "(sget-object \"LFoo;.qux:LBar;\") "
+            "(move-result-pseudo-object v0) "
+            "(return-void))");
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  delete g_redex;
 }

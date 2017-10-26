@@ -97,7 +97,6 @@ class DexInstruction : public Gatherable {
    */
   unsigned dests_size() const;
   unsigned srcs_size() const;
-  bool has_arg_word_count() const;
 
   /*
    * Accessors for logical parts of the instruction.

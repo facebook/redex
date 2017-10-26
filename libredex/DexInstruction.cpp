@@ -609,13 +609,6 @@ DexInstruction* DexInstruction::set_range_size(uint16_t size) {
   return this;
 }
 
-bool DexInstruction::has_arg_word_count() const {
-  auto format = opcode::format(opcode());
-  if(format == FMT_f35c || format == FMT_f57c)
-    return true;
-  return false;
-}
-
 uint16_t DexInstruction::arg_word_count() const {
   auto format = opcode::format(opcode());
   assert(format == FMT_f35c || format == FMT_f57c);
@@ -650,7 +643,8 @@ void DexInstruction::verify_encoding() const {
     test->set_range_base(range_base());
     test->set_range_size(range_size());
   }
-  if (has_arg_word_count()) test->set_arg_word_count(arg_word_count());
+  if (opcode::has_arg_word_count(opcode()))
+    test->set_arg_word_count(arg_word_count());
   if (opcode::has_literal(op)) test->set_literal(get_literal());
   if (opcode::has_offset(op)) test->set_offset(offset());
 

@@ -303,7 +303,7 @@ static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   if (insn->has_literal()) {
     dex_insn->set_literal(insn->get_literal());
   }
-  if (dex_insn->has_arg_word_count()) {
+  if (opcode::has_arg_word_count(op)) {
     dex_insn->set_arg_word_count(insn->srcs_size());
   }
   if (opcode::has_range(op)) {

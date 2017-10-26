@@ -79,7 +79,7 @@ TEST(IRInstruction, RoundTrip) {
       insn->set_range_base(0xf);
       insn->set_range_size(0xf);
     }
-    if (insn->has_arg_word_count()) {
+    if (opcode::has_arg_word_count(op)) {
       insn->set_arg_word_count(5);
     }
     if (insn->has_string()) {

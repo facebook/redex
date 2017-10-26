@@ -85,6 +85,7 @@ libredex_la_SOURCES = \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
+	libredex/DexMemberRefs.cpp \
 	libredex/DexOpcode.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \

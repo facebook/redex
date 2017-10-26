@@ -196,7 +196,7 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   for (size_t i = 0; i < srcs_size(); ++i) {
     insn->set_src(i, src(i));
   }
-  if (insn->has_arg_word_count()) {
+  if (opcode::has_arg_word_count(opcode())) {
     insn->set_arg_word_count(srcs_size());
   }
   if (opcode::has_range(insn->opcode())) {

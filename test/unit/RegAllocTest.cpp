@@ -87,7 +87,6 @@ TEST_F(RegAllocTest, RegTypeInvoke) {
 }
 
 TEST_F(RegAllocTest, LiveRangeSingleBlock) {
-  using namespace dex_asm;
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -117,7 +116,6 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
 }
 
 TEST_F(RegAllocTest, LiveRange) {
-  using namespace dex_asm;
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -241,8 +239,6 @@ TEST_F(RegAllocTest, InterferenceWeights) {
 }
 
 TEST_F(RegAllocTest, BuildInterferenceGraph) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -351,8 +347,6 @@ TEST_F(RegAllocTest, CombineAdjacentNodes) {
 }
 
 TEST_F(RegAllocTest, Coalesce) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (const/4 v0 0)
@@ -386,8 +380,6 @@ TEST_F(RegAllocTest, Coalesce) {
 }
 
 TEST_F(RegAllocTest, MoveWideCoalesce) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (const-wide v0 0)
@@ -424,8 +416,6 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
 }
 
 TEST_F(RegAllocTest, NoCoalesceWide) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (const-wide v0 0)
@@ -516,33 +506,36 @@ TEST_F(RegAllocTest, Simplify) {
 }
 
 TEST_F(RegAllocTest, SelectRange) {
-  using namespace dex_asm;
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param v2)
+     (load-param v3)
+     (load-param v4)
+     (load-param v5)
 
-  DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
-      "Lfoo;", "bar", "I", {"I", "I", "I", "I", "I", "I"}));
-  DexMethodRef* many_args_method = DexMethod::make_method(
-      "Lfoo;", "baz", "V", {"I", "I", "I", "I", "I", "I"});
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  // the invoke instruction references the param registers in order; make sure
-  // we map them 1:1 without any spills, and map v6 to the start of the frame
-  // (since the params must be at the end)
-  code.push_back(dasm(OPCODE_CONST_4, {6_v}));
-  code.push_back(dasm(
-      OPCODE_INVOKE_STATIC, many_args_method, {0_v, 1_v, 2_v, 3_v, 4_v, 5_v}));
-  code.push_back(dasm(OPCODE_ADD_INT, {3_v, 0_v, 6_v}));
-  code.push_back(dasm(OPCODE_RETURN, {3_v}));
-  code.set_registers_size(7);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+     ; the invoke instruction references the param registers in order; make
+     ; sure we map them 1:1 without any spills, and map v6 to the start of the
+     ; frame (since the params must be at the end)
+     (const/4 v6 0)
+     (invoke-static (v0 v1 v2 v3 v4 v5) "Lfoo;.baz:(IIIIII)V")
+
+     (add-int v3 v0 v6)
+     (return v3)
+    )
+)");
+  code->set_registers_size(7);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
-  RangeSet range_set = init_range_set(&code);
+  RangeSet range_set = init_range_set(code.get());
   EXPECT_EQ(range_set.size(), 1);
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, code.get(), code->get_registers_size(), range_set);
   for (size_t i = 0; i < 6; ++i) {
     auto& node = ig.get_node(i);
     EXPECT_TRUE(node.is_range() && node.is_param());
@@ -555,11 +548,12 @@ TEST_F(RegAllocTest, SelectRange) {
   std::stack<reg_t> select_stack;
   std::stack<reg_t> spilled_select_stack;
   allocator.simplify(&ig, &select_stack, &spilled_select_stack);
-  allocator.select(&code, ig, &select_stack, &reg_transform, &spill_plan);
+  allocator.select(code.get(), ig, &select_stack, &reg_transform, &spill_plan);
   // v3 is referenced by both range and non-range instructions. We should not
   // allocate it in select() but leave it to select_ranges()
   EXPECT_EQ(reg_transform.map, (transform::RegMap{{6, 0}}));
-  allocator.select_ranges(&code, ig, range_set, &reg_transform, &spill_plan);
+  allocator.select_ranges(
+      code.get(), ig, range_set, &reg_transform, &spill_plan);
   EXPECT_EQ(reg_transform.map,
             (transform::RegMap{
                 {0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 0}}));
@@ -568,40 +562,41 @@ TEST_F(RegAllocTest, SelectRange) {
 }
 
 TEST_F(RegAllocTest, SelectAliasedRange) {
-  using namespace dex_asm;
-
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {}));
-  DexMethodRef* range_callee =
-      DexMethod::make_method("Lfoo;", "baz", "V", {"I", "I"});
-  method->make_concrete(ACC_STATIC, false);
-  IRCode code(method, 0);
-  code.push_back(dasm(OPCODE_CONST_4, {0_v}));
-  auto* invoke = dasm(OPCODE_INVOKE_STATIC, range_callee, {0_v, 0_v});
-  code.push_back(invoke);
-  code.push_back(dasm(OPCODE_RETURN_VOID));
-  code.set_registers_size(2);
-  code.build_cfg();
-  auto& cfg = code.cfg();
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const/4 v0 0)
+     (invoke-static (v0 v0) "Lfoo;.baz:(II)V")
+     (return-void)
+    )
+)");
+  code->set_registers_size(2);
+  code->build_cfg();
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
-  fixpoint_iter.run(LivenessDomain(code.get_registers_size()));
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
+  auto invoke_it =
+      std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_OPCODE &&
+               mie.insn->opcode() == OPCODE_INVOKE_STATIC;
+      });
+  ASSERT_NE(invoke_it, code->end());
+  auto invoke = invoke_it->insn;
   RangeSet range_set;
   range_set.emplace(invoke);
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, &code, code.get_registers_size(), range_set);
+      fixpoint_iter, code.get(), code->get_registers_size(), range_set);
   graph_coloring::SpillPlan spill_plan;
   graph_coloring::RegisterTransform reg_transform;
   graph_coloring::Allocator allocator;
-  allocator.select_ranges(&code, ig, range_set, &reg_transform, &spill_plan);
+  allocator.select_ranges(
+      code.get(), ig, range_set, &reg_transform, &spill_plan);
 
   EXPECT_EQ(spill_plan.range_spills.at(invoke), std::unordered_set<reg_t>{0});
 }
 
 TEST_F(RegAllocTest, Spill) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (const/4 v0 1)
@@ -652,8 +647,6 @@ TEST_F(RegAllocTest, Spill) {
 }
 
 TEST_F(RegAllocTest, ContainmentGraph) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -746,8 +739,6 @@ TEST_F(RegAllocTest, FindSplit) {
 }
 
 TEST_F(RegAllocTest, Split) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (const/4 v0 1)
@@ -800,8 +791,6 @@ TEST_F(RegAllocTest, Split) {
 }
 
 TEST_F(RegAllocTest, ParamFirstUse) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)

@@ -52,6 +52,27 @@ struct DexFieldSpec {
   };
 };
 
+namespace dex_member_refs {
+
+struct FieldDescriptorTokens {
+  std::string cls;
+  std::string name;
+  std::string type;
+};
+
+struct MethodDescriptorTokens {
+  std::string cls;
+  std::string name;
+  std::vector<std::string> args;
+  std::string rtype;
+};
+
+FieldDescriptorTokens parse_field(const std::string&);
+
+MethodDescriptorTokens parse_method(const std::string&);
+
+} // namespace dex_member_refs
+
 namespace std {
 
 template <>

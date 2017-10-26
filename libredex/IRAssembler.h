@@ -12,6 +12,31 @@
 #include "IRCode.h"
 #include "S_Expression.h"
 
+/*
+ * This module provides an easy way to create / serialize sequences of
+ * IRInstructions using S-expressions.
+ *
+ * Example:
+ *
+ *   (const/4 v0 0)
+ *   :L0
+ *   (sget-object "LFoo.bar:I")
+ *   (move-result-pseudo-object v1)
+ *   ; note that since invoke-* instructions can take a variable number of
+ *   ; src operands, we wrap them in a list.
+ *   (invoke-static (v0 v1) "LFoo.qux:(II)V")
+ *   (goto :L0)
+ *
+ * Note that any field or methods that the opcodes reference will be
+ * automatically created by the assembler. I.e. you do *not* need to call
+ * make_{field,method}() beforehand to ensure that they exist.
+ *
+ * Not-yet-implemented features:
+ *   - try-catch
+ *   - debug info
+ *   - fill-array-data opcodes
+ */
+
 namespace assembler {
 
 s_expr to_s_expr(const IRCode* code);

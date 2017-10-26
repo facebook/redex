@@ -339,6 +339,12 @@ bool may_throw(DexOpcode);
 // if an opcode has a /range counterpart
 bool has_range_form(DexOpcode);
 
+// If an opcode has a variable number of register operands
+inline bool has_arg_word_count(DexOpcode op) {
+  auto fmt = format(op);
+  return fmt == FMT_f35c || fmt == FMT_f57c;
+}
+
 bool is_commutative(DexOpcode op);
 
 bool is_internal(DexOpcode);

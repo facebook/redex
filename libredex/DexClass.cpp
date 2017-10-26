@@ -52,6 +52,22 @@ void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   m_concrete = true;
 }
 
+DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
+  auto fdt = dex_member_refs::parse_field(full_descriptor);
+  auto cls = DexType::get_type(fdt.cls.c_str());
+  auto name = DexString::get_string(fdt.name.c_str());
+  auto type = DexType::get_type(fdt.type.c_str());
+  return DexField::get_field(cls, name, type);
+}
+
+DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
+  auto fdt = dex_member_refs::parse_field(full_descriptor);
+  auto cls = DexType::make_type(fdt.cls.c_str());
+  auto name = DexString::make_string(fdt.name.c_str());
+  auto type = DexType::make_type(fdt.type.c_str());
+  return DexField::make_field(cls, name, type);
+}
+
 DexDebugEntry::DexDebugEntry(DexDebugEntry&& that)
     : type(that.type), addr(that.addr) {
   switch (type) {
@@ -482,54 +498,31 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   return m;
 }
 
-namespace {
-std::vector<std::string> split_args(std::string args) {
-  std::vector<std::string> ret;
-  auto begin = size_t{0};
-  while (begin < args.length()) {
-    auto ch = args[begin];
-    auto end = begin + 1;
-    if (ch == '[') {
-      while (args[end] == '[') {
-        ++end;
-      }
-      ch = args[end];
-      ++end;
-    }
-    if (ch == 'L') {
-      auto semipos = args.find(';', end);
-      assert(semipos != std::string::npos);
-      end = semipos + 1;
-    }
-    ret.emplace_back(args.substr(begin, end - begin));
-    begin = end;
-  }
-  return ret;
-}
-}
-
-DexMethodRef* DexMethod::get_method(std::string canon) {
-  auto cls_end = canon.find('.');
-  auto name_start = cls_end + 1;
-  auto name_end = canon.find(':', name_start);
-  auto args_start = name_end + 2;
-  auto args_end = canon.find(')', args_start);
-  auto rtype_start = args_end + 1;
-  auto cls_str = canon.substr(0, cls_end);
-  auto name_str = canon.substr(name_start, name_end - name_start);
-  auto args_str = canon.substr(args_start, args_end - args_start);
-  auto rtype_str = canon.substr(rtype_start);
+DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
+  auto mdt = dex_member_refs::parse_method(full_descriptor);
+  auto cls = DexType::get_type(mdt.cls.c_str());
+  auto name = DexString::get_string(mdt.name.c_str());
   std::deque<DexType*> args;
-  for (auto const& arg_str : split_args(args_str)) {
+  for (auto& arg_str : mdt.args) {
     args.push_back(DexType::get_type(arg_str.c_str()));
   }
   auto dtl = DexTypeList::get_type_list(std::move(args));
-  return get_method(
-    DexType::get_type(cls_str.c_str()),
-    DexString::get_string(name_str.c_str()),
-    DexProto::get_proto(DexType::get_type(rtype_str.c_str()), dtl));
+  auto rtype = DexType::get_type(mdt.rtype.c_str());
+  return DexMethod::get_method(cls, name, DexProto::get_proto(rtype, dtl));
 }
 
+DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
+  auto mdt = dex_member_refs::parse_method(full_descriptor);
+  auto cls = DexType::make_type(mdt.cls.c_str());
+  auto name = DexString::make_string(mdt.name.c_str());
+  std::deque<DexType*> args;
+  for (auto& arg_str : mdt.args) {
+    args.push_back(DexType::make_type(arg_str.c_str()));
+  }
+  auto dtl = DexTypeList::make_type_list(std::move(args));
+  auto rtype = DexType::make_type(mdt.rtype.c_str());
+  return DexMethod::make_method(cls, name, DexProto::make_proto(rtype, dtl));
+}
 
 void DexClass::remove_method(const DexMethod* m) {
   auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
