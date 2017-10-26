@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <ostream>
 #include <sstream>
 #include <tuple>
@@ -70,8 +71,10 @@ bool operator<(const PointsToVariable& v, const PointsToVariable& w) {
 }
 
 std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
-  if (v.m_id < 0) {
+  if (v.m_id == PointsToVariable::null_var_id()) {
     o << "NULL";
+  } else if (v.m_id == PointsToVariable::this_var_id()) {
+    o << "THIS";
   } else {
     o << "V" << v.m_id;
   }
@@ -88,7 +91,6 @@ namespace pts_impl {
     OP_STRING(PTS_GET_CLASS),           \
     OP_STRING(PTS_CHECK_CAST),          \
     OP_STRING(PTS_GET_EXCEPTION),       \
-    OP_STRING(PTS_LOAD_THIS),           \
     OP_STRING(PTS_LOAD_PARAM),          \
     OP_STRING(PTS_RETURN),              \
     OP_STRING(PTS_DISJUNCTION),         \
@@ -200,7 +202,6 @@ s_expr PointsToOperation::to_s_expr() const {
   }
   case PTS_GET_EXCEPTION:
   case PTS_GET_CLASS:
-  case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
     return s_expr({op_kind_to_s_expr(kind)});
@@ -266,7 +267,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
   }
   case PTS_GET_EXCEPTION:
   case PTS_GET_CLASS:
-  case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
     return {PointsToOperation(op_kind)};
@@ -549,10 +549,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
     o << a.dest() << " = NEW " << op.dex_type->get_name()->str();
     break;
   }
-  case PTS_LOAD_THIS: {
-    o << a.dest() << " = THIS";
-    break;
-  }
   case PTS_LOAD_PARAM: {
     o << a.dest() << " = PARAM " << op.parameter;
     break;
@@ -745,12 +741,16 @@ class AnchorPropagation final
  public:
   using NodeId = Block*;
 
-  AnchorPropagation(const ControlFlowGraph& cfg, size_t register_count)
+  AnchorPropagation(const ControlFlowGraph& cfg,
+                    bool is_static_method,
+                    IRCode* code)
       : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
                                   std::bind(&Block::succs, _1),
                                   std::bind(&Block::preds, _1),
                                   cfg.blocks().size()),
-        m_register_count(register_count) {}
+        m_is_static_method(is_static_method),
+        m_code(code),
+        m_this_anchor(nullptr) {}
 
   void analyze_node(const NodeId& node,
                     AnchorEnvironment* current_state) const override {
@@ -771,7 +771,11 @@ class AnchorPropagation final
   void analyze_instruction(IRInstruction* insn,
                            AnchorEnvironment* current_state) const {
     switch (insn->opcode()) {
-    case IOPCODE_LOAD_PARAM_OBJECT:
+    case IOPCODE_LOAD_PARAM_OBJECT: {
+      // There's nothing to do, since this instruction has been taken care of
+      // during the initialization of the analysis.
+      break;
+    }
     case OPCODE_MOVE_EXCEPTION: {
       current_state->set(insn->dest(), AnchorDomain(insn));
       break;
@@ -838,20 +842,54 @@ class AnchorPropagation final
 
   void run() { MonotonicFixpointIterator::run(initial_environment()); }
 
+  bool is_this_anchor(IRInstruction* insn) const {
+    return insn == m_this_anchor;
+  }
+
  private:
   // We initialize all registers to the empty anchor set, i.e. the semantic
-  // equivalent of `null` in our analysis.
+  // equivalent of `null` in our analysis. However, the parameters of the method
+  // are initialized to the anchors of the corresponding LOAD_PARAM
+  // instructions.
   AnchorEnvironment initial_environment() {
     AnchorEnvironment env;
+    // We first initialize all registers to `null`.
     env.set(RESULT_REGISTER, AnchorDomain());
-    for (size_t reg = 0; reg < m_register_count; ++reg) {
+    for (size_t reg = 0; reg < m_code->get_registers_size(); ++reg) {
       env.set(reg, AnchorDomain());
+    }
+    // We then initialize the parameters of the method.
+    bool first_param = true;
+    for (const MethodItemEntry& mie :
+         InstructionIterable(m_code->get_param_instructions())) {
+      IRInstruction* insn = mie.insn;
+      if (first_param && !m_is_static_method) {
+        always_assert_log(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT,
+                          "Unexpected instruction '%s' in virtual method\n",
+                          SHOW(insn));
+        m_this_anchor = insn;
+      }
+      switch (insn->opcode()) {
+      case IOPCODE_LOAD_PARAM_OBJECT: {
+        env.set(insn->dest(), AnchorDomain(insn));
+        break;
+      }
+      case IOPCODE_LOAD_PARAM:
+      case IOPCODE_LOAD_PARAM_WIDE: {
+        break;
+      }
+      default: {
+        always_assert_log(false, "Unexpected instruction '%s'\n", SHOW(insn));
+      }
+      }
+      first_param = false;
     }
     return env;
   }
 
-  // The number of registers in the local frame of the method.
-  const size_t m_register_count;
+  bool m_is_static_method;
+  IRCode* m_code;
+  IRInstruction* m_this_anchor;
 };
 
 // Generates the points-to actions for a single method.
@@ -874,8 +912,9 @@ class PointsToActionGenerator final {
     cfg.calculate_exit_block();
 
     // We first propagate the anchors across the code.
-    AnchorPropagation analysis(cfg, code->get_registers_size());
-    analysis.run();
+    m_analysis =
+        std::make_unique<AnchorPropagation>(cfg, is_static(m_dex_method), code);
+    m_analysis->run();
 
     // Then we assign a unique variable to each anchor.
     name_anchors(cfg);
@@ -891,11 +930,7 @@ class PointsToActionGenerator final {
         case IOPCODE_LOAD_PARAM_OBJECT: {
           if (first_param && !is_static(m_dex_method)) {
             // If the method is not static, the first parameter corresponds to
-            // `this`.
-            first_param = false;
-            m_semantics->add(
-                PointsToAction::load_operation(PointsToOperation(PTS_LOAD_THIS),
-                                               get_variable_from_anchor(insn)));
+            // `this`, which is represented using a special points-to variable.
           } else {
             m_semantics->add(PointsToAction::load_operation(
                 PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
@@ -915,17 +950,18 @@ class PointsToActionGenerator final {
           goto done;
         }
         }
+        first_param = false;
       }
     }
   done:
     // We go over each IR instruction and generate the corresponding points-to
     // actions.
     for (Block* block : cfg.blocks()) {
-      AnchorEnvironment state = analysis.get_entry_state_at(block);
+      AnchorEnvironment state = m_analysis->get_entry_state_at(block);
       for (const MethodItemEntry& mie : InstructionIterable(*block)) {
         IRInstruction* insn = mie.insn;
         generate_action(insn, state);
-        analysis.analyze_instruction(insn, &state);
+        m_analysis->analyze_instruction(insn, &state);
       }
     }
     m_semantics->shrink();
@@ -1231,6 +1267,9 @@ class PointsToActionGenerator final {
   }
 
   PointsToVariable get_variable_from_anchor(IRInstruction* insn) {
+    if (m_analysis->is_this_anchor(insn)) {
+      return PointsToVariable::this_variable();
+    }
     auto it = m_anchors.find(insn);
     always_assert(it != m_anchors.end());
     return it->second;
@@ -1280,6 +1319,7 @@ class PointsToActionGenerator final {
   PointsToMethodSemantics* m_semantics;
   const TypeSystem& m_type_system;
   const PointsToSemanticsUtils& m_utils;
+  std::unique_ptr<AnchorPropagation> m_analysis;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
   std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;
