@@ -21,7 +21,7 @@
   m_##TYPE##_ids_size = dh->TYPE##_ids_size;                            \
   m_##TYPE##_cache = (CACHETYPE*)calloc(dh->TYPE##_ids_size, sizeof(CACHETYPE))
 
-DexIdx::DexIdx(dex_header* dh) {
+DexIdx::DexIdx(const dex_header* dh) {
   m_dexbase = (const uint8_t*)dh;
   INIT_DMAP_ID(string, DexString*);
   INIT_DMAP_ID(type, DexType*);

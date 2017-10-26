@@ -143,6 +143,7 @@ libredex_la_LIBADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
 	-lpthread
 
 #

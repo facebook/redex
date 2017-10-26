@@ -32,6 +32,10 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#ifdef _MSC_VER
+#include <mutex>
+#endif
+
 #include "android/configuration.h"
 
 namespace android {
@@ -530,7 +534,11 @@ private:
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
     size_t                      mSize;
+#ifndef _MSC_VER
     mutable Mutex               mDecodeLock;
+#else
+    mutable std::mutex          mDecodeLock;
+#endif
     const uint32_t*             mEntries;
     const uint32_t*             mEntryStyles;
     const void*                 mStrings;
@@ -1916,7 +1924,11 @@ private:
 
     void print_value(const Package* pkg, const Res_value& value) const;
 
+#ifndef _MSC_VER
     mutable Mutex               mLock;
+#else
+    mutable std::mutex          mLock;
+#endif
 
     status_t                    mError;
 

@@ -910,7 +910,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 }
 
 DexClass::DexClass(DexIdx* idx,
-                   dex_class_def* cdef,
+                   const dex_class_def* cdef,
                    const std::string& dex_location)
     : m_access_flags((DexAccessFlags)cdef->access_flags),
       m_super_class(idx->get_typeidx(cdef->super_idx)),

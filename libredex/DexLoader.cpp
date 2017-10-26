@@ -7,10 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <boost/iostreams/device/mapped_file.hpp>
 
 #include "DexLoader.h"
 #include "DexDefs.h"
@@ -20,54 +17,25 @@
 #include "Walkers.h"
 #include "WorkQueue.h"
 
-#define DL_FAIL (1)
-#define DL_SUCCESS (0)
-
 class DexLoader {
   DexIdx* m_idx;
-  dex_class_def* m_class_defs;
+  const dex_class_def* m_class_defs;
   DexClasses* m_classes;
-  uint8_t* m_dexmmap;
-  size_t m_dex_size;
+  boost::iostreams::mapped_file m_file;
   std::string m_dex_location;
 
  public:
   explicit DexLoader(const char* location) : m_dex_location(location) {}
   ~DexLoader() {
     if (m_idx) delete m_idx;
-    if (m_dexmmap) munmap(m_dexmmap, m_dex_size);
+    if (m_file.is_open()) m_file.close();
   }
   DexClasses load_dex(const char* location, dex_stats_t* stats);
   void load_dex_class(int num);
-  void gather_input_stats(dex_stats_t* stats, dex_header* dh);
+  void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
 };
 
-static int open_dex_file(const char* location,
-                         uint8_t*& dmapping,
-                         size_t& dsize) {
-  int fd = open(location, O_RDONLY);
-  struct stat buf;
-  if (fd < 0) {
-    fprintf(stderr, "Cannot open dump file %s\n", location);
-    return DL_FAIL;
-  }
-  if (fstat(fd, &buf)) {
-    fprintf(stderr, "Cannot fstat file %s\n", location);
-    return DL_FAIL;
-  }
-  dsize = buf.st_size;
-  dmapping =
-      (uint8_t*)mmap(nullptr, dsize, PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
-  close(fd);
-  if (dmapping == MAP_FAILED) {
-    dmapping = nullptr;
-    perror("Address space allocation failed for mmap\n");
-    return DL_FAIL;
-  }
-  return DL_SUCCESS;
-}
-
-static void validate_dex_header(dex_header* dh, size_t dexsize) {
+static void validate_dex_header(const dex_header* dh, size_t dexsize) {
   if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC, sizeof(dh->magic))) {
     always_assert_log(false, "Bad dex magic %s\n", dh->magic);
   }
@@ -87,7 +55,7 @@ static void class_work(class_load_work* clw) {
   clw->dl->load_dex_class(clw->num);
 }
 
-void DexLoader::gather_input_stats(dex_stats_t* stats, dex_header* dh) {
+void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_types += dh->type_ids_size;
   stats->num_classes += dh->class_defs_size;
   stats->num_method_refs += dh->method_ids_size;
@@ -174,27 +142,29 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, dex_header* dh) {
 }
 
 void DexLoader::load_dex_class(int num) {
-  dex_class_def* cdef = m_class_defs + num;
+  const dex_class_def* cdef = m_class_defs + num;
   DexClass* dc = new DexClass(m_idx, cdef, m_dex_location);
   m_classes->at(num) = dc;
 }
 
 DexClasses DexLoader::load_dex(const char* location, dex_stats_t* stats) {
-  dex_header* dh;
-  if (open_dex_file(location, m_dexmmap, m_dex_size) != DL_SUCCESS) {
-    exit(1); // FIXME(snay)
+  m_file.open(location, boost::iostreams::mapped_file::readonly);
+  if (!m_file.is_open()) {
+    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
+    exit(EXIT_FAILURE);
   }
-  dh = (dex_header*)m_dexmmap;
-  validate_dex_header(dh, m_dex_size);
+  auto dh = reinterpret_cast<const dex_header*>(m_file.const_data());
+  validate_dex_header(dh, m_file.size());
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
   m_idx = new DexIdx(dh);
   auto off = (uint64_t)dh->class_defs_off;
   auto limit = off + dh->class_defs_size * sizeof(dex_class_def);
-  always_assert_log(off < m_dex_size, "class_defs_off out of range");
-  always_assert_log(limit <= m_dex_size, "invalid class_defs_size");
-  m_class_defs = (dex_class_def*)(m_dexmmap + off);
+  always_assert_log(off < m_file.size(), "class_defs_off out of range");
+  always_assert_log(limit <= m_file.size(), "invalid class_defs_size");
+  m_class_defs =
+      reinterpret_cast<const dex_class_def*>(m_file.const_data() + off);
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
 

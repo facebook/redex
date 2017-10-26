@@ -29,6 +29,7 @@
 
 #ifdef _MSC_VER
 #include "CompatWindows.h"
+#include <mutex>
 #endif
 
 #include "androidfw/ByteBucketArray.h"
@@ -745,7 +746,11 @@ const char16_t* ResStringPool::stringAt(size_t idx, size_t* u16len) const
 
                 // encLen must be less than 0x7FFF due to encoding.
                 if ((uint32_t)(u8str+u8len-strings) < mStringPoolSize) {
+#ifndef _MSC_VER
                     AutoMutex lock(mDecodeLock);
+#else
+                    std::lock_guard<std::mutex> lock(mDecodeLock);
+#endif
 
                     if (mCache == NULL) {
 #ifndef __ANDROID__

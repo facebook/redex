@@ -934,7 +934,9 @@ class DexClass {
 
  public:
   ReferencedState rstate;
-  DexClass(DexIdx* idx, dex_class_def* cdef, const std::string& dex_location);
+  DexClass(DexIdx* idx,
+           const dex_class_def* cdef,
+           const std::string& dex_location);
 
  public:
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
