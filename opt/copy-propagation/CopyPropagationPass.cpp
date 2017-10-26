@@ -57,23 +57,9 @@
  *   wide registers (I tried it. it's only a tiny help. --jhendrick)
  */
 
+using namespace copy_propagation_impl;
+
 namespace {
-
-struct Stats {
-  size_t moves_eliminated{0};
-  size_t replaced_sources{0};
-
-  Stats() = default;
-  Stats(size_t elim, size_t replaced)
-      : moves_eliminated(elim), replaced_sources(replaced) {}
-
-  Stats operator+(const Stats& other);
-};
-
-Stats Stats::operator+(const Stats& other) {
-  return Stats{moves_eliminated + other.moves_eliminated,
-                        replaced_sources + other.replaced_sources};
-}
 
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<Block*, AliasDomain> {
@@ -161,7 +147,11 @@ class AliasFixpointIterator final
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
-        insn->opcode() != OPCODE_CHECK_CAST && !is_monitor(insn->opcode())) {
+        insn->opcode() != OPCODE_CHECK_CAST &&
+        // The ART verifier checks that monitor-{enter,exit} instructions use
+        // the same register:
+        // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
+        !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         RegisterValue val{insn->src(i)};
         boost::optional<Register> rep = aliases.get_representative(val);
@@ -240,67 +230,68 @@ class AliasFixpointIterator final
   }
 };
 
-class CopyPropagationImpl final {
- public:
-  explicit CopyPropagationImpl(const CopyPropagationPass::Config& config)
-      : m_config(config) {}
+} // namespace
 
-  Stats run(Scope scope) {
-    using Data = std::nullptr_t;
-    using Output = Stats;
-    return walk_methods_parallel<Data, Output>(
-        scope,
-        [this](Data&, DexMethod* m) {
-          if (m->get_code()) {
-            return run_on_method(m);
-          }
-          return Stats();
-        },
-        [](Output a, Output b) { return a + b; },
-        [](unsigned int /*thread_index*/) { return nullptr; });
-  }
+namespace copy_propagation_impl {
 
- private:
-  const CopyPropagationPass::Config& m_config;
-
-  Stats run_on_method(DexMethod* method) {
-    std::vector<IRInstruction*> deletes;
-    Stats stats;
-
-    auto code = method->get_code();
-    code->build_cfg();
-    const auto& blocks = code->cfg().blocks();
-
-    AliasFixpointIterator fixpoint(
-        code->cfg().entry_block(),
-        [](Block* const& block) { return block->succs(); },
-        [](Block* const& block) { return block->preds(); },
-        m_config,
-        stats);
-
-    if (m_config.full_method_analysis) {
-      fixpoint.run(AliasDomain());
-      for (auto block : blocks) {
-        AliasDomain domain = fixpoint.get_entry_state_at(block);
-        domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
-          fixpoint.run_on_block(block, aliases, &deletes);
-        });
-      }
-    } else {
-      for (auto block : blocks) {
-        AliasedRegisters aliases;
-        fixpoint.run_on_block(block, aliases, &deletes);
-      }
-    }
-
-    stats.moves_eliminated += deletes.size();
-    for (auto insn : deletes) {
-      code->remove_opcode(insn);
-    }
-    return stats;
-  }
-};
+Stats Stats::operator+(const Stats& other) {
+  return Stats{moves_eliminated + other.moves_eliminated,
+               replaced_sources + other.replaced_sources};
 }
+
+Stats CopyPropagation::run(Scope scope) {
+  using Data = std::nullptr_t;
+  using Output = Stats;
+  return walk_methods_parallel<Data, Output>(
+      scope,
+      [this](Data&, DexMethod* m) {
+        auto* code = m->get_code();
+        if (code != nullptr) {
+          return run(code);
+        }
+        return Stats();
+      },
+      [](Output a, Output b) { return a + b; },
+      [](unsigned int /*thread_index*/) { return nullptr; });
+}
+
+Stats CopyPropagation::run(IRCode* code) {
+  std::vector<IRInstruction*> deletes;
+  Stats stats;
+
+  code->build_cfg();
+  const auto& blocks = code->cfg().blocks();
+
+  AliasFixpointIterator fixpoint(
+      code->cfg().entry_block(),
+      [](Block* const& block) { return block->succs(); },
+      [](Block* const& block) { return block->preds(); },
+      m_config,
+      stats);
+
+  if (m_config.full_method_analysis) {
+    fixpoint.run(AliasDomain());
+    for (auto block : blocks) {
+      AliasDomain domain = fixpoint.get_entry_state_at(block);
+      domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
+        fixpoint.run_on_block(block, aliases, &deletes);
+      });
+    }
+  } else {
+    for (auto block : blocks) {
+      AliasedRegisters aliases;
+      fixpoint.run_on_block(block, aliases, &deletes);
+    }
+  }
+
+  stats.moves_eliminated += deletes.size();
+  for (auto insn : deletes) {
+    code->remove_opcode(insn);
+  }
+  return stats;
+}
+
+} // namespace copy_propagation_impl
 
 void CopyPropagationPass::run_pass(DexStoresVector& stores,
                                    ConfigFiles& /* unused */,
@@ -316,7 +307,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
           "enabled.\n");
   }
 
-  CopyPropagationImpl impl(m_config);
+  CopyPropagation impl(m_config);
   auto stats = impl.run(scope);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
