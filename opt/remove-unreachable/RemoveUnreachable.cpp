@@ -86,18 +86,23 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  // Load ignore string literals annotations.
-  std::unordered_set<const DexType*> ignore_string_literals_annos;
-  for (const auto& name : m_ignore_string_literals) {
-    const auto type = DexType::get_type(name.c_str());
-    if (type != nullptr) {
-      ignore_string_literals_annos.insert(type);
+  auto load_annos = [](const std::vector<std::string>& list) {
+    std::unordered_set<const DexType*> set;
+    for (const auto& name : list) {
+      const auto type = DexType::get_type(name.c_str());
+      if (type != nullptr) {
+        set.insert(type);
+      }
     }
-  }
+    return set;
+  };
 
   int num_ignore_check_strings = 0;
-  auto reachables = compute_reachable_objects(
-      stores, ignore_string_literals_annos, &num_ignore_check_strings, false);
+  auto reachables =
+      compute_reachable_objects(stores,
+                                load_annos(m_ignore_string_literals),
+                                load_annos(m_ignore_system_annos),
+                                &num_ignore_check_strings);
   deleted_stats before = trace_stats("before", stores);
   sweep(stores, reachables);
   deleted_stats after = trace_stats("after", stores);

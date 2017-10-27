@@ -88,7 +88,7 @@ IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src) {
 }
 
 static RegisterType const_dest_type(const IRInstruction* insn) {
-  if (insn->literal() == 0) {
+  if (insn->get_literal() == 0) {
     return RegisterType::ZERO;
   } else {
     return RegisterType::NORMAL;

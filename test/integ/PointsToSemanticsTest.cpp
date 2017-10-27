@@ -253,13 +253,13 @@ std::set<std::string> method_semantics = {
     " V0 = THIS\n"
     " V1 = NEW [Ljava/lang/Class;\n"
     " V2 = \"foo\"\n"
-    " V3 = V2.{V}Ljava/lang/Object;#getClass()\n"
+    " V3 = GET_CLASS(V2)\n"
     " ARRAY_ELEM(V1) = V3\n"
     " V4 = V0.{V}Lcom/facebook/redextest/PointsToSemantics;#nativeMethod()\n"
-    " V5 = V4.{V}Ljava/lang/Object;#getClass()\n"
+    " V5 = GET_CLASS(V4)\n"
     " ARRAY_ELEM(V1) = V5\n"
     " V6 = NEW Ljava/util/HashSet;\n V6.{D}Ljava/util/HashSet;#<init>()\n"
-    " V7 = V6.{V}Ljava/lang/Object;#getClass()\n"
+    " V7 = GET_CLASS(V6)\n"
     " ARRAY_ELEM(V1) = V7\n"
     " V8 = CLASS<Ljava/lang/Boolean;>\n"
     " ARRAY_ELEM(V1) = V8\n"
@@ -315,7 +315,8 @@ TEST(PointsToSemanticsTest, semanticActionGeneration) {
   std::set<std::string> pt_output;
   for (const auto& pt_entry : pt_semantics) {
     std::ostringstream out;
-    out << pt_entry.second;
+    EXPECT_NE(PTS_STUB, pt_entry.second.kind());
+    out << pt_entry.second;    
     pt_output.insert(out.str());
   }
   EXPECT_THAT(pt_output, ::testing::ContainerEq(method_semantics));

@@ -32,10 +32,9 @@ public class DisabledLineMapTest {
       inlinedThrower();
     } catch (Exception e) {
       List<StackTraceElement> trace = Arrays.asList(e.getStackTrace());
-      assertThat(TraceUtil.traceToString(trace, 3)).isEqualTo(Arrays.asList(
+      assertThat(TraceUtil.traceToString(trace, 2)).isEqualTo(Arrays.asList(
        "com.facebook.redexlinemap.DisabledLineMapTest.wrapsThrow(DisabledLineMapTest.java:22)",
-       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:26)",
-       "java.lang.reflect.Method.invokeNative(Native Method)"));
+       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:26)"));
     }
   }
 }

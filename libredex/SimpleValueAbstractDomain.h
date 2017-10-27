@@ -81,7 +81,7 @@ namespace svad_impl {
 template <typename T>
 class SimpleValue final : public AbstractValue<SimpleValue<T>> {
  public:
-  friend class SimpleValueAbstractDomain;
+  friend class SimpleValueAbstractDomain<T>;
   using Kind = typename AbstractValue<SimpleValue<T>>::Kind;
 
   void clear() override{};

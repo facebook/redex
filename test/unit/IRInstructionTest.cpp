@@ -293,3 +293,68 @@ TEST(IRInstruction, SelectConst) {
 
   delete g_redex;
 }
+
+TEST(IRInstruction, InvokeSourceIsWideBasic) {
+  using namespace dex_asm;
+  g_redex = new RedexContext();
+
+  DexMethodRef* m = DexMethod::make_method("Lfoo;", "baz", "V", {"J"});
+  IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_STATIC);
+  insn->set_arg_word_count(2);
+  insn->set_src(0, 0);
+  insn->set_src(1, 1);
+  insn->set_method(m);
+
+  EXPECT_TRUE(insn->invoke_src_is_wide(0));
+  EXPECT_TRUE(insn->invoke_src_is_wide(1));
+
+  delete g_redex;
+}
+
+TEST(IRInstruction, InvokeSourceIsWideComplex) {
+  g_redex = new RedexContext();
+
+  IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+  DexMethodRef* m = DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I"});
+  insn->set_method(m);
+  insn->set_arg_word_count(5);
+  insn->set_src(0, 0);
+  insn->set_src(1, 1);
+  insn->set_src(2, 3);
+  insn->set_src(3, 3);
+  insn->set_src(4, 4);
+
+  EXPECT_FALSE(insn->invoke_src_is_wide(0));
+  EXPECT_FALSE(insn->invoke_src_is_wide(1));
+  EXPECT_TRUE(insn->invoke_src_is_wide(2));
+  EXPECT_TRUE(insn->invoke_src_is_wide(3));
+  EXPECT_FALSE(insn->invoke_src_is_wide(4));
+
+  delete g_redex;
+}
+
+TEST(IRInstruction, InvokeSourceIsWideComplex2) {
+  g_redex = new RedexContext();
+
+  IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+  DexMethodRef* m = DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I", "J"});
+  insn->set_method(m);
+  insn->set_arg_word_count(7);
+  insn->set_src(0, 0);
+  insn->set_src(1, 1);
+  insn->set_src(2, 3);
+  insn->set_src(3, 3);
+  insn->set_src(4, 4);
+  insn->set_src(5, 5);
+  insn->set_src(6, 6);
+
+  EXPECT_FALSE(insn->invoke_src_is_wide(0));
+  EXPECT_FALSE(insn->invoke_src_is_wide(1));
+  EXPECT_TRUE(insn->invoke_src_is_wide(2));
+  EXPECT_TRUE(insn->invoke_src_is_wide(3));
+  EXPECT_FALSE(insn->invoke_src_is_wide(4));
+  EXPECT_TRUE(insn->invoke_src_is_wide(5));
+  EXPECT_TRUE(insn->invoke_src_is_wide(6));
+
+  delete g_redex;
+}

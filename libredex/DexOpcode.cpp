@@ -196,6 +196,44 @@ bool may_throw(DexOpcode op) {
   }
 }
 
+Branchingness branchingness(DexOpcode op) {
+  if (may_throw(op)) {
+    return BRANCH_THROW;
+  }
+
+  switch (op) {
+  case OPCODE_RETURN_VOID:
+  case OPCODE_RETURN:
+  case OPCODE_RETURN_WIDE:
+  case OPCODE_RETURN_OBJECT:
+    return BRANCH_RETURN;
+  case OPCODE_THROW:
+    return BRANCH_THROW;
+  case OPCODE_GOTO:
+  case OPCODE_GOTO_16:
+  case OPCODE_GOTO_32:
+    return BRANCH_GOTO;
+  case OPCODE_PACKED_SWITCH:
+  case OPCODE_SPARSE_SWITCH:
+    return BRANCH_SWITCH;
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE:
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+    return BRANCH_IF;
+  default:
+    return BRANCH_NONE;
+  }
+}
+
 bool has_range_form(DexOpcode op) {
   switch (op) {
   case OPCODE_INVOKE_DIRECT:
@@ -221,6 +259,71 @@ bool is_load_param(DexOpcode op) {
 bool is_move_result_pseudo(DexOpcode op) {
   return op >= IOPCODE_MOVE_RESULT_PSEUDO &&
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+}
+
+DexOpcode move_result_pseudo_for_iget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_IGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_IGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
+DexOpcode move_result_pseudo_for_sget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_SHORT:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_SGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_SGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
+DexOpcode invert_conditional_branch(DexOpcode op) {
+  switch (op) {
+  case OPCODE_IF_EQ:
+    return OPCODE_IF_NE;
+  case OPCODE_IF_NE:
+    return OPCODE_IF_EQ;
+  case OPCODE_IF_LT:
+    return OPCODE_IF_GE;
+  case OPCODE_IF_GE:
+    return OPCODE_IF_LT;
+  case OPCODE_IF_GT:
+    return OPCODE_IF_LE;
+  case OPCODE_IF_LE:
+    return OPCODE_IF_GT;
+  case OPCODE_IF_EQZ:
+    return OPCODE_IF_NEZ;
+  case OPCODE_IF_NEZ:
+    return OPCODE_IF_EQZ;
+  case OPCODE_IF_LTZ:
+    return OPCODE_IF_GEZ;
+  case OPCODE_IF_GEZ:
+    return OPCODE_IF_LTZ;
+  case OPCODE_IF_GTZ:
+    return OPCODE_IF_LEZ;
+  case OPCODE_IF_LEZ:
+    return OPCODE_IF_GTZ;
+  default:
+    always_assert_log(false, "Invalid conditional opcode %s", SHOW(op));
+  }
 }
 
 } // namespace opcode

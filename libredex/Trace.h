@@ -25,6 +25,7 @@
   TM(COMP_BUILDERS)      \
   TM(CFG)                \
   TM(CFP)                \
+  TM(CLP_GQL)            \
   TM(CPG)                \
   TM(CONSTP)             \
   TM(CUSTOMSORT)         \
@@ -32,6 +33,7 @@
   TM(DC)                 \
   TM(DCE)                \
   TM(DEDUP_BLOCKS)       \
+  TM(DEDUP_RES)          \
   TM(DELINIT)            \
   TM(DELMET)             \
   TM(DRAC)               \

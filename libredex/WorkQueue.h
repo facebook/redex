@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <mutex>
+#include <numeric>
 #include <queue>
 #include <random>
 #include <thread>

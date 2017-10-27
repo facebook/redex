@@ -328,7 +328,8 @@ void load_root_dexen(
   std::vector<fs::path> dexen;
   for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
     auto file = it->path();
-    if (fs::is_regular_file(file) && !file.extension().compare(".dex")) {
+    if (fs::is_regular_file(file) &&
+        !file.extension().compare(std::string(".dex"))) {
       dexen.emplace_back(file);
     }
   }
@@ -370,7 +371,7 @@ void load_root_dexen(
       TRACE(MAIN, 1, "Loading %s\n", dex.string().c_str());
     }
     // N.B. throaway stats for now
-    DexClasses classes = load_classes_from_dex(dex.c_str(), balloon);
+    DexClasses classes = load_classes_from_dex(dex.string().c_str(), balloon);
     store.add_classes(std::move(classes));
   }
 }
@@ -406,4 +407,14 @@ dex_stats_t&
   lhs.num_bytes += rhs.num_bytes;
   lhs.num_instructions += rhs.num_instructions;
   return lhs;
+}
+
+void relocate_method(DexMethod* method, DexType* to_type) {
+  auto from_cls = type_class(method->get_class());
+  auto to_cls = type_class(to_type);
+  from_cls->remove_method(method);
+  DexMethodSpec spec;
+  spec.cls = to_type;
+  method->change(spec, true);
+  to_cls->add_method(method);
 }

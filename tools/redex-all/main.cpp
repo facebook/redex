@@ -16,18 +16,26 @@
 #include <string>
 #include <vector>
 
-#include <getopt.h>
 #include <signal.h>
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
+#ifdef _MSC_VER
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
-#include <boost/iostreams/device/file.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <boost/iostreams/filtering_stream.hpp> // uses deprecated auto_ptr
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 #include <json/json.h>
 
 #include "CommentFilter.h"
@@ -46,48 +54,13 @@
 #include "Timer.h"
 #include "Warning.h"
 
-static void usage() {
-  fprintf(
-      stderr,
-      "usage: redex-all [opts...] dexes...\n\n"
-      "  -a --apkdir  directory containing unzipped APK\n"
-      "  -c --config  JSON-formatted config file\n"
-      "  -o --outdir  output directory for optimized dexes\n"
-      "  -j --jarpath Classpath jar\n"
-      "  -p --proguard-config proguard config file\n"
-      "  -s --seeds seeds file specifiying roots of classes to kept\n"
-      "  -q --printseeds file to report seeds computed by redex\n"
-      "  -w --warn    warning level:\n"
-      "                   0: no warnings\n"
-      "                   1: count of warnings\n"
-      "                   2: full text of warnings\n"
-      "     --verify-none-mode Run redex in verify-none mode.\n"
-      "                        This will activate optimization passes or\n"
-      "                        code in some passes that wouldn't normally\n"
-      "                        operate with verification enabled.\n"
-      "  -Skey=string  Add a string value to the global config, overwriting "
-      "the "
-      "existing value if any\n"
-      "                 Example: -Smy_param_name=foo\n"
-      "  -SSomePassName.key=string\n"
-      "               Add a string value to a pass config, overwriting the "
-      "existing value if any\n"
-      "                 Example: -SRenameClassesPass.class_rename="
-      "/foo/bar/data.txt\n"
-      "  -Jkey=<json value>\n"
-      "               Add a json value to the global config, overwriting the "
-      "existing value if any.\n"
-      "                 Example: -Smy_param_name={\"foo\": true}\n"
-      "  -JSomePassName.key=<json value>\n"
-      "               Add a json value to a pass config, overwriting the "
-      "existing value if any\n"
-      "                 Example: -SRenameClassesPass.class_rename=[1, 2, 3]\n"
-      "\n"
-      " Note: Be careful to properly escape JSON parameters, e.g. strings "
-      "must be quoted.\n");
-}
+namespace {
+const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
-/////////////////////////////////////////////////////////////////////////////
+void print_usage() {
+  std::cout << k_usage_header << std::endl;
+  std::cout << "Try 'redex-all -h' for more information." << std::endl;
+}
 
 struct Arguments {
   Json::Value config{Json::nullValue};
@@ -95,64 +68,86 @@ struct Arguments {
   std::vector<std::string> proguard_config_paths;
   std::string seeds_filename;
   std::string out_dir;
-  std::string printseeds;
+  std::vector<std::string> dex_files;
   bool verify_none_mode{false};
 };
 
-bool parse_config(const char* config_file, Arguments& args) {
+UNUSED void dump_args(const Arguments& args) {
+  std::cout << "seeds_filename: " << args.seeds_filename << std::endl;
+  std::cout << "out_dir: " << args.out_dir << std::endl;
+  std::cout << "verify_none_mode: " << args.verify_none_mode << std::endl;
+  std::cout << "jar_paths: " << std::endl;
+  for (const auto& e : args.jar_paths) {
+    std::cout << "  " << e << std::endl;
+  }
+  std::cout << "proguard_config_paths: " << std::endl;
+  for (const auto& e : args.proguard_config_paths) {
+    std::cout << "  " << e << std::endl;
+  }
+  std::cout << "dex_files: " << std::endl;
+  for (const auto& e : args.dex_files) {
+    std::cout << "  " << e << std::endl;
+  }
+  std::cout << "config: " << std::endl;
+  std::cout << args.config << std::endl;
+}
+
+Json::Value parse_config(const std::string& config_file) {
   std::ifstream config_stream(config_file);
   if (!config_stream) {
-    fprintf(stderr, "ERROR: cannot find config file\n");
-    return false;
+    std::cerr << "error: cannot find config file: " << config_file << std::endl;
+    exit(EXIT_FAILURE);
   }
+
   boost::iostreams::filtering_istream inbuf;
   inbuf.push(CommentFilter());
   inbuf.push(config_stream);
-  inbuf >> args.config; // parse JSON
-  return true;
+  Json::Value ret;
+  inbuf >> ret; // parse JSON
+  return ret;
 }
 
-static Json::Value parse_json_value(std::string& value_string) {
+Json::Value parse_json_value(const std::string& value_string) {
   std::stringstream temp_stream(value_string);
   Json::Value temp_json;
   temp_stream >> temp_json;
   return temp_json;
 }
 
-static bool add_value_to_config(Json::Value& config,
-                                std::string& key_value,
-                                bool is_json) {
-  size_t equals_idx = key_value.find('=');
-  size_t dot_idx = key_value.find('.');
-
-  if (equals_idx != std::string::npos) {
-    if (dot_idx != std::string::npos && dot_idx < equals_idx) {
-      // Pass-specific config value specified with -Dpassname.key=value
-      std::string pass = key_value.substr(0, dot_idx);
-      std::string key = key_value.substr(dot_idx + 1, equals_idx - dot_idx - 1);
-      std::string value_string = key_value.substr(equals_idx + 1);
-      if (is_json) {
-        config[pass.c_str()][key.c_str()] = parse_json_value(value_string);
-      } else {
-        config[pass.c_str()][key.c_str()] = value_string.c_str();
-      }
-    } else {
-      // Global config value specified with -Dkey=value
-      std::string key = key_value.substr(0, equals_idx);
-      std::string value_string = key_value.substr(equals_idx + 1);
-      if (is_json) {
-        config[key.c_str()] = parse_json_value(value_string);
-      } else {
-        config[key.c_str()] = value_string.c_str();
-      }
-    }
-    return true;
+bool add_value_to_config(Json::Value& config,
+                         const std::string& key_value,
+                         bool is_json) {
+  const size_t equals_idx = key_value.find('=');
+  if (equals_idx == std::string::npos) {
+    return false;
   }
-  return false;
+
+  const size_t dot_idx = key_value.find('.');
+  if (dot_idx != std::string::npos && dot_idx < equals_idx) {
+    // Pass-specific config value specified with -Dpassname.key=value
+    std::string pass = key_value.substr(0, dot_idx);
+    std::string key = key_value.substr(dot_idx + 1, equals_idx - dot_idx - 1);
+    std::string value_string = key_value.substr(equals_idx + 1);
+    if (is_json) {
+      config[pass][key] = parse_json_value(value_string);
+    } else {
+      config[pass][key] = value_string;
+    }
+  } else {
+    // Global config value specified with -Dkey=value
+    std::string key = key_value.substr(0, equals_idx);
+    std::string value_string = key_value.substr(equals_idx + 1);
+    if (is_json) {
+      config[key] = parse_json_value(value_string);
+    } else {
+      config[key] = value_string;
+    }
+  }
+  return true;
 }
 
 Json::Value default_config() {
-  auto passes = {
+  const auto passes = {
       "ReBindRefsPass",
       "BridgePass",
       "SynthPass",
@@ -173,123 +168,186 @@ Json::Value default_config() {
   return cfg;
 }
 
-int parse_args(int argc, char* argv[], Arguments& args) {
-  int verify_none_mode = 0;
-
-  const struct option options[] = {
-      {"apkdir", required_argument, 0, 'a'},
-      {"config", required_argument, 0, 'c'},
-      {"jarpath", required_argument, 0, 'j'},
-      {"proguard-config", required_argument, 0, 'p'},
-      {"seeds", required_argument, 0, 's'},
-      {"outdir", required_argument, 0, 'o'},
-      {"warn", required_argument, 0, 'w'},
-      {"printseeds", required_argument, 0, 'q'},
-      {"verify-none-mode", no_argument, &verify_none_mode, 1},
-      {nullptr, 0, nullptr, 0},
-  };
+Arguments parse_args(int argc, char* argv[]) {
+  Arguments args;
   args.out_dir = ".";
-
-  int c;
-
-  std::vector<std::string> json_values_from_command_line;
-  std::vector<std::string> string_values_from_command_line;
-
   args.config = default_config();
-  const char* apk_dir = nullptr;
 
-  while ((c = getopt_long(
-              argc, argv, ":a:c:j:p:q:s:o:w:S::J::", &options[0], nullptr)) !=
-         -1) {
-    switch (c) {
-    case 'a':
-      apk_dir = optarg;
-      break;
-    case 'c':
-      if (!parse_config(optarg, args)) {
-        return 0;
+  namespace po = boost::program_options;
+  po::options_description od(k_usage_header);
+  od.add_options()("help,h", "print this help message");
+  od.add_options()("apkdir,a",
+                   // We allow overwrites to most of the options but will take
+                   // only the last one.
+                   po::value<std::vector<std::string>>(),
+                   "directory containing unzipped APK");
+  od.add_options()("config,c",
+                   po::value<std::vector<std::string>>(),
+                   "JSON-formatted config file");
+  od.add_options()("outdir,o",
+                   po::value<std::vector<std::string>>(),
+                   "output directory for optimized dexes");
+  od.add_options()(
+      // This option value will be accumulated to a vector.
+      "jarpath,j",
+      po::value<std::vector<std::string>>(),
+      "classpath jar");
+  od.add_options()("proguard-config,p",
+                   po::value<std::vector<std::string>>(), // Accumulation
+                   "ProGuard config file");
+  od.add_options()("seeds,s",
+                   po::value<std::vector<std::string>>(),
+                   "seeds file specifiying roots of classes to keep");
+  od.add_options()("printseeds,q",
+                   po::value<std::vector<std::string>>(),
+                   "file to report seeds computed by redex");
+  od.add_options()("warn,w",
+                   po::value<std::vector<int>>(),
+                   "warning level:\n"
+                   "  0: no warnings\n"
+                   "  1: count of warnings\n"
+                   "  2: full text of warnings");
+  od.add_options()(
+      "verify-none-mode",
+      po::bool_switch(&args.verify_none_mode)->default_value(false),
+      "run redex in verify-none mode\n"
+      "  \tThis will activate optimization passes or code in some passes that "
+      "wouldn't normally operate with verification enabled.");
+  od.add_options()(",S",
+                   po::value<std::vector<std::string>>(), // Accumulation
+                   "-Skey=string\n"
+                   "  \tAdd a string value to the global config, overwriting "
+                   "the existing value if any\n"
+                   "    \te.g. -Smy_param_name=foo\n"
+                   "-Spass_name.key=string\n"
+                   "  \tAdd a string value to a pass"
+                   "config, overwriting the existing value if any\n"
+                   "    \te.g. -SMyPass.config=\"foo bar\"");
+  od.add_options()(
+      ",J",
+      po::value<std::vector<std::string>>(), // Accumulation
+      "-Jkey=<json value>\n"
+      "  \tAdd a json value to the global config, overwriting the existing "
+      "value if any\n"
+      "    \te.g. -Jmy_param_name={\"foo\": true}\n"
+      "-JSomePassName.key=<json value>\n"
+      "  \tAdd a json value to a pass config, overwriting the existing value "
+      "if any\n"
+      "    \te.g. -JMyPass.config=[1, 2, 3]\n"
+      "Note: Be careful to properly escape JSON parameters, e.g., strings must "
+      "be quoted.");
+  od.add_options()(
+      "dex-files", po::value<std::vector<std::string>>(), "dex files");
+
+  po::positional_options_description pod;
+  pod.add("dex-files", -1);
+  po::variables_map vm;
+
+  try {
+    po::store(
+        po::command_line_parser(argc, argv).options(od).positional(pod).run(),
+        vm);
+    po::notify(vm);
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl << std::endl;
+    print_usage();
+    exit(EXIT_FAILURE);
+  }
+
+  if (vm.count("dex-files")) {
+    args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
+  } else {
+    std::cerr << "error: no input dex files" << std::endl << std::endl;
+    print_usage();
+    exit(EXIT_SUCCESS);
+  }
+
+  if (vm.count("help")) {
+    od.print(std::cout);
+    exit(EXIT_SUCCESS);
+  }
+
+  if (vm.count("warn")) {
+    const auto& warns = vm["warn"].as<std::vector<int>>();
+    for (int warn : warns) {
+      if (!(0 <= warn && warn <= 2)) {
+        std::cerr << "warning: ignoring invalid warning level option: " << warn
+                  << std::endl;
       }
-      break;
-    case 'o':
-      args.out_dir = optarg;
-      break;
-    case 'j':
-      args.jar_paths.emplace(optarg);
-      TRACE(MAIN, 2, "Command line -j option: %s\n", optarg);
-      break;
-    case 'q':
-      args.config["printseeds"] = optarg;
-      break;
-    case 'p':
-      args.proguard_config_paths.push_back(optarg);
-      break;
-    case 'w':
-      g_warning_level = OptWarningLevel(strtol(optarg, nullptr, 10));
-      break;
-    case 's':
-      if (optarg) {
-        args.seeds_filename = optarg;
-      }
-      break;
-    case 'S':
-      if (optarg) {
-        std::string value(optarg);
-        string_values_from_command_line.push_back(value);
-      }
-      break;
-    case 'J':
-      if (optarg) {
-        std::string value(optarg);
-        json_values_from_command_line.push_back(value);
-      }
-      break;
-    case ':':
-      fprintf(stderr, "ERROR: %s requires an argument\n", argv[optind - 1]);
-      return 0;
-    case '?':
-      return 0; // getopt_long has printed an error
-    case 0:
-      // We're parsing a long opt and nothing has been broken yet,
-      // keep parsing...
-      continue;
-    default:
-      abort();
+    }
+    g_warning_level = OptWarningLevel(warns.back());
+  }
+
+  auto take_last = [](const auto& value) {
+    return value.template as<std::vector<std::string>>().back();
+  };
+
+  if (vm.count("config")) {
+    args.config = parse_config(take_last(vm["config"]));
+  }
+
+  if (vm.count("outdir")) {
+    args.out_dir = take_last(vm["outdir"]);
+  }
+
+  if (vm.count("seeds")) {
+    args.seeds_filename = take_last(vm["seeds"]);
+  }
+
+  if (vm.count("proguard-config")) {
+    args.proguard_config_paths =
+        vm["proguard-config"].as<std::vector<std::string>>();
+  }
+
+  if (vm.count("jarpath")) {
+    const auto& jar_paths = vm["jarpath"].as<std::vector<std::string>>();
+    for (const auto& e : jar_paths) {
+      TRACE(MAIN, 2, "Command line -j option: %s\n", e.c_str());
+      args.jar_paths.emplace(e);
     }
   }
-
-  if (verify_none_mode == 1) {
-    args.verify_none_mode = true;
-  }
-  TRACE(MAIN, 2, "Verify-none mode: %s\n", args.verify_none_mode ? "Yes" : "No");
 
   // We add these values to the config at the end so that they will always
   // overwrite values read from the config file regardless of the order of
-  // arguments
-  if (apk_dir) {
-    args.config["apk_dir"] = apk_dir;
+  // arguments.
+  if (vm.count("apkdir")) {
+    args.config["apk_dir"] = take_last(vm["apkdir"]);
   }
-  for (auto& key_value : json_values_from_command_line) {
-    if (!add_value_to_config(args.config, key_value, true)) {
-      fprintf(stderr, "Error parsing value -J%s\n", key_value.c_str());
+
+  if (vm.count("printseeds")) {
+    args.config["printseeds"] = take_last(vm["printseeds"]);
+  }
+
+  if (vm.count("-S")) {
+    for (auto& key_value : vm["-S"].as<std::vector<std::string>>()) {
+      if (!add_value_to_config(args.config, key_value, false)) {
+        std::cerr << "warning: cannot parse -S" << key_value << std::endl;
+      }
     }
   }
-  for (auto& key_value : string_values_from_command_line) {
-    if (!add_value_to_config(args.config, key_value, false)) {
-      fprintf(stderr, "Error parsing value -S%s\n", key_value.c_str());
+
+  if (vm.count("-J")) {
+    for (auto& key_value : vm["-J"].as<std::vector<std::string>>()) {
+      if (!add_value_to_config(args.config, key_value, true)) {
+        std::cerr << "warning: cannot parse -J" << key_value << std::endl;
+      }
     }
   }
-  return optind;
+
+  TRACE(
+      MAIN, 2, "Verify-none mode: %s\n", args.verify_none_mode ? "Yes" : "No");
+  return args;
 }
 
 bool dir_is_writable(const std::string& dir) {
-  struct stat buf;
-  if (stat(dir.c_str(), &buf) != 0) {
+  if (!boost::filesystem::is_directory(dir)) {
     return false;
   }
-  if (!(buf.st_mode & S_IFDIR)) {
-    return false;
-  }
+#ifdef _MSC_VER
+  return _access(dir.c_str(), 2) == 0;
+#else
   return access(dir.c_str(), W_OK) == 0;
+#endif
 }
 
 Json::Value get_stats(const dex_stats_t& stats) {
@@ -332,8 +390,7 @@ Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
   return obj;
 }
 
-Json::Value get_detailed_stats(
-    const std::vector<dex_stats_t>& dexes_stats) {
+Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
   for (const dex_stats_t& stats : dexes_stats) {
@@ -407,11 +464,14 @@ void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
     TRACE(MAIN, 1, "No method move map data structure!\n");
   }
 }
+} // namespace
 
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
+#ifndef _MSC_VER
   signal(SIGBUS, crash_backtrace_handler);
+#endif
 
   std::string stats_output_path;
   Json::Value stats;
@@ -420,7 +480,6 @@ int main(int argc, char* argv[]) {
 
     g_redex = new RedexContext();
 
-    Arguments args;
     // Currently there are two sources that specify the library jars:
     // 1. The jar_path argument, which may specify one library jar.
     // 2. The library_jars vector, which lists the library jars specified in
@@ -431,13 +490,12 @@ int main(int argc, char* argv[]) {
     // on the command line or ProGuard file.
     // TODO: Make the command line -jarpath option like a colon separated
     //       list of library JARS.
-    std::set<std::string> library_jars;
-    auto start = parse_args(argc, argv, args);
+    Arguments args = parse_args(argc, argv);
+
     if (!dir_is_writable(args.out_dir)) {
-      fprintf(stderr,
-              "outdir %s is not a writable directory\n",
-              args.out_dir.c_str());
-      exit(1);
+      std::cerr << "error: outdir is not a writable directory: " << args.out_dir
+                << std::endl;
+      exit(EXIT_FAILURE);
     }
 
     RedexContext::set_next_release_gate(
@@ -449,9 +507,10 @@ int main(int argc, char* argv[]) {
       redex::proguard_parser::parse_file(pg_config_path, &pg_config);
     }
 
-    auto const& pg_libs = pg_config.libraryjars;
+    const auto& pg_libs = pg_config.libraryjars;
     args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
 
+    std::set<std::string> library_jars;
     for (const auto jar_path : args.jar_paths) {
       std::stringstream jar_stream(jar_path);
       std::string dependent_jar_path;
@@ -464,11 +523,6 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    if (start == 0 || start == argc) {
-      usage();
-      exit(1);
-    }
-
     DexStore root_store("classes");
     DexStoresVector stores;
     stores.emplace_back(std::move(root_store));
@@ -478,11 +532,12 @@ int main(int argc, char* argv[]) {
 
     {
       Timer t("Load classes from dexes");
-      for (int i = start; i < argc; i++) {
-        const std::string filename(argv[i]);
-        if (filename.compare(filename.size() - 3, 3, "dex") == 0) {
+      for (const auto& filename : args.dex_files) {
+        if (filename.size() >= 5 &&
+            filename.compare(filename.size() - 4, 4, ".dex") == 0) {
           dex_stats_t dex_stats;
-          DexClasses classes = load_classes_from_dex(filename.c_str(), &dex_stats);
+          DexClasses classes =
+              load_classes_from_dex(filename.c_str(), &dex_stats);
           input_totals += dex_stats;
           input_dexes_stats.push_back(dex_stats);
           stores[0].add_classes(std::move(classes));
@@ -492,7 +547,8 @@ int main(int argc, char* argv[]) {
           DexStore store(store_metadata);
           for (auto file_path : store_metadata.get_files()) {
             dex_stats_t dex_stats;
-            DexClasses classes = load_classes_from_dex(file_path.c_str(), &dex_stats);
+            DexClasses classes =
+                load_classes_from_dex(file_path.c_str(), &dex_stats);
             input_totals += dex_stats;
             input_dexes_stats.push_back(dex_stats);
             store.add_classes(std::move(classes));
@@ -512,10 +568,9 @@ int main(int argc, char* argv[]) {
           std::string basedir_path =
               pg_config.basedirectory + "/" + library_jar.c_str();
           if (!load_jar_file(basedir_path.c_str())) {
-            fprintf(stderr,
-                    "ERROR: Library jar could not be loaded: %s\n",
-                    library_jar.c_str());
-            exit(1);
+            std::cerr << "error: library jar could not be loaded: "
+                      << library_jar << std::endl;
+            exit(EXIT_FAILURE);
           }
         }
       }
@@ -620,7 +675,7 @@ int main(int argc, char* argv[]) {
   stats["output_stats"]["time_stats"] = get_times();
   Json::StyledStreamWriter writer;
   {
-    std::ofstream out(stats_output_path.c_str());
+    std::ofstream out(stats_output_path);
     writer.write(out, stats);
   }
 

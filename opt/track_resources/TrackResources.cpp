@@ -60,7 +60,7 @@ void check_if_tracked_sget(DexMethod* src_method,
     std::unordered_set<std::string>& src_set,
     std::unordered_set<DexClass*>& classes_to_track,
     size_t& num_field_references,
-    std::map<DexClass*, int>& per_cls_refs,
+    std::map<DexClass*, int, dexclasses_comparator>& per_cls_refs,
     std::unordered_set<DexField*>& recorded_fields) {
   auto src_cls_name = src_method->get_class()->get_name()->c_str();
   auto target_cls = type_class(target_field->get_class());
@@ -76,11 +76,7 @@ void check_if_tracked_sget(DexMethod* src_method,
     }
     num_field_references++;
     recorded_fields.emplace(target_field);
-    if (per_cls_refs.count(target_cls)) {
-      per_cls_refs[target_cls]++;
-    } else {
-      per_cls_refs[target_cls] = 1;
-    }
+    ++per_cls_refs[target_cls];
   }
 }
 
@@ -96,7 +92,7 @@ void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
 
   // data structures to track field references from given classes
   size_t num_field_references = 0;
-  std::map<DexClass*, int> per_cls_refs;
+  std::map<DexClass*, int, dexclasses_comparator> per_cls_refs;
 
   for (auto clazz : classes_to_track) {
     auto sfields = clazz->get_sfields();

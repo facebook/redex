@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -72,13 +73,25 @@ struct BranchTarget {
 };
 
 enum MethodItemType {
+  // Begins or ends a try region. Points to the first associated catch block
   MFLOW_TRY,
+
+  // Found at the beginning of an exception handler block. Points to the next
+  // catch block (in case this one does not match)
   MFLOW_CATCH,
+
+  // The actual instructions
   MFLOW_OPCODE,
   MFLOW_DEX_OPCODE,
+
+  // The target of a goto, if, or switch. Also known as a "label"
   MFLOW_TARGET,
+
+  // These hold information about the next MFLOW_(DEX_)OPCODE
   MFLOW_DEBUG,
   MFLOW_POSITION,
+
+  // A no-op
   MFLOW_FALLTHROUGH,
 };
 
@@ -145,6 +158,8 @@ struct MethodItemEntry {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+
+  opcode::Branchingness branchingness() const;
 };
 
 using MethodItemMemberListOption =
@@ -156,14 +171,14 @@ using FatMethod =
     boost::intrusive::list<MethodItemEntry, MethodItemMemberListOption>;
 
 struct FatMethodDisposer {
-  void operator()(MethodItemEntry* mei) {
-    delete mei;
+  void operator()(MethodItemEntry* mie) {
+    delete mie;
   }
 };
 
 std::string show(const FatMethod*);
 
-struct Block;
+class Block;
 
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
 // belong there... I'm going to move them out soon
@@ -181,8 +196,6 @@ class IRCode {
    * replaced by another instruction.
    */
   void remove_branch_targets(IRInstruction *branch_inst);
-
-  void clear_cfg();
 
   FatMethod* m_fmethod;
   std::unique_ptr<ControlFlowGraph> m_cfg;
@@ -211,6 +224,11 @@ class IRCode {
   friend struct MethodCreator;
 
  public:
+  // This creates an "empty" IRCode, one that contains no load-param opcodes or
+  // debug info. If you attach it to a method, you need to insert the
+  // appropriate load-param opcodes yourself. Mostly used for testing purposes.
+  IRCode();
+
   explicit IRCode(DexMethod*);
   /*
    * Construct an IRCode for a DexMethod that has no DexCode (that is, a new
@@ -257,7 +275,17 @@ class IRCode {
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
 
-  void build_cfg();
+  // Build a Control Flow Graph
+  //  * A non editable CFG's blocks have begin and end pointers into the big
+  //    linear FatMethod in IRCode
+  //  * An editable CFG's blocks each own a small FatMethod (with
+  //    MethodItemEntries taken from IRCode)
+  // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
+  // called
+  void build_cfg(bool editable = false);
+
+  // if the cfg was editable, linearize it back into m_fmethod
+  void clear_cfg();
 
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);

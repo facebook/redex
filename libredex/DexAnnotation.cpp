@@ -737,3 +737,81 @@ void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
     ev->vencode(dodx, bytes);
   }
 }
+
+namespace {
+std::string show_helper(const DexEncodedValueArray* a, bool deobfuscated) {
+  std::stringstream ss;
+  ss << (a->is_static_val() ? "(static) " : "");
+  if (a->evalues()) {
+    bool first = true;
+    for (const auto& evalue : *a->evalues()) {
+      if (!first) {
+        ss << ' ';
+      }
+      if (deobfuscated) {
+        ss << evalue->show_deobfuscated();
+      } else {
+        ss << evalue->show();
+      }
+      first = false;
+    }
+  }
+  return ss.str();
+}
+
+std::string show_helper(const EncodedAnnotations* annos, bool deobfuscated) {
+  if (!annos) {
+    return "";
+  }
+  std::stringstream ss;
+  bool first = true;
+  for (auto const pair : *annos) {
+    if (!first) {
+      ss << ", ";
+    }
+    ss << show(pair.string) << ":";
+    if (deobfuscated) {
+      ss << pair.encoded_value->show_deobfuscated();
+    } else {
+      ss << pair.encoded_value->show();
+    }
+    first = false;
+  }
+  return ss.str();
+}
+}
+
+std::string show(const EncodedAnnotations* annos) {
+  return show_helper(annos, false);
+}
+
+std::string show_deobfuscated(const EncodedAnnotations* annos) {
+  return show_helper(annos, true);
+}
+
+std::string DexEncodedValue::show() const {
+  std::stringstream ss;
+  ss << m_value;
+  return ss.str();
+}
+
+std::string DexEncodedValueAnnotation::show() const {
+  std::stringstream ss;
+  ss << "type:" << ::show(m_type) << " annotations:" << ::show(m_annotations);
+  return ss.str();
+}
+
+std::string DexEncodedValueAnnotation::show_deobfuscated() const {
+  std::stringstream ss;
+  ss << "type:" << ::show(m_type)
+     << " annotations:" << ::show_deobfuscated(m_annotations);
+  return ss.str();
+}
+
+std::string DexEncodedValueArray::show() const {
+  return show_helper(this, false);
+}
+
+std::string DexEncodedValueArray::show_deobfuscated() const {
+  return show_helper(this, true);
+}

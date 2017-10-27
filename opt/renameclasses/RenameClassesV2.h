@@ -57,35 +57,21 @@ class RenameClassesPassV2 : public Pass {
       ConfigFiles& cfg, PassManager& mgr) override;
 
  private:
+  std::unordered_map<const DexType*, std::string>
+  build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
 
-  void build_force_rename_hierarchies(
-      PassManager& mgr,
-      Scope& scope,
-      const ClassHierarchy& class_hierarchy,
-      std::unordered_map<const DexType*,
-      std::string>& force_rename_hierarchies);
-
-  void build_dont_rename_resources(PassManager& mgr,
-      std::set<std::string>& dont_rename_resources);
-  void build_dont_rename_class_name_literals(Scope& scope,
-      std::set<std::string>& dont_rename_class_name_literals);
-  void build_dont_rename_for_types_with_reflection(
-      Scope& scope,
-      const ProguardMap& pg_map,
-      std::set<std::string>& build_dont_rename_for_specific_methods);
-  void build_dont_rename_canaries(Scope& scope,
-      std::set<std::string>& dont_rename_canaries);
-  void build_dont_rename_hierarchies(
-      PassManager& mgr,
-      Scope& scope,
-      const ClassHierarchy& class_hierarchy,
-      std::unordered_map<const DexType*, std::string>& dont_rename_hierarchies);
-  void build_dont_rename_native_bindings(Scope& scope,
-      std::set<DexType*>& dont_rename_native_bindings);
-  void build_dont_rename_serde_relationships(Scope& scope,
-      std::set<DexType*>& dont_rename_serde_relationships);
-  void build_dont_rename_annotated(
-      std::set<DexType*, dextypes_comparator>& dont_rename_annotated);
+  std::unordered_set<std::string> build_dont_rename_resources(PassManager&);
+  std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
+  std::unordered_set<std::string> build_dont_rename_for_types_with_reflection(
+      Scope&, const ProguardMap&);
+  std::unordered_set<std::string> build_dont_rename_canaries(Scope&);
+  std::unordered_map<const DexType*, std::string> build_dont_rename_hierarchies(
+      PassManager&, Scope&, const ClassHierarchy&);
+  std::unordered_set<const DexType*> build_dont_rename_native_bindings(
+      Scope& scope);
+  std::unordered_set<const DexType*> build_dont_rename_serde_relationships(
+      Scope& scope);
+  std::unordered_set<const DexType*> build_dont_rename_annotated();
 
   void eval_classes(Scope& scope,
                     const ClassHierarchy& class_hierarchy,

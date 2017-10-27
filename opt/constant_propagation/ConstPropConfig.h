@@ -5,8 +5,9 @@
 #include <unordered_set>
 #include "DexClass.h"
 
-struct ConstPropV3Config {
+struct ConstPropConfig {
   std::unordered_set<DexType*> blacklist;
-  bool replace_moves_with_consts;
-  bool fold_arithmetic;
+  bool replace_moves_with_consts{false};
+  bool fold_arithmetic{false};
+  bool propagate_conditions{false};
 };

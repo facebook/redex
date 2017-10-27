@@ -21,7 +21,6 @@
 #include "DelInit.h"
 #include "RemoveEmptyClasses.h"
 #include "ConstantPropagation.h"
-#include "ConstantPropagationV2.h"
 
 /*
 
@@ -87,7 +86,7 @@ ClassType filter_test_classes(const DexString *cls_name) {
   return OTHERCLASS;
 }
 
-void test(bool old_version) {
+TEST(ConstantPropagationTest, constantPropagation) {
   g_redex = new RedexContext();
 
   const char* dexfile = std::getenv("dexfile");
@@ -119,11 +118,7 @@ void test(bool old_version) {
   }
 
   Pass* constp = nullptr;
-  if (old_version) {
-    constp = new ConstantPropagationPass();
-  } else {
-    constp = new ConstantPropagationPassV2();
-  }
+  constp = new ConstantPropagationPass();
   std::vector<Pass*> passes = {
     constp
   };
@@ -149,8 +144,7 @@ void test(bool old_version) {
             DexOpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
-        } else if (!old_version &&
-                   strcmp(dm->get_name()->c_str(), "if_true") == 0) {
+        } else if (strcmp(dm->get_name()->c_str(), "if_true") == 0) {
           const InstructionIterable& it = InstructionIterable(dm->get_code());
           TRACE(CONSTP, 1, "%s\n", SHOW(it));
           for (auto& mie : it) {
@@ -172,12 +166,4 @@ void test(bool old_version) {
       }
     }
   }
-}
-
-TEST(ConstantPropagationTest1, constantPropagationOld) {
-  test(true);
-}
-
-TEST(ConstantPropagationTest1, constantPropagationNew) {
-  test(false);
 }

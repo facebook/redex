@@ -93,6 +93,11 @@ public class ConstantPropagationTest {
     return -1;
   }
 
+  // use SimpleInline so that redex sees this constant but `javac` does not
+  private int zero() {
+    return 0;
+  }
+
   @Test
   public void if_plus_one() {
     int x = neg1();
@@ -100,6 +105,20 @@ public class ConstantPropagationTest {
     assertThat(x).isEqualTo(0);
     int y;
     if (x == 0) {
+      y = 32;
+    } else {
+      y = 0;
+    }
+    assertThat(y).isEqualTo(32);
+  }
+
+  @Test
+  public void if_plus_one2() {
+    int x = zero();
+    x++;
+    assertThat(x).isEqualTo(1);
+    int y;
+    if (x == 1) {
       y = 32;
     } else {
       y = 0;

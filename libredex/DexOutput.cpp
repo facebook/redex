@@ -18,6 +18,19 @@
 #include <exception>
 #include <assert.h>
 
+#ifdef _MSC_VER
+// TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
+#include <io.h>
+#define open _open
+#define write _write
+#define close _close
+#define fstat _fstat64i32
+#define stat _stat64i32
+#define O_CREAT _O_CREAT
+#define O_TRUNC _O_TRUNC
+#define O_WRONLY _O_WRONLY
+#endif
+
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexOutput.h"
@@ -353,11 +366,11 @@ public:
   std::string m_class_mapping_filename;
   std::string m_pg_mapping_filename;
   std::string m_bytecode_offset_filename;
-  std::map<DexTypeList*, uint32_t> m_tl_emit_offsets;
+  std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
-  std::map<DexClass*, uint32_t> m_cdi_offsets;
-  std::map<DexClass*, uint32_t> m_static_values;
+  std::unordered_map<DexClass*, uint32_t> m_cdi_offsets;
+  std::unordered_map<DexClass*, uint32_t> m_static_values;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;

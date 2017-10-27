@@ -11,18 +11,11 @@
 
 #include "Pass.h"
 
-class RemoveUnreachablePass : public Pass {
+class TestCFGPass : public Pass {
  public:
-  RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
-
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("ignore_string_literals", {}, m_ignore_string_literals);
-    pc.get("ignore_system_annos", {}, m_ignore_system_annos);
-  }
+  TestCFGPass() : Pass("TestCFGPass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  private:
-    std::vector<std::string> m_ignore_string_literals;
-    std::vector<std::string> m_ignore_system_annos;
+  virtual void configure_pass(const PassConfig& pc) override {}
 };
