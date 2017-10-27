@@ -53,16 +53,17 @@ struct ReachableObject {
   std::string str() const {
     switch (type) {
     case ReachableObjectType::ANNO:
-      return show(anno);
+      return show_deobfuscated(anno);
     case ReachableObjectType::CLASS:
-      return show(cls);
+      return show_deobfuscated(cls);
     case ReachableObjectType::FIELD:
-      return show(field);
+      return show_deobfuscated(field);
     case ReachableObjectType::METHOD:
-      return show(method);
+      return show_deobfuscated(method);
     case ReachableObjectType::SEED:
       return std::string("<SEED>");
     }
+    not_reached();
   }
 
   std::string type_str() const {
@@ -78,6 +79,7 @@ struct ReachableObject {
     case ReachableObjectType::SEED:
       return "SEED";
     }
+    not_reached();
   }
 
   std::string state_str() const {
@@ -101,6 +103,7 @@ struct ReachableObject {
     case ReachableObjectType::SEED:
       return "Seed";
     }
+    not_reached();
   }
 };
 
@@ -118,6 +121,7 @@ struct ReachableObjectHash {
     case ReachableObjectType::SEED:
       return 0;
     }
+    not_reached();
   }
 };
 
@@ -139,6 +143,7 @@ struct ReachableObjectEq {
     case ReachableObjectType::SEED:
       return true;
     }
+    not_reached();
   }
 };
 
@@ -161,8 +166,9 @@ struct ReachableObjects {
 ReachableObjects compute_reachable_objects(
     DexStoresVector& stores,
     const std::unordered_set<const DexType*>& ignore_string_literals_annos,
+    const std::unordered_set<const DexType*>& ignore_system_annos,
     int* num_ignore_check_strings,
-    bool record_reachability);
+    bool record_reachability = false);
 
 // Dump reachability information to TRACE(REACH_DUMP, 5).
 void dump_reachability(DexStoresVector& stores,

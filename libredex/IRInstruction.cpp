@@ -86,10 +86,7 @@ IRInstruction::IRInstruction(const DexInstruction* insn) {
     m_opcode = convert_2to3addr(m_opcode);
   }
   if (opcode::has_literal(m_opcode)) {
-    m_literal = insn->literal();
-  }
-  if (opcode::has_offset(m_opcode)) {
-    m_offset = insn->offset();
+    m_literal = insn->get_literal();
   }
   if (opcode::has_range(m_opcode)) {
     m_range =
@@ -174,6 +171,9 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
     case opcode::Ref::Data:
       insn = new DexInstruction(opcode());
       break;
+    case opcode::Ref::Literal:
+      insn = (new DexInstruction(opcode()))->set_literal(get_literal());
+      break;
     case opcode::Ref::String:
       insn = new DexOpcodeString(opcode(), m_string);
       break;
@@ -196,12 +196,6 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   for (size_t i = 0; i < srcs_size(); ++i) {
     insn->set_src(i, src(i));
   }
-  if (opcode::has_literal(insn->opcode())) {
-    insn->set_literal(literal());
-  }
-  if (opcode::has_offset(insn->opcode())) {
-    insn->set_offset(offset());
-  }
   if (insn->has_arg_word_count()) {
     insn->set_arg_word_count(srcs_size());
   }
@@ -212,7 +206,55 @@ DexInstruction* IRInstruction::to_dex_instruction() const {
   return insn;
 }
 
+// The instruction format doesn't tell us the width of registers for invoke
+// so we inspect the signature of the method we're calling
+//
+// Surprisingly, wide registers are referenced differently in invoke
+// instructions as compared with `-wide` instructions. If you call a method
+// with a wide register, both registers in the pair are enumerated source
+// registers. Example:
+//
+// const-wide v2, 0x0000CAFE0000CAFE
+// invoke-static {v2, v3}, Lcom/Foo;.bar:(J)J     # note that "J" means `long`
+// move-result-wide v2
+//
+// this is surprising because move-result-wide only refers to v2 but invoke
+// refers to both v2, and v3!
+bool IRInstruction::invoke_src_is_wide(size_t i) const {
+  always_assert(has_method());
+
+  // virtual methods have `this` as the 0th register argument, but the
+  // arg list does NOT include `this`
+  if (!is_invoke_static(m_opcode)) {
+    if (i == 0) {
+      // reference to `this`. References are never wide
+      return false;
+    }
+    --i;
+  }
+
+  // Iterate through the proto arguments, counting how many registers each type
+  // uses. when we've reached the register in question, test if that type is
+  // wide
+  const auto& args = m_method->get_proto()->get_args()->get_type_list();
+  size_t j = 0;
+  for (DexType* arg : args) {
+    bool is_wide = is_wide_type(arg);
+    j += is_wide ? 2 : 1;
+    if (j > i) {
+      return is_wide;
+    }
+  }
+  not_reached();
+}
+
 bool IRInstruction::src_is_wide(size_t i) const {
+  always_assert(i < srcs_size());
+
+  if (is_invoke(m_opcode)) {
+    return invoke_src_is_wide(i);
+  }
+
   switch (opcode()) {
   case OPCODE_MOVE_WIDE:
   case OPCODE_MOVE_WIDE_FROM16:
@@ -431,7 +473,7 @@ uint64_t IRInstruction::hash() {
   }
 
   if (has_data()) {
-    size_t size = get_data()->size();
+    size_t size = get_data()->data_size();
     const auto& data = get_data()->data();
     for (size_t i = 0; i < size; i++) {
       bits.push_back(data[i]);
@@ -450,12 +492,13 @@ uint64_t IRInstruction::hash() {
   if (has_string()) {
     bits.push_back(reinterpret_cast<uint64_t>(get_string()));
   }
+  if (has_literal()) {
+    bits.push_back(get_literal());
+  }
   if (opcode::has_range(opcode())) {
     bits.push_back(range_base());
     bits.push_back(range_size());
   }
-  bits.push_back(literal());
-  // ignore offset because it's not known until sync to DexInstructions
 
   uint64_t result = 0;
   for (uint64_t elem : bits) {

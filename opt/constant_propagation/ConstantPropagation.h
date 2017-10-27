@@ -9,17 +9,86 @@
 
 #pragma once
 
+#include <mutex>
+
+#include "ConstPropConfig.h"
+#include "GlobalConstProp.h"
+#include "IRCode.h"
+#include "LocalConstProp.h"
 #include "Pass.h"
+
+using std::placeholders::_1;
+using std::vector;
+
+/** Intraprocedural Constant propagation
+ * This code leverages the analysis built by LocalConstantPropagation
+ * with works at the basic block level and extends its capabilities by
+ * leveraging the Abstract Interpretation Framework's FixPointIterator
+ * and HashedAbstractEnvironment facilities.
+ *
+ * By running the fix point iterator, instead of having no knowledge at
+ * the start of a basic block, we can now run the analysis with constants
+ * that have been propagated beyond the basic block boundary making this
+ * more powerful than its predecessor pass.
+ */
+class IntraProcConstantPropagation final
+    : public ConstantPropFixpointAnalysis<Block*,
+                                          MethodItemEntry,
+                                          std::vector<Block*>,
+                                          InstructionIterable> {
+ public:
+  explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
+                                        const ConstPropConfig& config)
+      : ConstantPropFixpointAnalysis<Block*,
+                                     MethodItemEntry,
+                                     vector<Block*>,
+                                     InstructionIterable>(
+            cfg.entry_block(),
+            cfg.blocks(),
+            std::bind(&Block::succs, _1),
+            std::bind(&Block::preds, _1)),
+        m_config(config),
+        m_lcp{config},
+        m_cfg(cfg) {}
+
+  ConstPropEnvironment analyze_edge(
+      Block* const& source,
+      Block* const& destination,
+      const ConstPropEnvironment& exit_state_at_source) const override;
+
+  void simplify_instruction(
+      Block* const& block,
+      MethodItemEntry& mie,
+      const ConstPropEnvironment& current_state) const override;
+  void analyze_instruction(const MethodItemEntry& mie,
+                           ConstPropEnvironment* current_state) const override;
+  void apply_changes(IRCode*) const;
+
+  size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
+  size_t materialized_consts() const { return m_lcp.num_materialized_consts(); }
+
+ private:
+  const ConstPropConfig m_config;
+  mutable LocalConstantPropagation m_lcp;
+  const ControlFlowGraph& m_cfg;
+};
 
 class ConstantPropagationPass : public Pass {
  public:
-  ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
+  ConstantPropagationPass()
+      : Pass("ConstantPropagationPass"), m_branches_removed(0) {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("blacklist", {}, m_blacklist);
-  }
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  virtual void configure_pass(const PassConfig& pc) override;
+  virtual void run_pass(DexStoresVector& stores,
+                        ConfigFiles& cfg,
+                        PassManager& mgr) override;
 
-private:
-  std::vector<std::string> m_blacklist;
+
+ private:
+  ConstPropConfig m_config;
+
+  // stats
+  std::mutex m_stats_mutex;
+  size_t m_branches_removed;
+  size_t m_materialized_consts;
 };

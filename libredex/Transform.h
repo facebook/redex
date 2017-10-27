@@ -26,8 +26,6 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map);
 
 void visit(Block* b, std::unordered_set<Block*>& visited);
 
-void remove_succ_edges(Block* b, ControlFlowGraph* cfg);
-
 /*
  * Sets all the opcodes in unreachable blocks to MFLOW_FALLTHROUGH, and removes
  * all successor edges connecting them to the graph. Does not actually delete

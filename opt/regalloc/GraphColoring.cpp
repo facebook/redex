@@ -397,15 +397,13 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
  *
  * Nodes that are used by load-param or range opcodes are ignored.
  *
- * If select_spill_later is true:
- *   Nodes that aren't constrained to < 16 bits are partitioned into
- *   a separate stack so they can be colored separately later.
+ * Nodes that aren't constrained to < 16 bits are partitioned into a separate
+ * stack so they can be colored later.
  *
  * This is fairly similar to section 8.8 in [Briggs92], except we are using
  * a weight as given by [Smith00] instead of just the node's degree.
  */
-void Allocator::simplify(bool select_spill_later,
-                         interference::Graph* ig,
+void Allocator::simplify(interference::Graph* ig,
                          std::stack<reg_t>* select_stack,
                          std::stack<reg_t>* spilled_select_stack) {
   // Nodes of low weight that we know are colorable. Note that even if all
@@ -435,7 +433,7 @@ void Allocator::simplify(bool select_spill_later,
       auto reg = *low.begin();
       const auto& node = ig->get_node(reg);
       TRACE(REG, 6, "Removing %u\n", reg);
-      if (!select_spill_later || node.max_vreg() < max_unsigned_value(16)) {
+      if (node.max_vreg() < max_unsigned_value(16)) {
         select_stack->push(reg);
       } else {
         spilled_select_stack->push(reg);
@@ -830,12 +828,8 @@ void Allocator::find_split(const interference::Graph& ig,
 }
 
 // Function for finding first uses of params that need to be spilt.
-// If spill_param_properly is false, spill all param registers at start of
-// method body.
 std::unordered_map<reg_t, FatMethod::iterator> Allocator::find_param_first_uses(
-    const std::unordered_set<reg_t>& orig_params,
-    bool spill_param_properly,
-    IRCode* code) {
+    const std::unordered_set<reg_t>& orig_params, IRCode* code) {
   std::unordered_map<reg_t, FatMethod::iterator> load_param;
   if (orig_params.size() == 0) {
     return load_param;
@@ -843,14 +837,6 @@ std::unordered_map<reg_t, FatMethod::iterator> Allocator::find_param_first_uses(
   // Erase parameter from list if there exist instructions overwriting the
   // symreg.
   auto pend = code->get_param_instructions().end();
-
-  if (!spill_param_properly) {
-    for (auto param : orig_params) {
-      load_param[param] = pend;
-      ++m_stats.params_spill_early;
-    }
-    return load_param;
-  }
 
   std::unordered_set<reg_t> params = orig_params;
   auto ii = InstructionIterable(code);
@@ -1031,10 +1017,7 @@ void Allocator::spill(const interference::Graph& ig,
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(bool use_splitting,
-                         bool spill_param_properly,
-                         bool select_spill_later,
-                         IRCode* code) {
+void Allocator::allocate(bool use_splitting, IRCode* code) {
 
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
@@ -1060,8 +1043,8 @@ void Allocator::allocate(bool use_splitting,
     fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
-    auto ig = interference::build_graph(
-        fixpoint_iter, select_spill_later, code, initial_regs, range_set);
+    auto ig =
+        interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
     if (first) {
       coalesce(&ig, code);
@@ -1082,7 +1065,7 @@ void Allocator::allocate(bool use_splitting,
 
     std::stack<reg_t> select_stack;
     std::stack<reg_t> spilled_select_stack;
-    simplify(select_spill_later, &ig, &select_stack, &spilled_select_stack);
+    simplify(&ig, &select_stack, &spilled_select_stack);
     select(code, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s\n", SHOW(reg_transform));
@@ -1106,8 +1089,7 @@ void Allocator::allocate(bool use_splitting,
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      auto load_param = find_param_first_uses(
-          spill_plan.param_spills, spill_param_properly, code);
+      auto load_param = find_param_first_uses(spill_plan.param_spills, code);
       std::unordered_set<reg_t> new_temps;
       if (load_param.size() > 0) {
         spill_params(ig, load_param, code, &new_temps);

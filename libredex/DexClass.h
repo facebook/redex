@@ -425,7 +425,7 @@ class DexTypeList {
    */
   int encode(DexOutputIdx* dodx, uint32_t* output);
 
-  friend bool operator<(DexTypeList& a, DexTypeList& b) {
+  friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
     auto ita = a.m_list.begin();
     auto itb = b.m_list.begin();
     while (1) {
@@ -444,7 +444,7 @@ class DexTypeList {
   void gather_types(std::vector<DexType*>& ltype) const;
 };
 
-inline bool compare_dextypelists(DexTypeList* a, DexTypeList* b) {
+inline bool compare_dextypelists(const DexTypeList* a, const DexTypeList* b) {
   if (a == nullptr) {
     return b != nullptr;
   } else if (b == nullptr) {
@@ -454,7 +454,7 @@ inline bool compare_dextypelists(DexTypeList* a, DexTypeList* b) {
 }
 
 struct dextypelists_comparator {
-  bool operator()(DexTypeList* a, DexTypeList* b) {
+  bool operator()(const DexTypeList* a, const DexTypeList* b) const {
     return compare_dextypelists(a, b);
   }
 };
@@ -905,7 +905,7 @@ class DexMethod : public DexMethodRef {
   void sync();
 };
 
-typedef std::map<DexCode*, uint32_t> dexcode_to_offset;
+using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
 
 class DexClass {
  private:

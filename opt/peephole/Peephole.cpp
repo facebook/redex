@@ -343,7 +343,7 @@ struct Matcher {
       case DexPattern::Kind::string:
         return match_string(dex_pattern.string, insn->get_string());
       case DexPattern::Kind::literal:
-        return match_literal(dex_pattern.literal, insn->literal());
+        return match_literal(dex_pattern.literal, insn->get_literal());
       case DexPattern::Kind::method:
         return dex_pattern.method == insn->get_method();
       case DexPattern::Kind::type:
@@ -1130,7 +1130,7 @@ static bool first_instruction_literal_is(const Matcher& m) {
   if (m.matched_instructions.empty()) {
     return false;
   }
-  return m.matched_instructions.front()->literal() == VALUE;
+  return m.matched_instructions.front()->get_literal() == VALUE;
 }
 
 DexPattern mul_lit(Register src, Register dst) {

@@ -54,7 +54,9 @@ class PassConfig {
       }
     } else if (val.isString()) {
       auto str = val.asString();
-      std::transform(str.begin(), str.end(), str.begin(), static_cast<int(*)(int)>(std::tolower));
+      std::transform(str.begin(), str.end(), str.begin(), [](auto c) {
+        return ::tolower(c);
+      });
       if (str == "0" || str == "false" || str == "off" || str == "no") {
         param = false;
         return;
@@ -78,6 +80,24 @@ class PassConfig {
       param.clear();
       for (auto const& str : it) {
         param.emplace_back(str.asString());
+      }
+    }
+  }
+
+  void get(
+    const char* name,
+    const std::vector<std::string>& dflt,
+    std::unordered_set<std::string>& param
+  ) const {
+    auto it = m_config[name];
+    param.clear();
+    if (it == Json::nullValue) {
+      param.insert(
+          dflt.begin(),
+          dflt.end());
+    } else {
+      for (auto const& str : it) {
+        param.emplace(str.asString());
       }
     }
   }

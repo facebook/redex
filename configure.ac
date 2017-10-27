@@ -28,6 +28,7 @@ AX_BOOST_BASE([1.58.0], [], [AC_MSG_ERROR(
 AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AX_BOOST_REGEX
+AX_BOOST_PROGRAM_OPTIONS
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
 AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 

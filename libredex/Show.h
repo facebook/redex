@@ -67,10 +67,13 @@ std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
 std::string show(const InstructionIterable&);
 
-// variants of show that use deobfuscated names
-std::string show_deobfuscated(const DexField*);
-std::string show_deobfuscated(const DexMethod*);
+// Variants of show that use deobfuscated names
+std::string show_deobfuscated(const DexClass*);
+std::string show_deobfuscated(const DexAnnotation*);
+std::string show_deobfuscated(const DexFieldRef*);
+std::string show_deobfuscated(const DexMethodRef*);
 std::string show_deobfuscated(const IRInstruction*);
+std::string show_deobfuscated(const DexEncodedValue*);
 
 template <typename T>
 std::string show(const std::unique_ptr<T>& ptr) {

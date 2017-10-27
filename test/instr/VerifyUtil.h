@@ -15,6 +15,9 @@
 #include "DexLoader.h"
 #include "IRCode.h"
 
+using ResourceFiles = std::unordered_map<std::string, std::string>;
+ResourceFiles decode_resource_paths(const char* location, const char* suffix);
+
 struct Verify : testing::Test {
   Verify() {
     g_redex = new RedexContext();
@@ -26,18 +29,24 @@ struct Verify : testing::Test {
 
 struct PreVerify : public Verify {
   DexClasses classes;
+  ResourceFiles resources;
   PreVerify()
       : Verify(),
         classes(load_classes_from_dex(std::getenv("dex_pre"),
-                                      /* balloon */ false)) {}
+                                      /* balloon */ false)),
+        resources(decode_resource_paths(std::getenv("extracted_resources"),
+                                        "pre")) {}
 };
 
 struct PostVerify : public Verify {
   DexClasses classes;
+  ResourceFiles resources;
   PostVerify()
       : Verify(),
         classes(load_classes_from_dex(std::getenv("dex_post"),
-                                      /* balloon */ false)) {}
+                                      /* balloon */ false)),
+        resources(decode_resource_paths(std::getenv("extracted_resources"),
+                                        "post")) {}
 };
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);
