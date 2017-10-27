@@ -111,9 +111,19 @@ void visit(Block* start, std::unordered_set<Block*>& visited) {
   }
 }
 
+void remove_succ_edges(Block* b, ControlFlowGraph* cfg) {
+  std::vector<std::pair<Block*, Block*>> remove_edges;
+  for (auto& s : b->succs()) {
+    remove_edges.emplace_back(b, s);
+  }
+  for (auto& p : remove_edges) {
+    cfg->remove_all_edges(p.first, p.second);
+  }
+}
+
 size_t remove_unreachable_blocks(IRCode* code) {
   auto& cfg = code->cfg();
-  const auto& blocks = cfg.blocks();
+  auto& blocks = cfg.blocks();
   size_t insns_removed{0};
 
   // remove unreachable blocks
@@ -126,7 +136,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
     }
     // Remove all successor edges. Note that we don't need to try and remove
     // predecessors since by definition, unreachable blocks have no preds
-    cfg.remove_succ_edges(b);
+    remove_succ_edges(b, &cfg);
     insns_removed += remove_block(code, b);
   }
 
@@ -177,7 +187,7 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block) {
     for (auto mie : will_move) {
       // insert the branch target at the beginning of new_block
       // and make sure `m_begin` and `m_end`s point to the right places
-      Block* before = cfg.find_block_that_ends_here(new_block->begin());
+      Block* before = cfg.find_block_that_ends_here(new_block->m_begin);
       new_block->m_begin = code->insert_before(new_block->begin(), *mie);
       if (before != nullptr) {
         before->m_end = new_block->m_begin;

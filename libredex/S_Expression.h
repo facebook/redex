@@ -58,7 +58,7 @@ class Pattern;
  * Examples of S-expressions:
  *   #12
  *   "a string\n"
- *   (a (b c) d) ; a comment
+ *   (a (b c) d)
  *   ((#-1 "a, b, c") (#0 d) (#1 ()))
  *
  * Note that a number that is not prefixed with the `#` character is interpreted
@@ -289,12 +289,6 @@ class s_expr_istream final {
  */
 class s_patn {
  public:
-
-  class MatchException final : public std::runtime_error {
-   public:
-    explicit MatchException(const std::string& what_arg)
-        : std::runtime_error(what_arg) {}
-  };
   /*
    * The wildcard pattern matches any S-expression.
    */
@@ -357,8 +351,6 @@ class s_patn {
    */
   bool match_with(const s_expr& expr);
 
-  void must_match(const s_expr& expr, const std::string& msg);
-
  private:
   // By construction, m_pattern can never be null.
   std::shared_ptr<s_expr_impl::Pattern> m_pattern;
@@ -370,9 +362,7 @@ enum class ComponentKind { Int32Atom, StringAtom, List };
 
 // Checks whether a character belongs to a Lisp-like symbol, i.e., a string atom
 // that can be represented without quotes.
-inline bool is_symbol_char(char c) {
-  return std::isalnum(c) || c == '_' || c == '-' || c == '/' || c == ':';
-}
+inline bool is_symbol_char(char c) { return std::isalnum(c) || c == '_'; }
 
 class Component {
  public:
@@ -794,10 +784,6 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
       m_stack.top().add_element(atom);
       break;
     }
-    case ';': {
-      m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      break;
-    }
     default: {
       // The next S-expression is necessary a symbol, i.e., an unquoted string.
       if (!s_expr_impl::is_symbol_char(next_char)) {
@@ -867,11 +853,4 @@ inline s_patn::s_patn(std::initializer_list<s_patn> heads, s_expr& tail)
 
 inline bool s_patn::match_with(const s_expr& expr) {
   return m_pattern->match_with(expr);
-}
-
-inline void s_patn::must_match(const s_expr& expr, const std::string& msg) {
-  if (!m_pattern->match_with(expr)) {
-    throw MatchException("Could not find match against " + expr.str() + ": " +
-                         msg);
-  }
 }

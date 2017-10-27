@@ -11,7 +11,6 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
-#include "DexOpcode.h"
 #include "Transform.h"
 
 namespace {
@@ -33,8 +32,7 @@ DexProto* make_static_sig(DexMethod* meth) {
   auto new_args = DexTypeList::make_type_list(std::move(arg_list));
   return DexProto::make_proto(rtype, new_args);
 }
-
-} // namespace
+}
 
 MethodBlock::MethodBlock(FatMethod::iterator iterator, MethodCreator* creator)
     : mc(creator), curr(iterator) {}
@@ -158,6 +156,23 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
   ifield_op(opcode, field, obj, src);
 }
 
+static DexOpcode move_result_pseudo_for_iget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_IGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_IGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
 void MethodBlock::ifield_op(DexOpcode opcode,
                             DexField* field,
                             Location obj,
@@ -169,9 +184,8 @@ void MethodBlock::ifield_op(DexOpcode opcode,
     src_or_dst.type = field->get_class();
     iget->set_src(0, obj.get_reg());
     push_instruction(iget);
-    push_instruction(
-        (new IRInstruction(opcode::move_result_pseudo_for_iget(opcode)))
-            ->set_dest(src_or_dst.get_reg()));
+    push_instruction((new IRInstruction(move_result_pseudo_for_iget(opcode)))
+                         ->set_dest(src_or_dst.get_reg()));
   } else {
     auto iput = new IRInstruction(opcode);
     iput->set_field(field);
@@ -262,9 +276,8 @@ void MethodBlock::sfield_op(DexOpcode opcode,
     sget->set_field(field);
     src_or_dst.type = field->get_class();
     push_instruction(sget);
-    push_instruction(
-        (new IRInstruction(opcode::move_result_pseudo_for_sget(opcode)))
-            ->set_dest(src_or_dst.get_reg()));
+    push_instruction((new IRInstruction(move_result_pseudo_for_iget(opcode)))
+                         ->set_dest(src_or_dst.get_reg()));
   } else {
     auto sput = new IRInstruction(opcode);
     sput->set_field(field)->set_src(0, src_or_dst.get_reg());

@@ -88,6 +88,14 @@ std::ostream& operator<<(std::ostream& o, const ConstantValue& cv);
 
 class ConstantDomain final
     : public AbstractDomainScaffolding<ConstantValue, ConstantDomain> {
+ private:
+  static ConstantDomain value(int32_t v, ConstantValue::ConstantType type) {
+    assert(type != ConstantValue::ConstantType::INVALID);
+    ConstantDomain result;
+    result.set_to_value(ConstantValue(v, type));
+    return result;
+  }
+
  public:
   ConstantDomain(AbstractValueKind kind = AbstractValueKind::Top)
       : AbstractDomainScaffolding<ConstantValue, ConstantDomain>(kind) {}
@@ -99,13 +107,6 @@ class ConstantDomain final
   }
 
   static ConstantDomain top() { return ConstantDomain(AbstractValueKind::Top); }
-
-  static ConstantDomain value(int32_t v, ConstantValue::ConstantType type) {
-    assert(type != ConstantValue::ConstantType::INVALID);
-    ConstantDomain result;
-    result.set_to_value(ConstantValue(v, type));
-    return result;
-  }
 
   friend class ConstPropEnvUtil;
 };

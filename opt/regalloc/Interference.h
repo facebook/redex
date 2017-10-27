@@ -221,7 +221,7 @@ class Graph {
   std::ostream& write_dot_format(std::ostream&) const;
 
  private:
-  uint32_t edge_weight(const Node&, const Node&) const;
+  bool should_separate_node(const Node&, const Node&) const;
 
   using ContainmentEdge = std::pair<reg_t, reg_t>;
   Graph() = default;
@@ -268,6 +268,7 @@ class GraphBuilder {
 
  public:
   static Graph build(const LivenessFixpointIterator&,
+                     bool select_spill_later,
                      IRCode*,
                      reg_t initial_regs,
                      const RangeSet&);
@@ -278,16 +279,17 @@ class GraphBuilder {
   static void add_edge(Graph*, reg_t, reg_t);
 };
 
-uint32_t edge_weight_helper(uint8_t, uint8_t);
+uint32_t edge_weight(uint8_t, uint8_t);
 
 } // namespace impl
 
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
+                         bool select_spill_later,
                          IRCode* code,
                          reg_t initial_regs,
                          const RangeSet& range_set) {
   return impl::GraphBuilder::build(
-      fixpoint_iter, code, initial_regs, range_set);
+      fixpoint_iter, select_spill_later, code, initial_regs, range_set);
 }
 
 } // interference

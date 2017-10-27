@@ -81,7 +81,7 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   auto op = insn->opcode();
   auto dest_width = required_bit_width(insn->dest());
   always_assert(dest_width <= 8);
-  auto literal = insn->get_literal();
+  auto literal = insn->literal();
   switch (op) {
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
@@ -184,22 +184,10 @@ static void check_load_params(DexMethod* method) {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
-      always_assert_log(insn->dest() < next_ins,
-                        "Instruction %s refers to a register (v%u) >= size (%u)"
-                        "in method %s\n",
-                        SHOW(insn),
-                        insn->dest(),
-                        next_ins,
-                        SHOW(method));
+      always_assert(insn->dest() < next_ins);
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      always_assert_log(insn->src(i) < next_ins,
-                        "Instruction %s refers to a register (v%u) >= size (%u)"
-                        "in method %s\n",
-                        SHOW(insn),
-                        insn->src(i),
-                        next_ins,
-                        SHOW(method));
+      always_assert(insn->src(i) < next_ins);
     }
   }
 }
@@ -208,8 +196,6 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   switch (opcode::ref(insn->opcode())) {
     case opcode::Ref::None:
     case opcode::Ref::Data:
-      return new DexInstruction(insn->opcode());
-    case opcode::Ref::Literal:
       return new DexInstruction(insn->opcode());
     case opcode::Ref::String:
       return new DexOpcodeString(insn->opcode(), insn->get_string());
@@ -220,7 +206,6 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     case opcode::Ref::Method:
       return new DexOpcodeMethod(insn->opcode(), insn->get_method());
   }
-  not_reached();
 }
 
 // IRCode::remove_opcode doesn't support removal of move-result-pseudo
@@ -301,8 +286,8 @@ static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     dex_insn->set_src(i, insn->src(i));
   }
-  if (insn->has_literal()) {
-    dex_insn->set_literal(insn->get_literal());
+  if (opcode::has_literal(op)) {
+    dex_insn->set_literal(insn->literal());
   }
   if (dex_insn->has_arg_word_count()) {
     dex_insn->set_arg_word_count(insn->srcs_size());

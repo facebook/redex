@@ -85,7 +85,6 @@ namespace pts_impl {
     OP_STRING(PTS_CONST_STRING),        \
     OP_STRING(PTS_CONST_CLASS),         \
     OP_STRING(PTS_NEW_OBJECT),          \
-    OP_STRING(PTS_GET_CLASS),           \
     OP_STRING(PTS_CHECK_CAST),          \
     OP_STRING(PTS_GET_EXCEPTION),       \
     OP_STRING(PTS_LOAD_THIS),           \
@@ -135,8 +134,6 @@ s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
   case PTS_ARRAY_ELEMENT: {
     return s_expr("PTS_ARRAY_ELEMENT");
   }
-  default:
-    not_reached();
   }
 }
 
@@ -201,7 +198,6 @@ s_expr PointsToOperation::to_s_expr() const {
         {op_kind_to_s_expr(kind), s_expr(dex_type->get_name()->str())});
   }
   case PTS_GET_EXCEPTION:
-  case PTS_GET_CLASS:
   case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
@@ -232,8 +228,6 @@ s_expr PointsToOperation::to_s_expr() const {
   case PTS_INVOKE_STATIC: {
     return s_expr({op_kind_to_s_expr(kind), dex_method_to_s_expr(dex_method)});
   }
-  default:
-    not_reached();
   }
 }
 
@@ -269,7 +263,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
         PointsToOperation(op_kind, DexType::make_type(dex_type_str.c_str()))};
   }
   case PTS_GET_EXCEPTION:
-  case PTS_GET_CLASS:
   case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
@@ -326,8 +319,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     }
     return {PointsToOperation(op_kind, *dex_method_opt)};
   }
-  default:
-    not_reached();
   }
 }
 
@@ -375,7 +366,7 @@ class PointsToVariableSet {
 
 std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
     const {
-  always_assert(m_operation.is_invoke() || m_operation.is_disjunction());
+  assert(m_operation.is_invoke() || m_operation.is_disjunction());
   std::vector<std::pair<size_t, PointsToVariable>> args;
   for (const auto& binding : m_arguments) {
     if (binding.first >= 0) {
@@ -389,29 +380,24 @@ std::vector<std::pair<size_t, PointsToVariable>> PointsToAction::get_arguments()
 
 PointsToAction PointsToAction::load_operation(
     const PointsToOperation& operation, PointsToVariable dest) {
-  always_assert(operation.is_load());
+  assert(operation.is_load());
   return PointsToAction(operation, {{dest_key(), dest}});
 }
 
-PointsToAction PointsToAction::get_class_operation(PointsToVariable dest,
-                                                   PointsToVariable src) {
-  return PointsToAction(PointsToOperation(PTS_GET_CLASS),
-                        {{dest_key(), dest}, {src_key(), src}});
-}
-
-PointsToAction PointsToAction::check_cast_operation(DexType* dex_type,
-                                                    PointsToVariable dest,
-                                                    PointsToVariable src) {
-  return PointsToAction(PointsToOperation(PTS_CHECK_CAST, dex_type),
-                        {{dest_key(), dest}, {src_key(), src}});
+PointsToAction PointsToAction::check_cast_operation(
+    const PointsToOperation& operation,
+    PointsToVariable dest,
+    PointsToVariable src) {
+  assert(operation.is_check_cast());
+  return PointsToAction(operation, {{dest_key(), dest}, {src_key(), src}});
 }
 
 PointsToAction PointsToAction::get_operation(
     const PointsToOperation& operation,
     PointsToVariable dest,
     boost::optional<PointsToVariable> instance) {
-  always_assert(operation.is_get());
-  always_assert(!(instance && operation.kind == PTS_SPUT));
+  assert(operation.is_get());
+  assert(!(instance && operation.kind == PTS_SPUT));
   if (instance) {
     return PointsToAction(operation,
                           {{dest_key(), dest}, {instance_key(), *instance}});
@@ -424,8 +410,8 @@ PointsToAction PointsToAction::put_operation(
     const PointsToOperation& operation,
     PointsToVariable rhs,
     boost::optional<PointsToVariable> lhs) {
-  always_assert(operation.is_put());
-  always_assert(!(lhs && operation.kind == PTS_SPUT));
+  assert(operation.is_put());
+  assert(!(lhs && operation.kind == PTS_SPUT));
   if (lhs) {
     return PointsToAction(operation, {{lhs_key(), *lhs}, {rhs_key(), rhs}});
   } else {
@@ -437,9 +423,9 @@ PointsToAction PointsToAction::invoke_operation(
     const PointsToOperation& operation,
     boost::optional<PointsToVariable> dest,
     boost::optional<PointsToVariable> instance,
-    const std::vector<std::pair<int32_t, PointsToVariable>>& args) {
-  always_assert(operation.is_invoke());
-  always_assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
+    const std::vector<std::pair<size_t, PointsToVariable>>& args) {
+  assert(operation.is_invoke());
+  assert(!(instance && operation.kind == PTS_INVOKE_STATIC));
   std::vector<std::pair<int32_t, PointsToVariable>> bindings;
   bindings.reserve(args.size() + 2);
   if (dest) {
@@ -452,8 +438,10 @@ PointsToAction PointsToAction::invoke_operation(
   return PointsToAction(operation, bindings);
 }
 
-PointsToAction PointsToAction::return_operation(PointsToVariable src) {
-  return PointsToAction(PointsToOperation(PTS_RETURN), {{src_key(), src}});
+PointsToAction PointsToAction::return_operation(
+    const PointsToOperation& operation, PointsToVariable src) {
+  assert(operation.is_return());
+  return PointsToAction(operation, {{src_key(), src}});
 }
 
 template <typename InputIterator>
@@ -477,7 +465,7 @@ PointsToAction::PointsToAction(
   for (const auto& binding : arguments) {
     auto status = m_arguments.insert(binding);
     // Making sure that there's no duplicate binding in the argument list.
-    always_assert(status.second);
+    assert(status.second);
   }
   m_arguments.shrink_to_fit();
 }
@@ -529,8 +517,6 @@ std::string special_edge_to_string(SpecialPointsToEdge e) {
   case PTS_ARRAY_ELEMENT: {
     return "ARRAY_ELEM";
   }
-  default:
-    not_reached();
   }
 }
 
@@ -561,10 +547,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
   }
   case PTS_LOAD_PARAM: {
     o << a.dest() << " = PARAM " << op.parameter;
-    break;
-  }
-  case PTS_GET_CLASS: {
-    o << a.dest() << " = GET_CLASS(" << a.src() << ")";
     break;
   }
   case PTS_CHECK_CAST: {
@@ -997,6 +979,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_RETURN_OBJECT: {
       m_semantics->add(PointsToAction::return_operation(
+          PointsToOperation(PTS_RETURN),
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
     }
@@ -1015,7 +998,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_CHECK_CAST: {
       m_semantics->add(PointsToAction::check_cast_operation(
-          insn->get_type(),
+          PointsToOperation(PTS_CHECK_CAST, insn->get_type()),
           get_variable_from_anchor(insn),
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
@@ -1141,15 +1124,7 @@ class PointsToActionGenerator final {
   // relevant to points-to analysis and for which the source code is either
   // unavailable or hard to process automatically (e.g., native methods).
   void translate_invoke(IRInstruction* insn, const AnchorEnvironment& state) {
-    // Calls to java.lang.Object#getClass() are converted to a points-to
-    // operation in order to simplify the analysis.
-    if (m_utils.is_get_class_invocation(insn)) {
-      m_semantics->add(PointsToAction::get_class_operation(
-          get_variable_from_anchor(insn),
-          get_variable_from_anchor_set(state.get(insn->src(0)))));
-      return;
-    }
-    // Otherwise, we default to the general translation of method calls.
+    // For now, we just default to the general translation of method calls.
     default_invoke_translation(insn, state);
   }
 
@@ -1158,7 +1133,7 @@ class PointsToActionGenerator final {
     DexMethodRef* dex_method = insn->get_method();
     DexProto* proto = dex_method->get_proto();
     const auto& signature = proto->get_args()->get_type_list();
-    std::vector<std::pair<int32_t, PointsToVariable>> args;
+    std::vector<std::pair<size_t, PointsToVariable>> args;
     IRSourceIterator src_it(insn);
 
     // Allocate a variable for the returned object if any.
@@ -1178,7 +1153,7 @@ class PointsToActionGenerator final {
     }
 
     // Process the arguments of the method invocation.
-    int32_t arg_pos = 0;
+    size_t arg_pos = 0;
     for (DexType* dex_type : signature) {
       if (is_object(dex_type)) {
         args.push_back(
@@ -1364,7 +1339,7 @@ class Shrinker final {
   void build_dependency_graph() {
     for (const PointsToAction& pt_action : *m_pt_actions) {
       const PointsToOperation& op = pt_action.operation();
-      if (op.is_get_class() || op.is_check_cast()) {
+      if (op.is_check_cast()) {
         add_dependency(pt_action.dest(), pt_action.src());
         continue;
       }
@@ -1564,8 +1539,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s) {
   return o;
 }
 
-PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
-    : m_generate_stubs(generate_stubs), m_type_system(scope) {
+PointsToSemantics::PointsToSemantics(const Scope& scope)
+    : m_type_system(scope) {
   // We size the hash table so as to fit all the methods in scope.
   size_t method_count = 0;
   for (DexClass* dex_class : scope) {
@@ -1592,41 +1567,18 @@ PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
   });
 }
 
-void PointsToSemantics::load_stubs(const std::string& file_name) {
-  std::ifstream file_input(file_name);
-  s_expr_istream s_expr_input(file_input);
-  while (s_expr_input.good()) {
-    s_expr expr;
-    s_expr_input >> expr;
-    if (s_expr_input.eoi()) {
-      break;
-    }
-    always_assert_log(
-        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
-    auto semantics_opt = PointsToMethodSemantics::from_s_expr(expr);
-    always_assert_log(
-        semantics_opt, "Couldn't parse S-expression: %s\n", expr.str().c_str());
-    DexMethodRef* dex_method = semantics_opt->get_method();
-    auto it = m_method_semantics.find(dex_method);
-    if (it == m_method_semantics.end()) {
-      m_method_semantics.emplace(dex_method, *semantics_opt);
-    } else {
-      TRACE(PTA, 2, "Collision with stub for method %s\n", SHOW(dex_method));
-    }
-  }
-}
-
-boost::optional<PointsToMethodSemantics*>
-PointsToSemantics::get_method_semantics(DexMethodRef* dex_method) {
+const PointsToMethodSemantics& PointsToSemantics::get_method_semantics(
+    DexMethod* dex_method) const {
   auto entry = m_method_semantics.find(dex_method);
-  if (entry == m_method_semantics.end()) {
-    return {};
-  }
-  return boost::optional<PointsToMethodSemantics*>(&entry->second);
+  always_assert(entry != m_method_semantics.end());
+  return entry->second;
 }
 
-MethodKind PointsToSemantics::default_method_kind() const {
-  return m_generate_stubs ? PTS_STUB : PTS_APK;
+PointsToMethodSemantics* PointsToSemantics::get_method_semantics(
+    DexMethod* dex_method) {
+  auto entry = m_method_semantics.find(dex_method);
+  always_assert(entry != m_method_semantics.end());
+  return &entry->second;
 }
 
 void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
@@ -1645,7 +1597,7 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
                         SHOW(dex_method->get_name()));
     }
   } else {
-    kind = default_method_kind();
+    kind = PTS_APK;
   }
   m_method_semantics.emplace(std::piecewise_construct,
                              std::forward_as_tuple(dex_method),
@@ -1665,7 +1617,7 @@ void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
   // All hash table entries have been initialized in the constructor.
   always_assert(entry != m_method_semantics.end());
   PointsToMethodSemantics* semantics = &entry->second;
-  if (semantics->kind() == default_method_kind()) {
+  if (semantics->kind() == PTS_APK) {
     pts_impl::PointsToActionGenerator generator(
         dex_method, semantics, m_type_system, m_utils);
     generator.run();

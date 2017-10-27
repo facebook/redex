@@ -31,8 +31,8 @@ static void test_1_opcode(const char* name,
       insn.set_src(i, i);
     }
     insn.set_dest(0);
-    EXPECT_EQ(insn.get_literal(), ext_value)
-        << "for opcode " << name << " value " << value;
+    EXPECT_EQ(insn.literal(), ext_value) << "for opcode " << name
+                                         << " value " << value;
   };
   // perform no more than 256 tests
   // note: naive 1LL<<width may overflow

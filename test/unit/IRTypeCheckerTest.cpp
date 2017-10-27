@@ -7,7 +7,6 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
 #include <sstream>
@@ -22,8 +21,6 @@
 #include "IRTypeChecker.h"
 #include "LocalDce.h"
 #include "RedexContext.h"
-
-using namespace testing;
 
 class IRTypeCheckerTest : public ::testing::Test {
  public:
@@ -72,10 +69,8 @@ TEST_F(IRTypeCheckerTest, load_param) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: "
-                           "IOPCODE_LOAD_PARAM v5 not at the start "
-                           "of the method$"));
+  EXPECT_EQ("Encountered load-param instruction not at the start of the method",
+            checker.what());
 }
 
 TEST_F(IRTypeCheckerTest, move_result) {
@@ -91,11 +86,11 @@ TEST_F(IRTypeCheckerTest, move_result) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: MOVE_RESULT v0 "
-                           "without appropriate prefix instruction. Expected "
-                           "invoke or filled-new-array, got "
-                           "ADD_INT v5, v5, v5$"));
+  EXPECT_EQ(
+      "Encountered move-result instruction without appropriate prefix "
+      "instruction. Expected invoke or filled-new-array, got ADD_INT v5, v5, "
+      "v5",
+      checker.what());
 }
 
 TEST_F(IRTypeCheckerTest, move_result_at_start) {
@@ -119,41 +114,8 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   IRTypeChecker checker(method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: MOVE_RESULT v0 "
-                           "at start of the method$"));
-}
-
-TEST_F(IRTypeCheckerTest, move_result_pseudo_no_prefix) {
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
-      dasm(OPCODE_ADD_INT, {5_v, 5_v, 5_v}),
-  };
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex(
-          "^Encountered [0x[0-9a-f]*] OPCODE: IOPCODE_MOVE_RESULT_PSEUDO v0 "
-          "without appropriate prefix instruction$"));
-}
-
-TEST_F(IRTypeCheckerTest, move_result_pseudo_no_suffix) {
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, get_object_type(), {14_v}),
-  };
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(),
-              MatchesRegex("^Did not find move-result-pseudo after "
-                           "[0x[0-9a-f]*] OPCODE: CHECK_CAST v14, "
-                           "Ljava/lang/Object;"));
+  EXPECT_EQ("Encountered move-result instruction at start of method",
+            checker.what());
 }
 
 TEST_F(IRTypeCheckerTest, arrayRead) {

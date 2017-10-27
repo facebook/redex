@@ -553,30 +553,6 @@ std::unordered_set<uint32_t> get_xml_reference_attributes(
   return extract_xml_reference_attributes(file_contents, filename);
 }
 
-bool is_drawable_attribute(
-    android::ResXMLTree& parser,
-    size_t attr_index) {
-  size_t name_size;
-  const char* attr_name_8 = parser.getAttributeName8(attr_index, &name_size);
-  if (attr_name_8 != nullptr) {
-    std::string name_str = std::string(attr_name_8, name_size);
-    if (name_str.compare("drawable") == 0) {
-      return true;
-    }
-  }
-
-  const char16_t* attr_name_16 = parser.getAttributeName(attr_index, &name_size);
-  if (attr_name_16 != nullptr) {
-    android::String8 name_str_8 = android::String8(attr_name_16, name_size);
-    std::string name_str = std::string(name_str_8.string(), name_size);
-    if (name_str.compare("drawable") == 0) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 int inline_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, android::Res_value>& id_to_inline_value) {
@@ -597,12 +573,6 @@ int inline_xml_reference_attributes(
     if (type == android::ResXMLParser::START_TAG) {
       const size_t attr_count = parser.getAttributeCount();
       for (size_t i = 0; i < attr_count; ++i) {
-        // Older versions of Android (below V5) do not allow inlining into
-        // android:drawable attributes.
-        if (is_drawable_attribute(parser, i)) {
-          continue;
-        }
-
         if (parser.getAttributeDataType(i) == android::Res_value::TYPE_REFERENCE) {
           android::Res_value outValue;
           parser.getAttributeValue(i, &outValue);

@@ -85,9 +85,6 @@ class OatFile {
   // Return true if we've detected samsung customizations to the oatfile format.
   virtual bool is_samsung() const = 0;
 
-  // Return the location of the art boot image, or null if there is none.
-  virtual std::unique_ptr<std::string> get_art_image_loc() const = 0;
-
   static Status build(const std::string& oat_file,
                       const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,

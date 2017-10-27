@@ -24,8 +24,7 @@
 
 namespace {
 
-using refs_t = std::unordered_map<const DexClass*,
-                                  std::set<DexClass*, dexclasses_comparator>>;
+using refs_t = std::unordered_map<const DexClass*, std::set<DexClass*>>;
 using class_to_store_map_t = std::unordered_map<const DexClass*, DexStore*>;
 using allowed_store_map_t = std::unordered_map<std::string, std::set<std::string>>;
 

@@ -26,7 +26,6 @@ void drop_this(DexMethod* method) {
     if (insn->dests_size()) {
       auto dest = insn->dest();
       assert(dest != this_reg);
-      // Make sure the `this` register isn't the upper half of a wide pair.
       assert(!insn->dest_is_wide() || insn->dest() != (this_reg - 1));
       if (dest > this_reg) {
         insn->set_dest(dest - 1);
@@ -34,17 +33,8 @@ void drop_this(DexMethod* method) {
     }
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       auto src = insn->src(i);
-      assert_log(
-          src != this_reg, "method: %s\ninsn: %s\n", SHOW(method), SHOW(insn));
-      if (!is_invoke(insn->opcode())) {
-        // Make sure the `this` register isn't the upper half of a wide pair.
-        // Exclude invoke because they explicitly refer to all registers, even
-        // upper halves.
-        assert_log(!(insn->src_is_wide(i) && insn->src(i) == this_reg - 1),
-                   "method: %s\ninsn: %s\n",
-                   SHOW(method),
-                   SHOW(insn));
-      }
+      assert_log(src != this_reg, "method: %s\ninsn: %s\n", SHOW(method), SHOW(insn));
+      assert(!insn->src_is_wide(i) || insn->src(i) != (this_reg - 1));
       if (src > this_reg) {
         insn->set_src(i, src - 1);
       }

@@ -111,9 +111,10 @@ void AnalysisImpl::filter_list(
 ) {
   if (list.empty()) return;
 
-  auto find_in_list = [&](const std::string& name) {
-    for (const std::string& el_name : list) {
-      if (name == el_name) {
+  auto find_in_list = [&](const char* name) {
+    for (auto& el_str : list) {
+      auto const el_name = el_str.c_str();
+      if (strncmp(name, el_name, strlen(el_name)) == 0) {
         return true;
       }
     }
@@ -123,7 +124,7 @@ void AnalysisImpl::filter_list(
   for (const auto intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
-    const std::string& intf_name = intf_cls->get_deobfuscated_name();
+    const auto intf_name = intf_cls->get_deobfuscated_name().c_str();
     bool match = find_in_list(intf_name);
     if (match && keep_match) continue;
     if (!match && !keep_match) continue;

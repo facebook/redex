@@ -198,7 +198,7 @@ class AliasFixpointIterator final
     case OPCODE_CONST_4:
     case OPCODE_CONST_16:
       if (m_config.eliminate_const_literals) {
-        return RegisterValue{insn->get_literal()};
+        return RegisterValue{insn->literal()};
       } else {
         return RegisterValue::none();
       }

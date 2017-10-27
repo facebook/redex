@@ -15,7 +15,6 @@
 #include "Creators.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "FinalInline.h"
@@ -33,6 +32,23 @@ static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>>
         {"D", {OPCODE_SGET_WIDE, OPCODE_SPUT_WIDE}},
         {"Ljava/lang/String;", {OPCODE_SGET_OBJECT, OPCODE_SPUT_OBJECT}},
 };
+
+static DexOpcode move_result_pseudo_for_sget(DexOpcode op) {
+  switch (op) {
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_SHORT:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET:
+      return IOPCODE_MOVE_RESULT_PSEUDO;
+    case OPCODE_SGET_OBJECT:
+      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    case OPCODE_SGET_WIDE:
+      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+    default:
+      always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
 
 struct ConstPropTest : testing::Test {
   DexType* m_int_type;
@@ -161,8 +177,7 @@ DexField* add_dependent_field(DexClass* cls,
   sget->set_field(parent);
   code->push_back(sget);
   code->push_back(
-      (new IRInstruction(opcode::move_result_pseudo_for_sget(ops.first)))
-          ->set_dest(0));
+      (new IRInstruction(move_result_pseudo_for_sget(ops.first)))->set_dest(0));
   auto sput = new IRInstruction(ops.second);
   sput->set_field(field)->set_src(0, 0);
   code->push_back(sput);

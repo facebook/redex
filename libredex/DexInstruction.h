@@ -108,7 +108,7 @@ class DexInstruction : public Gatherable {
   uint16_t arg_word_count() const;
   uint16_t range_base() const;
   uint16_t range_size() const;
-  int64_t get_literal() const;
+  int64_t literal() const;
   int32_t offset() const;
 
   /*
@@ -231,7 +231,6 @@ class DexOpcodeData : public DexInstruction {
   uint16_t* m_data;
 
  public:
-  // This size refers to the whole instruction, not just the data portion
   virtual uint16_t size() const;
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
   virtual DexOpcodeData* clone() const { return new DexOpcodeData(*this); }
@@ -260,8 +259,6 @@ class DexOpcodeData : public DexInstruction {
   ~DexOpcodeData() { delete[] m_data; }
 
   const uint16_t* data() { return m_data; }
-  // This size refers to just the length of the data array
-  const uint16_t data_size() { return m_data_count; }
 };
 
 /**
@@ -404,10 +401,6 @@ inline bool is_conditional_branch(DexOpcode op) {
 
 inline bool is_multi_branch(DexOpcode op) {
   return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
-}
-
-inline bool is_literal_const(DexOpcode op) {
-  return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16;
 }
 
 inline bool is_const(DexOpcode op) {

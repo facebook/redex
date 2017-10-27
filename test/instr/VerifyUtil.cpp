@@ -8,13 +8,8 @@
  */
 
 #include <algorithm>
-#include <cstring>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <gtest/gtest.h>
-#include <sstream>
 
-#include "Debug.h"
 #include "VerifyUtil.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
@@ -84,26 +79,4 @@ IRInstruction* find_instruction(
       return true;
     });
   return it == end ? nullptr : (*it).insn;
-}
-
-// Given a semicolon delimited list of extracted files from the APK, return a
-// map of the original APK's file path to its path on disk.
-ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
-  ResourceFiles files;
-  std::istringstream input;
-  input.str(location);
-  for (std::string file_path; std::getline(input, file_path, ':');) {
-    auto pos = file_path.rfind("/");
-    always_assert(pos >= 0 && pos + 1 < file_path.length());
-    auto directory = file_path.substr(0, pos);
-    if (boost::algorithm::ends_with(directory, suffix)) {
-      auto original_name = file_path.substr(pos + 1);
-      // Undo simple escaping at buck_imports/redex_utils
-      boost::replace_all(original_name, "zC", ":");
-      boost::replace_all(original_name, "zS", "/");
-      boost::replace_all(original_name, "zZ", "z");
-      files.emplace(original_name, file_path);
-    }
-  }
-  return files;
 }

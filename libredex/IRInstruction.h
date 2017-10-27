@@ -137,9 +137,6 @@ class IRInstruction final {
   bool has_method() const {
     return opcode::ref(m_opcode) == opcode::Ref::Method;
   }
-  bool has_literal() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Literal;
-  }
 
   /*
    * Number of registers used.
@@ -154,29 +151,15 @@ class IRInstruction final {
            (opcode_impl::dests_size(m_opcode) && opcode::may_throw(m_opcode));
   }
 
-
   /*
    * Information about operands.
    */
-
-  // Invoke instructions treat wide registers differently than *-wide
-  // instructions. They explicitly refer to both halves of a pair, rather than
-  // just the lower half. This method returns true on both lower and upper
-  // halves.
-  bool invoke_src_is_wide(size_t i) const;
-
   bool src_is_wide(size_t i) const;
   bool dest_is_wide() const {
-    always_assert(dests_size());
     return opcode_impl::dest_is_wide(m_opcode);
   }
   bool is_wide() const {
-    for (size_t i = 0; i < srcs_size(); i++) {
-      if (src_is_wide(i)) {
-        return true;
-      }
-    }
-    return dests_size() && dest_is_wide();
+    return src_is_wide(0) || src_is_wide(1) || dest_is_wide();
   }
   bit_width_t src_bit_width(uint16_t i) const;
 
@@ -199,6 +182,8 @@ class IRInstruction final {
     always_assert(opcode::has_range(m_opcode));
     return m_range.second;
   }
+  int64_t literal() const { return m_literal; }
+  int32_t offset() const { return m_offset; }
 
   /*
    * Setters for logical parts of the instruction.
@@ -230,15 +215,12 @@ class IRInstruction final {
     m_srcs.resize(count);
     return this;
   }
-
-  int64_t get_literal() const {
-    always_assert(has_literal());
-    return m_literal;
-  }
-
   IRInstruction* set_literal(int64_t literal) {
-    always_assert(has_literal());
     m_literal = literal;
+    return this;
+  }
+  IRInstruction* set_offset(int32_t offset) {
+    m_offset = offset;
     return this;
   }
 
@@ -333,16 +315,15 @@ class IRInstruction final {
   std::vector<uint16_t> m_srcs;
   uint16_t m_dest {0};
   union {
-    // Zero-initialize this union with the uint64_t member instead of a
-    // pointer-type member so that it works properly even on 32-bit machines
-    uint64_t m_literal{0};
-    DexString* m_string;
+    DexString* m_string {nullptr};
     DexType* m_type;
     DexFieldRef* m_field;
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
 
+  uint64_t m_literal {0};
+  int32_t m_offset {0};
   std::pair<uint16_t, uint16_t> m_range {0, 0};
 };
 

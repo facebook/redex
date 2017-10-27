@@ -235,8 +235,6 @@ inline bool is_any_init(const DexMethod* method) {
   return is_init(method) || is_clinit(method);
 }
 
-void relocate_method(DexMethod* method, DexType* to_type);
-
 /**
  * Merge the 2 visibility access flags. Return the most permissive visibility.
  */

@@ -26,23 +26,16 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
   }
 
   // A bit ugly copy from RMU pass, but...
-  auto load_annos = [](const std::vector<std::string>& list) {
-    std::unordered_set<const DexType*> set;
-    for (const auto& name : list) {
-      const auto type = DexType::get_type(name.c_str());
-      if (type != nullptr) {
-        set.insert(type);
-      }
+  std::unordered_set<const DexType*> ignore_string_literals_annos;
+  for (const auto& name : m_ignore_string_literals) {
+    const auto type = DexType::get_type(name.c_str());
+    if (type != nullptr) {
+      ignore_string_literals_annos.insert(type);
     }
-    return set;
-  };
+  }
 
-  auto reachables =
-      compute_reachable_objects(stores,
-                                load_annos(m_ignore_string_literals),
-                                load_annos(m_ignore_system_annos),
-                                nullptr,
-                                true /*generate graph*/);
+  auto reachables = compute_reachable_objects(
+      stores, ignore_string_literals_annos, nullptr, true /*generate graph*/);
 
   std::string tag = std::to_string(pm.get_current_pass_info()->repeat + 1);
 

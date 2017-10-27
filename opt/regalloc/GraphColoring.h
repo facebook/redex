@@ -93,7 +93,8 @@ class Allocator {
 
   bool coalesce(interference::Graph*, IRCode*);
 
-  void simplify(interference::Graph*,
+  void simplify(bool select_spill_later,
+                interference::Graph*,
                 std::stack<reg_t>* select_stack,
                 std::stack<reg_t>* spilled_select_stack);
 
@@ -131,7 +132,7 @@ class Allocator {
                   SplitPlan*);
 
   std::unordered_map<reg_t, FatMethod::iterator> find_param_first_uses(
-      const std::unordered_set<reg_t>&, IRCode*);
+      const std::unordered_set<reg_t>&, bool spill_param_properly, IRCode*);
 
   void spill_params(const interference::Graph&,
                     const std::unordered_map<reg_t, FatMethod::iterator>&,
@@ -144,7 +145,10 @@ class Allocator {
              IRCode*,
              std::unordered_set<reg_t>*);
 
-  void allocate(bool use_splitting, IRCode*);
+  void allocate(bool use_splitting,
+                bool spill_param_properly,
+                bool select_spill_later,
+                IRCode*);
 
   const Stats& get_stats() const { return m_stats; }
 

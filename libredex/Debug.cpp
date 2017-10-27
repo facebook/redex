@@ -10,28 +10,20 @@
 #include "Debug.h"
 
 #include <exception>
+
+#include <execinfo.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#ifndef _MSC_VER
-#include <execinfo.h>
 #include <unistd.h>
-#endif
 
-namespace {
 void crash_backtrace() {
-#ifndef _MSC_VER
   constexpr int max_bt_frames = 256;
   void* buf[max_bt_frames];
   auto frames = backtrace(buf, max_bt_frames);
   backtrace_symbols_fd(buf, frames, STDERR_FILENO);
-#else
-  fprintf(stderr, "Not supported in Windows.\n");
-#endif
 }
-}; // namespace
 
 void crash_backtrace_handler(int sig) {
   crash_backtrace();

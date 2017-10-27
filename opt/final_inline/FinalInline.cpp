@@ -406,9 +406,9 @@ class FinalInlineImpl {
               9,
               "- Integer Field: %s, %lu\n",
               SHOW(field),
-              static_cast<uint64_t>(const_op->get_literal()));
+              static_cast<uint64_t>(const_op->literal()));
         ev = DexEncodedValue::zero_for_type(field->get_type());
-        ev->value(static_cast<uint64_t>(const_op->get_literal()));
+        ev->value(static_cast<uint64_t>(const_op->literal()));
       }
       field->make_concrete(field->get_access(), ev);
     }

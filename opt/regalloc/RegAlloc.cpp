@@ -90,7 +90,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code);
           graph_coloring::Allocator allocator;
-          allocator.allocate(m_use_splitting, &code);
+          allocator.allocate(m_use_splitting,
+                             m_spill_param_properly,
+                             m_select_spill_later,
+                             &code);
           stats.accumulate(allocator.get_stats());
 
           TRACE(REG,

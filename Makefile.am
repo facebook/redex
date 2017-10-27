@@ -56,7 +56,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/string_simplification \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
-	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
@@ -92,7 +91,6 @@ libredex_la_SOURCES = \
 	libredex/DexUtil.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
-	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/IRTypeChecker.cpp \
@@ -159,6 +157,8 @@ redex_all_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
+	opt/constant_propagation/ConstantPropagationV2.cpp \
+	opt/constant_propagation/ConstantPropagationV3.cpp \
 	opt/constant_propagation/GlobalConstProp.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
@@ -210,7 +210,6 @@ redex_all_SOURCES = \
 	opt/string_simplification/StringSimplification.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
-	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
@@ -224,7 +223,6 @@ redex_all_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
-	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	-lpthread
 
 redex_all_LDFLAGS = \

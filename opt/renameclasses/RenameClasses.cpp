@@ -150,7 +150,7 @@ void rename_classes(
     PassManager& mgr) {
   unpackage_private(scope);
   int clazz_ident = 0;
-  std::map<DexString*, DexString*, dexstrings_comparator> aliases;
+  std::map<DexString*, DexString*> aliases;
   for(auto clazz: scope) {
     if (!should_rename(
         clazz, pre_whitelist_patterns, post_whitelist_patterns,

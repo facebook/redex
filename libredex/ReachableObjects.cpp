@@ -68,8 +68,6 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   return nullptr;
 }
 
-// TODO: Can it be replaced by ClassHierarchy helpers? I tried to replace it,
-// but the results were different.
 struct InheritanceGraph {
   explicit InheritanceGraph(DexStoresVector& stores) {
     for (auto const& dex : DexStoreClassesIterator(stores)) {
@@ -79,14 +77,8 @@ struct InheritanceGraph {
     }
   }
 
-  const std::set<const DexType*, dextypes_comparator>& get_descendants(
-      const DexType* type) const {
-    if (m_inheritors.count(type)) {
-      return m_inheritors.at(type);
-    } else {
-      static std::set<const DexType*, dextypes_comparator> empty;
-      return empty;
-    }
+  const std::unordered_set<DexType*>& get_descendants(DexType* type) {
+    return m_inheritors[type];
   }
 
  private:
@@ -107,9 +99,7 @@ struct InheritanceGraph {
   }
 
  private:
-  std::unordered_map<const DexType*,
-                     std::set<const DexType*, dextypes_comparator>>
-      m_inheritors;
+  std::unordered_map<DexType*, std::unordered_set<DexType*>> m_inheritors;
 };
 
 bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
@@ -144,39 +134,15 @@ bool implements_library_method(InheritanceGraph& graph,
   return false;
 }
 
-class Reachable {
-  DexStoresVector& m_stores;
-  const std::unordered_set<const DexType*>& m_ignore_string_literals_annos;
-  std::unordered_set<const DexType*> m_ignore_system_annos;
-  bool m_record_reachability;
-  InheritanceGraph m_inheritance_graph;
-  int m_num_ignore_check_strings = 0;
-  std::unordered_set<const DexClass*> m_marked_classes;
-  std::unordered_set<const DexFieldRef*> m_marked_fields;
-  std::unordered_set<const DexMethodRef*> m_marked_methods;
-  std::unordered_set<const DexField*> m_cond_marked_fields;
-  std::unordered_set<const DexMethod*> m_cond_marked_methods;
-  std::vector<const DexClass*> m_class_stack;
-  std::vector<const DexFieldRef*> m_field_stack;
-  std::vector<const DexMethodRef*> m_method_stack;
-  ReachableObjectGraph m_retainers_of;
-
- public:
+struct Reachable {
   Reachable(
       DexStoresVector& stores,
       const std::unordered_set<const DexType*>& ignore_string_literals_annos,
-      const std::unordered_set<const DexType*>& ignore_system_annos,
       bool record_reachability)
       : m_stores(stores),
         m_ignore_string_literals_annos(ignore_string_literals_annos),
-        m_ignore_system_annos(ignore_system_annos),
         m_record_reachability(record_reachability),
-        m_inheritance_graph(stores) {
-    // To keep the backward compatability of this code, ensure that the
-    // "MemberClasses" annotation is always in m_ignore_system_annos.
-    m_ignore_system_annos.emplace(
-        DexType::get_type("Ldalvik/annotation/MemberClasses;"));
-  }
+        m_inheritance_graph(stores) {}
 
  private:
   void mark(const DexClass* cls) {
@@ -222,8 +188,6 @@ class Reachable {
 
   template <class Parent>
   void push(const Parent* parent, const DexClass* cls) {
-    // FIXME: Bug! Even if cls is already marked, we need to record its
-    // reachability from parent to cls.
     if (!cls || marked(cls)) return;
     record_reachability(parent, cls);
     mark(cls);
@@ -352,12 +316,9 @@ class Reachable {
     const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
       for (auto const& anno : annoset->get_annotations()) {
-        if (m_ignore_system_annos.count(anno->type())) {
-          TRACE(REACH,
-                5,
-                "Stop marking from %s by system anno: %s\n",
-                SHOW(cls),
-                SHOW(anno->type()));
+        if (anno->type() ==
+            DexType::get_type("Ldalvik/annotation/MemberClasses;")) {
+          // Ignore inner-class annotations.
           continue;
         }
         record_reachability(cls, anno);
@@ -451,7 +412,8 @@ class Reachable {
   void record_is_seed(Seed* seed) {
     if (m_record_reachability) {
       assert(seed != nullptr);
-      m_retainers_of[ReachableObject(seed)].emplace(SEED_SINGLETON);
+      ReachableObject seed_object(seed);
+      m_retainers_of[seed_object].insert(SEED_SINGLETON);
     }
   }
 
@@ -461,13 +423,44 @@ class Reachable {
                                     const Object* object,
                                     ReachableObjectGraph& retainers_of) {
       assert(parent != nullptr && object != nullptr);
-      retainers_of[ReachableObject(object)].emplace(parent);
+      ReachableObject reachable_obj(object);
+      retainers_of[reachable_obj].emplace(parent);
+    }
+  };
+
+  template <class Object>
+  struct RecordImpl<DexType, Object> {
+    static void record_reachability(const DexType* parent,
+                                    const Object* object,
+                                    ReachableObjectGraph& reachable_of) {
+      DexClass* parent_cls = type_class(get_array_type_or_self(parent));
+      // If parent_class is null then it's not ours (e.g. String), so skip it.
+      if (parent_cls) {
+        RecordImpl<DexClass, Object>::record_reachability(
+            parent_cls, object, reachable_of);
+      }
+    }
+  };
+
+  template <class Parent>
+  struct RecordImpl<Parent, DexType> {
+    static void record_reachability(const Parent* parent,
+                                    const DexType* object,
+                                    ReachableObjectGraph&& reachable_of) {
+      DexClass* object_cls = type_class(get_array_type_or_self(object));
+      // If object_class is null then it's not ours (e.g. String), so skip it.
+      if (object_cls) {
+        RecordImpl<Parent, DexClass>::record_reachability(
+            parent, object_cls, reachable_of);
+      }
     }
   };
 
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object) {
     if (m_record_reachability) {
+      // We need to use this RecordImpl struct trick in order to partially
+      // specialize the template.
       RecordImpl<Parent, Object>::record_reachability(
           parent, object, m_retainers_of);
     }
@@ -541,6 +534,22 @@ class Reachable {
     ret.retainers_of = std::move(m_retainers_of);
     return ret;
   }
+
+ private:
+  DexStoresVector& m_stores;
+  const std::unordered_set<const DexType*>& m_ignore_string_literals_annos;
+  bool m_record_reachability;
+  InheritanceGraph m_inheritance_graph;
+  int m_num_ignore_check_strings = 0;
+  std::unordered_set<const DexClass*> m_marked_classes;
+  std::unordered_set<const DexFieldRef*> m_marked_fields;
+  std::unordered_set<const DexMethodRef*> m_marked_methods;
+  std::unordered_set<const DexField*> m_cond_marked_fields;
+  std::unordered_set<const DexMethod*> m_cond_marked_methods;
+  std::vector<const DexClass*> m_class_stack;
+  std::vector<const DexFieldRef*> m_field_stack;
+  std::vector<const DexMethodRef*> m_method_stack;
+  ReachableObjectGraph m_retainers_of;
 };
 
 void print_reachable_stack_h(const ReachableObject& obj,
@@ -621,7 +630,7 @@ void print_graph_edges(const DexClass* cls,
     }
   }
 
-  os << cls->get_deobfuscated_name() << "\t" << s << std::endl;
+  os << cls->get_deobfuscated_name() << '\t' << s << std::endl;
   TRACE(REACH_DUMP,
         5,
         "EDGE: %s %s %s;\n",
@@ -634,13 +643,9 @@ void print_graph_edges(const DexClass* cls,
 ReachableObjects compute_reachable_objects(
     DexStoresVector& stores,
     const std::unordered_set<const DexType*>& ignore_string_literals_annos,
-    const std::unordered_set<const DexType*>& ignore_system_annos,
     int* num_ignore_check_strings,
     bool record_reachability) {
-  return Reachable(stores,
-                   ignore_string_literals_annos,
-                   ignore_system_annos,
-                   record_reachability)
+  return Reachable(stores, ignore_string_literals_annos, record_reachability)
       .mark(num_ignore_check_strings);
 }
 

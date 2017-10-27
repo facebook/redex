@@ -164,7 +164,7 @@ TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
     if (opcode == OPCODE_CONST_4) {
       uint16_t dest = insn->dest();
       if (insn->dest() == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
-        values.push_back(insn->get_literal());
+        values.push_back(insn->literal());
       }
     } else if (is_invoke(opcode)) {
       auto invoked = static_cast<DexOpcodeMethod*>(insn)->get_method();

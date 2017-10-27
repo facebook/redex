@@ -39,9 +39,36 @@
  * block level.
  */
 
-using namespace constant_propagation_impl;
-
 namespace {
+
+template <typename Integral>
+bool get_constant_value(const ConstPropEnvironment& env,
+                        int16_t reg,
+                        Integral& result);
+
+template <>
+bool get_constant_value(const ConstPropEnvironment& env,
+                        int16_t reg,
+                        int64_t& result) {
+  if (ConstPropEnvUtil::is_wide_constant(env, reg)) {
+    result = ConstPropEnvUtil::get_wide(env, reg);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+template <>
+bool get_constant_value(const ConstPropEnvironment& env,
+                        int16_t reg,
+                        int32_t& result) {
+  if (ConstPropEnvUtil::is_narrow_constant(env, reg)) {
+    result = ConstPropEnvUtil::get_narrow(env, reg);
+    return true;
+  } else {
+    return false;
+  }
+}
 
 template <typename Out, typename In>
 // reinterpret the long's bits as a double
@@ -109,20 +136,16 @@ void analyze_compare(const IRInstruction* inst,
   }
 }
 
-} // namespace
+} // namespace anonymous
 
 bool addition_out_of_bounds(int32_t a, int32_t b) {
   int32_t max = std::numeric_limits<int32_t>::max();
   int32_t min = std::numeric_limits<int32_t>::min();
-  if ((b > 0 && a > max - b) || (b < 0 && a < min - b)) {
-    TRACE(CONSTP, 5, "%d, %d is out of bounds", a, b);
-    return true;
-  }
-  return false;
+  return (b > 0 && a > max - b) || (b < 0 && a < min - b);
 }
 
 void LocalConstantPropagation::analyze_instruction(
-    const IRInstruction* inst, ConstPropEnvironment* current_state) {
+    IRInstruction* const& inst, ConstPropEnvironment* current_state) {
   TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
   switch (inst->opcode()) {
   case OPCODE_CONST:
@@ -133,8 +156,8 @@ void LocalConstantPropagation::analyze_instruction(
           5,
           "Discovered new narrow constant for reg: %d, value: %d\n",
           inst->dest(),
-          inst->get_literal());
-    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->get_literal());
+          inst->literal());
+    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->literal());
     break;
   }
   case OPCODE_CONST_WIDE_16:
@@ -146,8 +169,8 @@ void LocalConstantPropagation::analyze_instruction(
           "Discovered new wide constant for regs: %d, %d, value: %ld\n",
           inst->dest(),
           inst->dest() + 1,
-          inst->get_literal());
-    ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
+          inst->literal());
+    ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->literal());
     break;
   }
   case OPCODE_MOVE_FROM16:
@@ -188,18 +211,13 @@ void LocalConstantPropagation::analyze_instruction(
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
     if (m_config.fold_arithmetic) {
-      int32_t lit = inst->get_literal();
+      int32_t lit = inst->literal();
       auto add_in_bounds = [lit](int32_t v) -> boost::optional<int32_t> {
         if (addition_out_of_bounds(lit, v)) {
           return boost::none;
         }
         return v + lit;
       };
-      TRACE(CONSTP,
-            5,
-            "Attempting to fold %s with literal %lu\n",
-            SHOW(inst),
-            lit);
       analyze_non_branch(inst, current_state, false, add_in_bounds);
       break;
     }
@@ -220,19 +238,17 @@ void LocalConstantPropagation::analyze_instruction(
   }
 }
 
-// We can use this function for moves and arithmetic instructions because a move
-// is just an arithmetic instruction with identity as its transform function
 void LocalConstantPropagation::analyze_non_branch(
-    const IRInstruction* inst,
+    IRInstruction* const& inst,
     ConstPropEnvironment* current_state,
     bool is_wide,
     value_transform_t value_transform, // default is identity
     wide_value_transform_t wide_value_transform // default is identity
-) {
+  ) {
   auto src = inst->src(0);
   auto dst = inst->dest();
 
-  auto mark_unknown = [&]() {
+  auto mark_unknown = [&](){
     TRACE(CONSTP,
           5,
           "Marking value unknown [Reg: %d, Is wide: %d]\n",
@@ -252,7 +268,8 @@ void LocalConstantPropagation::analyze_non_branch(
 
     TRACE(CONSTP,
           5,
-          "Propagating narrow constant [Value: %X] -> [Reg: %d]\n",
+          "Propagating narrow constant [Reg: %d, Value: %X] -> "
+          "[Reg: %d]\n",
           src,
           value,
           dst);
@@ -269,7 +286,8 @@ void LocalConstantPropagation::analyze_non_branch(
 
     TRACE(CONSTP,
           5,
-          "Propagating wide constant [Value: %lX] -> [Reg: %d]\n",
+          "Propagating wide constant [Reg: %d, Value: %lX] -> "
+          "[Reg: %d]\n",
           src,
           value,
           dst);
@@ -312,21 +330,21 @@ void LocalConstantPropagation::simplify_branch(
     IRInstruction*& inst, const ConstPropEnvironment& current_state) {
   int32_t left_value;
   int32_t right_value;
-  // if-*Z vA        is the same as
-  // if-*  vA, 0
-  if (!get_constant_value_at_src(current_state,
-                                 inst,
-                                 /* src_idx */ 0,
-                                 /* default_value */ 0,
-                                 left_value)) {
+
+  auto left = get_constant_value(current_state, inst->src(0), left_value);
+  if (!left) {
     return;
   }
-  if (!get_constant_value_at_src(current_state,
-                                 inst,
-                                 /* src_idx */ 1,
-                                 /* default_value */ 0,
-                                 right_value)) {
-    return;
+
+  if (inst->srcs_size() == 2) {
+    auto right = get_constant_value(current_state, inst->src(1), right_value);
+    if (!right) {
+      return;
+    }
+  } else {
+    // if-*Z vA        is the same as
+    // if-*  vA, 0
+    right_value = 0;
   }
 
   bool branch_result = eval_if(inst->opcode(), left_value, right_value);
@@ -390,25 +408,26 @@ void LocalConstantPropagation::simplify_instruction(
   }
 }
 
-// Replace an instruction that has a single destination register with a `const`
-// load. `current_state` holds the state of the registers after `inst` has been
-// evaluated. So, `current_state[dst]` holds the _new_ value of the destination
-// register
+// replace an instruction that has a single source register and a single
+// destination register with a `const` load. `current_state` holds the state of
+// the registers after `inst` has been evaluated, so no transform function is
+// necessary.
 void LocalConstantPropagation::simplify_non_branch(
-    IRInstruction* inst,
+    IRInstruction* const& inst,
     const ConstPropEnvironment& current_state,
-    bool is_wide) {
+    bool is_wide
+  ) {
+  uint16_t src = inst->src(0);
   uint16_t dst = inst->dest();
 
   int64_t value;
   IRInstruction* replacement = nullptr;
-  // we read from `dst` because analyze has put the new value of dst there
-  if (!is_wide && ConstPropEnvUtil::is_narrow_constant(current_state, dst)) {
-    value = ConstPropEnvUtil::get_narrow(current_state, dst);
+  if (!is_wide && ConstPropEnvUtil::is_narrow_constant(current_state, src)) {
+    value = ConstPropEnvUtil::get_narrow(current_state, src);
     replacement = new IRInstruction(OPCODE_CONST);
   } else if (is_wide &&
-             ConstPropEnvUtil::is_wide_constant(current_state, dst)) {
-    value = ConstPropEnvUtil::get_wide(current_state, dst);
+             ConstPropEnvUtil::is_wide_constant(current_state, src)) {
+    value = ConstPropEnvUtil::get_wide(current_state, src);
     replacement = new IRInstruction(OPCODE_CONST_WIDE);
   } else {
     return;

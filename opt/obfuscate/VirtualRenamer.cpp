@@ -106,9 +106,7 @@ DexMethod* find_method(
 };
 
 // keep a map from defs to all refs resolving to that def
-using RefsMap =
-    std::unordered_map<DexMethod*,
-                       std::set<DexMethodRef*, dexmethods_comparator>>;
+using RefsMap = std::map<DexMethod*, std::set<DexMethodRef*>>;
 
 /**
  * Rename a given method with the given name.

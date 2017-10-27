@@ -1863,10 +1863,6 @@ public:
         Vector<Res_value>& values,
         bool onlyDefault) const;
 
-    // Returns true if the given resource ID's are of the same type and have
-    // the same entries in the same configurations.
-    bool areResourceValuesIdentical(uint32_t resourceId1, uint32_t resourceId2) const;
-
     String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
 
     void getTypeNamesForPackage(
@@ -1885,11 +1881,6 @@ private:
     struct PackageGroup;
     struct bag_set;
     typedef Vector<Type*> TypeList;
-
-    void collectValuesInConfig(
-        Vector<Res_value>& values,
-        const ResTable_entry* ent,
-        uint32_t typeSize) const;
 
     bool tryGetConfigEntry(
         int entryIndex,
@@ -1930,10 +1921,6 @@ private:
 
     uint8_t                     mNextPackageId;
 };
-
-float complex_value(uint32_t complex);
-
-uint32_t complex_unit(uint32_t complex, bool isFraction);
 
 }   // namespace android
 

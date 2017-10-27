@@ -42,10 +42,6 @@ class PointsToSemanticsUtils final {
   // primitive type's wrapper class.
   bool is_primitive_type_class_object_retrieval(IRInstruction* insn) const;
 
-  // Checks whether the method java.lang.Object#getClass() is called by a method
-  // invocation operation.
-  bool is_get_class_invocation(IRInstruction* insn) const;
-
  private:
   DexType* m_throwable_type{DexType::make_type("Ljava/lang/Throwable;")};
   std::unordered_set<DexType*> m_primitive_type_wrappers{
@@ -59,9 +55,4 @@ class PointsToSemanticsUtils final {
        DexType::make_type("Ljava/lang/Short;"),
        DexType::make_type("Ljava/lang/Void;")}};
   DexString* m_wrapper_class_type_field_name{DexString::make_string("TYPE")};
-  DexMethodRef* m_java_lang_object_get_class{DexMethod::make_method(
-      DexType::make_type("Ljava/lang/Object;"),
-      DexString::make_string("getClass"),
-      DexProto::make_proto(DexType::make_type("Ljava/lang/Class;"),
-                           DexTypeList::make_type_list({})))};
 };

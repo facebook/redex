@@ -14,7 +14,6 @@
 #include <stdio.h>
 
 #include "Debug.h"
-#include "Util.h"
 
 /*
  * The the dex spec can be found here:
@@ -275,7 +274,7 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
  * we do on this has to do with making sure we're working on a non-opt
  * dex.  See link to Dalvik Executable Format above.
  */
-PACKED(struct dex_header {
+struct __attribute__((packed)) dex_header {
   char magic[8];
   uint32_t checksum;
   uint8_t signature[20];
@@ -299,25 +298,24 @@ PACKED(struct dex_header {
   uint32_t class_defs_off;
   uint32_t data_size;
   uint32_t data_off;
-});
+};
 
-PACKED(struct dex_string_id {
+struct __attribute__((packed)) dex_string_id {
   uint32_t offset;
-});
+};
 
-PACKED(struct dex_type_id {
+struct __attribute__((packed)) dex_type_id {
   uint32_t string_idx;
-});
+};
 
-PACKED(struct dex_map_item {
+struct __attribute__((packed)) dex_map_item {
   uint16_t type;
   uint16_t na /* Not used */;
   uint32_t size /* Item count, not byte size */;
   uint32_t offset /* From start of file */;
-});
-
+};
 #define DEX_NO_INDEX (0xffffffff)
-PACKED(struct dex_class_def {
+struct __attribute__((packed)) dex_class_def {
   uint32_t typeidx;
   uint32_t access_flags;
   uint32_t super_idx;
@@ -326,47 +324,44 @@ PACKED(struct dex_class_def {
   uint32_t annotations_off;
   uint32_t class_data_offset;
   uint32_t static_values_off;
-});
-
-PACKED(struct dex_method_id {
+};
+struct __attribute__((packed)) dex_method_id {
   uint16_t classidx;
   uint16_t protoidx;
   uint32_t nameidx;
-});
-
-PACKED(struct dex_field_id {
+};
+struct __attribute__((packed)) dex_field_id {
   uint16_t classidx;
   uint16_t typeidx;
   uint32_t nameidx;
-});
-
-PACKED(struct dex_proto_id {
+};
+struct __attribute__((packed)) dex_proto_id {
   uint32_t shortyidx;
   uint32_t rtypeidx;
   uint32_t param_off;
-});
+};
 
-PACKED(struct dex_code_item {
+struct __attribute__((packed)) dex_code_item {
   uint16_t registers_size;
   uint16_t ins_size;
   uint16_t outs_size;
   uint16_t tries_size;
   uint32_t debug_info_off;
   uint32_t insns_size;
-});
+};
 
-PACKED(struct dex_tries_item {
+struct __attribute__((packed)) dex_tries_item {
   uint32_t start_addr;
   uint16_t insn_count;
   uint16_t handler_off;
-});
+};
 
-PACKED(struct dex_annotations_directory_item {
+struct __attribute__((packed)) dex_annotations_directory_item {
   uint32_t class_annotations_off;
   uint32_t fields_size;
   uint32_t methods_size;
   uint32_t parameters_size;
-});
+};
 
 using DexDebugItemOpcode = uint8_t;
 enum DexDebugItemOpcodeValues : uint8_t {
