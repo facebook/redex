@@ -462,17 +462,161 @@ void ResStringPool::setToEmpty()
     mStyles = NULL;
     mStylePoolSize = 0;
     mHeader = (const ResStringPool_header*) header;
+    mAppendedStrings.clear();
+}
+void ResStringPool::appendString(String8 s) {
+  mAppendedStrings.push_back(s);
+}
+
+void align_vec(Vector<char>& cVec, size_t s) {
+  size_t r = cVec.size() % s;
+  if (r > 0) {
+    for (size_t i = s - r; i > 0; i--) {
+      cVec.push_back(0);
+    }
+  }
+}
+
+void push_short(Vector<char>& cVec, uint16_t data) {
+  auto swapped = dtohs(data);
+  cVec.push_back(swapped);
+  cVec.push_back(swapped >> 8);
+}
+
+void push_long(Vector<char>& cVec, uint32_t data) {
+  auto swapped = dtohl(data);
+  cVec.push_back(swapped);
+  cVec.push_back(swapped >> 8);
+  cVec.push_back(swapped >> 16);
+  cVec.push_back(swapped >> 24);
+}
+
+void push_u8_length(Vector<char>& cVec, size_t len) {
+  // If len > 2^7-1, then set the most significant bit, then use a second byte
+  // to describe the length (leaving 15 bits for the actual len).
+  if (len >= 0x80) {
+    const auto mask = 0x8000;
+    LOG_FATAL_IF(len >= mask, "String length too large");
+    // Set the high bit, then push it in two pieces (can't just push short).
+    uint16_t encoded = mask | len;
+    uint8_t high = encoded >> 8;
+    uint8_t low = encoded & 0xFF;
+    cVec.push_back(high);
+    cVec.push_back(low);
+  } else {
+    cVec.push_back((char) len);
+  }
+}
+
+void encode_string8(Vector<char>& cVec, String8 s) {
+  // aapt2 writes both the utf16 length followed by utf8 length
+  size_t len = s.length();
+  const uint8_t* u8_str = (const uint8_t*) s.string();
+  auto u16_len = utf8_to_utf16_length(u8_str, len);
+  push_u8_length(cVec, u16_len);
+  push_u8_length(cVec, len);
+  // Push each char
+  for (uint8_t* c = (uint8_t*) u8_str; *c; c++) {
+    cVec.push_back(*c);
+  }
+  cVec.push_back('\0');
+}
+
+void encode_string16(Vector<char>& cVec, String16 s) {
+  // Push uint16_t (2 bytes) describing the length. If length > 2^15-1, then set
+  // most significant bit, then use two uint16_t to describe the length (first
+  // uint16_t will be the high word).
+  auto len = s.size();
+  if (len >= 0x8000) {
+    const auto mask = 0x80000000;
+    LOG_FATAL_IF(len >= mask, "String length too large");
+    uint32_t encoded = mask | len;
+    push_short(cVec, encoded >> 16);
+    push_short(cVec, encoded & 0xFFFF);
+  } else {
+    push_short(cVec, (uint16_t)len);
+  }
+  auto u16_str = s.string();
+  for (uint16_t* c = (uint16_t*)u16_str; *c; c++) {
+    push_short(cVec, *c);
+  }
+  push_short(cVec, '\0');
+}
+
+void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
+  LOG_FATAL_IF(
+    mHeader->styleCount > 0,
+    "Appending to a StringPool with styles is not supported");
+  // Write string data into intermediate vector. Use this to calculate offsets,
+  // then copy to cVec.
+  Vector<uint32_t> string_idx;
+  Vector<char> serialized_strings;
+  auto num_strings = mHeader->stringCount;
+  auto utf8 = isUTF8();
+  for (size_t i = 0; i < num_strings; i++) {
+    string_idx.push_back(serialized_strings.size());
+    if (utf8) {
+      auto s = string8ObjectAt(i);
+      encode_string8(serialized_strings, s);
+    } else {
+      size_t out_len;
+      auto s = stringAt(i, &out_len);
+      encode_string16(serialized_strings, String16(s));
+    }
+  }
+  // Add any more Strings
+  auto more = mAppendedStrings.size();
+  for (size_t i = 0; i < more; i++) {
+    string_idx.push_back(serialized_strings.size());
+    auto s = mAppendedStrings[i];
+    if (utf8) {
+      encode_string8(serialized_strings, s);
+    } else {
+      auto u16 = String16(s);
+      encode_string16(serialized_strings, u16);
+    }
+  }
+  align_vec(serialized_strings, 4);
+  // ResChunk_header
+  auto header_size = mHeader->header.headerSize;
+  push_short(cVec, mHeader->header.type);
+  push_short(cVec, header_size);
+  // Sum of header size, plus the size of all the String/style data.
+  auto total_size =
+    header_size +
+    string_idx.size() * sizeof(uint32_t) +
+    serialized_strings.size() * sizeof(char);
+  push_long(cVec, total_size);
+  // ResStringPool_header
+  auto string_count = string_idx.size();
+  push_long(cVec, string_count);
+  push_long(cVec, 0); // style count
+  // May have wrecked the sort order (not supporting resort right now), so clear
+  // the bit.
+  auto flags = mHeader->flags & ~ResStringPool_header::SORTED_FLAG;
+  push_long(cVec, flags);
+  // strings start
+  push_long(cVec, header_size + sizeof(uint32_t) * string_count);
+   // styles start
+  push_long(cVec, 0);
+  for (const uint32_t &i : string_idx) {
+    push_long(cVec, i);
+  }
+  cVec.appendVector(serialized_strings);
 }
 
 void ResStringPool::serialize(Vector<char>& cVec)
 {
-    // Opaque serialization- does not support modification.
-    // To allow modifications, this method will need to
-    // iterate through strings and serialize each one in turn.
+  // Perform opaque serialization, unless new strings have been added.
+  // See method serializeWithAdditionalStrings for caveats on adding new strings
+  if (mAppendedStrings.size() == 0) {
     size_t dataSize = mHeader->header.size;
     for (size_t i = 0; i < dataSize; ++i) {
         cVec.push_back(*((unsigned char*)(mHeader) + i));
     }
+  } else {
+    serializeWithAdditionalStrings(cVec);
+  }
 }
 
 status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
