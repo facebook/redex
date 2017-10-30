@@ -75,7 +75,7 @@ class TypeSystem {
   }
 
   /**
-   * Return all interfaces imlemented by a given type.
+   * Return all interfaces implemented by a given type.
    * A type must be a class (not an interface)
    */
   const TypeSet& get_implemented_interfaces(const DexType* type) const {

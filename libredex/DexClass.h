@@ -1034,6 +1034,12 @@ class DexClass {
     m_access_flags = access;
   }
 
+  void set_super_class(DexType* super_class) {
+    always_assert_log(
+        !m_external, "Unexpected external class %s\n", SHOW(m_self));
+    m_super_class = super_class;
+  }
+
   void set_interfaces(DexTypeList* intfs) {
     always_assert_log(!m_external,
         "Unexpected external class %s\n", SHOW(m_self));
