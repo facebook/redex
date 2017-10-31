@@ -1099,10 +1099,11 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
         TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));
         m_stats.split_moves +=
             split(fixpoint_iter, split_plan, split_costs, ig, code);
-        // Since in split we might have inserted new blocks to load between
-        // blocks. So we call build_cfg() again to have a correct cfg.
-        code->build_cfg();
       }
+
+      // Since we have inserted instructions, we need to rebuild the CFG to
+      // ensure that block boundaries remain correct
+      code->build_cfg();
     } else {
       transform::remap_registers(code, reg_transform.map);
       code->set_registers_size(reg_transform.size);
