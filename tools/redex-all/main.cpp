@@ -236,6 +236,7 @@ Arguments parse_args(int argc, char* argv[]) {
       "    \te.g. -JMyPass.config=[1, 2, 3]\n"
       "Note: Be careful to properly escape JSON parameters, e.g., strings must "
       "be quoted.");
+  od.add_options()("show-passes", "show registered passes");
   od.add_options()(
       "dex-files", po::value<std::vector<std::string>>(), "dex files");
 
@@ -257,6 +258,15 @@ Arguments parse_args(int argc, char* argv[]) {
   // -h, --help handling must be the first.
   if (vm.count("help")) {
     od.print(std::cout);
+    exit(EXIT_SUCCESS);
+  }
+
+  if (vm.count("show-passes")) {
+    const auto& passes = PassRegistry::get().get_passes();
+    std::cout << "Registered passes: " << passes.size() << std::endl;
+    for (size_t i = 0; i < passes.size(); ++i) {
+      std::cout << i + 1 << ": " << passes[i]->name() << std::endl;
+    }
     exit(EXIT_SUCCESS);
   }
 
