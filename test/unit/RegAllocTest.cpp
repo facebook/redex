@@ -816,9 +816,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   spill_plan.param_spills = std::unordered_set<reg_t>{0, 1};
   std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  auto load_param = allocator.find_param_first_uses(
-      spill_plan.param_spills, code.get());
-  allocator.spill_params(ig, load_param, code.get(), &new_temps);
+  allocator.split_params(ig, spill_plan.param_spills, code.get(), &new_temps);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (

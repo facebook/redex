@@ -43,4 +43,6 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block);
 // if not, return null
 MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos);
 
+FatMethod::iterator find_last_instruction(Block* block);
+
 } // namespace transform

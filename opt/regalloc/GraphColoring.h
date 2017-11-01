@@ -130,13 +130,13 @@ class Allocator {
                   SpillPlan*,
                   SplitPlan*);
 
-  std::unordered_map<reg_t, FatMethod::iterator> find_param_first_uses(
+  std::unordered_map<reg_t, FatMethod::iterator> find_param_splits(
       const std::unordered_set<reg_t>&, IRCode*);
 
-  void spill_params(const interference::Graph&,
-                    const std::unordered_map<reg_t, FatMethod::iterator>&,
+  void split_params(const interference::Graph&,
+                    const std::unordered_set<reg_t>& param_regs,
                     IRCode*,
-                    std::unordered_set<reg_t>*);
+                    std::unordered_set<reg_t>* new_temps);
 
   void spill(const interference::Graph&,
              const SpillPlan&,

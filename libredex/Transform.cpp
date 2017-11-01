@@ -141,6 +141,16 @@ MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos) {
              : nullptr;
 }
 
+FatMethod::iterator find_last_instruction(Block* block) {
+  for (auto it = block->rbegin(); it != block->rend(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      return std::prev(it.base());
+    }
+  }
+  return block->end();
+}
+
+
 // delete old_block and reroute its predecessors to new_block
 //
 // if new_block is null, just delete old_block and don't reroute
