@@ -10,6 +10,8 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
+#include <vector>
+#include <string>
 
 class DexType;
 class DexString;

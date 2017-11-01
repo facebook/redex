@@ -128,7 +128,7 @@ void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
 }
 
 std::unordered_set<DexClass*> TrackResourcesPass::build_tracked_cls_set(
-    std::vector<std::string>& cls_suffixes,
+    const std::vector<std::string>& cls_suffixes,
     const ProguardMap& pg_map) {
   std::unordered_set<DexClass*> tracked_classes;
   for (auto& s : cls_suffixes) {

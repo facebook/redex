@@ -11,6 +11,8 @@
 
 #include "Debug.h"
 
+#include <sstream>
+
 namespace dex_member_refs {
 
 template <typename T>
