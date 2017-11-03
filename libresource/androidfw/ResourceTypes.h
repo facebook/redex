@@ -1823,6 +1823,11 @@ public:
     // Return the configurations (ResTable_config) that we know about
     void getConfigurations(Vector<ResTable_config>* configs, bool ignoreMipmap=false) const;
 
+    // Return the configurations for a specific type (i.e. drawable, dimen, etc)
+    void getConfigurationsByType(size_t base_package_idx,
+                                 String8 type_name,
+                                 Vector<ResTable_config>* configs) const;
+
     void getLocales(Vector<String8>* locales) const;
 
     // Generate an idmap.
@@ -1921,6 +1926,8 @@ private:
         Vector<Res_value>& values,
         const ResTable_entry* ent,
         uint32_t typeSize) const;
+
+    void collectAllConfigs(Vector<ResTable_config>* configs, const Type* type) const;
 
     bool tryGetConfigEntry(
         int entryIndex,

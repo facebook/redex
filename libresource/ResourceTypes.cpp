@@ -5968,6 +5968,30 @@ const DynamicRefTable* ResTable::getDynamicRefTableForCookie(int32_t cookie) con
     return NULL;
 }
 
+void ResTable::collectAllConfigs(
+  Vector<ResTable_config>* configs,
+  const Type* type) const {
+  const size_t numConfigs = type->configs.size();
+  for (size_t m = 0; m < numConfigs; m++) {
+      const ResTable_type* config = type->configs[m];
+      ResTable_config cfg;
+      memset(&cfg, 0, sizeof(ResTable_config));
+      cfg.copyFromDtoH(config->config);
+      // only insert unique
+      const size_t N = configs->size();
+      size_t n;
+      for (n = 0; n < N; n++) {
+          if (0 == (*configs)[n].compare(cfg)) {
+              break;
+          }
+      }
+      // if we didn't find it
+      if (n == N) {
+          configs->add(cfg);
+      }
+  }
+}
+
 void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMipmap) const
 {
     const size_t packageCount = mPackageGroups.size();
@@ -5984,29 +6008,29 @@ void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMi
                             type->typeSpec->id - 1) == "mipmap") {
                     continue;
                 }
-
-                const size_t numConfigs = type->configs.size();
-                for (size_t m = 0; m < numConfigs; m++) {
-                    const ResTable_type* config = type->configs[m];
-                    ResTable_config cfg;
-                    memset(&cfg, 0, sizeof(ResTable_config));
-                    cfg.copyFromDtoH(config->config);
-                    // only insert unique
-                    const size_t N = configs->size();
-                    size_t n;
-                    for (n = 0; n < N; n++) {
-                        if (0 == (*configs)[n].compare(cfg)) {
-                            break;
-                        }
-                    }
-                    // if we didn't find it
-                    if (n == N) {
-                        configs->add(cfg);
-                    }
-                }
+                collectAllConfigs(configs, type);
             }
         }
     }
+}
+
+void ResTable::getConfigurationsByType(
+  size_t base_package_idx,
+  String8 type_name,
+  Vector<ResTable_config>* configs) const {
+  const PackageGroup* package_group = mPackageGroups[base_package_idx];
+  const size_t type_count = package_group->types.size();
+  for (size_t i = 0; i < type_count; i++) {
+    const TypeList& type_list = package_group->types[i];
+    const size_t list_size = type_list.size();
+    for (size_t j = 0; j < list_size; j++) {
+      const Type* type = type_list[j];
+      const ResStringPool& type_strings = type->package->typeStrings;
+      if (type_strings.string8ObjectAt(type->typeSpec->id - 1) == type_name) {
+        collectAllConfigs(configs, type);
+      }
+    }
+  }
 }
 
 void ResTable::getLocales(Vector<String8>* locales) const
