@@ -261,7 +261,7 @@ void MultiMethodInliner::inline_callees(
   }
 
   // attempt to inline all inlinable candidates
-  auto estimated_insn_size{caller->get_code()->sum_opcode_sizes()};
+  size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
     auto insn = inlinable.second;
