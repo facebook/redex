@@ -70,6 +70,7 @@
   TM(SHORTEN)            \
   TM(SINK)               \
   TM(SINL)               \
+  TM(SPLIT_RES)          \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \
   TM(SYNT)               \
