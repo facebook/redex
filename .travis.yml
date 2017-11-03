@@ -1,0 +1,28 @@
+sudo: required
+language: cpp
+compiler: gcc-4.9
+dist: trusty
+
+before_install:
+  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - sudo apt-get -qq update
+  - sudo apt-get install g++-4.9 -y
+  - sudo apt-get install -y
+      automake
+      autoconf
+      autoconf-archive
+      libtool
+      liblz4-dev
+      liblzma-dev
+      make
+      zlib1g-dev
+      binutils-dev
+      libjemalloc-dev
+      libiberty-dev
+      libjsoncpp-dev
+      wget
+  - export CXX='g++-4.9'
+  - sudo sh get_boost.sh
+
+script:
+  - autoreconf -ivf && ./configure CXX='g++-4.9' && make -j4
