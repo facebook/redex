@@ -8,7 +8,10 @@
  */
 
 #include <array>
+#include <fcntl.h>
+#include <map>
 #include <gtest/gtest.h>
+#include <sys/mman.h>
 
 #include "Debug.h"
 #include "androidfw/ResourceTypes.h"
@@ -132,4 +135,50 @@ TEST(ResStringPool, AppendToExistingUTF16) {
   ASSERT_EQ(out_len, 35000);
   assert_u16_string(after.stringAt(6, &out_len), "more more more");
   ASSERT_EQ(out_len, 14);
+}
+
+void* map_arsc(const char* path, int& file_descriptor, size_t& length) {
+  file_descriptor = open(path, O_RDONLY);
+  if (file_descriptor <= 0) {
+    throw std::runtime_error("Failed to open arsc file");
+	}
+  struct stat st = {};
+  if (fstat(file_descriptor, &st) == -1)	{
+		close(file_descriptor);
+		throw std::runtime_error("Failed to get file length");
+	}
+  length = (size_t)st.st_size;
+  void* fp = mmap(
+    nullptr, length, PROT_READ, MAP_SHARED, file_descriptor, 0);
+  if (fp == MAP_FAILED) {
+		close(file_descriptor);
+		throw std::runtime_error("Failed to mmap arsc");
+	}
+  return fp;
+}
+
+void close_arsc(int file_descriptor, void* file_pointer, size_t length) {
+  munmap(file_pointer, length);
+  close(file_descriptor);
+}
+
+void assert_serialized_data(void* original, size_t length, android::Vector<char>& serialized) {
+  ASSERT_EQ(length, serialized.size());
+  for (size_t i = 0; i < length; i++) {
+    auto actual = *((char*) original + i);
+    ASSERT_EQ(actual, serialized[i]);
+  }
+}
+
+TEST(ResTable, TestRoundTrip) {
+  size_t length;
+  int file_descriptor;
+  auto fp = map_arsc(std::getenv("test_arsc_path"), file_descriptor, length);
+  android::ResTable table;
+  ASSERT_EQ(table.add(fp, length), 0);
+  // Just invoke the serialize method to ensure the same data comes back
+  android::Vector<char> serialized;
+  table.serialize(serialized, 0);
+  assert_serialized_data(fp, length, serialized);
+  close_arsc(file_descriptor, fp, length);
 }

@@ -3332,13 +3332,28 @@ struct ResTable::Package
 
     void serialize(Vector<char>& cVec)
     {
-        size_t headerSize = package->header.headerSize;
-        for (size_t i = 0; i < headerSize; ++i) {
-            cVec.push_back(*((unsigned char*)(package) + i));
-        }
+        // Write strings into intermediate vec, to calculate sizes.
+        Vector<char> serialized_strings;
+        typeStrings.serialize(serialized_strings);
+        auto typestr_size = serialized_strings.size();
+        keyStrings.serialize(serialized_strings);
 
-        typeStrings.serialize(cVec);
-        keyStrings.serialize(cVec);
+        auto header_size = sizeof(ResTable_package); // should be 288
+        auto total_size = header_size + serialized_strings.size();
+        push_short(cVec, package->header.type); // 0x0200
+        push_short(cVec, header_size);
+        push_long(cVec, total_size);
+        push_long(cVec, package->id);
+        auto num_elements = sizeof(package->name) / sizeof(package->name[0]);
+        for (size_t i = 0; i < num_elements; i++) {
+            push_short(cVec, package->name[i]);
+        }
+        push_long(cVec, header_size); // type strings start (skip over header)
+        push_long(cVec, package->lastPublicType);
+        push_long(cVec, header_size + typestr_size); // key strings start
+        push_long(cVec, package->lastPublicKey);
+        push_long(cVec, package->typeIdOffset);
+        cVec.appendVector(serialized_strings);
     }
 
     const ResTable* const           owner;
