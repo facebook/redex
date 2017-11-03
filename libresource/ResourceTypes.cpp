@@ -7255,11 +7255,9 @@ void ResTable::defineNewType(
   String8 type_name,
   uint8_t type_id,
   const ResTable_config* config,
-  Vector<uint32_t> source_ids,
-  Vector<Res_value> source_values) {
+  const Vector<uint32_t>& source_ids) {
   auto num_ids = source_ids.size();
   LOG_FATAL_IF(num_ids == 0, "Must provide ids to relocate");
-  LOG_FATAL_IF(source_values.size() != num_ids, "Length mismatch");
   Vector<char> output;
   const ssize_t pkg_index = getResourcePackageIndex(source_ids[0]);
   const auto old_type_id = Res_GETTYPE(source_ids[0]);
@@ -7310,7 +7308,12 @@ void ResTable::defineNewType(
     offsets.push(serialized_entries.size());
     // Copy ResTable_entry, then ResTable_value
     auto ep = &entries[i];
-    auto vp = &source_values[i];
+    Vector<Res_value> lookup;
+    getAllValuesForResource(source_ids[i], lookup, true);
+    LOG_FATAL_IF(
+      lookup.size() != 1,
+      "Relocation only supported for ids with a single default value");
+    auto vp = &lookup[0];
     for (size_t j = 0; j < ep->size; j++) {
       serialized_entries.push_back(*((unsigned char*)(ep) + j));
     }

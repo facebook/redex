@@ -206,7 +206,7 @@ TEST(ResTable, AppendNewType) {
     sizeof(android::ResTable_config)
   };
 
-  table.defineNewType(android::String8("foo"), dest_type, &config, source_ids, values);
+  table.defineNewType(android::String8("foo"), dest_type, &config, source_ids);
 
   android::Vector<char> serialized;
   table.serialize(serialized, 0);

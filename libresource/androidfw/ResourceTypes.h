@@ -1859,14 +1859,12 @@ public:
     void deleteResource(uint32_t resID);
 
     // Defines a ResTable::Type containing the entry data for the given ids.
-    // Input data is such that source_ids[n] has only 1 value, which is
-    // source_values[n].
+    // NOTE: Ids that have only default values are supported.
     void defineNewType(
       String8 type_name,
       uint8_t type_id,
       const ResTable_config* config,
-      Vector<uint32_t> source_ids,
-      Vector<Res_value> source_values);
+      const Vector<uint32_t>& source_ids);
 
     // For the given resource ID, looks across all configurations and remaps all
     // reference and attribute Res_value entries based on the given
