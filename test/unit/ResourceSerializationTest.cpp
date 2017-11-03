@@ -182,3 +182,65 @@ TEST(ResTable, TestRoundTrip) {
   assert_serialized_data(fp, length, serialized);
   close_arsc(file_descriptor, fp, length);
 }
+
+TEST(ResTable, AppendNewType) {
+  size_t length;
+  int file_descriptor;
+  auto fp = map_arsc(std::getenv("test_arsc_path"), file_descriptor, length);
+  android::ResTable table;
+  ASSERT_EQ(table.add(fp, length), 0);
+
+  // Copy some existing entries to a different table, verify serialization
+  const uint8_t dest_type = 3;
+  android::Vector<uint32_t> source_ids;
+  source_ids.push_back(0x7f010000);
+  size_t num_ids = source_ids.size();
+  android::Vector<android::Res_value> values;
+  for (size_t i = 0; i < num_ids; i++) {
+    android::Res_value val;
+    table.getResource(source_ids[i], &val);
+    values.push_back(val);
+  }
+
+  android::ResTable_config config = {
+    sizeof(android::ResTable_config)
+  };
+
+  table.defineNewType(android::String8("foo"), dest_type, &config, source_ids, values);
+
+  android::Vector<char> serialized;
+  table.serialize(serialized, 0);
+
+  android::ResTable round_trip;
+  ASSERT_EQ(round_trip.add((void*)serialized.array(), serialized.size()), 0);
+  // Make sure entries exist in 0x7f03xxxx range
+  for (size_t i = 0; i < num_ids; i++) {
+    auto old_id = source_ids[i];
+    auto new_id = 0x7f000000 | (dest_type << 16) | (old_id & 0xFFFF);
+    android::Res_value expected = values[i];
+    android::Res_value actual;
+    round_trip.getResource(new_id, &actual);
+    ASSERT_EQ(expected.dataType, actual.dataType);
+    ASSERT_EQ(expected.data, actual.data);
+  }
+
+  // Sanity check values in their original location
+  {
+    android::Res_value out_value;
+    round_trip.getResource(0x7f010000, &out_value);
+    float val = android::complex_value(out_value.data);
+    uint32_t unit = android::complex_unit(out_value.data, false);
+    ASSERT_EQ((int) val, 10);
+    ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
+  }
+  {
+    android::Res_value out_value;
+    round_trip.getResource(0x7f010001, &out_value);
+    float val = android::complex_value(out_value.data);
+    uint32_t unit = android::complex_unit(out_value.data, false);
+    ASSERT_EQ((int) val, 20);
+    ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
+  }
+
+  close_arsc(file_descriptor, fp, length);
+}

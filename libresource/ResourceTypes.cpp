@@ -7227,6 +7227,125 @@ bool ResTable::tryGetConfigEntry(
     return true;
 }
 
+void ResTable::defineNewType(
+  String8 type_name,
+  uint8_t type_id,
+  const ResTable_config* config,
+  Vector<uint32_t> source_ids,
+  Vector<Res_value> source_values) {
+  auto num_ids = source_ids.size();
+  LOG_FATAL_IF(num_ids == 0, "Must provide ids to relocate");
+  LOG_FATAL_IF(source_values.size() != num_ids, "Length mismatch");
+  Vector<char> output;
+  const ssize_t pkg_index = getResourcePackageIndex(source_ids[0]);
+  const auto old_type_id = Res_GETTYPE(source_ids[0]);
+  PackageGroup* pg = mPackageGroups[pkg_index];
+  // Given an existing resource id, and its Res_value, we need to lookup some
+  // additional details, like the ResTable_entry (which includes the string pool
+  // ref), and the flags that make up the ResTable_typeSpec entries.
+  Vector<uint32_t> spec_flags;
+  Vector<ResTable_entry> entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    auto id = source_ids[i];
+    // For simplicity, assert that all ids are from the same package/type.
+    LOG_FATAL_IF(
+      Res_GETTYPE(id) != old_type_id,
+      "Given ids must be in the same type");
+    LOG_FATAL_IF(
+      getResourcePackageIndex(id) != pkg_index,
+      "Given ids must be in the same package");
+
+    Entry entry;
+    status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), config, &entry);
+    LOG_FATAL_IF(err != NO_ERROR, "Entry not found");
+    spec_flags.push(entry.specFlags);
+    entries.push(*entry.entry);
+  }
+
+  // Write out the serialized form of a ResTable::Table.
+  // This is a ResTable_typeSpec followed by a ResTable_type.
+  const auto typespec_header_size = sizeof(ResTable_typeSpec);
+  const auto typespec_total_size =
+    typespec_header_size + sizeof(uint32_t) * num_ids;
+  push_short(output, 0x202); // ResTable_typeSpec identifier
+  push_short(output, typespec_header_size); // header size
+  push_long(output, typespec_total_size);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  push_long(output, num_ids);
+  for (size_t i = 0; i < num_ids; i++) {
+    push_long(output, spec_flags[i]);
+  }
+  // Serialize entry data into intermediate vec, to easily build the offset
+  // array.
+  Vector<uint32_t> offsets;
+  Vector<char> serialized_entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    offsets.push(serialized_entries.size());
+    // Copy ResTable_entry, then ResTable_value
+    auto ep = &entries[i];
+    auto vp = &source_values[i];
+    for (size_t j = 0; j < ep->size; j++) {
+      serialized_entries.push_back(*((unsigned char*)(ep) + j));
+    }
+    for (size_t j = 0; j < vp->size; j++) {
+      serialized_entries.push_back(*((unsigned char*)(vp) + j));
+    }
+  }
+  // ResTable_type
+  push_short(output, 0x201);
+  // TODO(T22233306): verify this size is actually correct. The size field in
+  // binary data produced by aapt2 seems to be different (and padded with 0s).
+  auto type_header_size = sizeof(ResTable_type);
+  push_short(output, type_header_size);
+  auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+  auto total_size = entries_start + serialized_entries.size();
+  push_long(output, total_size);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  push_long(output, num_ids);
+  push_long(output, entries_start);
+  for (size_t i = 0; i < config->size; i++) {
+    output.push_back(*((unsigned char*)(config) + i));
+  }
+  for (size_t i = 0; i < num_ids; i++) {
+    push_long(output, offsets[i]);
+  }
+  output.appendVector(serialized_entries);
+
+  // Append the name of this split type to the typeString pool.
+  auto package = pg->packages[0];
+  package->typeStrings.appendString(type_name);
+
+  // Jam in a new ResTable::Type into the PackageGroup. Note that by setting the
+  // second arg (owner), this should get properly destroyed when the
+  // PackageGroup is deleted.
+  ResTable::Type* type = new ResTable::Type(nullptr, package, num_ids);
+  auto final_size = output.size();
+  char* serialized_chars = (char*) malloc(final_size);
+  LOG_FATAL_IF(
+    serialized_chars == nullptr,
+    "Could not allocate %zu bytes for ResTable_typeSpec",
+    final_size);
+  memcpy(serialized_chars, output.array(), final_size);
+
+  auto flag_ptr = (uint32_t*) (serialized_chars + typespec_header_size);
+  type->typeSpecFlags = flag_ptr;
+  type->typeSpec = (ResTable_typeSpec*) serialized_chars;
+
+  auto tp = (ResTable_type*) (serialized_chars + typespec_total_size);
+  type->configs.push_back(tp);
+
+  TypeList type_list;
+  type_list.push_back(type);
+  const TypeList x = type_list;
+  pg->types.set(type_id - 1, x);
+}
+
 void ResTable::inlineReferenceValuesForResource(
     uint32_t resID,
     SortedVector<uint32_t> inlineable_ids,
