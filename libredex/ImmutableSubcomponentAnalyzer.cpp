@@ -152,16 +152,14 @@ using AbstractAccessPathEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractAccessPathDomain>;
 
 class Analyzer final
-    : public MonotonicFixpointIterator<Block*, AbstractAccessPathEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface,
+                                       AbstractAccessPathEnvironment> {
  public:
   using NodeId = Block*;
 
   Analyzer(const ControlFlowGraph& cfg,
            std::function<bool(DexMethodRef*)> is_immutable_getter)
-      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1),
-                                  cfg.blocks().size()),
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_cfg(cfg),
         m_is_immutable_getter(is_immutable_getter) {}
 
@@ -176,9 +174,7 @@ class Analyzer final
   }
 
   AbstractAccessPathEnvironment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* target */,
-      const AbstractAccessPathEnvironment& exit_state_at_source)
+      const EdgeId&, const AbstractAccessPathEnvironment& exit_state_at_source)
       const override {
     return exit_state_at_source;
   }

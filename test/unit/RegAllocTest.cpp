@@ -253,7 +253,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -359,7 +359,7 @@ TEST_F(RegAllocTest, Coalesce) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -391,7 +391,7 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -431,7 +431,7 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -529,7 +529,7 @@ TEST_F(RegAllocTest, SelectRange) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set = init_range_set(code.get());
@@ -573,7 +573,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   auto invoke_it =
@@ -609,7 +609,7 @@ TEST_F(RegAllocTest, Spill) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -662,7 +662,7 @@ TEST_F(RegAllocTest, ContainmentGraph) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -717,7 +717,7 @@ TEST_F(RegAllocTest, FindSplit) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -753,7 +753,7 @@ TEST_F(RegAllocTest, Split) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;
@@ -805,7 +805,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(const_cast<Block*>(cfg.exit_block()));
+  LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
   RangeSet range_set;

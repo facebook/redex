@@ -62,7 +62,7 @@ class RemoveGotos {
         continue;
       }
 
-      Block* next_block = current_block->succs()[0];
+      Block* next_block = current_block->succs()[0]->target();
       if (next_block != current_block && next_block->preds().size() == 1 &&
           (next_block->succs().empty() || has_goto(next_block))) {
         return current_block;
@@ -90,7 +90,7 @@ class RemoveGotos {
             current_block->id());
       num_goto_removed++;
 
-      auto next_block = current_block->succs()[0];
+      Block* next_block = current_block->succs()[0]->target();
 
       std::vector<MethodItemEntry*> next_block_mies;
       auto next_iter = next_block->begin();

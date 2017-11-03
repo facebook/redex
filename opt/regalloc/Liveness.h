@@ -19,14 +19,14 @@ using namespace std::placeholders;
 using LivenessDomain = SparseSetAbstractDomain;
 
 class LivenessFixpointIterator final
-    : public MonotonicFixpointIterator<Block*, LivenessDomain> {
+    : public MonotonicFixpointIterator<
+          BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
+          LivenessDomain> {
  public:
   using NodeId = Block*;
 
-  LivenessFixpointIterator(NodeId exit_block)
-      : MonotonicFixpointIterator(exit_block,
-                                  std::bind(&Block::preds, _1),
-                                  std::bind(&Block::succs, _1)) {}
+  LivenessFixpointIterator(const ControlFlowGraph& cfg)
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
 
   void analyze_node(const NodeId& block,
                     LivenessDomain* current_state) const override {
@@ -38,8 +38,7 @@ class LivenessFixpointIterator final
   }
 
   LivenessDomain analyze_edge(
-      const NodeId& /* source_block */,
-      const NodeId& /* target_block */,
+      const EdgeId&,
       const LivenessDomain& exit_state_at_source) const override {
     return exit_state_at_source;
   }

@@ -55,7 +55,7 @@ static void find_first_uses_dfs(
     return;
   }
   for (auto& s : block->succs()) {
-    find_first_uses_dfs(reg, s, blocks_with_uses, visited_blocks);
+    find_first_uses_dfs(reg, s->target(), blocks_with_uses, visited_blocks);
   }
 }
 
@@ -1066,8 +1066,7 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
 
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
-    LivenessFixpointIterator fixpoint_iter(
-        const_cast<Block*>(cfg.exit_block()));
+    LivenessFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
     TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));

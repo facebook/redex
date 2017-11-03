@@ -107,19 +107,22 @@ class StatementIterable {
 struct Program {
   Program() : m_start(nullptr) {}
 
-  vector<SimpleBlock*> succ(SimpleBlock* block) {
-    auto& succs = m_successors[block];
+  vector<SimpleBlock*> succ(SimpleBlock* block) const {
+    auto& succs = m_successors.at(block);
     return vector<SimpleBlock*>(succs.begin(), succs.end());
   }
 
-  vector<SimpleBlock*> pred(SimpleBlock* block) {
-    auto& preds = m_predecessors[block];
+  vector<SimpleBlock*> pred(SimpleBlock* block) const {
+    auto& preds = m_predecessors.at(block);
     return vector<SimpleBlock*>(preds.begin(), preds.end());
   }
 
   void add(SimpleBlock* block) {
     m_blocks.push_back(block);
     block->num = m_blocks.size() - 1;
+    // Ensure these are default-initialized
+    m_successors[block];
+    m_predecessors[block];
   }
 
   void add_edge(SimpleBlock* source, SimpleBlock* dest) {
@@ -137,7 +140,7 @@ struct Program {
   vector<SimpleBlock*>::iterator begin() { return m_blocks.begin(); }
   vector<SimpleBlock*>::iterator end() { return m_blocks.end(); }
 
-  SimpleBlock* start() { return m_start; }
+  SimpleBlock* start() const { return m_start; }
 
  private:
   SimpleBlock* m_start;
@@ -147,6 +150,24 @@ struct Program {
 
   friend std::ostream& operator<<(std::ostream&, const Program&);
   friend class BlockIterable;
+};
+
+class ProgramInterface : public FixpointIteratorGraphSpec<ProgramInterface> {
+ public:
+  using Graph = Program;
+  using NodeId = SimpleBlock*;
+  using EdgeId = SimpleBlock*;
+
+  static NodeId entry(const Graph& graph) { return graph.start(); }
+  static std::vector<EdgeId> predecessors(const Graph& graph,
+                                          const NodeId node) {
+    return graph.pred(node);
+  }
+  static std::vector<EdgeId> successors(const Graph& graph, const NodeId node) {
+    return graph.succ(node);
+  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e; }
+  static NodeId target(const Graph&, const EdgeId& e) { return e; }
 };
 
 std::ostream& operator<<(std::ostream& o, const Program& p) {
@@ -172,17 +193,13 @@ class BlockIterable {
 };
 
 class SkeletonConstantPropAnalysis final
-    : public ConstantPropFixpointAnalysis<SimpleBlock*,
+    : public ConstantPropFixpointAnalysis<ProgramInterface,
                                           Statement,
                                           BlockIterable,
                                           StatementIterable> {
  public:
   explicit SkeletonConstantPropAnalysis(Program& p)
-      : ConstantPropFixpointAnalysis(p.start(),
-                                     BlockIterable(&p),
-                                     std::bind(&Program::succ, &p, _1),
-                                     std::bind(&Program::pred, &p, _1)),
-        m_program(p) {}
+      : ConstantPropFixpointAnalysis(p, BlockIterable(&p)), m_program(p) {}
 
   void analyze_instruction(const Statement& stmt,
                            ConstPropEnvironment* current_state) const override {

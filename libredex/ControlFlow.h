@@ -9,10 +9,9 @@
 
 #pragma once
 
-#include <bitset>
-#include <boost/functional/hash.hpp>
 #include <utility>
 
+#include "FixpointIterators.h"
 #include "IRCode.h"
 
 /**
@@ -40,6 +39,29 @@ namespace transform {
 void replace_block(IRCode*, Block*, Block*);
 }
 
+namespace cfg {
+
+class Edge final {
+  Block* m_src;
+  Block* m_target;
+  EdgeType m_type;
+
+ public:
+  Edge(Block* src, Block* target, EdgeType type)
+      : m_src(src), m_target(target), m_type(type) {}
+  bool operator==(const Edge& that) const {
+    return m_src == that.m_src && m_target == that.m_target &&
+           m_type == that.m_type;
+  }
+  Block* src() const { return m_src; }
+  Block* target() const { return m_target; }
+  EdgeType type() const { return m_type; }
+};
+
+} // namespace cfg
+
+// TODO: Put the rest of this header under the cfg namespace too
+
 // A piece of "straight-line" code. Targets are only at the beginning of a block
 // and branches (throws, gotos, switches, etc) are only at the end of a block.
 class Block {
@@ -48,8 +70,12 @@ class Block {
       : m_id(id), m_parent(parent) {}
 
   size_t id() const { return m_id; }
-  const std::vector<Block*>& preds() const { return m_preds; }
-  const std::vector<Block*>& succs() const { return m_succs; }
+  const std::vector<std::shared_ptr<cfg::Edge>>& preds() const {
+    return m_preds;
+  }
+  const std::vector<std::shared_ptr<cfg::Edge>>& succs() const {
+    return m_succs;
+  }
   FatMethod::iterator begin();
   FatMethod::iterator end();
   FatMethod::reverse_iterator rbegin() {
@@ -82,8 +108,8 @@ class Block {
   FatMethod::iterator m_begin;
   FatMethod::iterator m_end;
 
-  std::vector<Block*> m_preds;
-  std::vector<Block*> m_succs;
+  std::vector<std::shared_ptr<cfg::Edge>> m_preds;
+  std::vector<std::shared_ptr<cfg::Edge>> m_succs;
 
   // This is the successor taken in the
   // non-exception, if false, or switch default situations
@@ -107,12 +133,10 @@ struct DominatorInfo {
 };
 
 class ControlFlowGraph {
-  using IdPair = std::pair<size_t, size_t>;
 
  public:
-  using EdgeFlags = std::bitset<EDGE_TYPE_SIZE>;
-
-  ControlFlowGraph() {}
+  ControlFlowGraph() = default;
+  ControlFlowGraph(const ControlFlowGraph&) = delete;
 
   /*
    * if editable is false, changes to the CFG aren't reflected in the output dex
@@ -142,12 +166,7 @@ class ControlFlowGraph {
    */
   void calculate_exit_block();
 
-  const EdgeFlags& edge(Block* pred, Block* succ) const {
-    return m_edges.at(IdPair(pred->id(), succ->id()));
-  }
   void add_edge(Block* pred, Block* succ, EdgeType type);
-  void remove_edge(Block* pred, Block* succ, EdgeType type);
-  void remove_all_edges(Block* pred, Block* succ);
 
   /*
    * Print the graph in the DOT graph description language.
@@ -179,10 +198,6 @@ class ControlFlowGraph {
       std::unordered_map<Block*,
                          std::pair<FatMethod::iterator, FatMethod::iterator>>;
   using Blocks = std::map<size_t, Block*>;
-
-  EdgeFlags& mutable_edge(Block* pred, Block* succ) {
-    return m_edges[IdPair(pred->id(), succ->id())];
-  }
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
@@ -235,12 +250,39 @@ class ControlFlowGraph {
 
   void remove_fallthru_gotos(const std::vector<Block*> ordering);
 
+  void remove_all_edges(Block* pred, Block* succ);
+
   Blocks m_blocks;
-  std::unordered_map<IdPair, EdgeFlags, boost::hash<IdPair>> m_edges;
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable;
 };
+
+namespace cfg {
+
+// A static-method-only API for use with the monotonic fixpoint iterator.
+class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
+ public:
+  using Graph = ControlFlowGraph;
+  using NodeId = Block*;
+  using EdgeId = std::shared_ptr<cfg::Edge>;
+  static NodeId entry(const Graph& graph) {
+    return const_cast<NodeId>(graph.entry_block());
+  }
+  static NodeId exit(const Graph& graph) {
+    return const_cast<NodeId>(graph.exit_block());
+  }
+  static std::vector<EdgeId> predecessors(const Graph&, const NodeId& b) {
+    return b->preds();
+  }
+  static std::vector<EdgeId> successors(const Graph&, const NodeId& b) {
+    return b->succs();
+  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e->src(); }
+  static NodeId target(const Graph&, const EdgeId& e) { return e->target(); }
+};
+
+} // namespace cfg
 
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
 

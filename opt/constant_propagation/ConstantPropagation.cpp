@@ -118,26 +118,22 @@ static void analyze_if(const IRInstruction* inst,
 }
 
 ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
-    Block* const& source,
-    Block* const& destination,
+    const std::shared_ptr<cfg::Edge>& edge,
     const ConstPropEnvironment& exit_state_at_source) const {
   auto current_state = exit_state_at_source;
   if (!m_config.propagate_conditions) {
     return current_state;
   }
 
-  auto last_insn_it = transform::find_last_instruction(source);
-  if (last_insn_it == source->end()) {
+  auto last_insn_it = transform::find_last_instruction(edge->src());
+  if (last_insn_it == edge->src()->end()) {
     return current_state;
   }
 
   auto insn = last_insn_it->insn;
   auto op = insn->opcode();
   if (is_conditional_branch(op)) {
-    analyze_if(
-        insn,
-        &current_state,
-        /* if_true_branch */ m_cfg.edge(source, destination)[EDGE_BRANCH]);
+    analyze_if(insn, &current_state, edge->type() == EDGE_BRANCH);
   }
   return current_state;
 }
@@ -183,8 +179,8 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
 }
 
 void ConstantPropagationPass::run_pass(DexStoresVector& stores,
-                                         ConfigFiles&,
-                                         PassManager& mgr) {
+                                       ConfigFiles&,
+                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   walk_methods_parallel_simple(scope, [&](DexMethod* method) {

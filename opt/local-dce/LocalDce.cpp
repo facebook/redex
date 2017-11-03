@@ -207,15 +207,15 @@ void LocalDce::dce(DexMethod* method) {
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
-        if(s->id() == b->id()) {
+        if (s->target()->id() == b->id()) {
           bliveness |= prev_liveness;
         }
         TRACE(DCE,
               5,
               "  S%lu: %s\n",
-              s->id(),
-              show(liveness[s->id()]).c_str());
-        bliveness |= liveness[s->id()];
+              s->target()->id(),
+              SHOW(liveness[s->target()->id()]));
+        bliveness |= liveness[s->target()->id()];
       }
 
       // Compute live-in for this block by walking its instruction list in
@@ -248,9 +248,14 @@ void LocalDce::dce(DexMethod* method) {
 
   // Remove dead instructions.
   TRACE(DCE, 2, "%s\n", SHOW(method));
+  std::unordered_set<IRInstruction*> seen;
   for (auto dead : dead_instructions) {
+    if (seen.count(dead->insn)) {
+      continue;
+    }
     TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
     code->remove_opcode(dead);
+    seen.emplace(dead->insn);
   }
   m_stats.dead_instruction_count += dead_instructions.size();
 

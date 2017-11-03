@@ -32,28 +32,22 @@ using std::vector;
  * more powerful than its predecessor pass.
  */
 class IntraProcConstantPropagation final
-    : public ConstantPropFixpointAnalysis<Block*,
+    : public ConstantPropFixpointAnalysis<cfg::GraphInterface,
                                           MethodItemEntry,
                                           std::vector<Block*>,
                                           InstructionIterable> {
  public:
   explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
                                         const ConstPropConfig& config)
-      : ConstantPropFixpointAnalysis<Block*,
+      : ConstantPropFixpointAnalysis<cfg::GraphInterface,
                                      MethodItemEntry,
                                      vector<Block*>,
-                                     InstructionIterable>(
-            cfg.entry_block(),
-            cfg.blocks(),
-            std::bind(&Block::succs, _1),
-            std::bind(&Block::preds, _1)),
+                                     InstructionIterable>(cfg, cfg.blocks()),
         m_config(config),
-        m_lcp{config},
-        m_cfg(cfg) {}
+        m_lcp{config} {}
 
   ConstPropEnvironment analyze_edge(
-      Block* const& source,
-      Block* const& destination,
+      const std::shared_ptr<cfg::Edge>&,
       const ConstPropEnvironment& exit_state_at_source) const override;
 
   void simplify_instruction(
@@ -70,7 +64,6 @@ class IntraProcConstantPropagation final
  private:
   const ConstPropConfig m_config;
   mutable LocalConstantPropagation m_lcp;
-  const ControlFlowGraph& m_cfg;
 };
 
 class ConstantPropagationPass : public Pass {

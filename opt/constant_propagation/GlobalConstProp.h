@@ -158,25 +158,21 @@ class ConstPropEnvUtil {
  *           replace instructions.  In code; these are all the simplify_*
  *           functions.
  */
-template <typename BlockType,
+template <typename GraphInterface,
           typename InstructionType,
           typename BlockIterable,
           typename InstructionIterable>
 class ConstantPropFixpointAnalysis
-    : public MonotonicFixpointIterator<BlockType, ConstPropEnvironment> {
+    : public MonotonicFixpointIterator<GraphInterface, ConstPropEnvironment> {
  public:
-  using BlockTypeToListFunc =
-      std::function<std::vector<BlockType>(BlockType const&)>;
+  using Graph = typename GraphInterface::Graph;
+  using BlockType = typename GraphInterface::NodeId;
+  using EdgeId = typename GraphInterface::EdgeId;
 
-  ConstantPropFixpointAnalysis(BlockType const& start_block,
-                               BlockIterable const& cfg_iterable,
-                               BlockTypeToListFunc succ,
-                               BlockTypeToListFunc pred)
-      : MonotonicFixpointIterator<BlockType, ConstPropEnvironment>(
-            start_block, succ, pred),
-        m_start_block(start_block),
-        m_cfg_iterable(cfg_iterable),
-        m_succ(succ) {}
+  ConstantPropFixpointAnalysis(const Graph& graph,
+                               BlockIterable const& cfg_iterable)
+      : MonotonicFixpointIterator<GraphInterface, ConstPropEnvironment>(graph),
+        m_cfg_iterable(cfg_iterable) {}
 
   void simplify() const {
     for (const auto& block : m_cfg_iterable) {
@@ -189,8 +185,7 @@ class ConstantPropFixpointAnalysis
   }
 
   ConstPropEnvironment analyze_edge(
-      BlockType const& source,
-      BlockType const& destination,
+      const EdgeId&,
       const ConstPropEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }
@@ -221,7 +216,5 @@ class ConstantPropFixpointAnalysis
       ConstPropEnvironment* current_state) const = 0;
 
  private:
-  BlockType m_start_block;
   BlockIterable m_cfg_iterable;
-  BlockTypeToListFunc m_succ;
 };

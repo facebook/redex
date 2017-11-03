@@ -249,3 +249,38 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
 }
+
+TEST(ConstantPropagation, JumpToImmediateNext) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :next) ; This jumps to the next opcode regardless of whether
+                       ; the test is true or false. So in this case we cannot
+                       ; conclude that v0 == 0 in the 'true' block, since that
+                       ; is identical to the 'false' block.
+     :next
+     (if-eqz v0 :end)
+     (const/4 v0 1)
+     :end
+     (return-void)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  do_const_prop(code.get(), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :next)
+     :next
+     (if-eqz v0 :end)
+     (const/4 v0 1)
+     :end
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}

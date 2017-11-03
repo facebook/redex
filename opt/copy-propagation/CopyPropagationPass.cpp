@@ -62,19 +62,16 @@ using namespace copy_propagation_impl;
 namespace {
 
 class AliasFixpointIterator final
-    : public MonotonicFixpointIterator<Block*, AliasDomain> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
   const CopyPropagationPass::Config& m_config;
   Stats& m_stats;
 
-  using BlockToListFunc = std::function<std::vector<Block*>(Block* const&)>;
-
-  AliasFixpointIterator(Block* start_block,
-                        BlockToListFunc succ,
-                        BlockToListFunc pred,
+  AliasFixpointIterator(ControlFlowGraph& cfg,
                         const CopyPropagationPass::Config& config,
                         Stats& stats)
-      : MonotonicFixpointIterator<Block*, AliasDomain>(start_block, succ, pred),
+      : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
+            cfg, cfg.blocks().size()),
         m_config(config),
         m_stats(stats) {}
 
@@ -223,9 +220,7 @@ class AliasFixpointIterator final
   }
 
   AliasDomain analyze_edge(
-      Block* const& /* source */,
-      Block* const& /* target */,
-      const AliasDomain& exit_state_at_source) const override {
+      const EdgeId&, const AliasDomain& exit_state_at_source) const override {
     return exit_state_at_source;
   }
 };
@@ -262,12 +257,7 @@ Stats CopyPropagation::run(IRCode* code) {
   code->build_cfg();
   const auto& blocks = code->cfg().blocks();
 
-  AliasFixpointIterator fixpoint(
-      code->cfg().entry_block(),
-      [](Block* const& block) { return block->succs(); },
-      [](Block* const& block) { return block->preds(); },
-      m_config,
-      stats);
+  AliasFixpointIterator fixpoint(code->cfg(), m_config, stats);
 
   if (m_config.full_method_analysis) {
     fixpoint.run(AliasDomain());

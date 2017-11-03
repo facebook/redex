@@ -111,14 +111,12 @@ class DefsEnvironment final
 };
 
 class ReachingDefsFixpointIterator final
-    : public MonotonicFixpointIterator<Block*, DefsEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, DefsEnvironment> {
  public:
   using NodeId = Block*;
 
-  ReachingDefsFixpointIterator(const ControlFlowGraph&, NodeId entry_block)
-      : MonotonicFixpointIterator(entry_block,
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1)) {}
+  explicit ReachingDefsFixpointIterator(const ControlFlowGraph& cfg)
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
 
   void analyze_node(const NodeId& block,
                     DefsEnvironment* current_state) const override {
@@ -136,8 +134,7 @@ class ReachingDefsFixpointIterator final
   }
 
   DefsEnvironment analyze_edge(
-      const NodeId& /* source_block */,
-      const NodeId& /* target_block */,
+      const EdgeId&,
       const DefsEnvironment& entry_state_at_source) const override {
     return entry_state_at_source;
   }
@@ -145,8 +142,7 @@ class ReachingDefsFixpointIterator final
 
 UDChains calculate_ud_chains(IRCode* code) {
   auto& cfg = code->cfg();
-  ReachingDefsFixpointIterator fixpoint_iter(
-      cfg, const_cast<Block*>(cfg.entry_block()));
+  ReachingDefsFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(DefsEnvironment());
   UDChains chains;
   for (Block* block : cfg.blocks()) {

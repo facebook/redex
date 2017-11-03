@@ -157,17 +157,14 @@ class TypeCheckingException final : public std::runtime_error {
 };
 
 class TypeInference final
-    : public MonotonicFixpointIterator<Block*, TypeEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, TypeEnvironment> {
  public:
   using NodeId = Block*;
 
   TypeInference(const ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
-      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1),
-                                  cfg.blocks().size()),
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),
@@ -243,8 +240,7 @@ class TypeInference final
   }
 
   TypeEnvironment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* target */,
+      const EdgeId&,
       const TypeEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }

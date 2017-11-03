@@ -1047,11 +1047,11 @@ std::string show(const ControlFlowGraph& cfg) {
   for (auto& b : blocks) {
     ss << "B" << b->id() << " succs:";
     for (auto& s : b->succs()) {
-      ss << " B" << s->id();
+      ss << " B" << s->target()->id();
     }
     ss << " preds:";
     for (auto& p : b->preds()) {
-      ss << " B" << p->id();
+      ss << " B" << p->src()->id();
     }
     ss << "\n";
   }

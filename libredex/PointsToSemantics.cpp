@@ -737,17 +737,14 @@ using AnchorEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
 
 class AnchorPropagation final
-    : public MonotonicFixpointIterator<Block*, AnchorEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, AnchorEnvironment> {
  public:
   using NodeId = Block*;
 
   AnchorPropagation(const ControlFlowGraph& cfg,
                     bool is_static_method,
                     IRCode* code)
-      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1),
-                                  cfg.blocks().size()),
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_is_static_method(is_static_method),
         m_code(code),
         m_this_anchor(nullptr) {}
@@ -762,8 +759,7 @@ class AnchorPropagation final
   }
 
   AnchorEnvironment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* target */,
+      const EdgeId&,
       const AnchorEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }

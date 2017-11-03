@@ -106,7 +106,7 @@ void visit(Block* start, std::unordered_set<Block*>& visited) {
     visited.emplace(b);
 
     for (auto& s : b->succs()) {
-      to_visit.push(s);
+      to_visit.push(s->target());
     }
   }
 }

@@ -64,26 +64,17 @@ struct BlockAsKey {
     if (b1_succs.size() != b2_succs.size()) {
       return false;
     }
-    for (Block* b1_succ : b1_succs) {
-      const auto& in_b2 = std::find(b2_succs.begin(), b2_succs.end(), b1_succ);
+    for (const std::shared_ptr<cfg::Edge>& b1_succ : b1_succs) {
+      const auto& in_b2 =
+          std::find_if(b2_succs.begin(),
+                       b2_succs.end(),
+                       [&](const std::shared_ptr<cfg::Edge>& e) {
+                         return e->target() == b1_succ->target() &&
+                                e->type() == b1_succ->type();
+                       });
       if (in_b2 == b2_succs.end()) {
-        // b1 has a succ that b2 doesn't
-        return false;
-      }
-
-      if (code->cfg().edge(this->block, b1_succ) !=
-          code->cfg().edge(other.block, *in_b2)) {
-        // successors are the same but the type of connecting
-        // edges are different.
-        // Like so:
-        //
-        // B0: if-eqz v0, B3
-        // B1: return
-        // B2: if eqz v0, B1
-        // B3: add-int v1, 1
-        //
-        // B0's succs are B1 (fallthru) and B3 (branch)
-        // B2's succs are B3 (fallthru) and B1 (branch)
+        // b1 has a succ that b2 doesn't. Note that both the succ blocks and
+        // the edge types have to match
         return false;
       }
     }
@@ -254,20 +245,20 @@ class DedupBlocksImpl {
     // We can't replace blocks that are involved in a fallthrough because they
     // depend on their position in the list of instructions. Deduplicating
     // will involve sending control to a block in a different place.
-    for (Block* pred : block->preds()) {
-      if (!has_opcodes(pred)) {
+    for (auto& pred : block->preds()) {
+      if (!has_opcodes(pred->src())) {
         // Skip this case because it's complicated. It should be fixed by
         // upcoming changes to the CFG
         return false;
       }
 
-      if (is_fallthrough(cfg, pred, block)) {
+      if (is_fallthrough(pred.get())) {
         return false;
       }
     }
 
-    for (Block* succ : block->succs()) {
-      if (is_fallthrough(cfg, block, succ)) {
+    for (auto& succ : block->succs()) {
+      if (is_fallthrough(succ.get())) {
         return false;
       }
     }
@@ -288,16 +279,13 @@ class DedupBlocksImpl {
     return false;
   }
 
-  // `pred` falls through to `succ` iff their connecting edge in the CFG is a
-  // goto but `pred`'s last instruction isn't a goto
-  static bool is_fallthrough(const ControlFlowGraph& cfg,
-                             Block* pred,
-                             Block* succ) {
-    always_assert_log(has_opcodes(pred), "need opcodes");
-    const auto& flags = cfg.edge(pred, succ);
-    const auto& last_of_pred = last_opcode(pred);
+  // `edge` falls through to its successor iff the connecting edge in the CFG
+  // is a goto but `edge->src()`'s last instruction isn't a goto
+  static bool is_fallthrough(const cfg::Edge* edge) {
+    always_assert_log(has_opcodes(edge->src()), "need opcodes");
+    const auto& last_of_block = last_opcode(edge->src());
 
-    return flags[EDGE_GOTO] && !is_goto(last_of_pred->insn->opcode());
+    return edge->type() == EDGE_GOTO && !is_goto(last_of_block->insn->opcode());
   }
 
   void record_stats(const duplicates_t& duplicates) {
