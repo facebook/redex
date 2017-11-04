@@ -1,4 +1,3 @@
-# @lint-avoid-pyflakes3
 # Parses Android hprof dumps.
 # Example usage:
 # In [1]: import hprof
