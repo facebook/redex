@@ -107,7 +107,6 @@ void StringIterator::analyze_instruction(const NodeId blk,
 
   } else if (is_invoke(insn->opcode())) {
     // Set all call's to top if not static strings.
-    insn->range_to_srcs();
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (!env->is_tracked(insn->src(i))) {
         continue;

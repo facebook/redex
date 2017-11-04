@@ -788,8 +788,7 @@ class AnchorPropagation final
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+    case OPCODE_FILLED_NEW_ARRAY: {
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
@@ -808,12 +807,7 @@ class AnchorPropagation final
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
       if (is_object(dex_method->get_proto()->get_rtype())) {
         // We attach an anchor to a method invocation only if the method returns
@@ -993,20 +987,14 @@ class PointsToActionGenerator final {
     case OPCODE_AGET_OBJECT:
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT:
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+    case OPCODE_FILLED_NEW_ARRAY: {
       return true;
     }
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       return is_object(insn->get_method()->get_proto()->get_rtype());
     }
     default: { return false; }
@@ -1063,10 +1051,8 @@ class PointsToActionGenerator final {
       // Otherwise, we fall through to the generic case.
     }
     case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
-      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY ||
-          insn->opcode() == OPCODE_FILLED_NEW_ARRAY_RANGE) {
+    case OPCODE_FILLED_NEW_ARRAY: {
+      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
         const DexType* element_type = get_array_type(insn->get_type());
         // Although the Dalvik bytecode specification states that a
         // filled-new-array operation could be used with an array of references,
@@ -1147,12 +1133,7 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       translate_invoke(insn, state);
       break;
     }
@@ -1185,7 +1166,7 @@ class PointsToActionGenerator final {
     DexProto* proto = dex_method->get_proto();
     const auto& signature = proto->get_args()->get_type_list();
     std::vector<std::pair<int32_t, PointsToVariable>> args;
-    IRSourceIterator src_it(insn);
+    size_t src_idx{0};
 
     // Allocate a variable for the returned object if any.
     boost::optional<PointsToVariable> dest;
@@ -1195,12 +1176,11 @@ class PointsToActionGenerator final {
 
     // Allocate a variable for the instance object if any.
     boost::optional<PointsToVariable> instance;
-    if (!(insn->opcode() == OPCODE_INVOKE_STATIC ||
-          insn->opcode() == OPCODE_INVOKE_STATIC_RANGE)) {
+    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
       instance = {
-          get_variable_from_anchor_set(state.get(src_it.get_register()))};
+          get_variable_from_anchor_set(state.get(insn->src(src_idx++)))};
     }
 
     // Process the arguments of the method invocation.
@@ -1209,14 +1189,10 @@ class PointsToActionGenerator final {
       if (is_object(dex_type)) {
         args.push_back(
             {arg_pos,
-             get_variable_from_anchor_set(state.get(src_it.get_register()))});
-      } else if (is_integer(dex_type) || is_float(dex_type)) {
-        // We skip this argument.
-        src_it.get_register();
+             get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});
       } else {
-        // Otherwise, the argument is a wide type (long or double) and we just
-        // skip it.
-        src_it.get_wide_register();
+        // We skip this argument.
+        ++src_idx;
       }
       ++arg_pos;
     }
@@ -1224,28 +1200,23 @@ class PointsToActionGenerator final {
     // Select the right points-to operation.
     PointsToOperationKind invoke_kind;
     switch (insn->opcode()) {
-    case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_STATIC_RANGE: {
+    case OPCODE_INVOKE_STATIC: {
       invoke_kind = PTS_INVOKE_STATIC;
       break;
     }
-    case OPCODE_INVOKE_VIRTUAL:
-    case OPCODE_INVOKE_VIRTUAL_RANGE: {
+    case OPCODE_INVOKE_VIRTUAL: {
       invoke_kind = PTS_INVOKE_VIRTUAL;
       break;
     }
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_SUPER_RANGE: {
+    case OPCODE_INVOKE_SUPER: {
       invoke_kind = PTS_INVOKE_SUPER;
       break;
     }
-    case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_DIRECT_RANGE: {
+    case OPCODE_INVOKE_DIRECT: {
       invoke_kind = PTS_INVOKE_DIRECT;
       break;
     }
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       invoke_kind = PTS_INVOKE_INTERFACE;
       break;
     }

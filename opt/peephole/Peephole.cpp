@@ -98,12 +98,6 @@ enum class Register : uint16_t {
   pair_D = 8,
 };
 
-Register get_pair_register(Register reg) {
-  assert(reg == Register::A || reg == Register::B || reg == Register::C ||
-         reg == Register::D);
-  return Register(uint16_t(reg) + 1);
-}
-
 enum class Literal {
   // For an arbitrary literal argument
   A,
@@ -672,28 +666,16 @@ DexPattern invoke_StringBuilder_init_String(Register instance,
 DexPattern invoke_StringBuilder_append(Register instance,
                                        Register argument,
                                        const char* param_type) {
-  std::vector<Register> srcs;
-  if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
-    srcs = {instance, argument, get_pair_register(argument)};
-  } else {
-    srcs = {instance, argument};
-  }
   return {{OPCODE_INVOKE_VIRTUAL},
-          std::move(srcs),
+          {instance, argument},
           {},
           DexMethod::make_method(
               LjavaStringBuilder, "append", LjavaStringBuilder, {param_type})};
 };
 
 DexPattern invoke_String_valueOf(Register argument, const char* param_type) {
-  std::vector<Register> srcs;
-  if (strcmp(param_type, "J") == 0 || strcmp(param_type, "D") == 0) {
-    srcs = {argument, get_pair_register(argument)};
-  } else {
-    srcs = {argument};
-  }
   return {{OPCODE_INVOKE_STATIC},
-          std::move(srcs),
+          {argument},
           {},
           DexMethod::make_method(
               LjavaString, "valueOf", LjavaString, {param_type})};
@@ -1195,12 +1177,7 @@ const std::unordered_set<uint16_t> kAnyInvoke = {OPCODE_INVOKE_VIRTUAL,
                                                  OPCODE_INVOKE_SUPER,
                                                  OPCODE_INVOKE_DIRECT,
                                                  OPCODE_INVOKE_STATIC,
-                                                 OPCODE_INVOKE_INTERFACE,
-                                                 OPCODE_INVOKE_VIRTUAL_RANGE,
-                                                 OPCODE_INVOKE_SUPER_RANGE,
-                                                 OPCODE_INVOKE_DIRECT_RANGE,
-                                                 OPCODE_INVOKE_STATIC_RANGE,
-                                                 OPCODE_INVOKE_INTERFACE_RANGE};
+                                                 OPCODE_INVOKE_INTERFACE};
 
 const DexPattern invoke_class_get_simple_name() {
   return {kAnyInvoke,

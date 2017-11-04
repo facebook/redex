@@ -57,13 +57,6 @@ inline bool has_code(const DexMethodRef* meth) {
       static_cast<const DexMethod*>(meth)->get_code() != nullptr;
 }
 
-/** Determine if the opcode matches any flavor of invoke-direct */
-inline bool is_invoke_direct(const IRInstruction* insn) {
-  auto op = insn->opcode();
-  return op == OPCODE_INVOKE_DIRECT ||
-    op == OPCODE_INVOKE_DIRECT_RANGE;
-}
-
 // Helpers
 
 namespace m {
@@ -289,8 +282,7 @@ match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
   return {
     [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       auto opcode = insn->opcode();
-      if (opcode == OPCODE_INVOKE_DIRECT ||
-        opcode == OPCODE_INVOKE_DIRECT_RANGE) {
+      if (opcode == OPCODE_INVOKE_DIRECT) {
         return p.matches(insn);
       } else {
         return false;
@@ -310,8 +302,7 @@ match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
   return {
     [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
       auto opcode = insn->opcode();
-      if (opcode == OPCODE_INVOKE_STATIC ||
-        opcode == OPCODE_INVOKE_STATIC_RANGE) {
+      if (opcode == OPCODE_INVOKE_STATIC) {
         return p.matches(insn);
       } else {
         return false;

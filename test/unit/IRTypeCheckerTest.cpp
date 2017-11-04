@@ -325,7 +325,7 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
       dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
       dasm(OPCODE_INVOKE_VIRTUAL,
            DexMethod::make_method("Lbar;", "foo", "V", {"I", "J", "Z"}),
-           {0_v, 5_v, 7_v, 8_v, 13_v}),
+           {0_v, 5_v, 7_v, 13_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
   add_code(insns);
@@ -334,17 +334,24 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
       "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, v5, "
-      "v7, v8, v13, Lbar;.foo:(IJZ)V' for register v13: expected type INT, but "
+      "v7, v13, Lbar;.foo:(IJZ)V' for register v13: expected type INT, but "
       "found FLOAT instead",
       checker.what());
 }
 
-TEST_F(IRTypeCheckerTest, invokeRange) {
+TEST_F(IRTypeCheckerTest, longInvoke) {
   using namespace dex_asm;
-  IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC_RANGE);
-  invoke->set_range_base(5)->set_range_size(9);
+  IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+  invoke->set_arg_word_count(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "D", "S", "F"}));
+  invoke->set_src(0, 5);
+  invoke->set_src(1, 6);
+  invoke->set_src(2, 7);
+  invoke->set_src(3, 9);
+  invoke->set_src(4, 10);
+  invoke->set_src(5, 12);
+  invoke->set_src(6, 13);
   std::vector<IRInstruction*> insns = {invoke, dasm(OPCODE_RETURN, {9_v})};
   add_code(insns);
   IRTypeChecker checker(m_method);
@@ -352,21 +359,28 @@ TEST_F(IRTypeCheckerTest, invokeRange) {
   EXPECT_TRUE(checker.good()) << checker.what();
 }
 
-TEST_F(IRTypeCheckerTest, signatureMismatchRange) {
+TEST_F(IRTypeCheckerTest, longSignatureMismatch) {
   using namespace dex_asm;
-  IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC_RANGE);
-  invoke->set_range_base(5)->set_range_size(9);
+  IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
+  invoke->set_arg_word_count(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "S", "D", "F"}));
+  invoke->set_src(0, 5);
+  invoke->set_src(1, 6);
+  invoke->set_src(2, 7);
+  invoke->set_src(3, 9);
+  invoke->set_src(4, 10);
+  invoke->set_src(5, 11);
+  invoke->set_src(6, 13);
   std::vector<IRInstruction*> insns = {invoke, dasm(OPCODE_RETURN, {9_v})};
   add_code(insns);
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_EQ(
-      "Type error in method testMethod at instruction 'INVOKE_STATIC_RANGE "
-      "range_base: 5, range_size: 9Lbar;.foo:(IBJZSDF)V' for register v10: "
-      "expected type INT, but found DOUBLE1 instead",
+      "Type error in method testMethod at instruction 'INVOKE_STATIC "
+      "v5, v6, v7, v9, v10, v11, v13, Lbar;.foo:(IBJZSDF)V' for "
+      "register v10: expected type INT, but found DOUBLE1 instead",
       checker.what());
 }
 

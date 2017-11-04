@@ -61,6 +61,10 @@ TEST_F(RegAllocTest, MoveGen) {
 TEST_F(RegAllocTest, RegTypeDestWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
+    // We cannot create IRInstructions from these opcodes
+    if (is_fopcode(op) || opcode::has_range(op)) {
+      continue;
+    }
     auto insn = std::make_unique<IRInstruction>(op);
     if (insn->dests_size() && !opcode::dest_is_src(op)) {
       EXPECT_EQ(insn->dest_is_wide(),

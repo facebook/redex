@@ -279,6 +279,17 @@ static void lower_fill_array_data(IRCode* code, FatMethod::iterator it) {
   it->replace_ir_with_dex(dex_insn);
 }
 
+static void lower_to_range_instruction(IRCode* code, FatMethod::iterator* it_) {
+  auto& it = *it_;
+  const auto* insn = it->insn;
+  always_assert(has_contiguous_srcs(insn));
+  auto* dex_insn = create_dex_instruction(insn);
+  dex_insn->set_opcode(opcode::range_version(insn->opcode()));
+  dex_insn->set_range_base(insn->src(0));
+  dex_insn->set_range_size(insn->srcs_size());
+  it->replace_ir_with_dex(dex_insn);
+}
+
 static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
@@ -306,10 +317,6 @@ static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   if (opcode::has_arg_word_count(op)) {
     dex_insn->set_arg_word_count(insn->srcs_size());
   }
-  if (opcode::has_range(op)) {
-    dex_insn->set_range_base(insn->range_base());
-    dex_insn->set_range_size(insn->range_size());
-  }
   it->replace_ir_with_dex(dex_insn);
   if (insn->has_move_result_pseudo()) {
     remove_move_result_pseudo(++it);
@@ -326,8 +333,9 @@ Stats lower(DexMethod* method) {
     if (it->type != MFLOW_OPCODE) {
       continue;
     }
-    const auto* insn = it->insn;
+    auto* insn = it->insn;
     auto op = insn->opcode();
+    insn->denormalize_registers();
 
     if (opcode::is_load_param(op)) {
       code->remove_opcode(it);
@@ -335,6 +343,8 @@ Stats lower(DexMethod* method) {
       stats.move_for_check_cast += lower_check_cast(code, &it);
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       lower_fill_array_data(code, it);
+    } else if (needs_range_conversion(insn)) {
+      lower_to_range_instruction(code, &it);
     } else {
       lower_simple_instruction(code, &it);
     }

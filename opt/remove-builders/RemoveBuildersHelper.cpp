@@ -677,13 +677,6 @@ bool params_change_regs(DexMethod* method) {
           return true;
         }
       }
-      if (opcode::has_range(op)) {
-        for (size_t index = 0; index < insn->range_size(); ++index) {
-          if (insn_tainted[insn->range_base() + index]) {
-            return true;
-          }
-        }
-      }
     }
 
     arg_reg += is_wide_type(arg) ? 2 : 1;
@@ -1043,36 +1036,27 @@ bool tainted_reg_escapes(
         // builder cannot possibly be passed as the `this` arg.
         args_reg_start = 1;
       }
-      if (opcode::has_range(insn->opcode())) {
-        for (size_t i = args_reg_start; i < insn->range_size(); ++i) {
-          if (tainted[insn->range_base() + i]) {
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
-          }
-        }
-      } else {
-        for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
-          if (tainted[insn->src(i)]) {
+      for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
+        if (tainted[insn->src(i)]) {
 
-            if (enable_buildee_constr_change) {
-              // Don't consider builders that get passed to the buildee's
-              // constructor. `update_buildee_constructor` will sort this
-              // out later.
-              if (is_init(invoked) &&
-                  invoked->get_class() == get_buildee(ty) &&
-                  has_only_argument(invoked, ty)) {
+          if (enable_buildee_constr_change) {
+            // Don't consider builders that get passed to the buildee's
+            // constructor. `update_buildee_constructor` will sort this
+            // out later.
+            if (is_init(invoked) &&
+                invoked->get_class() == get_buildee(ty) &&
+                has_only_argument(invoked, ty)) {
 
-                // If the 'fields constructor' already exist, don't continue.
-                if (get_fields_constr_if_exists(
-                      invoked, type_class(ty)) == nullptr) {
-                  continue;
-                }
+              // If the 'fields constructor' already exist, don't continue.
+              if (get_fields_constr_if_exists(
+                    invoked, type_class(ty)) == nullptr) {
+                continue;
               }
             }
-
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
           }
+
+          TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+          return true;
         }
       }
     } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||

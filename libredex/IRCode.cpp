@@ -575,7 +575,8 @@ void translate_dex_to_ir(
     }
     auto* dex_insn = it->dex_insn;
     auto op = dex_insn->opcode();
-    auto* insn = new IRInstruction(op);
+    auto* insn = new IRInstruction(
+        opcode::has_range(op) ? opcode::no_range_version(op) : op);
     always_assert(!is_fopcode(op));
 
     IRInstruction* move_result_pseudo{nullptr};
@@ -611,8 +612,11 @@ void translate_dex_to_ir(
       insn->set_literal(dex_insn->get_literal());
     }
     if (opcode::has_range(op)) {
-      insn->set_range_base(dex_insn->range_base());
-      insn->set_range_size(dex_insn->range_size());
+      insn->set_arg_word_count(dex_insn->range_size());
+      for (size_t i = 0; i < dex_insn->range_size(); ++i) {
+        insn->set_src(i, dex_insn->range_base() + i);
+      }
+      insn->set_opcode(opcode::no_range_version(op));
     }
     if (dex_insn->has_string()) {
       insn->set_string(
@@ -627,6 +631,8 @@ void translate_dex_to_ir(
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       insn->set_data(entry_to_data.at(get_target(&*it, bm)));
     }
+
+    insn->normalize_registers();
 
     it->type = MFLOW_OPCODE;
     it->insn = insn;

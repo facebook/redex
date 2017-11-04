@@ -629,11 +629,6 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << "v" << insn->src(i);
     first = false;
   }
-  if (opcode::has_range(insn->opcode())) {
-    if (!first) ss << ", ";
-    ss << "range_base: " << insn->range_base() << ", "
-       << "range_size: " << insn->range_size();
-  }
   if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
     ss << ", ";
   }

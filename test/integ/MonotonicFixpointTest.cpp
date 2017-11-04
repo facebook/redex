@@ -77,13 +77,6 @@ class IRFixpointIterator final
       // The source registers of an instruction are live.
       current_state->add(get_register(insn->src(i)));
     }
-    // `invoke-range` instructions require separate processing, because the
-    // source registers are encoded as a range.
-    if (opcode::has_range(insn->opcode())) {
-      for (size_t i = 0; i < insn->range_size(); i++) {
-        current_state->add(get_register(insn->range_base() + i));
-      }
-    }
   }
 
   LivenessDomain get_live_in_vars_at(const NodeId& block) const {

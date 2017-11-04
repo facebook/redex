@@ -128,11 +128,8 @@ struct Rebinder {
       [&](DexMethod* m, IRInstruction* insn) {
         switch (insn->opcode()) {
           case OPCODE_INVOKE_INTERFACE:
-          case OPCODE_INVOKE_INTERFACE_RANGE:
           case OPCODE_INVOKE_VIRTUAL:
-          case OPCODE_INVOKE_VIRTUAL_RANGE:
           case OPCODE_INVOKE_STATIC:
-          case OPCODE_INVOKE_STATIC_RANGE:
             rebind_method(insn, opcode_to_search(insn));
             break;
           case OPCODE_SGET:

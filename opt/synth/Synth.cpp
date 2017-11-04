@@ -457,25 +457,15 @@ void update_invoke(IRCode* transform,
                    DexMethod* method) {
   auto op = insn->opcode();
   auto new_invoke = [&] {
-    if (op == OPCODE_INVOKE_DIRECT_RANGE) {
-      auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC_RANGE
-                    : OPCODE_INVOKE_DIRECT_RANGE;
-      auto ret = new IRInstruction(new_op);
-      ret->set_method(method)
-          ->set_range_base(insn->range_base())
-          ->set_range_size(insn->range_size());
-      return ret;
-    } else {
-      assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
-      auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC
-                    : OPCODE_INVOKE_DIRECT;
-      auto ret = new IRInstruction(new_op);
-      ret->set_method(method)->set_arg_word_count(insn->arg_word_count());
-      for (int i = 0; i < ret->arg_word_count(); i++) {
-        ret->set_src(i, insn->src(i));
-      }
-      return ret;
+    assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
+    auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC
+                  : OPCODE_INVOKE_DIRECT;
+    auto ret = new IRInstruction(new_op);
+    ret->set_method(method)->set_arg_word_count(insn->arg_word_count());
+    for (int i = 0; i < ret->arg_word_count(); i++) {
+      ret->set_src(i, insn->src(i));
     }
+    return ret;
   }();
 
   TRACE(SYNT, 2, "new instruction: %s\n", SHOW(new_invoke));
@@ -549,22 +539,14 @@ void replace_ctor_wrapper(IRCode* transform,
 
   auto op = ctor_insn->opcode();
   auto new_ctor_call = [&] {
-    if (op == OPCODE_INVOKE_DIRECT_RANGE) {
-      auto ret = new IRInstruction(OPCODE_INVOKE_DIRECT_RANGE);
-      ret->set_method(ctor)
-          ->set_range_base(ctor_insn->range_base())
-          ->set_range_size(ctor_insn->range_size() - 1);
-      return ret;
-    } else {
-      assert(op == OPCODE_INVOKE_DIRECT);
-      auto ret = new IRInstruction(OPCODE_INVOKE_DIRECT);
-      ret->set_method(ctor)->set_arg_word_count(
-          ctor_insn->arg_word_count() - 1);
-      for (int i = 0; i < ret->arg_word_count(); i++) {
-        ret->set_src(i, ctor_insn->src(i));
-      }
-      return ret;
+    assert(op == OPCODE_INVOKE_DIRECT);
+    auto ret = new IRInstruction(OPCODE_INVOKE_DIRECT);
+    ret->set_method(ctor)->set_arg_word_count(
+        ctor_insn->arg_word_count() - 1);
+    for (int i = 0; i < ret->arg_word_count(); i++) {
+      ret->set_src(i, ctor_insn->src(i));
     }
+    return ret;
   }();
 
   TRACE(SYNT, 2, "new instruction: %s\n", SHOW(new_ctor_call));
@@ -614,8 +596,7 @@ void replace_wrappers(const ClassHierarchy& ch,
         SHOW(caller_method), SHOW(callee), SHOW(insn));
 
       ssms.keepers.emplace(callee);
-    } else if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
-               insn->opcode() == OPCODE_INVOKE_DIRECT_RANGE) {
+    } else if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
       auto const callee =
           resolve_method(insn->get_method(), MethodSearch::Direct);
       if (callee == nullptr) continue;
@@ -653,12 +634,6 @@ void replace_wrappers(const ClassHierarchy& ch,
         ctor_calls.emplace_back(insn, ctor);
         continue;
       }
-    } else if (insn->opcode() == OPCODE_INVOKE_STATIC_RANGE) {
-      // We don't handle this yet, but it's not hard.
-      auto const callee =
-          resolve_method(insn->get_method(), MethodSearch::Static);
-      if (callee == nullptr) continue;
-      ssms.keepers.emplace(callee);
     }
   }
   // Prune out wrappers that are invalid due to naming conflicts.
@@ -868,8 +843,7 @@ void do_transform(const ClassHierarchy& ch,
     for (auto& mie : InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto opcode = insn->opcode();
-      if (opcode != OPCODE_INVOKE_DIRECT &&
-          opcode != OPCODE_INVOKE_DIRECT_RANGE) {
+      if (opcode != OPCODE_INVOKE_DIRECT) {
         continue;
       }
       auto wrappee =
@@ -878,9 +852,7 @@ void do_transform(const ClassHierarchy& ch,
         continue;
       }
       // change the opcode to invoke-static
-      insn->set_opcode(opcode == OPCODE_INVOKE_DIRECT
-                           ? OPCODE_INVOKE_STATIC
-                           : OPCODE_INVOKE_STATIC_RANGE);
+      insn->set_opcode(OPCODE_INVOKE_STATIC);
       TRACE(SYNT, 3,
             "Updated invoke on promoted to static %s\n in method %s",
             SHOW(wrappee),

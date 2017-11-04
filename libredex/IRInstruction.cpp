@@ -12,48 +12,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
-namespace {
-
-DexOpcode opcode_no_range_version(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_DIRECT_RANGE:
-    return OPCODE_INVOKE_DIRECT;
-  case OPCODE_INVOKE_STATIC_RANGE:
-    return OPCODE_INVOKE_STATIC;
-  case OPCODE_INVOKE_SUPER_RANGE:
-    return OPCODE_INVOKE_SUPER;
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-    return OPCODE_INVOKE_VIRTUAL;
-  case OPCODE_INVOKE_INTERFACE_RANGE:
-    return OPCODE_INVOKE_INTERFACE;
-  case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    return OPCODE_FILLED_NEW_ARRAY;
-  default:
-    always_assert(false);
-  }
-}
-
-DexOpcode opcode_range_version(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_DIRECT:
-    return OPCODE_INVOKE_DIRECT_RANGE;
-  case OPCODE_INVOKE_STATIC:
-    return OPCODE_INVOKE_STATIC_RANGE;
-  case OPCODE_INVOKE_SUPER:
-    return OPCODE_INVOKE_SUPER_RANGE;
-  case OPCODE_INVOKE_VIRTUAL:
-    return OPCODE_INVOKE_VIRTUAL_RANGE;
-  case OPCODE_INVOKE_INTERFACE:
-    return OPCODE_INVOKE_INTERFACE_RANGE;
-  case OPCODE_FILLED_NEW_ARRAY:
-    return OPCODE_FILLED_NEW_ARRAY_RANGE;
-  default:
-    always_assert(false);
-  }
-}
-
-} // namespace
-
 DexOpcode convert_2to3addr(DexOpcode op) {
   always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
   constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
@@ -67,40 +25,8 @@ DexOpcode convert_3to2addr(DexOpcode op) {
 }
 
 IRInstruction::IRInstruction(DexOpcode op) : m_opcode(op) {
-  always_assert(!is_fopcode(op));
+  always_assert(!is_fopcode(op) && !opcode::has_range(op));
   m_srcs.resize(opcode_impl::min_srcs_size(op));
-}
-
-IRInstruction::IRInstruction(const DexInstruction* insn) {
-  m_opcode = insn->opcode();
-  always_assert(!is_fopcode(m_opcode));
-  if (opcode_impl::dests_size(m_opcode)) {
-    m_dest = insn->dest();
-  } else if (m_opcode == OPCODE_CHECK_CAST) {
-    m_dest = insn->src(0);
-  }
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    m_srcs.emplace_back(insn->src(i));
-  }
-  if (opcode::dest_is_src(m_opcode)) {
-    m_opcode = convert_2to3addr(m_opcode);
-  }
-  if (opcode::has_literal(m_opcode)) {
-    m_literal = insn->get_literal();
-  }
-  if (opcode::has_range(m_opcode)) {
-    m_range =
-        std::pair<uint16_t, uint16_t>(insn->range_base(), insn->range_size());
-  }
-  if (insn->has_string()) {
-    set_string(static_cast<const DexOpcodeString*>(insn)->get_string());
-  } else if (insn->has_type()) {
-    set_type(static_cast<const DexOpcodeType*>(insn)->get_type());
-  } else if (insn->has_field()) {
-    set_field(static_cast<const DexOpcodeField*>(insn)->get_field());
-  } else if (insn->has_method()) {
-    set_method(static_cast<const DexOpcodeMethod*>(insn)->get_method());
-  }
 }
 
 // Structural equality of opcodes except branches offsets are ignored
@@ -110,8 +36,7 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
     m_string == that.m_string && // just test one member of the union
     m_srcs == that.m_srcs &&
     m_dest == that.m_dest &&
-    m_literal == that.m_literal &&
-    m_range == that.m_range;
+    m_literal == that.m_literal;
 }
 
 uint16_t IRInstruction::size() const {
@@ -164,62 +89,8 @@ uint16_t IRInstruction::size() const {
   return args[opcode::format(opcode())];
 }
 
-DexInstruction* IRInstruction::to_dex_instruction() const {
-  DexInstruction* insn;
-  switch (opcode::ref(opcode())) {
-    case opcode::Ref::None:
-    case opcode::Ref::Data:
-      insn = new DexInstruction(opcode());
-      break;
-    case opcode::Ref::Literal:
-      insn = (new DexInstruction(opcode()))->set_literal(get_literal());
-      break;
-    case opcode::Ref::String:
-      insn = new DexOpcodeString(opcode(), m_string);
-      break;
-    case opcode::Ref::Type:
-      insn = new DexOpcodeType(opcode(), m_type);
-      break;
-    case opcode::Ref::Field:
-      insn = new DexOpcodeField(opcode(), m_field);
-      break;
-    case opcode::Ref::Method:
-      insn = new DexOpcodeMethod(opcode(), m_method);
-      break;
-  }
-
-  if (opcode() == OPCODE_CHECK_CAST || opcode::dest_is_src(opcode())) {
-    always_assert(dest() == src(0));
-  } else if (insn->dests_size()) {
-    insn->set_dest(dest());
-  }
-  for (size_t i = 0; i < srcs_size(); ++i) {
-    insn->set_src(i, src(i));
-  }
-  if (opcode::has_arg_word_count(opcode())) {
-    insn->set_arg_word_count(srcs_size());
-  }
-  if (opcode::has_range(insn->opcode())) {
-    insn->set_range_base(range_base());
-    insn->set_range_size(range_size());
-  }
-  return insn;
-}
-
 // The instruction format doesn't tell us the width of registers for invoke
 // so we inspect the signature of the method we're calling
-//
-// Surprisingly, wide registers are referenced differently in invoke
-// instructions as compared with `-wide` instructions. If you call a method
-// with a wide register, both registers in the pair are enumerated source
-// registers. Example:
-//
-// const-wide v2, 0x0000CAFE0000CAFE
-// invoke-static {v2, v3}, Lcom/Foo;.bar:(J)J     # note that "J" means `long`
-// move-result-wide v2
-//
-// this is surprising because move-result-wide only refers to v2 but invoke
-// refers to both v2, and v3!
 bool IRInstruction::invoke_src_is_wide(size_t i) const {
   always_assert(has_method());
 
@@ -233,19 +104,8 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
     --i;
   }
 
-  // Iterate through the proto arguments, counting how many registers each type
-  // uses. when we've reached the register in question, test if that type is
-  // wide
   const auto& args = m_method->get_proto()->get_args()->get_type_list();
-  size_t j = 0;
-  for (DexType* arg : args) {
-    bool is_wide = is_wide_type(arg);
-    j += is_wide ? 2 : 1;
-    if (j > i) {
-      return is_wide;
-    }
-  }
-  not_reached();
+  return is_wide_type(args.at(i));
 }
 
 bool IRInstruction::src_is_wide(size_t i) const {
@@ -347,6 +207,7 @@ void IRInstruction::normalize_registers() {
       set_src(srcs_idx++, src(old_srcs_idx));
       old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
+    always_assert(old_srcs_idx == srcs_size());
     set_arg_word_count(srcs_idx);
   }
 }
@@ -375,45 +236,6 @@ void IRInstruction::denormalize_registers() {
   }
 }
 
-void IRInstruction::range_to_srcs() {
-  if (!opcode::has_range(m_opcode)) {
-    return;
-  }
-  set_arg_word_count(range_size());
-  for (size_t i = 0; i < range_size(); ++i) {
-    set_src(i, range_base() + i);
-  }
-  set_range_base(0);
-  set_range_size(0);
-  m_opcode = opcode_no_range_version(m_opcode);
-}
-
-IRSourceIterator::IRSourceIterator(IRInstruction* insn)
-    : m_insn(insn), m_range(opcode::has_range(insn->opcode())), m_offset(0) {
-  always_assert_log(is_invoke(insn->opcode()) ||
-                        is_filled_new_array(insn->opcode()),
-                    "Unexpected instruction '%s'",
-                    SHOW(insn));
-}
-
-bool IRSourceIterator::empty() const {
-  return m_offset >= (m_range ? m_insn->range_size() : m_insn->srcs_size());
-}
-
-uint16_t IRSourceIterator::get_register() {
-  always_assert(!empty());
-  return m_range ? (m_insn->range_base() + m_offset++)
-                 : m_insn->src(m_offset++);
-}
-
-uint16_t IRSourceIterator::get_wide_register() {
-  always_assert(!empty());
-  uint16_t reg =
-      m_range ? (m_insn->range_base() + m_offset) : m_insn->src(m_offset);
-  m_offset += 2;
-  return reg;
-}
-
 bit_width_t required_bit_width(uint16_t v) {
   bit_width_t result {1};
   while (v >>= 1) {
@@ -438,7 +260,9 @@ bool has_contiguous_srcs(const IRInstruction* insn) {
 
 bool needs_range_conversion(const IRInstruction* insn) {
   auto op = insn->opcode();
-  always_assert(opcode::has_range_form(op));
+  if (!opcode::has_range_form(op)) {
+    return false;
+  }
   if (insn->srcs_size() > opcode::NON_RANGE_MAX) {
     return true;
   }
@@ -448,19 +272,6 @@ bool needs_range_conversion(const IRInstruction* insn) {
     }
   }
   return false;
-}
-
-void IRInstruction::srcs_to_range() {
-  if (!opcode::has_range_form(m_opcode) || !needs_range_conversion(this)) {
-    return;
-  }
-  // the register allocator is responsible for ensuring that this property is
-  // true
-  always_assert(has_contiguous_srcs(this));
-  m_opcode = opcode_range_version(m_opcode);
-  set_range_base(src(0));
-  set_range_size(srcs_size());
-  set_arg_word_count(0);
 }
 
 uint64_t IRInstruction::hash() {
@@ -497,10 +308,6 @@ uint64_t IRInstruction::hash() {
   }
   if (has_literal()) {
     bits.push_back(get_literal());
-  }
-  if (opcode::has_range(opcode())) {
-    bits.push_back(range_base());
-    bits.push_back(range_size());
   }
 
   uint64_t result = 0;

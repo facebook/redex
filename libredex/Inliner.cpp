@@ -409,7 +409,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
  */
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
   auto opcode = insn->opcode();
-  if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_DIRECT_RANGE) {
+  if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method = resolver(insn->get_method(), MethodSearch::Direct);
     if (method == nullptr) {
       info.need_vmethod++;
@@ -442,8 +442,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
 bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
                                                      const DexMethod* callee,
                                                      const DexMethod* caller) {
-  if (insn->opcode() == OPCODE_INVOKE_SUPER ||
-      insn->opcode() == OPCODE_INVOKE_SUPER_RANGE) {
+  if (insn->opcode() == OPCODE_INVOKE_SUPER) {
     if (callee->get_class() == caller->get_class()) {
       return false;
     }
@@ -470,8 +469,7 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
   if (caller->get_class() == callee->get_class()) {
     return false;
   }
-  if (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
-      insn->opcode() == OPCODE_INVOKE_VIRTUAL_RANGE) {
+  if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
@@ -657,21 +655,6 @@ void MultiMethodInliner::change_visibility(DexMethod* callee) {
   }
 }
 
-namespace {
-
-DexOpcode direct_to_static_op(DexOpcode op) {
-  switch (op) {
-    case OPCODE_INVOKE_DIRECT:
-      return OPCODE_INVOKE_STATIC;
-    case OPCODE_INVOKE_DIRECT_RANGE:
-      return OPCODE_INVOKE_STATIC_RANGE;
-    default:
-      always_assert(false);
-  }
-}
-
-}
-
 void MultiMethodInliner::invoke_direct_to_static() {
   // We sort the methods here because make_static renames methods on collision,
   // and which collisions occur is order-dependent. E.g. if we have the
@@ -698,10 +681,10 @@ void MultiMethodInliner::invoke_direct_to_static() {
   walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
-        if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE) {
+        if (op == OPCODE_INVOKE_DIRECT) {
           if (m_make_static.count(
               static_cast<DexMethod*>(insn->get_method()))) {
-            insn->set_opcode(direct_to_static_op(op));
+            insn->set_opcode(OPCODE_INVOKE_STATIC);
           }
         }
       });
@@ -788,8 +771,6 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   auto param_insns = InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
-  insn->range_to_srcs();
-  insn->normalize_registers();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
     auto param_op = param_it->insn->opcode();
@@ -856,8 +837,6 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
   auto param_insns = InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
-  insn->range_to_srcs();
-  insn->normalize_registers();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert_log(
         param_it != param_end, "no param insns\n%s", SHOW(callee_code));

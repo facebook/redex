@@ -75,3 +75,38 @@ TEST(CopyPropagationTest, deleteRepeatedMove) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
 }
+
+TEST(CopyPropagationTest, noRemapRange) {
+  g_redex = new RedexContext();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (move-object v1 v0)
+
+     ; v1 won't get remapped here because it's part of an instruction that
+     ; will be converted to /range form during the lowering step
+     (invoke-static (v1 v2 v3 v4 v5 v6) "LFoo;.bar:(IIIIII)V")
+
+     (return v1)
+    )
+)");
+  code->set_registers_size(7);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (move-object v1 v0)
+     (invoke-static (v1 v2 v3 v4 v5 v6) "LFoo;.bar:(IIIIII)V")
+     (return v0)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
+}

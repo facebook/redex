@@ -140,11 +140,9 @@ void remove_referenced(const Scope& scope,
         if (!insn->has_method()) return;
         const auto opcode = insn->opcode();
         DexMethod* meth = nullptr;
-        if (opcode == OPCODE_INVOKE_VIRTUAL ||
-            opcode == OPCODE_INVOKE_VIRTUAL_RANGE) {
+        if (opcode == OPCODE_INVOKE_VIRTUAL) {
           meth =  resolve_method(insn->get_method(), MethodSearch::Virtual);
-        } else if (opcode == OPCODE_INVOKE_INTERFACE ||
-            opcode == OPCODE_INVOKE_INTERFACE_RANGE) {
+        } else if (opcode == OPCODE_INVOKE_INTERFACE) {
           meth =  resolve_method(insn->get_method(), MethodSearch::Interface);
         } else {
           return;

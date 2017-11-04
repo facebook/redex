@@ -76,8 +76,6 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
               SHOW(&code));
         try {
           for (auto& mie : InstructionIterable(&code)) {
-            mie.insn->range_to_srcs();
-            mie.insn->normalize_registers();
             mie.insn->set_opcode(pessimize_opcode(mie.insn->opcode()));
           }
 
@@ -98,11 +96,6 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
                 "After alloc: regs:%d code:\n%s\n",
                 code.get_registers_size(),
                 SHOW(&code));
-
-          for (auto& mie : InstructionIterable(&code)) {
-            mie.insn->denormalize_registers();
-            mie.insn->srcs_to_range();
-          }
         } catch (std::exception&) {
           fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
           fprintf(stderr, "%s\n", SHOW(code.cfg()));

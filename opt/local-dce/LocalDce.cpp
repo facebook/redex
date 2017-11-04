@@ -90,11 +90,6 @@ static bool has_side_effects(DexOpcode opc) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-  case OPCODE_INVOKE_SUPER_RANGE:
-  case OPCODE_INVOKE_DIRECT_RANGE:
-  case OPCODE_INVOKE_STATIC_RANGE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
@@ -162,13 +157,6 @@ void update_liveness(const IRInstruction* inst,
   // Source registers are live.
   for (size_t i = 0; i < inst->srcs_size(); i++) {
     bliveness.set(inst->src(i));
-  }
-  // `invoke-range` instructions need special handling since their sources
-  // are encoded as a range.
-  if (opcode::has_range(op)) {
-    for (size_t i = 0; i < inst->range_size(); i++) {
-      bliveness.set(inst->range_base() + i);
-    }
   }
   // The source of a `move-result` is the return value of the prior call,
   // which is encoded as the max position in the bitvector.

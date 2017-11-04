@@ -339,6 +339,9 @@ bool may_throw(DexOpcode);
 // if an opcode has a /range counterpart
 bool has_range_form(DexOpcode);
 
+DexOpcode range_version(DexOpcode);
+DexOpcode no_range_version(DexOpcode);
+
 // If an opcode has a variable number of register operands
 inline bool has_arg_word_count(DexOpcode op) {
   auto fmt = format(op);

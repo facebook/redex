@@ -65,14 +65,18 @@ class AliasFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
   const CopyPropagationPass::Config& m_config;
+  const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
 
-  AliasFixpointIterator(ControlFlowGraph& cfg,
-                        const CopyPropagationPass::Config& config,
-                        Stats& stats)
+  AliasFixpointIterator(
+      ControlFlowGraph& cfg,
+      const CopyPropagationPass::Config& config,
+      const std::unordered_set<const IRInstruction*>& range_set,
+      Stats& stats)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
         m_config(config),
+        m_range_set(range_set),
         m_stats(stats) {}
 
   /*
@@ -140,7 +144,7 @@ class AliasFixpointIterator final
   void replace_with_representative(IRInstruction* insn,
                                    AliasedRegisters& aliases) const {
     if (insn->srcs_size() > 0 &&
-        !opcode::has_range(insn->opcode()) && // range has to stay in order
+        m_range_set.count(insn) == 0 && // range has to stay in order
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
@@ -251,13 +255,29 @@ Stats CopyPropagation::run(Scope scope) {
 }
 
 Stats CopyPropagation::run(IRCode* code) {
+  // XXX HACK! Since this pass runs after RegAlloc, we need to avoid remapping
+  // registers that belong to /range instructions. The easiest way to find out
+  // which instructions are in this category is by temporarily denormalizing
+  // the registers.
+  std::unordered_set<const IRInstruction*> range_set;
+  for (auto& mie : InstructionIterable(code)) {
+    auto* insn = mie.insn;
+    if (opcode::has_range_form(insn->opcode())) {
+      insn->denormalize_registers();
+      if (needs_range_conversion(insn)) {
+        range_set.emplace(insn);
+      }
+      insn->normalize_registers();
+    }
+  }
+
   std::vector<IRInstruction*> deletes;
   Stats stats;
 
   code->build_cfg();
   const auto& blocks = code->cfg().blocks();
 
-  AliasFixpointIterator fixpoint(code->cfg(), m_config, stats);
+  AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);
 
   if (m_config.full_method_analysis) {
     fixpoint.run(AliasDomain());

@@ -55,13 +55,6 @@ namespace transform {
 void remap_registers(IRInstruction* insn, const RegMap& reg_map) {
   remap_dest(insn, reg_map);
   remap_srcs(insn, reg_map);
-
-  if (opcode::has_range(insn->opcode())) {
-    auto it = reg_map.find(insn->range_base());
-    if (it != reg_map.end()) {
-      insn->set_range_base(it->second);
-    }
-  }
 }
 
 void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {

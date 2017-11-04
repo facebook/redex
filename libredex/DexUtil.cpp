@@ -292,17 +292,20 @@ void create_runtime_exception_block(
 bool passes_args_through(IRInstruction* insn,
                          const IRCode& code,
                          int ignore /* = 0 */
-                         ) {
-  auto regs = code.get_registers_size();
-  auto ins = sum_param_sizes(&code);
-  auto wc = insn->arg_word_count();
-  if (wc != ins - ignore) return false;
-  for (int i = 0; i < wc; i++) {
-    if (insn->src(i) != (regs - ins + i)) {
+) {
+  size_t src_idx{0};
+  size_t param_count{0};
+  for (auto& mie : InstructionIterable(code.get_param_instructions())) {
+    auto load_param = mie.insn;
+    ++param_count;
+    if (src_idx >= insn->srcs_size()) {
+      continue;
+    }
+    if (load_param->dest() != insn->src(src_idx++)) {
       return false;
     }
   }
-  return true;
+  return insn->srcs_size() + ignore == param_count;
 }
 
 Scope build_class_scope(DexStoresVector& stores) {
