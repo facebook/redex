@@ -216,29 +216,39 @@ TEST_F(PatriciaTreeSetTest, whiteBox) {
   }
 }
 
+using string_set = PatriciaTreeSet<std::string*>;
+
+std::vector<std::string> string_set_to_vector(const string_set& s) {
+  std::vector<std::string> v;
+  for (std::string* p : s) {
+    v.push_back(*p);
+  }
+  return v;
+}
+
 TEST_F(PatriciaTreeSetTest, setsOfPointers) {
-  using string_set = PatriciaTreeSet<std::string*>;
   std::string a = "a";
   std::string b = "b";
   std::string c = "c";
   std::string d = "d";
 
-  string_set s;
-  s.insert(&a).insert(&b).insert(&c).insert(&d);
-  {
-    std::vector<std::string> v;
-    for (std::string* p : s) {
-      v.push_back(*p);
-    }
-    EXPECT_THAT(v, ::testing::UnorderedElementsAre("a", "b", "c", "d"));
-  }
+  string_set s_abcd;
+  s_abcd.insert(&a).insert(&b).insert(&c).insert(&d);
+  EXPECT_THAT(string_set_to_vector(s_abcd),
+              ::testing::UnorderedElementsAre("a", "b", "c", "d"));
 
-  s.remove(&a).remove(&d);
-  {
-    std::vector<std::string> v;
-    for (std::string* p : s) {
-      v.push_back(*p);
-    }
-    EXPECT_THAT(v, ::testing::UnorderedElementsAre("b", "c"));
-  }
+  string_set s_bc = s_abcd;
+  s_bc.remove(&a).remove(&d);
+  EXPECT_THAT(string_set_to_vector(s_bc),
+              ::testing::UnorderedElementsAre("b", "c"));
+
+  string_set s_ab = s_abcd;
+  s_ab.filter([](std::string* x) { return *x < "c"; });
+  EXPECT_THAT(string_set_to_vector(s_ab),
+              ::testing::UnorderedElementsAre("a", "b"));
+  string_set s = s_ab;
+  s.filter([](std::string* x) { return *x >= "a"; });
+  EXPECT_TRUE(s.equals(s_ab));
+  s.filter([](std::string* x) { return *x > "g"; });
+  EXPECT_TRUE(s.is_empty());
 }
