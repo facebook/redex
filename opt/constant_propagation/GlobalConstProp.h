@@ -36,7 +36,7 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
  public:
   friend class ConstantDomain;
 
-  enum ConstantType { NARROW, WIDE_A, WIDE_B, INVALID };
+  enum ConstantType { NARROW, WIDE, INVALID };
 
   ConstantValue() : m_value(-1), m_type(ConstantType::INVALID) {}
 
@@ -73,14 +73,14 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
     return meet_with(other);
   }
 
-  int32_t constant() const { return m_value; }
+  int64_t constant() const { return m_value; }
   ConstantType type() const { return m_type; }
 
-  ConstantValue(int32_t value, ConstantType type)
+  ConstantValue(int64_t value, ConstantType type)
       : m_value(value), m_type(type) {}
 
  private:
-  int32_t m_value;
+  int64_t m_value;
   ConstantType m_type;
 };
 
@@ -110,7 +110,7 @@ class ConstantDomain final
 
   static ConstantDomain top() { return ConstantDomain(AbstractValueKind::Top); }
 
-  static ConstantDomain value(int32_t v, ConstantValue::ConstantType type) {
+  static ConstantDomain value(int64_t v, ConstantValue::ConstantType type) {
     assert(type != ConstantValue::ConstantType::INVALID);
     ConstantDomain result;
     result.set_to_value(ConstantValue(v, type));
@@ -131,16 +131,16 @@ class ConstPropEnvUtil {
                                           uint16_t reg,
                                           int32_t value);
   static ConstPropEnvironment& set_wide(ConstPropEnvironment& env,
-                                        uint16_t first_reg,
+                                        uint16_t reg,
                                         int64_t value);
   static ConstPropEnvironment& set_top(ConstPropEnvironment& env,
-                                       uint16_t first_reg,
+                                       uint16_t reg,
                                        bool is_wide = false);
   static bool is_narrow_constant(const ConstPropEnvironment& env, int16_t reg);
   static bool is_wide_constant(const ConstPropEnvironment& env,
-                               int16_t first_reg);
+                               int16_t reg);
   static int32_t get_narrow(const ConstPropEnvironment& env, int16_t reg);
-  static int64_t get_wide(const ConstPropEnvironment& env, int16_t first_reg);
+  static int64_t get_wide(const ConstPropEnvironment& env, int16_t reg);
 };
 
 /**

@@ -511,27 +511,24 @@ TEST_F(GlobalConstantPropagationTest, testProgram1) {
   // Block 0 -> Top
   EXPECT_TRUE(get_const_env(0).is_top());
 
-  // Block 1 -> [r0: 2, r1: WIDE_A, r2: WIDE_B]
+  // Block 1 -> [r0: 2, r1: 0x1234567890ABCDEFL]
   EXPECT_EQ(get_const_env(1).get(0).value(),
             ConstantValue(2, ConstantValue::ConstantType::NARROW));
-  EXPECT_EQ(get_const_env(1).get(1).value(),
-            ConstantValue(0x12345678, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(1).get(2).value(),
-            ConstantValue(0x90ABCDEF, ConstantValue::ConstantType::WIDE_B));
+  EXPECT_EQ(
+      get_const_env(1).get(1).value(),
+      ConstantValue(0x1234567890ABCDEFL, ConstantValue::ConstantType::WIDE));
 
-  // Block 2 -> [r0: 2, r1: WIDE_A, r2: WIDE_B]
+  // Block 2 -> [r0: 2, r1: 0x1234567890ABCDEFL]
   EXPECT_EQ(get_const_env(2).get(0).value(),
             ConstantValue(2, ConstantValue::ConstantType::NARROW));
-  EXPECT_EQ(get_const_env(2).get(1).value(),
-            ConstantValue(0x12345678, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(2).get(2).value(),
-            ConstantValue(0x90ABCDEF, ConstantValue::ConstantType::WIDE_B));
+  EXPECT_EQ(
+      get_const_env(2).get(1).value(),
+      ConstantValue(0x1234567890ABCDEFL, ConstantValue::ConstantType::WIDE));
 
-  // Block 3 -> [r1: WIDE_A, r2: WIDE_B]
-  EXPECT_EQ(get_const_env(3).get(1).value(),
-            ConstantValue(0x12345678, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(3).get(2).value(),
-            ConstantValue(0x90ABCDEF, ConstantValue::ConstantType::WIDE_B));
+  // Block 3 -> [r1: 0x1234567890ABCDEFL]
+  EXPECT_EQ(
+      get_const_env(3).get(1).value(),
+      ConstantValue(0x1234567890ABCDEFL, ConstantValue::ConstantType::WIDE));
   EXPECT_TRUE(get_const_env(3).get(0).is_top());
 
   auto& stmt = m_program1.get(3)->stmts[0];
@@ -557,50 +554,40 @@ TEST_F(GlobalConstantPropagationTest, testProgram2) {
   // Block 0 -> Top
   EXPECT_TRUE(get_const_env(0).is_top());
 
-  // Block 1 -> [r0: 0, r1: 0, r2: WIDE_A, r3: WIDE_B]
+  // Block 1 -> [r0: 0, r1: 0, r2: 10]
   EXPECT_EQ(get_const_env(1).get(0).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(1).get(1).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(1).get(2).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(1).get(3).value(),
-            ConstantValue(10, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(10, ConstantValue::ConstantType::WIDE));
 
-  // Block 2 -> [r0: 0, r2: WIDE_A, r3: WIDE_B]
+  // Block 2 -> [r0: 0, r2: 10]
   EXPECT_EQ(get_const_env(2).get(0).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(2).get(2).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(2).get(3).value(),
-            ConstantValue(10, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(10, ConstantValue::ConstantType::WIDE));
   EXPECT_TRUE(get_const_env(2).get(1).is_top());
 
-  // Block 3 -> [r0: 0, r2: WIDE_A, r3: WIDE_B]
+  // Block 3 -> [r0: 0, r2: 10]
   EXPECT_EQ(get_const_env(3).get(0).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(3).get(2).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(3).get(3).value(),
-            ConstantValue(10, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(10, ConstantValue::ConstantType::WIDE));
   EXPECT_TRUE(get_const_env(3).get(1).is_top());
 
-  // Block 4 -> [r0: 0, r2: WIDE_A, r3: WIDE_B]
+  // Block 4 -> [r0: 0, r2: 10]
   EXPECT_EQ(get_const_env(4).get(0).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(4).get(2).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(4).get(3).value(),
-            ConstantValue(10, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(10, ConstantValue::ConstantType::WIDE));
   EXPECT_TRUE(get_const_env(4).get(1).is_top());
 
-  // Block 5 -> [r0: 0, r2: WIDE_A, r3: WIDE_B]
+  // Block 5 -> [r0: 0, r2: 10]
   EXPECT_EQ(get_const_env(5).get(0).value(),
             ConstantValue(0, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(5).get(2).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(5).get(3).value(),
-            ConstantValue(10, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(10, ConstantValue::ConstantType::WIDE));
 
   auto& stmt1 = m_program2.get(4)->stmts[0];
   EXPECT_TRUE(stmt1.type == Statement::Type::NARROW_MOVE && stmt1.dest == 1);
@@ -638,21 +625,17 @@ TEST_F(GlobalConstantPropagationTest, testProgram3) {
   EXPECT_EQ(get_const_env(1).get(3).value(),
             ConstantValue(3, ConstantValue::ConstantType::NARROW));
 
-  // Block 2 -> [r0: WIDE_A, r1: WIDE_B, r2: 5, r3: 3]
+  // Block 2 -> [r0: 1, r2: 5, r3: 3]
   EXPECT_EQ(get_const_env(2).get(0).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(2).get(1).value(),
-            ConstantValue(1, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(1, ConstantValue::ConstantType::WIDE));
   EXPECT_EQ(get_const_env(2).get(2).value(),
             ConstantValue(5, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(2).get(3).value(),
             ConstantValue(3, ConstantValue::ConstantType::NARROW));
 
-  // Block 3 -> [r0: WIDE_A, r1: WIDE_B, r2: 5, r3: 3]
+  // Block 3 -> [r0: 1, r2: 5, r3: 3]
   EXPECT_EQ(get_const_env(3).get(0).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(3).get(1).value(),
-            ConstantValue(1, ConstantValue::ConstantType::WIDE_B));
+            ConstantValue(1, ConstantValue::ConstantType::WIDE));
   EXPECT_EQ(get_const_env(3).get(2).value(),
             ConstantValue(5, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(3).get(3).value(),
@@ -660,10 +643,9 @@ TEST_F(GlobalConstantPropagationTest, testProgram3) {
 
   // Block 4 -> [r3: 3]
   EXPECT_EQ(get_const_env(4).get(0).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_EQ(get_const_env(4).get(1).value(),
-            ConstantValue(0, ConstantValue::ConstantType::WIDE_A));
-  EXPECT_TRUE(get_const_env(4).get(2).is_top());
+            ConstantValue(1, ConstantValue::ConstantType::WIDE));
+  EXPECT_EQ(get_const_env(4).get(2).value(),
+            ConstantValue(5, ConstantValue::ConstantType::NARROW));
   EXPECT_EQ(get_const_env(4).get(3).value(),
             ConstantValue(3, ConstantValue::ConstantType::NARROW));
 

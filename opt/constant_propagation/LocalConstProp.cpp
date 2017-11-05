@@ -154,9 +154,8 @@ void LocalConstantPropagation::analyze_instruction(
   case OPCODE_CONST_WIDE_HIGH16: {
     TRACE(CONSTP,
           5,
-          "Discovered new wide constant for regs: %d, %d, value: %ld\n",
+          "Discovered new wide constant for reg: %d value: %ld\n",
           inst->dest(),
-          inst->dest() + 1,
           inst->get_literal());
     ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
     break;

@@ -16,12 +16,8 @@ std::ostream& operator<<(std::ostream& o, const ConstantValue& cv) {
     o << "NARROW";
     break;
   }
-  case ConstantValue::ConstantType::WIDE_A: {
-    o << "WIDE_A";
-    break;
-  }
-  case ConstantValue::ConstantType::WIDE_B: {
-    o << "WIDE_B";
+  case ConstantValue::ConstantType::WIDE: {
+    o << "WIDE";
     break;
   }
   case ConstantValue::ConstantType::INVALID: {
@@ -53,26 +49,18 @@ ConstPropEnvironment& ConstPropEnvUtil::set_narrow(ConstPropEnvironment& env,
 }
 
 ConstPropEnvironment& ConstPropEnvUtil::set_wide(ConstPropEnvironment& env,
-                                                 uint16_t first_reg,
+                                                 uint16_t reg,
                                                  int64_t value) {
-  int32_t first_half = (int32_t)((value >> 32) & 0xFFFFFFFFL);
-  int32_t second_half = (int32_t)(value & 0xFFFFFFFFL);
   env.set(
-      first_reg,
-      ConstantDomain::value(first_half, ConstantValue::ConstantType::WIDE_A));
-  env.set(
-      first_reg + 1,
-      ConstantDomain::value(second_half, ConstantValue::ConstantType::WIDE_B));
+      reg,
+      ConstantDomain::value(value, ConstantValue::ConstantType::WIDE));
   return env;
 }
 
 ConstPropEnvironment& ConstPropEnvUtil::set_top(ConstPropEnvironment& env,
-                                                uint16_t first_reg,
+                                                uint16_t reg,
                                                 bool is_wide) {
-  env.set(first_reg, ConstantDomain::top());
-  if (is_wide) {
-    env.set(first_reg + 1, ConstantDomain::top());
-  }
+  env.set(reg, ConstantDomain::top());
   return env;
 }
 
@@ -84,12 +72,10 @@ bool ConstPropEnvUtil::is_narrow_constant(const ConstPropEnvironment& env,
 }
 
 bool ConstPropEnvUtil::is_wide_constant(const ConstPropEnvironment& env,
-                                        int16_t first_reg) {
-  const auto& domain1 = env.get(first_reg);
-  const auto& domain2 = env.get(first_reg + 1);
-  return domain1.is_value() && domain2.is_value() &&
-         domain1.value().type() == ConstantValue::ConstantType::WIDE_A &&
-         domain2.value().type() == ConstantValue::ConstantType::WIDE_B;
+                                        int16_t reg) {
+  const auto& domain = env.get(reg);
+  return domain.is_value() &&
+         domain.value().type() == ConstantValue::ConstantType::WIDE;
 }
 
 int32_t ConstPropEnvUtil::get_narrow(const ConstPropEnvironment& env,
@@ -99,14 +85,7 @@ int32_t ConstPropEnvUtil::get_narrow(const ConstPropEnvironment& env,
 }
 
 int64_t ConstPropEnvUtil::get_wide(const ConstPropEnvironment& env,
-                                   int16_t first_reg) {
-  assert(is_wide_constant(env, first_reg));
-  const auto& domain1 = env.get(first_reg);
-  const auto& domain2 = env.get(first_reg + 1);
-
-  int64_t result =
-      static_cast<int64_t>(domain1.value().constant()) & 0xFFFFFFFFL;
-  result <<= 32;
-  result |= static_cast<int64_t>(domain2.value().constant()) & 0xFFFFFFFFL;
-  return result;
+                                   int16_t reg) {
+  assert(is_wide_constant(env, reg));
+  return env.get(reg).value().constant();
 }
