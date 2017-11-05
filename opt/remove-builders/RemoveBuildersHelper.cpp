@@ -49,12 +49,6 @@ void fields_mapping(FatMethod::iterator it,
       if (pair.second == current_dest) {
         fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
       }
-
-      if (insn->dest_is_wide()) {
-        if (pair.second == current_dest + 1) {
-          fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
-        }
-      }
     }
   }
 
@@ -638,7 +632,10 @@ bool params_change_regs(DexMethod* method) {
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
-  uint16_t arg_reg = regs_size - args.size();
+  const auto& param_insns = InstructionIterable(code->get_param_instructions());
+  always_assert(!is_static(method));
+  // Skip the `this` param
+  auto param_it = std::next(param_insns.begin());
 
   for (DexType* arg : args) {
     std::function<void(FatMethod::iterator, TaintedRegs*)> trans =
@@ -649,6 +646,8 @@ bool params_change_regs(DexMethod* method) {
         };
 
     auto tainted = TaintedRegs(regs_size + 1);
+    always_assert(param_it != param_insns.end());
+    auto arg_reg = (param_it++)->insn->dest();
     tainted.m_reg_set[arg_reg] = 1;
 
     auto taint_map = forwards_dataflow(blocks, tainted, trans);
@@ -678,8 +677,6 @@ bool params_change_regs(DexMethod* method) {
         }
       }
     }
-
-    arg_reg += is_wide_type(arg) ? 2 : 1;
   }
 
   return false;
@@ -903,16 +900,8 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
         move_result_pseudo->set_dest(new_regs_size);
         code->insert_before(it, move_result_pseudo);
 
-        insn->set_src(index, new_regs_size);
-        if (is_wide_type(field->get_type())) {
-          insn->set_src(index + 1, new_regs_size + 1);
-          new_regs_size += 2;
-          index += 2;
-        } else {
-          new_regs_size++;
-          index++;
-
-        }
+        insn->set_src(index++, new_regs_size);
+        new_regs_size += is_wide_type(field->get_type()) ? 2 : 1;
       }
 
       insn->set_arg_word_count(new_regs_size - regs_size + 1);
@@ -976,9 +965,6 @@ void transfer_object_reach(DexType* obj,
   auto op = insn->opcode();
   if (is_move(op)) {
     regs[insn->dest()] = regs[insn->src(0)];
-    if (insn->src_is_wide(0)) {
-      regs[insn->dest() + 1] = regs[insn->src(0)];
-    }
   } else if (is_move_result(op)) {
     regs[insn->dest()] = regs[regs_size];
   } else if (writes_result_register(op)) {
@@ -997,9 +983,6 @@ void transfer_object_reach(DexType* obj,
     regs[regs_size] = 0;
   } else if (insn->dests_size() != 0) {
     regs[insn->dest()] = 0;
-    if (insn->dest_is_wide()) {
-      regs[insn->dest() + 1] = 0;
-    }
   }
 }
 
