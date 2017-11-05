@@ -143,9 +143,6 @@ void update_liveness(const IRInstruction* inst,
   // The destination register is killed, so it isn't live before this.
   if (inst->dests_size()) {
     bliveness.reset(inst->dest());
-    if (inst->dest_is_wide()) {
-      bliveness.reset(inst->dest() + 1);
-    }
   }
   auto op = inst->opcode();
   // The destination of an `invoke` is its return value, which is encoded as
@@ -280,11 +277,7 @@ bool LocalDce::is_required(IRInstruction* inst,
     }
     return true;
   } else if (inst->dests_size()) {
-    bool result = bliveness.test(inst->dest());
-    if (inst->dest_is_wide()) {
-      result |= bliveness.test(inst->dest() + 1);
-    }
-    return result;
+    return bliveness.test(inst->dest());
   } else if (is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
     // These instructions pass their dests via the return-value slot, but
