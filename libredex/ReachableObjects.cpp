@@ -146,7 +146,8 @@ bool implements_library_method(InheritanceGraph& graph,
 
 class Reachable {
   DexStoresVector& m_stores;
-  const std::unordered_set<const DexType*>& m_ignore_string_literals_annos;
+  const std::unordered_set<const DexType*>& m_ignore_string_literals;
+  const std::unordered_set<const DexType*>& m_ignore_string_literal_annos;
   std::unordered_set<const DexType*> m_ignore_system_annos;
   bool m_record_reachability;
   InheritanceGraph m_inheritance_graph;
@@ -164,11 +165,13 @@ class Reachable {
  public:
   Reachable(
       DexStoresVector& stores,
-      const std::unordered_set<const DexType*>& ignore_string_literals_annos,
+      const std::unordered_set<const DexType*>& ignore_string_literals,
+      const std::unordered_set<const DexType*>& ignore_string_literal_annos,
       const std::unordered_set<const DexType*>& ignore_system_annos,
       bool record_reachability)
       : m_stores(stores),
-        m_ignore_string_literals_annos(ignore_string_literals_annos),
+        m_ignore_string_literals(ignore_string_literals),
+        m_ignore_string_literal_annos(ignore_string_literal_annos),
         m_ignore_system_annos(ignore_system_annos),
         m_record_reachability(record_reachability),
         m_inheritance_graph(stores) {
@@ -287,11 +290,16 @@ class Reachable {
   }
 
   void gather_and_push(DexMethod* meth) {
-    auto* cls = type_class(meth->get_class());
+    auto* type = meth->get_class();
+    auto* cls = type_class(type);
     bool check_strings = true;
-    if (cls) {
-      for (const auto& anno_type : m_ignore_string_literals_annos) {
-        if (has_anno(cls, anno_type)) {
+    if (m_ignore_string_literals.count(type)) {
+      ++m_num_ignore_check_strings;
+      check_strings = false;
+    }
+    if (cls && check_strings) {
+      for (const auto& ignore_anno_type : m_ignore_string_literal_annos) {
+        if (has_anno(cls, ignore_anno_type)) {
           ++m_num_ignore_check_strings;
           check_strings = false;
           break;
@@ -633,12 +641,14 @@ void print_graph_edges(const DexClass* cls,
 
 ReachableObjects compute_reachable_objects(
     DexStoresVector& stores,
-    const std::unordered_set<const DexType*>& ignore_string_literals_annos,
+    const std::unordered_set<const DexType*>& ignore_string_literals,
+    const std::unordered_set<const DexType*>& ignore_string_literal_annos,
     const std::unordered_set<const DexType*>& ignore_system_annos,
     int* num_ignore_check_strings,
     bool record_reachability) {
   return Reachable(stores,
-                   ignore_string_literals_annos,
+                   ignore_string_literals,
+                   ignore_string_literal_annos,
                    ignore_system_annos,
                    record_reachability)
       .mark(num_ignore_check_strings);

@@ -101,6 +101,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   auto reachables =
       compute_reachable_objects(stores,
                                 load_annos(m_ignore_string_literals),
+                                load_annos(m_ignore_string_literal_annos),
                                 load_annos(m_ignore_system_annos),
                                 &num_ignore_check_strings);
   deleted_stats before = trace_stats("before", stores);
