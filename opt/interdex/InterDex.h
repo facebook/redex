@@ -25,10 +25,10 @@ class InterDexPassPlugin {
  public:
   // Run plugin initialization here. Pass should run this before running
   // its implementation
-  virtual void configure(ConfigFiles& cfg) = 0;
+  virtual void configure(const Scope& original_scope, ConfigFiles& cfg) = 0;
 
   // Will prevent clazz from going into any output dex
-  virtual bool should_skip_class(const DexClass* clazz) const = 0;
+  virtual bool should_skip_class(const DexClass* clazz) = 0;
 
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below)

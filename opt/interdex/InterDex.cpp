@@ -578,7 +578,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   m_plugins = registry->create_plugins();
   for (const auto& plugin : m_plugins) {
-    plugin->configure(cfg);
+    plugin->configure(original_scope, cfg);
   }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
