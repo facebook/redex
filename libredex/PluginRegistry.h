@@ -27,6 +27,13 @@ class PluginEntry : public Plugin {
     }
     return nullptr;
   }
+  std::vector<std::unique_ptr<T>> create_plugins() {
+    std::vector<std::unique_ptr<T>> res;
+    for (const auto& creator : m_creators) {
+      res.emplace_back(std::unique_ptr<T>(creator.second()));
+    }
+    return res;
+  }
 
  private:
   std::unordered_map<std::string, Creator> m_creators;

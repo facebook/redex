@@ -576,11 +576,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
                             PassManager& mgr) {
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
-  std::unique_ptr<InterDexPassPlugin> interdex_plugin =
-      registry->create(INTERDEX_PLUGIN);
-  if (interdex_plugin) {
-    m_plugins.emplace_back(std::move(interdex_plugin));
-  }
+  m_plugins = registry->create_plugins();
   for (const auto& plugin : m_plugins) {
     plugin->configure(cfg);
   }
