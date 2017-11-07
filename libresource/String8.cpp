@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "utils/String8.h"
 
 #include "utils/Log.h"

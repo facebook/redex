@@ -10,6 +10,17 @@
 #include "LocalConstProp.h"
 
 #include <boost/optional.hpp>
+
+ // Note: MSVC STL didn't implement std::isnan(Integral arg). We need to provide
+ // an override of fpclassify for integral types.
+#ifdef _MSC_VER
+#include <type_traits>
+template <typename T>
+std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
+  return x == 0 ? FP_ZERO : FP_NORMAL;
+}
+#endif
+
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -143,9 +154,8 @@ void LocalConstantPropagation::analyze_instruction(
   case OPCODE_CONST_WIDE_HIGH16: {
     TRACE(CONSTP,
           5,
-          "Discovered new wide constant for regs: %d, %d, value: %ld\n",
+          "Discovered new wide constant for reg: %d value: %ld\n",
           inst->dest(),
-          inst->dest() + 1,
           inst->get_literal());
     ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
     break;

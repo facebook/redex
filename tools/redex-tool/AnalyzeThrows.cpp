@@ -33,7 +33,7 @@ bool is_throw_block(const DexMethod* meth, Block* block) {
       // only have catch successors
       if (block->succs().size() > 0) {
         for (const auto& succ : block->succs()) {
-          if (!is_catch(succ)) {
+          if (!is_catch(succ->target())) {
             always_assert_log(false,
                 "throw block with successors in %s",
                 SHOW(meth));
@@ -100,7 +100,8 @@ void walk_predecessors(
     std::unordered_set<Block*>& left_blocks) {
   throw_code.emplace_back(block);
   const auto& preds = block->preds();
-  for (const auto& pred : preds) {
+  for (const auto& pred_edge : preds) {
+    auto* pred = pred_edge->src();
     if (left_blocks.count(pred) > 0) {
       left_blocks.erase(pred);
       walk_predecessors(pred, throw_code, left_blocks);
@@ -133,7 +134,8 @@ void collect_throwing_blocks(
   while (!blocks_to_visit.empty()) {
     const auto block = blocks_to_visit.front();
     blocks_to_visit.pop();
-    for (const auto& pred : block->preds()) {
+    for (const auto& pred_edge : block->preds()) {
+      auto* pred = pred_edge->src();
       if (no_throw_blocks.count(pred) == 0) {
         blocks_to_visit.push(pred);
         no_throw_blocks.insert(pred);

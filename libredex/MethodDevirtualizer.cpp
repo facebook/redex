@@ -19,51 +19,18 @@ namespace {
 using CallSiteReferences =
     std::map<const DexMethod*, std::vector<IRInstruction*>>;
 
-DexOpcode invoke_virtual_to_static(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_VIRTUAL:
-    return OPCODE_INVOKE_STATIC;
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-    return OPCODE_INVOKE_STATIC_RANGE;
-  default:
-    always_assert(false);
-  }
-}
-
-DexOpcode invoke_super_to_static(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_SUPER:
-    return OPCODE_INVOKE_STATIC;
-  case OPCODE_INVOKE_SUPER_RANGE:
-    return OPCODE_INVOKE_STATIC_RANGE;
-  default:
-    always_assert(false);
-  }
-}
-
-DexOpcode invoke_direct_to_static(DexOpcode op) {
-  switch (op) {
-  case OPCODE_INVOKE_DIRECT:
-    return OPCODE_INVOKE_STATIC;
-  case OPCODE_INVOKE_DIRECT_RANGE:
-    return OPCODE_INVOKE_STATIC_RANGE;
-  default:
-    always_assert(false);
-  }
-}
-
 void patch_call_site(DexMethod* callee,
                      IRInstruction* method_inst,
                      DevirtualizerMetrics& metrics) {
   auto op = method_inst->opcode();
   if (is_invoke_virtual(op)) {
-    method_inst->set_opcode(invoke_virtual_to_static(op));
+    method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     metrics.num_virtual_calls++;
   } else if (is_invoke_super(op)) {
-    method_inst->set_opcode(invoke_super_to_static(op));
+    method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     metrics.num_super_calls++;
   } else if (is_invoke_direct(op)) {
-    method_inst->set_opcode(invoke_direct_to_static(op));
+    method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     metrics.num_direct_calls++;
   } else {
     always_assert_log(false, SHOW(op));
@@ -88,22 +55,11 @@ void fix_call_sites_and_drop_this_arg(
         continue;
       }
       patch_call_site(method, inst, metrics);
-      if (is_invoke_range(inst->opcode())) {
-        if (inst->range_size() == 1) {
-          auto repl = new IRInstruction(OPCODE_INVOKE_STATIC);
-          repl->set_method(method)->set_arg_word_count(0);
-          replacements.emplace_back(inst, repl);
-        } else {
-          inst->set_range_base(inst->range_base() + 1);
-          inst->set_range_size(inst->range_size() - 1);
-        }
-      } else {
-        auto nargs = inst->arg_word_count();
-        for (uint16_t i = 0; i < nargs - 1; i++) {
-          inst->set_src(i, inst->src(i + 1));
-        }
-        inst->set_arg_word_count(nargs - 1);
+      auto nargs = inst->arg_word_count();
+      for (uint16_t i = 0; i < nargs - 1; i++) {
+        inst->set_src(i, inst->src(i + 1));
       }
+      inst->set_arg_word_count(nargs - 1);
     }
     for (auto& pair : replacements) {
       code.replace_opcode(pair.first, pair.second);
@@ -155,12 +111,6 @@ bool uses_this(const DexMethod* method) {
   auto const this_reg = this_insn->dest();
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (opcode::has_range(insn->opcode())) {
-      if (this_reg >= insn->range_base() &&
-          this_reg < (insn->range_base() + insn->range_size())) {
-        return true;
-      }
-    }
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {
         return true;

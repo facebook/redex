@@ -37,21 +37,16 @@ using LivenessDomain = HashedSetAbstractDomain<std::string>;
 using namespace std::placeholders;
 
 class IRFixpointIterator final
-    : public MonotonicFixpointIterator<Block*, LivenessDomain> {
+    : public MonotonicFixpointIterator<
+          BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
+          LivenessDomain> {
  public:
   // In the IR a CFG node is a basic block, i.e., a Block structure. A node id
   // is simply a pointer to a Block.
   using NodeId = Block*;
 
-  // Liveness is a backward analysis, hence we apply the generic fixpoint
-  // iterator by using the exit block as the root and swapping the successors
-  // and predecessors functions.
-  IRFixpointIterator(const ControlFlowGraph& cfg, NodeId exit_block)
-      : MonotonicFixpointIterator(exit_block,
-                                  std::bind(&Block::preds, _1),
-                                  std::bind(&Block::succs, _1),
-                                  cfg.blocks().size()),
-        m_cfg(cfg) {}
+  explicit IRFixpointIterator(const ControlFlowGraph& cfg)
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()), m_cfg(cfg) {}
 
   void analyze_node(const NodeId& block,
                     LivenessDomain* current_state) const override {
@@ -65,8 +60,7 @@ class IRFixpointIterator final
   }
 
   LivenessDomain analyze_edge(
-      const NodeId& source_block,
-      const NodeId& target_block,
+      const EdgeId&,
       const LivenessDomain& exit_state_at_source) const override {
     // Edges have no semantic transformers attached.
     return exit_state_at_source;
@@ -82,13 +76,6 @@ class IRFixpointIterator final
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       // The source registers of an instruction are live.
       current_state->add(get_register(insn->src(i)));
-    }
-    // `invoke-range` instructions require separate processing, because the
-    // source registers are encoded as a range.
-    if (opcode::has_range(insn->opcode())) {
-      for (size_t i = 0; i < insn->range_size(); i++) {
-        current_state->add(get_register(insn->range_base() + i));
-      }
     }
   }
 
@@ -142,8 +129,7 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
           std::cout << "CFG of function_1:" << std::endl
                     << SHOW(cfg) << std::endl;
           ASSERT_EQ(cfg.exit_block()->id(), 2);
-          IRFixpointIterator fixpoint_iterator(
-              cfg, const_cast<Block*>(cfg.exit_block()));
+          IRFixpointIterator fixpoint_iterator(cfg);
           fixpoint_iterator.run(LivenessDomain());
 
           for (Block* block : cfg.blocks()) {

@@ -20,6 +20,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
 #include "cutils/log.h"
 
 #include "utils/Errors.h"

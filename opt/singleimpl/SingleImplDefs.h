@@ -31,7 +31,7 @@ using TypeList = std::vector<DexType*>;
 using TypeMap = std::unordered_map<DexType*, DexType*>;
 using TypeToTypes = std::unordered_map<DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
-using MethodSet = std::unordered_set<DexMethod*>;
+using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
 using OpcodeList = std::vector<IRInstruction*>;
 using OpcodeSet = std::unordered_set<IRInstruction*>;
 using FieldRefToOpcodes = std::unordered_map<DexFieldRef*, OpcodeList>;
@@ -114,7 +114,7 @@ struct SingleImplData {
   // single impl interface typed fields
   FieldList fielddefs;
   // methods with the single impl interface in the signature
-  MethodSet methoddefs;
+  OrderedMethodSet methoddefs;
   // single impl interface typerefs
   OpcodeList typerefs;
   // single impl interface typed fieldref opcode

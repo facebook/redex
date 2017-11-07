@@ -102,8 +102,12 @@ class PassConfig {
     }
   }
 
-  private:
-    Json::Value m_config;
+  void get(const char* name, const Json::Value dflt, Json::Value& param) const {
+    param = m_config.get(name, dflt);
+  }
+
+ private:
+  Json::Value m_config;
 };
 
 class Pass {

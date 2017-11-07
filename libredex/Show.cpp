@@ -109,7 +109,6 @@ std::string show(DexAnnotationVisibility vis) {
   case DAV_SYSTEM:
     return "system";
   }
-  not_reached();
 }
 
 std::string show_opcode(const DexInstruction* insn) {
@@ -630,11 +629,6 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << "v" << insn->src(i);
     first = false;
   }
-  if (opcode::has_range(insn->opcode())) {
-    if (!first) ss << ", ";
-    ss << "range_base: " << insn->range_base() << ", "
-       << "range_size: " << insn->range_size();
-  }
   if (opcode::ref(insn->opcode()) != opcode::Ref::None && !first) {
     ss << ", ";
   }
@@ -995,7 +989,6 @@ std::string show(TryEntryType t) {
   case TRY_END:
     return "TRY_END";
   }
-  not_reached();
 }
 
 std::string show(const MethodItemEntry& mei) {
@@ -1031,7 +1024,6 @@ std::string show(const MethodItemEntry& mei) {
   case MFLOW_FALLTHROUGH:
     return "FALLTHROUGH";
   }
-  not_reached();
 }
 
 std::string show(const FatMethod* fm) {
@@ -1050,11 +1042,11 @@ std::string show(const ControlFlowGraph& cfg) {
   for (auto& b : blocks) {
     ss << "B" << b->id() << " succs:";
     for (auto& s : b->succs()) {
-      ss << " B" << s->id();
+      ss << " B" << s->target()->id();
     }
     ss << " preds:";
     for (auto& p : b->preds()) {
-      ss << " B" << p->id();
+      ss << " B" << p->src()->id();
     }
     ss << "\n";
   }

@@ -11,9 +11,9 @@
 
 #include "Pass.h"
 
-class RedundantMoveEliminationPass : public Pass {
+class CopyPropagationPass : public Pass {
  public:
-  RedundantMoveEliminationPass() : Pass("RedundantMoveEliminationPass") {}
+  CopyPropagationPass() : Pass("CopyPropagationPass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
@@ -42,10 +42,38 @@ class RedundantMoveEliminationPass : public Pass {
   }
 
   struct Config {
-    bool eliminate_const_literals;
-    bool eliminate_const_strings;
-    bool eliminate_const_classes;
-    bool replace_with_representative;
-    bool full_method_analysis;
+    bool eliminate_const_literals{false};
+    bool eliminate_const_strings{true};
+    bool eliminate_const_classes{true};
+    bool replace_with_representative{true};
+    bool full_method_analysis{true};
   } m_config;
 };
+
+namespace copy_propagation_impl {
+
+struct Stats {
+  size_t moves_eliminated{0};
+  size_t replaced_sources{0};
+
+  Stats() = default;
+  Stats(size_t elim, size_t replaced)
+      : moves_eliminated(elim), replaced_sources(replaced) {}
+
+  Stats operator+(const Stats& other);
+};
+
+class CopyPropagation final {
+ public:
+  explicit CopyPropagation(const CopyPropagationPass::Config& config)
+      : m_config(config) {}
+
+  Stats run(Scope scope);
+
+  Stats run(IRCode*);
+
+ private:
+  const CopyPropagationPass::Config& m_config;
+};
+
+} // namespace copy_propagation_impl

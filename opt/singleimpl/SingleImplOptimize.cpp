@@ -388,8 +388,6 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       auto op = mop->opcode();
       if (op == OPCODE_INVOKE_INTERFACE) {
         mop->set_opcode(OPCODE_INVOKE_VIRTUAL);
-      } else if (op == OPCODE_INVOKE_INTERFACE_RANGE) {
-        mop->set_opcode(OPCODE_INVOKE_VIRTUAL_RANGE);
       }
       SingleImplPass::s_invoke_intf_count++;
       TRACE(INTF, 3, "(MITFOP)\t=>%s\n", SHOW(mop));

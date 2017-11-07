@@ -229,10 +229,7 @@ void init_permanently_reachable_classes(
         auto move_result_pseudo = insns[1];
         auto invoke_static = insns[2];
         // Make sure that the registers agree
-        auto src = opcode::has_range(invoke_static->opcode())
-                       ? invoke_static->range_base()
-                       : invoke_static->src(0);
-        if (move_result_pseudo->dest() == src) {
+        if (move_result_pseudo->dest() == invoke_static->src(0)) {
           auto classname = JavaNameUtil::external_to_internal(
               const_string->get_string()->c_str());
           TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",

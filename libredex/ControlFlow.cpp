@@ -15,6 +15,8 @@
 #include "DexUtil.h"
 #include "Transform.h"
 
+using namespace cfg;
+
 namespace {
 
 bool end_of_block(const FatMethod* fm, FatMethod::iterator it, bool in_try) {
@@ -335,8 +337,8 @@ void ControlFlowGraph::clean_dangling_targets() {
 
     // find all branch instructions in all predecessors
     std::unordered_set<MethodItemEntry*> branches;
-    for (Block* pred : b->m_preds) {
-      for (auto& mie : pred->m_entries) {
+    for (auto& pred : b->m_preds) {
+      for (auto& mie : pred->src()->m_entries) {
         if (mie.branchingness() != opcode::BRANCH_NONE) {
           branches.insert(&mie);
         }
@@ -525,37 +527,31 @@ void ControlFlowGraph::calculate_exit_block() {
 }
 
 void ControlFlowGraph::add_edge(Block* p, Block* s, EdgeType type) {
-  if (std::find(p->succs().begin(), p->succs().end(), s) == p->succs().end()) {
-    p->m_succs.push_back(s);
-    s->m_preds.push_back(p);
-  }
-  mutable_edge(p, s).set(type);
-}
-
-void ControlFlowGraph::remove_edge(Block* p, Block* s, EdgeType type) {
-  mutable_edge(p, s).reset(type);
-  if (edge(p, s).none()) {
-    remove_all_edges(p, s);
-  }
+  auto edge = std::make_shared<Edge>(p, s, type);
+  p->m_succs.emplace_back(edge);
+  s->m_preds.emplace_back(edge);
 }
 
 void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
-  mutable_edge(p, s).reset();
   p->m_succs.erase(std::remove_if(p->m_succs.begin(),
                                   p->m_succs.end(),
-                                  [&](Block* b) { return b == s; }),
+                                  [&](const std::shared_ptr<Edge>& e) {
+                                    return e->target() == s;
+                                  }),
                    p->succs().end());
   s->m_preds.erase(std::remove_if(s->m_preds.begin(),
                                   s->m_preds.end(),
-                                  [&](Block* b) { return b == p; }),
+                                  [&](const std::shared_ptr<Edge>& e) {
+                                    return e->src() == p;
+                                  }),
                    s->preds().end());
 }
 
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   o << "digraph {\n";
   for (auto* block : blocks()) {
-    for (auto* succ : block->succs()) {
-      o << block->id() << " -> " << succ->id() << "\n";
+    for (auto& succ : block->succs()) {
+      o << block->id() << " -> " << succ->target()->id() << "\n";
     }
   }
   o << "}\n";
@@ -588,12 +584,12 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
     // whether any vertex in the current SCC has a successor edge that points
     // outside itself
     bool has_exit{false};
-    for (auto* succ : b->succs()) {
-      uint32_t succ_dfn = dfns[succ];
+    for (auto& succ : b->succs()) {
+      uint32_t succ_dfn = dfns[succ->target()];
       uint32_t min;
       if (succ_dfn == 0) {
         bool succ_has_exit;
-        std::tie(min, succ_has_exit) = visit(succ);
+        std::tie(min, succ_has_exit) = visit(succ->target());
         has_exit |= succ_has_exit;
       } else {
         has_exit |= succ_dfn == VISITED;
@@ -634,8 +630,8 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
     visited.insert(curr);
     bool all_succs_visited = [&] {
       for (auto const& s : curr->succs()) {
-        if (!visited.count(s)) {
-          stack.push_back(s);
+        if (!visited.count(s->target())) {
+          stack.push_back(s->target());
           return false;
         }
       }
@@ -716,15 +712,16 @@ ControlFlowGraph::immediate_dominators() const {
       Block* new_idom = nullptr;
       // Pick one random processed block as starting point.
       for (auto& pred : ordered_block->preds()) {
-        if (postorder_dominator[pred].dom != nullptr) {
-          new_idom = pred;
+        if (postorder_dominator[pred->src()].dom != nullptr) {
+          new_idom = pred->src();
           break;
         }
       }
       always_assert(new_idom != nullptr);
       for (auto& pred : ordered_block->preds()) {
-        if (pred != new_idom && postorder_dominator[pred].dom != nullptr) {
-          new_idom = idom_intersect(postorder_dominator, new_idom, pred);
+        if (pred->src() != new_idom &&
+            postorder_dominator[pred->src()].dom != nullptr) {
+          new_idom = idom_intersect(postorder_dominator, new_idom, pred->src());
         }
       }
       if (postorder_dominator[ordered_block].dom != new_idom) {
@@ -739,7 +736,7 @@ ControlFlowGraph::immediate_dominators() const {
 void ControlFlowGraph::remove_succ_edges(Block* b) {
   std::vector<std::pair<Block*, Block*>> remove_edges;
   for (auto& s : b->succs()) {
-    remove_edges.emplace_back(b, s);
+    remove_edges.emplace_back(b, s->target());
   }
   for (auto& p : remove_edges) {
     this->remove_all_edges(p.first, p.second);

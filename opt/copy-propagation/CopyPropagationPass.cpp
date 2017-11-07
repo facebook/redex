@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "RedundantMoveEliminationPass.h"
+#include "CopyPropagationPass.h"
 
 #include <boost/optional.hpp>
 
@@ -57,38 +57,26 @@
  *   wide registers (I tried it. it's only a tiny help. --jhendrick)
  */
 
+using namespace copy_propagation_impl;
+
 namespace {
 
-struct RedundantStats {
-  size_t moves_eliminated{0};
-  size_t replaced_sources{0};
-
-  RedundantStats() = default;
-  RedundantStats(size_t elim, size_t replaced) : moves_eliminated(elim), replaced_sources(replaced) {}
-
-  RedundantStats operator+(const RedundantStats& other);
-};
-
-RedundantStats RedundantStats::operator+(const RedundantStats& other) {
-  return RedundantStats{moves_eliminated + other.moves_eliminated,
-                        replaced_sources + other.replaced_sources};
-}
-
 class AliasFixpointIterator final
-    : public MonotonicFixpointIterator<Block*, AliasDomain> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
-  const RedundantMoveEliminationPass::Config& m_config;
-  RedundantStats& m_stats;
+  const CopyPropagationPass::Config& m_config;
+  const std::unordered_set<const IRInstruction*>& m_range_set;
+  Stats& m_stats;
 
-  using BlockToListFunc = std::function<std::vector<Block*>(Block* const&)>;
-
-  AliasFixpointIterator(Block* start_block,
-                        BlockToListFunc succ,
-                        BlockToListFunc pred,
-                        const RedundantMoveEliminationPass::Config& config,
-                        RedundantStats& stats)
-      : MonotonicFixpointIterator<Block*, AliasDomain>(start_block, succ, pred),
+  AliasFixpointIterator(
+      ControlFlowGraph& cfg,
+      const CopyPropagationPass::Config& config,
+      const std::unordered_set<const IRInstruction*>& range_set,
+      Stats& stats)
+      : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
+            cfg, cfg.blocks().size()),
         m_config(config),
+        m_range_set(range_set),
         m_stats(stats) {}
 
   /*
@@ -156,11 +144,15 @@ class AliasFixpointIterator final
   void replace_with_representative(IRInstruction* insn,
                                    AliasedRegisters& aliases) const {
     if (insn->srcs_size() > 0 &&
-        !opcode::has_range(insn->opcode()) && // range has to stay in order
+        m_range_set.count(insn) == 0 && // range has to stay in order
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
-        insn->opcode() != OPCODE_CHECK_CAST && !is_monitor(insn->opcode())) {
+        insn->opcode() != OPCODE_CHECK_CAST &&
+        // The ART verifier checks that monitor-{enter,exit} instructions use
+        // the same register:
+        // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
+        !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         RegisterValue val{insn->src(i)};
         boost::optional<Register> rep = aliases.get_representative(val);
@@ -232,79 +224,88 @@ class AliasFixpointIterator final
   }
 
   AliasDomain analyze_edge(
-      Block* const& /* source */,
-      Block* const& /* target */,
-      const AliasDomain& exit_state_at_source) const override {
+      const EdgeId&, const AliasDomain& exit_state_at_source) const override {
     return exit_state_at_source;
   }
 };
 
-class RedundantMoveEliminationImpl final {
- public:
-  explicit RedundantMoveEliminationImpl(
-      const RedundantMoveEliminationPass::Config& config)
-      : m_config(config) {}
+} // namespace
 
-  RedundantStats run(Scope scope) {
-    using Data = std::nullptr_t;
-    using Output = RedundantStats;
-    return walk_methods_parallel<Data, Output>(
-        scope,
-        [this](Data&, DexMethod* m) {
-          if (m->get_code()) {
-            return run_on_method(m);
-          }
-          return RedundantStats();
-        },
-        [](Output a, Output b) { return a + b; },
-        [](unsigned int /*thread_index*/) { return nullptr; });
-  }
+namespace copy_propagation_impl {
 
- private:
-  const RedundantMoveEliminationPass::Config& m_config;
-
-  RedundantStats run_on_method(DexMethod* method) {
-    std::vector<IRInstruction*> deletes;
-    RedundantStats stats;
-
-    auto code = method->get_code();
-    code->build_cfg();
-    const auto& blocks = code->cfg().blocks();
-
-    AliasFixpointIterator fixpoint(
-        code->cfg().entry_block(),
-        [](Block* const& block) { return block->succs(); },
-        [](Block* const& block) { return block->preds(); },
-        m_config,
-        stats);
-
-    if (m_config.full_method_analysis) {
-      fixpoint.run(AliasDomain());
-      for (auto block : blocks) {
-        AliasDomain domain = fixpoint.get_entry_state_at(block);
-        domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
-          fixpoint.run_on_block(block, aliases, &deletes);
-        });
-      }
-    } else {
-      for (auto block : blocks) {
-        AliasedRegisters aliases;
-        fixpoint.run_on_block(block, aliases, &deletes);
-      }
-    }
-
-    stats.moves_eliminated += deletes.size();
-    for (auto insn : deletes) {
-      code->remove_opcode(insn);
-    }
-    return stats;
-  }
-};
+Stats Stats::operator+(const Stats& other) {
+  return Stats{moves_eliminated + other.moves_eliminated,
+               replaced_sources + other.replaced_sources};
 }
 
-void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
-                                            ConfigFiles& /* unused */,
-                                            PassManager& mgr) {
+Stats CopyPropagation::run(Scope scope) {
+  using Data = std::nullptr_t;
+  using Output = Stats;
+  return walk_methods_parallel<Data, Output>(
+      scope,
+      [this](Data&, DexMethod* m) {
+        auto* code = m->get_code();
+        if (code != nullptr) {
+          return run(code);
+        }
+        return Stats();
+      },
+      [](Output a, Output b) { return a + b; },
+      [](unsigned int /*thread_index*/) { return nullptr; });
+}
+
+Stats CopyPropagation::run(IRCode* code) {
+  // XXX HACK! Since this pass runs after RegAlloc, we need to avoid remapping
+  // registers that belong to /range instructions. The easiest way to find out
+  // which instructions are in this category is by temporarily denormalizing
+  // the registers.
+  std::unordered_set<const IRInstruction*> range_set;
+  for (auto& mie : InstructionIterable(code)) {
+    auto* insn = mie.insn;
+    if (opcode::has_range_form(insn->opcode())) {
+      insn->denormalize_registers();
+      if (needs_range_conversion(insn)) {
+        range_set.emplace(insn);
+      }
+      insn->normalize_registers();
+    }
+  }
+
+  std::vector<IRInstruction*> deletes;
+  Stats stats;
+
+  code->build_cfg();
+  const auto& blocks = code->cfg().blocks();
+
+  AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);
+
+  if (m_config.full_method_analysis) {
+    fixpoint.run(AliasDomain());
+    for (auto block : blocks) {
+      AliasDomain domain = fixpoint.get_entry_state_at(block);
+      domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
+        fixpoint.run_on_block(block, aliases, &deletes);
+      });
+    }
+  } else {
+    for (auto block : blocks) {
+      AliasedRegisters aliases;
+      fixpoint.run_on_block(block, aliases, &deletes);
+    }
+  }
+
+  stats.moves_eliminated += deletes.size();
+  for (auto insn : deletes) {
+    code->remove_opcode(insn);
+  }
+  return stats;
+}
+
+} // namespace copy_propagation_impl
+
+void CopyPropagationPass::run_pass(DexStoresVector& stores,
+                                   ConfigFiles& /* unused */,
+                                   PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   if (m_config.eliminate_const_literals && !mgr.verify_none_enabled()) {
@@ -316,7 +317,7 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
           "enabled.\n");
   }
 
-  RedundantMoveEliminationImpl impl(m_config);
+  CopyPropagation impl(m_config);
   auto stats = impl.run(scope);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
@@ -331,4 +332,4 @@ void RedundantMoveEliminationPass::run_pass(DexStoresVector& stores,
         mgr.get_metric("source_regs_replaced_with_representative"));
 }
 
-static RedundantMoveEliminationPass s_pass;
+static CopyPropagationPass s_pass;

@@ -49,7 +49,7 @@ class DexIdx {
   DexProto* get_protoidx_fromdex(uint32_t pidx);
 
  public:
-  DexIdx(dex_header* dh);
+  explicit DexIdx(const dex_header* dh);
   ~DexIdx();
 
   DexString* get_stringidx(uint32_t stridx) {

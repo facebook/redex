@@ -63,7 +63,6 @@ struct ReachableObject {
     case ReachableObjectType::SEED:
       return std::string("<SEED>");
     }
-    not_reached();
   }
 
   std::string type_str() const {
@@ -79,7 +78,6 @@ struct ReachableObject {
     case ReachableObjectType::SEED:
       return "SEED";
     }
-    not_reached();
   }
 
   std::string state_str() const {
@@ -103,7 +101,6 @@ struct ReachableObject {
     case ReachableObjectType::SEED:
       return "Seed";
     }
-    not_reached();
   }
 };
 
@@ -121,7 +118,6 @@ struct ReachableObjectHash {
     case ReachableObjectType::SEED:
       return 0;
     }
-    not_reached();
   }
 };
 
@@ -143,7 +139,6 @@ struct ReachableObjectEq {
     case ReachableObjectType::SEED:
       return true;
     }
-    not_reached();
   }
 };
 

@@ -20,17 +20,14 @@
 constexpr const char* STRING_DEF = "Ljava/lang/String;";
 constexpr const char* STRINGBUILDER_DEF = "Ljava/lang/StringBuilder;";
 
-class StringIterator
-    : public MonotonicFixpointIterator<Block*, StringProdEnvironment> {
+class StringIterator : public MonotonicFixpointIterator<cfg::GraphInterface,
+                                                        StringProdEnvironment> {
   using NodeId = Block*;
   using Environment = StringProdEnvironment;
 
  public:
   StringIterator(IRCode* code, NodeId start_block)
-      : MonotonicFixpointIterator(
-            start_block,
-            std::bind(&Block::succs, std::placeholders::_1),
-            std::bind(&Block::preds, std::placeholders::_1)),
+      : MonotonicFixpointIterator(code->cfg()),
         m_code(code),
         m_string_type(DexType::make_type(STRING_DEF)),
         m_builder_type(DexType::make_type(STRINGBUILDER_DEF)),
@@ -47,8 +44,7 @@ class StringIterator
   size_t get_instructions_removed() const { return m_instructions_removed; }
 
   Environment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* destination */,
+      const std::shared_ptr<cfg::Edge>&,
       const Environment& exit_state_at_source) const override {
     return exit_state_at_source;
   }

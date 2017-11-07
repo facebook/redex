@@ -63,16 +63,28 @@ s_expr to_s_expr(const IRInstruction* insn,
   if (insn->dests_size()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
   }
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    s_exprs.emplace_back(reg_to_str(insn->src(i)));
+  if (opcode::has_arg_word_count(op)) {
+    std::vector<s_expr> src_s_exprs;
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      src_s_exprs.emplace_back(reg_to_str(insn->src(i)));
+    }
+    s_exprs.emplace_back(src_s_exprs);
+  } else {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      s_exprs.emplace_back(reg_to_str(insn->src(i)));
+    }
   }
   switch (opcode::ref(op)) {
     case opcode::Ref::None:
       break;
-    case opcode::Ref::Field:
-    case opcode::Ref::Method:
     case opcode::Ref::Data:
       always_assert_log(false, "Not yet supported");
+      break;
+    case opcode::Ref::Field:
+      s_exprs.emplace_back(show(insn->get_field()));
+      break;
+    case opcode::Ref::Method:
+      s_exprs.emplace_back(show(insn->get_method()));
       break;
     case opcode::Ref::String:
       s_exprs.emplace_back(insn->get_string()->str());
@@ -105,19 +117,42 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
         .must_match(tail, "Expected dest reg for " + opcode_str);
     insn->set_dest(reg_from_str(reg_str));
   }
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    s_patn({s_patn(&reg_str)}, tail)
-        .must_match(tail, "Expected src reg for" + opcode_str);
-    insn->set_src(i, reg_from_str(reg_str));
+  if (opcode::has_arg_word_count(op)) {
+    auto srcs = tail[0];
+    tail = tail.tail(1);
+    insn->set_arg_word_count(srcs.size());
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      insn->set_src(i, reg_from_str(srcs[i].get_string()));
+    }
+  } else {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      s_patn({s_patn(&reg_str)}, tail)
+          .must_match(tail, "Expected src reg for" + opcode_str);
+      insn->set_src(i, reg_from_str(reg_str));
+    }
   }
   switch (opcode::ref(op)) {
     case opcode::Ref::None:
       break;
-    case opcode::Ref::Field:
-    case opcode::Ref::Method:
     case opcode::Ref::Data:
       always_assert_log(false, "Not yet supported");
       break;
+    case opcode::Ref::Field: {
+      std::string str;
+      s_patn({s_patn(&str)}, tail)
+          .must_match(tail, "Expecting string literal for " + opcode_str);
+      auto* dex_field = DexField::make_field(str);
+      insn->set_field(dex_field);
+      break;
+    }
+    case opcode::Ref::Method: {
+      std::string str;
+      s_patn({s_patn(&str)}, tail)
+          .must_match(tail, "Expecting string literal for " + opcode_str);
+      auto* dex_method = DexMethod::make_method(str);
+      insn->set_method(dex_method);
+      break;
+    }
     case opcode::Ref::String: {
       std::string str;
       s_patn({s_patn(&str)}, tail)
@@ -227,6 +262,8 @@ s_expr to_s_expr(const IRCode* code) {
         always_assert_log(false, "Not yet implemented");
         break;
       case MFLOW_TARGET:
+        insn_exprs.emplace_back(insn_to_label.at(it->target->src->insn));
+        break;
       case MFLOW_FALLTHROUGH:
         break;
       case MFLOW_DEX_OPCODE:
@@ -246,9 +283,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
 
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
-    s_expr tail;
-    always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
-    if (keyword[0] == ':') {
+    if (s_patn(&keyword).match_with(insns_expr[i])) {
+      always_assert_log(keyword[0] == ':', "Labels must start with ':'");
       auto label = keyword;
       always_assert_log(
           label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
@@ -258,6 +294,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
       label_defs.emplace(label, maybe_target);
       code->push_back(*maybe_target);
     } else {
+      s_expr tail;
+      always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
       auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
       always_assert(insn != nullptr);
       code->push_back(insn.release());
@@ -277,6 +315,8 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
     if (s_expr_input.eoi()) {
       break;
     }
+    always_assert_log(
+        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
   }
   return ircode_from_s_expr(expr);
 }

@@ -25,8 +25,8 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (Block* pred : block->preds()) {
-      insn_in.meet(block_outs[pred->id()]);
+    for (auto& pred : block->preds()) {
+      insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {
       if (it->type != MFLOW_OPCODE) {
@@ -36,10 +36,10 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     }
     if (insn_in != block_outs[block->id()]) {
       block_outs[block->id()] = std::move(insn_in);
-      for (auto succ : block->succs()) {
-        if (std::find(work_list.begin(), work_list.end(), succ) ==
+      for (auto& succ : block->succs()) {
+        if (std::find(work_list.begin(), work_list.end(), succ->target()) ==
             work_list.end()) {
-          work_list.push_back(succ);
+          work_list.push_back(succ->target());
         }
       }
     }
@@ -52,8 +52,8 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (Block* pred : block->preds()) {
-      insn_in.meet(block_outs[pred->id()]);
+    for (auto pred : block->preds()) {
+      insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {
       if (it->type != MFLOW_OPCODE) {

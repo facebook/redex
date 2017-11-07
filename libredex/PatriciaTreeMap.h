@@ -39,13 +39,12 @@ template <typename T>
 using CombiningFunction = std::function<T(const T&, const T&)>;
 
 template <typename IntegerType, typename Value>
-inline const Value* find_value(
+inline const typename Value::type* find_value(
     IntegerType key, std::shared_ptr<PatriciaTree<IntegerType, Value>> tree);
 
 template <typename IntegerType, typename Value>
-inline bool leq(
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree2);
+inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
+                std::shared_ptr<PatriciaTree<IntegerType, Value>> tree2);
 
 template <typename IntegerType, typename Value>
 inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
@@ -53,26 +52,26 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
-    const CombiningFunction<Value>& combine,
+    const CombiningFunction<typename Value::type>& combine,
     IntegerType key,
-    const Value& value);
+    const typename Value::type& value);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
-    const CombiningFunction<Value>& combine,
+    const CombiningFunction<typename Value::type>& combine,
     IntegerType key,
-    const Value& value,
+    const typename Value::type& value,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> tree);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
-    const CombiningFunction<Value>& combine,
+    const CombiningFunction<typename Value::type>& combine,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> t);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
-    const ptmap_impl::CombiningFunction<Value>& combine,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> t);
 
@@ -91,10 +90,32 @@ T snd(const T&, const T& second) {
  *
  * See PatriciaTreeSet.h for more details about Patricia trees.
  *
- * Specializing this implementation for AbstractDomain values (instead of
- * arbitrary values) allows us to better optimize operations like meet, join,
- * and leq. It also makes it easy for us to save space by implicitly mapping
- * all unbound keys to Top.
+ * This implementation differs from the paper in that we allow for a special
+ * default value, which is never explicitly represented in the map. When using
+ * Patricia tree maps with AbstractDomain values, this allows us to better
+ * optimize operations like meet, join, and leq. It also makes it easy for us to
+ * save space by implicitly mapping all unbound keys to Top.
+ *
+ * Value is a structure that should contain the following components:
+ *
+ *   struct Value {
+ *     // The type of elements used as values in the map.
+ *     using type = ...;
+ *
+ *     // Returns the default value.
+ *     static type default_value();
+ *
+ *     // Tests whether a value is the default value.
+ *     static bool is_default_value(const type& x);
+ *
+ *     // The equality predicate for values.
+ *     static bool equals(const type& x, const type& y);
+ *
+ *     // A partial order relation over values. This function only needs to be
+ *     // implemented when one wants to use the lifted partial order relation
+ *     // over maps PatriciaTreeMap::leq().
+ *     static bool leq(const type& x, const type& y);
+ *   }
  */
 template <typename Key, typename Value>
 class PatriciaTreeMap final {
@@ -103,10 +124,10 @@ class PatriciaTreeMap final {
       typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
 
   using key_type = Key;
-  using mapped_type = Value;
-  using value_type = std::pair<const Key, Value>;
+  using mapped_type = typename Value::type;
+  using value_type = std::pair<const Key, mapped_type>;
   using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
-  using combining_function = ptmap_impl::CombiningFunction<Value>;
+  using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
 
   PatriciaTreeMap() = default;
 
@@ -114,8 +135,23 @@ class PatriciaTreeMap final {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
     // sanity checks on the template parameters.
-    static_assert(std::is_base_of<AbstractDomain<Value>, Value>::value,
-                  "Value doesn't inherit from AbstractDomain");
+    static_assert(
+        std::is_same<decltype(Value::default_value()), mapped_type>::value,
+        "Value::default_value() does not exist");
+    static_assert(std::is_same<decltype(Value::is_default_value(
+                                   std::declval<mapped_type>())),
+                               bool>::value,
+                  "Value::is_default_value() does not exist");
+    static_assert(
+        std::is_same<decltype(Value::equals(std::declval<mapped_type>(),
+                                            std::declval<mapped_type>())),
+                     bool>::value,
+        "Value::equals() does not exist");
+    static_assert(
+        std::is_same<decltype(Value::leq(std::declval<mapped_type>(),
+                                         std::declval<mapped_type>())),
+                     bool>::value,
+        "Value::leq() does not exist");
   }
 
   bool is_empty() const { return m_tree == nullptr; }
@@ -132,10 +168,10 @@ class PatriciaTreeMap final {
 
   iterator end() const { return iterator(); }
 
-  const Value at(Key key) const {
-    const Value* value = ptmap_impl::find_value(encode(key), m_tree);
+  const mapped_type at(Key key) const {
+    const mapped_type* value = ptmap_impl::find_value(encode(key), m_tree);
     if (value == nullptr) {
-      return Value::top();
+      return Value::default_value();
     }
     return *value;
   }
@@ -148,31 +184,36 @@ class PatriciaTreeMap final {
     return ptmap_impl::equals<IntegerType>(m_tree, other.m_tree);
   }
 
-  PatriciaTreeMap& update(const std::function<Value(const Value&)>& operation,
-                          Key key) {
+  PatriciaTreeMap& update(
+      const std::function<mapped_type(const mapped_type&)>& operation,
+      Key key) {
     m_tree = ptmap_impl::update<IntegerType, Value>(
-        [&operation](const Value& x, const Value&) { return operation(x); },
+        [&operation](const mapped_type& x, const mapped_type&) {
+          return operation(x);
+        },
         encode(key),
-        Value::top(),
+        Value::default_value(),
         m_tree);
     return *this;
   }
 
-  PatriciaTreeMap& insert_or_assign(Key key, const Value& value) {
+  PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
     m_tree = ptmap_impl::update<IntegerType, Value>(
-        ptmap_impl::snd<Value>, encode(key), value, m_tree);
+        ptmap_impl::snd<mapped_type>, encode(key), value, m_tree);
     return *this;
   }
 
   PatriciaTreeMap& union_with(const combining_function& combine,
                               const PatriciaTreeMap& other) {
-    m_tree = ptmap_impl::merge(combine, m_tree, other.m_tree);
+    m_tree =
+        ptmap_impl::merge<IntegerType, Value>(combine, m_tree, other.m_tree);
     return *this;
   }
 
   PatriciaTreeMap& intersection_with(const combining_function& combine,
                                      const PatriciaTreeMap& other) {
-    m_tree = ptmap_impl::intersect<IntegerType>(combine, m_tree, other.m_tree);
+    m_tree = ptmap_impl::intersect<IntegerType, Value>(
+        combine, m_tree, other.m_tree);
     return *this;
   }
 
@@ -239,8 +280,7 @@ inline std::ostream& operator<<(std::ostream& o,
                                 const PatriciaTreeMap<Key, Value>& s) {
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeMap<Key, Value>::decode(it->first) << " -> "
-      << it->second;
+    o << PatriciaTreeMap<Key, Value>::decode(it->first) << " -> " << it->second;
     if (std::next(it) != s.end()) {
       o << ", ";
     }
@@ -309,17 +349,19 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType, Value> {
 template <typename IntegerType, typename Value>
 class PatriciaTreeLeaf final : public PatriciaTree<IntegerType, Value> {
  public:
-  explicit PatriciaTreeLeaf(IntegerType key, const Value& value)
+  using mapped_type = typename Value::type;
+
+  explicit PatriciaTreeLeaf(IntegerType key, const mapped_type& value)
       : m_pair(key, value) {}
 
   bool is_leaf() const override { return true; }
 
   const IntegerType& key() const { return m_pair.first; }
 
-  const Value& value() const { return m_pair.second; }
+  const mapped_type& value() const { return m_pair.second; }
 
  private:
-  std::pair<IntegerType, Value> m_pair;
+  std::pair<IntegerType, mapped_type> m_pair;
 
   template <typename T, typename V>
   friend class ptmap_impl::PatriciaTreeIterator;
@@ -362,9 +404,8 @@ std::shared_ptr<PatriciaTree<IntegerType, Value>> make_branch(
 // Tries to find the value corresponding to :key. Returns null if the key is
 // not present in :tree.
 template <typename IntegerType, typename Value>
-inline const Value* find_value(
-    IntegerType key,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree) {
+inline const typename Value::type* find_value(
+    IntegerType key, std::shared_ptr<PatriciaTree<IntegerType, Value>> tree) {
   if (tree == nullptr) {
     return nullptr;
   }
@@ -386,9 +427,8 @@ inline const Value* find_value(
 }
 
 template <typename IntegerType, typename Value>
-inline bool leq(
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
+inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
+                std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
   if (s == t) {
     // This conditions allows the leq to run in sublinear time when comparing
     // Patricia trees that share some structure.
@@ -408,7 +448,7 @@ inline bool leq(
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
     auto t_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    return s_leaf->value().leq(t_leaf->value());
+    return Value::leq(s_leaf->value(), t_leaf->value());
   }
   if (t->is_leaf()) {
     auto leaf =
@@ -417,7 +457,7 @@ inline bool leq(
     if (s_value == nullptr) {
       return false;
     }
-    return s_value->leq(leaf->value());
+    return Value::leq(*s_value, leaf->value());
   }
   auto s_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
@@ -468,7 +508,7 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
     auto leaf2 =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree2);
     return leaf1->key() == leaf2->key() &&
-           leaf1->value().equals(leaf2->value());
+           Value::equals(leaf1->value(), leaf2->value());
   }
   if (tree2->is_leaf()) {
     return false;
@@ -488,12 +528,12 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
 // always the first parameter to :combine and the new value is the second.
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
-    const ptmap_impl::CombiningFunction<Value>& combine,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     IntegerType key,
-    const Value& value,
+    const typename Value::type& value,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> tree) {
   if (tree == nullptr) {
-    return combine_new_leaf(combine, key, value);
+    return combine_new_leaf<IntegerType, Value>(combine, key, value);
   }
   if (tree->is_leaf()) {
     auto leaf =
@@ -501,7 +541,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     if (key == leaf->key()) {
       return combine_leaf(combine, value, leaf);
     }
-    auto new_leaf = combine_new_leaf(combine, key, value);
+    auto new_leaf = combine_new_leaf<IntegerType, Value>(combine, key, value);
     if (new_leaf == nullptr) {
       return leaf;
     }
@@ -530,7 +570,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
                          new_right_tree);
     }
   }
-  auto new_leaf = combine_new_leaf(combine, key, value);
+  auto new_leaf = combine_new_leaf<IntegerType, Value>(combine, key, value);
   if (new_leaf == nullptr) {
     return branch;
   }
@@ -541,7 +581,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
 // to follow.
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
-    const ptmap_impl::CombiningFunction<Value>& combine,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
   if (s == t) {
@@ -633,8 +673,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
 // Combine :value with the value in :leaf.
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
-    const ptmap_impl::CombiningFunction<Value>& combine,
-    const Value& value,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const typename Value::type& value,
     std::shared_ptr<PatriciaTreeLeaf<IntegerType, Value>> leaf) {
   auto combined_value = combine(leaf->value(), value);
   if (combined_value.is_top()) {
@@ -650,17 +690,17 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
 // Create a new leaf with a Top value and combine :value into it.
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
-    const ptmap_impl::CombiningFunction<Value>& combine,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     IntegerType key,
-    const Value& value) {
+    const typename Value::type& value) {
   auto new_leaf = std::make_shared<PatriciaTreeLeaf<IntegerType, Value>>(
-      key, Value::top());
+      key, Value::default_value());
   return combine_leaf(combine, value, new_leaf);
 }
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
-    const ptmap_impl::CombiningFunction<Value>& combine,
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
   if (s == t) {
@@ -709,8 +749,15 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     // function will still be called to merge the elements in one tree with the
     // implicit Top values in the other.
     return merge<IntegerType, Value>(
-        [](const Value& x, const Value& y) -> Value {
-          return x.meet(y);
+        [](const typename Value::type& x, const typename Value::type& y) ->
+        typename Value::type {
+          if (Value::is_default_value(x)) {
+            return y;
+          }
+          if (Value::is_default_value(y)) {
+            return x;
+          }
+          always_assert_log(false, "Malformed Patricia tree.\n");
         },
         intersect(combine, s0, t0),
         intersect(combine, s1, t1));
@@ -734,6 +781,7 @@ class PatriciaTreeIterator final
     : public std::iterator<std::forward_iterator_tag, Key> {
  public:
   using IntegerType = typename PatriciaTreeMap<Key, Value>::IntegerType;
+  using mapped_type = typename Value::type;
 
   PatriciaTreeIterator() {}
 
@@ -778,12 +826,12 @@ class PatriciaTreeIterator final
     return !(*this == other);
   }
 
-  const std::pair<Key, Value>& operator*() {
-    return *reinterpret_cast<std::pair<Key, Value>*>(&m_leaf->m_pair);
+  const std::pair<Key, mapped_type>& operator*() {
+    return *reinterpret_cast<std::pair<Key, mapped_type>*>(&m_leaf->m_pair);
   }
 
-  const std::pair<Key, Value>* operator->() {
-    return reinterpret_cast<std::pair<Key, Value>*>(&m_leaf->m_pair);
+  const std::pair<Key, mapped_type>* operator->() {
+    return reinterpret_cast<std::pair<Key, mapped_type>*>(&m_leaf->m_pair);
   }
 
  private:

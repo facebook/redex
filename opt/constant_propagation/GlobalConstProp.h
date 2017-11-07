@@ -36,7 +36,7 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
  public:
   friend class ConstantDomain;
 
-  enum ConstantType { NARROW, WIDE_A, WIDE_B, INVALID };
+  enum ConstantType { NARROW, WIDE, INVALID };
 
   ConstantValue() : m_value(-1), m_type(ConstantType::INVALID) {}
 
@@ -73,16 +73,26 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
     return meet_with(other);
   }
 
-  int32_t constant() const { return m_value; }
+  int64_t constant() const { return m_value; }
   ConstantType type() const { return m_type; }
 
-  ConstantValue(int32_t value, ConstantType type)
+  ConstantValue(int64_t value, ConstantType type)
       : m_value(value), m_type(type) {}
 
  private:
-  int32_t m_value;
+  int64_t m_value;
   ConstantType m_type;
 };
+
+// Add operator overloading for == so that 3rd-party code that depends on it
+// (like gtest's EXPECT_EQ) will work
+inline bool operator==(const ConstantValue& v1, const ConstantValue& v2) {
+  return v1.equals(v2);
+}
+
+inline bool operator!=(const ConstantValue& v1, const ConstantValue& v2) {
+  return !(v1 == v2);
+}
 
 std::ostream& operator<<(std::ostream& o, const ConstantValue& cv);
 
@@ -100,7 +110,7 @@ class ConstantDomain final
 
   static ConstantDomain top() { return ConstantDomain(AbstractValueKind::Top); }
 
-  static ConstantDomain value(int32_t v, ConstantValue::ConstantType type) {
+  static ConstantDomain value(int64_t v, ConstantValue::ConstantType type) {
     assert(type != ConstantValue::ConstantType::INVALID);
     ConstantDomain result;
     result.set_to_value(ConstantValue(v, type));
@@ -121,16 +131,16 @@ class ConstPropEnvUtil {
                                           uint16_t reg,
                                           int32_t value);
   static ConstPropEnvironment& set_wide(ConstPropEnvironment& env,
-                                        uint16_t first_reg,
+                                        uint16_t reg,
                                         int64_t value);
   static ConstPropEnvironment& set_top(ConstPropEnvironment& env,
-                                       uint16_t first_reg,
+                                       uint16_t reg,
                                        bool is_wide = false);
   static bool is_narrow_constant(const ConstPropEnvironment& env, int16_t reg);
   static bool is_wide_constant(const ConstPropEnvironment& env,
-                               int16_t first_reg);
+                               int16_t reg);
   static int32_t get_narrow(const ConstPropEnvironment& env, int16_t reg);
-  static int64_t get_wide(const ConstPropEnvironment& env, int16_t first_reg);
+  static int64_t get_wide(const ConstPropEnvironment& env, int16_t reg);
 };
 
 /**
@@ -148,25 +158,21 @@ class ConstPropEnvUtil {
  *           replace instructions.  In code; these are all the simplify_*
  *           functions.
  */
-template <typename BlockType,
+template <typename GraphInterface,
           typename InstructionType,
           typename BlockIterable,
           typename InstructionIterable>
 class ConstantPropFixpointAnalysis
-    : public MonotonicFixpointIterator<BlockType, ConstPropEnvironment> {
+    : public MonotonicFixpointIterator<GraphInterface, ConstPropEnvironment> {
  public:
-  using BlockTypeToListFunc =
-      std::function<std::vector<BlockType>(BlockType const&)>;
+  using Graph = typename GraphInterface::Graph;
+  using BlockType = typename GraphInterface::NodeId;
+  using EdgeId = typename GraphInterface::EdgeId;
 
-  ConstantPropFixpointAnalysis(BlockType const& start_block,
-                               BlockIterable const& cfg_iterable,
-                               BlockTypeToListFunc succ,
-                               BlockTypeToListFunc pred)
-      : MonotonicFixpointIterator<BlockType, ConstPropEnvironment>(
-            start_block, succ, pred),
-        m_start_block(start_block),
-        m_cfg_iterable(cfg_iterable),
-        m_succ(succ) {}
+  ConstantPropFixpointAnalysis(const Graph& graph,
+                               BlockIterable const& cfg_iterable)
+      : MonotonicFixpointIterator<GraphInterface, ConstPropEnvironment>(graph),
+        m_cfg_iterable(cfg_iterable) {}
 
   void simplify() const {
     for (const auto& block : m_cfg_iterable) {
@@ -179,8 +185,7 @@ class ConstantPropFixpointAnalysis
   }
 
   ConstPropEnvironment analyze_edge(
-      BlockType const& source,
-      BlockType const& destination,
+      const EdgeId&,
       const ConstPropEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }
@@ -211,7 +216,5 @@ class ConstantPropFixpointAnalysis
       ConstPropEnvironment* current_state) const = 0;
 
  private:
-  BlockType m_start_block;
   BlockIterable m_cfg_iterable;
-  BlockTypeToListFunc m_succ;
 };

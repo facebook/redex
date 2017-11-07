@@ -157,17 +157,14 @@ class TypeCheckingException final : public std::runtime_error {
 };
 
 class TypeInference final
-    : public MonotonicFixpointIterator<Block*, TypeEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, TypeEnvironment> {
  public:
   using NodeId = Block*;
 
   TypeInference(const ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
-      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1),
-                                  cfg.blocks().size()),
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),
@@ -243,8 +240,7 @@ class TypeInference final
   }
 
   TypeEnvironment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* target */,
+      const EdgeId&,
       const TypeEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }
@@ -392,8 +388,7 @@ class TypeInference final
       set_reference(current_state, RESULT_REGISTER);
       break;
     }
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+    case OPCODE_FILLED_NEW_ARRAY: {
       const DexType* type = get_array_type(insn->get_type());
       // We assume that structural constraints on the bytecode are satisfied,
       // i.e., the type is indeed an array type.
@@ -404,9 +399,8 @@ class TypeInference final
       // here as a safeguard.
       always_assert_log(
           !is_object(type), "Unexpected instruction '%s'.\n", SHOW(insn));
-      IRSourceIterator src_it(insn);
-      while (!src_it.empty()) {
-        assume_scalar(current_state, src_it.get_register());
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        assume_scalar(current_state, insn->src(i));
       }
       set_reference(current_state, RESULT_REGISTER);
       break;
@@ -645,40 +639,34 @@ class TypeInference final
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
       auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
-      IRSourceIterator src_it(insn);
-      if (!(insn->opcode() == OPCODE_INVOKE_STATIC ||
-            insn->opcode() == OPCODE_INVOKE_STATIC_RANGE)) {
+      size_t src_idx{0};
+      if (insn->opcode() != OPCODE_INVOKE_STATIC) {
         // The first argument is a reference to the object instance on which the
         // method is invoked.
-        assume_reference(current_state, src_it.get_register());
+        assume_reference(current_state, insn->src(src_idx++));
       }
       for (DexType* arg_type : arg_types) {
         if (is_object(arg_type)) {
-          assume_reference(current_state, src_it.get_register());
+          assume_reference(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_integer(arg_type)) {
-          assume_integer(current_state, src_it.get_register());
+          assume_integer(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_long(arg_type)) {
-          assume_long(current_state, src_it.get_wide_register());
+          assume_long(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_float(arg_type)) {
-          assume_float(current_state, src_it.get_register());
+          assume_float(current_state, insn->src(src_idx++));
           continue;
         }
         always_assert(is_double(arg_type));
-        assume_double(current_state, src_it.get_wide_register());
+        assume_double(current_state, insn->src(src_idx++));
       }
       DexType* return_type = dex_method->get_proto()->get_rtype();
       if (is_void(return_type)) {
@@ -944,8 +932,14 @@ class TypeInference final
     }
     case FOPCODE_PACKED_SWITCH:
     case FOPCODE_SPARSE_SWITCH:
-    case FOPCODE_FILLED_ARRAY: {
-      // Pseudo-opcodes have been simplified away by the IR.
+    case FOPCODE_FILLED_ARRAY:
+    case OPCODE_FILLED_NEW_ARRAY_RANGE:
+    case OPCODE_INVOKE_VIRTUAL_RANGE:
+    case OPCODE_INVOKE_SUPER_RANGE:
+    case OPCODE_INVOKE_DIRECT_RANGE:
+    case OPCODE_INVOKE_STATIC_RANGE:
+    case OPCODE_INVOKE_INTERFACE_RANGE: {
+      // Pseudo-opcodes and range opcodes have been simplified away by the IR.
       always_assert_log(false, "Unexpected instruction: %s.\n", SHOW(insn));
     }
     }

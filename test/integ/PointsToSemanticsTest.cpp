@@ -36,8 +36,7 @@ std::set<std::string> method_semantics = {
     "}\n",
     // PointsToSemantics' constructor
     "Lcom/facebook/redextest/PointsToSemantics;#<init>: ()V {\n"
-    " V0 = THIS\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // I#f()
     "Lcom/facebook/redextest/PointsToSemantics$I;#f: "
@@ -45,33 +44,29 @@ std::set<std::string> method_semantics = {
     // Base's constructor
     "Lcom/facebook/redextest/PointsToSemantics$Base;#<init>: "
     "(Lcom/facebook/redextest/PointsToSemantics;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 0\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$Base;#this$0 = V1\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$Base;#this$0 = V1\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // Base#f()
     "Lcom/facebook/redextest/PointsToSemantics$Base;#f: "
     "()Lcom/facebook/redextest/PointsToSemantics$I; {\n"
-    " V0 = THIS\n"
     " V1 = NEW Lcom/facebook/redextest/PointsToSemantics$Base;\n"
-    " V2 = V0.Lcom/facebook/redextest/PointsToSemantics$Base;#this$0\n"
+    " V2 = THIS.Lcom/facebook/redextest/PointsToSemantics$Base;#this$0\n"
     " V1.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => V2)\n"
     " RETURN V1\n"
     "}\n",
     // X's constructor
     "Lcom/facebook/redextest/PointsToSemantics$X;#<init>: "
     "(Lcom/facebook/redextest/PointsToSemantics;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 0\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$X;#this$0 = V1\n"
-    " V0.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => V1)\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$X;#this$0 = V1\n"
+    " THIS.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => V1)\n"
     "}\n",
     // X#g()
     "Lcom/facebook/redextest/PointsToSemantics$X;#g: "
     "()Lcom/facebook/redextest/PointsToSemantics$I; {\n"
-    " V0 = THIS\n"
-    " V1 = V0.{S}Lcom/facebook/redextest/PointsToSemantics$Base;#f()\n"
+    " V1 = THIS.{S}Lcom/facebook/redextest/PointsToSemantics$Base;#f()\n"
     " RETURN V1\n"
     "}\n",
     // PointsToSemantics#cast()
@@ -88,27 +83,24 @@ std::set<std::string> method_semantics = {
     // A's constructor 1
     "Lcom/facebook/redextest/PointsToSemantics$A;#<init>: "
     "(ILjava/lang/String;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 1\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     " V2 = NEW Ljava/util/ArrayList;\n"
     " V2.{D}Ljava/util/ArrayList;#<init>()\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$A;#m_list = V2\n"
-    " V3 = V0.Lcom/facebook/redextest/PointsToSemantics$A;#m_list\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$A;#m_list = V2\n"
+    " V3 = THIS.Lcom/facebook/redextest/PointsToSemantics$A;#m_list\n"
     " V3.{V}Ljava/util/ArrayList;#add(0 => V1)\n"
     "}\n",
     // A's constructor 2
     "Lcom/facebook/redextest/PointsToSemantics$A;#<init>: (I)V {\n"
-    " V0 = THIS\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     " V1 = NEW Ljava/util/ArrayList;\n"
     " V1.{D}Ljava/util/ArrayList;#<init>()\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$A;#m_list = V1\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$A;#m_list = V1\n"
     "}\n",
     // B's constructor
     "Lcom/facebook/redextest/PointsToSemantics$B;#<init>: ()V {\n"
-    " V0 = THIS\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // B#strs()
     "Lcom/facebook/redextest/PointsToSemantics$B;#strs: ()[Ljava/lang/String;"
@@ -142,8 +134,7 @@ std::set<std::string> method_semantics = {
     "ABSTRACT\n",
     // Time's constructor
     "Lcom/facebook/redextest/PointsToSemantics$Time;#<init>: (J)V {\n"
-    " V0 = THIS\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // Time#sleep
     "Lcom/facebook/redextest/PointsToSemantics$Time;#sleep: (J)V {\n"
@@ -151,28 +142,25 @@ std::set<std::string> method_semantics = {
     // Time#repeat()
     "Lcom/facebook/redextest/PointsToSemantics$Time;#repeat: "
     "(JLcom/facebook/redextest/PointsToSemantics$Processor;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 1\n"
     " V1.{I}Lcom/facebook/redextest/PointsToSemantics$Processor;#run()\n"
     " Ljava/lang/Math;#max()\n"
-    " V0.{V}Lcom/facebook/redextest/PointsToSemantics$Time;#sleep()\n"
+    " THIS.{V}Lcom/facebook/redextest/PointsToSemantics$Time;#sleep()\n"
     "}\n",
     // C's constructor
     "Lcom/facebook/redextest/PointsToSemantics$C;#<init>: "
     "(Lcom/facebook/redextest/PointsToSemantics$A;Lcom/facebook/redextest/"
     "PointsToSemantics$C;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 0\n"
     " V2 = PARAM 1\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$C;#next = V2\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$C;#val = V1\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$C;#next = V2\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$C;#val = V1\n"
     "}\n",
     // C#nth()
     "Lcom/facebook/redextest/PointsToSemantics$C;#nth: "
     "(I)Lcom/facebook/redextest/PointsToSemantics$A; {\n"
-    " V0 = THIS\n"
-    " V3 = V0 U V1\n"
+    " V3 = THIS U V1\n"
     " V1 = V3.Lcom/facebook/redextest/PointsToSemantics$C;#next\n"
     " V2 = V3.Lcom/facebook/redextest/PointsToSemantics$C;#val\n"
     " RETURN V2\n"
@@ -195,8 +183,7 @@ std::set<std::string> method_semantics = {
     "Lcom/facebook/redextest/PointsToSemantics;#nativeMethod: ()[I = NATIVE\n",
     // AnException's constructor
     "Lcom/facebook/redextest/PointsToSemantics$AnException;#<init>: ()V {\n"
-    " V0 = THIS\n"
-    " V0.{D}Ljava/lang/Exception;#<init>()\n"
+    " THIS.{D}Ljava/lang/Exception;#<init>()\n"
     "}\n",
     // PointsToSemantics#arrayOfX()
     "Lcom/facebook/redextest/PointsToSemantics;#arrayOfX: "
@@ -209,8 +196,7 @@ std::set<std::string> method_semantics = {
     // PointsToSemantics#runOnArrayOfX()
     "Lcom/facebook/redextest/PointsToSemantics;#runOnArrayOfX: "
     "(I)Lcom/facebook/redextest/PointsToSemantics$I; {\n"
-    " V0 = THIS\n"
-    " V1 = V0.{V}Lcom/facebook/redextest/PointsToSemantics;#arrayOfX()\n"
+    " V1 = THIS.{V}Lcom/facebook/redextest/PointsToSemantics;#arrayOfX()\n"
     " V2 = ARRAY_ELEM(V1)\n"
     " V3 = Lcom/facebook/redextest/PointsToSemantics;#cast(0 => V2)\n"
     " ARRAY_ELEM(V1) = V3\n"
@@ -223,7 +209,7 @@ std::set<std::string> method_semantics = {
     "PointsToSemantics$AnException;#getMessage()\n"
     " V6.{V}Ljava/io/PrintStream;#println(0 => V7)\n"
     " V8 = NEW Lcom/facebook/redextest/PointsToSemantics$Base;\n"
-    " V8.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => V0)\n"
+    " V8.{D}Lcom/facebook/redextest/PointsToSemantics$Base;#<init>(0 => THIS)\n"
     "}\n",
     // PointsToSemantics#longMethod()
     "Lcom/facebook/redextest/PointsToSemantics;#longMethod: (JJJJJI[J)[J {\n"
@@ -233,10 +219,9 @@ std::set<std::string> method_semantics = {
     // Complex's constructor
     "Lcom/facebook/redextest/PointsToSemantics$Complex;#<init>: "
     "(Lcom/facebook/redextest/PointsToSemantics;)V {\n"
-    " V0 = THIS\n"
     " V1 = PARAM 0\n"
-    " V0.Lcom/facebook/redextest/PointsToSemantics$Complex;#this$0 = V1\n"
-    " V0.{D}Ljava/lang/Object;#<init>()\n"
+    " THIS.Lcom/facebook/redextest/PointsToSemantics$Complex;#this$0 = V1\n"
+    " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // PointsToSemantics#unusedFields()
     "Lcom/facebook/redextest/PointsToSemantics;#unusedFields: "
@@ -250,15 +235,15 @@ std::set<std::string> method_semantics = {
     // PointsToSemantics#getClassTest()
     "Lcom/facebook/redextest/PointsToSemantics;#getClassTest: "
     "()[Ljava/lang/Class; {\n"
-    " V0 = THIS\n"
     " V1 = NEW [Ljava/lang/Class;\n"
     " V2 = \"foo\"\n"
     " V3 = GET_CLASS(V2)\n"
     " ARRAY_ELEM(V1) = V3\n"
-    " V4 = V0.{V}Lcom/facebook/redextest/PointsToSemantics;#nativeMethod()\n"
+    " V4 = THIS.{V}Lcom/facebook/redextest/PointsToSemantics;#nativeMethod()\n"
     " V5 = GET_CLASS(V4)\n"
     " ARRAY_ELEM(V1) = V5\n"
-    " V6 = NEW Ljava/util/HashSet;\n V6.{D}Ljava/util/HashSet;#<init>()\n"
+    " V6 = NEW Ljava/util/HashSet;\n"
+    " V6.{D}Ljava/util/HashSet;#<init>()\n"
     " V7 = GET_CLASS(V6)\n"
     " ARRAY_ELEM(V1) = V7\n"
     " V8 = CLASS<Ljava/lang/Boolean;>\n"
@@ -316,7 +301,7 @@ TEST(PointsToSemanticsTest, semanticActionGeneration) {
   for (const auto& pt_entry : pt_semantics) {
     std::ostringstream out;
     EXPECT_NE(PTS_STUB, pt_entry.second.kind());
-    out << pt_entry.second;    
+    out << pt_entry.second;
     pt_output.insert(out.str());
   }
   EXPECT_THAT(pt_output, ::testing::ContainerEq(method_semantics));

@@ -152,8 +152,8 @@ void build_refs(
   // Looking for direct/static invokes or class refs
   auto match =
     m::invoke_static()
-    or m::invoke_direct()
-    or m::has_type();
+    || m::invoke_direct()
+    || m::has_type();
   visit_opcodes(scope, match, [&](const DexMethod* meth, IRInstruction* insn){
     if (insn->has_type()) {
       const auto tref = type_class(insn->get_type());

@@ -49,12 +49,6 @@ void fields_mapping(FatMethod::iterator it,
       if (pair.second == current_dest) {
         fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
       }
-
-      if (insn->dest_is_wide()) {
-        if (pair.second == current_dest + 1) {
-          fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
-        }
-      }
     }
   }
 
@@ -638,7 +632,10 @@ bool params_change_regs(DexMethod* method) {
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
-  uint16_t arg_reg = regs_size - args.size();
+  const auto& param_insns = InstructionIterable(code->get_param_instructions());
+  always_assert(!is_static(method));
+  // Skip the `this` param
+  auto param_it = std::next(param_insns.begin());
 
   for (DexType* arg : args) {
     std::function<void(FatMethod::iterator, TaintedRegs*)> trans =
@@ -649,6 +646,8 @@ bool params_change_regs(DexMethod* method) {
         };
 
     auto tainted = TaintedRegs(regs_size + 1);
+    always_assert(param_it != param_insns.end());
+    auto arg_reg = (param_it++)->insn->dest();
     tainted.m_reg_set[arg_reg] = 1;
 
     auto taint_map = forwards_dataflow(blocks, tainted, trans);
@@ -677,16 +676,7 @@ bool params_change_regs(DexMethod* method) {
           return true;
         }
       }
-      if (opcode::has_range(op)) {
-        for (size_t index = 0; index < insn->range_size(); ++index) {
-          if (insn_tainted[insn->range_base() + index]) {
-            return true;
-          }
-        }
-      }
     }
-
-    arg_reg += is_wide_type(arg) ? 2 : 1;
   }
 
   return false;
@@ -910,16 +900,8 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
         move_result_pseudo->set_dest(new_regs_size);
         code->insert_before(it, move_result_pseudo);
 
-        insn->set_src(index, new_regs_size);
-        if (is_wide_type(field->get_type())) {
-          insn->set_src(index + 1, new_regs_size + 1);
-          new_regs_size += 2;
-          index += 2;
-        } else {
-          new_regs_size++;
-          index++;
-
-        }
+        insn->set_src(index++, new_regs_size);
+        new_regs_size += is_wide_type(field->get_type()) ? 2 : 1;
       }
 
       insn->set_arg_word_count(new_regs_size - regs_size + 1);
@@ -983,9 +965,6 @@ void transfer_object_reach(DexType* obj,
   auto op = insn->opcode();
   if (is_move(op)) {
     regs[insn->dest()] = regs[insn->src(0)];
-    if (insn->src_is_wide(0)) {
-      regs[insn->dest() + 1] = regs[insn->src(0)];
-    }
   } else if (is_move_result(op)) {
     regs[insn->dest()] = regs[regs_size];
   } else if (writes_result_register(op)) {
@@ -1004,9 +983,6 @@ void transfer_object_reach(DexType* obj,
     regs[regs_size] = 0;
   } else if (insn->dests_size() != 0) {
     regs[insn->dest()] = 0;
-    if (insn->dest_is_wide()) {
-      regs[insn->dest() + 1] = 0;
-    }
   }
 }
 
@@ -1043,36 +1019,27 @@ bool tainted_reg_escapes(
         // builder cannot possibly be passed as the `this` arg.
         args_reg_start = 1;
       }
-      if (opcode::has_range(insn->opcode())) {
-        for (size_t i = args_reg_start; i < insn->range_size(); ++i) {
-          if (tainted[insn->range_base() + i]) {
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
-          }
-        }
-      } else {
-        for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
-          if (tainted[insn->src(i)]) {
+      for (size_t i = args_reg_start; i < insn->srcs_size(); ++i) {
+        if (tainted[insn->src(i)]) {
 
-            if (enable_buildee_constr_change) {
-              // Don't consider builders that get passed to the buildee's
-              // constructor. `update_buildee_constructor` will sort this
-              // out later.
-              if (is_init(invoked) &&
-                  invoked->get_class() == get_buildee(ty) &&
-                  has_only_argument(invoked, ty)) {
+          if (enable_buildee_constr_change) {
+            // Don't consider builders that get passed to the buildee's
+            // constructor. `update_buildee_constructor` will sort this
+            // out later.
+            if (is_init(invoked) &&
+                invoked->get_class() == get_buildee(ty) &&
+                has_only_argument(invoked, ty)) {
 
-                // If the 'fields constructor' already exist, don't continue.
-                if (get_fields_constr_if_exists(
-                      invoked, type_class(ty)) == nullptr) {
-                  continue;
-                }
+              // If the 'fields constructor' already exist, don't continue.
+              if (get_fields_constr_if_exists(
+                    invoked, type_class(ty)) == nullptr) {
+                continue;
               }
             }
-
-            TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
-            return true;
           }
+
+          TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+          return true;
         }
       }
     } else if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
@@ -1191,10 +1158,11 @@ bool BuilderTransform::inline_methods(
 
     for (const auto& inlinable : to_inline) {
       if (!inlinable->get_code()) {
-        fprintf(stderr,
-                "[BUILDERS]: Trying to inline abstract / native etc method: %s in %s\n",
-                SHOW(inlinable),
-                SHOW(method));
+        TRACE(BUILDERS,
+              2,
+              "Trying to inline abstract / native etc method: %s in %s\n",
+              SHOW(inlinable),
+              SHOW(method));
         return false;
       }
     }

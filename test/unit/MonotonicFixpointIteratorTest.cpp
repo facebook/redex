@@ -40,16 +40,19 @@ struct Statement {
  */
 class Program final {
  public:
-  Program(const std::string& entry) : m_entry(entry) {}
+  using Edge = std::pair<std::string, std::string>;
+  using EdgeId = std::shared_ptr<Edge>;
 
-  std::vector<std::string> successors(const std::string& node) {
-    auto& succs = m_successors[node];
-    return std::vector<std::string>(succs.begin(), succs.end());
+  explicit Program(const std::string& entry) : m_entry(entry), m_exit(entry) {}
+
+  std::vector<EdgeId> successors(const std::string& node) const {
+    auto& succs = m_successors.at(node);
+    return std::vector<EdgeId>(succs.begin(), succs.end());
   }
 
-  std::vector<std::string> predecessors(const std::string& node) {
-    auto& preds = m_predecessors[node];
-    return std::vector<std::string>(preds.begin(), preds.end());
+  std::vector<EdgeId> predecessors(const std::string& node) const {
+    auto& preds = m_predecessors.at(node);
+    return std::vector<EdgeId>(preds.begin(), preds.end());
   }
 
   const Statement& statement_at(const std::string& node) const {
@@ -62,12 +65,18 @@ class Program final {
 
   void add(const std::string& node, const Statement& stmt) {
     m_statements[node] = stmt;
+    // Ensure that the pred/succ entries for the node are initialized
+    m_predecessors[node];
+    m_successors[node];
   }
 
   void add_edge(const std::string& src, const std::string& dst) {
-    m_successors[src].insert(dst);
-    m_predecessors[dst].insert(src);
+    auto edge = std::make_shared<Edge>(src, dst);
+    m_successors[src].insert(edge);
+    m_predecessors[dst].insert(edge);
   }
+
+  void set_exit(const std::string& exit) { m_exit = exit; }
 
  private:
   // In gtest, FAIL (or any ASSERT_* statement) can only be called from within a
@@ -77,10 +86,32 @@ class Program final {
   }
 
   std::string m_entry;
+  std::string m_exit;
   std::unordered_map<std::string, Statement> m_statements;
-  std::unordered_map<std::string, std::unordered_set<std::string>> m_successors;
-  std::unordered_map<std::string, std::unordered_set<std::string>>
-      m_predecessors;
+  std::unordered_map<std::string, std::unordered_set<EdgeId>> m_successors;
+  std::unordered_map<std::string, std::unordered_set<EdgeId>> m_predecessors;
+
+  friend class ProgramInterface;
+};
+
+class ProgramInterface : public FixpointIteratorGraphSpec<ProgramInterface> {
+ public:
+  using Graph = Program;
+  using NodeId = std::string;
+  using EdgeId = Program::EdgeId;
+
+  static NodeId entry(const Graph& graph) { return graph.m_entry; }
+  static NodeId exit(const Graph& graph) { return graph.m_exit; }
+  static std::vector<EdgeId> predecessors(const Graph& graph,
+                                          const NodeId& node) {
+    return graph.predecessors(node);
+  }
+  static std::vector<EdgeId> successors(const Graph& graph,
+                                        const NodeId& node) {
+    return graph.successors(node);
+  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e->first; }
+  static NodeId target(const Graph&, const EdgeId& e) { return e->second; }
 };
 
 /*
@@ -89,18 +120,12 @@ class Program final {
 using LivenessDomain = HashedSetAbstractDomain<std::string>;
 
 class FixpointIterator final
-    : public MonotonicFixpointIterator<std::string, LivenessDomain> {
+    : public MonotonicFixpointIterator<
+          BackwardsFixpointIterationAdaptor<ProgramInterface>,
+          LivenessDomain> {
  public:
-  // Liveness is a backward analysis, hence we apply the generic fixpoint
-  // iterator by using the exit node as the root and swapping the successors and
-  // predecessors functions.
-  FixpointIterator(
-      const Program& program,
-      const std::string& exit_node,
-      std::function<std::vector<std::string>(const std::string&)> successors,
-      std::function<std::vector<std::string>(const std::string&)> predecessors)
-      : MonotonicFixpointIterator(exit_node, predecessors, successors),
-        m_program(program) {}
+  explicit FixpointIterator(const Program& program)
+      : MonotonicFixpointIterator(program), m_program(program) {}
 
   void analyze_node(const std::string& node,
                     LivenessDomain* current_state) const override {
@@ -111,8 +136,7 @@ class FixpointIterator final
   }
 
   LivenessDomain analyze_edge(
-      const std::string& source,
-      const std::string& target,
+      const EdgeId&,
       const LivenessDomain& exit_state_at_source) const override {
     // Edges have no semantic transformers attached.
     return exit_state_at_source;
@@ -173,6 +197,7 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
     m_program1.add_edge("4", "5");
     m_program1.add_edge("5", "6");
     m_program1.add_edge("5", "2");
+    m_program1.set_exit("6");
   }
 
   /*
@@ -206,15 +231,13 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
     m_program2.add_edge("5", "6");
     m_program2.add_edge("6", "3");
     m_program2.add_edge("6", "7");
+    m_program2.set_exit("4");
   }
 };
 
 TEST_F(MonotonicFixpointIteratorTest, program1) {
   using namespace std::placeholders;
-  FixpointIterator fp(this->m_program1,
-                      "6",
-                      std::bind(&Program::successors, &m_program1, _1),
-                      std::bind(&Program::predecessors, &m_program1, _1));
+  FixpointIterator fp(this->m_program1);
   fp.run(LivenessDomain());
 
   ASSERT_TRUE(fp.get_live_in_vars_at("1").is_value());
@@ -261,10 +284,7 @@ TEST_F(MonotonicFixpointIteratorTest, program1) {
 
 TEST_F(MonotonicFixpointIteratorTest, program2) {
   using namespace std::placeholders;
-  FixpointIterator fp(this->m_program2,
-                      "4",
-                      std::bind(&Program::successors, &m_program2, _1),
-                      std::bind(&Program::predecessors, &m_program2, _1));
+  FixpointIterator fp(this->m_program2);
   fp.run(LivenessDomain());
 
   ASSERT_TRUE(fp.get_live_in_vars_at("1").is_value());

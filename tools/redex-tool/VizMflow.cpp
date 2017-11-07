@@ -39,7 +39,7 @@ void dump_viz(
           }
           fprintf(stderr, "\"]\n");
           for (const auto& succ : block->succs()) {
-            fprintf(stderr, " \"%p\" -> \"%p\"\n", block, succ);
+            fprintf(stderr, " \"%p\" -> \"%p\"\n", block, succ->target());
           }
         }
         fprintf(stderr, "}\n\n");

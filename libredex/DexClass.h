@@ -318,6 +318,16 @@ class DexField : public DexFieldRef {
     return g_redex->get_field(container, name, type);
   }
 
+  /**
+   * Get a field using a full descriptor: Lcls;.name:type
+   */
+  static DexFieldRef* get_field(const std::string&);
+
+  /**
+   * Make a field using a full descriptor: Lcls;.name:type
+   */
+  static DexFieldRef* make_field(const std::string&);
+
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexEncodedValue* get_static_value() { return m_value; }
@@ -788,9 +798,14 @@ class DexMethod : public DexMethodRef {
   }
 
   /**
-   * Get a method using a canonical name: Lcls;.name:(args)rtype
+   * Get a method using a full descriptor: Lcls;.name:(args)rtype
    */
-  static DexMethodRef* get_method(std::string canon);
+  static DexMethodRef* get_method(const std::string&);
+
+  /**
+   * Make a method using a full descriptor: Lcls;.name:(args)rtype
+   */
+  static DexMethodRef* make_method(const std::string&);
 
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethodRef* get_method(DexType* type,
@@ -934,7 +949,9 @@ class DexClass {
 
  public:
   ReferencedState rstate;
-  DexClass(DexIdx* idx, dex_class_def* cdef, const std::string& dex_location);
+  DexClass(DexIdx* idx,
+           const dex_class_def* cdef,
+           const std::string& dex_location);
 
  public:
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
@@ -1015,6 +1032,12 @@ class DexClass {
     always_assert_log(!m_external,
         "Unexpected external class %s\n", SHOW(m_self));
     m_access_flags = access;
+  }
+
+  void set_super_class(DexType* super_class) {
+    always_assert_log(
+        !m_external, "Unexpected external class %s\n", SHOW(m_self));
+    m_super_class = super_class;
   }
 
   void set_interfaces(DexTypeList* intfs) {

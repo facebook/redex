@@ -113,12 +113,19 @@ class PointsToVariable final {
     return PointsToVariable(null_var_id());
   }
 
+  // This variable represents the special parameter `this` in instance methods.
+  static PointsToVariable this_variable() {
+    return PointsToVariable(this_var_id());
+  }
+
   s_expr to_s_expr() const;
 
   static boost::optional<PointsToVariable> from_s_expr(const s_expr& e);
 
  private:
   static constexpr int32_t null_var_id() { return -1; }
+
+  static constexpr int32_t this_var_id() { return -2; }
 
   explicit PointsToVariable(size_t id) : m_id(id) {}
 
@@ -164,7 +171,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
 I  PTS_OP(PTS_CONST_CLASS,      true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_GET_EXCEPTION,    true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_NEW_OBJECT,       true ,   false,  false,  false    ) \
-I  PTS_OP(PTS_LOAD_THIS,        true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_LOAD_PARAM,       true ,   false,  false,  false    ) \
 I  PTS_OP(PTS_GET_CLASS,        false,   false,  false,  false    ) \
 I  PTS_OP(PTS_CHECK_CAST,       false,   false,  false,  false    ) \

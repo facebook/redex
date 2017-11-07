@@ -21,18 +21,18 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
     // LiveOut(block) - LiveIn(succs).
-    for (auto& s : block->succs()) {
-      LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(s);
+    for (auto& succ : block->succs()) {
+      LivenessDomain live_in =
+          fixpoint_iter.get_live_in_vars_at(succ->target());
       for (auto reg : live_out.elements()) {
         if (!live_in.contains(reg)) {
           split_costs->increase_load(reg);
-          const auto& flags = cfg.edge(block, s);
           // Record how many death on edge occured at certain catch block.
-          if (flags[EDGE_THROW]) {
-            split_costs->add_catch_block(reg, s);
+          if (succ->type() == EDGE_THROW) {
+            split_costs->add_catch_block(reg, succ->target());
           } else {
             // Record death on edge to non-catch block;
-            split_costs->add_other_block(reg, s);
+            split_costs->add_other_block(reg, succ->target());
           }
         }
       }
@@ -146,9 +146,8 @@ size_t split_for_block(const SplitPlan& split_plan,
                        IRCode* code,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
-  const auto& cfg = code->cfg();
-  for (auto& s : block->succs()) {
-    LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(s);
+  for (auto& succ : block->succs()) {
+    LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(succ->target());
     for (auto reg : live_out.elements()) {
       if (live_in.contains(reg)) {
         continue;
@@ -165,53 +164,55 @@ size_t split_for_block(const SplitPlan& split_plan,
         IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
         // Storing the mov needed to be inserted between blocks and
         // insert them together later.
-        const auto& flags = cfg.edge(block, s);
         // If all of block s's preds have reg died on the edge
         // pred->s, then no need to insert a block for every edge,
         // Inserting loads at the beginning of block s will be fine and
         // won't cause problems.
         bool can_insert_directly =
-            split_costs.death_at_other(reg).at(s) == s->preds().size();
-        if ((flags[EDGE_GOTO] || flags[EDGE_BRANCH]) && can_insert_directly) {
+            split_costs.death_at_other(reg).at(succ->target()) ==
+            succ->target()->preds().size();
+        if ((succ->type() == EDGE_GOTO || succ->type() == EDGE_BRANCH) &&
+            can_insert_directly) {
           // Use other_loaded_regs to make sure we don't load a register
           // several times in the same place.
-          auto other_loaded_it = block_load_info->other_loaded_regs.find(s);
+          auto other_loaded_it =
+              block_load_info->other_loaded_regs.find(succ->target());
           if (other_loaded_it == block_load_info->other_loaded_regs.end() ||
               other_loaded_it->second.find(l) ==
                   other_loaded_it->second.end()) {
             // Iterate to the first opcode instruction and insert move
             // before it.
-            auto pos_it = s->begin();
-            while (pos_it != s->end() && pos_it->type != MFLOW_OPCODE) {
+            auto pos_it = succ->target()->begin();
+            while (pos_it != succ->target()->end() &&
+                   pos_it->type != MFLOW_OPCODE) {
               ++pos_it;
             }
             code->insert_before(pos_it, mov);
-            block_load_info->other_loaded_regs[s].emplace(l);
+            block_load_info->other_loaded_regs[succ->target()].emplace(l);
             ++split_move;
           }
           continue;
         }
 
-        auto block_edge = std::pair<Block*, Block*>(block, s);
+        auto block_edge = std::pair<Block*, Block*>(block, succ->target());
         auto lastmei = block->rbegin();
-        // Since in theory the edge between two blocks can be both EDGE_THROW
-        // and EDGE_GOTO, we check if the edge is EDGE_THROW first. Because
-        // in find_split we limited the try-catch edge to only deal with
-        // catch block where reg died on all the exception edge toward it.
+        // Because in find_split we limited the try-catch edge to only deal
+        // with catch block where reg died on all the exception edge toward it.
         // So even if there is a EDGE_GOTO we don't need to worry about should
         // we insert a block to load reg or not.
-        if (flags[EDGE_THROW]) {
+        if (succ->type() == EDGE_THROW) {
           // Try Catch blocks.
           // Use try_loaded_regs to make sure we don't load a register several
           // times in the same place.
-          auto try_loaded_it = block_load_info->try_loaded_regs.find(s);
+          auto try_loaded_it =
+              block_load_info->try_loaded_regs.find(succ->target());
           if (try_loaded_it == block_load_info->try_loaded_regs.end() ||
               try_loaded_it->second.find(l) == try_loaded_it->second.end()) {
             block_load_info->mode_and_insn[block_edge].add_insn_mode(mov,
                                                                      TRYCATCH);
-            block_load_info->try_loaded_regs[s].emplace(l);
+            block_load_info->try_loaded_regs[succ->target()].emplace(l);
           }
-        } else if (flags[EDGE_GOTO]) {
+        } else if (succ->type() == EDGE_GOTO) {
           if (lastmei->type != MFLOW_OPCODE ||
               !is_goto(lastmei->insn->opcode())) {
             // Fall throughs, don't need to change target.
@@ -220,11 +221,12 @@ size_t split_for_block(const SplitPlan& split_plan,
           } else {
             // Goto, need to change target.
             store_info_for_branch(
-                block_edge, s, mov, &*lastmei, block_load_info);
+                block_edge, succ->target(), mov, &*lastmei, block_load_info);
           }
         } else {
           // Branches, need to change target.
-          store_info_for_branch(block_edge, s, mov, &*lastmei, block_load_info);
+          store_info_for_branch(
+              block_edge, succ->target(), mov, &*lastmei, block_load_info);
         }
       }
     }
@@ -292,7 +294,6 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           FatMethod::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
-  const auto& cfg = code->cfg();
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     auto src = insn->src(i);
     if (live_out.contains(src)) {
@@ -316,16 +317,18 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // we would treat it like the case of
         // live_out(block) - live_in(succ_block).
         if (is_branch(insn->opcode()) && it == block->rbegin()) {
-          for (auto& s : block->succs()) {
+          for (auto& succ : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
-            auto block_edge = std::pair<Block*, Block*>(block, s);
-            const auto& flags = cfg.edge(block, s);
-            if (flags[EDGE_BRANCH]) {
+            auto block_edge = std::pair<Block*, Block*>(block, succ->target());
+            if (succ->type() == EDGE_BRANCH) {
               // Branches, need to change target.
-              store_info_for_branch(
-                  block_edge, s, mov, &*(--(it.base())), block_load_info);
-            } else if (flags[EDGE_GOTO]) {
+              store_info_for_branch(block_edge,
+                                    succ->target(),
+                                    mov,
+                                    &*(--(it.base())),
+                                    block_load_info);
+            } else if (succ->type() == EDGE_GOTO) {
               // Fall throughs, don't need to change target.
               block_load_info->mode_and_insn[block_edge].add_insn_mode(
                   mov, FALLTHROUGH);

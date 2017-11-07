@@ -32,6 +32,10 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#ifdef _MSC_VER
+#include <mutex>
+#endif
+
 #include "android/configuration.h"
 
 namespace android {
@@ -112,6 +116,8 @@ struct __assertChar16Size {
  *
  * The PNG chunk type is "npTc".
  */
+
+#pragma pack(push, 1)
 struct alignas(uintptr_t) Res_png_9patch
 {
     Res_png_9patch() : wasDeserialized(false), xDivsOffset(0),
@@ -175,7 +181,9 @@ struct alignas(uintptr_t) Res_png_9patch
         return reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(this) + colorsOffset);
     }
 
-} __attribute__((packed));
+};
+#pragma pack(pop)
+
 
 /** ********************************************************************
  *  Base Types
@@ -464,7 +472,7 @@ struct ResStringPool_header
  */
 struct ResStringPool_span
 {
-    enum {
+    enum : uint32_t {
         END = 0xFFFFFFFF
     };
 
@@ -521,12 +529,24 @@ public:
     bool isSorted() const;
     bool isUTF8() const;
 
+    // Adds a new string to the end of the pool. This only takes effect during
+    // serialization, and has several caveats (doesn't support sorting, assumes
+    // there are no styles.)
+    void appendString(String8 s);
+
 private:
+    // Saves the changes made via appendString(). Will fatal if any of the
+    // unsupported conditions are detected.
+    void serializeWithAdditionalStrings(Vector<char>& cVec);
     status_t                    mError;
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
     size_t                      mSize;
+#ifndef _MSC_VER
     mutable Mutex               mDecodeLock;
+#else
+    mutable std::mutex          mDecodeLock;
+#endif
     const uint32_t*             mEntries;
     const uint32_t*             mEntryStyles;
     const void*                 mStrings;
@@ -534,6 +554,7 @@ private:
     uint32_t                    mStringPoolSize;    // number of uint16_t
     const uint32_t*             mStyles;
     uint32_t                    mStylePoolSize;    // number of uint32_t
+    Vector<String8>             mAppendedStrings;
 };
 
 /**
@@ -1301,7 +1322,7 @@ struct ResTable_type
 {
     struct ResChunk_header header;
 
-    enum {
+    enum : uint32_t {
         NO_ENTRY = 0xFFFFFFFF
     };
 
@@ -1802,6 +1823,11 @@ public:
     // Return the configurations (ResTable_config) that we know about
     void getConfigurations(Vector<ResTable_config>* configs, bool ignoreMipmap=false) const;
 
+    // Return the configurations for a specific type (i.e. drawable, dimen, etc)
+    void getConfigurationsByType(size_t base_package_idx,
+                                 String8 type_name,
+                                 Vector<ResTable_config>* configs) const;
+
     void getLocales(Vector<String8>* locales) const;
 
     // Generate an idmap.
@@ -1831,6 +1857,14 @@ public:
     // Marks the entries (across each config) for the given resource ID as deleted.
     // Only takes effect during serialization (any deleted rows will be skipped).
     void deleteResource(uint32_t resID);
+
+    // Defines a ResTable::Type containing the entry data for the given ids.
+    // NOTE: Ids that have only default values are supported.
+    void defineNewType(
+      String8 type_name,
+      uint8_t type_id,
+      const ResTable_config* config,
+      const Vector<uint32_t>& source_ids);
 
     // For the given resource ID, looks across all configurations and remaps all
     // reference and attribute Res_value entries based on the given
@@ -1891,6 +1925,8 @@ private:
         const ResTable_entry* ent,
         uint32_t typeSize) const;
 
+    void collectAllConfigs(Vector<ResTable_config>* configs, const Type* type) const;
+
     bool tryGetConfigEntry(
         int entryIndex,
         const ResTable_type* type,
@@ -1912,7 +1948,11 @@ private:
 
     void print_value(const Package* pkg, const Res_value& value) const;
 
+#ifndef _MSC_VER
     mutable Mutex               mLock;
+#else
+    mutable std::mutex          mLock;
+#endif
 
     status_t                    mError;
 

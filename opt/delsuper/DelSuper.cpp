@@ -109,20 +109,11 @@ private:
     const DexMethod* meth,
     const IRInstruction* insn) {
     assert(insn->opcode() == OPCODE_INVOKE_SUPER);
-    uint16_t start_reg = meth->get_code()->get_registers_size() -
-      sum_param_sizes(meth->get_code());
-    uint16_t end_reg = meth->get_code()->get_registers_size();
-    // args to this method start at 'start_reg', so they should
-    // be passed into invoke_super of insn {start_reg, ..., end_reg}
-    uint16_t arg_word_count = insn->arg_word_count();
-    if (arg_word_count != end_reg - start_reg) {
-      return false;
-    }
-    // N.B. don't need to check reg < end_reg in for loop
-    // because of above length check
-    for (uint16_t i = 0, reg = start_reg ; i < arg_word_count ; ++i, ++reg) {
-      uint16_t opc_reg = insn->src(i);
-      if (reg != opc_reg) {
+    size_t src_idx{0};
+    for (auto& mie :
+         InstructionIterable(meth->get_code()->get_param_instructions())) {
+      auto load_param = mie.insn;
+      if (load_param->dest() != insn->src(src_idx++)) {
         return false;
       }
     }

@@ -103,6 +103,44 @@ bool has_range(DexOpcode op) {
   return false;
 }
 
+DexOpcode range_version(DexOpcode op) {
+  switch (op) {
+  case OPCODE_INVOKE_DIRECT:
+    return OPCODE_INVOKE_DIRECT_RANGE;
+  case OPCODE_INVOKE_STATIC:
+    return OPCODE_INVOKE_STATIC_RANGE;
+  case OPCODE_INVOKE_SUPER:
+    return OPCODE_INVOKE_SUPER_RANGE;
+  case OPCODE_INVOKE_VIRTUAL:
+    return OPCODE_INVOKE_VIRTUAL_RANGE;
+  case OPCODE_INVOKE_INTERFACE:
+    return OPCODE_INVOKE_INTERFACE_RANGE;
+  case OPCODE_FILLED_NEW_ARRAY:
+    return OPCODE_FILLED_NEW_ARRAY_RANGE;
+  default:
+    always_assert(false);
+  }
+}
+
+DexOpcode no_range_version(DexOpcode op) {
+  switch (op) {
+  case OPCODE_INVOKE_DIRECT_RANGE:
+    return OPCODE_INVOKE_DIRECT;
+  case OPCODE_INVOKE_STATIC_RANGE:
+    return OPCODE_INVOKE_STATIC;
+  case OPCODE_INVOKE_SUPER_RANGE:
+    return OPCODE_INVOKE_SUPER;
+  case OPCODE_INVOKE_VIRTUAL_RANGE:
+    return OPCODE_INVOKE_VIRTUAL;
+  case OPCODE_INVOKE_INTERFACE_RANGE:
+    return OPCODE_INVOKE_INTERFACE;
+  case OPCODE_FILLED_NEW_ARRAY_RANGE:
+    return OPCODE_FILLED_NEW_ARRAY;
+  default:
+    always_assert(false);
+  }
+}
+
 bool is_commutative(DexOpcode op) {
   return op == OPCODE_ADD_INT || op == OPCODE_MUL_INT ||
          (op >= OPCODE_AND_INT && op <= OPCODE_XOR_INT) ||

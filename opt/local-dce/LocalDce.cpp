@@ -90,11 +90,6 @@ static bool has_side_effects(DexOpcode opc) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-  case OPCODE_INVOKE_SUPER_RANGE:
-  case OPCODE_INVOKE_DIRECT_RANGE:
-  case OPCODE_INVOKE_STATIC_RANGE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
@@ -148,9 +143,6 @@ void update_liveness(const IRInstruction* inst,
   // The destination register is killed, so it isn't live before this.
   if (inst->dests_size()) {
     bliveness.reset(inst->dest());
-    if (inst->dest_is_wide()) {
-      bliveness.reset(inst->dest() + 1);
-    }
   }
   auto op = inst->opcode();
   // The destination of an `invoke` is its return value, which is encoded as
@@ -162,13 +154,6 @@ void update_liveness(const IRInstruction* inst,
   // Source registers are live.
   for (size_t i = 0; i < inst->srcs_size(); i++) {
     bliveness.set(inst->src(i));
-  }
-  // `invoke-range` instructions need special handling since their sources
-  // are encoded as a range.
-  if (opcode::has_range(op)) {
-    for (size_t i = 0; i < inst->range_size(); i++) {
-      bliveness.set(inst->range_base() + i);
-    }
   }
   // The source of a `move-result` is the return value of the prior call,
   // which is encoded as the max position in the bitvector.
@@ -207,15 +192,15 @@ void LocalDce::dce(DexMethod* method) {
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
-        if(s->id() == b->id()) {
+        if (s->target()->id() == b->id()) {
           bliveness |= prev_liveness;
         }
         TRACE(DCE,
               5,
               "  S%lu: %s\n",
-              s->id(),
-              show(liveness[s->id()]).c_str());
-        bliveness |= liveness[s->id()];
+              s->target()->id(),
+              SHOW(liveness[s->target()->id()]));
+        bliveness |= liveness[s->target()->id()];
       }
 
       // Compute live-in for this block by walking its instruction list in
@@ -248,9 +233,14 @@ void LocalDce::dce(DexMethod* method) {
 
   // Remove dead instructions.
   TRACE(DCE, 2, "%s\n", SHOW(method));
+  std::unordered_set<IRInstruction*> seen;
   for (auto dead : dead_instructions) {
+    if (seen.count(dead->insn)) {
+      continue;
+    }
     TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
     code->remove_opcode(dead);
+    seen.emplace(dead->insn);
   }
   m_stats.dead_instruction_count += dead_instructions.size();
 
@@ -287,11 +277,7 @@ bool LocalDce::is_required(IRInstruction* inst,
     }
     return true;
   } else if (inst->dests_size()) {
-    bool result = bliveness.test(inst->dest());
-    if (inst->dest_is_wide()) {
-      result |= bliveness.test(inst->dest() + 1);
-    }
-    return result;
+    return bliveness.test(inst->dest());
   } else if (is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
     // These instructions pass their dests via the return-value slot, but

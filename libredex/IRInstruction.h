@@ -21,13 +21,17 @@
  *
  * 2. 2addr opcodes no longer exist. They are converted to the non-2addr form.
  *
- * 3. Any Dex opcode that can both throw and write to a dest register is split
+ * 3. range instructions no longer exist. They are represented as their
+ *    non-range forms, which are not constrained in their number of src
+ *    operands.
+ *
+ * 4. Any Dex opcode that can both throw and write to a dest register is split
  *    into two separate pieces in our IR: one piece that may throw but does not
  *    write to a dest, and one move-result-pseudo instruction that writes to a
  *    dest but does not throw. This makes accurate liveness analysis easy.
  *    This is elaborated further below.
  *
- * 4. check-cast also has a move-result-pseudo suffix. check-cast has a side
+ * 5. check-cast also has a move-result-pseudo suffix. check-cast has a side
  *    effect in the runtime verifier when the cast succeeds. The runtime
  *    verifier updates the type in the source register to its more specific
  *    type. As such, for many analyses, it is semantically equivalent to
@@ -38,7 +42,7 @@
  *    See this link for the relevant verifier code:
  *    androidxref.com/7.1.1_r6/xref/art/runtime/verifier/method_verifier.cc#2383
  *
- * 5. payload instructions no longer exist. fill-array-data-payload is attached
+ * 6. payload instructions no longer exist. fill-array-data-payload is attached
  *    directly to the fill-array-data instruction that references it.
  *    {packed, sparse}-switch-payloads are represented by MFLOW_TARGET entries
  *    in the IRCode instruction stream.
@@ -98,18 +102,7 @@
 class IRInstruction final {
  public:
   explicit IRInstruction(DexOpcode op);
-  explicit IRInstruction(const DexInstruction* dex_insn);
 
-  static IRInstruction* make(const DexInstruction*);
-  DexInstruction* to_dex_instruction() const;
-
-  void range_to_srcs();
-  /*
-   * Converts invoke/fill-array instructions into their /range equivalents
-   * if necessary. Will throw if the conversion is necessary but the src
-   * registers are not consecutive.
-   */
-  void srcs_to_range();
   /*
    * Ensures that wide registers only have their first register referenced
    * in the srcs list. This only affects invoke-* instructions.
@@ -191,19 +184,12 @@ class IRInstruction final {
   uint16_t src(size_t i) const { return m_srcs.at(i); }
   const std::vector<uint16_t>& srcs() const { return m_srcs; }
   uint16_t arg_word_count() const { return m_srcs.size(); }
-  uint16_t range_base() const {
-    always_assert(opcode::has_range(m_opcode));
-    return m_range.first;
-  }
-  uint16_t range_size() const {
-    always_assert(opcode::has_range(m_opcode));
-    return m_range.second;
-  }
 
   /*
    * Setters for logical parts of the instruction.
    */
   IRInstruction* set_opcode(DexOpcode op) {
+    always_assert(!is_fopcode(op) && !opcode::has_range(op));
     m_opcode = op;
     return this;
   }
@@ -214,16 +200,6 @@ class IRInstruction final {
   }
   IRInstruction* set_src(size_t i, uint16_t vreg) {
     m_srcs.at(i) = vreg;
-    return this;
-  }
-  IRInstruction* set_range_base(uint16_t vreg) {
-    always_assert(opcode::has_range(m_opcode));
-    m_range.first = vreg;
-    return this;
-  }
-  IRInstruction* set_range_size(uint16_t size) {
-    always_assert(opcode::has_range(m_opcode));
-    m_range.second = size;
     return this;
   }
   IRInstruction* set_arg_word_count(uint16_t count) {
@@ -342,32 +318,6 @@ class IRInstruction final {
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
-
-  std::pair<uint16_t, uint16_t> m_range {0, 0};
-};
-
-/*
- * Iterates over the sources of a denormalized invoke-* instruction or
- * filled-new-array-instance, whether it is range-based or not.
- */
-class IRSourceIterator final {
- public:
-  explicit IRSourceIterator(IRInstruction* insn);
-
-  IRSourceIterator(const IRSourceIterator&) = delete;
-
-  IRSourceIterator& operator=(const IRSourceIterator&) = delete;
-
-  bool empty() const;
-
-  uint16_t get_register();
-
-  uint16_t get_wide_register();
-
- private:
-  IRInstruction* m_insn;
-  bool m_range;
-  uint16_t m_offset;
 };
 
 /*
@@ -388,8 +338,6 @@ bool has_contiguous_srcs(const IRInstruction*);
  * as a DexInstruction
  */
 bool needs_range_conversion(const IRInstruction*);
-
-bool can_use_2addr(const IRInstruction*);
 
 DexOpcode convert_2to3addr(DexOpcode op);
 

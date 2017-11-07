@@ -6,19 +6,19 @@
  * LICENSE file in the root directory of this source tree. An additional grant
  * of patent rights can be found in the PATENTS file in the same directory.
  */
-#if !defined(__MINGW32__)
-#include <sys/mman.h>
-#endif
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
+
+#include <boost/iostreams/device/mapped_file.hpp>
+
+#include <cstdint>
 #include <vector>
 #include <zlib.h>
+
+#ifdef _MSC_VER
+#include <Winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <netinet/in.h>
+#endif
 
 #include "Creators.h"
 #include "DexClass.h"
@@ -564,7 +564,7 @@ struct jar_entry {
 };
 }
 
-static bool find_central_directory(uint8_t *mapping, ssize_t size,
+static bool find_central_directory(const uint8_t *mapping, ssize_t size,
                                    pk_cdir_end &pce) {
   ssize_t soffset = (size - sizeof(pk_cdir_end));
   ssize_t eoffset = soffset - kMaxCDirEndSearch;
@@ -573,7 +573,7 @@ static bool find_central_directory(uint8_t *mapping, ssize_t size,
   if (eoffset < 0)
     eoffset = 0;
   do {
-    uint8_t *cdsearch = mapping + soffset;
+    const uint8_t *cdsearch = mapping + soffset;
     if (memcmp(cdsearch, kCDirEnd, kSignatureSize) == 0) {
       memcpy(&pce, cdsearch, sizeof(pk_cdir_end));
       return true;
@@ -601,7 +601,7 @@ static bool validate_pce(pk_cdir_end &pce, ssize_t size) {
   return true;
 }
 
-static bool extract_jar_entry(uint8_t* &mapping, jar_entry &je) {
+static bool extract_jar_entry(const uint8_t* &mapping, jar_entry &je) {
   if (memcmp(mapping, kCDFile, kSignatureSize) != 0) {
     fprintf(stderr, "Invalid central directory entry, bailing\n");
     return false;
@@ -617,9 +617,9 @@ static bool extract_jar_entry(uint8_t* &mapping, jar_entry &je) {
   return true;
 }
 
-static bool get_jar_entries(uint8_t *mapping, pk_cdir_end &pce,
+static bool get_jar_entries(const uint8_t *mapping, pk_cdir_end &pce,
                             std::vector<jar_entry> &files) {
-  uint8_t *cdir = mapping + pce.cd_disk_offset;
+  const uint8_t *cdir = mapping + pce.cd_disk_offset;
   files.resize(pce.cd_entries);
   for (int entry=0; entry < pce.cd_entries; entry++) {
     if (!extract_jar_entry(cdir, files[entry]))
@@ -654,14 +654,14 @@ static int jar_uncompress(Bytef *dest, uLongf *destLen, const Bytef *source,
   return err;
 }
 
-static bool decompress_class(jar_entry &file, uint8_t *mapping,
+static bool decompress_class(jar_entry &file, const uint8_t *mapping,
                              uint8_t *outbuffer, ssize_t bufsize) {
   if (file.cd_entry.comp_method != kCompMethodDeflate) {
     fprintf(stderr, "Unknown compression method %d, Bailing\n",
             file.cd_entry.comp_method);
     return false;
   }
-  uint8_t *lfile = mapping + file.cd_entry.disk_offset;
+  const uint8_t *lfile = mapping + file.cd_entry.disk_offset;
   if (memcmp(lfile, kLFile, kSignatureSize) != 0) {
     fprintf(stderr, "Invalid local file entry, bailing\n");
     return false;
@@ -704,7 +704,7 @@ static bool decompress_class(jar_entry &file, uint8_t *mapping,
 static const int kStartBufferSize = 128 * 1024;
 
 static bool process_jar_entries(std::vector<jar_entry>& files,
-                                uint8_t* mapping,
+                                const uint8_t* mapping,
                                 Scope* classes,
                                 attribute_hook_t attr_hook) {
   ssize_t bufsize = kStartBufferSize;
@@ -746,7 +746,7 @@ static bool process_jar_entries(std::vector<jar_entry>& files,
   return true;
 }
 
-static bool process_jar(uint8_t* mapping,
+static bool process_jar(const uint8_t* mapping,
                         ssize_t size,
                         Scope* classes,
                         attribute_hook_t attr_hook) {
@@ -767,33 +767,19 @@ static bool process_jar(uint8_t* mapping,
 bool load_jar_file(const char* location,
                    Scope* classes,
                    attribute_hook_t attr_hook) {
-  int fd = open(location, O_RDONLY);
-  struct stat stat;
-  ssize_t size;
-  uint8_t *mapping;
-  if (fd < 0) {
-    fprintf(stderr, "Cannot open jar file %s\n", location);
+  boost::iostreams::mapped_file file;
+  file.open(location, boost::iostreams::mapped_file::readonly);
+  if (!file.is_open()) {
+    fprintf(stderr, "error: cannot open jar file: %s\n", location);
     return false;
   }
-  if (fstat(fd, &stat)) {
-    fprintf(stderr, "Cannot fstat file %s\n", location);
+
+  auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
+  if (!process_jar(mapping, file.size(), classes, attr_hook)) {
+    fprintf(stderr, "error: cannot process jar: %s\n", location);
     return false;
   }
-  size = stat.st_size;
-  mapping = (uint8_t*)mmap(nullptr, size, PROT_READ,
-                         MAP_FILE | MAP_SHARED, fd, 0);
-  close(fd);
-  if (mapping == MAP_FAILED) {
-    mapping = nullptr;
-    perror("Address space allocation failed for mmap\n");
-    return false;
-  }
-  bool rv = process_jar(mapping, size, classes, attr_hook);
-  munmap(mapping, size);
-  if (!rv) {
-    fprintf(stderr, "Error processing jar: %s\n", location);
-  }
-  return rv;
+  return true;
 }
 
 //#define LOCAL_MAIN

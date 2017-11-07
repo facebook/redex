@@ -17,7 +17,13 @@
 #ifndef __LIB_UTILS_COMPAT_H
 #define __LIB_UTILS_COMPAT_H
 
+#if !defined(_MSC_VER)
 #include <unistd.h>
+#endif
+
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
 
 #if defined(__APPLE__)
 

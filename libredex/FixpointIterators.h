@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -83,6 +84,42 @@ class MonotonicFixpointIteratorContext final {
   friend class MonotonicFixpointIterator;
 };
 
+template <typename Derived>
+class FixpointIteratorGraphSpec {
+
+  ~FixpointIteratorGraphSpec() {
+    using Graph = typename Derived::Graph;
+    using NodeId = typename Derived::NodeId;
+    using EdgeId = typename Derived::EdgeId;
+
+    // The graph is specified by its root node together with the successors,
+    // predecessors, and edge source/target functions.
+    static_assert(std::is_same<decltype(Derived::entry(std::declval<Graph>())),
+                               NodeId>::value,
+                  "No implementation of entry()");
+    static_assert(
+        std::is_same<decltype(Derived::predecessors(std::declval<Graph>(),
+                                                    std::declval<NodeId>())),
+                     std::vector<EdgeId>>::value,
+        "No implementation of predecessors()");
+    static_assert(
+        std::is_same<decltype(Derived::successors(std::declval<Graph>(),
+                                                  std::declval<NodeId>())),
+                     std::vector<EdgeId>>::value,
+        "No implementation of successors()");
+    static_assert(
+        std::is_same<decltype(Derived::source(std::declval<Graph>(),
+                                              std::declval<EdgeId>())),
+                     NodeId>::value,
+        "No implementation of source()");
+    static_assert(
+        std::is_same<decltype(Derived::target(std::declval<Graph>(),
+                                              std::declval<EdgeId>())),
+                     NodeId>::value,
+        "No implementation of target()");
+  }
+};
+
 /*
  * This is the implementation of a monotonically increasing chaotic fixpoint
  * iteration sequence with widening over a control-flow graph using the
@@ -99,30 +136,43 @@ class MonotonicFixpointIteratorContext final {
  *
  * The fixpoint iterator is thread safe.
  */
-template <typename NodeId, typename Domain>
+template <typename GraphInterface, typename Domain>
 class MonotonicFixpointIterator {
  public:
+  using Graph = typename GraphInterface::Graph;
+  using NodeId = typename GraphInterface::NodeId;
+  using EdgeId = typename GraphInterface::EdgeId;
   using Context = MonotonicFixpointIteratorContext<NodeId, Domain>;
 
   virtual ~MonotonicFixpointIterator() {
     static_assert(std::is_base_of<AbstractDomain<Domain>, Domain>::value,
                   "Domain does not inherit from AbstractDomain");
+    static_assert(
+        std::is_base_of<FixpointIteratorGraphSpec<GraphInterface>,
+                        GraphInterface>::value,
+        "GraphInterface does not inherit from FixpointIteratorGraphSpec");
   }
 
   /*
-   * The control-flow graph is specified by its root node together with the
-   * successors and predecessors functions. When the number of nodes in the CFG
-   * is known, it's better to provide it to the constructor, so as to prevent
-   * unnecessary resizing of the underlying hashtables during the iteration.
+   * When the number of nodes in the CFG is known, it's better to provide it to
+   * the constructor, so as to prevent unnecessary resizing of the underlying
+   * hashtables during the iteration.
    */
-  MonotonicFixpointIterator(
-      NodeId root,
-      std::function<std::vector<NodeId>(const NodeId&)> successors,
-      std::function<std::vector<NodeId>(const NodeId&)> predecessors,
-      size_t cfg_size_hint = 4)
-      : m_root(root),
-        m_predecessors(predecessors),
-        m_wto(root, successors),
+  MonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
+      : m_graph(graph),
+        m_wto(GraphInterface::entry(graph),
+              [=, &graph](const NodeId& x) {
+                std::vector<EdgeId> succ_edges =
+                    GraphInterface::successors(graph, x);
+                std::vector<NodeId> succ_nodes;
+                std::transform(succ_edges.begin(),
+                               succ_edges.end(),
+                               std::back_inserter(succ_nodes),
+                               std::bind(&GraphInterface::target,
+                                         std::ref(graph),
+                                         std::placeholders::_1));
+                return succ_nodes;
+              }),
         m_entry_states(cfg_size_hint),
         m_exit_states(cfg_size_hint) {}
 
@@ -153,8 +203,7 @@ class MonotonicFixpointIterator {
    * Edge transformers are required to be monotonic.
    *
    */
-  virtual Domain analyze_edge(const NodeId& source,
-                              const NodeId& target,
+  virtual Domain analyze_edge(const EdgeId& edge,
                               const Domain& exit_state_at_source) const = 0;
 
   /*
@@ -236,11 +285,12 @@ class MonotonicFixpointIterator {
                            const NodeId& node,
                            Domain* placeholder) {
     placeholder->set_to_bottom();
-    if (node == m_root) {
+    if (node == GraphInterface::entry(m_graph)) {
       placeholder->join_with(context->get_initial_value());
     }
-    for (NodeId pred : m_predecessors(node)) {
-      placeholder->join_with(analyze_edge(pred, node, get_exit_state_at(pred)));
+    for (EdgeId edge : GraphInterface::predecessors(m_graph, node)) {
+      placeholder->join_with(analyze_edge(
+          edge, get_exit_state_at(GraphInterface::source(m_graph, edge))));
     }
   }
 
@@ -303,9 +353,50 @@ class MonotonicFixpointIterator {
   }
 
   mutable std::recursive_mutex m_lock;
-  NodeId m_root;
-  std::function<std::vector<NodeId>(const NodeId&)> m_predecessors;
+  const Graph& m_graph;
   WeakTopologicalOrdering<NodeId> m_wto;
   std::unordered_map<NodeId, Domain> m_entry_states;
   std::unordered_map<NodeId, Domain> m_exit_states;
+};
+
+template <typename GraphInterface>
+class BackwardsFixpointIterationAdaptor
+    : public FixpointIteratorGraphSpec<
+          BackwardsFixpointIterationAdaptor<GraphInterface>> {
+ public:
+  using Graph = typename GraphInterface::Graph;
+  using NodeId = typename GraphInterface::NodeId;
+  using EdgeId = typename GraphInterface::EdgeId;
+
+  ~BackwardsFixpointIterationAdaptor() {
+    static_assert(
+        std::is_same<decltype(GraphInterface::exit(std::declval<Graph>())),
+                     NodeId>::value,
+        "No implementation of exit()");
+    static_assert(
+        std::is_base_of<FixpointIteratorGraphSpec<GraphInterface>,
+                        GraphInterface>::value,
+        "GraphInterface does not inherit from FixpointIteratorGraphSpec");
+  }
+
+  static NodeId entry(const Graph& graph) {
+    return GraphInterface::exit(graph);
+  }
+  static NodeId exit(const Graph& graph) {
+    return GraphInterface::entry(graph);
+  }
+  static std::vector<EdgeId> predecessors(const Graph& graph,
+                                          const NodeId& node) {
+    return GraphInterface::successors(graph, node);
+  }
+  static std::vector<EdgeId> successors(const Graph& graph,
+                                        const NodeId& node) {
+    return GraphInterface::predecessors(graph, node);
+  }
+  static NodeId source(const Graph& graph, const EdgeId& edge) {
+    return GraphInterface::target(graph, edge);
+  }
+  static NodeId target(const Graph& graph, const EdgeId& edge) {
+    return GraphInterface::source(graph, edge);
+  }
 };

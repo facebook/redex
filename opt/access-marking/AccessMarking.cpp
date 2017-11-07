@@ -117,10 +117,7 @@ void fix_call_sites_private(
       if (callee != nullptr && privates.count(callee)) {
         inst->set_method(callee);
         if (!is_static(callee)) {
-          inst->set_opcode(
-            is_invoke_range(inst->opcode())
-            ? OPCODE_INVOKE_DIRECT_RANGE
-            : OPCODE_INVOKE_DIRECT);
+          inst->set_opcode(OPCODE_INVOKE_DIRECT);
         }
       }
     }

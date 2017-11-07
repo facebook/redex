@@ -29,7 +29,7 @@ class TrackResourcesPass : public Pass {
       std::unordered_set<std::string>& classes_to_search);
 
   static std::unordered_set<DexClass*> build_tracked_cls_set(
-      std::vector<std::string>& cls_suffixes,
+      const std::vector<std::string>& cls_suffixes,
       const ProguardMap& pg_map);
 
  private:

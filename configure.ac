@@ -29,6 +29,7 @@ AX_BOOST_FILESYSTEM
 AX_BOOST_SYSTEM
 AX_BOOST_REGEX
 AX_BOOST_PROGRAM_OPTIONS
+AX_BOOST_IOSTREAMS
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
 AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 

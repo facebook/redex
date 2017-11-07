@@ -27,8 +27,6 @@ void crash_backtrace() {
   void* buf[max_bt_frames];
   auto frames = backtrace(buf, max_bt_frames);
   backtrace_symbols_fd(buf, frames, STDERR_FILENO);
-#else
-  fprintf(stderr, "Not supported in Windows.\n");
 #endif
 }
 }; // namespace

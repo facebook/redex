@@ -77,7 +77,8 @@ class PatriciaTreeMapAbstractEnvironment final
     return this->get_value()->m_map.size();
   }
 
-  const PatriciaTreeMap<Variable, Domain>& bindings() const {
+  const PatriciaTreeMap<Variable, typename Value::ValueInterface>& bindings()
+      const {
     assert(this->kind() == AbstractValueKind::Value);
     return this->get_value()->m_map;
   }
@@ -176,14 +177,26 @@ namespace ptmae_impl {
  * (possibly infinite) set of variables to an abstract domain implemented as a
  * hashtable. Variable bindings with the Top value are not stored in the
  * hashtable. The hashtable can never contain bindings with Bottom, as those are
- * filtered out in PatriciaTreeMapAbstractEnvironment (the whole environment is set to
- * Bottom in that case). The Meet and Narrowing operations abort and return
- * Kind::Bottom whenever a binding with Bottom is about to be created.
+ * filtered out in PatriciaTreeMapAbstractEnvironment (the whole environment is
+ * set to Bottom in that case). The Meet and Narrowing operations abort and
+ * return Kind::Bottom whenever a binding with Bottom is about to be created.
  */
 template <typename Variable, typename Domain>
 class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
  public:
   using Kind = typename AbstractValue<MapValue<Variable, Domain>>::Kind;
+
+  struct ValueInterface {
+    using type = Domain;
+
+    static type default_value() { return type::top(); }
+
+    static bool is_default_value(const type& x) { return x.is_top(); }
+
+    static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+    static bool leq(const type& x, const type& y) { return x.leq(y); }
+  };
 
   MapValue() = default;
 
@@ -260,7 +273,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     }
   }
 
-  PatriciaTreeMap<Variable, Domain> m_map;
+  PatriciaTreeMap<Variable, ValueInterface> m_map;
 
   template <typename T1, typename T2>
   friend class ::PatriciaTreeMapAbstractEnvironment;

@@ -351,8 +351,7 @@ void AnalysisImpl::analyze_opcodes() {
                  case OPCODE_INSTANCE_OF:
                  case OPCODE_NEW_INSTANCE:
                  case OPCODE_NEW_ARRAY:
-                 case OPCODE_FILLED_NEW_ARRAY:
-                 case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+                 case OPCODE_FILLED_NEW_ARRAY: {
                    auto intf = get_and_check_single_impl(insn->get_type());
                    if (intf) {
                      single_impls[intf].typerefs.push_back(insn);
@@ -389,8 +388,7 @@ void AnalysisImpl::analyze_opcodes() {
                    return;
                  }
                  // method ref
-                 case OPCODE_INVOKE_INTERFACE:
-                 case OPCODE_INVOKE_INTERFACE_RANGE: {
+                 case OPCODE_INVOKE_INTERFACE: {
                    // if it is an invoke on the interface method, collect it as
                    // such
                    const auto meth = insn->get_method();
@@ -412,13 +410,9 @@ void AnalysisImpl::analyze_opcodes() {
                  }
 
                  case OPCODE_INVOKE_DIRECT:
-                 case OPCODE_INVOKE_DIRECT_RANGE:
                  case OPCODE_INVOKE_STATIC:
-                 case OPCODE_INVOKE_STATIC_RANGE:
                  case OPCODE_INVOKE_VIRTUAL:
-                 case OPCODE_INVOKE_VIRTUAL_RANGE:
-                 case OPCODE_INVOKE_SUPER:
-                 case OPCODE_INVOKE_SUPER_RANGE: {
+                 case OPCODE_INVOKE_SUPER: {
                    const auto meth = insn->get_method();
                    check_sig(meth, insn);
                    return;

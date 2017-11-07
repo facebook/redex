@@ -10,12 +10,16 @@
 #include "AliasedRegisters.h"
 
 #include <algorithm>
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
+#endif
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/breadth_first_search.hpp>
 #include <boost/graph/connected_components.hpp>
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 #include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <limits>

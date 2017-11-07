@@ -85,11 +85,13 @@ libredex_la_SOURCES = \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
+	libredex/DexMemberRefs.cpp \
 	libredex/DexOpcode.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IRAssembler.cpp \
@@ -142,6 +144,7 @@ libredex_la_LIBADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
 	-lpthread
 
 #
@@ -161,6 +164,8 @@ redex_all_SOURCES = \
 	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/constant_propagation/GlobalConstProp.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \
+	opt/copy-propagation/AliasedRegisters.cpp \
+	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
@@ -179,8 +184,6 @@ redex_all_SOURCES = \
 	opt/print-members/PrintMembers.cpp \
 	opt/reachability_graph/ReachabilityGraphPrinter.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
-	opt/redundant_move_elimination/AliasedRegisters.cpp \
-	opt/redundant_move_elimination/RedundantMoveEliminationPass.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
 	opt/regalloc/LiveRange.cpp \

@@ -60,7 +60,12 @@ public:
 
     static inline const String8 empty();
 
+
+#if defined(__GNUC__)
     static String8              format(const char* fmt, ...) __attribute__((format (printf, 1, 2)));
+#else
+    static String8              format(const char* fmt, ...);
+#endif
     static String8              formatV(const char* fmt, va_list args);
 
     inline  const char*         string() const;
@@ -84,8 +89,12 @@ public:
             status_t            append(const char* other);
             status_t            append(const char* other, size_t numChars);
 
-            status_t            appendFormat(const char* fmt, ...)
-                    __attribute__((format (printf, 2, 3)));
+
+#if defined(__GNUC__)
+            status_t            appendFormat(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+            status_t            appendFormat(const char* fmt, ...);
+#endif
             status_t            appendFormatV(const char* fmt, va_list args);
 
             // Note that this function takes O(N) time to calculate the value.

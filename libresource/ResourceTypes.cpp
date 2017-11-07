@@ -27,6 +27,11 @@
 #include <limits>
 #include <type_traits>
 
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#include <mutex>
+#endif
+
 #include "androidfw/ByteBucketArray.h"
 #include "androidfw/ResourceTypes.h"
 #include "androidfw/TypeWrappers.h"
@@ -457,17 +462,161 @@ void ResStringPool::setToEmpty()
     mStyles = NULL;
     mStylePoolSize = 0;
     mHeader = (const ResStringPool_header*) header;
+    mAppendedStrings.clear();
+}
+void ResStringPool::appendString(String8 s) {
+  mAppendedStrings.push_back(s);
+}
+
+void align_vec(Vector<char>& cVec, size_t s) {
+  size_t r = cVec.size() % s;
+  if (r > 0) {
+    for (size_t i = s - r; i > 0; i--) {
+      cVec.push_back(0);
+    }
+  }
+}
+
+void push_short(Vector<char>& cVec, uint16_t data) {
+  auto swapped = dtohs(data);
+  cVec.push_back(swapped);
+  cVec.push_back(swapped >> 8);
+}
+
+void push_long(Vector<char>& cVec, uint32_t data) {
+  auto swapped = dtohl(data);
+  cVec.push_back(swapped);
+  cVec.push_back(swapped >> 8);
+  cVec.push_back(swapped >> 16);
+  cVec.push_back(swapped >> 24);
+}
+
+void push_u8_length(Vector<char>& cVec, size_t len) {
+  // If len > 2^7-1, then set the most significant bit, then use a second byte
+  // to describe the length (leaving 15 bits for the actual len).
+  if (len >= 0x80) {
+    const auto mask = 0x8000;
+    LOG_FATAL_IF(len >= mask, "String length too large");
+    // Set the high bit, then push it in two pieces (can't just push short).
+    uint16_t encoded = mask | len;
+    uint8_t high = encoded >> 8;
+    uint8_t low = encoded & 0xFF;
+    cVec.push_back(high);
+    cVec.push_back(low);
+  } else {
+    cVec.push_back((char) len);
+  }
+}
+
+void encode_string8(Vector<char>& cVec, String8 s) {
+  // aapt2 writes both the utf16 length followed by utf8 length
+  size_t len = s.length();
+  const uint8_t* u8_str = (const uint8_t*) s.string();
+  auto u16_len = utf8_to_utf16_length(u8_str, len);
+  push_u8_length(cVec, u16_len);
+  push_u8_length(cVec, len);
+  // Push each char
+  for (uint8_t* c = (uint8_t*) u8_str; *c; c++) {
+    cVec.push_back(*c);
+  }
+  cVec.push_back('\0');
+}
+
+void encode_string16(Vector<char>& cVec, String16 s) {
+  // Push uint16_t (2 bytes) describing the length. If length > 2^15-1, then set
+  // most significant bit, then use two uint16_t to describe the length (first
+  // uint16_t will be the high word).
+  auto len = s.size();
+  if (len >= 0x8000) {
+    const auto mask = 0x80000000;
+    LOG_FATAL_IF(len >= mask, "String length too large");
+    uint32_t encoded = mask | len;
+    push_short(cVec, encoded >> 16);
+    push_short(cVec, encoded & 0xFFFF);
+  } else {
+    push_short(cVec, (uint16_t)len);
+  }
+  auto u16_str = s.string();
+  for (uint16_t* c = (uint16_t*)u16_str; *c; c++) {
+    push_short(cVec, *c);
+  }
+  push_short(cVec, '\0');
+}
+
+void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
+  LOG_FATAL_IF(
+    mHeader->styleCount > 0,
+    "Appending to a StringPool with styles is not supported");
+  // Write string data into intermediate vector. Use this to calculate offsets,
+  // then copy to cVec.
+  Vector<uint32_t> string_idx;
+  Vector<char> serialized_strings;
+  auto num_strings = mHeader->stringCount;
+  auto utf8 = isUTF8();
+  for (size_t i = 0; i < num_strings; i++) {
+    string_idx.push_back(serialized_strings.size());
+    if (utf8) {
+      auto s = string8ObjectAt(i);
+      encode_string8(serialized_strings, s);
+    } else {
+      size_t out_len;
+      auto s = stringAt(i, &out_len);
+      encode_string16(serialized_strings, String16(s));
+    }
+  }
+  // Add any more Strings
+  auto more = mAppendedStrings.size();
+  for (size_t i = 0; i < more; i++) {
+    string_idx.push_back(serialized_strings.size());
+    auto s = mAppendedStrings[i];
+    if (utf8) {
+      encode_string8(serialized_strings, s);
+    } else {
+      auto u16 = String16(s);
+      encode_string16(serialized_strings, u16);
+    }
+  }
+  align_vec(serialized_strings, 4);
+  // ResChunk_header
+  auto header_size = mHeader->header.headerSize;
+  push_short(cVec, mHeader->header.type);
+  push_short(cVec, header_size);
+  // Sum of header size, plus the size of all the String/style data.
+  auto total_size =
+    header_size +
+    string_idx.size() * sizeof(uint32_t) +
+    serialized_strings.size() * sizeof(char);
+  push_long(cVec, total_size);
+  // ResStringPool_header
+  auto string_count = string_idx.size();
+  push_long(cVec, string_count);
+  push_long(cVec, 0); // style count
+  // May have wrecked the sort order (not supporting resort right now), so clear
+  // the bit.
+  auto flags = mHeader->flags & ~ResStringPool_header::SORTED_FLAG;
+  push_long(cVec, flags);
+  // strings start
+  push_long(cVec, header_size + sizeof(uint32_t) * string_count);
+   // styles start
+  push_long(cVec, 0);
+  for (const uint32_t &i : string_idx) {
+    push_long(cVec, i);
+  }
+  cVec.appendVector(serialized_strings);
 }
 
 void ResStringPool::serialize(Vector<char>& cVec)
 {
-    // Opaque serialization- does not support modification.
-    // To allow modifications, this method will need to
-    // iterate through strings and serialize each one in turn.
+  // Perform opaque serialization, unless new strings have been added.
+  // See method serializeWithAdditionalStrings for caveats on adding new strings
+  if (mAppendedStrings.size() == 0) {
     size_t dataSize = mHeader->header.size;
     for (size_t i = 0; i < dataSize; ++i) {
         cVec.push_back(*((unsigned char*)(mHeader) + i));
     }
+  } else {
+    serializeWithAdditionalStrings(cVec);
+  }
 }
 
 status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
@@ -741,7 +890,11 @@ const char16_t* ResStringPool::stringAt(size_t idx, size_t* u16len) const
 
                 // encLen must be less than 0x7FFF due to encoding.
                 if ((uint32_t)(u8str+u8len-strings) < mStringPoolSize) {
+#ifndef _MSC_VER
                     AutoMutex lock(mDecodeLock);
+#else
+                    std::lock_guard<std::mutex> lock(mDecodeLock);
+#endif
 
                     if (mCache == NULL) {
 #ifndef __ANDROID__
@@ -3179,13 +3332,28 @@ struct ResTable::Package
 
     void serialize(Vector<char>& cVec)
     {
-        size_t headerSize = package->header.headerSize;
-        for (size_t i = 0; i < headerSize; ++i) {
-            cVec.push_back(*((unsigned char*)(package) + i));
-        }
+        // Write strings into intermediate vec, to calculate sizes.
+        Vector<char> serialized_strings;
+        typeStrings.serialize(serialized_strings);
+        auto typestr_size = serialized_strings.size();
+        keyStrings.serialize(serialized_strings);
 
-        typeStrings.serialize(cVec);
-        keyStrings.serialize(cVec);
+        auto header_size = sizeof(ResTable_package); // should be 288
+        auto total_size = header_size + serialized_strings.size();
+        push_short(cVec, package->header.type); // 0x0200
+        push_short(cVec, header_size);
+        push_long(cVec, total_size);
+        push_long(cVec, package->id);
+        auto num_elements = sizeof(package->name) / sizeof(package->name[0]);
+        for (size_t i = 0; i < num_elements; i++) {
+            push_short(cVec, package->name[i]);
+        }
+        push_long(cVec, header_size); // type strings start (skip over header)
+        push_long(cVec, package->lastPublicType);
+        push_long(cVec, header_size + typestr_size); // key strings start
+        push_long(cVec, package->lastPublicKey);
+        push_long(cVec, package->typeIdOffset);
+        cVec.appendVector(serialized_strings);
     }
 
     const ResTable* const           owner;
@@ -5800,6 +5968,30 @@ const DynamicRefTable* ResTable::getDynamicRefTableForCookie(int32_t cookie) con
     return NULL;
 }
 
+void ResTable::collectAllConfigs(
+  Vector<ResTable_config>* configs,
+  const Type* type) const {
+  const size_t numConfigs = type->configs.size();
+  for (size_t m = 0; m < numConfigs; m++) {
+      const ResTable_type* config = type->configs[m];
+      ResTable_config cfg;
+      memset(&cfg, 0, sizeof(ResTable_config));
+      cfg.copyFromDtoH(config->config);
+      // only insert unique
+      const size_t N = configs->size();
+      size_t n;
+      for (n = 0; n < N; n++) {
+          if (0 == (*configs)[n].compare(cfg)) {
+              break;
+          }
+      }
+      // if we didn't find it
+      if (n == N) {
+          configs->add(cfg);
+      }
+  }
+}
+
 void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMipmap) const
 {
     const size_t packageCount = mPackageGroups.size();
@@ -5816,29 +6008,29 @@ void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMi
                             type->typeSpec->id - 1) == "mipmap") {
                     continue;
                 }
-
-                const size_t numConfigs = type->configs.size();
-                for (size_t m = 0; m < numConfigs; m++) {
-                    const ResTable_type* config = type->configs[m];
-                    ResTable_config cfg;
-                    memset(&cfg, 0, sizeof(ResTable_config));
-                    cfg.copyFromDtoH(config->config);
-                    // only insert unique
-                    const size_t N = configs->size();
-                    size_t n;
-                    for (n = 0; n < N; n++) {
-                        if (0 == (*configs)[n].compare(cfg)) {
-                            break;
-                        }
-                    }
-                    // if we didn't find it
-                    if (n == N) {
-                        configs->add(cfg);
-                    }
-                }
+                collectAllConfigs(configs, type);
             }
         }
     }
+}
+
+void ResTable::getConfigurationsByType(
+  size_t base_package_idx,
+  String8 type_name,
+  Vector<ResTable_config>* configs) const {
+  const PackageGroup* package_group = mPackageGroups[base_package_idx];
+  const size_t type_count = package_group->types.size();
+  for (size_t i = 0; i < type_count; i++) {
+    const TypeList& type_list = package_group->types[i];
+    const size_t list_size = type_list.size();
+    for (size_t j = 0; j < list_size; j++) {
+      const Type* type = type_list[j];
+      const ResStringPool& type_strings = type->package->typeStrings;
+      if (type_strings.string8ObjectAt(type->typeSpec->id - 1) == type_name) {
+        collectAllConfigs(configs, type);
+      }
+    }
+  }
 }
 
 void ResTable::getLocales(Vector<String8>* locales) const
@@ -7057,6 +7249,128 @@ bool ResTable::tryGetConfigEntry(
     *entPtr = ent;
 
     return true;
+}
+
+void ResTable::defineNewType(
+  String8 type_name,
+  uint8_t type_id,
+  const ResTable_config* config,
+  const Vector<uint32_t>& source_ids) {
+  auto num_ids = source_ids.size();
+  LOG_FATAL_IF(num_ids == 0, "Must provide ids to relocate");
+  Vector<char> output;
+  const ssize_t pkg_index = getResourcePackageIndex(source_ids[0]);
+  const auto old_type_id = Res_GETTYPE(source_ids[0]);
+  PackageGroup* pg = mPackageGroups[pkg_index];
+  // Given an existing resource id, and its Res_value, we need to lookup some
+  // additional details, like the ResTable_entry (which includes the string pool
+  // ref), and the flags that make up the ResTable_typeSpec entries.
+  Vector<uint32_t> spec_flags;
+  Vector<ResTable_entry> entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    auto id = source_ids[i];
+    // For simplicity, assert that all ids are from the same package/type.
+    LOG_FATAL_IF(
+      Res_GETTYPE(id) != old_type_id,
+      "Given ids must be in the same type");
+    LOG_FATAL_IF(
+      getResourcePackageIndex(id) != pkg_index,
+      "Given ids must be in the same package");
+
+    Entry entry;
+    status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), config, &entry);
+    LOG_FATAL_IF(err != NO_ERROR, "Entry not found");
+    spec_flags.push(entry.specFlags);
+    entries.push(*entry.entry);
+  }
+
+  // Write out the serialized form of a ResTable::Table.
+  // This is a ResTable_typeSpec followed by a ResTable_type.
+  const auto typespec_header_size = sizeof(ResTable_typeSpec);
+  const auto typespec_total_size =
+    typespec_header_size + sizeof(uint32_t) * num_ids;
+  push_short(output, 0x202); // ResTable_typeSpec identifier
+  push_short(output, typespec_header_size); // header size
+  push_long(output, typespec_total_size);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  push_long(output, num_ids);
+  for (size_t i = 0; i < num_ids; i++) {
+    push_long(output, spec_flags[i]);
+  }
+  // Serialize entry data into intermediate vec, to easily build the offset
+  // array.
+  Vector<uint32_t> offsets;
+  Vector<char> serialized_entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    offsets.push(serialized_entries.size());
+    // Copy ResTable_entry, then ResTable_value
+    auto ep = &entries[i];
+    Vector<Res_value> lookup;
+    getAllValuesForResource(source_ids[i], lookup, true);
+    LOG_FATAL_IF(
+      lookup.size() != 1,
+      "Relocation only supported for ids with a single default value");
+    auto vp = &lookup[0];
+    for (size_t j = 0; j < ep->size; j++) {
+      serialized_entries.push_back(*((unsigned char*)(ep) + j));
+    }
+    for (size_t j = 0; j < vp->size; j++) {
+      serialized_entries.push_back(*((unsigned char*)(vp) + j));
+    }
+  }
+  // ResTable_type
+  push_short(output, 0x201);
+  // TODO(T22233306): verify this size is actually correct. The size field in
+  // binary data produced by aapt2 seems to be different (and padded with 0s).
+  auto type_header_size = sizeof(ResTable_type);
+  push_short(output, type_header_size);
+  auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+  auto total_size = entries_start + serialized_entries.size();
+  push_long(output, total_size);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  push_long(output, num_ids);
+  push_long(output, entries_start);
+  for (size_t i = 0; i < config->size; i++) {
+    output.push_back(*((unsigned char*)(config) + i));
+  }
+  for (size_t i = 0; i < num_ids; i++) {
+    push_long(output, offsets[i]);
+  }
+  output.appendVector(serialized_entries);
+
+  // Append the name of this split type to the typeString pool.
+  auto package = pg->packages[0];
+  package->typeStrings.appendString(type_name);
+
+  // Jam in a new ResTable::Type into the PackageGroup. Note that by setting the
+  // second arg (owner), this should get properly destroyed when the
+  // PackageGroup is deleted.
+  ResTable::Type* type = new ResTable::Type(nullptr, package, num_ids);
+  auto final_size = output.size();
+  char* serialized_chars = (char*) malloc(final_size);
+  LOG_FATAL_IF(
+    serialized_chars == nullptr,
+    "Could not allocate %zu bytes for ResTable_typeSpec",
+    final_size);
+  memcpy(serialized_chars, output.array(), final_size);
+
+  auto flag_ptr = (uint32_t*) (serialized_chars + typespec_header_size);
+  type->typeSpecFlags = flag_ptr;
+  type->typeSpec = (ResTable_typeSpec*) serialized_chars;
+
+  auto tp = (ResTable_type*) (serialized_chars + typespec_total_size);
+  type->configs.push_back(tp);
+
+  TypeList type_list;
+  type_list.push_back(type);
+  const TypeList x = type_list;
+  pg->types.set(type_id - 1, x);
 }
 
 void ResTable::inlineReferenceValuesForResource(

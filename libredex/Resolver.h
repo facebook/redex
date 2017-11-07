@@ -47,18 +47,13 @@ inline MethodSearch opcode_to_search(IRInstruction* insn) {
   always_assert(is_invoke(opcode));
   switch (opcode) {
   case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_DIRECT_RANGE:
     return MethodSearch::Direct;
   case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_STATIC_RANGE:
     return MethodSearch::Static;
   case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
   case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_SUPER_RANGE:
     return MethodSearch::Virtual;
   case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
     return MethodSearch::Interface;
   default:
     // TODO: sort out the interface story.

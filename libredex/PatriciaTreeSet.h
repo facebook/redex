@@ -56,6 +56,11 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> remove(
     IntegerType key, std::shared_ptr<PatriciaTree<IntegerType>> tree);
 
 template <typename IntegerType>
+inline std::shared_ptr<PatriciaTree<IntegerType>> filter(
+    const std::function<bool(IntegerType)>& predicate,
+    std::shared_ptr<PatriciaTree<IntegerType>> tree);
+
+template <typename IntegerType>
 inline std::shared_ptr<PatriciaTree<IntegerType>> merge(
     std::shared_ptr<PatriciaTree<IntegerType>> s,
     std::shared_ptr<PatriciaTree<IntegerType>> t);
@@ -152,6 +157,15 @@ class PatriciaTreeSet final {
 
   PatriciaTreeSet& remove(Element key) {
     m_tree = pt_impl::remove<IntegerType>(encode(key), m_tree);
+    return *this;
+  }
+
+  PatriciaTreeSet& filter(
+      const std::function<bool(const Element&)>& predicate) {
+    auto encoded_predicate = [&predicate](IntegerType key) {
+      return predicate(decode(key));
+    };
+    m_tree = pt_impl::filter<IntegerType>(encoded_predicate, m_tree);
     return *this;
   }
 
@@ -528,6 +542,31 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> remove(
     }
   }
   return branch;
+}
+
+template <typename IntegerType>
+inline std::shared_ptr<PatriciaTree<IntegerType>> filter(
+    const std::function<bool(IntegerType key)>& predicate,
+    std::shared_ptr<PatriciaTree<IntegerType>> tree) {
+  if (tree == nullptr) {
+    return nullptr;
+  }
+  if (tree->is_leaf()) {
+    auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(tree);
+    return predicate(leaf->key()) ? leaf : nullptr;
+  }
+  auto branch = std::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(tree);
+  auto new_left_tree = filter(predicate, branch->left_tree());
+  auto new_right_tree = filter(predicate, branch->right_tree());
+  if (new_left_tree == branch->left_tree() &&
+      new_right_tree == branch->right_tree()) {
+    return branch;
+  } else {
+    return make_branch<IntegerType>(branch->prefix(),
+                                    branch->branching_bit(),
+                                    new_left_tree,
+                                    new_right_tree);
+  }
 }
 
 // We keep the notations of the paper so as to make the implementation easier

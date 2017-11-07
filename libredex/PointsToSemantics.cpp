@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <ostream>
 #include <sstream>
 #include <tuple>
@@ -70,8 +71,10 @@ bool operator<(const PointsToVariable& v, const PointsToVariable& w) {
 }
 
 std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
-  if (v.m_id < 0) {
+  if (v.m_id == PointsToVariable::null_var_id()) {
     o << "NULL";
+  } else if (v.m_id == PointsToVariable::this_var_id()) {
+    o << "THIS";
   } else {
     o << "V" << v.m_id;
   }
@@ -88,7 +91,6 @@ namespace pts_impl {
     OP_STRING(PTS_GET_CLASS),           \
     OP_STRING(PTS_CHECK_CAST),          \
     OP_STRING(PTS_GET_EXCEPTION),       \
-    OP_STRING(PTS_LOAD_THIS),           \
     OP_STRING(PTS_LOAD_PARAM),          \
     OP_STRING(PTS_RETURN),              \
     OP_STRING(PTS_DISJUNCTION),         \
@@ -135,8 +137,6 @@ s_expr special_edge_to_s_expr(SpecialPointsToEdge edge) {
   case PTS_ARRAY_ELEMENT: {
     return s_expr("PTS_ARRAY_ELEMENT");
   }
-  default:
-    not_reached();
   }
 }
 
@@ -202,7 +202,6 @@ s_expr PointsToOperation::to_s_expr() const {
   }
   case PTS_GET_EXCEPTION:
   case PTS_GET_CLASS:
-  case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
     return s_expr({op_kind_to_s_expr(kind)});
@@ -232,8 +231,6 @@ s_expr PointsToOperation::to_s_expr() const {
   case PTS_INVOKE_STATIC: {
     return s_expr({op_kind_to_s_expr(kind), dex_method_to_s_expr(dex_method)});
   }
-  default:
-    not_reached();
   }
 }
 
@@ -270,7 +267,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
   }
   case PTS_GET_EXCEPTION:
   case PTS_GET_CLASS:
-  case PTS_LOAD_THIS:
   case PTS_RETURN:
   case PTS_DISJUNCTION: {
     return {PointsToOperation(op_kind)};
@@ -326,8 +322,6 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     }
     return {PointsToOperation(op_kind, *dex_method_opt)};
   }
-  default:
-    not_reached();
   }
 }
 
@@ -555,10 +549,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
     o << a.dest() << " = NEW " << op.dex_type->get_name()->str();
     break;
   }
-  case PTS_LOAD_THIS: {
-    o << a.dest() << " = THIS";
-    break;
-  }
   case PTS_LOAD_PARAM: {
     o << a.dest() << " = PARAM " << op.parameter;
     break;
@@ -747,16 +737,17 @@ using AnchorEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
 
 class AnchorPropagation final
-    : public MonotonicFixpointIterator<Block*, AnchorEnvironment> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface, AnchorEnvironment> {
  public:
   using NodeId = Block*;
 
-  AnchorPropagation(const ControlFlowGraph& cfg, size_t register_count)
-      : MonotonicFixpointIterator(const_cast<Block*>(cfg.entry_block()),
-                                  std::bind(&Block::succs, _1),
-                                  std::bind(&Block::preds, _1),
-                                  cfg.blocks().size()),
-        m_register_count(register_count) {}
+  AnchorPropagation(const ControlFlowGraph& cfg,
+                    bool is_static_method,
+                    IRCode* code)
+      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+        m_is_static_method(is_static_method),
+        m_code(code),
+        m_this_anchor(nullptr) {}
 
   void analyze_node(const NodeId& node,
                     AnchorEnvironment* current_state) const override {
@@ -768,8 +759,7 @@ class AnchorPropagation final
   }
 
   AnchorEnvironment analyze_edge(
-      const NodeId& /* source */,
-      const NodeId& /* target */,
+      const EdgeId&,
       const AnchorEnvironment& exit_state_at_source) const override {
     return exit_state_at_source;
   }
@@ -777,7 +767,11 @@ class AnchorPropagation final
   void analyze_instruction(IRInstruction* insn,
                            AnchorEnvironment* current_state) const {
     switch (insn->opcode()) {
-    case IOPCODE_LOAD_PARAM_OBJECT:
+    case IOPCODE_LOAD_PARAM_OBJECT: {
+      // There's nothing to do, since this instruction has been taken care of
+      // during the initialization of the analysis.
+      break;
+    }
     case OPCODE_MOVE_EXCEPTION: {
       current_state->set(insn->dest(), AnchorDomain(insn));
       break;
@@ -794,8 +788,7 @@ class AnchorPropagation final
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+    case OPCODE_FILLED_NEW_ARRAY: {
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
@@ -814,12 +807,7 @@ class AnchorPropagation final
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
       if (is_object(dex_method->get_proto()->get_rtype())) {
         // We attach an anchor to a method invocation only if the method returns
@@ -844,20 +832,54 @@ class AnchorPropagation final
 
   void run() { MonotonicFixpointIterator::run(initial_environment()); }
 
+  bool is_this_anchor(IRInstruction* insn) const {
+    return insn == m_this_anchor;
+  }
+
  private:
   // We initialize all registers to the empty anchor set, i.e. the semantic
-  // equivalent of `null` in our analysis.
+  // equivalent of `null` in our analysis. However, the parameters of the method
+  // are initialized to the anchors of the corresponding LOAD_PARAM
+  // instructions.
   AnchorEnvironment initial_environment() {
     AnchorEnvironment env;
+    // We first initialize all registers to `null`.
     env.set(RESULT_REGISTER, AnchorDomain());
-    for (size_t reg = 0; reg < m_register_count; ++reg) {
+    for (size_t reg = 0; reg < m_code->get_registers_size(); ++reg) {
       env.set(reg, AnchorDomain());
+    }
+    // We then initialize the parameters of the method.
+    bool first_param = true;
+    for (const MethodItemEntry& mie :
+         InstructionIterable(m_code->get_param_instructions())) {
+      IRInstruction* insn = mie.insn;
+      if (first_param && !m_is_static_method) {
+        always_assert_log(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT,
+                          "Unexpected instruction '%s' in virtual method\n",
+                          SHOW(insn));
+        m_this_anchor = insn;
+      }
+      switch (insn->opcode()) {
+      case IOPCODE_LOAD_PARAM_OBJECT: {
+        env.set(insn->dest(), AnchorDomain(insn));
+        break;
+      }
+      case IOPCODE_LOAD_PARAM:
+      case IOPCODE_LOAD_PARAM_WIDE: {
+        break;
+      }
+      default: {
+        always_assert_log(false, "Unexpected instruction '%s'\n", SHOW(insn));
+      }
+      }
+      first_param = false;
     }
     return env;
   }
 
-  // The number of registers in the local frame of the method.
-  const size_t m_register_count;
+  bool m_is_static_method;
+  IRCode* m_code;
+  IRInstruction* m_this_anchor;
 };
 
 // Generates the points-to actions for a single method.
@@ -880,8 +902,9 @@ class PointsToActionGenerator final {
     cfg.calculate_exit_block();
 
     // We first propagate the anchors across the code.
-    AnchorPropagation analysis(cfg, code->get_registers_size());
-    analysis.run();
+    m_analysis =
+        std::make_unique<AnchorPropagation>(cfg, is_static(m_dex_method), code);
+    m_analysis->run();
 
     // Then we assign a unique variable to each anchor.
     name_anchors(cfg);
@@ -897,11 +920,7 @@ class PointsToActionGenerator final {
         case IOPCODE_LOAD_PARAM_OBJECT: {
           if (first_param && !is_static(m_dex_method)) {
             // If the method is not static, the first parameter corresponds to
-            // `this`.
-            first_param = false;
-            m_semantics->add(
-                PointsToAction::load_operation(PointsToOperation(PTS_LOAD_THIS),
-                                               get_variable_from_anchor(insn)));
+            // `this`, which is represented using a special points-to variable.
           } else {
             m_semantics->add(PointsToAction::load_operation(
                 PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
@@ -921,17 +940,18 @@ class PointsToActionGenerator final {
           goto done;
         }
         }
+        first_param = false;
       }
     }
   done:
     // We go over each IR instruction and generate the corresponding points-to
     // actions.
     for (Block* block : cfg.blocks()) {
-      AnchorEnvironment state = analysis.get_entry_state_at(block);
+      AnchorEnvironment state = m_analysis->get_entry_state_at(block);
       for (const MethodItemEntry& mie : InstructionIterable(*block)) {
         IRInstruction* insn = mie.insn;
         generate_action(insn, state);
-        analysis.analyze_instruction(insn, &state);
+        m_analysis->analyze_instruction(insn, &state);
       }
     }
     m_semantics->shrink();
@@ -967,20 +987,14 @@ class PointsToActionGenerator final {
     case OPCODE_AGET_OBJECT:
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT:
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
+    case OPCODE_FILLED_NEW_ARRAY: {
       return true;
     }
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       return is_object(insn->get_method()->get_proto()->get_rtype());
     }
     default: { return false; }
@@ -1037,10 +1051,8 @@ class PointsToActionGenerator final {
       // Otherwise, we fall through to the generic case.
     }
     case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE: {
-      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY ||
-          insn->opcode() == OPCODE_FILLED_NEW_ARRAY_RANGE) {
+    case OPCODE_FILLED_NEW_ARRAY: {
+      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
         const DexType* element_type = get_array_type(insn->get_type());
         // Although the Dalvik bytecode specification states that a
         // filled-new-array operation could be used with an array of references,
@@ -1121,12 +1133,7 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       translate_invoke(insn, state);
       break;
     }
@@ -1159,7 +1166,7 @@ class PointsToActionGenerator final {
     DexProto* proto = dex_method->get_proto();
     const auto& signature = proto->get_args()->get_type_list();
     std::vector<std::pair<int32_t, PointsToVariable>> args;
-    IRSourceIterator src_it(insn);
+    size_t src_idx{0};
 
     // Allocate a variable for the returned object if any.
     boost::optional<PointsToVariable> dest;
@@ -1169,12 +1176,11 @@ class PointsToActionGenerator final {
 
     // Allocate a variable for the instance object if any.
     boost::optional<PointsToVariable> instance;
-    if (!(insn->opcode() == OPCODE_INVOKE_STATIC ||
-          insn->opcode() == OPCODE_INVOKE_STATIC_RANGE)) {
+    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
       instance = {
-          get_variable_from_anchor_set(state.get(src_it.get_register()))};
+          get_variable_from_anchor_set(state.get(insn->src(src_idx++)))};
     }
 
     // Process the arguments of the method invocation.
@@ -1183,14 +1189,10 @@ class PointsToActionGenerator final {
       if (is_object(dex_type)) {
         args.push_back(
             {arg_pos,
-             get_variable_from_anchor_set(state.get(src_it.get_register()))});
-      } else if (is_integer(dex_type) || is_float(dex_type)) {
-        // We skip this argument.
-        src_it.get_register();
+             get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});
       } else {
-        // Otherwise, the argument is a wide type (long or double) and we just
-        // skip it.
-        src_it.get_wide_register();
+        // We skip this argument.
+        ++src_idx;
       }
       ++arg_pos;
     }
@@ -1198,28 +1200,23 @@ class PointsToActionGenerator final {
     // Select the right points-to operation.
     PointsToOperationKind invoke_kind;
     switch (insn->opcode()) {
-    case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_STATIC_RANGE: {
+    case OPCODE_INVOKE_STATIC: {
       invoke_kind = PTS_INVOKE_STATIC;
       break;
     }
-    case OPCODE_INVOKE_VIRTUAL:
-    case OPCODE_INVOKE_VIRTUAL_RANGE: {
+    case OPCODE_INVOKE_VIRTUAL: {
       invoke_kind = PTS_INVOKE_VIRTUAL;
       break;
     }
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_SUPER_RANGE: {
+    case OPCODE_INVOKE_SUPER: {
       invoke_kind = PTS_INVOKE_SUPER;
       break;
     }
-    case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_DIRECT_RANGE: {
+    case OPCODE_INVOKE_DIRECT: {
       invoke_kind = PTS_INVOKE_DIRECT;
       break;
     }
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
+    case OPCODE_INVOKE_INTERFACE: {
       invoke_kind = PTS_INVOKE_INTERFACE;
       break;
     }
@@ -1237,6 +1234,9 @@ class PointsToActionGenerator final {
   }
 
   PointsToVariable get_variable_from_anchor(IRInstruction* insn) {
+    if (m_analysis->is_this_anchor(insn)) {
+      return PointsToVariable::this_variable();
+    }
     auto it = m_anchors.find(insn);
     always_assert(it != m_anchors.end());
     return it->second;
@@ -1286,6 +1286,7 @@ class PointsToActionGenerator final {
   PointsToMethodSemantics* m_semantics;
   const TypeSystem& m_type_system;
   const PointsToSemanticsUtils& m_utils;
+  std::unique_ptr<AnchorPropagation> m_analysis;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
   std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;

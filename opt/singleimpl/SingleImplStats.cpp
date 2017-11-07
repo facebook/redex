@@ -114,7 +114,7 @@ void breakup_by_package(SingleImpls& single_impls) {
     }
   }
   fprintf(stderr, "no package types %d\n", no_package_types);
-  fprintf(stderr, "break up by package, %lu packages:\n", by_package.size());
+  fprintf(stderr, "break up by package, %zu packages:\n", by_package.size());
   std::sort(by_package.begin(),
             by_package.end(),
             [](const PackageBreakUp& left, const PackageBreakUp& right) {
@@ -184,22 +184,22 @@ void class_type_stats(SingleImpls& single_impls) {
     }
   }
   fprintf(stderr,
-          "anonymous single implemented with no parent count: %lu\n",
+          "anonymous single implemented with no parent count: %zu\n",
           anonymous_no_parent_count);
   fprintf(stderr,
-          "nested single implemented with no parent count: %lu\n",
+          "nested single implemented with no parent count: %zu\n",
           nested_no_parent_count);
   fprintf(stderr,
-          "top level single implemented with no parent count: %lu\n",
+          "top level single implemented with no parent count: %zu\n",
           top_level_no_parent_count);
   fprintf(stderr,
-          "anonymous single implemented with parent count: %lu\n",
+          "anonymous single implemented with parent count: %zu\n",
           anonymous_count);
   fprintf(stderr,
-          "nested single implemented with parent count: %lu\n",
+          "nested single implemented with parent count: %zu\n",
           nested_count);
   fprintf(stderr,
-          "top level single implemented with parent count: %lu\n",
+          "top level single implemented with parent count: %zu\n",
           top_level_count);
   fprintf(stderr, "\n");
   fprintf(stderr,
@@ -226,7 +226,7 @@ void class_type_stats(SingleImpls& single_impls) {
 void print_stats(SingleImpls& single_impls) {
   // interface stats
   fprintf(
-      stderr, "single implemented interface count: %lu\n", single_impls.size());
+      stderr, "single implemented interface count: %zu\n", single_impls.size());
   for (auto const& intf_it : single_impls) {
     fprintf(stderr, "+ %s\n", SHOW(intf_it.first));
   }
