@@ -84,16 +84,21 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
-  // declare that r1 and r2 are aliases of each other.
-  // This also means r1 is aliased to all of r2's aliases and vice versa.
+  // Declare that r1 and r2 are aliases of each other.
+  // This does NOT handle all transitive aliases. It's mostly used for testing
   void make_aliased(const RegisterValue& r1, const RegisterValue& r2);
+
+  // move `moving` into the alias group of `group`
+  void move(const RegisterValue& moving, const RegisterValue& group);
 
   // break every alias that any register has to `r`
   void break_alias(const RegisterValue& r);
 
-  // Including transitive aliases
+  // Are r1 and r2 aliases?
+  // (including transitive aliases)
   bool are_aliases(const RegisterValue& r1, const RegisterValue& r2);
 
+  // Each alias group has one representative register
   boost::optional<Register> get_representative(const RegisterValue& r);
 
   // ---- extends AbstractValue ----
@@ -126,7 +131,7 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   Graph m_graph;
 
   // Cache the connected component map here for speed.
-  // Computed by get_representative and cleared by any change to the graph
+  // Computed by `check_cache()` and cleared by `invalidate_cache()`
   std::vector<int> m_conn_components;
 
   const boost::range_detail::integer_iterator<vertex_t> find(
@@ -138,9 +143,15 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   bool has_edge_between(const RegisterValue& r1, const RegisterValue& r2) const;
 
-  // call when the graph is changed and things we computed on the old graph
+  // Get all vertices in in the same component as v
+  std::vector<vertex_t> vertices_in_component(vertex_t v);
+
+  // Call when the graph is changed and things we computed on the old graph
   // are no longer true.
   void invalidate_cache();
+
+  // Call this before you access cached data
+  void check_cache();
 };
 
 class AliasDomain

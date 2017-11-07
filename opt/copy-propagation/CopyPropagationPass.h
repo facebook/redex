@@ -40,6 +40,7 @@ class CopyPropagationPass : public Pass {
            m_config.replace_with_representative);
     pc.get("full_method_analysis", true, m_config.full_method_analysis);
     pc.get("all_representatives", false, m_config.all_representatives);
+    pc.get("all_transitives", false, m_config.all_transitives);
     pc.get("debug", false, m_config.debug);
   }
 
@@ -50,6 +51,7 @@ class CopyPropagationPass : public Pass {
     bool replace_with_representative{true};
     bool full_method_analysis{true};
     bool all_representatives{true};
+    bool all_transitives{true};
     bool debug{false};
   } m_config;
 };

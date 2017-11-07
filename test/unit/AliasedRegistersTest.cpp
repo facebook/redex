@@ -184,6 +184,23 @@ TEST(AliasedRegistersTest, getRepresentativeTwoLinks) {
   EXPECT_EQ(0, *two_rep);
 }
 
+TEST(AliasedRegistersTest, breakLineGraph) {
+  AliasedRegisters a;
+  a.make_aliased(zero, one);
+  a.move(two, one);
+  a.break_alias(one);
+  EXPECT_TRUE(a.are_aliases(zero, two));
+
+  a.clear();
+  a.move(one, two);
+  a.move(zero, one);
+  a.break_alias(one);
+  EXPECT_TRUE(a.are_aliases(zero, two));
+  EXPECT_TRUE(a.are_aliases(two, zero));
+  EXPECT_FALSE(a.are_aliases(one, two));
+  EXPECT_FALSE(a.are_aliases(one, zero));
+}
+
 TEST(AliasedRegistersTest, getRepresentativeNone) {
   AliasedRegisters a;
   boost::optional<Register> zero_rep = a.get_representative(zero);

@@ -191,3 +191,30 @@ TEST(CopyPropagationTest, verifyEnabled) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
 }
+
+TEST(CopyPropagationTest, cliqueAliasing) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v2)
+      (move v0 v1)
+      (move v1 v3)
+      (move v0 v2)
+    )
+  )");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  config.all_transitives = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v2)
+      (move v0 v1)
+      (move v1 v3)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}

@@ -117,8 +117,10 @@ class AliasFixpointIterator final
               deletes->push_back(insn);
             }
           }
-        } else {
+        } else if (m_config.all_transitives) {
           // move dst into src's alias group
+          aliases.move(dst, src);
+        } else {
           aliases.break_alias(dst);
           aliases.make_aliased(dst, src);
         }
