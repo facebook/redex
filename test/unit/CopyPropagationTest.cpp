@@ -218,3 +218,123 @@ TEST(CopyPropagationTest, cliqueAliasing) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
 }
+
+TEST(CopyPropagationTest, loopNoChange) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 10)
+
+      :loop
+      (if-eq v0 v1 :end)
+      (add-int/lit8 v0 v0 1)
+      (goto :loop)
+
+      :end
+      (return-void)
+    )
+  )");
+  code->set_registers_size(2);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 10)
+
+      :loop
+      (if-eq v0 v1 :end)
+      (add-int/lit8 v0 v0 1)
+      (goto :loop)
+
+      :end
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, branchNoChange) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v3 v2)
+
+      :end
+      (move v1 v3)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v3 v2)
+
+      :end
+      (move v1 v3)
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, intersect) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v1 v2)
+
+      :end
+      (move v1 v2)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v1 v2)
+
+      :end
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}

@@ -130,10 +130,6 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;
   Graph m_graph;
 
-  // Cache the connected component map here for speed.
-  // Computed by `check_cache()` and cleared by `invalidate_cache()`
-  std::vector<int> m_conn_components;
-
   const boost::range_detail::integer_iterator<vertex_t> find(
       const RegisterValue& r) const;
 
@@ -141,15 +137,11 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   bool has_edge_between(const RegisterValue& r1, const RegisterValue& r2) const;
 
-  // Get all vertices in in the same component as v
-  std::vector<vertex_t> vertices_in_component(vertex_t v);
+  // return a vector of all vertices in v's alias group (including v itself)
+  std::vector<vertex_t> vertices_in_group(vertex_t v) const;
 
-  // Call when the graph is changed and things we computed on the old graph
-  // are no longer true.
-  void invalidate_cache();
-
-  // Call this before you access cached data
-  void check_cache();
+  // merge r1's group with r2. This operation is symmetric
+  void merge_groups_of(const RegisterValue& r1, const RegisterValue& r2);
 };
 
 class AliasDomain

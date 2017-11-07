@@ -18,6 +18,7 @@ RegisterValue one{(uint16_t)1};
 RegisterValue one_lit{(int64_t)1};
 RegisterValue two{(uint16_t)2};
 RegisterValue three{(uint16_t)3};
+RegisterValue four{(uint16_t)4};
 
 TEST(AliasedRegistersTest, identity) {
   AliasedRegisters a;
@@ -349,4 +350,32 @@ TEST(AliasedRegistersTest, AbstractValueJoinSome) {
   EXPECT_TRUE(b.are_aliases(one, two));
   EXPECT_TRUE(b.are_aliases(zero, two));
   EXPECT_FALSE(b.are_aliases(zero, three));
+}
+
+TEST(AliasedRegistersTest, AbstractValueJoin) {
+  AliasedRegisters a;
+  AliasedRegisters b;
+
+  a.make_aliased(zero, one);
+  a.move(two, zero);
+  a.move(three, zero);
+
+  b.make_aliased(four, one);
+  b.move(two, four);
+  b.move(three, four);
+
+  a.join_with(b);
+
+  EXPECT_TRUE(a.are_aliases(one, two));
+  EXPECT_TRUE(a.are_aliases(one, three));
+  EXPECT_TRUE(a.are_aliases(two, three));
+
+  EXPECT_FALSE(a.are_aliases(zero, one));
+  EXPECT_FALSE(a.are_aliases(zero, two));
+  EXPECT_FALSE(a.are_aliases(zero, three));
+  EXPECT_FALSE(a.are_aliases(zero, four));
+
+  EXPECT_FALSE(a.are_aliases(four, one));
+  EXPECT_FALSE(a.are_aliases(four, two));
+  EXPECT_FALSE(a.are_aliases(four, three));
 }
