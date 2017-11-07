@@ -84,20 +84,14 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
-  /**
-   * declare that r1 and r2 are aliases of each other.
-   * This also means r1 is aliased to all of r2's aliases and vice versa.
-   */
+  // declare that r1 and r2 are aliases of each other.
+  // This also means r1 is aliased to all of r2's aliases and vice versa.
   void make_aliased(const RegisterValue& r1, const RegisterValue& r2);
 
-  /**
-   * break every alias that any register has to `r`
-   */
+  // break every alias that any register has to `r`
   void break_alias(const RegisterValue& r);
 
-  /**
-   * Including transitive aliases
-   */
+  // Including transitive aliases
   bool are_aliases(const RegisterValue& r1, const RegisterValue& r2);
 
   boost::optional<Register> get_representative(const RegisterValue& r);

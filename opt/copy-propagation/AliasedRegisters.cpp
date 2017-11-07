@@ -69,11 +69,9 @@ bool contains(const std::unordered_set<T>& set, const T& val) {
   return set.count(val) > 0;
 }
 
-/**
- * Return a representative for this register.
- *
- * Return the lowest numbered register that this value is an alias with.
- */
+// Return a representative for this register.
+//
+// Return the lowest numbered register that this value is an alias with.
 boost::optional<Register> AliasedRegisters::get_representative(
     const RegisterValue& r) {
 
@@ -195,19 +193,17 @@ AliasedRegisters::Kind AliasedRegisters::kind() const {
                                          : AliasedRegisters::Kind::Top;
 }
 
-/**
- * The lattice looks like this:
- *
- *             T (graphs with no edges)
- *      graphs with 1 edge                  ^  join moves up (edge intersection)
- *      graphs with 2 edges                 |
- *            ...                           v  meet moves down (edge union)
- *      graphs with n edges
- *            ...
- *            _|_
- *
- * So, leq is the superset relation on the edge set
- */
+// The lattice looks like this:
+//
+//             T (graphs with no edges)
+//      graphs with 1 edge                  ^  join moves up (edge intersection)
+//      graphs with 2 edges                 |
+//            ...                           v  meet moves down (edge union)
+//      graphs with n edges
+//            ...
+//            _|_
+//
+// So, leq is the superset relation on the edge set
 bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   if (boost::num_edges(m_graph) < boost::num_edges(other.m_graph)) {
     // this cannot be a superset of other if this has fewer edges
@@ -229,10 +225,8 @@ bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   return true;
 }
 
-/*
- * returns true iff they have exactly the same edges between the same
- * RegisterValues
- */
+// returns true iff they have exactly the same edges between the same
+// RegisterValues
 bool AliasedRegisters::equals(const AliasedRegisters& other) const {
   return boost::num_edges(m_graph) == boost::num_edges(other.m_graph) &&
          leq(other);

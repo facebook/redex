@@ -16,46 +16,44 @@
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
+#include "IRTypeChecker.h"
 #include "ParallelWalkers.h"
 #include "PassManager.h"
 
-/**
- * This pass eliminates writes to registers that already hold the written value.
- *
- * It's more commonly known as Copy Propagation.
- *
- * For example,
- *   move-object/from16 v0, v33
- *   iget-object v2, v0, LX/04b;.a:Landroid/content/Context; // field@05d6
- *   move-object/from16 v0, v33
- *   iget-object v3, v0, LX/04b;.b:Ljava/lang/String; // field@05d7
- *   move-object/from16 v0, v33
- *   iget-object v4, v0, LX/04b;.c:LX/04K; // field@05d8
- *   move-object/from16 v0, v33
- *
- * It keeps moving v33 to v0 even though they hold the same object!
- *
- * This optimization transforms the above code to this:
- *   move-object/from16 v0, v33
- *   iget-object v2, v0, LX/04b;.a:Landroid/content/Context; // field@05d6
- *   iget-object v3, v0, LX/04b;.b:Ljava/lang/String; // field@05d7
- *   iget-object v4, v0, LX/04b;.c:LX/04K; // field@05d8
- *
- * It does so by examinining all the writes to registers in a basic block, if vA
- * is moved into vB, then vA and vB are aliases until one of them is written
- * with a different value. Any move between registers that are already aliased
- * is unneccesary. Eliminate them.
- *
- * It can also do the same thing with constant loads, if enabled by the config.
- *
- * This optimization also will replace source registers with a representative
- * register (a whole alias group has a single representative). The reason is
- * that if we use fewer registers, DCE could clean up some more moves after
- * us.
- *
- * Possible additions: (TODO?)
- *   wide registers (I tried it. it's only a tiny help. --jhendrick)
- */
+// This pass eliminates writes to registers that already hold the written value.
+//
+// For example,
+//   move-object/from16 v0, v33
+//   iget-object v2, v0, LX/04b;.a:Landroid/content/Context; // field@05d6
+//   move-object/from16 v0, v33
+//   iget-object v3, v0, LX/04b;.b:Ljava/lang/String; // field@05d7
+//   move-object/from16 v0, v33
+//   iget-object v4, v0, LX/04b;.c:LX/04K; // field@05d8
+//   move-object/from16 v0, v33
+//
+// It keeps moving v33 to v0 even though they hold the same object!
+//
+// This optimization transforms the above code to this:
+//   move-object/from16 v0, v33
+//   iget-object v2, v0, LX/04b;.a:Landroid/content/Context; // field@05d6
+//   iget-object v3, v0, LX/04b;.b:Ljava/lang/String; // field@05d7
+//   iget-object v4, v0, LX/04b;.c:LX/04K; // field@05d8
+//
+// It does so by examinining all the writes to registers in a basic block, if vA
+// is moved into vB, then vA and vB are aliases until one of them is written
+// with a different value. Any move between registers that are already aliased
+// is unneccesary. Eliminate them.
+//
+// It can also do the same thing with constant loads, if enabled by the config.
+//
+// This optimization can also replace source registers with a representative
+// register (a whole alias group has a single representative). The reason is
+// that if we use fewer registers, DCE could clean up some more moves after
+// us. Another reason is that representatives are likely to be v15 or less,
+// leading to more compact move instructions.
+//
+// Possible additions: (TODO?)
+//   wide registers (I tried it. it's only a tiny help. --jhendrick)
 
 using namespace copy_propagation_impl;
 
@@ -79,15 +77,12 @@ class AliasFixpointIterator final
         m_range_set(range_set),
         m_stats(stats) {}
 
-  /*
-   * if deletes is not null, this time is for real.
-   * fill the `deletes` vector with redundant instructions
-   *
-   * if deletes is null, analyze only. make no changes.
-   *
-   * An instruction can be removed if we know the source and destination are
-   * aliases
-   */
+  // An instruction can be removed if we know the source and destination are
+  // aliases.
+  //
+  // if deletes is not null, this time is for real.
+  // fill the `deletes` vector with redundant instructions
+  // if deletes is null, analyze only. Make no changes to the code.
   void run_on_block(Block* block,
                     AliasedRegisters& aliases,
                     std::vector<IRInstruction*>* deletes) const {
@@ -98,12 +93,19 @@ class AliasFixpointIterator final
       }
       auto insn = it->insn;
       auto op = insn->opcode();
+
+      if (m_config.replace_with_representative && deletes != nullptr &&
+          m_config.all_representatives) {
+        replace_with_representative(insn, aliases);
+      }
+
       RegisterValue src;
       if (opcode::is_move_result_pseudo(op)) {
         src = get_src_value(primary_instruction_of_move_result_pseudo(it));
       } else if (!insn->has_move_result_pseudo()) {
         src = get_src_value(insn);
       }
+
       if (src != RegisterValue::none()) {
         // either a move or a constant load into `dst`
         RegisterValue dst = RegisterValue{insn->dest()};
@@ -116,11 +118,13 @@ class AliasFixpointIterator final
             }
           }
         } else {
+          // move dst into src's alias group
           aliases.break_alias(dst);
           aliases.make_aliased(dst, src);
         }
       } else {
-        if (m_config.replace_with_representative && deletes != nullptr) {
+        if (m_config.replace_with_representative && deletes != nullptr &&
+            !m_config.all_representatives) {
           replace_with_representative(insn, aliases);
         }
         if (insn->dests_size() > 0) {
@@ -141,6 +145,20 @@ class AliasFixpointIterator final
 
   // Each group of aliases has one representative register.
   // Try to replace source registers with their representative.
+  //
+  // We can use fewer registers and instructions if we only use one
+  // register of an alias group (AKA representative)
+  //
+  // Example:
+  //   const v0, 0
+  //   const v1, 0
+  //   invoke-static v0 foo
+  //   invoke-static v1 bar
+  //
+  // Can be optimized to
+  //   const v0, 0
+  //   invoke-static v0 foo
+  //   invoke-static v0 bar
   void replace_with_representative(IRInstruction* insn,
                                    AliasedRegisters& aliases) const {
     if (insn->srcs_size() > 0 &&
@@ -244,14 +262,37 @@ Stats CopyPropagation::run(Scope scope) {
   return walk_methods_parallel<Data, Output>(
       scope,
       [this](Data&, DexMethod* m) {
-        auto* code = m->get_code();
-        if (code != nullptr) {
-          return run(code);
+        IRCode* code = m->get_code();
+        if (code == nullptr) {
+          return Stats();
         }
-        return Stats();
+
+        const std::string& before_code =
+            m_config.debug ? show(m->get_code()) : "";
+        const auto& result = run(code);
+
+        if (m_config.debug) {
+          // Run the IR type checker
+          IRTypeChecker checker(m);
+          checker.run();
+          if (!checker.good()) {
+            std::string msg = checker.what();
+            TRACE(RME,
+                  1,
+                  "%s: Inconsistency in Dex code. %s\n",
+                  SHOW(m),
+                  msg.c_str());
+            TRACE(RME, 1, "before code:\n%s\n", before_code.c_str());
+            TRACE(RME, 1, "after  code:\n%s\n", SHOW(m->get_code()));
+            always_assert(false);
+          }
+        }
+        return result;
       },
       [](Output a, Output b) { return a + b; },
-      [](unsigned int /*thread_index*/) { return nullptr; });
+      [](unsigned int /* thread_index */) { return nullptr; },
+      Output(),
+      m_config.debug ? 1 : std::thread::hardware_concurrency() / 2);
 }
 
 Stats CopyPropagation::run(IRCode* code) {
