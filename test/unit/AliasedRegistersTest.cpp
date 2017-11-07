@@ -62,7 +62,7 @@ TEST(AliasedRegistersTest, transitiveBreakFirst) {
   AliasedRegisters a;
 
   a.make_aliased(zero, one);
-  a.make_aliased(one, two);
+  a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
   a.break_alias(zero);
@@ -74,18 +74,18 @@ TEST(AliasedRegistersTest, transitiveBreakMiddle) {
   AliasedRegisters a;
 
   a.make_aliased(zero, one);
-  a.make_aliased(one, two);
+  a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
   a.break_alias(one);
-  EXPECT_FALSE(a.are_aliases(zero, two));
+  EXPECT_TRUE(a.are_aliases(zero, two));
 }
 
 TEST(AliasedRegistersTest, transitiveBreakEnd) {
   AliasedRegisters a;
 
   a.make_aliased(zero, one);
-  a.make_aliased(one, two);
+  a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
   a.break_alias(two);
@@ -96,9 +96,9 @@ TEST(AliasedRegistersTest, transitiveBreakEnd) {
 TEST(AliasedRegistersTest, transitiveTwoStep) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
-  a.make_aliased(one, two);
-  a.make_aliased(three, two);
+  a.move(zero, one);
+  a.move(two, one);
+  a.move(three, two);
 
   EXPECT_TRUE(a.are_aliases(zero, three));
   EXPECT_TRUE(a.are_aliases(zero, two));
@@ -125,10 +125,10 @@ TEST(AliasedRegistersTest, transitiveTwoStep) {
 TEST(AliasedRegistersTest, transitiveCycleBreak) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
-  a.make_aliased(one, two);
-  a.make_aliased(three, two);
-  a.make_aliased(zero, three);
+  a.move(zero, one);
+  a.move(two, one);
+  a.move(three, two);
+  a.move(three, zero);
 
   EXPECT_TRUE(a.are_aliases(zero, three));
   EXPECT_TRUE(a.are_aliases(zero, two));
@@ -336,7 +336,7 @@ TEST(AliasedRegistersTest, AbstractValueJoinSome) {
 
   a.make_aliased(zero, one);
   b.make_aliased(zero, one);
-  b.make_aliased(one, two);
+  b.move(two, one);
 
   a.join_with(b);
 

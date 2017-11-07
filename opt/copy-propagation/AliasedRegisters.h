@@ -139,8 +139,6 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   vertex_t find_or_create(const RegisterValue& r);
 
-  bool path_exists(vertex_t v1, vertex_t v2) const;
-
   bool has_edge_between(const RegisterValue& r1, const RegisterValue& r2) const;
 
   // Get all vertices in in the same component as v

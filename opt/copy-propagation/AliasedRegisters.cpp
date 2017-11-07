@@ -38,6 +38,9 @@
 //   Transitive: `AliasedRegisters::move` adds an edge to every node in the
 //               group, creating a clique
 
+// This method is only public for testing reasons. Only use it if you know what
+// you're doing. This method does not maintain transitive closure of the graph,
+// You probably want to use `move`
 void AliasedRegisters::make_aliased(const RegisterValue& r1, const RegisterValue& r2) {
   if (r1 != r2) {
     vertex_t v1 = find_or_create(r1);
@@ -88,43 +91,30 @@ void AliasedRegisters::break_alias(const RegisterValue& r) {
   }
 }
 
-// if there exists a path from r1 to r2, then they are aliases
+// if there is an edge between r1 to r2, then they are aliases.
+// We only need to check for single edge paths because `move` adds an edge to
+// every node in the alias group, thus maintaining transitive closure of the
+// graph
 bool AliasedRegisters::are_aliases(const RegisterValue& r1, const RegisterValue& r2) {
   if (r1 == r2) {
     return true;
   }
 
-  const auto& v1 = find(r1);
-  const auto& v2 = find(r2);
-  const auto& end = boost::vertices(m_graph).second;
-  if (v1 == end || v2 == end) {
-    // if either register is not in the graph, then
-    // they cannot be aliases
-    return false;
-  }
-
-  return path_exists(*v1, *v2);
+  return has_edge_between(r1, r2);
 }
 
-template <typename T>
-bool contains(const std::unordered_set<T>& set, const T& val) {
-  return set.count(val) > 0;
-}
-
-// If the cached data isn't available, compute it
-// else, do nothing.
+// If the cached data isn't available, compute it. else, do nothing.
 // You should call this before you access cached data (like m_conn_components)
 void AliasedRegisters::check_cache() {
   auto num_vertices = boost::num_vertices(m_graph);
-  if (m_conn_components.empty()) {
-    // Empty means the cache was invalidated (or we've never computed it).
-    // So, compute the connected components
+  if (m_conn_components.size() != num_vertices) {
+    // The cache was invalidated (or we've never computed it)
     m_conn_components.resize(num_vertices);
     boost::connected_components(m_graph, m_conn_components.data());
   }
 }
 
-// return a vector of all the vectors in the same group as v
+// return a vector of all the vertices in the same group as v
 std::vector<AliasedRegisters::vertex_t> AliasedRegisters::vertices_in_component(
     vertex_t v) {
   auto num_vertices = boost::num_vertices(m_graph);
@@ -192,31 +182,6 @@ AliasedRegisters::vertex_t AliasedRegisters::find_or_create(const RegisterValue&
     invalidate_cache();
     return boost::add_vertex(r, m_graph);
   }
-}
-
-// return true if there exists a path from `start` to `end`
-//
-// Implemented with recursive DFS, stopping as soon as `end` is found
-// (or traversing the entire graph then returning false)
-bool AliasedRegisters::path_exists(AliasedRegisters::vertex_t start,
-                                   AliasedRegisters::vertex_t end) const {
-  std::unordered_set<AliasedRegisters::vertex_t> visited;
-  const auto& graph = m_graph;
-  std::function<bool(vertex_t)> recurse =
-      [&recurse, &graph, &visited, end](AliasedRegisters::vertex_t v) {
-        if (v == end) {
-          return true;
-        }
-        visited.insert(v);
-        const auto& adj_vertices = boost::adjacent_vertices(v, graph);
-        for (auto it = adj_vertices.first; it != adj_vertices.second; ++it) {
-          if (!contains(visited, *it) && recurse(*it)) {
-            return true;
-          }
-        }
-        return false;
-      };
-  return recurse(start);
 }
 
 // return true if there is a path of length exactly 1 from r1 to r2
@@ -301,6 +266,7 @@ AliasedRegisters::Kind AliasedRegisters::meet_with(
   for (auto it = begin; it != end; ++it) {
     const RegisterValue& r1 = other.m_graph[boost::source(*it, other.m_graph)];
     const RegisterValue& r2 = other.m_graph[boost::target(*it, other.m_graph)];
+    // FIXME: this does not maintain transitive closure!
     this->make_aliased(r1, r2);
   }
   this->invalidate_cache();
@@ -331,6 +297,7 @@ AliasedRegisters::Kind AliasedRegisters::join_with(
     }
   }
 
+  // FIXME: this does not maintain transitive closure!
   for (const auto& edge : deletes) {
     boost::remove_edge(edge.first, edge.second, this->m_graph);
   }
