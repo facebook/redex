@@ -11,6 +11,7 @@
 #include "Trace.h"
 #include "Util.h"
 #include <unordered_map>
+#include <vector>
 
 class Plugin {};
 
