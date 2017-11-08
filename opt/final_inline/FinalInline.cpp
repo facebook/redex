@@ -160,11 +160,9 @@ class FinalInlineImpl {
     case OPCODE_SGET_BYTE:
     case OPCODE_SGET_CHAR:
     case OPCODE_SGET_SHORT:
-      return true;
     case OPCODE_SGET_OBJECT:
-      return m_config.inline_string_fields;
     case OPCODE_SGET_WIDE:
-      return m_config.inline_wide_fields;
+      return true;
     default:
       return false;
     }
@@ -173,12 +171,6 @@ class FinalInlineImpl {
   bool validate_sget(DexMethod* context, IRInstruction* opfield) {
     if (check_sget(opfield)) {
       return true;
-    } else if (opfield->opcode() == OPCODE_SGET_OBJECT &&
-               !m_config.inline_string_fields) {
-      return false;
-    } else if (opfield->opcode() == OPCODE_SGET_WIDE &&
-               !m_config.inline_wide_fields) {
-      return false;
     } else {
       auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
       always_assert_log(field->is_concrete(), "Must be a concrete field");
@@ -296,14 +288,12 @@ class FinalInlineImpl {
     case OPCODE_CONST_4:
     case OPCODE_CONST_16:
     case OPCODE_CONST:
-      return true;
     case OPCODE_CONST_STRING:
     case OPCODE_CONST_STRING_JUMBO:
-      return m_config.inline_string_fields;
     case OPCODE_CONST_WIDE_16:
     case OPCODE_CONST_WIDE_32:
     case OPCODE_CONST_WIDE:
-      return m_config.inline_wide_fields;
+      return true;
     default:
       return false;
     }
@@ -634,8 +624,6 @@ size_t FinalInlinePass::propagate_constants_for_test(Scope& scope,
                                                      bool inline_string_fields,
                                                      bool inline_wide_fields) {
   FinalInlinePass::Config config{};
-  config.inline_string_fields = inline_string_fields;
-  config.inline_wide_fields = inline_wide_fields;
 
   FinalInlineImpl impl(scope, config);
   return impl.propagate_constants();
