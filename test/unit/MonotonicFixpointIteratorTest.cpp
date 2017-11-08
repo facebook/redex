@@ -15,6 +15,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <boost/functional/hash.hpp>
+
 #include "FixpointIterators.h"
 #include "HashedSetAbstractDomain.h"
 
@@ -34,28 +36,43 @@ struct Statement {
   std::vector<std::string> def;
 };
 
+struct ControlPoint {
+  std::string label;
+
+  explicit ControlPoint(const std::string& l) : label(l) {}
+};
+
+bool operator==(const ControlPoint& cp1, const ControlPoint& cp2) {
+  return cp1.label == cp2.label;
+}
+
+size_t hash_value(const ControlPoint& cp) {
+  boost::hash<std::string> hasher;
+  return hasher(cp.label);
+}
+
 /*
  * A program is a control-flow graph where each node is labeled with a
  * statement.
  */
 class Program final {
  public:
-  using Edge = std::pair<std::string, std::string>;
+  using Edge = std::pair<ControlPoint, ControlPoint>;
   using EdgeId = std::shared_ptr<Edge>;
 
   explicit Program(const std::string& entry) : m_entry(entry), m_exit(entry) {}
 
-  std::vector<EdgeId> successors(const std::string& node) const {
+  std::vector<EdgeId> successors(const ControlPoint& node) const {
     auto& succs = m_successors.at(node);
     return std::vector<EdgeId>(succs.begin(), succs.end());
   }
 
-  std::vector<EdgeId> predecessors(const std::string& node) const {
+  std::vector<EdgeId> predecessors(const ControlPoint& node) const {
     auto& preds = m_predecessors.at(node);
     return std::vector<EdgeId>(preds.begin(), preds.end());
   }
 
-  const Statement& statement_at(const std::string& node) const {
+  const Statement& statement_at(const ControlPoint& node) const {
     auto it = m_statements.find(node);
     if (it == m_statements.end()) {
       fail(node);
@@ -64,32 +81,42 @@ class Program final {
   }
 
   void add(const std::string& node, const Statement& stmt) {
-    m_statements[node] = stmt;
+    ControlPoint cp(node);
+    m_statements[cp] = stmt;
     // Ensure that the pred/succ entries for the node are initialized
-    m_predecessors[node];
-    m_successors[node];
+    m_predecessors[cp];
+    m_successors[cp];
   }
 
   void add_edge(const std::string& src, const std::string& dst) {
-    auto edge = std::make_shared<Edge>(src, dst);
-    m_successors[src].insert(edge);
-    m_predecessors[dst].insert(edge);
+    ControlPoint src_cp(src);
+    ControlPoint dst_cp(dst);
+    auto edge = std::make_shared<Edge>(src_cp, dst_cp);
+    m_successors[src_cp].insert(edge);
+    m_predecessors[dst_cp].insert(edge);
   }
 
-  void set_exit(const std::string& exit) { m_exit = exit; }
+  void set_exit(const std::string& exit) { m_exit = ControlPoint(exit); }
 
  private:
   // In gtest, FAIL (or any ASSERT_* statement) can only be called from within a
   // function that returns void.
-  void fail(std::string node) const {
-    FAIL() << "No statement at node " << node;
+  void fail(const ControlPoint& node) const {
+    FAIL() << "No statement at node " << node.label;
   }
 
-  std::string m_entry;
-  std::string m_exit;
-  std::unordered_map<std::string, Statement> m_statements;
-  std::unordered_map<std::string, std::unordered_set<EdgeId>> m_successors;
-  std::unordered_map<std::string, std::unordered_set<EdgeId>> m_predecessors;
+  ControlPoint m_entry;
+  ControlPoint m_exit;
+  std::unordered_map<ControlPoint, Statement, boost::hash<ControlPoint>>
+      m_statements;
+  std::unordered_map<ControlPoint,
+                     std::unordered_set<EdgeId>,
+                     boost::hash<ControlPoint>>
+      m_successors;
+  std::unordered_map<ControlPoint,
+                     std::unordered_set<EdgeId>,
+                     boost::hash<ControlPoint>>
+      m_predecessors;
 
   friend class ProgramInterface;
 };
@@ -97,7 +124,7 @@ class Program final {
 class ProgramInterface : public FixpointIteratorGraphSpec<ProgramInterface> {
  public:
   using Graph = Program;
-  using NodeId = std::string;
+  using NodeId = ControlPoint;
   using EdgeId = Program::EdgeId;
 
   static NodeId entry(const Graph& graph) { return graph.m_entry; }
@@ -122,12 +149,13 @@ using LivenessDomain = HashedSetAbstractDomain<std::string>;
 class FixpointIterator final
     : public MonotonicFixpointIterator<
           BackwardsFixpointIterationAdaptor<ProgramInterface>,
-          LivenessDomain> {
+          LivenessDomain,
+          boost::hash<ControlPoint>> {
  public:
   explicit FixpointIterator(const Program& program)
       : MonotonicFixpointIterator(program), m_program(program) {}
 
-  void analyze_node(const std::string& node,
+  void analyze_node(const ControlPoint& node,
                     LivenessDomain* current_state) const override {
     const Statement& stmt = m_program.statement_at(node);
     // This is the standard semantic definition of liveness.
@@ -146,13 +174,13 @@ class FixpointIterator final
     // Since we performed a backward analysis by reversing the control-flow
     // graph, the set of live variables before executing a node is given by
     // the exit state at the node.
-    return get_exit_state_at(node);
+    return get_exit_state_at(ControlPoint(node));
   }
 
   LivenessDomain get_live_out_vars_at(const std::string& node) {
     // Similarly, the set of live variables after executing a node is given by
     // the entry state at the node.
-    return get_entry_state_at(node);
+    return get_entry_state_at(ControlPoint(node));
   }
 
  private:

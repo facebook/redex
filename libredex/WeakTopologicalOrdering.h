@@ -21,7 +21,7 @@
 
 template <typename NodeId>
 class WtoComponent;
-template <typename NodeId>
+template <typename NodeId, typename NodeHash>
 class WeakTopologicalOrdering;
 
 namespace wto_impl {
@@ -78,7 +78,7 @@ class WtoComponentIterator final
 
   template <typename T>
   friend class ::WtoComponent;
-  template <typename T>
+  template <typename T1, typename T2>
   friend class ::WeakTopologicalOrdering;
 };
 
@@ -166,10 +166,11 @@ class WtoComponent final {
  * parametric class definition. This also makes the design of unit tests much
  * easier.
  *
- * - NodeId is the identifier of a node in the graph. It's meant to be a simple
- *   type like an int, a pointer or a string.
+ * - NodeId is the identifier of a node in the graph. Nodes should be comparable
+ *   using `operator==()`.
+ * - NodeHash is a functional structure providing a hash function on nodes.
  */
-template <typename NodeId>
+template <typename NodeId, typename NodeHash = std::hash<NodeId>>
 class WeakTopologicalOrdering final {
  public:
   using iterator = wto_impl::WtoComponentIterator<NodeId>;
@@ -215,7 +216,9 @@ class WeakTopologicalOrdering final {
       NodeId element = m_stack.top();
       m_stack.pop();
       if (loop) {
-        while (element != vertex) {
+        // Nodes are required to be comparable using `operator==()`. We don't
+        // assume `operator!=()` to be defined on nodes.
+        while (!(element == vertex)) {
           set_dfn(element, 0);
           element = m_stack.top();
           m_stack.pop();
@@ -264,7 +267,7 @@ class WeakTopologicalOrdering final {
   // The next available position at the end of the vector m_wto_space.
   int32_t m_free_position;
   // These are auxiliary data structures used by Bourdoncle's algorithm.
-  std::unordered_map<NodeId, uint32_t> m_dfn;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_dfn;
   std::stack<NodeId> m_stack;
   uint32_t m_num;
 };
