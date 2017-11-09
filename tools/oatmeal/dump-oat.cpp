@@ -2224,8 +2224,10 @@ OatFile::~OatFile() = default;
 static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
                                                    ConstBuffer oatfile_buffer,
                                                    const std::vector<DexInput>& dexes) {
+  constexpr size_t kOatElfOffset = 0x1000;
+
   size_t oat_offset = 0;
-  if (oatfile_buffer.len >= sizeof(Elf32_Ehdr)) {
+  if (oatfile_buffer.len >= std::max(kOatElfOffset, sizeof(Elf32_Ehdr))) {
     Elf32_Ehdr header;
     memcpy(&header, oatfile_buffer.ptr, sizeof(Elf32_Ehdr));
     if (header.e_ident[0] == 0x7f &&
@@ -2238,6 +2240,10 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
       oat_offset = 0x1000;
       oatfile_buffer = oatfile_buffer.slice(0x1000);
     }
+  }
+
+  if (oatfile_buffer.len < sizeof(OatHeader)) {
+    return nullptr;
   }
 
   auto header = OatHeader_Common::parse(oatfile_buffer);
