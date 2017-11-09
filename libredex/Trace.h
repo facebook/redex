@@ -94,10 +94,10 @@ TMS
   N_TRACE_MODULES,
 };
 
+bool traceEnabled(TraceModule module, int level);
 #ifdef NDEBUG
 #define TRACE(...)
 #else
-bool traceEnabled(TraceModule module, int level);
 void trace(TraceModule module, int level, const char* fmt, ...);
 #define TRACE(module, level, fmt, ...)          \
   do {                                          \

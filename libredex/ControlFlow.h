@@ -262,6 +262,8 @@ namespace cfg {
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
 class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
+  ~GraphInterface() = delete;
+
  public:
   using Graph = ControlFlowGraph;
   using NodeId = Block*;
