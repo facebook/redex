@@ -2727,12 +2727,10 @@ void write_vdex_header(FileHandle& fh,
 		       uint32_t num_dex_files,
 		       uint32_t dex_size,
 		       uint32_t verifier_deps_size,
-		       uint32_t quickening_info_size) {
+		       uint32_t quickening_info_size,
+		       uint32_t vdex_checksum) {
   constexpr uint8_t kVdexMagic[] = { 'v', 'd', 'e', 'x' };
   constexpr uint8_t kVdexVersion[] = { '0', '0', '6', '\0' };
-
-  // It appears the ART runtime  doesn't care about the checksum, so ¯\_(>_>)_/¯
-  uint32_t vdex_checksum = 0x0;
 
   write_obj(fh, kVdexMagic);
   write_obj(fh, kVdexVersion);
@@ -2823,16 +2821,22 @@ OatFile::Status build_v124_vdex_odex(
 
   const auto& dex_input_filename = dex_input.filename;
 
-  // This will open the DEX file twice, we need its size first to 
+  // This will open the DEX file twice, we need its size first to
   // write it in the VDEX header.
   uint32_t dex_file_size = 0;
 
   auto dex_fh = FileHandle(fopen(dex_input_filename.c_str(), "r"));
   dex_file_size = get_filesize(dex_fh);
 
+  // Retrieve the DEX checksum to store it just after the VDEX header
+  uint32_t dex_checksum = 0x0;
+  dex_fh.seek_set(8);
+  dex_fh.fread(&dex_checksum, sizeof(uint32_t), 1);
+  dex_fh.seek_set(0);
+
   auto vdex_fh = FileHandle(fopen(vdex_file_name.c_str(), "w"));
 
-  write_vdex_header(vdex_fh, 1, dex_file_size, 0, 0);
+  write_vdex_header(vdex_fh, 1, dex_file_size, 0, 0, dex_checksum);
 
   stream_file(dex_fh, vdex_fh);
 
