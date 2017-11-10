@@ -11,6 +11,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <vector>
+#include <unordered_set>
 #include "DexClass.h"
 
 class DexStore;
@@ -45,6 +47,7 @@ class DexStore {
 
   std::string get_name() const;
   std::vector<DexClasses>& get_dexen();
+  const std::vector<DexClasses>& get_dexen() const;
   std::vector<std::string> get_dependencies() const;
 
   void add_classes(DexClasses classes);
@@ -97,4 +100,63 @@ public:
   bool operator==(const DexStoreClassesIterator& rhs) { return m_current_classes == rhs.m_current_classes; }
   bool operator!=(const DexStoreClassesIterator& rhs) { return m_current_classes != rhs.m_current_classes; }
   DexClasses& operator*() { return *m_current_classes; }
+};
+
+/**
+ * Provide an API to determine whether an illegal cross DexStore
+ * reference/dependency is created.
+ * TODO: this probably need to rely on metadata to be correct. Right now it
+ *       just uses order of DexStores.
+ */
+class XStoreRefs {
+ private:
+  /**
+   * Set of classes in each logical store. A primary DEX goes in its own
+   * bucket (first element in the array).
+   */
+  std::vector<std::unordered_set<const DexType*>> m_xstores;
+
+ public:
+  explicit XStoreRefs(const DexStoresVector& stores);
+
+  /**
+   * Return a stored idx for a given type.
+   * The store idx can be used in the 'bool illegal_ref(size_t, const DexType*)'
+   * api.
+   */
+  size_t get_store_idx(const DexType* type) const {
+    for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
+      if (m_xstores[store_idx].count(type) > 0) return store_idx;
+    }
+    always_assert_log(false, "type %s not in the current APK", SHOW(type));
+  }
+
+  /**
+   * Verify that a 'type' can be moved in the DexStore where 'location' is
+   * defined.
+   * Use it for one time calls where 'type' is moved either in a method (member
+   * in general) of 'location' or more broadly a reference to 'type' is made
+   * in 'location'.
+   */
+  bool illegal_ref(const DexType* location, const DexType* type) const {
+    return illegal_ref(get_store_idx(location), type);
+  }
+
+  /**
+   * Verify that a 'type' can be moved in the DexStore identified by
+   * 'store_idx'.
+   * Use it when an anlaysis over a given DEX (or instructions in a given
+   * method/class) needs to be performed by an optimization.
+   */
+  bool illegal_ref(size_t store_idx, const DexType* type) const {
+    if (type_class_internal(type) == nullptr) return false;
+    // Temporary HACK: optimizations may leave references to dead classes and
+    // if we just call get_store_idx() - as we should - the assert will fire...
+    size_t type_store_idx = 0;
+    for (; type_store_idx < m_xstores.size(); type_store_idx++) {
+      if (m_xstores[type_store_idx].count(type) > 0) break;
+    }
+    return type_store_idx > store_idx;
+  }
+
 };

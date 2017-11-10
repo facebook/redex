@@ -139,25 +139,6 @@ enum class DataType : uint8_t {
 DataType type_to_datatype(const DexType* t);
 
 /**
- * Return the DexClass that represents the DexType in input or nullptr if
- * no such DexClass exists.
- */
-inline DexClass* type_class(const DexType* t) {
-  return g_redex->type_class(t);
-}
-
-/**
- * Return the DexClass that represents an internal DexType or nullptr if
- * no such DexClass exists.
- */
-inline DexClass* type_class_internal(const DexType* t) {
-  auto dc = type_class(t);
-  if (dc == nullptr || dc->is_external())
-    return nullptr;
-  return dc;
-}
-
-/**
  * Check whether a type can be cast to another type.
  * That is, if 'base_type' is an ancestor or an interface implemented by 'type'.
  * However the check is only within classes known to the app. So
