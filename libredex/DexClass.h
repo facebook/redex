@@ -1100,6 +1100,25 @@ struct dexmethods_comparator {
   }
 };
 
+/**
+ * Return the DexClass that represents the DexType in input or nullptr if
+ * no such DexClass exists.
+ */
+inline DexClass* type_class(const DexType* t) {
+  return g_redex->type_class(t);
+}
+
+/**
+ * Return the DexClass that represents an internal DexType or nullptr if
+ * no such DexClass exists.
+ */
+inline DexClass* type_class_internal(const DexType* t) {
+  auto dc = type_class(t);
+  if (dc == nullptr || dc->is_external())
+    return nullptr;
+  return dc;
+}
+
 DISALLOW_DEFAULT_COMPARATOR(DexClass)
 DISALLOW_DEFAULT_COMPARATOR(DexCode)
 DISALLOW_DEFAULT_COMPARATOR(DexDebugInstruction)

@@ -20,6 +20,7 @@
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexStore.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
@@ -27,11 +28,8 @@
 #include "Walkers.h"
 
 struct AnalysisImpl : SingleImplAnalysis {
-  AnalysisImpl(const Scope& scope, DexClasses& primary_dex)
-      : SingleImplAnalysis(), scope(scope) {
-    for (const auto& cls : primary_dex) {
-      primary.insert(cls->get_type());
-    }
+  AnalysisImpl(const Scope& scope, const DexStoresVector& stores)
+      : SingleImplAnalysis(), scope(scope), xstores(stores) {
   }
 
   void create_single_impl(const TypeMap& single_impl,
@@ -40,7 +38,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   void collect_field_defs();
   void collect_method_defs();
   void analyze_opcodes();
-  void escape_not_in_primary();
+  void escape_cross_stores();
   void remove_escaped();
 
  private:
@@ -55,7 +53,7 @@ struct AnalysisImpl : SingleImplAnalysis {
 
  private:
   const Scope& scope;
-  std::unordered_set<DexType*> primary;
+  XStoreRefs xstores;
 };
 
 /**
@@ -221,14 +219,18 @@ void AnalysisImpl::escape_with_sfields() {
 }
 
 /**
- * If an interface in primary brings a class not in primary drop the
+ * If an interface in a store brings a class in a later store drop the
  * optimization.
  */
-void AnalysisImpl::escape_not_in_primary() {
+void AnalysisImpl::escape_cross_stores() {
   for (auto const& intf_it : single_impls) {
-    if (primary.count(intf_it.first) == 0) continue;
-    if (primary.count(intf_it.second.cls) == 0) {
-      escape_interface(intf_it.first, NOT_IN_PRIMARY);
+    // REVIEW: not sure how accurate this is. I mean it is the right check
+    //         if the code was written correctly, that is, if the interface
+    //         itself is not creating a bad cross reference already.
+    //         Good enough for now and possible forever
+    //         (in which case remove this comment)
+    if (xstores.illegal_ref(intf_it.first, intf_it.second.cls)) {
+      escape_interface(intf_it.first, CROSS_STORES);
     }
   }
 }
@@ -427,15 +429,16 @@ void AnalysisImpl::analyze_opcodes() {
  * Main analysis method
  */
 std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
-    const Scope& scope, DexClasses& primary_dex, const TypeMap& single_impl,
-    const TypeSet& intfs, const SingleImplConfig& config) {
+    const Scope& scope, const DexStoresVector& stores,
+    const TypeMap& single_impl, const TypeSet& intfs,
+    const SingleImplConfig& config) {
   std::unique_ptr<AnalysisImpl> single_impls(
-      new AnalysisImpl(scope, primary_dex));
+      new AnalysisImpl(scope, stores));
   single_impls->create_single_impl(single_impl, intfs, config);
   single_impls->collect_field_defs();
   single_impls->collect_method_defs();
   single_impls->analyze_opcodes();
-  single_impls->escape_not_in_primary();
+  single_impls->escape_cross_stores();
   single_impls->remove_escaped();
   return std::move(single_impls);
 }

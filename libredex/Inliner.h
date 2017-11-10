@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "DexStore.h"
 #include "IRCode.h"
 #include "Resolver.h"
 
@@ -219,10 +220,9 @@ class MultiMethodInliner {
   std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver;
 
   /**
-   * Set of classes in each logical store that must not be touched
-   * when creating crossreferences across stores.
+   * Checker for cross stores contaminations.
    */
-  std::vector<std::unordered_set<DexType*>> xstores;
+  XStoreRefs xstores;
 
   /**
    * Inlined methods.
