@@ -261,9 +261,10 @@ static int get_strtab_alignment(OatVersion version) {
       return 1;
     case OatVersion::V_079:
     case OatVersion::V_088:
-      return 0x1000;
-    case OatVersion::UNKNOWN:
     case OatVersion::V_124:
+      return 0x1000;
+
+    case OatVersion::UNKNOWN:
     default: {
     fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
     return 1;
@@ -279,10 +280,10 @@ static Elf32_Word get_str_entsize(OatVersion version) {
     case OatVersion::V_064:
     case OatVersion::V_079:
     case OatVersion::V_088:
-
-      return 0;
-    case OatVersion::UNKNOWN:
     case OatVersion::V_124:
+      return 0;
+
+    case OatVersion::UNKNOWN:
   default: {
     fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
     return 0;
@@ -554,7 +555,8 @@ void ElfWriter::write_hash(FileHandle& fh) {
       break;
     }
     case OatVersion::V_079:
-    case OatVersion::V_088: {
+    case OatVersion::V_088:
+    case OatVersion::V_124: {
       // Everything goes in 1 bucket, chained.
       hash.push_back(1);
       hash.push_back(num_dynsymbols); // Number of chains.
@@ -567,7 +569,6 @@ void ElfWriter::write_hash(FileHandle& fh) {
       hash.push_back(0);  // Last symbol terminates the chain.
       break;
     }
-    case OatVersion::V_124:
     case OatVersion::UNKNOWN:
       break;
   }
@@ -688,7 +689,7 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
       break;
     }
     case OatVersion::V_079:
-    case OatVersion::V_088: 
+    case OatVersion::V_088:
     case OatVersion::V_124: {
       // LOAD bss
       prog_headers.push_back(Elf32_Phdr {
