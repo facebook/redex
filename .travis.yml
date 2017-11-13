@@ -26,3 +26,6 @@ before_install:
 
 script:
   - autoreconf -ivf && ./configure CXX='g++-4.9' && make -j4
+
+notifications:
+  webhooks: https://code.facebook.com/travis/webhook/
