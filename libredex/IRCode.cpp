@@ -373,7 +373,9 @@ bool encode_offset(FatMethod* fm,
 
       DexOpcode inverted = opcode::invert_conditional_branch(bop);
       MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
-      mei->dex_insn->set_src(0, insn->src(0));
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        mei->dex_insn->set_src(i, insn->src(i));
+      }
       fm->insert(fm->iterator_to(*branch_op_mie), *mei);
 
       // this iterator should always be valid -- an if-* instruction cannot
