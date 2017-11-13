@@ -40,6 +40,12 @@ class InterDexPassPlugin {
   virtual DexClasses additional_classes(const DexClassesVector& outdex,
                                         const DexClasses& classes) = 0;
 
+  // Return classes that should be added at the end.
+  virtual DexClasses leftover_classes() {
+    DexClasses empty;
+    return empty;
+  }
+
   // Run plugin cleanup and finalization here. Pass should run this after
   // running its implementation
   virtual void cleanup(const std::vector<DexClass*>& scope) = 0;

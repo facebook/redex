@@ -273,12 +273,13 @@ static void emit_class(InterDexPass* pass,
                        dex_emit_tracker& det,
                        DexClassesVector& outdex,
                        DexClass* clazz,
-                       bool is_primary) {
+                       bool is_primary,
+                       bool check_if_skip = true) {
   if(det.emitted.count(clazz) != 0)
     return;
   if(is_canary(clazz))
     return;
-  if (should_skip_class(pass, clazz)) {
+  if (check_if_skip && should_skip_class(pass, clazz)) {
     TRACE(IDEX, 3, "IDEX: Skipping class :: %s\n", SHOW(clazz));
     return;
   }
@@ -543,6 +544,16 @@ static DexClassesVector run_interdex(InterDexPass* pass,
    */
   for (auto clazz : scope) {
     emit_class(pass, det, outdex, clazz);
+  }
+  for (const auto& plugin : pass->m_plugins) {
+    auto add_classes = plugin->leftover_classes();
+    for (auto add_class : add_classes) {
+      TRACE(IDEX,
+            4,
+            "IDEX: Emitting plugin generated leftover class :: %s\n",
+            SHOW(add_class));
+      emit_class(pass, det, outdex, add_class, false);
+    }
   }
 
   /* Finally, emit the "left-over" det.outs */
