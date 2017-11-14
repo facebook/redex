@@ -53,6 +53,7 @@ class OatFile {
     BUILD_SUCCESS,
     BUILD_UNSUPPORTED_VERSION,
     BUILD_IO_ERROR,
+    BUILD_ARG_ERROR
   };
 
   OatFile() = default;
@@ -88,7 +89,7 @@ class OatFile {
   // Return the location of the art boot image, or null if there is none.
   virtual std::unique_ptr<std::string> get_art_image_loc() const = 0;
 
-  static Status build(const std::string& oat_file,
+  static Status build(const std::vector<std::string>& oat_files,
                       const std::vector<DexInput>& dex_files,
                       const std::string& oat_version,
                       const std::string& arch,

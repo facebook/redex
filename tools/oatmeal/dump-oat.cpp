@@ -2944,31 +2944,57 @@ OatFile::Status OatFile_124::build(const std::string& oat_file_name,
   );
 }
 
-OatFile::Status OatFile::build(const std::string& oat_file_name,
+OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                const std::vector<DexInput>& dex_files,
                                const std::string& oat_version,
                                const std::string& arch,
                                bool write_elf,
                                const std::string& art_image_location,
                                bool samsung_mode) {
-  auto version = versionInt(oat_version);
-  auto isa = instruction_set(arch);
-  switch (version) {
-    case OatVersion::V_079:
-    case OatVersion::V_088:
-      return OatFile_079::build(oat_file_name, dex_files, version, isa, write_elf,
-                                art_image_location, samsung_mode);
 
-    case OatVersion::V_039:
-    case OatVersion::V_045:
-    case OatVersion::V_064:
-      return OatFile_064::build(oat_file_name, dex_files, version, isa, write_elf,
-                                art_image_location, samsung_mode);
-    case OatVersion::V_124:
-      return OatFile_124::build(oat_file_name, dex_files, version, isa, write_elf,
-                                art_image_location, samsung_mode);
-    default:
-      fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
-      return Status::BUILD_UNSUPPORTED_VERSION;
+  auto build_fn = [&](const std::string& oat_file_name,
+                      const std::vector<DexInput>& dexes) {
+    auto version = versionInt(oat_version);
+    auto isa = instruction_set(arch);
+    switch (version) {
+      case OatVersion::V_079:
+      case OatVersion::V_088:
+        return OatFile_079::build(oat_file_name, dexes, version, isa, write_elf,
+                                  art_image_location, samsung_mode);
+
+      case OatVersion::V_039:
+      case OatVersion::V_045:
+      case OatVersion::V_064:
+        return OatFile_064::build(oat_file_name, dexes, version, isa, write_elf,
+                                  art_image_location, samsung_mode);
+      case OatVersion::V_124:
+        return OatFile_124::build(oat_file_name, dexes, version, isa, write_elf,
+                                  art_image_location, samsung_mode);
+      default:
+        fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
+        return Status::BUILD_UNSUPPORTED_VERSION;
+    }
+  };
+
+  if (oat_file_names.size() == 0) {
+    fprintf(stderr, "At least one oat file name required\n");
+    return Status::BUILD_ARG_ERROR;
+  } else if (oat_file_names.size() == 1) {
+    return build_fn(oat_file_names[0], dex_files);
+  } else {
+    if (oat_file_names.size() != dex_files.size()) {
+      fprintf(stderr, "One oat file per dex file required.\n");
+      return Status::BUILD_ARG_ERROR;
+    }
+
+    for (unsigned int i = 0; i < oat_file_names.size(); i++) {
+      std::vector<DexInput> dex_file;
+      dex_file.push_back(dex_files[i]);
+      auto status = build_fn(oat_file_names[i], dex_file);
+      if (status != Status::BUILD_SUCCESS) {
+        return status;
+      }
+    }
+    return Status::BUILD_SUCCESS;
   }
 }
