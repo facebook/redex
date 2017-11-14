@@ -991,6 +991,14 @@ std::string show(TryEntryType t) {
   }
 }
 
+std::string show(const SwitchIndices& si) {
+  std::stringstream ss;
+  for (auto index : si) {
+    ss << index << " ";
+  }
+  return ss.str();
+}
+
 std::string show(const MethodItemEntry& mei) {
   std::stringstream ss;
   ss << "[" << &mei << "] ";

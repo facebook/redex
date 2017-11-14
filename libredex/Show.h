@@ -12,6 +12,7 @@
 #include <iostream>
 #include <list>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,7 @@ struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
 class InstructionIterable;
+using SwitchIndices = std::set<int>;
 
 std::string show(const DexString*);
 std::string show(const DexType*);
@@ -66,6 +68,7 @@ std::string show(const ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
 std::string show(const InstructionIterable&);
+std::string show(const SwitchIndices& si);
 
 // Variants of show that use deobfuscated names
 std::string show_deobfuscated(const DexClass*);
