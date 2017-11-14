@@ -610,10 +610,14 @@ MethodCreator::MethodCreator(DexMethod* meth)
 MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
-                             DexAccessFlags access)
+                             DexAccessFlags access,
+                             DexAnnotationSet* anno)
     : method(
-        static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
+          static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
   always_assert_log(!method->is_concrete(), "Method already defined");
+  if (anno) {
+    method->attach_annotation_set(anno);
+  }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
   method->set_code(std::make_unique<IRCode>(method, 0));
