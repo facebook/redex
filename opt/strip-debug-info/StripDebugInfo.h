@@ -19,6 +19,8 @@ class StripDebugInfoPass : public Pass {
     pc.get("drop_prologue_end", false, m_drop_prologue_end);
     pc.get("drop_epilogue_begin", false, m_drop_epilogue_begin);
     pc.get("drop_all_dbg_info_if_empty", false, m_drop_all_dbg_info_if_empty);
+    pc.get("drop_synth_aggressive", false, m_drop_synth_aggressive);
+    pc.get("drop_synth_conservative", false, m_drop_synth_conservative);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -44,6 +46,7 @@ class StripDebugInfoPass : public Pass {
   }
   bool method_passes_filter(DexMethod* meth) const;
   bool should_remove(const MethodItemEntry& mei);
+  bool should_drop_for_synth(const DexMethod*) const;
 
   std::vector<std::string> m_cls_patterns;
   std::vector<std::string> m_meth_patterns;
@@ -55,6 +58,8 @@ class StripDebugInfoPass : public Pass {
   bool m_drop_prologue_end = false;
   bool m_drop_epilogue_begin = false;
   bool m_drop_all_dbg_info_if_empty = false;
+  bool m_drop_synth_aggressive = false;
+  bool m_drop_synth_conservative = false;
   int m_num_matches = 0;
   int m_num_pos_dropped = 0;
   int m_num_var_dropped = 0;
