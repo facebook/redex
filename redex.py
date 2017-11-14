@@ -610,6 +610,7 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'resid-optres-mapping.json', 'resid map after optres pass', 'redex-resid-optres-mapping.json')
     copy_file_to_out_dir(dex_dir, args.out, 'resid-dedup-mapping.json', 'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
+    copy_file_to_out_dir(dex_dir, args.out, 'resid-splitres-mapping.json', 'resid map after split pass', 'redex-resid-splitres-mapping.json')
 
     if config_dict.get('proguard_map_output', '') != '':
         merge_proguard_maps(
