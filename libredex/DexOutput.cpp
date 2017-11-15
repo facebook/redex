@@ -816,6 +816,11 @@ void DexOutput::generate_static_values() {
       enc_arrays;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
+    // Fields need to be sorted otherwise static values may end up out of order
+    auto& sfields = clz->get_sfields();
+    std::sort(sfields.begin(), sfields.end(), compare_dexfields);
+    auto& ifields = clz->get_ifields();
+    std::sort(ifields.begin(), ifields.end(), compare_dexfields);
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
     if (!deva) continue;
     if (enc_arrays.count(*deva)) {

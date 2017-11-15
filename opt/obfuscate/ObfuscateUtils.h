@@ -381,9 +381,6 @@ public:
     for (unsigned int i = 0;
         i < fields.size() + static_final_null_fields.size(); ++i)
       names.emplace_back(this->next_name());
-    // if we have more than 52 names, next_name won't be in alphabetical order
-    // because it'll return "AA" after "z"
-    std::sort(names.begin(), names.end());
     TRACE(OBFUSCATE, 3, "Static Generator\n");
     unsigned int i = 0;
     for (DexFieldWrapper* wrap : fields) {
