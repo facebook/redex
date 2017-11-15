@@ -7266,7 +7266,8 @@ void ResTable::defineNewType(
   // additional details, like the ResTable_entry (which includes the string pool
   // ref), and the flags that make up the ResTable_typeSpec entries.
   Vector<uint32_t> spec_flags;
-  Vector<ResTable_entry> entries;
+  Vector<const ResTable_entry*> entries;
+  bool is_complex;
   for (size_t i = 0; i < num_ids; i++) {
     auto id = source_ids[i];
     // For simplicity, assert that all ids are from the same package/type.
@@ -7281,7 +7282,16 @@ void ResTable::defineNewType(
     status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), config, &entry);
     LOG_FATAL_IF(err != NO_ERROR, "Entry not found");
     spec_flags.push(entry.specFlags);
-    entries.push(*entry.entry);
+    entries.push(entry.entry);
+    bool entry_is_complex =
+      (dtohs(entry.entry->flags) & ResTable_entry::FLAG_COMPLEX) != 0;
+    if (i == 0) {
+      is_complex = entry_is_complex;
+    } else {
+      LOG_FATAL_IF(
+        is_complex != entry_is_complex,
+        "Can't mix bag and non-bag entries");
+    }
   }
 
   // Write out the serialized form of a ResTable::Table.
@@ -7307,18 +7317,29 @@ void ResTable::defineNewType(
   for (size_t i = 0; i < num_ids; i++) {
     offsets.push(serialized_entries.size());
     // Copy ResTable_entry, then ResTable_value
-    auto ep = &entries[i];
-    Vector<Res_value> lookup;
-    getAllValuesForResource(source_ids[i], lookup, true);
-    LOG_FATAL_IF(
-      lookup.size() != 1,
-      "Relocation only supported for ids with a single default value");
-    auto vp = &lookup[0];
-    for (size_t j = 0; j < ep->size; j++) {
-      serialized_entries.push_back(*((unsigned char*)(ep) + j));
-    }
-    for (size_t j = 0; j < vp->size; j++) {
-      serialized_entries.push_back(*((unsigned char*)(vp) + j));
+    auto ep = entries[i];
+    if (is_complex) {
+      auto map_entry_ptr = (ResTable_map_entry*) ep;
+      auto total_size =
+        dtohs(map_entry_ptr->size) +
+        dtohl(map_entry_ptr->count) * sizeof(ResTable_map);
+      // Slurp all the bytes up, all the values should be aligned contiguously.
+      for (size_t j = 0; j < total_size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(map_entry_ptr) + j));
+      }
+    } else {
+      Vector<Res_value> lookup;
+      getAllValuesForResource(source_ids[i], lookup, true);
+      LOG_FATAL_IF(
+        lookup.size() != 1,
+        "Relocation only supported for ids with a single default value");
+      auto vp = &lookup[0];
+      for (size_t j = 0; j < ep->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(ep) + j));
+      }
+      for (size_t j = 0; j < vp->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(vp) + j));
+      }
     }
   }
   // ResTable_type
