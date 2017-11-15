@@ -122,7 +122,7 @@ void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
   TRACE(TRACKRESOURCES, 1,
       "found %d total sgets to tracked classes\n", num_field_references);
   for (auto& it : per_cls_refs) {
-    TRACE(TRACKRESOURCES, 1,
+    TRACE(TRACKRESOURCES, 3,
         "%d sgets to %s \n", it.second, SHOW(it.first->get_name()));
   }
 }
