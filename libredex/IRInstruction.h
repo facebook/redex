@@ -147,6 +147,10 @@ class IRInstruction final {
            (opcode_impl::dests_size(m_opcode) && opcode::may_throw(m_opcode));
   }
 
+  bool has_move_result() const {
+    return has_method() || has_move_result_pseudo() ||
+           m_opcode == OPCODE_FILLED_NEW_ARRAY;
+  }
 
   /*
    * Information about operands.

@@ -223,6 +223,11 @@ class Analyzer final
           current_state->set(insn->dest() + 1, AbstractAccessPathDomain::top());
         }
       }
+      // We need to invalidate RESULT_REGISTER if the instruction writes into
+      // this register.
+      if (insn->has_move_result()) {
+        current_state->set(RESULT_REGISTER, AbstractAccessPathDomain::top());
+      }
     }
     }
   }
@@ -303,5 +308,8 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
 
 boost::optional<AccessPath> ImmutableSubcomponentAnalyzer::get_access_path(
     size_t reg, IRInstruction* insn) const {
+  if (m_analyzer == nullptr) {
+    return boost::none;
+  }
   return m_analyzer->get_access_path(reg, insn);
 }
