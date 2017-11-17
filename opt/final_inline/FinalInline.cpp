@@ -91,7 +91,8 @@ class FinalInlineImpl {
     return false;
   }
 
-  void remove_unused_fields() {
+  // returns the number of fields removed
+  size_t remove_unused_fields() {
     std::vector<DexField*> moveable_fields;
     std::vector<DexClass*> smallscope;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
@@ -150,6 +151,7 @@ class FinalInlineImpl {
                                    }),
                     sfields.end());
     }
+    return smallscope.size();
   }
 
   bool check_sget(IRInstruction* opfield) {
@@ -215,7 +217,8 @@ class FinalInlineImpl {
     }
   }
 
-  void inline_field_values() {
+  // returns the total number of inlines
+  size_t inline_field_values() {
     std::unordered_set<DexField*> inline_field;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
@@ -241,39 +244,45 @@ class FinalInlineImpl {
       }
     }
 
-    walk_methods_parallel_simple(m_full_scope, [&](DexMethod* m) {
-      auto* code = m->get_code();
-      if (!code) {
-        return;
-      }
-      std::vector<FatMethod::iterator> rewrites;
-      auto ii = InstructionIterable(code);
-      for (auto it = ii.begin(); it != ii.end(); ++it) {
-        auto* insn = it->insn;
-        if (!is_sget(insn->opcode())) {
-          continue;
-        }
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-        if (field == nullptr || !field->is_concrete()) continue;
-        if (inline_field.count(field) == 0) continue;
-        if (!validate_sget(m, insn)) continue;
-        rewrites.push_back(it.unwrap());
-      }
-      for (auto it : rewrites) {
-        auto* insn = it->insn;
-        auto dest = move_result_pseudo_of(it)->dest();
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-        auto value = field->get_static_value();
-        auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
-        uint64_t v =
-            value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
-        auto newopcode =
-            (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
+    return walk_methods_parallel<std::nullptr_t, size_t, Scope>(
+        m_full_scope,
+        [&inline_field, this](std::nullptr_t, DexMethod* m) -> size_t {
+          auto* code = m->get_code();
+          if (!code) {
+            return 0;
+          }
+          std::vector<FatMethod::iterator> rewrites;
+          auto ii = InstructionIterable(code);
+          for (auto it = ii.begin(); it != ii.end(); ++it) {
+            auto* insn = it->insn;
+            if (!is_sget(insn->opcode())) {
+              continue;
+            }
+            auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+            if (field == nullptr || !field->is_concrete()) continue;
+            if (inline_field.count(field) == 0) continue;
+            if (!validate_sget(m, insn)) continue;
+            rewrites.push_back(it.unwrap());
+          }
+          for (auto it : rewrites) {
+            auto* insn = it->insn;
+            auto dest = move_result_pseudo_of(it)->dest();
+            auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+            auto value = field->get_static_value();
+            auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
+            uint64_t v =
+                value != nullptr ? static_cast<uint64_t>(value->value()) : 0;
+            auto newopcode =
+                (new IRInstruction(opcode))->set_dest(dest)->set_literal(v);
 
-        code->insert_before(it, newopcode);
-        code->remove_opcode(it);
-      }
-    });
+            code->insert_before(it, newopcode);
+            code->remove_opcode(it);
+          }
+          return rewrites.size();
+        },
+        [](size_t a, size_t b) { return a + b; }, // output reducer
+        [](int) { return nullptr; } // data initializer. not needed
+    );
   }
 
   /*
@@ -618,7 +627,7 @@ class FinalInlineImpl {
     }
   }
 };
-}
+} // namespace
 
 size_t FinalInlinePass::propagate_constants_for_test(Scope& scope,
                                                      bool inline_string_fields,
@@ -659,8 +668,11 @@ void FinalInlinePass::run_pass(DexStoresVector& stores,
     mgr.incr_metric("encodable_clinits_replaced", nreplaced);
   }
 
-  impl.inline_field_values();
-  impl.remove_unused_fields();
+  size_t num_finals_inlined = impl.inline_field_values();
+  size_t num_removed_fields = impl.remove_unused_fields();
+
+  mgr.incr_metric("num_finals_inlined", num_finals_inlined);
+  mgr.incr_metric("num_removed_fields", num_removed_fields);
 }
 
 void FinalInlinePass::inline_fields(const Scope& scope) {
