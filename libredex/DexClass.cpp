@@ -524,6 +524,22 @@ DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
   return DexMethod::make_method(cls, name, DexProto::make_proto(rtype, dtl));
 }
 
+DexMethodRef* DexMethod::make_method(
+    const std::string& class_type,
+    const std::string& name,
+    std::initializer_list<std::string> arg_types,
+    const std::string& return_type) {
+  std::deque<DexType*> dex_types;
+  for (const std::string& type_str : arg_types) {
+    dex_types.push_back(DexType::make_type(type_str.c_str()));
+  }
+  return DexMethod::make_method(
+      DexType::make_type(class_type.c_str()),
+      DexString::make_string(name),
+      DexProto::make_proto(DexType::make_type(return_type.c_str()),
+                           DexTypeList::make_type_list(std::move(dex_types))));
+}
+
 void DexClass::remove_method(const DexMethod* m) {
   auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
   auto it = std::find(meths.begin(), meths.end(), m);

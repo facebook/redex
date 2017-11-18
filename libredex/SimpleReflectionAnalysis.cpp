@@ -297,36 +297,36 @@ class Analyzer final
   }
 
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
-  DexMethodRef* m_get_class{get_method_from_signature(
+  DexMethodRef* m_get_class{DexMethod::make_method(
       "Ljava/lang/Object;", "getClass", {}, "Ljava/lang/Class;")};
   DexMethodRef* m_get_method{
-      get_method_from_signature("Ljava/lang/Class;",
-                                "getMethod",
-                                {"Ljava/lang/String;", "[Ljava/lang/Class;"},
-                                "Ljava/lang/reflect/Method;")};
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
   DexMethodRef* m_get_declared_method{
-      get_method_from_signature("Ljava/lang/Class;",
-                                "getDeclaredMethod",
-                                {"Ljava/lang/String;", "[Ljava/lang/Class;"},
-                                "Ljava/lang/reflect/Method;")};
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
   DexMethodRef* m_get_field{
-      get_method_from_signature("Ljava/lang/Class;",
-                                "getField",
-                                {"Ljava/lang/String;"},
-                                "Ljava/lang/reflect/Field;")};
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
   DexMethodRef* m_get_declared_field{
-      get_method_from_signature("Ljava/lang/Class;",
-                                "getDeclaredField",
-                                {"Ljava/lang/String;"},
-                                "Ljava/lang/reflect/Field;")};
-  DexMethodRef* m_get_method_name{get_method_from_signature(
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
+  DexMethodRef* m_get_method_name{DexMethod::make_method(
       "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
-  DexMethodRef* m_get_field_name{get_method_from_signature(
+  DexMethodRef* m_get_field_name{DexMethod::make_method(
       "Ljava/lang/reflect/Field;", "getName", {}, "Ljava/lang/String;")};
-  DexMethodRef* m_for_name{get_method_from_signature("Ljava/lang/Class;",
-                                                     "forName",
-                                                     {"Ljava/lang/String;"},
-                                                     "Ljava/lang/Class;")};
+  DexMethodRef* m_for_name{DexMethod::make_method("Ljava/lang/Class;",
+                                                  "forName",
+                                                  {"Ljava/lang/String;"},
+                                                  "Ljava/lang/Class;")};
 };
 
 } // namespace impl

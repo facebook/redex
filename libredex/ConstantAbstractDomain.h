@@ -19,7 +19,10 @@
 
 /*
  * This abstract domain combinator constructs the lattice of constants of a
- * certain type.
+ * certain type (also called the flat lattice or the three-level lattice). For
+ * more detail on constant propagation please see:
+ *
+ *   https://www.cs.utexas.edu/users/lin/cs380c/wegman.pdf
  *
  * For example, the lattice of integer constants:
  *
