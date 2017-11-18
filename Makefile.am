@@ -120,6 +120,7 @@ libredex_la_SOURCES = \
 	libredex/RedexContext.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
+	libredex/SimpleReflectionAnalysis.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \

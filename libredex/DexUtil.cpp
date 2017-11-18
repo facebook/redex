@@ -11,6 +11,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
+#include <deque>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -68,6 +69,22 @@ DexType* get_class_type() {
 
 DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
+}
+
+DexMethodRef* get_method_from_signature(
+    const std::string& class_type,
+    const std::string& name,
+    std::initializer_list<std::string> arg_types,
+    const std::string& return_type) {
+  std::deque<DexType*> dex_types;
+  for (const std::string& type_str : arg_types) {
+    dex_types.push_back(DexType::make_type(type_str.c_str()));
+  }
+  return DexMethod::make_method(
+      DexType::make_type(class_type.c_str()),
+      DexString::make_string(name),
+      DexProto::make_proto(DexType::make_type(return_type.c_str()),
+                           DexTypeList::make_type_list(std::move(dex_types))));
 }
 
 bool is_primitive(const DexType* type) {

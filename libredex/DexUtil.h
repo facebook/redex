@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <initializer_list>
 #include <vector>
 
 #include "DexClass.h"
@@ -83,6 +84,16 @@ DexType* get_class_type();
  * Return the DexType for an java.lang.Enum type.
  */
 DexType* get_enum_type();
+
+/**
+ * Creates a method reference from its signature given as a collection of
+ * strings.
+ */
+DexMethodRef* get_method_from_signature(
+    const std::string& class_type,
+    const std::string& name,
+    std::initializer_list<std::string> arg_types,
+    const std::string& return_type);
 
 /**
  * Return true if the type is a primitive.
