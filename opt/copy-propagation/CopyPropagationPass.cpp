@@ -294,7 +294,7 @@ Stats CopyPropagation::run(Scope scope) {
       [](Output a, Output b) { return a + b; },
       [](unsigned int /* thread_index */) { return nullptr; },
       Output(),
-      m_config.debug ? 1 : std::thread::hardware_concurrency() / 2);
+      m_config.debug ? 1 : walkers_default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code) {
