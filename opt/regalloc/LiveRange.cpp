@@ -81,8 +81,6 @@ class DefsDomain final : public AbstractDomainReverseAdaptor<
   // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
   // compilers fail to catch this. So we insert a redundant '= default'.
   DefsDomain() = default;
-  explicit DefsDomain(IRInstruction* insn)
-      : AbstractDomainReverseAdaptor(BaseDomain(insn)) {}
 
   size_t size() const {
     return unwrap().size();
