@@ -7255,23 +7255,111 @@ bool ResTable::tryGetConfigEntry(
     return true;
 }
 
+// Helper method for defineNewType. This copies data from source entries into
+// the serialized format for a ResTable_type.
+void ResTable::serializeSingleResType(
+  Vector<char>& output,
+  const uint8_t type_id,
+  const PackageGroup* pg,
+  const ResTable_config& config,
+  const Vector<uint32_t>& source_ids) {
+  auto num_ids = source_ids.size();
+
+  // Push serialized value data into intermediate vec. This will make
+  // calculating offsets convenient. Note that not all given ids will have a
+  // value in the given config.
+  Vector<uint32_t> offsets;
+  Vector<char> serialized_entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    auto id = source_ids[i];
+    auto offset_loc = serialized_entries.size();
+
+    Entry out_entry;
+    status_t err =
+      getEntry(pg, Res_GETTYPE(id), Res_GETENTRY(id), &config, &out_entry);
+    LOG_FATAL_IF(err != NO_ERROR, "Entry not found [%d]", err);
+
+    // getEntry lookup will find a "best match" instead of an entry in exactly
+    // the config we specified. Here we want to know if a value literally exists
+    // in the given config, so as a proxy just check if it came back with a
+    // non-equal config.
+    if (config.compare(out_entry.config) != 0) {
+      offsets.push(ResTable_type::NO_ENTRY);
+      continue;
+    }
+
+    offsets.push(serialized_entries.size());
+    auto ep = out_entry.entry;
+    bool entry_is_complex =
+      (dtohs(ep->flags) & ResTable_entry::FLAG_COMPLEX) != 0;
+
+    if (entry_is_complex) {
+      auto map_entry_ptr = (ResTable_map_entry*) ep;
+      auto total_size =
+        dtohs(map_entry_ptr->size) +
+        dtohl(map_entry_ptr->count) * sizeof(ResTable_map);
+      // Slurp all the bytes up, all the values should be aligned contiguously.
+      for (size_t j = 0; j < total_size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(map_entry_ptr) + j));
+      }
+    } else {
+      Vector<Res_value> lookup;
+      getAllValuesForResource(id, lookup, &config);
+      LOG_FATAL_IF(
+        lookup.size() != 1,
+        "Non-complex entry 0x%x should only have 1 value. Got: %zu",
+        id,
+        lookup.size());
+      auto vp = &lookup[0];
+      for (size_t j = 0; j < ep->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(ep) + j));
+      }
+      for (size_t j = 0; j < vp->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(vp) + j));
+      }
+    }
+  }
+  // Write out the header struct, followed by each offset uint32_t, followed by
+  // all the entry bytes we already serialized.
+  push_short(output, 0x201);
+  auto type_header_size = sizeof(ResTable_type);
+  push_short(output, type_header_size);
+  auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+  auto total_size = entries_start + serialized_entries.size();
+  push_long(output, total_size);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  push_long(output, num_ids);
+  push_long(output, entries_start);
+  auto cp = &config;
+  for (size_t i = 0; i < cp->size; i++) {
+    output.push_back(*((unsigned char*)(cp) + i));
+  }
+  for (size_t i = 0; i < num_ids; i++) {
+    push_long(output, offsets[i]);
+  }
+  output.appendVector(serialized_entries);
+}
+
 void ResTable::defineNewType(
   String8 type_name,
   uint8_t type_id,
-  const ResTable_config* config,
+  const Vector<ResTable_config>& configs,
   const Vector<uint32_t>& source_ids) {
   auto num_ids = source_ids.size();
+  auto num_configs = configs.size();
   LOG_FATAL_IF(num_ids == 0, "Must provide ids to relocate");
+  LOG_FATAL_IF(num_configs == 0, "Must provide one or more configs");
   Vector<char> output;
   const ssize_t pkg_index = getResourcePackageIndex(source_ids[0]);
   const auto old_type_id = Res_GETTYPE(source_ids[0]);
   PackageGroup* pg = mPackageGroups[pkg_index];
-  // Given an existing resource id, and its Res_value, we need to lookup some
-  // additional details, like the ResTable_entry (which includes the string pool
-  // ref), and the flags that make up the ResTable_typeSpec entries.
+
+  // For each res id, we need to lookup the spec flags. This spells out which
+  // configs the id has values in.
   Vector<uint32_t> spec_flags;
-  Vector<const ResTable_entry*> entries;
-  bool is_complex;
   for (size_t i = 0; i < num_ids; i++) {
     auto id = source_ids[i];
     // For simplicity, assert that all ids are from the same package/type.
@@ -7283,19 +7371,9 @@ void ResTable::defineNewType(
       "Given ids must be in the same package");
 
     Entry entry;
-    status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), config, &entry);
-    LOG_FATAL_IF(err != NO_ERROR, "Entry not found");
+    status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), nullptr, &entry);
+    LOG_FATAL_IF(err != NO_ERROR, "Entry not found [%d]", err);
     spec_flags.push(entry.specFlags);
-    entries.push(entry.entry);
-    bool entry_is_complex =
-      (dtohs(entry.entry->flags) & ResTable_entry::FLAG_COMPLEX) != 0;
-    if (i == 0) {
-      is_complex = entry_is_complex;
-    } else {
-      LOG_FATAL_IF(
-        is_complex != entry_is_complex,
-        "Can't mix bag and non-bag entries");
-    }
   }
 
   // Write out the serialized form of a ResTable::Table.
@@ -7314,60 +7392,20 @@ void ResTable::defineNewType(
   for (size_t i = 0; i < num_ids; i++) {
     push_long(output, spec_flags[i]);
   }
-  // Serialize entry data into intermediate vec, to easily build the offset
-  // array.
-  Vector<uint32_t> offsets;
-  Vector<char> serialized_entries;
-  for (size_t i = 0; i < num_ids; i++) {
-    offsets.push(serialized_entries.size());
-    // Copy ResTable_entry, then ResTable_value
-    auto ep = entries[i];
-    if (is_complex) {
-      auto map_entry_ptr = (ResTable_map_entry*) ep;
-      auto total_size =
-        dtohs(map_entry_ptr->size) +
-        dtohl(map_entry_ptr->count) * sizeof(ResTable_map);
-      // Slurp all the bytes up, all the values should be aligned contiguously.
-      for (size_t j = 0; j < total_size; j++) {
-        serialized_entries.push_back(*((unsigned char*)(map_entry_ptr) + j));
-      }
-    } else {
-      Vector<Res_value> lookup;
-      getAllValuesForResource(source_ids[i], lookup, true);
-      LOG_FATAL_IF(
-        lookup.size() != 1,
-        "Relocation only supported for ids with a single default value");
-      auto vp = &lookup[0];
-      for (size_t j = 0; j < ep->size; j++) {
-        serialized_entries.push_back(*((unsigned char*)(ep) + j));
-      }
-      for (size_t j = 0; j < vp->size; j++) {
-        serialized_entries.push_back(*((unsigned char*)(vp) + j));
-      }
-    }
+  // Basic sanity check :)
+  LOG_FATAL_IF(
+    typespec_total_size != output.size(),
+    "Bad serialized size for ResTable_typeSpec. Expected: %zu, actual: %zu",
+    typespec_total_size,
+    output.size());
+
+  // For each ResTable_config, write the bytes for a ResTable_type. Keep track
+  // of the offsets to each of these ResTable_types.
+  Vector<size_t> res_type_offsets;
+  for (size_t i = 0; i < num_configs; i++) {
+    res_type_offsets.push(output.size());
+    serializeSingleResType(output, type_id, pg, configs[i], source_ids);
   }
-  // ResTable_type
-  push_short(output, 0x201);
-  // TODO(T22233306): verify this size is actually correct. The size field in
-  // binary data produced by aapt2 seems to be different (and padded with 0s).
-  auto type_header_size = sizeof(ResTable_type);
-  push_short(output, type_header_size);
-  auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
-  auto total_size = entries_start + serialized_entries.size();
-  push_long(output, total_size);
-  output.push_back(type_id);
-  output.push_back(0); // pad to 4 bytes
-  output.push_back(0);
-  output.push_back(0);
-  push_long(output, num_ids);
-  push_long(output, entries_start);
-  for (size_t i = 0; i < config->size; i++) {
-    output.push_back(*((unsigned char*)(config) + i));
-  }
-  for (size_t i = 0; i < num_ids; i++) {
-    push_long(output, offsets[i]);
-  }
-  output.appendVector(serialized_entries);
 
   // Append the name of this split type to the typeString pool.
   auto package = pg->packages[0];
@@ -7376,6 +7414,8 @@ void ResTable::defineNewType(
   // Jam in a new ResTable::Type into the PackageGroup. Note that by setting the
   // second arg (owner), this should get properly destroyed when the
   // PackageGroup is deleted.
+  // Note that a single ResTable::Type encapsulates multiple ResTable_type
+  // structs, confusingly in a list called "configs".
   ResTable::Type* type = new ResTable::Type(nullptr, package, num_ids);
   auto final_size = output.size();
   char* serialized_chars = (char*) malloc(final_size);
@@ -7389,8 +7429,11 @@ void ResTable::defineNewType(
   type->typeSpecFlags = flag_ptr;
   type->typeSpec = (ResTable_typeSpec*) serialized_chars;
 
-  auto tp = (ResTable_type*) (serialized_chars + typespec_total_size);
-  type->configs.push_back(tp);
+  // Point to each ResTable_type from the Type
+  for (size_t i = 0; i < num_configs; i++) {
+    auto tp = (ResTable_type*) (serialized_chars + res_type_offsets[i]);
+    type->configs.push_back(tp);
+  }
 
   TypeList type_list;
   type_list.push_back(type);

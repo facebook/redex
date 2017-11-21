@@ -1876,11 +1876,12 @@ public:
     void deleteResource(uint32_t resID);
 
     // Defines a ResTable::Type containing the entry data for the given ids.
-    // NOTE: Ids that have only default values are supported.
+    // This adds a new ResTable_typeSpec, followed by 1 ResTable_type for each
+    // given config.
     void defineNewType(
       String8 type_name,
       uint8_t type_id,
-      const ResTable_config* config,
+      const Vector<ResTable_config>& configs,
       const Vector<uint32_t>& source_ids);
 
     // For the given resource ID, looks across all configurations and remaps all
@@ -1971,6 +1972,13 @@ private:
         const ResTable_package* const pkg, const Header* const header);
 
     void print_value(const Package* pkg, const Res_value& value) const;
+
+    void serializeSingleResType(
+      Vector<char>& output,
+      const uint8_t type_id,
+      const PackageGroup* pg,
+      const ResTable_config& config,
+      const Vector<uint32_t>& source_ids);
 
 #ifndef _MSC_VER
     mutable Mutex               mLock;
