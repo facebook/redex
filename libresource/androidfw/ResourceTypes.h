@@ -1169,6 +1169,23 @@ struct ResTable_config
     // chars. Interpreted in conjunction with the locale field.
     char localeVariant[8];
 
+    // An extension of screenConfig.
+    union {
+        struct {
+            uint8_t screenLayout2;      // Contains round/notround qualifier.
+            uint8_t colorMode;          // Wide-gamut, HDR, etc.
+            uint16_t screenConfigPad2;  // Reserved padding.
+        };
+        uint32_t screenConfig2;
+    };
+    // If false and localeScript is set, it means that the script of the locale
+    // was explicitly provided.
+    //
+    // If true, it means that localeScript was automatically computed.
+    // localeScript may still not be set in this case, which means that we
+    // tried but could not compute a script.
+    bool localeScriptWasComputed;
+
     void copyFromDeviceNoSwap(const ResTable_config& o);
 
     void copyFromDtoH(const ResTable_config& o);

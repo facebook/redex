@@ -2092,6 +2092,10 @@ int ResTable_config::compare(const ResTable_config& o) const {
     if (diff != 0) return diff;
     diff = (int32_t)(screenLayout - o.screenLayout);
     if (diff != 0) return diff;
+    diff = (int32_t)(screenLayout2 - o.screenLayout2);
+    if (diff != 0) return diff;
+    diff = (int32_t)(colorMode - o.colorMode);
+    if (diff != 0) return diff;
     diff = (int32_t)(uiMode - o.uiMode);
     if (diff != 0) return diff;
     diff = (int32_t)(smallestScreenWidthDp - o.smallestScreenWidthDp);
