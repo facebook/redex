@@ -25,13 +25,20 @@
  *    non-range forms, which are not constrained in their number of src
  *    operands.
  *
- * 4. Any Dex opcode that can both throw and write to a dest register is split
+ * 4. invoke-* instructions no longer reference both halves of a wide register.
+ *    I.e. our IR represents them like `invoke-static {v0} LFoo;.bar(J)V` even
+ *    though the Dex format will represent that as
+ *    `invoke-static {v0, v1} LFoo;.bar(J)V`. All other instructions in the Dex
+ *    format only refer to the lower half of a wide pair, so this makes things
+ *    uniform.
+ *
+ * 5. Any Dex opcode that can both throw and write to a dest register is split
  *    into two separate pieces in our IR: one piece that may throw but does not
  *    write to a dest, and one move-result-pseudo instruction that writes to a
  *    dest but does not throw. This makes accurate liveness analysis easy.
  *    This is elaborated further below.
  *
- * 5. check-cast also has a move-result-pseudo suffix. check-cast has a side
+ * 6. check-cast also has a move-result-pseudo suffix. check-cast has a side
  *    effect in the runtime verifier when the cast succeeds. The runtime
  *    verifier updates the type in the source register to its more specific
  *    type. As such, for many analyses, it is semantically equivalent to
@@ -42,7 +49,7 @@
  *    See this link for the relevant verifier code:
  *    androidxref.com/7.1.1_r6/xref/art/runtime/verifier/method_verifier.cc#2383
  *
- * 6. payload instructions no longer exist. fill-array-data-payload is attached
+ * 7. payload instructions no longer exist. fill-array-data-payload is attached
  *    directly to the fill-array-data instruction that references it.
  *    {packed, sparse}-switch-payloads are represented by MFLOW_TARGET entries
  *    in the IRCode instruction stream.
