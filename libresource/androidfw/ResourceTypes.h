@@ -1914,6 +1914,13 @@ public:
         Vector<Res_value>& values,
         bool onlyDefault) const;
 
+    // As above, but restrict return values to only values in the given config.
+    // Null pointer means return all values in all configs.
+    void getAllValuesForResource(
+        uint32_t resourceId,
+        Vector<Res_value>& values,
+        const ResTable_config* allowed_config) const;
+
     // Returns true if the given resource ID's are of the same type and have
     // the same entries in the same configurations.
     bool areResourceValuesIdentical(uint32_t resourceId1, uint32_t resourceId2) const;

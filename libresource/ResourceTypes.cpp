@@ -7534,7 +7534,24 @@ void ResTable::collectValuesInConfig(
 void ResTable::getAllValuesForResource(
     uint32_t resID,
     Vector<Res_value>& values,
-    bool onlyDefault) const
+    bool onlyDefault) const {
+  Vector<ResTable_config> allowed;
+  if (onlyDefault) {
+    ResTable_config def = {
+      sizeof(ResTable_config)
+    };
+    getAllValuesForResource(resID, values, (ResTable_config*)&def);
+  } else {
+    getAllValuesForResource(resID, values, (ResTable_config*)nullptr);
+  }
+}
+
+// As above, but if allowed_config is non null, only consider values in that
+// config.
+void ResTable::getAllValuesForResource(
+    uint32_t resID,
+    Vector<Res_value>& values,
+    const ResTable_config* allowed_config) const
 {
     resource_name resName;
     if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
@@ -7556,15 +7573,15 @@ void ResTable::getAllValuesForResource(
 
     for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
         const ResTable_type* type = typeConfigs->configs[configIndex];
+
+        if (allowed_config != nullptr &&
+            type->config.compare(*allowed_config) != 0) {
+          continue;
+        }
+
         const ResTable_entry* ent;
         if (!tryGetConfigEntry(entryIndex, type, &ent)) {
             continue;
-        }
-
-        if (onlyDefault) {
-            if (type->config.toString().size() > 0) {
-                continue;
-            }
         }
 
         uint32_t typeSize = dtohl(type->header.size);
