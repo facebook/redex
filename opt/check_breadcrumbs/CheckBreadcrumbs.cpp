@@ -15,8 +15,8 @@
 
 #include "Walkers.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "Resolver.h"
 
 namespace {
@@ -27,6 +27,8 @@ constexpr const char* METRIC_BAD_TYPE_INSTRUCTIONS = "bad_type_instructions";
 constexpr const char* METRIC_BAD_FIELD_INSTRUCTIONS = "bad_field_instructions";
 constexpr const char* METRIC_BAD_METHOD_INSTRUCTIONS =
     "bad_method_instructions";
+constexpr const char* METRIC_ILLEGAL_CROSS_STORE_REFS =
+    "illegal_cross_store_refs";
 
 bool class_contains(const DexField* field) {
   const auto& cls = type_class(field->get_class());
@@ -57,6 +59,23 @@ using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
 using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
+void illegal_elements(const MethodInsns& method_to_insns,
+                      const char* msj,
+                      std::stringstream& ss,
+                      size_t& illegal_cross_store_refs) {
+
+  for (const auto& pair : method_to_insns) {
+    const auto method = pair.first;
+    const auto& insns = pair.second;
+    ss << "Illegal " << msj << " in method "
+       << method->get_deobfuscated_name() << std::endl;
+    illegal_cross_store_refs += insns.size();
+    for (const auto insn : insns) {
+      ss << "\t" << show_deobfuscated(insn) << std::endl;
+    }
+  }
+}
+
 /**
  * Performs 2 kind of verifications:
  * 1- no references should be to a DexClass that is "internal"
@@ -74,11 +93,21 @@ class Breadcrumbs {
   std::map<const DexType*, MethodInsns, dextypes_comparator> bad_type_insns;
   std::map<const DexField*, MethodInsns, dexfields_comparator> bad_field_insns;
   std::map<const DexMethod*, MethodInsns, dexmethods_comparator> bad_meth_insns;
+  std::map<const DexType*, Fields, dextypes_comparator> illegal_field;
+  MethodInsns illegal_type;
+  MethodInsns illegal_field_type;
+  MethodInsns illegal_field_cls;
+  MethodInsns illegal_method_call;
+  XStoreRefs xstores;
+  bool multiple_root_store_dexes;
 
  public:
 
-  explicit Breadcrumbs(const Scope& scope) : scope(scope) {
+  explicit Breadcrumbs(const Scope& scope, DexStoresVector& stores)
+    : scope(scope),
+      xstores(stores) {
     classes.insert(scope.begin(), scope.end());
+    multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   }
 
   void check_breadcrumbs() {
@@ -87,7 +116,7 @@ class Breadcrumbs {
     check_opcodes();
   }
 
-  void report(bool report_only, PassManager& mgr) {
+  void report_deleted_types(bool report_only, PassManager& mgr) {
     size_t bad_fields_count = 0;
     size_t bad_methods_count = 0;
     size_t bad_type_insns_count = 0;
@@ -170,7 +199,63 @@ class Breadcrumbs {
     mgr.incr_metric(METRIC_BAD_METHOD_INSTRUCTIONS, bad_meths_insns_count);
   }
 
+
+  void report_illegal_refs(bool fail_if_illegal_refs, PassManager& mgr) {
+    size_t illegal_cross_store_refs = 0;
+    std::stringstream ss;
+    for (const auto& pair : illegal_field) {
+      const auto type = pair.first;
+      const auto& fields = pair.second;
+      illegal_cross_store_refs += fields.size();
+
+      ss << "Illegal fields in class "
+         << type_class(type)->get_deobfuscated_name()
+         << std::endl;;
+      for (const auto field : fields) {
+        ss << "\t" << field->get_deobfuscated_name() << std::endl;
+      }
+    }
+
+    illegal_elements(illegal_type, "type refs", ss, illegal_cross_store_refs);
+    illegal_elements(
+        illegal_field_type, "field type refs", ss, illegal_cross_store_refs);
+    illegal_elements(
+        illegal_field_cls, "field class refs", ss, illegal_cross_store_refs);
+    illegal_elements(
+        illegal_method_call, "method call", ss, illegal_cross_store_refs);
+
+    mgr.set_metric(METRIC_ILLEGAL_CROSS_STORE_REFS, illegal_cross_store_refs);
+
+    always_assert_log(ss.str().empty() || !fail_if_illegal_refs,
+                      "ERROR - illegal cross store references "
+                      "(contact redex@on-call):\n%s",
+                      ss.str().c_str());
+  }
+
  private:
+  bool is_illegal_cross_store(const DexType* caller, const DexType* callee) {
+    // Skip deleted types, as we don't know the store for those.
+    if (classes.count(type_class(caller)) == 0 ||
+        classes.count(type_class(callee)) == 0) {
+      return false;
+    }
+
+    size_t caller_store_idx = xstores.get_store_idx(caller);
+    size_t callee_store_idx = xstores.get_store_idx(callee);
+    if (caller_store_idx < callee_store_idx) {
+      // Accept primary to secondary references.
+      if (multiple_root_store_dexes &&
+          caller_store_idx == 0 &&
+          callee_store_idx == 1) {
+        return false;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
   const DexType* check_type(const DexType* type) {
     const auto& cls = type_class(type);
     if (cls == nullptr) return nullptr;
@@ -204,7 +289,14 @@ class Breadcrumbs {
     walk_fields(scope,
         [&](DexField* field) {
           const auto& type = check_type(field->get_type());
-          if (type == nullptr) return;
+          if (type == nullptr) {
+            const auto cls = field->get_class();
+            const auto field_type = field->get_type();
+            if (is_illegal_cross_store(cls, field_type)) {
+              illegal_field[cls].emplace_back(field);
+            }
+            return;
+          }
           bad_fields[type].emplace_back(field);
         });
   }
@@ -225,6 +317,11 @@ class Breadcrumbs {
     type = check_type(type);
     if (type != nullptr) {
       bad_type(type, method, insn);
+    } else {
+      const auto cls = method->get_class();
+      if (is_illegal_cross_store(cls, insn->get_type())) {
+        illegal_type[method].emplace_back(insn);
+      }
     }
   }
 
@@ -235,11 +332,22 @@ class Breadcrumbs {
       bad_type(type, method, insn);
       return;
     }
+
+    auto cls = method->get_class();
+    if (is_illegal_cross_store(cls, field->get_class())) {
+      illegal_field_type[method].emplace_back(insn);
+    }
+
     type = check_type(field->get_type());
     if (type != nullptr) {
       bad_type(type, method, insn);
       return;
     }
+
+    if (is_illegal_cross_store(cls, field->get_type())) {
+      illegal_field_cls[method].emplace_back(insn);
+    }
+
     auto res_field = resolve_field(field);
     if (res_field != nullptr) {
       // a resolved field can only differ in the owner class
@@ -267,6 +375,9 @@ class Breadcrumbs {
     if (type != nullptr) {
       bad_type(type, method, insn);
       return;
+    }
+    if (is_illegal_cross_store(method->get_class(), meth->get_class())) {
+      illegal_method_call[method].emplace_back(insn);
     }
 
     DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn));
@@ -318,9 +429,10 @@ void CheckBreadcrumbsPass::run_pass(
     ConfigFiles& cfg,
     PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope);
+  Breadcrumbs bc(scope, stores);
   bc.check_breadcrumbs();
-  bc.report(!fail, mgr);
+  bc.report_deleted_types(!fail, mgr);
+  bc.report_illegal_refs(fail_if_illegal_refs, mgr);
 }
 
 static CheckBreadcrumbsPass s_pass;
