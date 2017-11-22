@@ -7264,7 +7264,6 @@ void ResTable::serializeSingleResType(
   const ResTable_config& config,
   const Vector<uint32_t>& source_ids) {
   auto num_ids = source_ids.size();
-
   // Push serialized value data into intermediate vec. This will make
   // calculating offsets convenient. Note that not all given ids will have a
   // value in the given config.
@@ -7277,13 +7276,13 @@ void ResTable::serializeSingleResType(
     Entry out_entry;
     status_t err =
       getEntry(pg, Res_GETTYPE(id), Res_GETENTRY(id), &config, &out_entry);
-    LOG_FATAL_IF(err != NO_ERROR, "Entry not found [%d]", err);
-
     // getEntry lookup will find a "best match" instead of an entry in exactly
     // the config we specified. Here we want to know if a value literally exists
     // in the given config, so as a proxy just check if it came back with a
     // non-equal config.
-    if (config.compare(out_entry.config) != 0) {
+    // Similarly, asking for a value for default config which only has a higher
+    // API variant for example will return an error status. Check both.
+    if (err != NO_ERROR || config.compare(out_entry.config) != 0) {
       offsets.push(ResTable_type::NO_ENTRY);
       continue;
     }
@@ -7372,7 +7371,11 @@ void ResTable::defineNewType(
 
     Entry entry;
     status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), nullptr, &entry);
-    LOG_FATAL_IF(err != NO_ERROR, "Entry not found [%d]", err);
+    LOG_FATAL_IF(
+      err != NO_ERROR,
+      "Entry 0x%x not found [err %d]",
+      id,
+      err);
     spec_flags.push(entry.specFlags);
   }
 
