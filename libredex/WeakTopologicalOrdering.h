@@ -11,10 +11,12 @@
 
 #include <cstddef>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <limits>
 #include <stack>
+#include <thread>
 #include <vector>
 
 #include "Debug.h"
@@ -183,7 +185,7 @@ class WeakTopologicalOrdering final {
       NodeId root, std::function<std::vector<NodeId>(const NodeId&)> successors)
       : m_successors(successors), m_free_position(0), m_num(0) {
     int32_t partition = -1;
-    visit(root, &partition);
+    visit(root, &partition, 0);
   }
 
   iterator begin() const {
@@ -196,15 +198,35 @@ class WeakTopologicalOrdering final {
   }
 
  private:
+  constexpr size_t max_depth() { return 1000; }
+
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
-  uint32_t visit(const NodeId& vertex, int32_t* partition) {
+  uint32_t visit(const NodeId& vertex, int32_t* partition, size_t depth) {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
     for (NodeId succ : m_successors(vertex)) {
       uint32_t succ_dfn = get_dfn(succ);
-      uint32_t min = (succ_dfn == 0) ? visit(succ, partition) : succ_dfn;
+      uint32_t min;
+      if (succ_dfn == 0) {
+        if (depth < max_depth()) {
+          min = visit(succ, partition, depth + 1);
+        } else {
+          // If the depth-first search dives too deep into the graph, we fork
+          // the computation into a new thread, which eases pressure on the
+          // stack (a new thread gets its own stack space).
+          std::packaged_task<uint32_t()> task(
+              [=] { return visit(succ, partition, 0); });
+          std::future<uint32_t> f = task.get_future();
+          std::thread t(std::move(task));
+          f.wait();
+          min = f.get();
+          t.join();
+        }
+      } else {
+        min = succ_dfn;
+      };
       if (min <= head) {
         head = min;
         loop = true;
@@ -223,7 +245,7 @@ class WeakTopologicalOrdering final {
           element = m_stack.top();
           m_stack.pop();
         }
-        push_component(vertex, *partition);
+        push_component(vertex, *partition, depth);
       }
       auto kind = loop ? WtoComponent<NodeId>::Kind::Scc
                        : WtoComponent<NodeId>::Kind::Vertex;
@@ -233,10 +255,10 @@ class WeakTopologicalOrdering final {
     return head;
   }
 
-  void push_component(const NodeId& vertex, int32_t partition) {
+  void push_component(const NodeId& vertex, int32_t partition, size_t depth) {
     for (NodeId succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
-        visit(succ, &partition);
+        visit(succ, &partition, depth + 1);
       }
     }
   }
