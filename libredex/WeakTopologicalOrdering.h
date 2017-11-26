@@ -11,17 +11,19 @@
 
 #include <cstddef>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <limits>
 #include <stack>
+#include <thread>
 #include <vector>
 
 #include "Debug.h"
 
 template <typename NodeId>
 class WtoComponent;
-template <typename NodeId>
+template <typename NodeId, typename NodeHash>
 class WeakTopologicalOrdering;
 
 namespace wto_impl {
@@ -78,7 +80,7 @@ class WtoComponentIterator final
 
   template <typename T>
   friend class ::WtoComponent;
-  template <typename T>
+  template <typename T1, typename T2>
   friend class ::WeakTopologicalOrdering;
 };
 
@@ -166,10 +168,11 @@ class WtoComponent final {
  * parametric class definition. This also makes the design of unit tests much
  * easier.
  *
- * - NodeId is the identifier of a node in the graph. It's meant to be a simple
- *   type like an int, a pointer or a string.
+ * - NodeId is the identifier of a node in the graph. Nodes should be comparable
+ *   using `operator==()`.
+ * - NodeHash is a functional structure providing a hash function on nodes.
  */
-template <typename NodeId>
+template <typename NodeId, typename NodeHash = std::hash<NodeId>>
 class WeakTopologicalOrdering final {
  public:
   using iterator = wto_impl::WtoComponentIterator<NodeId>;
@@ -182,7 +185,7 @@ class WeakTopologicalOrdering final {
       NodeId root, std::function<std::vector<NodeId>(const NodeId&)> successors)
       : m_successors(successors), m_free_position(0), m_num(0) {
     int32_t partition = -1;
-    visit(root, &partition);
+    visit(root, &partition, 0);
   }
 
   iterator begin() const {
@@ -195,15 +198,35 @@ class WeakTopologicalOrdering final {
   }
 
  private:
+  constexpr size_t max_depth() { return 1000; }
+
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
-  uint32_t visit(const NodeId& vertex, int32_t* partition) {
+  uint32_t visit(const NodeId& vertex, int32_t* partition, size_t depth) {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
     for (NodeId succ : m_successors(vertex)) {
       uint32_t succ_dfn = get_dfn(succ);
-      uint32_t min = (succ_dfn == 0) ? visit(succ, partition) : succ_dfn;
+      uint32_t min;
+      if (succ_dfn == 0) {
+        if (depth < max_depth()) {
+          min = visit(succ, partition, depth + 1);
+        } else {
+          // If the depth-first search dives too deep into the graph, we fork
+          // the computation into a new thread, which eases pressure on the
+          // stack (a new thread gets its own stack space).
+          std::packaged_task<uint32_t()> task(
+              [=] { return visit(succ, partition, 0); });
+          std::future<uint32_t> f = task.get_future();
+          std::thread t(std::move(task));
+          f.wait();
+          min = f.get();
+          t.join();
+        }
+      } else {
+        min = succ_dfn;
+      };
       if (min <= head) {
         head = min;
         loop = true;
@@ -215,12 +238,14 @@ class WeakTopologicalOrdering final {
       NodeId element = m_stack.top();
       m_stack.pop();
       if (loop) {
-        while (element != vertex) {
+        // Nodes are required to be comparable using `operator==()`. We don't
+        // assume `operator!=()` to be defined on nodes.
+        while (!(element == vertex)) {
           set_dfn(element, 0);
           element = m_stack.top();
           m_stack.pop();
         }
-        push_component(vertex, *partition);
+        push_component(vertex, *partition, depth);
       }
       auto kind = loop ? WtoComponent<NodeId>::Kind::Scc
                        : WtoComponent<NodeId>::Kind::Vertex;
@@ -230,10 +255,10 @@ class WeakTopologicalOrdering final {
     return head;
   }
 
-  void push_component(const NodeId& vertex, int32_t partition) {
+  void push_component(const NodeId& vertex, int32_t partition, size_t depth) {
     for (NodeId succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
-        visit(succ, &partition);
+        visit(succ, &partition, depth + 1);
       }
     }
   }
@@ -264,7 +289,7 @@ class WeakTopologicalOrdering final {
   // The next available position at the end of the vector m_wto_space.
   int32_t m_free_position;
   // These are auxiliary data structures used by Bourdoncle's algorithm.
-  std::unordered_map<NodeId, uint32_t> m_dfn;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_dfn;
   std::stack<NodeId> m_stack;
   uint32_t m_num;
 };
