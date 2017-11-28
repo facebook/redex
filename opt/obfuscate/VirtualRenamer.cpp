@@ -295,6 +295,11 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
           if (type_class(scope->type)->is_external()) return;
           if (!can_rename_scope(scope)) return;
         }
+        for (const auto& intf : intfs) {
+          const auto& intf_cls = type_class(intf);
+          if (intf_cls == nullptr) return;
+          if (intf_cls->is_external()) return;
+        }
         // if any interface method that we are about to rename
         // cannot be renamed give up
         for (const auto& intf : intfs) {
@@ -413,10 +418,12 @@ size_t rename_virtuals(Scope& classes) {
   const auto obj_t = get_object_type();
   int seed = 0;
   size_t renamed = vr.rename_virtual_scopes(obj_t, seed);
+  TRACE(OBFUSCATE, 2, "Virtual renamed: %ld\n", renamed);
 
   // rename interfaces
   std::unordered_set<const VirtualScope*> visited;
-  renamed += vr.rename_interface_scopes(seed);
+  size_t intf_renamed = vr.rename_interface_scopes(seed);
+  TRACE(OBFUSCATE, 2, "Interface renamed: %ld\n", intf_renamed);
   TRACE(OBFUSCATE, 2, "MAX seed: %d\n", seed);
-  return renamed;
+  return renamed + intf_renamed;
 }

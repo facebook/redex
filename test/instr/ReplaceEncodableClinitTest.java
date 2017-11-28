@@ -21,6 +21,8 @@ public class ReplaceEncodableClinitTest {
     assertThat(Encodable.S_SHORT).isEqualTo((short) 128);
     assertThat(Encodable.S_INT).isEqualTo(12345);
     assertThat(Encodable.S_STRING).isEqualTo("string");
+    assertThat(Encodable.S_LONG).isEqualTo(0x1000200030004000L);
+    assertThat(Encodable.S_DOUBLE).isEqualTo(1.0000000000000002);
   }
 }
 
@@ -31,15 +33,12 @@ class Encodable {
   public static short S_SHORT = 128;
   public static int S_INT = 12345;
   public static String S_STRING = "string";
+  public static long S_LONG = 0x1000200030004000L;
+  public static double S_DOUBLE = 1.0000000000000002;
 }
 
 class UnEncodable {
   public static final int S_INT = Math.random() > .5 ? 1 : 0;
-}
-
-class HasWides {
-  public static long S_LONG = 0x1000200030004000L;
-  public static double S_DOUBLE = 1.0000000000000002;
 }
 
 class HasCharSequence {

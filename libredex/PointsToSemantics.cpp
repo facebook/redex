@@ -826,6 +826,9 @@ class AnchorPropagation final
           current_state->set(insn->dest() + 1, AnchorDomain());
         }
       }
+      // There is no need to invalidate RESULT_REGISTER, because all operations
+      // that may write a reference into RESULT_REGISTER are handled in the
+      // switch statement.
     }
     }
   }

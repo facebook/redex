@@ -17,6 +17,7 @@ class RemoveUnreachablePass : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("ignore_string_literals", {}, m_ignore_string_literals);
+    pc.get("ignore_string_literal_annos", {}, m_ignore_string_literal_annos);
     pc.get("ignore_system_annos", {}, m_ignore_system_annos);
   }
 
@@ -24,5 +25,6 @@ class RemoveUnreachablePass : public Pass {
 
   private:
     std::vector<std::string> m_ignore_string_literals;
+    std::vector<std::string> m_ignore_string_literal_annos;
     std::vector<std::string> m_ignore_system_annos;
 };

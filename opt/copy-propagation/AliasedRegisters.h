@@ -84,22 +84,21 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
-  /**
-   * declare that r1 and r2 are aliases of each other.
-   * This also means r1 is aliased to all of r2's aliases and vice versa.
-   */
+  // Declare that r1 and r2 are aliases of each other.
+  // This does NOT handle all transitive aliases. It's mostly used for testing
   void make_aliased(const RegisterValue& r1, const RegisterValue& r2);
 
-  /**
-   * break every alias that any register has to `r`
-   */
+  // move `moving` into the alias group of `group`
+  void move(const RegisterValue& moving, const RegisterValue& group);
+
+  // break every alias that any register has to `r`
   void break_alias(const RegisterValue& r);
 
-  /**
-   * Including transitive aliases
-   */
+  // Are r1 and r2 aliases?
+  // (including transitive aliases)
   bool are_aliases(const RegisterValue& r1, const RegisterValue& r2);
 
+  // Each alias group has one representative register
   boost::optional<Register> get_representative(const RegisterValue& r);
 
   // ---- extends AbstractValue ----
@@ -131,22 +130,18 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;
   Graph m_graph;
 
-  // Cache the connected component map here for speed.
-  // Computed by get_representative and cleared by any change to the graph
-  std::vector<int> m_conn_components;
-
   const boost::range_detail::integer_iterator<vertex_t> find(
       const RegisterValue& r) const;
 
   vertex_t find_or_create(const RegisterValue& r);
 
-  bool path_exists(vertex_t v1, vertex_t v2) const;
-
   bool has_edge_between(const RegisterValue& r1, const RegisterValue& r2) const;
 
-  // call when the graph is changed and things we computed on the old graph
-  // are no longer true.
-  void invalidate_cache();
+  // return a vector of all vertices in v's alias group (including v itself)
+  std::vector<vertex_t> vertices_in_group(vertex_t v) const;
+
+  // merge r1's group with r2. This operation is symmetric
+  void merge_groups_of(const RegisterValue& r1, const RegisterValue& r2);
 };
 
 class AliasDomain

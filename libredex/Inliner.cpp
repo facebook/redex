@@ -257,6 +257,10 @@ void MultiMethodInliner::inline_callees(
     inliner::inline_method(caller->get_code(), callee->get_code(), insn);
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
+    TRACE(MMINL,
+          6,
+          "checking visibility usage of members in %s\n",
+          SHOW(callee));
     change_visibility(callee);
     info.calls_inlined++;
     inlined.insert(callee);
@@ -553,75 +557,6 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
   return false;
 }
 
-/**
- * Change the visibility of members accessed in a callee as they are moved
- * to the caller context.
- * We make everything public but we could be more precise and only
- * relax visibility as needed.
- */
-void MultiMethodInliner::change_visibility(DexMethod* callee) {
-  TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
-      SHOW(callee));
-  for (auto& mie : InstructionIterable(callee->get_code())) {
-    auto insn = mie.insn;
-    if (insn->has_field()) {
-      auto cls = type_class(insn->get_field()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto field =
-          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-              ? FieldSearch::Static : FieldSearch::Instance);
-      if (field != nullptr && field->is_concrete()) {
-        TRACE(MMINL, 6, "changing visibility of %s.%s %s\n",
-            SHOW(field->get_class()), SHOW(field->get_name()),
-            SHOW(field->get_type()));
-        set_public(field);
-        set_public(type_class(field->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_field(field);
-      }
-      continue;
-    }
-    if (insn->has_method()) {
-      auto cls = type_class(insn->get_method()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto method = resolver(insn->get_method(), opcode_to_search(insn));
-      if (method != nullptr && method->is_concrete()) {
-        TRACE(MMINL, 6, "changing visibility of %s.%s: %s\n",
-            SHOW(method->get_class()), SHOW(method->get_name()),
-            SHOW(method->get_proto()));
-        set_public(method);
-        set_public(type_class(method->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_method(method);
-      }
-      continue;
-    }
-    if (insn->has_type()) {
-      auto type = insn->get_type();
-      auto cls = type_class(type);
-      if (cls != nullptr && !cls->is_external()) {
-        TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
-        set_public(cls);
-      }
-      continue;
-    }
-  }
-
-  std::vector<DexType*> types;
-  callee->get_code()->gather_catch_types(types);
-  for (auto type : types) {
-    auto cls = type_class(type);
-    if (cls != nullptr && !cls->is_external()) {
-      TRACE(MMINL, 6, "changing visibility of %s\n", SHOW(type));
-      set_public(cls);
-    }
-  }
-}
-
 void MultiMethodInliner::invoke_direct_to_static() {
   // We sort the methods here because make_static renames methods on collision,
   // and which collisions occur is order-dependent. E.g. if we have the
@@ -705,6 +640,58 @@ void select_inlinable(
       if (callee->get_code()->count_opcodes() <= CODE_SIZE_3_CALLERS) {
         inlinable->insert(callee);
       }
+    }
+  }
+}
+
+void change_visibility(DexMethod* callee) {
+  auto code = callee->get_code();
+  always_assert(code != nullptr);
+
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+
+    if (insn->has_field()) {
+      auto cls = type_class(insn->get_field()->get_class());
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+      auto field =
+          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+              ? FieldSearch::Static : FieldSearch::Instance);
+      if (field != nullptr && field->is_concrete()) {
+        set_public(field);
+        set_public(type_class(field->get_class()));
+        // FIXME no point in rewriting opcodes in the callee
+        insn->set_field(field);
+      }
+    } else if (insn->has_method()) {
+      auto cls = type_class(insn->get_method()->get_class());
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (method != nullptr && method->is_concrete()) {
+        set_public(method);
+        set_public(type_class(method->get_class()));
+        // FIXME no point in rewriting opcodes in the callee
+        insn->set_method(method);
+      }
+    } else if (insn->has_type()) {
+      auto type = insn->get_type();
+      auto cls = type_class(type);
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+    }
+  }
+
+  std::vector<DexType*> types;
+  callee->get_code()->gather_catch_types(types);
+  for (auto type : types) {
+    auto cls = type_class(type);
+    if (cls != nullptr && !cls->is_external()) {
+      set_public(cls);
     }
   }
 }

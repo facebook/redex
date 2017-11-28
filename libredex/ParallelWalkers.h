@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <thread>
 #include <vector>
@@ -19,6 +20,11 @@
 #include "IRCode.h"
 #include "Match.h"
 #include "WorkQueue.h"
+
+inline unsigned int walkers_default_num_threads() {
+  unsigned int threads = std::thread::hardware_concurrency() / 2;
+  return std::max(1u, threads);
+}
 
 /**
  * Walk all methods of all classes defined in 'scope' calling back
@@ -41,7 +47,7 @@ Output walk_methods_parallel(
     OutputReducerFn reducer,
     DataInitializerFn data_initializer,
     const Output& init = Output(),
-    size_t num_threads = std::thread::hardware_concurrency() / 2) {
+    size_t num_threads = walkers_default_num_threads()) {
   auto wq = WorkQueue<DexClass*, Data, Output>(
       [&](Data& data, DexClass* cls) {
         Output out = init;

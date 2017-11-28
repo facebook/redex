@@ -1169,6 +1169,23 @@ struct ResTable_config
     // chars. Interpreted in conjunction with the locale field.
     char localeVariant[8];
 
+    // An extension of screenConfig.
+    union {
+        struct {
+            uint8_t screenLayout2;      // Contains round/notround qualifier.
+            uint8_t colorMode;          // Wide-gamut, HDR, etc.
+            uint16_t screenConfigPad2;  // Reserved padding.
+        };
+        uint32_t screenConfig2;
+    };
+    // If false and localeScript is set, it means that the script of the locale
+    // was explicitly provided.
+    //
+    // If true, it means that localeScript was automatically computed.
+    // localeScript may still not be set in this case, which means that we
+    // tried but could not compute a script.
+    bool localeScriptWasComputed;
+
     void copyFromDeviceNoSwap(const ResTable_config& o);
 
     void copyFromDtoH(const ResTable_config& o);
@@ -1859,11 +1876,12 @@ public:
     void deleteResource(uint32_t resID);
 
     // Defines a ResTable::Type containing the entry data for the given ids.
-    // NOTE: Ids that have only default values are supported.
+    // This adds a new ResTable_typeSpec, followed by 1 ResTable_type for each
+    // given config.
     void defineNewType(
       String8 type_name,
       uint8_t type_id,
-      const ResTable_config* config,
+      const Vector<ResTable_config>& configs,
       const Vector<uint32_t>& source_ids);
 
     // For the given resource ID, looks across all configurations and remaps all
@@ -1896,6 +1914,13 @@ public:
         uint32_t resourceId,
         Vector<Res_value>& values,
         bool onlyDefault) const;
+
+    // As above, but restrict return values to only values in the given config.
+    // Null pointer means return all values in all configs.
+    void getAllValuesForResource(
+        uint32_t resourceId,
+        Vector<Res_value>& values,
+        const ResTable_config* allowed_config) const;
 
     // Returns true if the given resource ID's are of the same type and have
     // the same entries in the same configurations.
@@ -1947,6 +1972,13 @@ private:
         const ResTable_package* const pkg, const Header* const header);
 
     void print_value(const Package* pkg, const Res_value& value) const;
+
+    void serializeSingleResType(
+      Vector<char>& output,
+      const uint8_t type_id,
+      const PackageGroup* pg,
+      const ResTable_config& config,
+      const Vector<uint32_t>& source_ids);
 
 #ifndef _MSC_VER
     mutable Mutex               mLock;

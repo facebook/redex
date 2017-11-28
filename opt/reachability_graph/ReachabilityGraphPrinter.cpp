@@ -40,6 +40,7 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
   auto reachables =
       compute_reachable_objects(stores,
                                 load_annos(m_ignore_string_literals),
+                                load_annos(m_ignore_string_literal_annos),
                                 load_annos(m_ignore_system_annos),
                                 nullptr,
                                 true /*generate graph*/);

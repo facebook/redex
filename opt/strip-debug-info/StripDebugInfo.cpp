@@ -30,6 +30,10 @@ bool pattern_matches(const char* str,
   return false;
 }
 
+bool is_debug_entry(const MethodItemEntry& mie) {
+  return mie.type == MFLOW_DEBUG || mie.type == MFLOW_POSITION;
+}
+
 } // namespace
 
 bool StripDebugInfoPass::method_passes_filter(DexMethod* meth) const {
@@ -76,6 +80,34 @@ bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
   }
   return remove;
 }
+
+/*
+ * Debug info in static methods is often not terribly useful.  Bridge and
+ * accessor methods seem to have their line numbers point to the top of their
+ * class definition; setting drop_synth_conservative will remove debug info for
+ * these methods.
+ *
+ * Some code-generating annotations have their code point to the annotation
+ * site, which I suppose is mildly useful, but we can often figure that out
+ * from the class name anyway. However, conducting a comprehensive analysis of
+ * all synthetic methods is hard, so it's hard to be sure that stripping all of
+ * them of debug info is safe -- hence I'm gating their removal under the
+ * drop_synth_aggressive flag.
+ */
+bool StripDebugInfoPass::should_drop_for_synth(const DexMethod* method) const {
+  if (!is_synthetic(method) && !is_bridge(method)) {
+    return false;
+  }
+
+  if (m_drop_synth_aggressive) {
+    return true;
+  }
+
+  return m_drop_synth_conservative &&
+         (is_bridge(method) ||
+          strstr(method->get_name()->c_str(), "access$") != nullptr);
+}
+
 void StripDebugInfoPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& cfg,
                                   PassManager& mgr) {
@@ -92,10 +124,15 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
     if (!method_passes_filter(meth)) return;
     ++m_num_matches;
     bool debug_info_empty = true;
+    bool force_discard = m_drop_all_dbg_info || should_drop_for_synth(meth);
 
     for (auto it = code->begin(); it != code->end();) {
       const auto& mei = *it;
-      if (should_remove(mei)) {
+      if (should_remove(mei) || (force_discard && is_debug_entry(mei))) {
+        // Even though force_discard will drop the debug item below, preventing
+        // any of the debug entries for :meth to be output, we still want to
+        // erase those entries here so that transformations like inlining won't
+        // move these entries into a method that does have a debug item.
         it = code->erase(it);
       } else {
         switch (mei.type) {
@@ -116,7 +153,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
     }
 
     if (m_drop_all_dbg_info ||
-        (debug_info_empty && m_drop_all_dbg_info_if_empty)) {
+        (debug_info_empty && m_drop_all_dbg_info_if_empty) || force_discard) {
       ++m_num_empty_dropped;
       code->release_debug_item();
     }

@@ -1,4 +1,3 @@
-
 /**
  * Copyright (c) 2016-present, Facebook, Inc.
  * All rights reserved.
@@ -160,7 +159,8 @@ struct ReachableObjects {
 
 ReachableObjects compute_reachable_objects(
     DexStoresVector& stores,
-    const std::unordered_set<const DexType*>& ignore_string_literals_annos,
+    const std::unordered_set<const DexType*>& ignore_string_literals,
+    const std::unordered_set<const DexType*>& ignore_string_literal_annos,
     const std::unordered_set<const DexType*>& ignore_system_annos,
     int* num_ignore_check_strings,
     bool record_reachability = false);

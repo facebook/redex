@@ -153,9 +153,15 @@ struct Tracer {
 static Tracer tracer;
 }
 
+#ifdef NDEBUG
+bool traceEnabled(TraceModule, int) {
+  return false;
+}
+#else
 bool traceEnabled(TraceModule module, int level) {
   return tracer.traceEnabled(module, level);
 }
+#endif
 
 void trace(TraceModule module, int level, const char* fmt, ...) {
   va_list ap;

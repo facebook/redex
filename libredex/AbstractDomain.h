@@ -452,7 +452,10 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
   using BaseDomain = Domain;
 
   AbstractDomainReverseAdaptor() = default;
-  explicit AbstractDomainReverseAdaptor(Domain domain) : m_domain(domain) {}
+
+  template <typename... Args>
+  explicit AbstractDomainReverseAdaptor(Args&&... args)
+      : m_domain(std::forward<Args>(args)...) {}
 
   bool is_bottom() const override { return m_domain.is_top(); }
 

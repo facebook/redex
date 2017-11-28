@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <initializer_list>
 #include <list>
 #include <map>
 #include <memory>
@@ -796,6 +797,15 @@ class DexMethod : public DexMethodRef {
     DexTypeList* dtl = DexTypeList::make_type_list(std::move(args));
     return make_method(cls, name, DexProto::make_proto(rtype, dtl));
   }
+
+  /**
+   * Creates a method reference from its signature given as a collection of
+   * strings.
+   */
+  static DexMethodRef* make_method(const std::string& class_type,
+                                   const std::string& name,
+                                   std::initializer_list<std::string> arg_types,
+                                   const std::string& return_type);
 
   /**
    * Get a method using a full descriptor: Lcls;.name:(args)rtype

@@ -30,7 +30,7 @@
  * analyzed in the current local stabilization loop (please see Bourdoncle's
  * paper for more details on the recursive iteration strategy).
  */
-template <typename NodeId, typename Domain>
+template <typename NodeId, typename Domain, typename NodeHash>
 class MonotonicFixpointIteratorContext final {
  public:
   MonotonicFixpointIteratorContext() = delete;
@@ -59,8 +59,9 @@ class MonotonicFixpointIteratorContext final {
 
   const Domain& get_initial_value() const { return m_init; }
 
-  void increase_iteration_count(const NodeId& node,
-                                std::unordered_map<NodeId, uint32_t>* table) {
+  void increase_iteration_count(
+      const NodeId& node,
+      std::unordered_map<NodeId, uint32_t, NodeHash>* table) {
     auto insertion = table->insert({node, 1});
     if (insertion.second == false) {
       ++insertion.first->second;
@@ -77,10 +78,10 @@ class MonotonicFixpointIteratorContext final {
   }
 
   const Domain& m_init;
-  std::unordered_map<NodeId, uint32_t> m_global_iterations;
-  std::unordered_map<NodeId, uint32_t> m_local_iterations;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_global_iterations;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_local_iterations;
 
-  template <typename T1, typename T2>
+  template <typename T1, typename T2, typename T3>
   friend class MonotonicFixpointIterator;
 };
 
@@ -136,13 +137,15 @@ class FixpointIteratorGraphSpec {
  *
  * The fixpoint iterator is thread safe.
  */
-template <typename GraphInterface, typename Domain>
+template <typename GraphInterface,
+          typename Domain,
+          typename NodeHash = std::hash<typename GraphInterface::NodeId>>
 class MonotonicFixpointIterator {
  public:
   using Graph = typename GraphInterface::Graph;
   using NodeId = typename GraphInterface::NodeId;
   using EdgeId = typename GraphInterface::EdgeId;
-  using Context = MonotonicFixpointIteratorContext<NodeId, Domain>;
+  using Context = MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
 
   virtual ~MonotonicFixpointIterator() {
     static_assert(std::is_base_of<AbstractDomain<Domain>, Domain>::value,
@@ -354,9 +357,9 @@ class MonotonicFixpointIterator {
 
   mutable std::recursive_mutex m_lock;
   const Graph& m_graph;
-  WeakTopologicalOrdering<NodeId> m_wto;
-  std::unordered_map<NodeId, Domain> m_entry_states;
-  std::unordered_map<NodeId, Domain> m_exit_states;
+  WeakTopologicalOrdering<NodeId, NodeHash> m_wto;
+  std::unordered_map<NodeId, Domain, NodeHash> m_entry_states;
+  std::unordered_map<NodeId, Domain, NodeHash> m_exit_states;
 };
 
 template <typename GraphInterface>

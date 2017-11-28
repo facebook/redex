@@ -28,7 +28,7 @@ void assert_class_clinit_exist(DexClasses& classes, const char* name) {
   auto cls = find_class_named(classes, name);
   ASSERT_NE(nullptr, cls);
   auto clinit = cls->get_clinit();
-  ASSERT_NE(nullptr, clinit);
+  EXPECT_NE(nullptr, clinit);
 }
 
 /*
@@ -39,7 +39,6 @@ void assert_class_clinit_exist(DexClasses& classes, const char* name) {
 TEST_F(PreVerify, ReplaceEncodableClinit) {
   assert_class_clinit_exist(classes, "Lredex/Encodable;");
   assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
-  assert_class_clinit_exist(classes, "Lredex/HasWides;");
   assert_class_clinit_exist(classes, "Lredex/HasCharSequence;");
 }
 
@@ -63,7 +62,4 @@ TEST_F(PostVerify, ReplaceEncodableClinit) {
 
   assert_class_clinit_exist(classes, "Lredex/UnEncodable;");
   assert_class_clinit_exist(classes, "Lredex/HasCharSequence;");
-
-  // "inline_wide_fields": false
-  assert_class_clinit_exist(classes, "Lredex/HasWides;");
 }

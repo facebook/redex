@@ -39,7 +39,8 @@ struct Arguments {
 
   // if true, write elf file, else write bare oat file.
   bool write_elf = false;
-  std::string oat_file;
+  bool one_oat_per_dex = false;
+  std::vector<std::string> oat_files;
   std::vector<DexInput> dex_files;
 
   std::string oat_version;
@@ -96,6 +97,7 @@ Arguments parse_args(int argc, char* argv[]) {
                              {"art-image-location", required_argument, nullptr, 0},
                              {"test-is-oatmeal", no_argument, nullptr, 1},
                              {"samsung-oatformat", no_argument, nullptr, 2},
+                             {"one-oat-per-dex", no_argument, nullptr, 3},
                              {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -135,11 +137,7 @@ Arguments parse_args(int argc, char* argv[]) {
       break;
 
     case 'o':
-      if (!ret.oat_file.empty()) {
-        fprintf(stderr, "--oat may only be set once.");
-        exit(1);
-      }
-      ret.oat_file = expand(optarg);
+      ret.oat_files.push_back(expand(optarg));
       break;
 
     case 'x':
@@ -176,6 +174,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 2:
       ret.samsung_mode = true;
+      break;
+
+    case 3:
+      ret.one_oat_per_dex = true;
       break;
 
     case ':':
@@ -217,16 +219,17 @@ Arguments parse_args(int argc, char* argv[]) {
 }
 
 int dump(const Arguments& args) {
-  if (args.oat_file.empty()) {
-    fprintf(stderr, "-o/--oat required\n");
+  if (args.oat_files.size() != 1) {
+    fprintf(stderr, "-o/--oat required (exactly once)\n");
     return 1;
   }
 
-  auto oat_file = FileHandle(fopen(args.oat_file.c_str(), "r"));
+  auto const& oat_file_name = args.oat_files[0];
+  auto oat_file = FileHandle(fopen(oat_file_name.c_str(), "r"));
   if (oat_file.get() == nullptr) {
     fprintf(stderr,
             "failed to open file %s %s\n",
-            args.oat_file.c_str(),
+            oat_file_name.c_str(),
             std::strerror(errno));
     return 1;
   }
@@ -251,7 +254,7 @@ int dump(const Arguments& args) {
   auto oatfile = OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
 
   if (!oatfile) {
-    fprintf(stderr, "Cannot open .oat file %s\n", args.oat_file.c_str());
+    fprintf(stderr, "Cannot open .oat file %s\n", oat_file_name.c_str());
     return 1;
   }
 
@@ -269,14 +272,23 @@ int dump(const Arguments& args) {
 }
 
 int build(const Arguments& args) {
-  if (args.oat_file.empty()) {
-    fprintf(stderr, "-o/--oat required\n");
-    return 1;
-  }
 
   if (args.dex_files.empty()) {
     fprintf(stderr, "one or more `-x dexfile` args required.\n");
     return 1;
+  }
+
+  if (args.one_oat_per_dex) {
+    if (args.oat_files.size() != args.dex_files.size()) {
+      fprintf(stderr, "--one-oat-per-dex was set, so number of -o args (oat files) "
+                      "must match number of -x args (dex files).\n");
+      return 1;
+    }
+  } else {
+    if (args.oat_files.size() != 1) {
+      fprintf(stderr, "-o/--oat required (exactly once)\n");
+      return 1;
+    }
   }
 
   if (args.oat_version.empty()) {
@@ -284,7 +296,7 @@ int build(const Arguments& args) {
     return 1;
   }
 
-  OatFile::build(args.oat_file, args.dex_files, args.oat_version, args.arch,
+  OatFile::build(args.oat_files, args.dex_files, args.oat_version, args.arch,
       args.write_elf, args.art_image_location, args.samsung_mode);
 
   return 0;

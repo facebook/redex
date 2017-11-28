@@ -15,8 +15,6 @@
 #pragma GCC diagnostic ignored "-Wshadow"
 #endif
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/breadth_first_search.hpp>
-#include <boost/graph/connected_components.hpp>
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
@@ -27,53 +25,85 @@
 
 // Implemented by an undirected graph where nodes are Registers and edges are an
 // alias between them.
+//
+// An alias group is a fully connected clique of nodes.
+// Every node in a group is aliased to every other node.
+//
+// Data structure invariant: The graph is a forest of cliques
+// Corollary: There are no edges that are not part of a clique.
+//
+// The aliasing relation is an equivalence relation. An alias group is an
+// equivalence class of this relation.
+//   Reflexive : a node is trivially equivalent to itself
+//   Symmetric : edges in the graph are undirected
+//   Transitive: `AliasedRegisters::move` adds an edge to every node in the
+//               group, creating a clique
 
+// Move `moving` into the alias group of `group`
+//
+// Create an edge from `moving` to every vertex in the alias group of
+// `group`.
+//
+// We want alias groups to be fully connected cliques.
+// Here's an example to show why:
+//
+//   move v1, v2
+//   move v0, v1 # (call `AliasedRegisters::move(v0, v1)` here)
+//   const v1, 0
+//
+// At this point, v0 and v2 still hold the same value, but if we had just
+// `make_aliased(v0, v1)`, then we would have lost this information.
+void AliasedRegisters::move(const RegisterValue& moving,
+                            const RegisterValue& group) {
+  // Only need to do something if they're not already in same group
+  if (!are_aliases(moving, group)) {
+    // remove from the old group
+    break_alias(moving);
+    vertex_t mov = find_or_create(moving);
+    vertex_t grp = find_or_create(group);
+    // add edge to every node in new group
+    for (vertex_t v : vertices_in_group(grp)) {
+      boost::add_edge(mov, v, m_graph);
+    }
+  }
+}
+
+// This method is only public for testing reasons. Only use it if you know what
+// you're doing. This method does not maintain transitive closure of the graph,
+// You probably want to use `move`
 void AliasedRegisters::make_aliased(const RegisterValue& r1, const RegisterValue& r2) {
   if (r1 != r2) {
     vertex_t v1 = find_or_create(r1);
     vertex_t v2 = find_or_create(r2);
     boost::add_edge(v1, v2, m_graph);
-    invalidate_cache();
   }
 }
 
+// Remove r from its alias group
 void AliasedRegisters::break_alias(const RegisterValue& r) {
   const auto& v = find(r);
   const auto& end = boost::vertices(m_graph).second;
   if (v != end) {
     // clear removes all edges incident to r
     boost::clear_vertex(*v, m_graph);
-    invalidate_cache();
   }
 }
 
+// if there is an edge between r1 to r2, then they are aliases.
+// We only need to check for single edge paths because `move` adds an edge to
+// every node in the alias group, thus maintaining transitive closure of the
+// graph
 bool AliasedRegisters::are_aliases(const RegisterValue& r1, const RegisterValue& r2) {
   if (r1 == r2) {
     return true;
   }
 
-  const auto& v1 = find(r1);
-  const auto& v2 = find(r2);
-  const auto& end = boost::vertices(m_graph).second;
-  if (v1 == end || v2 == end) {
-    // if either register is not in the graph, then
-    // they cannot be aliases
-    return false;
-  }
-
-  return path_exists(*v1, *v2);
+  return has_edge_between(r1, r2);
 }
 
-template <typename T>
-bool contains(const std::unordered_set<T>& set, const T& val) {
-  return set.count(val) > 0;
-}
-
-/**
- * Return a representative for this register.
- *
- * Return the lowest numbered register that this value is an alias with.
- */
+// Return a representative for this register.
+//
+// Return the lowest numbered register that this value is an alias with.
 boost::optional<Register> AliasedRegisters::get_representative(
     const RegisterValue& r) {
 
@@ -84,21 +114,11 @@ boost::optional<Register> AliasedRegisters::get_representative(
     return boost::none;
   }
 
-  // compute connected components
-  // (or use cached value when graph hasn't changed)
-  auto num_vertices = boost::num_vertices(m_graph);
-  if (m_conn_components.empty()) {
-    m_conn_components.resize(num_vertices);
-    boost::connected_components(m_graph, m_conn_components.data());
-  }
-  int component_of_v = m_conn_components.at(*v);
-
-  // find the lowest numbered register in the same component as `v`
+  // find the lowest numbered register in the same alias group as `v`
   Register result = std::numeric_limits<Register>::max();
-  for (vertex_t candidate = 0; candidate < num_vertices; ++candidate) {
+  for (vertex_t candidate : vertices_in_group(*v)) {
     const RegisterValue& val = m_graph[candidate];
-    if (component_of_v == m_conn_components.at(candidate) &&
-        val.kind == RegisterValue::Kind::REGISTER) {
+    if (val.kind == RegisterValue::Kind::REGISTER) {
       result = std::min<Register>(result, val.reg);
     }
   }
@@ -108,6 +128,8 @@ boost::optional<Register> AliasedRegisters::get_representative(
   return result;
 }
 
+// if `r` is in the graph, return the vertex holding it.
+// if not, return the `end` iterator of the vertices
 const boost::range_detail::integer_iterator<AliasedRegisters::vertex_t>
 AliasedRegisters::find(const RegisterValue& r) const {
   const auto& iters = boost::vertices(m_graph);
@@ -129,36 +151,11 @@ AliasedRegisters::vertex_t AliasedRegisters::find_or_create(const RegisterValue&
   if (it != end) {
     return *it;
   } else {
-    invalidate_cache();
     return boost::add_vertex(r, m_graph);
   }
 }
 
-// return true if there exists a path from `start` to `end`
-//
-// Implemented with recursive DFS, stopping as soon as `end` is found
-// (or traversing the entire graph then returning false)
-bool AliasedRegisters::path_exists(AliasedRegisters::vertex_t start,
-                                   AliasedRegisters::vertex_t end) const {
-  std::unordered_set<AliasedRegisters::vertex_t> visited;
-  const auto& graph = m_graph;
-  std::function<bool(vertex_t)> recurse =
-      [&recurse, &graph, &visited, end](AliasedRegisters::vertex_t v) {
-        if (v == end) {
-          return true;
-        }
-        visited.insert(v);
-        const auto& adj_vertices = boost::adjacent_vertices(v, graph);
-        for (auto it = adj_vertices.first; it != adj_vertices.second; ++it) {
-          if (!contains(visited, *it) && recurse(*it)) {
-            return true;
-          }
-        }
-        return false;
-      };
-  return recurse(start);
-}
-
+// return true if there is a path of length exactly 1 from r1 to r2
 bool AliasedRegisters::has_edge_between(const RegisterValue& r1,
                                         const RegisterValue& r2) const {
   // make sure we have both vertices
@@ -174,20 +171,37 @@ bool AliasedRegisters::has_edge_between(const RegisterValue& r1,
   const auto& adj_begin = adj.first;
   const auto& adj_end = adj.second;
   const auto& edge_search = std::find(adj_begin, adj_end, *search2);
-  if (edge_search == adj_end) {
-    return false;
-  }
-  return true;
+  return edge_search != adj_end;
 }
 
-// call this when m_graph changes
-void AliasedRegisters::invalidate_cache() { m_conn_components.clear(); }
+std::vector<AliasedRegisters::vertex_t> AliasedRegisters::vertices_in_group(
+    vertex_t v) const {
+  std::vector<vertex_t> result;
+  result.push_back(v);
+  const auto& adj = boost::adjacent_vertices(v, m_graph);
+  const auto& adj_begin = adj.first;
+  const auto& adj_end = adj.second;
+  for (auto it = adj_begin; it != adj_end; ++it) {
+    result.push_back(*it);
+  }
+  return result;
+}
+
+void AliasedRegisters::merge_groups_of(const RegisterValue& r1, const RegisterValue& r2) {
+  vertex_t v1 = find_or_create(r1);
+  vertex_t v2 = find_or_create(r2);
+
+  for (vertex_t g1 : vertices_in_group(v1)) {
+    for (vertex_t g2 : vertices_in_group(v2)) {
+      boost::add_edge(g1, g2, m_graph);
+    }
+  }
+}
 
 // ---- extends AbstractValue ----
 
 void AliasedRegisters::clear() {
   m_graph.clear();
-  invalidate_cache();
 }
 
 AliasedRegisters::Kind AliasedRegisters::kind() const {
@@ -195,19 +209,17 @@ AliasedRegisters::Kind AliasedRegisters::kind() const {
                                          : AliasedRegisters::Kind::Top;
 }
 
-/**
- * The lattice looks like this:
- *
- *             T (graphs with no edges)
- *      graphs with 1 edge                  ^  join moves up (edge intersection)
- *      graphs with 2 edges                 |
- *            ...                           v  meet moves down (edge union)
- *      graphs with n edges
- *            ...
- *            _|_
- *
- * So, leq is the superset relation on the edge set
- */
+// The lattice looks like this:
+//
+//             T (graphs with no edges)
+//      graphs with 1 edge                  ^  join moves up (edge intersection)
+//      graphs with 2 edges                 |
+//            ...                           v  meet moves down (edge union)
+//      graphs with n edges
+//            ...
+//            _|_
+//
+// So, leq is the superset relation on the edge set
 bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   if (boost::num_edges(m_graph) < boost::num_edges(other.m_graph)) {
     // this cannot be a superset of other if this has fewer edges
@@ -229,16 +241,14 @@ bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   return true;
 }
 
-/*
- * returns true iff they have exactly the same edges between the same
- * RegisterValues
- */
+// returns true iff they have exactly the same edges between the same
+// RegisterValues
 bool AliasedRegisters::equals(const AliasedRegisters& other) const {
   return boost::num_edges(m_graph) == boost::num_edges(other.m_graph) &&
          leq(other);
 }
 
-// edge union
+// alias group union
 AliasedRegisters::Kind AliasedRegisters::meet_with(
     const AliasedRegisters& other) {
   const auto& iters = boost::edges(other.m_graph);
@@ -247,9 +257,10 @@ AliasedRegisters::Kind AliasedRegisters::meet_with(
   for (auto it = begin; it != end; ++it) {
     const RegisterValue& r1 = other.m_graph[boost::source(*it, other.m_graph)];
     const RegisterValue& r2 = other.m_graph[boost::target(*it, other.m_graph)];
-    this->make_aliased(r1, r2);
+    if (!this->are_aliases(r1, r2)) {
+      this->merge_groups_of(r1, r2);
+    }
   }
-  this->invalidate_cache();
   return AliasedRegisters::Kind::Value;
 }
 
@@ -277,11 +288,12 @@ AliasedRegisters::Kind AliasedRegisters::join_with(
     }
   }
 
+  // This maintains a forest of cliques because any subset of nodes of a clique
+  // is also a clique
   for (const auto& edge : deletes) {
     boost::remove_edge(edge.first, edge.second, this->m_graph);
   }
 
-  this->invalidate_cache();
   return AliasedRegisters::Kind::Value;
 }
 

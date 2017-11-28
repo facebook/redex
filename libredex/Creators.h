@@ -384,7 +384,8 @@ struct MethodCreator {
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,
-                DexAccessFlags access);
+                DexAccessFlags access,
+                DexAnnotationSet* anno = nullptr);
 
   /**
    * Get an existing local.

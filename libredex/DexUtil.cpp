@@ -11,6 +11,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
+#include <deque>
 #include <unordered_set>
 
 #include "Debug.h"

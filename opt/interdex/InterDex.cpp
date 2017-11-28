@@ -273,12 +273,13 @@ static void emit_class(InterDexPass* pass,
                        dex_emit_tracker& det,
                        DexClassesVector& outdex,
                        DexClass* clazz,
-                       bool is_primary) {
+                       bool is_primary,
+                       bool check_if_skip = true) {
   if(det.emitted.count(clazz) != 0)
     return;
   if(is_canary(clazz))
     return;
-  if (should_skip_class(pass, clazz)) {
+  if (check_if_skip && should_skip_class(pass, clazz)) {
     TRACE(IDEX, 3, "IDEX: Skipping class :: %s\n", SHOW(clazz));
     return;
   }
@@ -544,6 +545,16 @@ static DexClassesVector run_interdex(InterDexPass* pass,
   for (auto clazz : scope) {
     emit_class(pass, det, outdex, clazz);
   }
+  for (const auto& plugin : pass->m_plugins) {
+    auto add_classes = plugin->leftover_classes();
+    for (auto add_class : add_classes) {
+      TRACE(IDEX,
+            4,
+            "IDEX: Emitting plugin generated leftover class :: %s\n",
+            SHOW(add_class));
+      emit_class(pass, det, outdex, add_class, false);
+    }
+  }
 
   /* Finally, emit the "left-over" det.outs */
   if (det.outs.size()) {
@@ -576,13 +587,9 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
                             PassManager& mgr) {
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
-  std::unique_ptr<InterDexPassPlugin> interdex_plugin =
-      registry->create(INTERDEX_PLUGIN);
-  if (interdex_plugin) {
-    m_plugins.emplace_back(std::move(interdex_plugin));
-  }
+  m_plugins = registry->create_plugins();
   for (const auto& plugin : m_plugins) {
-    plugin->configure(cfg);
+    plugin->configure(original_scope, cfg);
   }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
