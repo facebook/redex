@@ -40,6 +40,8 @@ std::string humanize(std::string const& type) {
     return "long";
   } else if (type.compare("S") == 0) {
     return "short";
+  } else if (type.compare("V") == 0) {
+    return "void";
   } else if (type.compare("Z") == 0) {
     return "boolean";
   } else if (type[0] == '[') {
