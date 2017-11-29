@@ -46,6 +46,8 @@ OatVersion versionInt(const std::string& version_str) {
     return OatVersion::V_045;
   } else if (version_str == "064") {
     return OatVersion::V_064;
+  } else if (version_str == "067") {
+    return OatVersion::V_067;
   } else if (version_str == "079") {
     return OatVersion::V_079;
   } else if (version_str == "088") {
@@ -873,7 +875,7 @@ class DexFileListing_064 : public DexFileListing {
     if (version == OatVersion::V_039) {
       // http://androidxref.com/5.0.0_r2/xref/art/runtime/oat.h#161
       oat_method_offset_size = 8;
-    } else if (version == OatVersion::V_045 || version == OatVersion::V_064) {
+    } else if (version == OatVersion::V_045 || version == OatVersion::V_064 || version == OatVersion::V_067) {
       // http://androidxref.com/5.1.1_r6/xref/art/runtime/oat.h#163
       oat_method_offset_size = 4;
     } else {
@@ -1814,6 +1816,12 @@ class OatFile_064 : public OatFile {
     return key_value_store_.has_key(kCreatedByOatmeal);
   }
 
+  std::string version_string() const override {
+    char buf[5] = {};
+    memcpy(buf, &header_.common.version, 4);
+    return std::string(buf);
+  }
+
   size_t oat_offset() const override { return oat_offset_; }
 
   bool is_samsung() const override {
@@ -1943,6 +1951,12 @@ class OatFile_079 : public OatFile {
 
   bool created_by_oatmeal() const override {
     return key_value_store_.has_key(kCreatedByOatmeal);
+  }
+
+  std::string version_string() const override {
+    char buf[5] = {};
+    memcpy(buf, &header_.common.version, 4);
+    return std::string(buf);
   }
 
  private:
@@ -2107,6 +2121,12 @@ class OatFile_124 : public OatFile {
     return key_value_store_.has_key(kCreatedByOatmeal);
   }
 
+  std::string version_string() const override {
+    char buf[5] = {};
+    memcpy(buf, &header_.common.version, 4);
+    return std::string(buf);
+  }
+
  private:
   OatFile_124(OatHeader h,
               KeyValueStore kv,
@@ -2170,6 +2190,10 @@ public:
     return false;
   }
 
+  std::string version_string() const override {
+    return "";
+  }
+
   bool is_samsung() const override { return false; }
 
 private:
@@ -2205,6 +2229,10 @@ public:
 
   bool created_by_oatmeal() const override {
     return false;
+  }
+
+  std::string version_string() const override {
+    return "";
   }
 
   bool is_samsung() const override { return false; }
@@ -2258,6 +2286,7 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(bool dex_files_only,
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
+    case OatVersion::V_067:
       return OatFile_064::parse(dex_files_only, oatfile_buffer, oat_offset);
     case OatVersion::V_079:
     case OatVersion::V_088:
@@ -2636,8 +2665,8 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
 
   ////////// Gather image info from boot.art and boot.oat
   std::unique_ptr<ImageInfo_064> image_info;
-  if (oat_version == OatVersion::V_064 || oat_version == OatVersion::V_045 ||
-      oat_version == OatVersion::V_039) {
+  if (oat_version == OatVersion::V_067 || oat_version == OatVersion::V_064 ||
+      oat_version == OatVersion::V_045 || oat_version == OatVersion::V_039) {
     image_info = read_image_info_064(art_image_location);
   }
 
@@ -2965,6 +2994,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
       case OatVersion::V_039:
       case OatVersion::V_045:
       case OatVersion::V_064:
+      case OatVersion::V_067:
         return OatFile_064::build(oat_file_name, dexes, version, isa, write_elf,
                                   art_image_location, samsung_mode);
       case OatVersion::V_124:

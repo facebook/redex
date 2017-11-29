@@ -22,6 +22,7 @@ enum class OatVersion : uint32_t {
   V_039 = 0x00393330, // 5.0, api level 21
   V_045 = 0x00353430, // 5.1, api level 22
   V_064 = 0x00343630, // 6.0, api level 23
+  V_067 = 0x00373630, // 6.0, api level 23
   V_079 = 0x00393730, // 7.0, api level 24
   V_088 = 0x00383830, // 7.1, api level 25
   V_124 = 0x00343231  // 8.0, api level 26
@@ -75,6 +76,9 @@ class OatFile {
   virtual void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) = 0;
 
   virtual Status status() = 0;
+
+  // Return the version number as a string, e.g. "039", "079", etc.
+  virtual std::string version_string() const = 0;
 
   virtual bool created_by_oatmeal() const = 0;
 
