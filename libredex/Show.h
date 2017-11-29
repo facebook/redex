@@ -91,5 +91,5 @@ std::string show(const std::unique_ptr<T>& ptr) {
  * They print the given member in source language style including annotations.
  */
 std::string vshow(const DexClass*);
-std::string vshow(const DexMethod*);
+std::string vshow(const DexMethod*, bool include_annotations = true);
 std::string vshow(const DexField*);
