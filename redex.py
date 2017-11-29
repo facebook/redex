@@ -335,6 +335,23 @@ def update_proguard_mapping_file(pg_map, redex_map, output_file):
             print('%s -> %s:' % (unmangled, mangled), file=output)
 
 
+def overwrite_proguard_maps(
+        redex_rename_map_path,
+        apk_output_path,
+        dex_dir,
+        pg_file):
+    log('running overwrite proguard step')
+    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
+    log('redex map is at ' + str(redex_rename_map_path))
+    log('pg map is at ' + str(pg_file))
+    assert os.path.isfile(redex_rename_map_path)
+    redex_pg_file = "redex-class-rename-map.txt"
+    output_dir = os.path.dirname(apk_output_path)
+    output_file = join(output_dir, redex_pg_file)
+    log('wrote redex pg format mapping file to ' + str(output_file))
+    shutil.move(redex_rename_map_path, output_file)
+
+
 def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_dir = os.path.dirname(apk_output_path)
     output_path = os.path.join(output_dir, out_name)
@@ -613,12 +630,21 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'resid-splitres-mapping.json', 'resid map after split pass', 'redex-resid-splitres-mapping.json')
 
     if config_dict.get('proguard_map_output', '') != '':
-        merge_proguard_maps(
-            config_dict['proguard_map_output'],
-            args.input_apk,
-            args.out,
-            dex_dir,
-            args.proguard_map)
+        # if our map output strategy is overwrite, we don't merge at all
+        # if you enable ObfuscatePass, this needs to be overwrite
+        if config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
+            overwrite_proguard_maps(
+                config_dict['proguard_map_output'],
+                args.out,
+                dex_dir,
+                args.proguard_map)
+        else:
+            merge_proguard_maps(
+                config_dict['proguard_map_output'],
+                args.input_apk,
+                args.out,
+                dex_dir,
+                args.proguard_map)
     else:
         assert 'RenameClassesPass' not in passes_list and\
                 'RenameClassesPassV2' not in passes_list

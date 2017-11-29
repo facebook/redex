@@ -1247,11 +1247,34 @@ void write_class_mapping(
   fclose(fd);
 }
 
+const char* deobf_primitive(char type) {
+  switch (type) {
+    case 'B':
+      return "byte";
+    case 'C':
+      return "char";
+    case 'D':
+      return "double";
+    case 'F':
+      return "float";
+    case 'I':
+      return "int";
+    case 'J':
+      return "long";
+    case 'S':
+      return "short";
+    case 'Z':
+      return "boolean";
+    case 'V':
+      return "void";
+    default:
+      always_assert_log(false, "Illegal type: %c", type);
+      not_reached();
+  }
+}
+
 void write_pg_mapping(const std::string& filename, DexClasses* classes) {
-  // TODO: this function only writes out class mappings for now, neglecting
-  // the method and field mappings entirely.
   if (filename.empty()) return;
-  FILE* fd = fopen(filename.c_str(), "a");
 
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
@@ -1261,18 +1284,115 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
     return proguard_name(cls);
   };
 
+  auto deobf_type = [&](DexType* type) {
+    if (type) {
+      if (is_array(type)) {
+        auto* type_str = type->c_str();
+        int dim = 0;
+        while (type_str[dim] == '[') {
+          dim++;
+        }
+        DexType* inner_type = DexType::get_type(&type_str[dim]);
+        DexClass* inner_cls = inner_type ? type_class(inner_type) : nullptr;
+        std::string result;
+        if (inner_cls) {
+          result = JavaNameUtil::internal_to_external(deobf_class(inner_cls));
+        } else if (inner_type && is_primitive(inner_type)) {
+          result = deobf_primitive(type_str[dim]);
+        } else {
+          result = JavaNameUtil::internal_to_external(&type_str[dim]);
+        }
+        for (int i = 0 ; i < dim ; ++i) {
+          result = result + "[]";
+        }
+        return result;
+      } else {
+        DexClass* cls = type_class(type);
+        if (cls) {
+          return JavaNameUtil::internal_to_external(deobf_class(cls));
+        } else if (is_primitive(type)) {
+          return std::string(deobf_primitive(type->c_str()[0]));
+        } else {
+          return JavaNameUtil::internal_to_external(type->c_str());
+        }
+      }
+    }
+    return proguard_name(type);
+  };
+
+  auto deobf_meth = [&](DexMethod* method) {
+    if (method) {
+      // Example: 672:672:boolean customShouldDelayInitMessage(android.os.Handler,android.os.Message)
+      auto* proto = method->get_proto();
+      std::ostringstream ss;
+      auto* code = method->get_dex_code();
+      auto* dbg = code ? code->get_debug_item() : nullptr;
+      if (dbg) {
+        uint32_t line_start = code->get_debug_item()->get_line_start();
+        uint32_t line_end = line_start;
+        for (auto& entry : dbg->get_entries()) {
+          if (entry.type == DexDebugEntryType::Position) {
+            if (entry.pos->line > line_end) {
+              line_end = entry.pos->line;
+            }
+          }
+        }
+        ss << line_start << ":" << line_end << ":";
+      }
+      auto* rtype = proto->get_rtype();
+      auto rtype_str = deobf_type(rtype);
+      ss << rtype_str;
+      ss << " " << method->get_simple_deobfuscated_name() << "(";
+      auto args = proto->get_args()->get_type_list();
+      for (auto iter = args.begin() ; iter != args.end() ; ++iter) {
+        auto* atype = *iter;
+        auto atype_str = deobf_type(atype);
+        ss << atype_str;
+        if (iter + 1 != args.end()) {
+          ss << ",";
+        }
+      }
+      ss << ")";
+      return ss.str();
+    }
+    return proguard_name(method);
+  };
+
+  auto deobf_field = [&](DexField* field) {
+    if (field) {
+      std::ostringstream ss;
+      ss << deobf_type(field->get_type())
+      << " "
+      << field->get_simple_deobfuscated_name();
+      return ss.str();
+    }
+    return proguard_name(field);
+  };
+
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
 
   for (auto cls : *classes) {
-    auto deobf = deobf_class(cls);
-    if (deobf != cls->get_type()->c_str()) {
-      ofs << JavaNameUtil::internal_to_external(deobf) << " -> "
-          << JavaNameUtil::internal_to_external(cls->get_type()->c_str())
-          << ":\n";
+    auto deobf_cls = deobf_class(cls);
+    ofs << JavaNameUtil::internal_to_external(deobf_cls) << " -> "
+        << JavaNameUtil::internal_to_external(cls->get_type()->c_str())
+        << ":" << std::endl;
+    for (auto field : cls->get_ifields()) {
+      auto deobf = deobf_field(field);
+      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+    }
+    for (auto field : cls->get_sfields()) {
+      auto deobf = deobf_field(field);
+      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+    }
+    for (auto meth : cls->get_dmethods()) {
+      auto deobf = deobf_meth(meth);
+      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+    }
+    for (auto meth : cls->get_vmethods()) {
+      auto deobf = deobf_meth(meth);
+      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
     }
   }
-
-  fclose(fd);
 }
 
 void write_bytecode_offset_mapping(

@@ -349,6 +349,21 @@ class DexField : public DexFieldRef {
     m_external = true;
   }
 
+  /** return just the name of the field */
+  std::string get_simple_deobfuscated_name() const {
+    auto full_name = get_deobfuscated_name();
+    if (full_name.empty()) {
+      // This comes up for redex-created fields
+      return std::string(c_str());
+    }
+    auto dot_pos = full_name.find(".");
+    auto colon_pos = full_name.find(":");
+    if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
+      return full_name;
+    }
+    return full_name.substr(dot_pos + 1, colon_pos-dot_pos - 1);
+  }
+
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
   std::string get_deobfuscated_name() const {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
@@ -583,6 +598,7 @@ class DexDebugItem {
   void set_entries(std::vector<DexDebugEntry> dbg_entries) {
     m_dbg_entries.swap(dbg_entries);
   }
+  uint32_t get_line_start() const;
   std::vector<DexString*>& get_param_names() { return m_param_names; }
   void remove_parameter_names() { m_param_names.clear(); };
   void bind_positions(DexMethod* method, DexString* file);
@@ -855,11 +871,19 @@ class DexMethod : public DexMethodRef {
     return is_external() ? proguard_name(this) : m_deobfuscated_name;
   }
 
+  /** return just the name of the method */
   std::string get_simple_deobfuscated_name() const {
     auto full_name = get_deobfuscated_name();
-    auto pos = full_name.find(".");
-    always_assert(pos != std::string::npos);
-    return full_name.substr(pos + 1);
+    if (full_name.empty()) {
+      // This comes up for redex-created methods
+      return std::string(c_str());
+    }
+    auto dot_pos = full_name.find(".");
+    auto colon_pos = full_name.find(":");
+    if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
+      return full_name;
+    }
+    return full_name.substr(dot_pos + 1, colon_pos-dot_pos - 1);
   }
 
   void set_access(DexAccessFlags access) {

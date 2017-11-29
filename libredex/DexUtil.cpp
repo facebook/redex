@@ -72,21 +72,21 @@ DexType* get_enum_type() {
 }
 
 bool is_primitive(const DexType* type) {
-  auto const name = type->get_name()->c_str();
+  auto* const name = type->get_name()->c_str();
   switch (name[0]) {
-  case 'Z':
-  case 'B':
-  case 'S':
-  case 'C':
-  case 'I':
-  case 'J':
-  case 'F':
-  case 'D':
-    return true;
-  case 'L':
-  case '[':
-  case 'V':
-    return false;
+    case 'Z':
+    case 'B':
+    case 'S':
+    case 'C':
+    case 'I':
+    case 'J':
+    case 'F':
+    case 'D':
+    case 'V':
+      return true;
+    case 'L':
+    case '[':
+      return false;
   }
   not_reached();
 }
