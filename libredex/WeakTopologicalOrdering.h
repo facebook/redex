@@ -18,8 +18,10 @@
 #include <stack>
 #include <thread>
 #include <vector>
+#include <unordered_map>
 
 #include "Debug.h"
+#include "Util.h"
 
 template <typename NodeId>
 class WtoComponent;
@@ -202,6 +204,7 @@ class WeakTopologicalOrdering final {
 
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
+  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
   uint32_t visit(const NodeId& vertex, int32_t* partition, size_t depth) {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);

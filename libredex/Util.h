@@ -96,3 +96,9 @@ struct fake_dependency : public std::false_type {};
 #include <BaseTsd.h>
 using ssize_t = SSIZE_T;
 #endif
+
+#if defined(__clang__) || defined (__GNUC__)
+# define NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address))
+#else
+# define NO_SANITIZE_ADDRESS
+#endif

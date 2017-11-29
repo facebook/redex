@@ -558,27 +558,26 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   return o;
 }
 
-/*
- * Find all exit blocks. Note that it's not as simple as looking for BBs with
- * return or throw opcodes; infinite loops are a valid way of terminating dex
- * bytecode too. As such, we need to find all SCCs and vertices that lack
- * successors. For SCCs that lack successors, any one of its vertices can be
- * treated as an exit block; the implementation below picks the head of the
- * SCC.
- */
-std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
-  std::vector<Block*> exit_blocks;
+// We create a small class here (instead of a recursive lambda) so we can
+// label visit with NO_SANITIZE_ADDRESS
+class ExitBlocks {
+ private:
   uint32_t next_dfn{0};
   std::stack<const Block*> stack;
   // Depth-first number. Special values:
   //   0 - unvisited
   //   UINT32_MAX - visited and determined to be in a separate SCC
   std::unordered_map<const Block*, uint32_t> dfns;
-  constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
+  static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
   // This is basically Tarjan's algorithm for finding SCCs. I pass around an
   // extra has_exit value to determine if a given SCC has any successors.
   using t = std::pair<uint32_t, bool>;
-  std::function<t(const Block*)> visit = [&](const Block* b) {
+
+ public:
+  std::vector<Block*> exit_blocks;
+
+  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
+  t visit(const Block* b) {
     stack.push(b);
     uint32_t head = dfns[b] = ++next_dfn;
     // whether any vertex in the current SCC has a successor edge that points
@@ -610,9 +609,21 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
       } while (top != b);
     }
     return t(head, has_exit);
-  };
-  visit(cfg.entry_block());
-  return exit_blocks;
+  }
+};
+
+/*
+ * Find all exit blocks. Note that it's not as simple as looking for BBs with
+ * return or throw opcodes; infinite loops are a valid way of terminating dex
+ * bytecode too. As such, we need to find all SCCs and vertices that lack
+ * successors. For SCCs that lack successors, any one of its vertices can be
+ * treated as an exit block; the implementation below picks the head of the
+ * SCC.
+ */
+std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
+  ExitBlocks eb{};
+  eb.visit(cfg.entry_block());
+  return eb.exit_blocks;
 }
 
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
