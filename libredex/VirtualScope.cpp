@@ -908,3 +908,16 @@ void ClassScopes::build_interface_scopes() {
     }
   }
 }
+
+InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
+  InterfaceScope  intf_scope;
+  DexType* intf = meth->get_class();
+  const auto& scopes = m_sig_map.at(meth->get_name()).at(meth->get_proto());
+  always_assert(scopes.size() > 0); // at least the method itself
+  for (const auto& scope : scopes) {
+    if (scope.interfaces.count(intf) == 0) continue;
+    TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf));
+    intf_scope.push_back(&scope);
+  }
+  return intf_scope;
+}

@@ -115,6 +115,8 @@ struct VirtualScope {
   TypeSet interfaces;
 };
 
+using InterfaceScope = std::vector<const VirtualScope*>;
+
 /**
  * Return true if a VirtualScope can be renamed.
  */
@@ -270,7 +272,7 @@ class ClassScopes {
    * The vector lifetime is tied to that of the ClassScope as such it should
    * not exceed it.
    */
-  const std::vector<std::vector<const VirtualScope*>>& get_interface_scopes(
+  const std::vector<InterfaceScope>& get_interface_scopes(
       const DexType* type) const {
     const auto& scopes_it = m_interface_scopes.find(type);
     if (scopes_it == m_interface_scopes.end()) {
@@ -380,6 +382,11 @@ class ClassScopes {
   const VirtualScope& find_virtual_scope(const DexMethod* meth) const {
     return ::find_virtual_scope(m_sig_map, meth);
   }
+
+  /**
+   * Given a DexMethod return the scope the method is in.
+   */
+  InterfaceScope find_interface_scope(const DexMethod* meth) const;
 
   /**
    * Return the ClassHierarchy known when building the scopes.
