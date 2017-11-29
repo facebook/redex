@@ -776,11 +776,19 @@ std::string show(const DexMethodRef* p) {
   return ss.str();
 }
 
+std::string vshow(uint32_t acc) {
+  return accessibility(acc, 32);
+}
+
+std::string vshow(const DexType* t) {
+  return humanize(show(t));
+}
+
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->get_access(), true)
-     << humanize(show(p->get_proto()->get_rtype())) << " "
+  ss << vshow(p->get_access())
+     << vshow(p->get_proto()->get_rtype()) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name())
      << vshow(p->get_proto(), false);
   if (include_annotations) {

@@ -93,3 +93,5 @@ std::string show(const std::unique_ptr<T>& ptr) {
 std::string vshow(const DexClass*);
 std::string vshow(const DexMethod*, bool include_annotations = true);
 std::string vshow(const DexField*);
+std::string vshow(uint32_t acc); // for modifiers
+std::string vshow(const DexType*);
