@@ -122,7 +122,7 @@ class WtoComponent final {
    * If the component is not strongly connected, this method returns the single
    * node contained inside a Vertex component.
    */
-  NodeId head_node() const { return m_node; }
+  const NodeId& head_node() const { return m_node; }
 
   bool is_vertex() const { return m_kind == Kind::Vertex; }
 
@@ -173,6 +173,11 @@ class WtoComponent final {
  * - NodeId is the identifier of a node in the graph. Nodes should be comparable
  *   using `operator==()`.
  * - NodeHash is a functional structure providing a hash function on nodes.
+ *
+ * Please note that node identifiers are copied around at various steps of the
+ * algorithm, in particular wherever the `m_successors` function is invoked. For
+ * performance reasons, it's a good idea to keep the structure of `NodeId` as
+ * simple as possible, such as a pointer or a structure of primitive types.
  */
 template <typename NodeId, typename NodeHash = std::hash<NodeId>>
 class WeakTopologicalOrdering final {
@@ -184,7 +189,8 @@ class WeakTopologicalOrdering final {
    * and the successor function.
    */
   WeakTopologicalOrdering(
-      NodeId root, std::function<std::vector<NodeId>(const NodeId&)> successors)
+      const NodeId& root,
+      std::function<std::vector<NodeId>(const NodeId&)> successors)
       : m_successors(successors), m_free_position(0), m_num(0) {
     int32_t partition = -1;
     visit(root, &partition, 0);
@@ -209,7 +215,7 @@ class WeakTopologicalOrdering final {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
-    for (NodeId succ : m_successors(vertex)) {
+    for (const NodeId& succ : m_successors(vertex)) {
       uint32_t succ_dfn = get_dfn(succ);
       uint32_t min;
       if (succ_dfn == 0) {
@@ -259,7 +265,7 @@ class WeakTopologicalOrdering final {
   }
 
   void push_component(const NodeId& vertex, int32_t partition, size_t depth) {
-    for (NodeId succ : m_successors(vertex)) {
+    for (const NodeId& succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
         visit(succ, &partition, depth + 1);
       }
