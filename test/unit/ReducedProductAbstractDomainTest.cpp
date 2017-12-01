@@ -67,9 +67,10 @@ class D0xD1xD2 final
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   // For testing purposes we assume that A and C have disjoint denotations.
-  void reduce() override {
-    if ((get<1>().element() == A) && (get<2>().element() == C)) {
-      set_to_bottom();
+  static void reduce_product(std::tuple<D0, D1, D2>& product) {
+    if ((std::get<1>(product).element() == A) &&
+        (std::get<2>(product).element() == C)) {
+      std::get<1>(product) = D1::bottom();
     }
   }
 

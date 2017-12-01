@@ -24,9 +24,18 @@
  * The reduced cartesian product of abstract domains D1 x ... x Dn consists of
  * tuples of abstract values (v1, ..., vn) that represent the intersection of
  * the denotations of v1, ..., vn. Hence, all tuples that have at least one _|_
- * component are equated to _|_ (this is similar to abstract environments). More
- * complex reduction steps able to infer the emptiness of the intersection when
- * no component is equal to _|_ can be implemented by overriding the reduce()
+ * component are equated to _|_ (this is similar to abstract environments).
+ * However, the intersection of the denotations may be empty even though none of
+ * the components is equal to _|_.
+ *
+ * The reduction operation of the reduced product (usually denoted by the
+ * Greek letter sigma in the literature) is used to decide whether the
+ * intersection of the denotations of the components is empty when no
+ * component is _|_. This occurs when the component domains have overlapping
+ * denotations and can refine each other. For example, one could implement
+ * Granger's local iterations to propagate information across components. The
+ * reduction operation is specific to the abstract domains used in the product
+ * and should be implemented in the derived class as the `reduce_product()`
  * method.
  *
  * The interface uses the curiously recurring template pattern, thus allowing
@@ -59,7 +68,13 @@
  *      x.operation2();
  *      y.operation2();
  *      ...
+ *      // Explicitly call the reduction operation
+ *      reduce();
  *    }
+ *    // The reduce_product method implements the mechanics of the reduction
+ *    // operation. It is required by the API, even though it does nothing. The
+ *    // reduction operates by changing the contents of the given tuple.
+ *    static void reduce_product(std::tuple<D0, D1>& product) { ... }
  *    static D0xD1 bottom() {
  *      D0xD1 x;
  *      x.set_to_bottom();
@@ -84,6 +99,9 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     static_assert(
         sizeof...(Domains) >= 2,
         "ReducedProductAbstractDomain requires at least two parameters");
+    static_assert(std::is_void<decltype(Derived::reduce_product(
+                      std::declval<std::tuple<Domains...>&>()))>::value,
+                  "Derived::reduce_product() does not exist");
   }
 
   ReducedProductAbstractDomain() = default;
@@ -98,12 +116,29 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     // Since one or more components can be _|_, we need to normalize the
     // representation.
     normalize();
+    if (is_bottom()) {
+      // No need to reduce the product any further.
+      return;
+    }
     // Even though no component is _|_, the intersection of the denotations of
     // the components might still be empty. Deciding the emptiness of the
     // intersection usually involves more sophisticated techniques that are
     // specific to the abstract domains in the product. This step is performed
     // by the reduce() method.
     reduce();
+  }
+
+  // This method allows the user to explicitly call the reduction operation at
+  // any time during the analysis. The `reduce_product()` method implements the
+  // mechanics of the reduction operation and should never be called explicitly.
+  // Note that this method cannot be virtual, because it would otherwise be
+  // impossible to call it from the constructor (dynamic binding is disabled in
+  // the body of constructors).
+  void reduce() {
+    Derived::reduce_product(m_product);
+    // We don't assume that the reduction operation leaves the representation in
+    // a normalized state.
+    normalize();
   }
 
   /*
@@ -139,18 +174,6 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
       reduce();
     }
   }
-
-  /*
-   * The reduction operation of the reduced product (usually denoted by the
-   * Greek letter sigma in the literature) is used to decide whether the
-   * intersection of the denotations of the components is empty when no
-   * component is _|_. This occurs when the component domains have overlapping
-   * denotations and can refine each other. For example, one could implement
-   * Granger's local iterations to propagate information across components. The
-   * reduction operation is specific to the abstract domains used in the product
-   * and should be implemented in the derived class.
-   */
-  virtual void reduce() {}
 
   bool is_bottom() const override {
     // The normalized _|_ element in the product domain has all its components

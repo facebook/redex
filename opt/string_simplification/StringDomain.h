@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <boost/optional.hpp>
 #include <iostream>
+#include <tuple>
 
 #include "AbstractDomain.h"
 #include "HashedSetAbstractDomain.h"
@@ -184,6 +185,10 @@ class StringProdEnvironment final
                                           StringConstantEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  static void reduce_product(
+      std::tuple<PointerReferenceEnvironment,
+                 StringConstantEnvironment>& /* product */) {}
 
   static StringProdEnvironment top() {
     StringProdEnvironment p;
