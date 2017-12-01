@@ -705,7 +705,7 @@ class DexFileListing_079 : public DexFileListing {
 
   struct DexFile_079 : public DexFile {
     DexFile_079() = default;
-    DexFile_079(std::string location_, uint32_t location_checksum_,
+    DexFile_079(const std::string& location_, uint32_t location_checksum_,
                 uint32_t file_offset_, uint32_t num_classes_,
                 uint32_t classes_offset_, uint32_t lookup_table_offset_)
     : DexFile(location_, location_checksum_, file_offset_),
@@ -2514,15 +2514,15 @@ DexFileListing_079::build(const std::vector<DexInput>& dex_input,
 std::vector<DexFileListing_124::DexFile_124>
 DexFileListing_124::build(const std::vector<DexInput>& dex_input,
                           uint32_t& next_offset, bool /*samsung_mode*/) {
-  uint32_t total_dex_size = 0;
-
   CHECK(dex_input.size() == 1);
 
   std::vector<DexFileListing_124::DexFile_124> dex_files;
   dex_files.reserve(dex_input.size());
 
   for (const auto dex : dex_input) {
-    auto dex_offset = next_offset + total_dex_size;
+    // We load the dex bytecode in the VDEX file after the header and
+    // the checksum for the DEX right after.
+    auto dex_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
 
     auto dex_fh = FileHandle(fopen(dex.filename.c_str(), "r"));
     CHECK(dex_fh.get() != nullptr);
@@ -2553,7 +2553,6 @@ DexFileListing_124::build(const std::vector<DexInput>& dex_input,
       lookup_table_size
     ));
   }
-  next_offset += total_dex_size;
 
   CHECK(is_aligned<4>(next_offset));
   // note non-const ref
@@ -2779,7 +2778,9 @@ OatFile::Status build_v124_vdex_odex(
 				     bool samsung_mode) {
   const std::vector<KeyValueStore::KeyValue> key_value = {
     { "classpath", "" },
-    { "compiler-filter", "verify-none" },
+    { "compiler-filter", "assume-verified" },
+    // Oreo will reject any OAT file that doesn't set this flag.
+    { "concurrent-copying", "true" },
     { "debuggable", "false" },
     // What ever will happen if art tries to use this?
     { "dex2oat-cmdline", "--oat-file=/dev/null --dex-file=/dev/null" },
