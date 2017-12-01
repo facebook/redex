@@ -110,7 +110,7 @@ class PatriciaTreeSet final {
 
   explicit PatriciaTreeSet(std::initializer_list<Element> l) {
     for (Element x : l) {
-      insert(encode(x));
+      insert(x);
     }
   }
 
@@ -148,6 +148,28 @@ class PatriciaTreeSet final {
 
   bool equals(const PatriciaTreeSet& other) const {
     return pt_impl::equals<IntegerType>(m_tree, other.m_tree);
+  }
+
+  /*
+   * This faster equality predicate can be used to check whether a sequence of
+   * in-place modifications leaves a Patricia-tree set unchanged. For comparing
+   * two arbitrary Patricia-tree sets, one needs to use the `equals()`
+   * predicate.
+   *
+   * Example:
+   *
+   *   PatriciaTreeSet<...> s, t;
+   *   ...
+   *   t = s;
+   *   t.union_with(...);
+   *   t.remove(...);
+   *   t.intersection_with(...);
+   *   if (s.reference_equals(t)) { // This test is equivalent to s.equals(t)
+   *     ...
+   *   }
+   */
+  bool reference_equals(const PatriciaTreeSet& other) const {
+    return m_tree == other.m_tree;
   }
 
   PatriciaTreeSet& insert(Element key) {
@@ -193,11 +215,6 @@ class PatriciaTreeSet final {
 
   void clear() { m_tree.reset(); }
 
-  std::shared_ptr<pt_impl::PatriciaTree<IntegerType>> get_patricia_tree()
-      const {
-    return m_tree;
-  }
-
  private:
   // These functions are used to handle the type conversions required when
   // manipulating sets of pointers. The first parameter is necessary to make
@@ -226,6 +243,18 @@ class PatriciaTreeSet final {
     return x;
   }
 
+  template <typename T = Element,
+            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+  static typename std::remove_pointer<T>::type deref(Element x) {
+    return *x;
+  }
+
+  template <typename T = Element,
+            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+  static Element deref(Element x) {
+    return x;
+  }
+
   std::shared_ptr<pt_impl::PatriciaTree<IntegerType>> m_tree;
 
   template <typename T>
@@ -240,7 +269,7 @@ inline std::ostream& operator<<(std::ostream& o,
                                 const PatriciaTreeSet<Element>& s) {
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeSet<Element>::decode(*it);
+    o << PatriciaTreeSet<Element>::deref(*it);
     if (std::next(it) != s.end()) {
       o << ", ";
     }

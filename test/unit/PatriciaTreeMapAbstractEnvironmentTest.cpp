@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <random>
+#include <sstream>
 
 #include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
@@ -247,11 +248,22 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, whiteBox) {
   // operation shares structure with the operands whenever possible). This is
   // what we check here.
   Environment e({{1, Domain({"a"})}});
-  auto tree_before = e.bindings().get_patricia_tree();
+  const auto& before = e.bindings();
   e.update(1, [](const Domain& x) { return Domain({"a"}); });
-  EXPECT_EQ(e.bindings().get_patricia_tree(), tree_before);
+  EXPECT_TRUE(e.bindings().reference_equals(before));
   e.meet_with(e);
-  EXPECT_EQ(e.bindings().get_patricia_tree(), tree_before);
+  EXPECT_TRUE(e.bindings().reference_equals(before));
   e.join_with(e);
-  EXPECT_EQ(e.bindings().get_patricia_tree(), tree_before);
+  EXPECT_TRUE(e.bindings().reference_equals(before));
+}
+
+TEST_F(PatriciaTreeMapAbstractEnvironmentTest, prettyPrinting) {
+  using StringEnvironment =
+      PatriciaTreeMapAbstractEnvironment<std::string*, Domain>;
+  std::string a = "a";
+  StringEnvironment e({{&a, Domain("A")}});
+
+  std::ostringstream out;
+  out << e.bindings();
+  EXPECT_EQ("{a -> [#1]{A}}", out.str());
 }

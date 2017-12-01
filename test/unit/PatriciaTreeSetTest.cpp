@@ -111,6 +111,8 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
     std::ostringstream out;
     out << s2;
     EXPECT_EQ("{0, 2, 3, 1023}", out.str());
+    pt_set s_init_list({0, 2, 3, 1023});
+    EXPECT_TRUE(s_init_list.equals(s2));
   }
 
   EXPECT_TRUE(empty_set.is_subset_of(s1));
@@ -190,29 +192,29 @@ TEST_F(PatriciaTreeSetTest, whiteBox) {
     pt_set s = this->generate_random_set();
     pt_set u = s.get_union_with(s);
     pt_set i = s.get_intersection_with(s);
-    EXPECT_EQ(s.get_patricia_tree(), u.get_patricia_tree());
-    EXPECT_EQ(s.get_patricia_tree(), i.get_patricia_tree());
+    EXPECT_TRUE(s.reference_equals(u));
+    EXPECT_TRUE(s.reference_equals(i));
     {
       s.insert(17);
-      auto tree = s.get_patricia_tree();
+      pt_set s0 = s;
       s.insert(17);
-      EXPECT_EQ(tree, s.get_patricia_tree());
+      EXPECT_TRUE(s.reference_equals(s0));
     }
     {
       s.remove(157);
-      auto tree = s.get_patricia_tree();
+      pt_set s0 = s;
       s.remove(157);
-      EXPECT_EQ(tree, s.get_patricia_tree());
+      EXPECT_TRUE(s.reference_equals(s0));
     }
     pt_set t = this->generate_random_set();
     pt_set ust = s.get_union_with(t);
     pt_set ist = s.get_intersection_with(t);
-    auto ust_tree = ust.get_patricia_tree();
-    auto ist_tree = ist.get_patricia_tree();
+    pt_set ust0 = ust;
+    pt_set ist0 = ist;
     ust.union_with(t);
     ist.intersection_with(t);
-    EXPECT_EQ(ust.get_patricia_tree(), ust_tree);
-    EXPECT_EQ(ist.get_patricia_tree(), ist_tree);
+    EXPECT_TRUE(ust.reference_equals(ust0));
+    EXPECT_TRUE(ist.reference_equals(ist0));
   }
 }
 
@@ -251,4 +253,9 @@ TEST_F(PatriciaTreeSetTest, setsOfPointers) {
   EXPECT_TRUE(s.equals(s_ab));
   s.filter([](std::string* x) { return *x > "g"; });
   EXPECT_TRUE(s.is_empty());
+
+  string_set t({&a});
+  std::ostringstream out;
+  out << t;
+  EXPECT_EQ("{a}", out.str());
 }
