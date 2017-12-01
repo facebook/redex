@@ -46,6 +46,7 @@ class ReferencedState {
   // If m_whyareyoukeeping is true then report debugging information
   // about why this class or member is being kept.
   bool m_whyareyoukeeping{false};
+  bool m_keep_name{false};
 
  public:
   ReferencedState() = default;
@@ -54,8 +55,8 @@ class ReferencedState {
 
   bool can_delete() const { return !m_bytype && (!m_keep || m_allowshrinking); }
   bool can_rename() const {
-    return !m_bystring &&
-           ((!m_keep || m_allowobfuscation) && !m_allowshrinking);
+    return !m_keep_name && !m_bystring && (!m_keep || m_allowobfuscation) &&
+           !m_allowshrinking;
   }
 
   /**
@@ -105,6 +106,8 @@ class ReferencedState {
 
   // ProGuard keep information.
   void set_keep() { m_keep = true; }
+
+  void set_keep_name() { m_keep_name = true; }
 
   void set_includedescriptorclasses() { m_includedescriptorclasses = true; }
 

@@ -643,6 +643,7 @@ void RenameClassesPassV2::eval_classes_post(
     PassManager& mgr) {
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
+  std::string norule = "";
 
   for (auto clazz : scope) {
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
@@ -675,6 +676,13 @@ void RenameClassesPassV2::eval_classes_post(
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
       continue;
+    }
+
+    // Don't rename anything if something changed and the class cannot be
+    // renamed anymore.
+    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
+      m_dont_rename_reasons[clazz] =
+        { DontRenameReasonCode::ProguardCantRename, norule };
     }
   }
 }
