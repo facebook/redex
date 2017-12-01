@@ -117,6 +117,8 @@ class ConstantDomain final
     return result;
   }
 
+  std::string str() const;
+
   friend class ConstPropEnvUtil;
 };
 

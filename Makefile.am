@@ -74,6 +74,7 @@ noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
+	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
@@ -164,6 +165,7 @@ redex_all_SOURCES = \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/constant_propagation/GlobalConstProp.cpp \
+	opt/constant_propagation/InterproceduralConstantPropagation.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \

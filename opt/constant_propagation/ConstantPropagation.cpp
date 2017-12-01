@@ -31,7 +31,14 @@ void IntraProcConstantPropagation::simplify_instruction(
 void IntraProcConstantPropagation::analyze_instruction(
     const MethodItemEntry& mie, ConstPropEnvironment* current_state) const {
   auto insn = mie.insn;
-  m_lcp.analyze_instruction(insn, current_state);
+  auto op = insn->opcode();
+  if (opcode::is_load_param(op)) {
+    // We assume that the initial environment passed to run() has parameter
+    // bindings already added, so do nothing here
+    return;
+  } else {
+    m_lcp.analyze_instruction(insn, current_state);
+  }
 }
 
 /*

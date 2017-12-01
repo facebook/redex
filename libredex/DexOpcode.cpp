@@ -49,9 +49,6 @@ Ref ref(DexOpcode opcode) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
-    // TODO: The load-param opcodes should really contain a type ref. However,
-    // for that to happen, a bunch of our analyses that check if certain types
-    // are referenced need to be updated.
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:

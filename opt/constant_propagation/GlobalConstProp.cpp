@@ -10,7 +10,7 @@
 #include "GlobalConstProp.h"
 
 std::ostream& operator<<(std::ostream& o, const ConstantValue& cv) {
-  o << "ConstantValue[ Type:";
+  o << "ConstantValue[Type:";
   switch (cv.type()) {
   case ConstantValue::ConstantType::NARROW: {
     o << "NARROW";
@@ -38,6 +38,12 @@ std::ostream& operator<<(std::ostream& o, const ConstantDomain& cd) {
     o << cd.value();
   }
   return o;
+}
+
+std::string ConstantDomain::str() const {
+  std::ostringstream ss;
+  ss << *this;
+  return ss.str();
 }
 
 ConstPropEnvironment& ConstPropEnvUtil::set_narrow(ConstPropEnvironment& env,
