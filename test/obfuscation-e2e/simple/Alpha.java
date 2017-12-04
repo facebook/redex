@@ -9,6 +9,9 @@
 
 package com.facebook.redex.test.proguard;
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.List;
 
 interface IntfParent {
@@ -64,19 +67,59 @@ class Baz {
   }
 }
 
-public class Alpha {
+interface ReflectedInterface {
+    public void reflectedI1();
+    public void reflectedI2();
+    public void reflectedI3();
+    public void unreflectedI4();
+}
+
+public class Alpha implements ReflectedInterface {
 
     private int wombat;
     public int numbat;
     public String omega;
     public List<String> theta;
+    public int reflected1;
+    public int reflected2;
+    public volatile int reflected3;
+    public volatile long reflected4;
+    public volatile Object reflected5;
+    public int reflected6;
 
     // static final nulls have to be at the end of static fields we write out
     private static final int anum = 5;
     public static final Object brand = new Object();
 
-    public Alpha () {
+    public static void reflected1() {}
+    public static void reflected2() {}
+    public static void reflected3() {}
+
+    public void reflected4() {}
+    public void reflected5() {}
+    public void reflected6() {}
+
+    public void reflectedI1() {}
+    public void reflectedI2() {}
+    public void reflectedI3() {}
+    public void unreflectedI4() {}
+
+    public Alpha () throws Exception {
         wombat = 18;
+        Alpha.class.getField("reflected1");
+        Alpha.class.getDeclaredField("reflected2");
+        Alpha.class.getMethod("reflected1");
+        Alpha.class.getDeclaredMethod("reflected2");
+        Alpha.class.getDeclaredMethod("reflected3", new Class[] {});
+        Alpha.class.getMethod("reflected4");
+        Alpha.class.getDeclaredMethod("reflected5");
+        Alpha.class.getDeclaredMethod("reflected6", new Class[] {});
+        ReflectedInterface.class.getMethod("reflectedI1");
+        ReflectedInterface.class.getDeclaredMethod("reflectedI2");
+        ReflectedInterface.class.getDeclaredMethod("reflectedI3", new Class[] {});
+        AtomicIntegerFieldUpdater.newUpdater(Alpha.class, "reflected3");
+        AtomicLongFieldUpdater.newUpdater(Alpha.class, "reflected4");
+        AtomicReferenceFieldUpdater.newUpdater(Alpha.class, Object.class, "reflected5");
     }
 
     public Alpha (int v) {

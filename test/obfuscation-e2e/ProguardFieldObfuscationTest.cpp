@@ -26,18 +26,18 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
-template<std::size_t SIZE>
 void testClass(
     ProguardObfuscationTest* tester,
     const std::string& class_name,
-    const std::array<std::string, SIZE>& fields) {
+    const std::vector<std::string>& fields,
+    bool expects_found = false) {
   auto clazz = tester->find_class_named(class_name);
   ASSERT_NE(nullptr, clazz) << class_name << " not found.";
 
   for (const std::string &fieldName : fields) {
-    ASSERT_FALSE(tester->field_found(
+    ASSERT_EQ(expects_found, tester->field_found(
         clazz->get_ifields(),
-        class_name + fieldName)) << class_name + fieldName << " not obfuscated";
+        class_name + fieldName)) << class_name + fieldName << (expects_found ? "" : " not") << " obfuscated";
   }
 }
 
@@ -50,22 +50,41 @@ TEST(ProguardTest, obfuscation) {
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
   const char* configuration_file = std::getenv("pg_config_e2e_pgconfig");
+  const char* refl_strategy = std::getenv("reflection_strategy");
   ASSERT_NE(nullptr, dexfile);
   ASSERT_NE(nullptr, configuration_file);
+  ASSERT_NE(nullptr, refl_strategy);
 
   ProguardObfuscationTest tester(dexfile, mapping_file);
   ASSERT_TRUE(tester.configure_proguard(configuration_file))
     << "Proguard configuration failed";
 
   // Make sure the fields class Alpha are renamed.
-  const std::array<std::string, 4> alphaNames = {
+  std::vector<std::string> reflectedNames = {
+    ".reflected1:I",
+    ".reflected2:I",
+    ".reflected3:I",
+    ".reflected4:J",
+    ".reflected5:Ljava/lang/Object;"
+  };
+  std::vector<std::string> alphaNames = {
     ".wombat:I",
     ".numbat:I",
+    ".reflected6:I",
     ".omega:Ljava/lang/String;",
     ".theta:Ljava/util/List;"};
-  const std::array<std::string, 1> helloNames = {
+  if (!strcmp(refl_strategy, "rename")) {
+    alphaNames.insert(alphaNames.end(), reflectedNames.begin(), reflectedNames.end());
+  } else {
+    // Ensure reflectedNames are NOT renamed
+    testClass(&tester,
+              "Lcom/facebook/redex/test/proguard/Alpha;",
+              reflectedNames,
+              true);
+  }
+  const std::vector<std::string> helloNames = {
     ".hello:Ljava/lang/String;" };
-  const std::array<std::string, 1> worldNames = {
+  const std::vector<std::string> worldNames = {
     ".world:Ljava/lang/String;" };
   testClass(&tester,
     "Lcom/facebook/redex/test/proguard/Alpha;",
