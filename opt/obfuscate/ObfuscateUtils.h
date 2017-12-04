@@ -118,9 +118,8 @@ public:
   explicit FieldNameWrapper(DexField* elem) :
       DexFieldWrapper(elem) { }
 
-  // To address issue with AtomicReferenceFieldUpdater
   bool should_rename() override {
-    return !is_volatile(this->get());
+    return true;
   }
 };
 
