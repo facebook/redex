@@ -46,81 +46,85 @@ void IntraProcConstantPropagation::analyze_instruction(
  * environment, set the environment to bottom upon entry into the unreachable
  * block.
  */
-static void analyze_if(const IRInstruction* inst,
-                       ConstPropEnvironment* current_state,
+static void analyze_if(const IRInstruction* insn,
+                       ConstPropEnvironment* state,
                        bool is_true_branch) {
+  if (state->is_bottom()) {
+    return;
+  }
   // Inverting the conditional here means that we only need to consider the
   // "true" case of the if-* opcode
-  auto op = !is_true_branch ? opcode::invert_conditional_branch(inst->opcode())
-                            : inst->opcode();
-  // We handle if-eq(z) cases specially since we can infer useful information
-  // even if only one operand is constant
-  if (op == OPCODE_IF_EQ) {
-    auto left_value = current_state->get(inst->src(0));
-    auto right_value = current_state->get(inst->src(1));
-    auto refined_value = left_value.meet(right_value);
-    current_state->set(inst->src(0), refined_value);
-    current_state->set(inst->src(1), refined_value);
-    return;
-  } else if (op == OPCODE_IF_EQZ) {
-    auto value = current_state->get(inst->src(0));
-    auto refined_value = value.meet(
-        ConstantDomain::value(0, ConstantValue::ConstantType::NARROW));
-    current_state->set(inst->src(0), refined_value);
-    return;
-  }
+  auto op = !is_true_branch ? opcode::invert_conditional_branch(insn->opcode())
+                            : insn->opcode();
 
-  int32_t left_value;
-  int32_t right_value;
-  if (!get_constant_value_at_src(*current_state,
-                                 inst,
-                                 /* src_idx */ 0,
-                                 /* default_value */ 0,
-                                 left_value)) {
-    return;
-  }
-  if (!get_constant_value_at_src(*current_state,
-                                 inst,
-                                 /* src_idx */ 1,
-                                 /* default_value */ 0,
-                                 right_value)) {
-    return;
-  }
+  auto scd_left = state->get(insn->src(0));
+  auto scd_right = insn->srcs_size() > 1
+                       ? state->get(insn->src(1))
+                       : SignedConstantDomain(0, ConstantValue::NARROW);
 
   switch (op) {
-    case OPCODE_IF_NE:
-    case OPCODE_IF_NEZ:
-      if (left_value == right_value) {
-        current_state->set_to_bottom();
-      }
+  case OPCODE_IF_EQ: {
+    auto refined_value = scd_left.meet(scd_right);
+    state->set(insn->src(0), refined_value);
+    state->set(insn->src(1), refined_value);
+    break;
+  }
+  case OPCODE_IF_EQZ: {
+    state->set(insn->src(0),
+               scd_left.meet(SignedConstantDomain(0, ConstantValue::NARROW)));
+    break;
+  }
+  case OPCODE_IF_NE:
+  case OPCODE_IF_NEZ: {
+    auto cd_left = scd_left.constant_domain();
+    auto cd_right = scd_right.constant_domain();
+    if (!(cd_left.is_value() && cd_right.is_value())) {
       break;
-    case OPCODE_IF_LT:
-    case OPCODE_IF_LTZ:
-      if (left_value >= right_value) {
-        current_state->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_GE:
-    case OPCODE_IF_GEZ:
-      if (left_value < right_value) {
-        current_state->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_GT:
-    case OPCODE_IF_GTZ:
-      if (left_value <= right_value) {
-        current_state->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_LE:
-    case OPCODE_IF_LEZ:
-      if (left_value > right_value) {
-        current_state->set_to_bottom();
-      }
-      break;
-    default:
-      always_assert_log(false, "expected if-* opcode");
-      not_reached();
+    }
+    if (cd_left.value().constant() == cd_right.value().constant()) {
+      state->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_LT:
+    if (scd_left.min_element() >= scd_right.max_element()) {
+      state->set_to_bottom();
+    }
+    break;
+  case OPCODE_IF_LTZ:
+    state->set(insn->src(0),
+               scd_left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
+    break;
+  case OPCODE_IF_GE:
+    if (scd_left.max_element() < scd_right.min_element()) {
+      state->set_to_bottom();
+    }
+    break;
+  case OPCODE_IF_GEZ:
+    state->set(insn->src(0),
+               scd_left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
+    break;
+  case OPCODE_IF_GT:
+    if (scd_left.max_element() <= scd_right.min_element()) {
+      state->set_to_bottom();
+    }
+    break;
+  case OPCODE_IF_GTZ:
+    state->set(insn->src(0),
+               scd_left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
+    break;
+  case OPCODE_IF_LE:
+    if (scd_left.min_element() > scd_right.max_element()) {
+      state->set_to_bottom();
+    }
+    break;
+  case OPCODE_IF_LEZ:
+    state->set(insn->src(0),
+               scd_left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
+    break;
+  default:
+    always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
+    not_reached();
   }
 }
 
@@ -200,8 +204,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    TRACE(CONSTP, 5, "Class: %s\n", SHOW(method->get_class()));
-    TRACE(CONSTP, 5, "Method: %s\n", SHOW(method->get_name()));
+    TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
 
     auto code = method->get_code();
     code->build_cfg();

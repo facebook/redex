@@ -250,6 +250,42 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST(ConstantPropagation, ConditionalConstantInferInterval) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0) ; some unknown value
+
+     (if-lez v0 :exit)
+     (if-gtz v0 :exit) ; we know v0 must be > 0 here, so this is always true
+
+     (const/4 v0 1)
+
+     :exit
+     (return-void)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  do_const_prop(code.get(), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (if-lez v0 :exit)
+     (goto :exit)
+
+     (const/4 v0 1)
+
+     :exit
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -283,4 +319,51 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
 )");
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ConstantPropagation, SignedConstantDomainOperations) {
+  using namespace sign_domain;
+  auto one = SignedConstantDomain(1, ConstantValue::ConstantType::NARROW);
+  auto minus_one =
+      SignedConstantDomain(-1, ConstantValue::ConstantType::NARROW);
+  auto zero = SignedConstantDomain(0, ConstantValue::ConstantType::NARROW);
+  auto max_val = SignedConstantDomain(std::numeric_limits<int64_t>::max(),
+                                      ConstantValue::ConstantType::WIDE);
+  auto min_val = SignedConstantDomain(std::numeric_limits<int64_t>::min(),
+                                      ConstantValue::ConstantType::WIDE);
+
+  EXPECT_EQ(one.interval(), Interval::GTZ);
+  EXPECT_EQ(minus_one.interval(), Interval::LTZ);
+  EXPECT_EQ(zero.interval(), Interval::EQZ);
+  EXPECT_EQ(max_val.interval(), Interval::GTZ);
+  EXPECT_EQ(min_val.interval(), Interval::LTZ);
+
+  EXPECT_EQ(one.join(minus_one).interval(), Interval::ALL);
+  EXPECT_EQ(one.join(zero).interval(), Interval::GEZ);
+  EXPECT_EQ(minus_one.join(zero).interval(), Interval::LEZ);
+  EXPECT_EQ(max_val.join(zero).interval(), Interval::GEZ);
+  EXPECT_EQ(min_val.join(zero).interval(), Interval::LEZ);
+
+  auto positive = SignedConstantDomain(Interval::GTZ);
+  auto negative = SignedConstantDomain(Interval::LTZ);
+
+  EXPECT_EQ(one.join(positive), positive);
+  EXPECT_TRUE(one.join(negative).is_top());
+  EXPECT_EQ(max_val.join(positive), positive);
+  EXPECT_TRUE(max_val.join(negative).is_top());
+  EXPECT_EQ(minus_one.join(negative), negative);
+  EXPECT_TRUE(minus_one.join(positive).is_top());
+  EXPECT_EQ(min_val.join(negative), negative);
+  EXPECT_TRUE(min_val.join(positive).is_top());
+  EXPECT_EQ(zero.join(positive).interval(), Interval::GEZ);
+  EXPECT_EQ(zero.join(negative).interval(), Interval::LEZ);
+
+  EXPECT_EQ(one.meet(positive), one);
+  EXPECT_TRUE(one.meet(negative).is_bottom());
+  EXPECT_EQ(max_val.meet(positive), max_val);
+  EXPECT_TRUE(max_val.meet(negative).is_bottom());
+  EXPECT_EQ(minus_one.meet(negative), minus_one);
+  EXPECT_TRUE(minus_one.meet(positive).is_bottom());
+  EXPECT_EQ(min_val.meet(negative), min_val);
+  EXPECT_TRUE(min_val.meet(positive).is_bottom());
 }

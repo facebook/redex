@@ -289,28 +289,75 @@ void LocalConstantPropagation::analyze_non_branch(
   }
 }
 
-// Evaluate the guard expression of an if opcode.
-// pass 0 as the r_val for if-*Z opcodes
-bool eval_if(DexOpcode op, int32_t l_val, int32_t r_val) {
+// Evaluate the guard expression of an if opcode. Return boost::none if the
+// branch cannot be determined to jump the same way every time. Otherwise
+// return true if the branch is always taken and false if it is never taken.
+boost::optional<bool> eval_if(IRInstruction*& insn,
+                              const ConstPropEnvironment& state) {
+  if (state.is_bottom()) {
+    return boost::none;
+  }
+  auto op = insn->opcode();
+  auto scd_left = state.get(insn->src(0));
+  auto scd_right = insn->srcs_size() > 1
+                       ? state.get(insn->src(1))
+                       : SignedConstantDomain(0, ConstantValue::NARROW);
   switch (op) {
   case OPCODE_IF_EQ:
-  case OPCODE_IF_EQZ:
-    return l_val == r_val;
   case OPCODE_IF_NE:
-  case OPCODE_IF_NEZ:
-    return l_val != r_val;
-  case OPCODE_IF_LT:
-  case OPCODE_IF_LTZ:
-    return l_val < r_val;
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GEZ:
-    return l_val >= r_val;
-  case OPCODE_IF_GT:
-  case OPCODE_IF_GTZ:
-    return l_val > r_val;
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ: {
+    auto cd_left = scd_left.constant_domain();
+    auto cd_right = scd_right.constant_domain();
+    if (!(cd_left.is_value() && cd_right.is_value())) {
+      return boost::none;
+    }
+    if (op == OPCODE_IF_EQ || op == OPCODE_IF_EQZ) {
+      return cd_left.value().constant() == cd_right.value().constant();
+    } else { // IF_NE / IF_NEZ
+      return cd_left.value().constant() != cd_right.value().constant();
+    }
+  }
   case OPCODE_IF_LE:
-  case OPCODE_IF_LEZ:
-    return l_val <= r_val;
+  case OPCODE_IF_LEZ: {
+    if (scd_left.max_element() <= scd_right.min_element()) {
+      return true;
+    } else if (scd_left.min_element() > scd_right.max_element()) {
+      return false;
+    } else {
+      return boost::none;
+    }
+  }
+  case OPCODE_IF_LT:
+  case OPCODE_IF_LTZ: {
+    if (scd_left.max_element() < scd_right.min_element()) {
+      return true;
+    } else if (scd_left.min_element() >= scd_right.max_element()) {
+      return false;
+    } else {
+      return boost::none;
+    }
+  }
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GEZ: {
+    if (scd_left.min_element() >= scd_right.max_element()) {
+      return true;
+    } else if (scd_left.max_element() < scd_right.min_element()) {
+      return false;
+    } else {
+      return boost::none;
+    }
+  }
+  case OPCODE_IF_GT:
+  case OPCODE_IF_GTZ: {
+    if (scd_left.min_element() > scd_right.max_element()) {
+      return true;
+    } else if (scd_left.max_element() <= scd_right.min_element()) {
+      return false;
+    } else {
+      return boost::none;
+    }
+  }
   default:
     always_assert_log(false, "opcode %s must be an if", SHOW(op));
   }
@@ -320,39 +367,21 @@ bool eval_if(DexOpcode op, int32_t l_val, int32_t r_val) {
 // replace the conditional branch with an unconditional one.
 void LocalConstantPropagation::simplify_branch(
     IRInstruction*& inst, const ConstPropEnvironment& current_state) {
-  int32_t left_value;
-  int32_t right_value;
-  // if-*Z vA        is the same as
-  // if-*  vA, 0
-  if (!get_constant_value_at_src(current_state,
-                                 inst,
-                                 /* src_idx */ 0,
-                                 /* default_value */ 0,
-                                 left_value)) {
+  auto constant_branch = eval_if(inst, current_state);
+
+  if (!constant_branch) {
     return;
   }
-  if (!get_constant_value_at_src(current_state,
-                                 inst,
-                                 /* src_idx */ 1,
-                                 /* default_value */ 0,
-                                 right_value)) {
-    return;
-  }
-
-  bool branch_result = eval_if(inst->opcode(), left_value, right_value);
-  TRACE(CONSTP, 2, "Changed conditional branch %s\n", SHOW(inst));
-
-  IRInstruction* replacement = nullptr;
-  if (branch_result) {
-    // Transform keeps track of the target and selects the right size
-    // instruction based on the offset
-    replacement = new IRInstruction(OPCODE_GOTO);
-  } else {
-    replacement = new IRInstruction(OPCODE_NOP);
-  }
-
+  TRACE(CONSTP,
+        2,
+        "Changed conditional branch %s as it is always %s\n",
+        SHOW(inst),
+        *constant_branch ? "true" : "false");
   ++m_branch_propagated;
-  m_insn_replacements.emplace_back(inst, replacement);
+  // Transform keeps track of the target and selects the right size
+  // instruction based on the offset
+  m_insn_replacements.emplace_back(
+      inst, new IRInstruction(*constant_branch ? OPCODE_GOTO : OPCODE_NOP));
 }
 
 void LocalConstantPropagation::simplify_instruction(

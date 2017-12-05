@@ -15,6 +15,8 @@
 #include "FixpointIterators.h"
 #include "HashedSetAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "ReducedProductAbstractDomain.h"
+#include "SignDomain.h"
 
 /**
  *This class represents constant values living in the following lattice:
@@ -40,7 +42,8 @@ class ConstantValue final : public AbstractValue<ConstantValue> {
 
   ConstantValue() : m_value(-1), m_type(ConstantType::INVALID) {}
 
-  void clear() override{};
+  void clear() override {}
+
   Kind kind() const override { return Kind::Value; }
 
   bool equals(const ConstantValue& other) const override {
@@ -122,10 +125,75 @@ class ConstantDomain final
   friend class ConstPropEnvUtil;
 };
 
+class SignedConstantDomain
+    : public ReducedProductAbstractDomain<SignedConstantDomain,
+                                          sign_domain::Domain,
+                                          ConstantDomain> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  explicit SignedConstantDomain(int64_t v, ConstantValue::ConstantType type)
+      : SignedConstantDomain(std::make_tuple(sign_domain::Domain::top(),
+                                             ConstantDomain::value(v, type))) {}
+
+  explicit SignedConstantDomain(sign_domain::Interval interval)
+      : SignedConstantDomain(std::make_tuple(sign_domain::Domain(interval),
+                                             ConstantDomain::top())) {}
+
+  static void reduce_product(
+      std::tuple<sign_domain::Domain, ConstantDomain>& domains) {
+    auto& sdom = std::get<0>(domains);
+    auto& cdom = std::get<1>(domains);
+    if (!cdom.is_value()) {
+      return;
+    }
+    auto cst = cdom.value().constant();
+    if (!sign_domain::contains(sdom.element(), cst)) {
+      sdom.set_to_bottom();
+      return;
+    }
+    sdom.meet_with(sign_domain::from_int(cst));
+  }
+
+  sign_domain::Domain interval_domain() const { return get<0>(); }
+
+  sign_domain::Interval interval() const { return interval_domain().element(); }
+
+  ConstantDomain constant_domain() const { return get<1>(); }
+
+  static SignedConstantDomain top() {
+    SignedConstantDomain scd;
+    scd.set_to_top();
+    return scd;
+  }
+
+  static SignedConstantDomain bottom() {
+    SignedConstantDomain scd;
+    scd.set_to_bottom();
+    return scd;
+  }
+
+  /* Return the largest element within the interval. */
+  int64_t max_element() const;
+
+  /* Return the smallest element within the interval. */
+  int64_t min_element() const;
+};
+
+inline bool operator==(const SignedConstantDomain& x,
+                       const SignedConstantDomain& y) {
+  return x.equals(y);
+}
+
+inline bool operator!=(const SignedConstantDomain& x,
+                       const SignedConstantDomain& y) {
+  return !(x == y);
+}
+
 std::ostream& operator<<(std::ostream& o, const ConstantDomain& cd);
 
 using ConstPropEnvironment =
-    PatriciaTreeMapAbstractEnvironment<uint16_t, ConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<uint16_t, SignedConstantDomain>;
 
 class ConstPropEnvUtil {
  public:
