@@ -56,7 +56,6 @@ inline MethodSearch opcode_to_search(IRInstruction* insn) {
   case OPCODE_INVOKE_INTERFACE:
     return MethodSearch::Interface;
   default:
-    // TODO: sort out the interface story.
     return MethodSearch::Any;
   }
 }

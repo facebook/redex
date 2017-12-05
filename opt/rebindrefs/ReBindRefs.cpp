@@ -126,11 +126,15 @@ struct Rebinder {
       m_scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
+        bool top_ancestor = false;
         switch (insn->opcode()) {
-          case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_VIRTUAL:
+            top_ancestor = true;
+            // fallthrough
+          case OPCODE_INVOKE_SUPER:
+          case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_STATIC:
-            rebind_method(insn, opcode_to_search(insn));
+            rebind_method(insn, opcode_to_search(insn), top_ancestor);
             break;
           case OPCODE_SGET:
           case OPCODE_SGET_WIDE:
@@ -201,9 +205,10 @@ struct Rebinder {
     }
   };
 
-  void rebind_method(IRInstruction* mop, MethodSearch search) {
+  void rebind_method(
+      IRInstruction* mop, MethodSearch search, bool top_ancestor) {
     const auto mref = mop->get_method();
-    if (search == MethodSearch::Virtual) {
+    if (search == MethodSearch::Virtual && top_ancestor) {
       auto mtype = mref->get_class();
       if (is_array_clone(mref, mtype)) {
         rebind_method_opcode(mop, mref, rebind_array_clone(mref));
