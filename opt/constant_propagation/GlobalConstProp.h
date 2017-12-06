@@ -132,6 +132,12 @@ class SignedConstantDomain
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via the
+  // `using` declaration above), but some compilers fail to catch this. So we
+  // insert a redundant '= default'.
+  SignedConstantDomain() = default;
+
   explicit SignedConstantDomain(int64_t v, ConstantValue::ConstantType type)
       : SignedConstantDomain(std::make_tuple(sign_domain::Domain::top(),
                                              ConstantDomain::value(v, type))) {}
