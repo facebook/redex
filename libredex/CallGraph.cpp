@@ -17,12 +17,13 @@ namespace call_graph {
 Edge::Edge(DexMethod* caller, DexMethod* callee, FatMethod::iterator invoke_it)
     : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
 
-Graph::Graph(const Scope& scope) {
+Graph::Graph(const Scope& scope, bool include_virtuals) {
   MethodRefCache resolved_refs;
   auto resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);
   };
-  auto non_virtual_vec = devirtualize(scope);
+  auto non_virtual_vec =
+      include_virtuals ? devirtualize(scope) : std::vector<DexMethod*>();
   auto non_virtual = std::unordered_set<const DexMethod*>(
       non_virtual_vec.begin(), non_virtual_vec.end());
   auto is_definitely_virtual = [&](const DexMethod* method) {

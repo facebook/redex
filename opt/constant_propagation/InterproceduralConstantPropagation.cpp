@@ -115,7 +115,7 @@ class Propagator {
       : m_scope(scope), m_config(config) {}
 
   std::unique_ptr<FixpointIterator> analyze(size_t max_iterations) {
-    call_graph::Graph cg(m_scope);
+    call_graph::Graph cg(m_scope, m_config.include_virtuals);
     // Rebuild all CFGs here -- this should be more efficient than doing them
     // within FixpointIterator::analyze_node(), since that can get called
     // multiple times for a given method

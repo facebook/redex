@@ -65,7 +65,7 @@ class Node {
 
 class Graph {
  public:
-  explicit Graph(const Scope&);
+  explicit Graph(const Scope&, bool include_virtuals = false);
 
   const Node& entry() const { return m_entry; }
 

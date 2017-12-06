@@ -34,6 +34,7 @@ class InterproceduralConstantPropagationPass : public Pass {
         "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
     pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
     pc.get("propagate_conditions", false, m_config.propagate_conditions);
+    pc.get("include_virtuals", false, m_config.include_virtuals);
   }
 
   // run() is exposed for testing purposes -- run_pass takes a PassManager
