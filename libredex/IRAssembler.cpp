@@ -102,6 +102,15 @@ s_expr to_s_expr(const IRInstruction* insn,
   return s_expr(s_exprs);
 }
 
+s_expr to_s_expr(const DexPosition* pos) {
+  always_assert_log(pos->parent == nullptr, "Not yet implemented");
+  return s_expr({
+      s_expr(show(pos->method)),
+      s_expr(pos->file->c_str()),
+      s_expr(std::to_string(pos->line)),
+  });
+}
+
 std::unique_ptr<IRInstruction> instruction_from_s_expr(
     const std::string& opcode_str, const s_expr& e, LabelRefs* label_refs) {
   auto op_it = string_to_opcode_table.find(opcode_str);
@@ -194,6 +203,25 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   return insn;
 }
 
+std::unique_ptr<DexPosition> position_from_s_expr(const s_expr& e) {
+  std::string method_str;
+  std::string file_str;
+  std::string line_str;
+  s_patn({s_patn(&method_str), s_patn(&file_str), s_patn(&line_str)})
+      .must_match(e, "Expected 3 args for position directive");
+  auto* dex_method =
+      static_cast<DexMethod*>(DexMethod::make_method(method_str));
+  // We should ideally allow DexPosition to take non-concrete methods too...
+  always_assert(dex_method->is_concrete());
+  auto* file = DexString::make_string(file_str);
+  uint32_t line;
+  std::istringstream in(line_str);
+  in >> line;
+  auto pos = std::make_unique<DexPosition>(line);
+  pos->bind(dex_method, file);
+  return pos;
+}
+
 /*
  * Connect label defs to label refs via creation of MFLOW_TARGET instances
  */
@@ -227,7 +255,7 @@ void handle_labels(IRCode* code,
 namespace assembler {
 
 s_expr to_s_expr(const IRCode* code) {
-  std::vector<s_expr> insn_exprs;
+  std::vector<s_expr> exprs;
   std::unordered_map<const IRInstruction*, std::string> insn_to_label;
   size_t label_ctr{0};
   auto generate_label_name = [&]() {
@@ -253,16 +281,17 @@ s_expr to_s_expr(const IRCode* code) {
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
       case MFLOW_OPCODE:
-        insn_exprs.emplace_back(::to_s_expr(it->insn, insn_to_label));
+        exprs.emplace_back(::to_s_expr(it->insn, insn_to_label));
         break;
       case MFLOW_TRY:
       case MFLOW_CATCH:
       case MFLOW_DEBUG:
-      case MFLOW_POSITION:
         always_assert_log(false, "Not yet implemented");
+      case MFLOW_POSITION:
+        exprs.emplace_back(::to_s_expr(it->pos.get()));
         break;
       case MFLOW_TARGET:
-        insn_exprs.emplace_back(insn_to_label.at(it->target->src->insn));
+        exprs.emplace_back(insn_to_label.at(it->target->src->insn));
         break;
       case MFLOW_FALLTHROUGH:
         break;
@@ -270,7 +299,7 @@ s_expr to_s_expr(const IRCode* code) {
         not_reached();
     }
   }
-  return s_expr(insn_exprs);
+  return s_expr(exprs);
 }
 
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
@@ -296,9 +325,13 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
     } else {
       s_expr tail;
       always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
-      auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
-      always_assert(insn != nullptr);
-      code->push_back(insn.release());
+      if (keyword == ".pos") {
+        code->push_back(position_from_s_expr(tail));
+      } else {
+        auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
+        always_assert(insn != nullptr);
+        code->push_back(insn.release());
+      }
     }
   }
   handle_labels(code.get(), label_defs, label_refs);

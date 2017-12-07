@@ -23,6 +23,13 @@ void DexPosition::bind(DexMethod* method_, DexString* file_) {
   this->file = file_;
 }
 
+bool DexPosition::operator==(const DexPosition& that) const {
+  return method == that.method && file == that.file && line == that.line &&
+         (parent == that.parent ||
+          (parent != nullptr && that.parent != nullptr &&
+           *parent == *that.parent));
+}
+
 void RealPositionMapper::register_position(DexPosition* pos) {
   m_pos_line_map[pos] = -1;
 }

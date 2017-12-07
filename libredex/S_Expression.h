@@ -371,7 +371,8 @@ enum class ComponentKind { Int32Atom, StringAtom, List };
 // Checks whether a character belongs to a Lisp-like symbol, i.e., a string atom
 // that can be represented without quotes.
 inline bool is_symbol_char(char c) {
-  return std::isalnum(c) || c == '_' || c == '-' || c == '/' || c == ':';
+  return std::isalnum(c) || c == '_' || c == '-' || c == '/' || c == ':' ||
+         c == '.';
 }
 
 class Component {

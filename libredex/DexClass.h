@@ -589,6 +589,7 @@ class DexDebugItem {
   DexDebugItem(DexIdx* idx, uint32_t offset);
 
  public:
+  DexDebugItem() = default;
   DexDebugItem(const DexDebugItem&);
   static std::unique_ptr<DexDebugItem> get_dex_debug(DexIdx* idx,
                                                      uint32_t offset);
