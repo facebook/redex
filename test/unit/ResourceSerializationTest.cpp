@@ -8,12 +8,10 @@
  */
 
 #include <array>
-#include <fcntl.h>
-#include <map>
 #include <gtest/gtest.h>
-#include <sys/mman.h>
 
 #include "Debug.h"
+#include "RedexResources.h"
 #include "androidfw/ResourceTypes.h"
 
 std::string make_big_string(size_t len) {
@@ -137,29 +135,60 @@ TEST(ResStringPool, AppendToExistingUTF16) {
   ASSERT_EQ(out_len, 14);
 }
 
-void* map_arsc(const char* path, int& file_descriptor, size_t& length) {
-  file_descriptor = open(path, O_RDONLY);
-  if (file_descriptor <= 0) {
-    throw std::runtime_error("Failed to open arsc file");
-	}
-  struct stat st = {};
-  if (fstat(file_descriptor, &st) == -1)	{
-		close(file_descriptor);
-		throw std::runtime_error("Failed to get file length");
-	}
-  length = (size_t)st.st_size;
-  void* fp = mmap(
-    nullptr, length, PROT_READ, MAP_SHARED, file_descriptor, 0);
-  if (fp == MAP_FAILED) {
-		close(file_descriptor);
-		throw std::runtime_error("Failed to mmap arsc");
-	}
-  return fp;
-}
+TEST(ResStringPool, ReplaceStringsInXmlLayout) {
+  // Given layout file should have a series of View subclasses in the XML, which
+  // we will rename. Parse the resulting binary data, and make sure all tags are
+  // right.
+  size_t length;
+  int file_descriptor;
+  auto fp = map_file(std::getenv("test_layout_path"), file_descriptor, length);
 
-void close_arsc(int file_descriptor, void* file_pointer, size_t length) {
-  munmap(file_pointer, length);
-  close(file_descriptor);
+  std::map<std::string, std::string> shortened_names;
+  shortened_names.emplace("com.example.test.CustomViewGroup", "Z.a");
+  shortened_names.emplace("com.example.test.CustomTextView", "Z.b");
+  shortened_names.emplace("com.example.test.CustomButton", "Z.c");
+  shortened_names.emplace("com.example.test.NotFound", "Z.d");
+
+  android::Vector<char> serialized;
+  size_t num_renamed = 0;
+  replace_in_xml_string_pool(
+    fp,
+    length,
+    shortened_names,
+    &serialized,
+    &num_renamed);
+
+  EXPECT_EQ(num_renamed, 3);
+  android::ResXMLTree parser;
+  parser.setTo(&serialized[0], serialized.size());
+  EXPECT_EQ(android::NO_ERROR, parser.getError())
+    << "Error parsing layout after rename";
+
+  std::vector<std::string> expected_xml_tags;
+  expected_xml_tags.push_back("Z.a");
+  expected_xml_tags.push_back("TextView");
+  expected_xml_tags.push_back("Z.b");
+  expected_xml_tags.push_back("Z.c");
+  expected_xml_tags.push_back("Button");
+
+  size_t tag_count = 0;
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      EXPECT_LT(tag_count, 5);
+      size_t len;
+      android::String16 tag(parser.getElementName(&len));
+      auto actual_chars = android::String8(tag).string();
+      auto expected_chars = expected_xml_tags[tag_count].c_str();
+      EXPECT_STREQ(actual_chars, expected_chars);
+      tag_count++;
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+  EXPECT_EQ(tag_count, 5);
+
+  unmap_and_close(file_descriptor, fp, length);
 }
 
 void assert_serialized_data(void* original, size_t length, android::Vector<char>& serialized) {
@@ -173,20 +202,20 @@ void assert_serialized_data(void* original, size_t length, android::Vector<char>
 TEST(ResTable, TestRoundTrip) {
   size_t length;
   int file_descriptor;
-  auto fp = map_arsc(std::getenv("test_arsc_path"), file_descriptor, length);
+  auto fp = map_file(std::getenv("test_arsc_path"), file_descriptor, length);
   android::ResTable table;
   ASSERT_EQ(table.add(fp, length), 0);
   // Just invoke the serialize method to ensure the same data comes back
   android::Vector<char> serialized;
   table.serialize(serialized, 0);
   assert_serialized_data(fp, length, serialized);
-  close_arsc(file_descriptor, fp, length);
+  unmap_and_close(file_descriptor, fp, length);
 }
 
 TEST(ResTable, AppendNewType) {
   size_t length;
   int file_descriptor;
-  auto fp = map_arsc(std::getenv("test_arsc_path"), file_descriptor, length);
+  auto fp = map_file(std::getenv("test_arsc_path"), file_descriptor, length);
   android::ResTable table;
   ASSERT_EQ(table.add(fp, length), 0);
 
@@ -248,5 +277,5 @@ TEST(ResTable, AppendNewType) {
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
 
-  close_arsc(file_descriptor, fp, length);
+  unmap_and_close(file_descriptor, fp, length);
 }

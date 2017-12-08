@@ -52,6 +52,27 @@ void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
 
+// Given the bytes of a binary XML file, replace the entries (if any) in the
+// ResStringPool. Writes result to the given Vector output param.
+// Returns android::NO_ERROR (0) on success, or one of the corresponding
+// android:: error codes for failure conditions/bad input data.
+int replace_in_xml_string_pool(
+    const void* data,
+    const size_t len,
+    const std::map<std::string, std::string>& shortened_names,
+    android::Vector<char>* out_data,
+    size_t* out_num_renamed);
+
+// Replaces all strings in the ResStringPool for the given file with their
+// replacements. Writes all changes to disk, clobbering the given file.
+// Same return codes as replace_in_xml_string_pool.
+int rename_classes_in_layout(
+    const std::string& file_path,
+    const std::map<std::string, std::string>& shortened_names,
+    size_t* out_num_renamed,
+    ssize_t* out_size_delta);
+
+
 /**
  * Follows the reference links for a resource for all configurations.
  * Returns all the nodes visited, as well as all the string values seen.
