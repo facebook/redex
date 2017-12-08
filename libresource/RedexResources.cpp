@@ -12,11 +12,14 @@
 #include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
 #include <fstream>
 #include <map>
 #include <boost/regex.hpp>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unordered_set>
 #include <vector>
 
@@ -25,8 +28,12 @@
 #endif
 
 #include "androidfw/ResourceTypes.h"
+#include "utils/ByteOrder.h"
+#include "utils/Errors.h"
+#include "utils/Log.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
+#include "utils/Serialize.h"
 #include "utils/TypeHelpers.h"
 
 #include "StringUtil.h"
@@ -761,4 +768,52 @@ std::unordered_set<std::string> get_native_classes(const std::string& apk_direct
     all_classes.insert(classes_from_layout.begin(), classes_from_layout.end());
   }
   return all_classes;
+}
+
+void* map_file(
+  const char* path,
+  int& file_descriptor,
+  size_t& length,
+  const bool mode_write) {
+  file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
+  if (file_descriptor <= 0) {
+    throw std::runtime_error("Failed to open arsc file");
+  }
+  struct stat st = {};
+  if (fstat(file_descriptor, &st) == -1) {
+    close(file_descriptor);
+    throw std::runtime_error("Failed to get file length");
+  }
+  length = (size_t)st.st_size;
+  int flags = PROT_READ;
+  if (mode_write) {
+    flags |= PROT_WRITE;
+  }
+  void* fp = mmap(nullptr, length, flags, MAP_SHARED, file_descriptor, 0);
+  if (fp == MAP_FAILED) {
+		close(file_descriptor);
+		throw std::runtime_error("Failed to mmap file");
+	}
+  return fp;
+}
+
+void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
+  munmap(file_pointer, length);
+  close(file_descriptor);
+}
+
+size_t write_serialized_data(
+  const android::Vector<char>& cVec,
+  int file_descriptor,
+  void* file_pointer,
+  const size_t& length) {
+  size_t vec_size = cVec.size();
+  if (vec_size > 0) {
+    memcpy(file_pointer, &(cVec[0]), vec_size);
+  }
+
+  munmap(file_pointer, length);
+  ftruncate(file_descriptor, cVec.size());
+  close(file_descriptor);
+  return vec_size > 0 ? vec_size : length;
 }

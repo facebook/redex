@@ -17,6 +17,18 @@
 
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename, const std::string& contents);
+void* map_file(
+    const char* path,
+    int& file_descriptor,
+    size_t& length,
+    const bool mode_write = false);
+size_t write_serialized_data(
+    const android::Vector<char>& cVec,
+    int file_descriptor,
+    void* file_pointer,
+    const size_t& length);
+void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
+
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 bool has_raw_attribute_value(
