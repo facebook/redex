@@ -33,6 +33,8 @@ struct DontRenameReason {
   std::string rule;
 };
 
+class AliasMap;
+
 class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
@@ -40,6 +42,7 @@ class RenameClassesPassV2 : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("rename_annotations", false, m_rename_annotations);
     pc.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
+    pc.get("force_layout_rename_packages", {}, m_force_layout_rename_packages);
     pc.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
     pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
     std::vector<std::string> dont_rename_specific;
@@ -60,7 +63,8 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_map<const DexType*, std::string>
   build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
 
-  std::unordered_set<std::string> build_dont_rename_resources(PassManager&);
+  std::unordered_set<std::string> build_dont_rename_resources(
+    PassManager&, std::unordered_map<const DexType*, std::string>&);
   std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
   std::unordered_set<std::string> build_dont_rename_for_types_with_reflection(
       Scope&, const ProguardMap&);
@@ -85,10 +89,12 @@ class RenameClassesPassV2 : public Pass {
                       ConfigFiles& cfg,
                       bool rename_annotations,
                       PassManager& mgr);
+  void rename_classes_in_layouts(const AliasMap& aliases, PassManager& mgr);
 
   // Config and rules
   bool m_rename_annotations;
   std::vector<std::string> m_force_rename_hierarchies;
+  std::vector<std::string> m_force_layout_rename_packages;
   std::vector<std::string> m_dont_rename_hierarchies;
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
@@ -98,4 +104,6 @@ class RenameClassesPassV2 : public Pass {
   // Decisions we made in the eval_classes pass
   std::unordered_set<const DexClass*> m_force_rename_classes;
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
+
+  std::string m_apk_dir;
 };

@@ -157,30 +157,53 @@ static int s_padding = 0;
 
 }
 
-std::unordered_set<std::string>
-RenameClassesPassV2::build_dont_rename_resources(PassManager& mgr) {
-  std::unordered_set<std::string> dont_rename_resources;
-  const Json::Value& config = mgr.get_config();
-  PassConfig pc(config);
-  std::string apk_dir;
-  pc.get("apk_dir", "", apk_dir);
+// Returns idx of the vector of packages if the given class name matches, or -1
+// if not found.
+ssize_t find_matching_package(
+  const std::string& classname,
+  const std::vector<std::string>& allowed_packages) {
+  for (size_t i = 0; i < allowed_packages.size(); i++) {
+    if (classname.rfind("L"+allowed_packages[i]) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
 
-  if (apk_dir.size()) {
+std::unordered_set<std::string>
+RenameClassesPassV2::build_dont_rename_resources(
+  PassManager& mgr,
+  std::unordered_map<const DexType*, std::string>& force_rename_classes) {
+  std::unordered_set<std::string> dont_rename_resources;
+  if (m_apk_dir.size()) {
     // Classes present in manifest
-    std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+    std::string manifest = m_apk_dir + std::string("/AndroidManifest.xml");
     for (std::string classname : get_manifest_classes(manifest)) {
       TRACE(RENAME, 4, "manifest: %s\n", classname.c_str());
       dont_rename_resources.insert(classname);
     }
 
     // Classes present in XML layouts
-    for (std::string classname : get_layout_classes(apk_dir)) {
-      TRACE(RENAME, 4, "xml_layout: %s\n", classname.c_str());
-      dont_rename_resources.insert(classname);
+    for (const auto& classname : get_layout_classes(m_apk_dir)) {
+      const auto matching_pkg = find_matching_package(
+        classname,
+        m_force_layout_rename_packages);
+      if (matching_pkg < 0) {
+        TRACE(RENAME, 4, "xml_layout: %s\n", classname.c_str());
+        dont_rename_resources.insert(classname);
+      } else {
+        const auto dex_type = DexType::get_type(classname.c_str());
+        if (dex_type != nullptr) {
+          TRACE(RENAME, 4, "xml_layout: forcing class %s\n", classname.c_str());
+          force_rename_classes.emplace(
+            dex_type,
+            m_force_layout_rename_packages[matching_pkg]);
+        }
+      }
     }
 
     // Classnames present in native libraries (lib/*/*.so)
-    for (std::string classname : get_native_classes(apk_dir)) {
+    for (std::string classname : get_native_classes(m_apk_dir)) {
       auto type = DexType::get_type(classname.c_str());
       if (type == nullptr) continue;
       TRACE(RENAME, 4, "native_lib: %s\n", classname.c_str());
@@ -520,7 +543,8 @@ void RenameClassesPassV2::eval_classes(
       build_force_rename_hierarchies(mgr, scope, class_hierarchy);
 
   auto dont_rename_serde_relationships = build_dont_rename_serde_relationships(scope);
-  auto dont_rename_resources = build_dont_rename_resources(mgr);
+  auto dont_rename_resources =
+    build_dont_rename_resources(mgr, force_rename_hierarchies);
   auto dont_rename_class_name_literals = build_dont_rename_class_name_literals(scope);
   auto dont_rename_class_for_types_with_reflection =
       build_dont_rename_for_types_with_reflection(scope,
@@ -690,6 +714,9 @@ void RenameClassesPassV2::eval_classes_post(
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& cfg,
                                     PassManager& mgr) {
+  const Json::Value& config = mgr.get_config();
+  PassConfig pc(config);
+  pc.get("apk_dir", "", m_apk_dir);
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes(scope, class_hierarchy, cfg, m_rename_annotations, mgr);
@@ -873,7 +900,48 @@ void RenameClassesPassV2::rename_classes(
     }
   });
 
+  if (!m_force_layout_rename_packages.empty()) {
+    rename_classes_in_layouts(aliases, mgr);
+  }
+
   sanity_check(scope, aliases);
+}
+
+void RenameClassesPassV2::rename_classes_in_layouts(
+  const AliasMap& aliases,
+  PassManager& mgr) {
+  // Sync up ResStringPool entries in XML layouts. Class names should appear in
+  // their "external" name, i.e. java.lang.String instead of Ljava/lang/String;
+  std::map<std::string, std::string> aliases_for_layouts;
+  for (const auto& apair : aliases.get_class_map()) {
+    aliases_for_layouts.emplace(
+      JavaNameUtil::internal_to_external(apair.first->str()),
+      JavaNameUtil::internal_to_external(apair.second->str()));
+  }
+  ssize_t layout_bytes_delta = 0;
+  size_t num_layout_renamed = 0;
+  auto xml_files = get_xml_files(m_apk_dir + "/res");
+  for (const auto& path : xml_files) {
+    size_t num_renamed;
+    ssize_t out_delta;
+    TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());
+    rename_classes_in_layout(path, aliases_for_layouts, &num_renamed, &out_delta);
+    TRACE(
+      RENAME,
+      3,
+      "Renamed %zu ResStringPool entries in layout %s\n",
+      num_renamed,
+      path.c_str());
+    layout_bytes_delta += out_delta;
+    num_layout_renamed += num_renamed;
+  }
+  mgr.incr_metric("layout_bytes_delta", layout_bytes_delta);
+  TRACE(
+    RENAME,
+    2,
+    "Renamed %zu ResStringPool entries, delta %zi bytes\n",
+    num_layout_renamed,
+    layout_bytes_delta);
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores,
