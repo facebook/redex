@@ -133,6 +133,7 @@ libredex_la_SOURCES = \
 	libresource/FileMap.cpp \
 	libresource/RedexResources.cpp \
 	libresource/ResourceTypes.cpp \
+	libresource/Serialize.cpp \
 	libresource/SharedBuffer.cpp \
 	libresource/Static.cpp \
 	libresource/String16.cpp \
