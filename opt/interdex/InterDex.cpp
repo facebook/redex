@@ -552,7 +552,13 @@ static DexClassesVector run_interdex(InterDexPass* pass,
             4,
             "IDEX: Emitting plugin generated leftover class :: %s\n",
             SHOW(add_class));
-      emit_class(pass, det, outdex, add_class, false);
+      emit_class(
+          pass,
+          det,
+          outdex,
+          add_class,
+          false, /* not primary */
+          false /* shouldn't skip */);
     }
   }
 
