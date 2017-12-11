@@ -98,8 +98,8 @@ cmake .. -G Ninja
 
 On Windows, first, get `CMAKE_TOOLCHAIN_FILE` from the output of `"vcpkg integrate install"`, and then:
 ```
-cmake .. -G "Visual Studio 15 2017 Win64"`
- -DVCPKG_TARGET_TRIPLET=x64-windows-static`
+cmake .. -G "Visual Studio 15 2017 Win64"
+ -DVCPKG_TARGET_TRIPLET=x64-windows-static
  -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
 ```
 
