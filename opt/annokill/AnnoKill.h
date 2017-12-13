@@ -40,6 +40,7 @@ class AnnoKill {
   };
 
   AnnoKill(Scope& scope,
+           bool only_force_kill,
            const AnnoNames& keep,
            const AnnoNames& kill,
            const AnnoNames& force_kill);
@@ -62,6 +63,7 @@ class AnnoKill {
   void count_annotation(const DexAnnotation* da);
 
   Scope& m_scope;
+  bool m_only_force_kill;
   AnnoSet m_kill;
   AnnoSet m_force_kill;
   AnnoSet m_keep;
@@ -75,6 +77,7 @@ class AnnoKill {
 class AnnoKillPass : public Pass {
  public:
   AnnoKillPass() : Pass("AnnoKillPass") {}
+  explicit AnnoKillPass(const char* name) : Pass(name) {}
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("keep_annos", {}, m_keep_annos);
@@ -83,6 +86,8 @@ class AnnoKillPass : public Pass {
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  virtual bool only_force_kill() const { return false; }
 
  private:
   std::vector<std::string> m_keep_annos;
