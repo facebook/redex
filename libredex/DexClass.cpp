@@ -153,6 +153,19 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   m_dbg_entries = eval_debug_instructions(this, insns, line_start);
 }
 
+uint32_t DexDebugItem::get_line_start() const {
+  for (auto& entry : m_dbg_entries) {
+    switch (entry.type) {
+      case DexDebugEntryType::Position: {
+        return entry.pos->line;
+      default:
+        break;
+      }
+    }
+  }
+  return 0;
+}
+
 DexDebugItem::DexDebugItem(const DexDebugItem& that)
     : m_param_names(that.m_param_names) {
   std::unordered_map<DexPosition*, DexPosition*> pos_map;

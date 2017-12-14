@@ -118,9 +118,8 @@ public:
   explicit FieldNameWrapper(DexField* elem) :
       DexFieldWrapper(elem) { }
 
-  // To address issue with AtomicReferenceFieldUpdater
   bool should_rename() override {
-    return !is_volatile(this->get());
+    return true;
   }
 };
 
@@ -357,20 +356,22 @@ public:
 // once making sure to put static final fields with a nullptr value at the end
 // (for proper writing of dexes)
 class StaticFieldNameGenerator : public NameGenerator<DexField*> {
-private:
-  std::unordered_set<DexFieldWrapper*> fields;
-  std::unordered_set<DexFieldWrapper*> static_final_null_fields;
-public:
+ private:
+  // Use ordered maps here to get deterministic names
+  std::map<DexField*, DexFieldWrapper*, dexfields_comparator> fields;
+  std::map<DexField*, DexFieldWrapper*, dexfields_comparator>
+      static_final_null_fields;
+ public:
   StaticFieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
       std::unordered_set<std::string>& used_ids) :
     NameGenerator(ids_to_avoid, used_ids) {}
 
-  void find_new_name (DexFieldWrapper* wrap) override {
+  void find_new_name(DexFieldWrapper* wrap) override {
     DexField* field = wrap->get();
     if (field->get_static_value() == nullptr) {
-      static_final_null_fields.insert(wrap);
+      static_final_null_fields.emplace(field, wrap);
     } else {
-      fields.insert(wrap);
+      fields.emplace(field, wrap);
     }
   }
 
@@ -383,7 +384,8 @@ public:
       names.emplace_back(this->next_name());
     TRACE(OBFUSCATE, 3, "Static Generator\n");
     unsigned int i = 0;
-    for (DexFieldWrapper* wrap : fields) {
+    for (auto& pair : fields) {
+      DexFieldWrapper* wrap = pair.second;
       const std::string& new_name(names[i++]);
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
@@ -392,7 +394,8 @@ public:
           SHOW(field->get_type()), SHOW(field->get_class()),
           SHOW(field->get_name()), new_name.c_str());
     }
-    for (DexFieldWrapper* wrap : static_final_null_fields) {
+    for (auto& pair : static_final_null_fields) {
+      DexFieldWrapper* wrap = pair.second;
       const std::string& new_name(names[i++]);
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);

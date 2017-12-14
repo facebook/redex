@@ -26,8 +26,8 @@
   TM(CFG)                \
   TM(CFP)                \
   TM(CLP_GQL)            \
-  TM(CPG)                \
   TM(CONSTP)             \
+  TM(CPG)                \
   TM(CUSTOMSORT)         \
   TM(DBGSTRIP)           \
   TM(DC)                 \
@@ -40,6 +40,7 @@
   TM(EMPTY)              \
   TM(FINALINLINE)        \
   TM(HOTNESS)            \
+  TM(ICONSTP)            \
   TM(IDEX)               \
   TM(INL)                \
   TM(INLINIT)            \

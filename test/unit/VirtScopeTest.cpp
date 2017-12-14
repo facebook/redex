@@ -15,6 +15,7 @@
 #include "Creators.h"
 #include "DexUtil.h"
 #include "VirtualScope.h"
+#include "TypeSystem.h"
 #include "ScopeHelper.h"
 #include "VirtScopeHelper.h"
 
@@ -1506,6 +1507,120 @@ TEST(Interface3IntfOverEscape, empty) {
       static_cast<DexMethod*>(DexMethod::get_method(h_t, g, void_int)),
       static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int)),
       static_cast<DexMethod*>(DexMethod::get_method(k_t, g, void_int))));
+
+  delete g_redex;
+}
+
+/**
+ * Vitual/InterfaceScope resolution
+ *
+ * interface Intf1 { void f(); }
+ * interface Intf2 { void g(int); }
+ * interface Intf3 { void f(); }
+ * class java.lang.Object { // Object methods ... }
+ * class A { void f() {} }
+ *   class F extends A { void f(int) {} boolean equals(Object) {} void g(int); }
+ *   class G extends F { void g(int) {} }
+ *     class H extends G implements Intf2 { }
+ *       class I extends H { void g(int) {} }
+ *       class J extends H {}
+ *     class K extends G { void g(int) {} }
+ *   class L extends F { void g(int) {} }
+ * class B implements Intf1 { void g() {} void f() {} void g(int) {} }
+ *   class C extends B implements Intf2 { void g(int) {} }
+ *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
+ *     class E extends C { void g() {} void g(int) {} }
+ */
+TEST(VitualInterfaceResolutionTest, empty) {
+  g_redex = new RedexContext();
+  std::vector<DexClass*> scope = create_scope_10();
+  TypeSystem type_system(scope);
+  auto eq = DexString::get_string("equals");
+  auto f = DexString::get_string("f");
+  auto g = DexString::get_string("g");
+  auto obj_t = get_object_type();
+  auto a_t = DexType::get_type("LA;");
+  auto b_t = DexType::get_type("LB;");
+  auto c_t = DexType::get_type("LC;");
+  auto d_t = DexType::get_type("LD;");
+  auto e_t = DexType::get_type("LE;");
+  auto f_t = DexType::get_type("LF;");
+  auto g_t = DexType::get_type("LG;");
+  auto h_t = DexType::get_type("LH;");
+  auto k_t = DexType::get_type("LK;");
+  auto i_t = DexType::get_type("LI;");
+  auto j_t = DexType::get_type("LJ;");
+  auto l_t = DexType::get_type("LL;");
+  auto intf1_t = DexType::get_type("LIntf1;");
+  auto intf2_t = DexType::get_type("LIntf2;");
+  auto intf3_t = DexType::get_type("LIntf3;");
+  auto intf4_t = DexType::get_type("LIntf4;");
+  auto void_void = DexProto::make_proto(
+      get_void_type(), DexTypeList::make_type_list({}));
+  auto void_int = DexProto::make_proto(
+      get_void_type(), DexTypeList::make_type_list({get_int_type()}));
+  auto bool_obj = DexProto::make_proto(
+      get_boolean_type(), DexTypeList::make_type_list({obj_t}));
+
+  // invoke_virtual I.g(int)
+  // Resolve the above call and obtain G.g(int) virtual scope
+  // that is where the method is introduced
+  auto i_g_void_int = static_cast<DexMethod*>(
+      DexMethod::get_method(i_t, g, void_int));
+  const auto& g_g_virt_scope = type_system.find_virtual_scope(i_g_void_int);
+  EXPECT_TRUE(g_g_virt_scope != nullptr);
+
+  std::unordered_set<DexMethod *> methods;
+  // Resolve invoke_virtual G.g(int) for I
+  type_system.select_methods(*g_g_virt_scope, {i_t}, methods);
+  EXPECT_EQ(*methods.begin(), i_g_void_int);
+  methods.clear();
+  // Resolve invoke_virtual G.g(int) for K
+  type_system.select_methods(*g_g_virt_scope, {k_t}, methods);
+  EXPECT_EQ(*methods.begin(), DexMethod::get_method(k_t, g, void_int));
+  methods.clear();
+  // Resolve invoke_virtual G.g(int) for J
+  type_system.select_methods(*g_g_virt_scope, {j_t}, methods);
+  EXPECT_EQ(*methods.begin(), DexMethod::get_method(g_t, g, void_int));
+  methods.clear();
+  // Resolve invoke_virtual G.g(int) for J, K
+  type_system.select_methods(*g_g_virt_scope, {j_t, k_t}, methods);
+  EXPECT_EQ(methods.size(), 2);
+  EXPECT_EQ(methods.count(
+      static_cast<DexMethod*>(DexMethod::get_method(g_t, g, void_int))), 1);
+  EXPECT_EQ(methods.count(
+      static_cast<DexMethod*>(DexMethod::get_method(k_t, g, void_int))), 1);
+  methods.clear();
+
+  // invoke_interface Intf2.g(int)
+  // Resolve the above call and obtain Intf2.g(int) interface scope
+  auto intf2_g_void_int = static_cast<DexMethod*>(
+      DexMethod::get_method(intf2_t, g, void_int));
+  const auto& intf2_g_intf_scope =
+      type_system.find_interface_scope(intf2_g_void_int);
+  EXPECT_TRUE(intf2_g_intf_scope.size() == 2);
+
+  // Resolve invoke_interface Intf2.g(int) for I
+  type_system.select_methods(intf2_g_intf_scope, {i_t}, methods);
+  EXPECT_EQ(*methods.begin(), DexMethod::get_method(i_t, g, void_int));
+  methods.clear();
+  // Resolve invoke_interface Intf2.g(int) for E
+  type_system.select_methods(intf2_g_intf_scope, {e_t}, methods);
+  EXPECT_EQ(*methods.begin(), DexMethod::get_method(e_t, g, void_int));
+  methods.clear();
+  // Resolve invoke_interface Intf2.g(int) for E, I
+  type_system.select_methods(intf2_g_intf_scope, {e_t, i_t}, methods);
+  EXPECT_EQ(methods.size(), 2);
+  EXPECT_EQ(methods.count(
+      static_cast<DexMethod*>(DexMethod::get_method(e_t, g, void_int))), 1);
+  EXPECT_EQ(methods.count(
+      static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int))), 1);
+  methods.clear();
+  // Resolve invoke_interface Intf2.g(int) for J, H
+  type_system.select_methods(intf2_g_intf_scope, {j_t,h_t}, methods);
+  EXPECT_EQ(methods.size(), 1);
+  EXPECT_EQ(*methods.begin(), DexMethod::get_method(g_t, g, void_int));
+  methods.clear();
 
   delete g_redex;
 }

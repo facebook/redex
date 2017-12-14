@@ -10,4 +10,5 @@ struct ConstPropConfig {
   bool replace_moves_with_consts{false};
   bool fold_arithmetic{false};
   bool propagate_conditions{false};
+  bool include_virtuals{false};
 };

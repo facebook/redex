@@ -12,11 +12,14 @@
 #include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
 #include <fstream>
 #include <map>
 #include <boost/regex.hpp>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unordered_set>
 #include <vector>
 
@@ -25,8 +28,12 @@
 #endif
 
 #include "androidfw/ResourceTypes.h"
+#include "utils/ByteOrder.h"
+#include "utils/Errors.h"
+#include "utils/Log.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
+#include "utils/Serialize.h"
 #include "utils/TypeHelpers.h"
 
 #include "StringUtil.h"
@@ -761,4 +768,176 @@ std::unordered_set<std::string> get_native_classes(const std::string& apk_direct
     all_classes.insert(classes_from_layout.begin(), classes_from_layout.end());
   }
   return all_classes;
+}
+
+void* map_file(
+  const char* path,
+  int& file_descriptor,
+  size_t& length,
+  const bool mode_write) {
+  file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
+  if (file_descriptor <= 0) {
+    throw std::runtime_error("Failed to open arsc file");
+  }
+  struct stat st = {};
+  if (fstat(file_descriptor, &st) == -1) {
+    close(file_descriptor);
+    throw std::runtime_error("Failed to get file length");
+  }
+  length = (size_t)st.st_size;
+  int flags = PROT_READ;
+  if (mode_write) {
+    flags |= PROT_WRITE;
+  }
+  void* fp = mmap(nullptr, length, flags, MAP_SHARED, file_descriptor, 0);
+  if (fp == MAP_FAILED) {
+		close(file_descriptor);
+		throw std::runtime_error("Failed to mmap file");
+	}
+  return fp;
+}
+
+void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
+  munmap(file_pointer, length);
+  close(file_descriptor);
+}
+
+size_t write_serialized_data(
+  const android::Vector<char>& cVec,
+  int file_descriptor,
+  void* file_pointer,
+  const size_t& length) {
+  size_t vec_size = cVec.size();
+  if (vec_size > 0) {
+    memcpy(file_pointer, &(cVec[0]), vec_size);
+  }
+
+  munmap(file_pointer, length);
+  ftruncate(file_descriptor, cVec.size());
+  close(file_descriptor);
+  return vec_size > 0 ? vec_size : length;
+}
+
+int replace_in_xml_string_pool(
+  const void* data,
+  const size_t len,
+  const std::map<std::string, std::string>& shortened_names,
+  android::Vector<char>* out_data,
+  size_t* out_num_renamed) {
+  const auto chunk_size = sizeof(android::ResChunk_header);
+  const auto pool_header_size =
+    (uint16_t) sizeof(android::ResStringPool_header);
+
+  // Validate the given bytes.
+  if (len < chunk_size + pool_header_size) {
+    return android::NOT_ENOUGH_DATA;
+  }
+
+  // Layout XMLs will have a ResChunk_header, followed by ResStringPool
+  // representing each XML tag and attribute string.
+  auto chunk = (android::ResChunk_header*) data;
+  LOG_FATAL_IF(dtohl(chunk->size) != len, "Can't read header size");
+
+  auto pool_ptr = (android::ResStringPool_header*) ((char*) data + chunk_size);
+  if (dtohs(pool_ptr->header.type) != android::RES_STRING_POOL_TYPE) {
+    return android::BAD_TYPE;
+  }
+
+  size_t num_replaced = 0;
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+
+  // Straight copy of everything after the string pool.
+  android::Vector<char> serialized_nodes;
+  auto start = chunk_size + pool_ptr->header.size;
+  auto remaining = len - start;
+  serialized_nodes.resize(remaining);
+  void* start_ptr = ((char*) data) + start;
+  memcpy((void*) &serialized_nodes[0], start_ptr, remaining);
+
+  // Rewrite the strings
+  android::Vector<char> serialized_pool;
+  auto num_strings = pool_ptr->stringCount;
+
+  // Make an empty pool.
+  auto new_pool_header = android::ResStringPool_header {
+    {
+      htods(android::RES_STRING_POOL_TYPE),
+      htods(pool_header_size),
+      htodl(pool_header_size)
+    },
+    0,
+    0,
+    htodl(android::ResStringPool_header::UTF8_FLAG),
+    0,
+    0
+  };
+  android::ResStringPool new_pool(
+    &new_pool_header,
+    pool_header_size);
+
+  for (size_t i = 0; i < num_strings; i++) {
+    // Public accessors for strings are a bit of a foot gun. string8ObjectAt
+    // does not reliably return lengths with chars outside the BMP. Work around
+    // to get a proper String8.
+    size_t u16_len;
+    auto wide_chars = pool.stringAt(i, &u16_len);
+    android::String16 s16(wide_chars, u16_len);
+    android::String8 string8(s16);
+    std::string existing_str(string8.string());
+
+    auto replacement = shortened_names.find(existing_str);
+    if (replacement == shortened_names.end()) {
+      new_pool.appendString(string8);
+    } else {
+      android::String8 replacement8(replacement->second.c_str());
+      new_pool.appendString(replacement8);
+      num_replaced++;
+    }
+  }
+
+  new_pool.serialize(serialized_pool);
+
+  // Assemble
+  push_short(*out_data, android::RES_XML_TYPE);
+  push_short(*out_data, chunk_size);
+  auto total_size =
+    chunk_size + serialized_nodes.size() + serialized_pool.size();
+  push_long(*out_data, total_size);
+
+  out_data->appendVector(serialized_pool);
+  out_data->appendVector(serialized_nodes);
+
+  LOG_FATAL_IF(
+    num_replaced == 0 && out_data->size() != len,
+    "No strings replaced, but length mismatch!");
+  *out_num_renamed = num_replaced;
+  return android::OK;
+}
+
+int rename_classes_in_layout(
+  const std::string& file_path,
+  const std::map<std::string, std::string>& shortened_names,
+  size_t* out_num_renamed,
+  ssize_t* out_size_delta) {
+
+  int file_desc;
+  size_t len;
+  auto fp = map_file(file_path.c_str(), file_desc, len, true);
+
+  android::Vector<char> serialized;
+  auto status = replace_in_xml_string_pool(
+    fp,
+    len,
+    shortened_names,
+    &serialized,
+    out_num_renamed);
+
+  if (status != android::OK) {
+    unmap_and_close(file_desc, fp, len);
+    return status;
+  }
+
+  write_serialized_data(serialized, file_desc, fp, len);
+  *out_size_delta = serialized.size() - len;
+  return android::OK;
 }

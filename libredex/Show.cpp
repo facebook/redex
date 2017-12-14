@@ -40,6 +40,8 @@ std::string humanize(std::string const& type) {
     return "long";
   } else if (type.compare("S") == 0) {
     return "short";
+  } else if (type.compare("V") == 0) {
+    return "void";
   } else if (type.compare("Z") == 0) {
     return "boolean";
   } else if (type[0] == '[') {
@@ -711,6 +713,31 @@ std::string vshow(const DexField* p) {
   return ss.str();
 }
 
+std::string vshow(const DexTypeList* p) {
+  if (!p) return "";
+  std::ostringstream ss;
+  bool first = true;
+  for (auto const& type : p->get_type_list()) {
+    if (!first) {
+      ss << ", ";
+    } else {
+      first = false;
+    }
+    ss << humanize(show(type));
+  }
+  return ss.str();
+}
+
+std::string vshow(const DexProto* p, bool include_ret_type = true) {
+  if (!p) return "";
+  std::ostringstream ss;
+  ss << "(" << vshow(p->get_args()) << ")";
+  if (include_ret_type) {
+     ss << humanize(show(p->get_rtype()));
+  }
+  return ss.str();
+}
+
 std::string show(const DexTypeList* p) {
   if (!p) return "";
   std::stringstream ss;
@@ -749,24 +776,35 @@ std::string show(const DexMethodRef* p) {
   return ss.str();
 }
 
-std::string vshow(const DexMethod* p) {
+std::string vshow(uint32_t acc) {
+  return accessibility(acc, 32);
+}
+
+std::string vshow(const DexType* t) {
+  return humanize(show(t));
+}
+
+std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   if (!p) return "";
   std::stringstream ss;
-  ss << accessibility(p->get_access(), true)
-      << humanize(show(p->get_class())) << "."
-      << show(p->get_name()) << show(p->get_proto());
-  if (p->get_anno_set()) {
-    ss << "\n  annotations:" << show(p->get_anno_set());
-  }
-  bool first = true;
-  if (p->get_param_anno() != nullptr) {
-    for (auto const pair : *p->get_param_anno()) {
-      if (first) {
-        ss << "\n  param annotations:"
-           << "\n";
-        first = false;
+  ss << vshow(p->get_access())
+     << vshow(p->get_proto()->get_rtype()) << " "
+     << humanize(show(p->get_class())) << "." << show(p->get_name())
+     << vshow(p->get_proto(), false);
+  if (include_annotations) {
+    if (p->get_anno_set()) {
+      ss << "\n  annotations:" << show(p->get_anno_set());
+    }
+    bool first = true;
+    if (p->get_param_anno() != nullptr) {
+      for (auto const pair : *p->get_param_anno()) {
+        if (first) {
+          ss << "\n  param annotations:"
+             << "\n";
+          first = false;
+        }
+        ss << "    " << pair.first << ": " << show(pair.second) << "\n";
       }
-      ss << "    " << pair.first << ": " << show(pair.second) << "\n";
     }
   }
   return ss.str();

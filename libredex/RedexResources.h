@@ -17,6 +17,18 @@
 
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename, const std::string& contents);
+void* map_file(
+    const char* path,
+    int& file_descriptor,
+    size_t& length,
+    const bool mode_write = false);
+size_t write_serialized_data(
+    const android::Vector<char>& cVec,
+    int file_descriptor,
+    void* file_pointer,
+    const size_t& length);
+void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
+
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 bool has_raw_attribute_value(
@@ -39,6 +51,27 @@ int inline_xml_reference_attributes(
 void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
+
+// Given the bytes of a binary XML file, replace the entries (if any) in the
+// ResStringPool. Writes result to the given Vector output param.
+// Returns android::NO_ERROR (0) on success, or one of the corresponding
+// android:: error codes for failure conditions/bad input data.
+int replace_in_xml_string_pool(
+    const void* data,
+    const size_t len,
+    const std::map<std::string, std::string>& shortened_names,
+    android::Vector<char>* out_data,
+    size_t* out_num_renamed);
+
+// Replaces all strings in the ResStringPool for the given file with their
+// replacements. Writes all changes to disk, clobbering the given file.
+// Same return codes as replace_in_xml_string_pool.
+int rename_classes_in_layout(
+    const std::string& file_path,
+    const std::map<std::string, std::string>& shortened_names,
+    size_t* out_num_renamed,
+    ssize_t* out_size_delta);
+
 
 /**
  * Follows the reference links for a resource for all configurations.

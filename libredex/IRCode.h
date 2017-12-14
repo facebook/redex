@@ -260,6 +260,9 @@ class IRCode {
    */
   boost::sub_range<FatMethod> get_param_instructions() const;
 
+  void set_debug_item(std::unique_ptr<DexDebugItem> dbg) {
+    m_dbg = std::move(dbg);
+  }
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
   DexDebugItem* get_debug_item() { return m_dbg.get(); }
   std::unique_ptr<DexDebugItem> release_debug_item() {

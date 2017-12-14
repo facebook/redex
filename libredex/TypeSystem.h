@@ -187,6 +187,20 @@ class TypeSystem {
    * Given a DexMethod return the scope the method is in.
    */
   const VirtualScope* find_virtual_scope(const DexMethod* meth) const;
+  InterfaceScope find_interface_scope(const DexMethod* meth) const {
+    return m_class_scopes.find_interface_scope(meth);
+  }
+
+  /**
+   * Given a set of types select the concrete methods invoked for those
+   * types in a given scope.
+   */
+  void select_methods(const VirtualScope& scope,
+                      const std::unordered_set<DexType*>& types,
+                      std::unordered_set<DexMethod*>& methods) const;
+  void select_methods(const InterfaceScope& scope,
+                      const std::unordered_set<DexType*>& types,
+                      std::unordered_set<DexMethod*>& methods) const;
 
   /**
    * Given a VirtualScope and a type return the list of methods that
@@ -209,4 +223,5 @@ class TypeSystem {
  private:
   void make_instanceof_interfaces_table();
   void make_interfaces_table(const DexType* type);
+
 };

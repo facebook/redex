@@ -75,6 +75,7 @@ void ElfWriter::build(InstructionSet isa,
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
+    case OatVersion::V_067:
       next_offset_ = 0x134;
       next_addr_ = 0x134;
 
@@ -113,7 +114,6 @@ void ElfWriter::build(InstructionSet isa,
       add_empty_section_header();
       add_rodata(oat_size);
       add_text();
-      add_bss(bss_size);
       add_dynstr();
       add_dynsym();
       add_hash();
@@ -153,6 +153,7 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
+    case OatVersion::V_067:
       // There are 4 symbols in the dynsym section (oatbss and oatbsslastword
       // would be added if we were generating a bss section, but we aren't):
       // 0: Empty
@@ -163,7 +164,6 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
 
     case OatVersion::V_079:
     case OatVersion::V_088:
-    case OatVersion::V_124:
       // There are 5 symbols in the dynsym section:
       // 0: Empty
       // 1: oatdata
@@ -171,6 +171,13 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
       // 3: oatbss
       // 4: oatbsslastword
       return 5;
+
+    case OatVersion::V_124:
+      // There are 3 symbols in the dynsym section:
+      // 0: Empty
+      // 1: oatdata
+      // 2: oatlastword
+      return 3;
 
     case OatVersion::UNKNOWN:
       break;
@@ -182,13 +189,14 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
 void ElfWriter::build_dynstr_table() {
   dynstr_table_.get_string("");
   dynstr_table_.get_string("oatdata");
-  if (oat_version_ == OatVersion::V_064 || oat_version_ == OatVersion::V_045 ||
-      oat_version_ == OatVersion::V_039 || oat_version_ == OatVersion::V_124) {
+    if (oat_version_ == OatVersion::V_067 ||
+        oat_version_ == OatVersion::V_064 ||
+        oat_version_ == OatVersion::V_045 ||
+        oat_version_ == OatVersion::V_039) {
     dynstr_table_.get_string("oatexec");
   }
   dynstr_table_.get_string("oatlastword");
-  if (oat_version_ == OatVersion::V_079 || oat_version_ == OatVersion::V_088 ||
-      oat_version_ == OatVersion::V_124) {
+  if (oat_version_ == OatVersion::V_079 || oat_version_ == OatVersion::V_088) {
     dynstr_table_.get_string("oatbss");
     dynstr_table_.get_string("oatbsslastword");
   }
@@ -258,6 +266,7 @@ static int get_strtab_alignment(OatVersion version) {
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
+    case OatVersion::V_067:
       return 1;
     case OatVersion::V_079:
     case OatVersion::V_088:
@@ -278,6 +287,7 @@ static Elf32_Word get_str_entsize(OatVersion version) {
     case OatVersion::V_045:
       return 1;
     case OatVersion::V_064:
+    case OatVersion::V_067:
     case OatVersion::V_079:
     case OatVersion::V_088:
     case OatVersion::V_124:
@@ -448,18 +458,17 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
   add_symbol(dynstr_table_.get_string("oatdata"),
       oat_addr, oat_size, STB_GLOBAL, STT_OBJECT, rodata_idx_);
 
-  if (oat_version_ == OatVersion::V_064 || oat_version_ == OatVersion::V_045 ||
-      oat_version_ == OatVersion::V_039) {
+  if (oat_version_ == OatVersion::V_067 || oat_version_ == OatVersion::V_064 ||
+      oat_version_ == OatVersion::V_045 || oat_version_ == OatVersion::V_039) {
     add_symbol(dynstr_table_.get_string("oatexec"),
         oat_addr + oat_size, 0, STB_GLOBAL, STT_OBJECT, text_idx_);
   }
 
   add_symbol(dynstr_table_.get_string("oatlastword"),
       oat_addr + oat_size - 4, 4, STB_GLOBAL, STT_OBJECT,
-      oat_version_ == OatVersion::V_064 ? text_idx_ : rodata_idx_);
+      (oat_version_ == OatVersion::V_064 || oat_version_ == OatVersion::V_067) ? text_idx_ : rodata_idx_);
 
-  if (oat_version_ == OatVersion::V_079 || oat_version_ == OatVersion::V_088 ||
-      oat_version_ == OatVersion::V_124) {
+  if (oat_version_ == OatVersion::V_079 || oat_version_ == OatVersion::V_088) {
     // dex2oat on 7.0 appears to write the incorrect section index (they use
     // rodata_idx_ + 1 when the text section is empty.)
     add_symbol(dynstr_table_.get_string("oatbss"),
@@ -515,7 +524,8 @@ void ElfWriter::write_hash(FileHandle& fh) {
   switch (oat_version_) {
     case OatVersion::V_039:
     case OatVersion::V_045:
-    case OatVersion::V_064: {
+    case OatVersion::V_064:
+    case OatVersion::V_067: {
 
       CHECK(dynsyms_.size() == num_dynsymbols,
             "dynsyms must be written before the hash table");
@@ -627,6 +637,7 @@ unsigned int ElfWriter::get_num_program_headers() const {
     case OatVersion::V_039:
     case OatVersion::V_045:
     case OatVersion::V_064:
+    case OatVersion::V_067:
       return 5;
 
     case OatVersion::V_079:
@@ -676,7 +687,8 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
   switch (oat_version_) {
     case OatVersion::V_039:
     case OatVersion::V_045:
-    case OatVersion::V_064: {
+    case OatVersion::V_064:
+    case OatVersion::V_067: {
       // LOAD text
       prog_headers.push_back(Elf32_Phdr {
           PT_LOAD,
@@ -689,8 +701,7 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
       break;
     }
     case OatVersion::V_079:
-    case OatVersion::V_088:
-    case OatVersion::V_124: {
+    case OatVersion::V_088: {
       // LOAD bss
       prog_headers.push_back(Elf32_Phdr {
           PT_LOAD,
@@ -700,7 +711,9 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
           PF_R | PF_W,
           0x1000
       });
-
+    }
+    // fallthrough
+    case OatVersion::V_124: {
       // LOAD dynstr, dynsym, hash
       const auto dynstr_offset = section_headers_.at(dynstr_idx_).sh_offset;
       const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;

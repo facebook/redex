@@ -223,24 +223,15 @@ private:
 bool VirtualRenamer::usable_name(
     DexString* name,
     const VirtualScope* scope) const {
-  for (const auto& meth : scope->methods) {
-    if (DexMethod::get_method(
-        meth.first->get_class(),
-        name,
-        meth.first->get_proto()) != nullptr) {
+  const auto root = scope->type;
+  const auto proto = scope->methods[0].first->get_proto();
+  TypeSet hier;
+  hier.insert(root);
+  get_all_children(class_scopes.get_class_hierarchy(), root, hier);
+  for (const auto& type : hier) {
+    if (DexMethod::get_method(const_cast<DexType*>(type), name, proto)
+        != nullptr) {
       return false;
-    }
-    assert(scope->methods.size() > 0);
-    const auto& refs = def_refs.find(scope->methods[0].first);
-    if (refs != def_refs.end()) {
-      for (const auto& ref : refs->second) {
-        if (DexMethod::get_method(
-            ref->get_class(),
-            name,
-            ref->get_proto()) != nullptr) {
-          return false;
-        }
-      }
     }
   }
   return true;
@@ -292,13 +283,27 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
             scopes.size(), SHOW(name), SHOW(proto));
         for (auto& scope : scopes) {
           assert(type_class(scope->type) != nullptr);
-          if (type_class(scope->type)->is_external()) return;
-          if (!can_rename_scope(scope)) return;
+          if (type_class(scope->type)->is_external()) {
+            TRACE(OBFUSCATE, 5,
+                "External impl scope %s\n", SHOW(scope->methods[0].first));
+            return;
+          }
+          if (!can_rename_scope(scope)) {
+            TRACE(OBFUSCATE, 5,
+                "Cannot rename impl scope %s\n", SHOW(scope->methods[0].first));
+            return;
+          }
         }
         for (const auto& intf : intfs) {
           const auto& intf_cls = type_class(intf);
-          if (intf_cls == nullptr) return;
-          if (intf_cls->is_external()) return;
+          if (intf_cls == nullptr) {
+            TRACE(OBFUSCATE, 5, "No interface class %s\n", SHOW(intf));
+            return;
+          }
+          if (intf_cls->is_external()) {
+            TRACE(OBFUSCATE, 5, "External interface %s\n", SHOW(intf));
+            return;
+          }
         }
         // if any interface method that we are about to rename
         // cannot be renamed give up
@@ -306,7 +311,10 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
           assert(type_class(intf) != nullptr);
           const auto meth = find_method(type_class(intf), name, proto);
           assert(meth != nullptr);
-          if (!can_rename(meth)) return;
+          if (!can_rename(meth)) {
+            TRACE(OBFUSCATE, 5, "Cannot rename %s\n", SHOW(meth));
+            return;
+          }
         }
         // all scopes can be renamed, go for it
         auto new_name =  get_unescaped_name(scopes, seed);
@@ -350,8 +358,16 @@ int VirtualRenamer::rename_virtual_scopes(
     // and can be renamed
     TRACE(OBFUSCATE, 5, "Found %ld scopes in %s\n", scopes.size(), SHOW(type));
     for (auto& scope : scopes) {
-      if (!can_rename_scope(scope)) continue;
-      if (is_impl_scope(scope)) continue;
+      if (!can_rename_scope(scope)) {
+        TRACE(OBFUSCATE, 5,
+            "Cannot rename %s\n", SHOW(scope->methods[0].first));
+        continue;
+      }
+      if (is_impl_scope(scope)) {
+        TRACE(OBFUSCATE, 5,
+            "Impl scope %s\n", SHOW(scope->methods[0].first));
+        continue;
+      }
       auto name =  get_unescaped_name(scope, seed);
       TRACE(OBFUSCATE, 5, "New name %s for %s\n",
           SHOW(name), SHOW(scope->methods[0].first));

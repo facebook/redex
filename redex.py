@@ -15,9 +15,7 @@ from __future__ import unicode_literals
 import argparse
 import distutils.version
 import errno
-import functools
 import glob
-import hashlib
 import json
 import os
 import re
@@ -29,8 +27,7 @@ import time
 import timeit
 import zipfile
 
-from os.path import abspath, basename, dirname, getsize, isdir, isfile, join, \
-        realpath, split
+from os.path import abspath, basename, dirname, isdir, isfile, join
 
 import pyredex.logger as logger
 import pyredex.unpacker as unpacker
@@ -77,6 +74,16 @@ def write_debugger_commands(args):
         'lldb_script_name': lldb_script_name,
     }
 
+
+def add_extra_environment_args(env):
+    # If we're running with ASAN, we'll want these flags, if we're not, they do
+    # nothing
+    if 'ASAN_OPTIONS' not in env:  # don't overwrite user specified options
+        # We ignore leaks because they are high volume and low danger (for a
+        # short running program like redex).
+        # We don't detect container overflow because it finds bugs in our
+        # libraries (namely jsoncpp and boost).
+        env['ASAN_OPTIONS'] = 'detect_leaks=0:detect_container_overflow=0'
 
 def run_pass(
         executable_path,
@@ -143,6 +150,8 @@ def run_pass(
 
     env = logger.setup_trace_for_child(os.environ)
     logger.flush()
+
+    add_extra_environment_args(env)
 
     # Our CI system occasionally fails because it is trying to write the
     # redex-all binary when this tries to run.  This shouldn't happen, and
@@ -217,13 +226,13 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign):
     # Align zip and optionally perform good compression.
     try:
         zipalign = [join(find_android_build_tools(), 'zipalign')]
-    except:
+    except Exception:
         # We couldn't find zipalign via ANDROID_SDK.  Try PATH.
         zipalign = ['zipalign']
     try:
         subprocess.check_call(zipalign +
                               ['4', unaligned_apk_path, output_apk_path])
-    except:
+    except subprocess.CalledProcessError:
         print("Couldn't find zipalign. See README.md to resolve this.")
         if not ignore_zipalign:
             raise Exception('No zipalign executable found')
@@ -248,7 +257,7 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
 
     # Create new zip file
     with zipfile.ZipFile(unaligned_apk_path, 'w') as unaligned_apk:
-        for dirpath, dirnames, filenames in os.walk(extracted_apk_dir):
+        for dirpath, _dirnames, filenames in os.walk(extracted_apk_dir):
             for filename in filenames:
                 filepath = join(dirpath, filename)
                 archivepath = filepath[len(extracted_apk_dir) + 1:]
@@ -660,7 +669,7 @@ if __name__ == '__main__':
             keys['keystore'] = keystore
             keys['keyalias'] = 'androiddebugkey'
             keys['keypass'] = 'android'
-    except:
+    except Exception:
         pass
     args = arg_parser(**keys).parse_args()
     validate_args(args)

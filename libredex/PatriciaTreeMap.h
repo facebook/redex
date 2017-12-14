@@ -11,7 +11,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -184,6 +183,28 @@ class PatriciaTreeMap final {
     return ptmap_impl::equals<IntegerType>(m_tree, other.m_tree);
   }
 
+  /*
+   * This faster equality predicate can be used to check whether a sequence of
+   * in-place modifications leaves a Patricia-tree map unchanged. For comparing
+   * two arbitrary Patricia-tree maps, one needs to use the `equals()`
+   * predicate.
+   *
+   * Example:
+   *
+   *   PatriciaTreeMap<...> m1, m2;
+   *   ...
+   *   m2 = m1;
+   *   m2.union_with(...);
+   *   m2.update(...);
+   *   m2.intersection_with(...);
+   *   if (m2.reference_equals(m1)) { // This is equivalent to m2.equals(m1)
+   *     ...
+   *   }
+   */
+  bool reference_equals(const PatriciaTreeMap& other) const {
+    return m_tree == other.m_tree;
+  }
+
   PatriciaTreeMap& update(
       const std::function<mapped_type(const mapped_type&)>& operation,
       Key key) {
@@ -233,11 +254,6 @@ class PatriciaTreeMap final {
 
   void clear() { m_tree.reset(); }
 
-  std::shared_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>>
-  get_patricia_tree() const {
-    return m_tree;
-  }
-
  private:
   // These functions are used to handle the type conversions required when
   // manipulating sets of pointers. The first parameter is necessary to make
@@ -266,6 +282,18 @@ class PatriciaTreeMap final {
     return x;
   }
 
+  template <typename T = Key,
+            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+  static typename std::remove_pointer<T>::type deref(Key x) {
+    return *x;
+  }
+
+  template <typename T = Key,
+            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+  static Key deref(Key x) {
+    return x;
+  }
+
   std::shared_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>> m_tree;
 
   template <typename T, typename V>
@@ -280,7 +308,7 @@ inline std::ostream& operator<<(std::ostream& o,
                                 const PatriciaTreeMap<Key, Value>& s) {
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeMap<Key, Value>::decode(it->first) << " -> " << it->second;
+    o << PatriciaTreeMap<Key, Value>::deref(it->first) << " -> " << it->second;
     if (std::next(it) != s.end()) {
       o << ", ";
     }

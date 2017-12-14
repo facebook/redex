@@ -20,9 +20,139 @@
 #include "DexClass.h"
 #include "Match.h"
 #include "RedexResources.h"
+#include "SimpleReflectionAnalysis.h"
 #include "StringUtil.h"
 
 namespace {
+
+using namespace sra;
+
+template<typename T, typename F>
+struct DexItemIter {
+};
+
+template<typename F>
+struct DexItemIter<DexField*, F> {
+  static void iterate(DexClass* cls, F& yield) {
+    if (cls->is_external()) return;
+    for (auto* field : cls->get_sfields()) {
+      yield(field);
+    }
+    for (auto* field : cls->get_ifields()) {
+      yield(field);
+    }
+  }
+};
+
+template<typename F>
+struct DexItemIter<DexMethod*, F> {
+  static void iterate(DexClass* cls, F& yield) {
+    if (cls->is_external()) return;
+    for (auto* method : cls->get_dmethods()) {
+      yield(method);
+    }
+    for (auto* method : cls->get_vmethods()) {
+      yield(method);
+    }
+  }
+};
+
+template<typename T>
+void blacklist(DexType* type, DexString *name, bool declared) {
+  auto* cls = type_class(type);
+  if (cls) {
+    auto yield = [&](T t) {
+      if (t->get_name() != name) return;
+      TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
+      t->rstate.ref_by_string(true);
+      if (!declared) {
+        // TOOD: handle not declared case, go up inheritance tree
+      }
+    };
+    DexItemIter<T, decltype(yield)>::iterate(cls, yield);
+  }
+}
+
+void analyze_reflection(const Scope& scope) {
+  enum ReflectionType {
+    GET_FIELD,
+    GET_DECLARED_FIELD,
+    GET_METHOD,
+    GET_DECLARED_METHOD,
+    INT_UPDATER,
+    LONG_UPDATER,
+    REF_UPDATER,
+  };
+
+  const auto JAVA_LANG_CLASS = "Ljava/lang/Class;";
+  const auto ATOMIC_INT_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicIntegerFieldUpdater;";
+  const auto ATOMIC_LONG_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
+  const auto ATOMIC_REF_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
+
+  std::map<std::string, std::map<std::string, ReflectionType>> refls;
+  refls[JAVA_LANG_CLASS]["getField"] = GET_FIELD;
+  refls[JAVA_LANG_CLASS]["getDeclaredField"] = GET_DECLARED_FIELD;
+  refls[JAVA_LANG_CLASS]["getMethod"] = GET_METHOD;
+  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
+  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
+  refls[ATOMIC_INT_FIELD_UPDATER]["newUpdater"]  = INT_UPDATER;
+  refls[ATOMIC_LONG_FIELD_UPDATER]["newUpdater"]  = LONG_UPDATER;
+  refls[ATOMIC_REF_FIELD_UPDATER]["newUpdater"]  = REF_UPDATER;
+
+  walk_methods(scope, [&](DexMethod* method) {
+      if (!method->get_code()) return;
+      SimpleReflectionAnalysis analysis(method);
+      for (auto& mie : InstructionIterable(method->get_code())) {
+        IRInstruction* insn = mie.insn;
+        if (!insn->has_method() || !is_invoke(insn->opcode())) continue;
+        // See if it matches something in refls
+        auto& method_name = insn->get_method()->get_name()->str();
+        auto& method_class_name = insn->get_method()->get_class()->get_name()->str();
+        if (refls.find(method_class_name) != refls.end() &&
+            refls[method_class_name].find(method_name) != refls[method_class_name].end()) {
+          ReflectionType refl_type = refls[method_class_name][method_name];
+          int arg_cls_idx = 0;
+          int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
+          auto arg_cls = analysis.get_abstract_object(insn->src(arg_cls_idx), insn);
+          auto arg_str = analysis.get_abstract_object(insn->src(arg_str_idx), insn);
+          if ((arg_cls && arg_cls->kind == AbstractObjectKind::CLASS) &&
+              (arg_str && arg_str->kind == AbstractObjectKind::STRING)) {
+            TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %d %s %s\n",
+                  insn->get_method()->get_name()->str().c_str(),
+                  refl_type,
+                  method_class_name.c_str(),
+                  method_name.c_str(),
+                  arg_cls->kind, SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
+                  arg_str->kind, SHOW(arg_str->dex_type), SHOW(arg_str->dex_string)
+                  );
+          switch (refl_type) {
+            case GET_FIELD:
+              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+              break;
+            case GET_DECLARED_FIELD:
+              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, false);
+              break;
+            case GET_METHOD:
+              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, true);
+              break;
+            case GET_DECLARED_METHOD:
+              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, false);
+              break;
+            case INT_UPDATER:
+              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+              break;
+            case LONG_UPDATER:
+              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+              break;
+            case REF_UPDATER:
+              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+              break;
+            }
+          }
+        }
+      }
+    });
+}
 
 template<typename DexMember>
 void mark_only_reachable_directly(DexMember* m) {
@@ -290,6 +420,8 @@ void init_permanently_reachable_classes(
       mark_reachable_by_classname(type, false);
     }
   }
+
+  analyze_reflection(scope);
 
   std::unordered_set<DexClass*> reflected_package_classes;
   for (auto clazz : scope) {

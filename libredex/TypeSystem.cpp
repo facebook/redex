@@ -124,8 +124,13 @@ const VirtualScope* TypeSystem::find_virtual_scope(
 
   auto type = meth->get_class();
   while (type != nullptr) {
+    TRACE(VIRT, 1, "check... %s\n", SHOW(type));
     for (const auto& scope : m_class_scopes.get(type)) {
-      if (match(scope->methods[0].first, meth)) return scope;
+      TRACE(VIRT, 1, "check... %s\n", SHOW(scope->methods[0].first));
+      if (match(scope->methods[0].first, meth)) {
+        TRACE(VIRT, 1, "return scope\n");
+        return scope;
+      }
     }
     const auto cls = type_class(type);
     if (cls == nullptr) break;
@@ -203,5 +208,48 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
   if (children == hierarchy.end()) return;
   for (const auto& child : children->second) {
     make_interfaces_table(child);
+  }
+}
+
+void TypeSystem::select_methods(
+    const VirtualScope& scope,
+    const std::unordered_set<DexType*>& types,
+    std::unordered_set<DexMethod*>& methods) const {
+  TRACE(VIRT, 1, "select_methods make filter\n");
+  std::unordered_set<DexType*> filter;
+  filter.insert(types.begin(), types.end());
+
+  TRACE(VIRT, 1, "select_methods make type_method map\n");
+  std::unordered_map<const DexType*, DexMethod*> type_method;
+  for (const auto& vmeth : scope.methods) {
+    const auto meth = vmeth.first;
+    if (!meth->is_def()) continue;
+    type_method[meth->get_class()] = meth;
+  }
+
+  TRACE(VIRT, 1, "select_methods walk hierarchy\n");
+  while (!filter.empty()) {
+    const auto type = *filter.begin();
+    filter.erase(filter.begin());
+    TRACE(VIRT, 1, "check... %s\n", SHOW(type));
+    if (!is_subtype(scope.type, type)) continue;
+    const auto& meth = type_method.find(type);
+    if (meth != type_method.end()) {
+      methods.insert(meth->second);
+      continue;
+    }
+    const auto super = type_class(type)->get_super_class();
+    if (super == nullptr) continue;
+    if (types.count(super) > 0) continue;
+    filter.insert(super);
+  }
+}
+
+void TypeSystem::select_methods(
+    const InterfaceScope& scope,
+    const std::unordered_set<DexType*>& types,
+    std::unordered_set<DexMethod*>& methods) const {
+  for (const auto& virt_scope : scope) {
+    select_methods(*virt_scope, types, methods);
   }
 }

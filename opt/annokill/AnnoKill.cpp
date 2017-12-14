@@ -30,10 +30,11 @@ constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
 
 AnnoKill::AnnoKill(Scope& scope,
+                   bool only_force_kill,
                    const AnnoNames& keep,
                    const AnnoNames& kill,
                    const AnnoNames& force_kill)
-    : m_scope(scope) {
+  : m_scope(scope), m_only_force_kill(only_force_kill) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
   for (const auto& anno_name : keep) {
@@ -358,7 +359,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       return true;
     }
 
-    if (!da->system_visible()) {
+    if (!m_only_force_kill && !da->system_visible()) {
       TRACE(ANNO, 3, "Killing annotation instance %s\n", SHOW(da));
       m_stats.annotations_killed++;
       delete da;
@@ -371,7 +372,9 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
 
 bool AnnoKill::kill_annotations() {
   const auto& referenced_annos = get_referenced_annos();
-  m_kill = get_removable_annotation_instances();
+  if (!m_only_force_kill) {
+    m_kill = get_removable_annotation_instances();
+  }
 
   for (auto clazz : m_scope) {
     DexAnnotationSet* aset = clazz->get_anno_set();
@@ -505,7 +508,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  AnnoKill ak(scope, m_keep_annos, m_kill_annos, m_force_kill_annos);
+  AnnoKill ak(scope, only_force_kill(), m_keep_annos, m_kill_annos, m_force_kill_annos);
   bool classes_removed = ak.kill_annotations();
 
   if (classes_removed) {

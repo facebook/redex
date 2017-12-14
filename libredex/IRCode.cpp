@@ -1190,9 +1190,9 @@ void IRCode::clear_cfg() {
   }
 }
 
-namespace ir_code_impl {
+namespace {
 
-static uint16_t calc_outs_size(const IRCode* code) {
+uint16_t calc_outs_size(const IRCode* code) {
   uint16_t size {0};
   for (auto& mie : *code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
@@ -1208,8 +1208,7 @@ static uint16_t calc_outs_size(const IRCode* code) {
   return size;
 }
 
-static void calculate_ins_size(const DexMethod* method,
-                               DexCode* dex_code) {
+void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
   auto& args_list = method->get_proto()->get_args()->get_type_list();
   uint16_t ins_size{0};
   if (!is_static(method)) {
@@ -1225,9 +1224,78 @@ static void calculate_ins_size(const DexMethod* method,
   dex_code->set_ins_size(ins_size);
 }
 
-} // namespace ir_code_impl
+/*
+ * Gather the debug opcodes and DexPositions in :fmethod and put them in
+ * :entries. As part of this process, we do some pruning of redundant
+ * DexPositions. There are two scenarios where we want to eliminate them:
+ *
+ * 1) A DexPosition needs to be emitted iff it immediately precedes a dex
+ * opcode. If there are multple DexPositions immediately before a given opcode,
+ * only the last one needs to get emitted. Concretely:
+ *
+ *   .pos "LFoo;.a()V" Foo.java 123
+ *   .pos "LFoo;.a()V" Foo.java 124 # this can be deleted
+ *   const/4 v0 0
+ *
+ * 2) If we have two identical consecutive DexPositions, only the first one
+ * needs to be emitted. Concretely:
+ *
+ *   .pos "LFoo;.a()V" Foo.java 123
+ *   const/4 v0 0
+ *   .pos "LFoo;.a()V" Foo.java 123 # this can be deleted
+ *   const/4 v0 0
+ *
+ * Note that this pruning is not done as part of StripDebugInfoPass as that
+ * pass needs to run before inlining. Pruning needs to be done after all
+ * optimizations have run, because the optimizations can create redundant
+ * DexPositions.
+ */
+void gather_debug_entries(
+    FatMethod* fmethod,
+    const std::unordered_map<MethodItemEntry*, uint32_t>& entry_to_addr,
+    std::vector<DexDebugEntry>* entries) {
+  bool next_pos_is_root{false};
+  // A root is the first DexPosition that precedes an opcode
+  std::unordered_set<DexPosition*> roots;
+  // The last root that we encountered on our reverse walk of the FatMethod
+  DexPosition* last_root_pos{nullptr};
+  for (auto it = fmethod->rbegin(); it != fmethod->rend(); ++it) {
+    auto& mie = *it;
+    if (mie.type == MFLOW_DEX_OPCODE) {
+      next_pos_is_root = true;
+    } else if (mie.type == MFLOW_POSITION && next_pos_is_root) {
+      next_pos_is_root = false;
+      // Check for consecutive duplicates
+      if (last_root_pos != nullptr && *last_root_pos == *mie.pos) {
+        roots.erase(last_root_pos);
+      }
+      last_root_pos = mie.pos.get();
+      roots.emplace(last_root_pos);
+    }
+  }
+  // DexPositions have parent pointers that refer to other DexPositions in the
+  // same method body; we want to recursively preserve the referents as well.
+  // The rest of the DexPositions can be eliminated.
+  std::unordered_set<DexPosition*> positions_to_keep;
+  for (DexPosition* pos : roots) {
+    positions_to_keep.emplace(pos);
+    DexPosition* parent{pos->parent};
+    while (parent != nullptr && positions_to_keep.count(parent) == 0) {
+      positions_to_keep.emplace(parent);
+      parent = parent->parent;
+    }
+  }
+  for (auto& mie : *fmethod) {
+    if (mie.type == MFLOW_DEBUG) {
+      entries->emplace_back(entry_to_addr.at(&mie), std::move(mie.dbgop));
+    } else if (mie.type == MFLOW_POSITION &&
+               positions_to_keep.count(mie.pos.get()) != 0) {
+      entries->emplace_back(entry_to_addr.at(&mie), std::move(mie.pos));
+    }
+  }
+}
 
-using namespace ir_code_impl;
+} // namespace
 
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   auto dex_code = std::make_unique<DexCode>();
@@ -1407,18 +1475,11 @@ bool IRCode::try_sync(DexCode* code) {
     }
   }
 
-  // Step 4, emit debug opcodes
-  TRACE(MTRANS, 5, "Emitting debug opcodes\n");
+  // Step 4, emit debug entries
+  TRACE(MTRANS, 5, "Emitting debug entries\n");
   auto debugitem = code->get_debug_item();
   if (debugitem) {
-    auto& entries = debugitem->get_entries();
-    for (auto& mentry : *m_fmethod) {
-      if (mentry.type == MFLOW_DEBUG) {
-        entries.emplace_back(entry_to_addr.at(&mentry), std::move(mentry.dbgop));
-      } else if (mentry.type == MFLOW_POSITION) {
-        entries.emplace_back(entry_to_addr.at(&mentry), std::move(mentry.pos));
-      }
-    }
+    gather_debug_entries(m_fmethod, entry_to_addr, &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
   TRACE(MTRANS, 5, "Emitting try items & catch handlers\n");

@@ -27,7 +27,9 @@ struct DexPosition final {
   // have the DexPosition of the callsite as their parent.
   DexPosition* parent;
   DexPosition(uint32_t line);
+
   void bind(DexMethod* method_, DexString* file_);
+  bool operator==(const DexPosition&) const;
 };
 
 class PositionMapper {

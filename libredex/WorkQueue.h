@@ -120,9 +120,9 @@ WorkQueue<Input, Data, Output>::WorkQueue(
  */
 template <class Input>
 WorkQueue<Input, std::nullptr_t /*Data*/, std::nullptr_t /*Output*/>
-workqueue_foreach(
-    const std::function<void(Input)>& func,
-    unsigned int num_threads = std::thread::hardware_concurrency()) {
+workqueue_foreach(const std::function<void(Input)>& func,
+                  unsigned int num_threads =
+                      std::max(1u, std::thread::hardware_concurrency())) {
   using Data = std::nullptr_t;
   using Output = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
@@ -143,7 +143,8 @@ template <class Input, class Output>
 WorkQueue<Input, std::nullptr_t /*Data*/, Output> workqueue_mapreduce(
     const std::function<Output(Input)>& mapper,
     const std::function<Output(Output, Output)>& reducer,
-    unsigned int num_threads = std::thread::hardware_concurrency()) {
+    unsigned int num_threads = std::max(1u,
+                                        std::thread::hardware_concurrency())) {
   using Data = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
       [mapper](Data&, Input a) -> Output { return mapper(a); },

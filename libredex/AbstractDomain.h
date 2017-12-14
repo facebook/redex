@@ -329,13 +329,23 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
     if (is_top()) {
       return false;
     }
-    assert(m_kind == AbstractValueKind::Value &&
-           other.m_kind == AbstractValueKind::Value);
+    always_assert(m_kind == AbstractValueKind::Value &&
+                  other.m_kind == AbstractValueKind::Value);
     return m_value.leq(other.m_value);
   }
 
   bool equals(const Derived& other) const override {
-    return m_kind == other.m_kind && m_value.equals(other.m_value);
+    if (is_bottom()) {
+      return other.is_bottom();
+    }
+    if (is_top()) {
+      return other.is_top();
+    }
+    always_assert(m_kind == AbstractValueKind::Value);
+    if (other.m_kind != AbstractValueKind::Value) {
+      return false;
+    }
+    return m_value.equals(other.m_value);
   }
 
   void join_with(const Derived& other) override {
