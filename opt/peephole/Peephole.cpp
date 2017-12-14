@@ -134,6 +134,11 @@ enum class Type {
   B,
 };
 
+enum class Field {
+  A,
+  B,
+};
+
 // Just a minimal refactor for long string constants.
 static const char* LjavaString = "Ljava/lang/String;";
 static const char* LjavaStringBuilder = "Ljava/lang/StringBuilder;";
@@ -151,6 +156,7 @@ struct DexPattern {
     literal,
     type,
     copy, // Replace with the same exact instruction we matched. No change.
+    field,
   } kind;
 
   const union {
@@ -160,56 +166,67 @@ struct DexPattern {
     Literal const literal;
     Type const type;
     unsigned int const copy_index;
+    Field field;
   };
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests)
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests)
       : opcodes(std::move(opcodes)),
         srcs(std::move(srcs)),
         dests(std::move(dests)),
         kind(DexPattern::Kind::none),
         dummy(nullptr) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcode_set,
-             const std::vector<Register>& src_set,
-             const std::vector<Register>& dest_set,
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests,
              DexMethodRef* const method)
-      : opcodes(opcode_set),
-        srcs(src_set),
-        dests(dest_set),
+      : opcodes(std::move(opcodes)),
+        srcs(std::move(srcs)),
+        dests(std::move(dests)),
         kind(DexPattern::Kind::method),
         method(method) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
-             String const string)
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests,
+             const String string)
       : opcodes(std::move(opcodes)),
         srcs(std::move(srcs)),
         dests(std::move(dests)),
         kind(DexPattern::Kind::string),
         string(string) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
-             Literal const literal)
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests,
+             const Literal literal)
       : opcodes(std::move(opcodes)),
         srcs(std::move(srcs)),
         dests(std::move(dests)),
         kind(DexPattern::Kind::literal),
         literal(literal) {}
 
-  DexPattern(const std::unordered_set<uint16_t>& opcodes,
-             const std::vector<Register>& srcs,
-             const std::vector<Register>& dests,
-             Type const type)
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests,
+             const Type type)
       : opcodes(std::move(opcodes)),
         srcs(std::move(srcs)),
         dests(std::move(dests)),
         kind(DexPattern::Kind::type),
         type(type) {}
+
+  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+             std::vector<Register>&& srcs,
+             std::vector<Register>&& dests,
+             const Field field)
+      : opcodes(std::move(opcodes)),
+        srcs(std::move(srcs)),
+        dests(std::move(dests)),
+        kind(DexPattern::Kind::field),
+        field(field) {}
 
   static const DexPattern copy_matched_instruction(int index) {
     return DexPattern(index);
@@ -256,6 +273,7 @@ struct Matcher {
   std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
   std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
+  std::unordered_map<Field, DexFieldRef*, EnumClassHash> matched_fields;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
 
@@ -266,6 +284,7 @@ struct Matcher {
     matched_strings.clear();
     matched_literals.clear();
     matched_types.clear();
+    matched_fields.clear();
   }
 
   // It updates the matching state for the given instruction. Returns true if
@@ -309,6 +328,12 @@ struct Matcher {
       return true;
     };
 
+    auto match_field = [&](Field field_pattern, DexFieldRef* insn_field) {
+      auto result = matched_fields.emplace(field_pattern, insn_field);
+      bool newly_inserted = result.second;
+      return newly_inserted ? true : result.first->second == insn_field;
+    };
+
     // Does 'insn' match to the given DexPattern?
     auto match_instruction = [&](const DexPattern& dex_pattern) {
       if (dex_pattern.opcodes.find(insn->opcode()) ==
@@ -342,6 +367,8 @@ struct Matcher {
         return dex_pattern.method == insn->get_method();
       case DexPattern::Kind::type:
         return match_type(dex_pattern.type, insn->get_type());
+      case DexPattern::Kind::field:
+        return match_field(dex_pattern.field, insn->get_field());
       case DexPattern::Kind::copy:
         always_assert_log(
             false, "Kind::copy can only be used in replacements. Not matches");
@@ -426,6 +453,23 @@ struct Matcher {
     case OPCODE_CONST:
       assert(replace.kind == DexPattern::Kind::literal);
       return new IRInstruction((DexOpcode)opcode);
+
+    case OPCODE_IPUT:
+    case OPCODE_IPUT_BYTE:
+    case OPCODE_IPUT_CHAR:
+    case OPCODE_IPUT_BOOLEAN:
+    case OPCODE_IPUT_SHORT:
+    case OPCODE_IPUT_WIDE:
+    case OPCODE_IPUT_OBJECT:
+    case OPCODE_IGET:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_WIDE:
+    case OPCODE_IGET_OBJECT:
+      assert(replace.kind == DexPattern::Kind::field);
+      return new IRInstruction(static_cast<DexOpcode>(opcode));
     }
 
     always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
@@ -610,6 +654,17 @@ struct Matcher {
               false, "Unexpected type directive 0x%x", replace_info.type);
           break;
         }
+      } else if (replace_info.kind == DexPattern::Kind::field) {
+        switch (replace_info.field) {
+        case Field::A:
+          replace->set_field(matched_fields.at(Field::A));
+          break;
+        case Field::B:
+          replace->set_field(matched_fields.at(Field::B));
+        default:
+          always_assert_log(
+              false, "Unexpected field directive 0x%x", replace_info.field);
+        }
       }
     }
     return replacements;
@@ -697,6 +752,14 @@ DexPattern invoke_String_length(Register instance) {
 
 DexPattern const_string(String string) {
   return {{OPCODE_CONST_STRING}, {}, {}, string};
+};
+
+DexPattern move_result_pseudo_wide(Register dest) {
+  return {{IOPCODE_MOVE_RESULT_PSEUDO_WIDE}, {}, {dest}};
+};
+
+DexPattern move_result_pseudo(Register dest) {
+  return {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dest}};
 };
 
 DexPattern move_result_pseudo_object(Register dest) {
@@ -1107,6 +1170,110 @@ const std::vector<Pattern>& get_nop_patterns() {
   return kNopPatterns;
 }
 
+static bool second_get_non_volatile(const Matcher& m) {
+  if (m.matched_instructions.size() < 2) {
+    return false;
+  }
+
+  DexFieldRef* field_ref = m.matched_instructions[1]->get_field();
+  if (!field_ref->is_concrete()) {
+    return false;
+  }
+
+  DexField* field = static_cast<DexField*>(field_ref);
+  return !(field->get_access() & ACC_VOLATILE);
+}
+
+DexPattern put_x_op(DexOpcode op_code,
+                    Register src,
+                    Register obj_register,
+                    Field field) {
+  static const auto* kPutOpcodes =
+      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+          {OPCODE_IPUT,
+           OPCODE_IPUT_WIDE,
+           OPCODE_IPUT_OBJECT,
+           OPCODE_IPUT_SHORT,
+           OPCODE_IPUT_CHAR,
+           OPCODE_IPUT_BYTE,
+           OPCODE_IPUT_BOOLEAN});
+  if (kPutOpcodes->find(op_code) == kPutOpcodes->end()) {
+    always_assert_log(false, "Not supported DexOpcode");
+  }
+
+  return {{op_code}, {src, obj_register}, {}, field};
+}
+
+DexPattern get_x_op(DexOpcode op_code, Register src, Field field) {
+  static const auto* kGetOpcodes =
+      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+          {OPCODE_IGET,
+           OPCODE_IGET_WIDE,
+           OPCODE_IGET_OBJECT,
+           OPCODE_IGET_SHORT,
+           OPCODE_IGET_CHAR,
+           OPCODE_IGET_BYTE,
+           OPCODE_IGET_BOOLEAN});
+  if (kGetOpcodes->find(op_code) == kGetOpcodes->end()) {
+    always_assert_log(false, "Not supported DexOpcode");
+  }
+
+  return {{op_code}, {src}, {}, field};
+}
+
+std::vector<DexPattern> put_x_patterns(DexOpcode put_code) {
+  return {put_x_op(put_code, Register::A, Register::B, Field::A)};
+}
+
+std::vector<DexPattern> put_get_x_patterns(DexOpcode put_code,
+                          DexOpcode get_code,
+                          DexPattern (*move_pseudo_func)(Register reg)) {
+  return {
+    put_x_op(put_code, Register::A, Register::B, Field::A),
+    get_x_op(get_code, Register::B, Field::A),
+    move_pseudo_func(Register::A)
+  };
+}
+
+const std::vector<Pattern>& get_putget_patterns() {
+  static const auto* kPutGetPatterns = new std::vector<Pattern>(
+      {{"Replace_PutGet",
+        put_get_x_patterns(OPCODE_IPUT, OPCODE_IGET, move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT),
+        second_get_non_volatile},
+       {"Replace_PutGetWide",
+        put_get_x_patterns(
+            OPCODE_IPUT_WIDE, OPCODE_IGET_WIDE, move_result_pseudo_wide),
+        put_x_patterns(OPCODE_IPUT_WIDE),
+        second_get_non_volatile},
+       {"Replace_PutGetObject",
+        put_get_x_patterns(
+            OPCODE_IPUT_OBJECT, OPCODE_IGET_OBJECT, move_result_pseudo_object),
+        put_x_patterns(OPCODE_IPUT_OBJECT),
+        second_get_non_volatile},
+       {"Replace_PutGetShort",
+        put_get_x_patterns(
+            OPCODE_IPUT_SHORT, OPCODE_IGET_SHORT, move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_SHORT),
+        second_get_non_volatile},
+       {"Replace_PutGetChar",
+        put_get_x_patterns(
+            OPCODE_IPUT_CHAR, OPCODE_IGET_CHAR, move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_CHAR),
+        second_get_non_volatile},
+       {"Replace_PutGetByte",
+        put_get_x_patterns(
+            OPCODE_IPUT_BYTE, OPCODE_IGET_BYTE, move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_BYTE),
+        second_get_non_volatile},
+       {"Replace_PutGetBoolean",
+        put_get_x_patterns(
+            OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN, move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_BOOLEAN),
+        second_get_non_volatile}});
+  return *kPutGetPatterns;
+}
+
 template <int64_t VALUE>
 static bool first_instruction_literal_is(const Matcher& m) {
   if (m.matched_instructions.empty()) {
@@ -1173,14 +1340,12 @@ const std::vector<Pattern>& get_arith_patterns() {
   return kArithPatterns;
 }
 
-const std::unordered_set<uint16_t> kAnyInvoke = {OPCODE_INVOKE_VIRTUAL,
-                                                 OPCODE_INVOKE_SUPER,
-                                                 OPCODE_INVOKE_DIRECT,
-                                                 OPCODE_INVOKE_STATIC,
-                                                 OPCODE_INVOKE_INTERFACE};
-
 const DexPattern invoke_class_get_simple_name() {
-  return {kAnyInvoke,
+  return {{OPCODE_INVOKE_VIRTUAL,
+           OPCODE_INVOKE_SUPER,
+           OPCODE_INVOKE_DIRECT,
+           OPCODE_INVOKE_STATIC,
+           OPCODE_INVOKE_INTERFACE},
           {Register::A},
           {},
           DexMethod::make_method(
@@ -1211,10 +1376,13 @@ const std::vector<std::vector<Pattern>>& get_all_patterns() {
       get_string_patterns(),
       get_arith_patterns(),
       get_func_patterns(),
-      get_nop_patterns()};
+      get_nop_patterns(),
+      get_putget_patterns()};
+
   return kAllPatterns;
 }
-}
+
+} // namespace patterns
 
 template <typename T>
 bool contains(const std::vector<T>& vec, const T& value) {
