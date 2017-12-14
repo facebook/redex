@@ -12,8 +12,8 @@
 #include "util.h"
 
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
 
@@ -25,7 +25,7 @@ enum class OatVersion : uint32_t {
   V_067 = 0x00373630, // 6.0, api level 23
   V_079 = 0x00393730, // 7.0, api level 24
   V_088 = 0x00383830, // 7.1, api level 25
-  V_124 = 0x00343231  // 8.0, api level 26
+  V_124 = 0x00343231 // 8.0, api level 26
 };
 
 struct DexInput {
@@ -36,7 +36,7 @@ struct DexInput {
 struct OatDexFile {
   OatDexFile() = default;
   OatDexFile(std::string location_, uint32_t file_offset_, uint32_t file_size_)
-    : location(location_), file_offset(file_offset_), file_size(file_size_) {}
+      : location(location_), file_offset(file_offset_), file_size(file_size_) {}
 
   std::string location;
   uint32_t file_offset;
@@ -73,7 +73,9 @@ class OatFile {
 
   virtual std::vector<OatDexFile> get_oat_dexfiles() = 0;
 
-  virtual void print(bool dump_classes, bool dump_tables, bool print_unverified_classes) = 0;
+  virtual void print(bool dump_classes,
+                     bool dump_tables,
+                     bool print_unverified_classes) = 0;
 
   virtual Status status() = 0;
 
@@ -82,9 +84,10 @@ class OatFile {
 
   virtual bool created_by_oatmeal() const = 0;
 
-  // In an OatFile created with parse or parse_dex_files_only, the buffer may have been an
-  // ELF file, in which case the parsing starts at the offset of the ELF file's .rodata
-  // section. This returns the offset to that data. (Or zero if the buffer was not an elf file.)
+  // In an OatFile created with parse or parse_dex_files_only, the buffer may
+  // have been an ELF file, in which case the parsing starts at the offset of
+  // the ELF file's .rodata section. This returns the offset to that data. (Or
+  // zero if the buffer was not an elf file.)
   virtual size_t oat_offset() const = 0;
 
   // Return true if we've detected samsung customizations to the oatfile format.
@@ -119,17 +122,15 @@ struct ArchStrings {
   const char* s;
 };
 
-constexpr ArchStrings arch_strings[] = {
-  { InstructionSet::kNone, "NONE" },
-  { InstructionSet::kArm, "arm" },
-  { InstructionSet::kArm64, "arm64" },
-  { InstructionSet::kThumb2, "thumb2" },
-  { InstructionSet::kX86, "x86" },
-  { InstructionSet::kX86_64, "x86_64" },
-  { InstructionSet::kMips, "mips" },
-  { InstructionSet::kMips64, "mips64" },
-  { InstructionSet::kMax, nullptr }
-};
+constexpr ArchStrings arch_strings[] = {{InstructionSet::kNone, "NONE"},
+                                        {InstructionSet::kArm, "arm"},
+                                        {InstructionSet::kArm64, "arm64"},
+                                        {InstructionSet::kThumb2, "thumb2"},
+                                        {InstructionSet::kX86, "x86"},
+                                        {InstructionSet::kX86_64, "x86_64"},
+                                        {InstructionSet::kMips, "mips"},
+                                        {InstructionSet::kMips64, "mips64"},
+                                        {InstructionSet::kMax, nullptr}};
 
 inline const char* instruction_set_str(InstructionSet isa) {
   int i = 0;
@@ -152,4 +153,3 @@ inline InstructionSet instruction_set(const std::string& isa) {
   }
   return InstructionSet::kMax;
 }
-

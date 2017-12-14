@@ -75,38 +75,37 @@ std::string expand(const std::string& path) {
 }
 #else
 // We don't expand ~ in paths on android
-std::string expand(const std::string& path) {
-  return path;
-}
+std::string expand(const std::string& path) { return path; }
 #endif
 
 Arguments parse_args(int argc, char* argv[]) {
 
-  struct option options[] = {{"dump", no_argument, nullptr, 'd'},
-                             {"build", no_argument, nullptr, 'b'},
-                             {"write-elf", no_argument, nullptr, 'e'},
-                             {"dex", required_argument, nullptr, 'x'},
-                             {"dex-location", required_argument, nullptr, 'l'},
-                             {"oat", required_argument, nullptr, 'o'},
-                             {"oat-version", required_argument, nullptr, 'v'},
-                             {"dump-classes", no_argument, nullptr, 'c'},
-                             {"dump-tables", no_argument, nullptr, 't'},
-                             {"dump-memory-usage", no_argument, nullptr, 'm'},
-                             {"print-unverified-classes", no_argument, nullptr, 'p'},
-                             {"arch", required_argument, nullptr, 'a'},
-                             {"art-image-location", required_argument, nullptr, 0},
-                             {"test-is-oatmeal", no_argument, nullptr, 1},
-                             {"samsung-oatformat", no_argument, nullptr, 2},
-                             {"one-oat-per-dex", no_argument, nullptr, 3},
-                             {nullptr, 0, nullptr, 0}};
+  struct option options[] = {
+      {"dump", no_argument, nullptr, 'd'},
+      {"build", no_argument, nullptr, 'b'},
+      {"write-elf", no_argument, nullptr, 'e'},
+      {"dex", required_argument, nullptr, 'x'},
+      {"dex-location", required_argument, nullptr, 'l'},
+      {"oat", required_argument, nullptr, 'o'},
+      {"oat-version", required_argument, nullptr, 'v'},
+      {"dump-classes", no_argument, nullptr, 'c'},
+      {"dump-tables", no_argument, nullptr, 't'},
+      {"dump-memory-usage", no_argument, nullptr, 'm'},
+      {"print-unverified-classes", no_argument, nullptr, 'p'},
+      {"arch", required_argument, nullptr, 'a'},
+      {"art-image-location", required_argument, nullptr, 0},
+      {"test-is-oatmeal", no_argument, nullptr, 1},
+      {"samsung-oatformat", no_argument, nullptr, 2},
+      {"one-oat-per-dex", no_argument, nullptr, 3},
+      {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
   std::vector<std::string> dex_files;
   std::vector<std::string> dex_locations;
 
   int c;
-  while ((c = getopt_long(argc, argv, "cetmpdbx:l:o:v:a:", &options[0], nullptr)) !=
-         -1) {
+  while ((c = getopt_long(
+              argc, argv, "cetmpdbx:l:o:v:a:", &options[0], nullptr)) != -1) {
     switch (c) {
     case 'd':
       if (ret.action != Action::DUMP && ret.action != Action::NONE) {
@@ -193,22 +192,24 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   if (ret.action != Action::DUMP && ret.print_unverified_classes) {
-    fprintf(stderr, "-p/--print-unverified-classes can only be used with -d/--dump\n");
+    fprintf(stderr,
+            "-p/--print-unverified-classes can only be used with -d/--dump\n");
     exit(1);
   }
 
   if (dex_locations.size() > 0) {
     if (dex_locations.size() != dex_files.size()) {
-      fprintf(stderr,
+      fprintf(
+          stderr,
           "ERROR: number of -l arguments must match number of -x arguments.\n");
       exit(1);
     }
 
-    foreach_pair(dex_files, dex_locations,
-      [&](const std::string& file, const std::string& loc) {
-        ret.dex_files.push_back(DexInput{file, loc});
-      }
-    );
+    foreach_pair(dex_files,
+                 dex_locations,
+                 [&](const std::string& file, const std::string& loc) {
+                   ret.dex_files.push_back(DexInput{file, loc});
+                 });
   } else {
     for (const auto& f : dex_files) {
       ret.dex_files.push_back(DexInput{f, f});
@@ -239,7 +240,8 @@ int dump(const Arguments& args) {
   // We don't run dumping during install on device, so it is allowed to consume
   // lots of memory.
   auto oat_file_contents = std::make_unique<char[]>(oat_file_size);
-  auto oatFileBytesRead = fread(oat_file_contents.get(), 1, oat_file_size, oat_file.get());
+  auto oatFileBytesRead =
+      fread(oat_file_contents.get(), 1, oat_file_size, oat_file.get());
   if (oatFileBytesRead != oat_file_size) {
     fprintf(stderr,
             "Failed to read file %s (%zd)\n",
@@ -251,7 +253,8 @@ int dump(const Arguments& args) {
   ConstBuffer oatfile_buffer{oat_file_contents.get(), oat_file_size};
   auto ma_scope = MemoryAccounter::NewScope(oatfile_buffer);
 
-  auto oatfile = OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
+  auto oatfile =
+      OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
 
   if (!oatfile) {
     fprintf(stderr, "Cannot open .oat file %s\n", oat_file_name.c_str());
@@ -262,7 +265,8 @@ int dump(const Arguments& args) {
     return oatfile->created_by_oatmeal();
   }
 
-  oatfile->print(args.dump_classes, args.dump_tables, args.print_unverified_classes);
+  oatfile->print(
+      args.dump_classes, args.dump_tables, args.print_unverified_classes);
 
   if (args.dump_memory_usage) {
     cur_ma()->print();
@@ -280,8 +284,9 @@ int build(const Arguments& args) {
 
   if (args.one_oat_per_dex) {
     if (args.oat_files.size() != args.dex_files.size()) {
-      fprintf(stderr, "--one-oat-per-dex was set, so number of -o args (oat files) "
-                      "must match number of -x args (dex files).\n");
+      fprintf(stderr,
+              "--one-oat-per-dex was set, so number of -o args (oat files) "
+              "must match number of -x args (dex files).\n");
       return 1;
     }
   } else {
@@ -296,13 +301,18 @@ int build(const Arguments& args) {
     return 1;
   }
 
-  OatFile::build(args.oat_files, args.dex_files, args.oat_version, args.arch,
-      args.write_elf, args.art_image_location, args.samsung_mode);
+  OatFile::build(args.oat_files,
+                 args.dex_files,
+                 args.oat_version,
+                 args.arch,
+                 args.write_elf,
+                 args.art_image_location,
+                 args.samsung_mode);
 
   return 0;
 }
 
-}
+} // namespace
 
 int main(int argc, char* argv[]) {
 

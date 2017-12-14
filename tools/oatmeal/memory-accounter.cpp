@@ -19,15 +19,15 @@ namespace {
 // This class is a bit of a wart - the oat parsing code was initially written
 // only for exploratory purposes, and MemoryAccounter exists so that we can
 // make sure we've parsed and therefore understood all the bytes in an oat file.
-// But now we're adding the ability to do oat parsing on device, for the purposes
-// of madvise()ing regions of the oat file that correspond to various dex files,
-// in which case we want to be able to run without forcing the caller to call
-// MemoryAccounter::NewScope().
+// But now we're adding the ability to do oat parsing on device, for the
+// purposes of madvise()ing regions of the oat file that correspond to various
+// dex files, in which case we want to be able to run without forcing the caller
+// to call MemoryAccounter::NewScope().
 //
 // Adding this stub class is easier than putting in null checks everywhere we
 // call cur_ma().
 class NilMemoryAccounterImpl : public MemoryAccounter {
-public:
+ public:
   void print() override {}
   void memcpyAndMark(void* dest, const char* src, size_t count) override {
     memcpy(dest, src, count);
@@ -41,8 +41,9 @@ public:
 class MultiBufferMemoryAccounter;
 
 class MemoryAccounterImpl : public MemoryAccounter {
- friend class ::MemoryAccounterScope;
- friend class ::MultiBufferMemoryAccounter;
+  friend class ::MemoryAccounterScope;
+  friend class ::MultiBufferMemoryAccounter;
+
  public:
   UNCOPYABLE(MemoryAccounterImpl);
   MOVABLE(MemoryAccounterImpl);
@@ -135,14 +136,12 @@ class MemoryAccounterImpl : public MemoryAccounter {
 };
 
 class MultiBufferMemoryAccounter : public MemoryAccounter {
-public:
+ public:
   MultiBufferMemoryAccounter() = delete;
   MOVABLE(MultiBufferMemoryAccounter);
   UNCOPYABLE(MultiBufferMemoryAccounter);
 
-  MultiBufferMemoryAccounter(ConstBuffer buf) {
-    accounters_.emplace_back(buf);
-  }
+  MultiBufferMemoryAccounter(ConstBuffer buf) { accounters_.emplace_back(buf); }
 
   void print() override;
 
@@ -154,12 +153,13 @@ public:
 
   virtual ~MultiBufferMemoryAccounter() = default;
 
-private:
+ private:
   std::vector<MemoryAccounterImpl> accounters_;
 };
 
-
-void MultiBufferMemoryAccounter::memcpyAndMark(void* dest, const char* src, size_t count) {
+void MultiBufferMemoryAccounter::memcpyAndMark(void* dest,
+                                               const char* src,
+                                               size_t count) {
   for (auto& a : accounters_) {
     auto ptr = a.buf_.ptr;
     char* dst_ptr = reinterpret_cast<char*>(dest);
@@ -171,7 +171,8 @@ void MultiBufferMemoryAccounter::memcpyAndMark(void* dest, const char* src, size
   CHECK(false, "Can't find memory location");
 }
 
-void MultiBufferMemoryAccounter::markRangeConsumed(const char* ptr, uint32_t count) {
+void MultiBufferMemoryAccounter::markRangeConsumed(const char* ptr,
+                                                   uint32_t count) {
   for (auto& a : accounters_) {
     auto base_ptr = a.buf_.ptr;
     if (base_ptr <= ptr && ptr + count <= base_ptr + a.buf_.len) {
@@ -190,7 +191,8 @@ void MultiBufferMemoryAccounter::markBufferConsumed(ConstBuffer subBuffer) {
     auto subbuf_ptr = subBuffer.ptr;
     auto subbuf_len = subBuffer.len;
 
-    if (base_ptr <= subbuf_ptr && subbuf_ptr + subbuf_len <= base_ptr + base_len) {
+    if (base_ptr <= subbuf_ptr &&
+        subbuf_ptr + subbuf_len <= base_ptr + base_len) {
       a.markBufferConsumed(subBuffer);
       return;
     }
@@ -204,7 +206,7 @@ void MultiBufferMemoryAccounter::print() {
   }
 }
 
-void MultiBufferMemoryAccounter::addBuffer(ConstBuffer buf) { 
+void MultiBufferMemoryAccounter::addBuffer(ConstBuffer buf) {
   // Make sure this is no-ones sub-buffer in the currently accounted set.
   for (const auto& a : accounters_) {
     auto a_end = a.buf_.ptr + a.buf_.len;
@@ -216,7 +218,8 @@ void MultiBufferMemoryAccounter::addBuffer(ConstBuffer buf) {
 }
 
 NilMemoryAccounterImpl MemoryAccounterImpl::nil_accounter_;
-std::vector<std::unique_ptr<MemoryAccounter>> MemoryAccounterImpl::accounter_stack_;
+std::vector<std::unique_ptr<MemoryAccounter>>
+    MemoryAccounterImpl::accounter_stack_;
 } // namespace
 
 MemoryAccounter::~MemoryAccounter() = default;
@@ -225,14 +228,12 @@ MemoryAccounterScope MemoryAccounter::NewScope(ConstBuffer buf) {
   return MemoryAccounterScope(buf);
 }
 
-MemoryAccounter* MemoryAccounter::Cur() {
-  return MemoryAccounterImpl::Cur();
-}
+MemoryAccounter* MemoryAccounter::Cur() { return MemoryAccounterImpl::Cur(); }
 
 MemoryAccounterScope::MemoryAccounterScope(ConstBuffer buf) {
   MemoryAccounterImpl::accounter_stack_.push_back(
-    std::unique_ptr<MultiBufferMemoryAccounter>(new MultiBufferMemoryAccounter(buf))
-  );
+      std::unique_ptr<MultiBufferMemoryAccounter>(
+          new MultiBufferMemoryAccounter(buf)));
 }
 
 MemoryAccounterScope::~MemoryAccounterScope() {
