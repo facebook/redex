@@ -67,8 +67,8 @@ static void PrintTo(const IRInstructionList& insn_list, std::ostream* os) {
 // The opcode should be a literal-carrying opcode like OPCODE_ADD_INT_LIT16
 // The source register is src_reg, dest register is 1
 static IRInstructionList op_lit(DexOpcode opcode,
-                                 int64_t literal,
-                                 unsigned dst_reg = 1) {
+                                int64_t literal,
+                                unsigned dst_reg = 1) {
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
@@ -95,7 +95,7 @@ static IRInstructionList op_lit_move_result_pseudo(DexOpcode opcode,
 static IRInstructionList op_unary(DexOpcode opcode) {
   using namespace dex_asm;
   return IRInstructionList{dasm(OPCODE_CONST_16, {0_v, 42_L}),
-                            dasm(opcode, {1_v, 0_v})};
+                           dasm(opcode, {1_v, 0_v})};
 }
 
 class PeepholeTest : public ::testing::Test {
@@ -157,10 +157,10 @@ class PeepholeTest : public ::testing::Test {
 
   // Performs one peephole test. Applies peephole optimizations to the given
   // source instruction stream, and checks that it equals the expected result
-  void test_1(const char* name,
+  void test_1(const std::string& name,
               const IRInstructionList& src,
               const IRInstructionList& expected) {
-    DexMethod* method = make_void_method(name, src);
+    DexMethod* method = make_void_method(name.c_str(), src);
     dex_class->add_method(method);
     Scope external_classes;
     manager.run_passes(stores, external_classes, config);
@@ -171,8 +171,82 @@ class PeepholeTest : public ::testing::Test {
 
   // Perform a negative peephole test.
   // We expect to NOT modify these instructions.
-  void test_1_nochange(const char* name, const IRInstructionList& src) {
+  void test_1_nochange(const std::string& name, const IRInstructionList& src) {
     test_1(name, src, src);
+  }
+
+  IRInstructionList op_put(DexOpcode put, bool is_wide = false) {
+    using namespace dex_asm;
+
+    DexFieldRef* field =
+        DexField::make_field(dex_class->get_type(),
+                             DexString::make_string("field_name"),
+                             get_int_type());
+
+    return IRInstructionList{
+        dasm(OPCODE_NEW_INSTANCE, dex_class->get_type(), {}),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
+        is_wide ? dasm(OPCODE_CONST_WIDE, {0_v, 11_L})
+                : dasm(OPCODE_CONST, {0_v, 22_L}),
+        dasm(put, field, {0_v, 5_v})};
+  }
+
+  IRInstructionList op_putget(DexOpcode put,
+                              DexOpcode get,
+                              DexOpcode move_result_pseudo,
+                              bool is_wide = false,
+                              bool use_same_register = true,
+                              bool make_field_volatile = false) {
+    using namespace dex_asm;
+
+    DexFieldRef* field =
+        DexField::make_field(dex_class->get_type(),
+                             DexString::make_string("field_name"),
+                             get_int_type());
+
+    auto* dex_field = static_cast<DexField*>(field);
+    if (make_field_volatile) {
+      dex_field->make_concrete(DexAccessFlags::ACC_VOLATILE);
+    } else {
+      dex_field->make_concrete(DexAccessFlags::ACC_PUBLIC);
+    }
+    dex_class->add_field(dex_field);
+
+    return IRInstructionList{
+        dasm(OPCODE_NEW_INSTANCE, dex_class->get_type(), {}),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
+        is_wide ? dasm(OPCODE_CONST_WIDE, {0_v, 11_L})
+                : dasm(OPCODE_CONST, {0_v, 22_L}),
+        dasm(put, field, {0_v, 5_v}),
+        dasm(get, field, {5_v}),
+        use_same_register ? dasm(move_result_pseudo, {0_v})
+                          : dasm(move_result_pseudo, {3_v})};
+  }
+
+  void put_get_test_helper(const std::string& test_name,
+                           DexOpcode put,
+                           DexOpcode get,
+                           DexOpcode move_result_pseudo,
+                           bool is_wide = false) {
+    IRInstructionList input = op_putget(put, get, move_result_pseudo, is_wide);
+    IRInstructionList expected = op_put(put, is_wide);
+    test_1(test_name, input, expected);
+  }
+
+  void put_get_test_helper_nochange(const std::string& test_name,
+                                    DexOpcode put,
+                                    DexOpcode get,
+                                    DexOpcode move_result_pseudo,
+                                    bool is_wide = false,
+                                    bool use_same_register = true,
+                                    bool make_field_volative = false) {
+    IRInstructionList input = op_putget(put,
+                                        get,
+                                        move_result_pseudo,
+                                        is_wide,
+                                        use_same_register,
+                                        make_field_volative);
+    test_1_nochange(test_name, input);
   }
 };
 
@@ -200,4 +274,57 @@ TEST_F(PeepholeTest, Arithmetic) {
   test_1_nochange("add16_1", op_lit(OPCODE_ADD_INT_LIT16, 1));
   test_1_nochange("mult8_3", op_lit(OPCODE_MUL_INT_LIT8, 3));
   test_1_nochange("mult16_12", op_lit(OPCODE_MUL_INT_LIT16, 12));
+}
+
+TEST_F(PeepholeTest, RemovePutGetPair) {
+  put_get_test_helper(
+      "remove_put_get", OPCODE_IPUT, OPCODE_IGET, IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper("remove_put_get_byte",
+                      OPCODE_IPUT_BYTE,
+                      OPCODE_IGET_BYTE,
+                      IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper("remove_put_get_char",
+                      OPCODE_IPUT_CHAR,
+                      OPCODE_IGET_CHAR,
+                      IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper("remove_put_get_boolean",
+                      OPCODE_IPUT_BOOLEAN,
+                      OPCODE_IGET_BOOLEAN,
+                      IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper("remove_put_get_short",
+                      OPCODE_IPUT_SHORT,
+                      OPCODE_IGET_SHORT,
+                      IOPCODE_MOVE_RESULT_PSEUDO);
+
+  put_get_test_helper("remove_put_get_wide",
+                      OPCODE_IPUT_WIDE,
+                      OPCODE_IGET_WIDE,
+                      IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
+                      true);
+
+  // Negative case, no match/replacement.
+  put_get_test_helper_nochange("remove_put_get_byte_nochange",
+                               OPCODE_IPUT,
+                               OPCODE_IGET_BYTE,
+                               IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_nochange("remove_put_char_get_byte_nochange",
+                               OPCODE_IPUT_CHAR,
+                               OPCODE_IGET_BYTE,
+                               IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_nochange(
+      "remove_put_get_char_diff_register_nochange",
+      OPCODE_IPUT_CHAR,
+      OPCODE_IGET_CHAR,
+      IOPCODE_MOVE_RESULT_PSEUDO,
+      false,
+      false);
+
+  put_get_test_helper_nochange(
+      "remove_put_get_char_volatile_field_register_nochange",
+      OPCODE_IPUT_CHAR,
+      OPCODE_IGET_CHAR,
+      IOPCODE_MOVE_RESULT_PSEUDO,
+      false,
+      true,
+      true);
 }
