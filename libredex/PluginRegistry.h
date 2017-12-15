@@ -10,6 +10,7 @@
 #pragma once
 #include "Trace.h"
 #include "Util.h"
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
