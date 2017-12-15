@@ -1,3 +1,5 @@
+load("@xplat//configurations/buck/android:instrumentation_tests.bzl", "instrumentation_test_ci_config")
+
 include_defs("//native/redex/REDEX_DEFS")
 include_defs("//buck_imports/redex_utils")
 
