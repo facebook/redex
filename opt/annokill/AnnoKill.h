@@ -45,7 +45,8 @@ class AnnoKill {
            bool kill_bad_signatures,
            const AnnoNames& keep,
            const AnnoNames& kill,
-           const AnnoNames& force_kill);
+           const AnnoNames& force_kill,
+           const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos);
 
   bool kill_annotations();
   bool should_kill_bad_signature(DexAnnotation* da);
@@ -61,7 +62,10 @@ class AnnoKill {
   // of annotation types to be removed.
   AnnoSet get_removable_annotation_instances();
 
-  void cleanup_aset(DexAnnotationSet* aset, const AnnoSet& referenced_annos);
+  void cleanup_aset(
+    DexAnnotationSet* aset,
+    const AnnoSet& referenced_annos,
+    const std::unordered_set<const DexType*>& keep_annos = std::unordered_set<const DexType*>{});
   void count_annotation(const DexAnnotation* da);
 
   Scope& m_scope;
@@ -75,6 +79,7 @@ class AnnoKill {
   std::map<std::string, size_t> m_build_anno_map;
   std::map<std::string, size_t> m_runtime_anno_map;
   std::map<std::string, size_t> m_system_anno_map;
+  std::unordered_map<const DexType*, std::unordered_set<const DexType*>> m_anno_class_hierarchy_keep;
 };
 
 class AnnoKillPass : public Pass {
@@ -87,6 +92,8 @@ class AnnoKillPass : public Pass {
     pc.get("kill_annos", {}, m_kill_annos);
     pc.get("force_kill_annos", {}, m_force_kill_annos);
     pc.get("kill_bad_signatures", false, m_kill_bad_signatures);
+    std::unordered_map<std::string, std::vector<std::string>> dflt;
+    pc.get("class_hierarchy_keep_annos", dflt, m_class_hierarchy_keep_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -97,5 +104,6 @@ class AnnoKillPass : public Pass {
   std::vector<std::string> m_keep_annos;
   std::vector<std::string> m_kill_annos;
   std::vector<std::string> m_force_kill_annos;
+  std::unordered_map<std::string, std::vector<std::string>> m_class_hierarchy_keep_annos;
   bool m_kill_bad_signatures;
 };

@@ -9,6 +9,7 @@
 
 #include "AnnoKill.h"
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -35,7 +36,8 @@ AnnoKill::AnnoKill(Scope& scope,
                    bool only_force_kill,
                    const AnnoNames& keep,
                    const AnnoNames& kill,
-                   const AnnoNames& force_kill)
+                   const AnnoNames& force_kill,
+                   const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos)
   : m_scope(scope), m_only_force_kill(only_force_kill), m_kill_bad_signatures(kill_bad_signatures) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
@@ -71,6 +73,26 @@ AnnoKill::AnnoKill(Scope& scope,
       m_force_kill.insert(anno);
     } else {
       TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+    }
+  }
+
+  // Populate class hierarchy keep map
+  auto ch = build_type_hierarchy(m_scope);
+  for (auto it : class_hierarchy_keep_annos) {
+    auto* type = DexType::get_type(it.first.c_str());
+    auto* type_cls = type ? type_class(type) : nullptr;
+    TypeSet type_refs;
+    get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
+    for (auto& anno : it.second) {
+      auto* anno_type = DexType::get_type(anno.c_str());
+      for (auto type_ref : type_refs) {
+        m_anno_class_hierarchy_keep[type_ref].insert(anno_type);
+      }
+    }
+  }
+  for (auto it : m_anno_class_hierarchy_keep) {
+    for (auto type : it.second) {
+      TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s\n", it.first->get_name()->c_str(), type->get_name()->c_str());
     }
   }
 }
@@ -310,7 +332,8 @@ void AnnoKill::count_annotation(const DexAnnotation* da) {
 }
 
 void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
-                            const AnnoKill::AnnoSet& referenced_annos) {
+                            const AnnoKill::AnnoSet& referenced_annos,
+                            const std::unordered_set<const DexType*>& keep_annos) {
   m_stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](DexAnnotation* da) {
@@ -324,6 +347,13 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
             "code, skipping...\n\tannotation: %s\n",
             SHOW(anno_type),
             SHOW(da));
+      return false;
+    }
+
+    if (keep_annos.count(anno_type) > 0) {
+      TRACE(ANNO,
+            4,
+            "Prohibited from removing annotation %s\n", SHOW(da));
       return false;
     }
 
@@ -381,12 +411,6 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
   annos.erase(std::remove_if(annos.begin(), annos.end(), fn), annos.end());
 }
 
-/**
- * Look for @Signatures that reference non-existent classes and kill those
- * annotations. The logic is that a @Signature with broken type references
- * is no better than no @Signature at all. This may not be safe to do in all
- * cases, so it's controlled via config.
- */
 bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
   if (!m_kill_bad_signatures) return false;
   TRACE(ANNO, 3, "Examining @Signature instance %s\n", SHOW(da));
@@ -464,8 +488,10 @@ bool AnnoKill::kill_annotations() {
     if (!aset) {
       continue;
     }
+    auto& keep_list = m_anno_class_hierarchy_keep[clazz->get_type()];
+
     m_stats.class_asets++;
-    cleanup_aset(aset, referenced_annos);
+    cleanup_aset(aset, referenced_annos, keep_list);
     if (aset->size() == 0) {
       TRACE(ANNO,
             3,
@@ -596,7 +622,8 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
               only_force_kill(),
               m_keep_annos,
               m_kill_annos,
-              m_force_kill_annos);
+              m_force_kill_annos,
+              m_class_hierarchy_keep_annos);
   bool classes_removed = ak.kill_annotations();
 
   if (classes_removed) {
