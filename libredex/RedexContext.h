@@ -161,8 +161,8 @@ class malformed_dex : public std::exception {
                        const std::string& dex_1,
                        const std::string& dex_2) {
     std::ostringstream oss;
-    oss << "Found duplicate class: " << m_class_name
-        << " in two dexes:\ndex 1: " << m_dex_1 << "\ndex 2: " << m_dex_2;
+    oss << "Found duplicate class in two different dex files. Class "
+        << m_class_name;
 
     return oss.str();
   }

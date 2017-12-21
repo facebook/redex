@@ -233,7 +233,9 @@ DexClasses load_classes_from_dex(const char* location, bool balloon) {
   return load_classes_from_dex(location, &stats, balloon);
 }
 
-DexClasses load_classes_from_dex(const char* location, dex_stats_t* stats, bool balloon) {
+DexClasses load_classes_from_dex(const char* location,
+                                 dex_stats_t* stats,
+                                 bool balloon) {
   TRACE(MAIN, 1, "Loading classes from dex from %s\n", location);
   DexLoader dl(location);
   auto classes = dl.load_dex(location, stats);
