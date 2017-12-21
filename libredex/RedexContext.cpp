@@ -9,6 +9,7 @@
 
 #include "RedexContext.h"
 
+#include <exception>
 #include <mutex>
 #include <unordered_set>
 
@@ -288,21 +289,19 @@ void RedexContext::publish_class(DexClass* cls) {
     if (prev_loc == cur_loc) {
       TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
     } else {
+      std::string class_name = show(cls);
+      std::string dex_1 = m_type_to_class[type]->get_dex_location();
+      std::string dex_2 = cls->get_dex_location();
+
       TRACE(MAIN,
             1,
             "ABORT! Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
             "2: %s\n",
-            SHOW(cls),
-            m_type_to_class[type]->get_dex_location().c_str(),
-            cls->get_dex_location().c_str());
-      fprintf(stderr,
-              "ABORT! Found duplicate class: %s in two dexes:\ndex 1: %s\ndex "
-              "2: %s\n",
-              SHOW(cls),
-              m_type_to_class[type]->get_dex_location().c_str(),
-              cls->get_dex_location().c_str());
-      // TODO: better error exit strategy needed for the python wrapper etc.
-      exit(EXIT_FAILURE);
+            class_name.c_str(),
+            dex_1.c_str(),
+            dex_2.c_str());
+
+      throw malformed_dex(class_name, dex_1, dex_2);
     }
   }
   m_type_to_class.emplace(type, cls);
