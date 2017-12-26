@@ -142,3 +142,14 @@ DexMethod* find_top_impl(
   }
   return top_impl;
 }
+
+DexMethod* find_top_intf_impl(
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
+  DexMethod* top_impl = nullptr;
+  while (cls) {
+    DexMethod* top_mir_impl = resolve_intf_method_ref(cls, name, proto);
+    if (top_mir_impl != nullptr) top_impl = top_mir_impl;
+    cls = type_class(cls->get_super_class());
+  }
+  return top_impl;
+}

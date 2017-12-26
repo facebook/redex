@@ -164,6 +164,15 @@ inline DexMethod* resolve_method(
 DexMethod* find_top_impl(const DexClass*, const DexString*, const DexProto*);
 
 /**
+ * Find where a method was introduced from an interface.
+ * It may return a concrete method or a miranda depending on whether
+ * the class where the interface is declared has a concrete method for the
+ * interface method.
+ */
+DexMethod* find_top_intf_impl(
+    const DexClass* cls, const DexString* name, const DexProto* proto);
+
+/**
  * Type of fields to resolve.
  */
 enum class FieldSearch {
