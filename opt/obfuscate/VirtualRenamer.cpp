@@ -408,6 +408,15 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
         top = resolve_method(callee, MethodSearch::Interface);
       } else {
         top = find_top_impl(cls, callee->get_name(), callee->get_proto());
+        if (top == nullptr) {
+          TRACE(OBFUSCATE, 2, "Possible top miranda: %s\n", SHOW(callee));
+          // see if it's a virtual call to an interface miranda method
+          top = find_top_intf_impl(
+              cls, callee->get_name(), callee->get_proto());
+          if (top != nullptr) {
+            TRACE(OBFUSCATE, 2, "Top miranda: %s\n", SHOW(top));
+          }
+        }
       }
       if (top == nullptr || top == callee) return;
       assert(type_class(top->get_class()) != nullptr);
