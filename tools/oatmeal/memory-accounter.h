@@ -16,13 +16,15 @@
 class MemoryAccounter;
 
 class MemoryAccounterScope {
-friend class MemoryAccounter;
-public:
+  friend class MemoryAccounter;
+
+ public:
   UNCOPYABLE(MemoryAccounterScope);
   MOVABLE(MemoryAccounterScope);
 
   ~MemoryAccounterScope();
-private:
+
+ private:
   explicit MemoryAccounterScope(ConstBuffer buf);
 };
 

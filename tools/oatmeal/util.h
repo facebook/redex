@@ -16,18 +16,15 @@
 #include <utility>
 #include <vector>
 
-#define CHECK(cond, ...)                        \
-  do {                                          \
-    auto cond_eval = (cond);                    \
-    if (!cond_eval) {                           \
-      fprintf(stderr, "%s:%d CHECK(%s) failed.",\
-              __FILE__,                         \
-              __LINE__,                         \
-              #cond);                           \
-      fprintf(stderr, " " __VA_ARGS__);         \
-      fprintf(stderr, "\n");                    \
-    }                                           \
-    assert(cond_eval);                          \
+#define CHECK(cond, ...)                                                     \
+  do {                                                                       \
+    auto cond_eval = (cond);                                                 \
+    if (!cond_eval) {                                                        \
+      fprintf(stderr, "%s:%d CHECK(%s) failed.", __FILE__, __LINE__, #cond); \
+      fprintf(stderr, " " __VA_ARGS__);                                      \
+      fprintf(stderr, "\n");                                                 \
+    }                                                                        \
+    assert(cond_eval);                                                       \
   } while (0)
 
 #define UNCOPYABLE(klass)       \
@@ -72,7 +69,9 @@ inline T nextPowerOfTwo(T in) {
 template <typename T>
 inline T countSetBits(T in) {
   // Turn off all but msb.
-  if (in == 0) { return 0; }
+  if (in == 0) {
+    return 0;
+  }
   int count = 1;
   while ((in & (in - 1u)) != 0) {
     in &= in - 1u;
@@ -80,7 +79,6 @@ inline T countSetBits(T in) {
   }
   return count;
 }
-
 
 struct ConstBuffer {
   const char* ptr;
@@ -107,7 +105,7 @@ struct ConstBuffer {
 };
 
 class FileHandle {
-public:
+ public:
   explicit FileHandle(FILE* fh) : bytes_written_(0), seek_ref_(0), fh_(fh) {}
   UNCOPYABLE(FileHandle);
 
@@ -163,7 +161,7 @@ public:
   void set_seek_reference_to_fpos();
   void set_seek_reference(long offset);
 
-protected:
+ protected:
   size_t fwrite_impl(const void* p, size_t size, size_t count);
   virtual void flush() {}
   size_t bytes_written_;
@@ -171,7 +169,7 @@ protected:
   // seek_set() operates relative to this point.
   long seek_ref_;
 
-private:
+ private:
   FILE* fh_;
 };
 
@@ -182,13 +180,14 @@ void write_padding(FileHandle& fh, char byte, size_t num);
 
 template <typename T>
 void write_obj(FileHandle& fh, const T& obj) {
-  write_buf(fh, ConstBuffer { reinterpret_cast<const char*>(&obj), sizeof(T) });
+  write_buf(fh, ConstBuffer{reinterpret_cast<const char*>(&obj), sizeof(T)});
 }
 
 template <typename T>
 void write_vec(FileHandle& fh, const std::vector<T>& obj) {
-  write_buf(fh, ConstBuffer { reinterpret_cast<const char*>(obj.data()),
-                              obj.size() * sizeof(T) });
+  write_buf(fh,
+            ConstBuffer{reinterpret_cast<const char*>(obj.data()),
+                        obj.size() * sizeof(T)});
 }
 
 void write_str_and_null(FileHandle& fh, const std::string& str);

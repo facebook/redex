@@ -8,9 +8,9 @@
  */
 
 #include "util.h"
-#include <sys/stat.h>
 #include <cerrno>
 #include <cstring>
+#include <sys/stat.h>
 
 size_t FileHandle::fwrite_impl(const void* p, size_t size, size_t count) {
   auto ret = ::fwrite(p, size, count, fh_);
@@ -27,13 +27,9 @@ size_t FileHandle::fread(void* p, size_t size, size_t count) {
   return ::fread(p, size, count, fh_);
 }
 
-bool FileHandle::feof() {
-  return ::feof(fh_) != 0;
-}
+bool FileHandle::feof() { return ::feof(fh_) != 0; }
 
-bool FileHandle::ferror() {
-  return ::ferror(fh_) != 0;
-}
+bool FileHandle::ferror() { return ::ferror(fh_) != 0; }
 
 bool FileHandle::seek_set(long offset) {
   flush();
@@ -49,14 +45,13 @@ void FileHandle::set_seek_reference_to_fpos() {
   set_seek_reference(::ftell(fh_));
 }
 
-void FileHandle::set_seek_reference(long offset) {
-  seek_ref_ = offset;
-}
+void FileHandle::set_seek_reference(long offset) { seek_ref_ = offset; }
 
 void write_word(FileHandle& fh, uint32_t value) {
   auto bytes_written = fh.fwrite(&value, sizeof(value), 1) * sizeof(value);
   if (bytes_written != sizeof(value)) {
-    fprintf(stderr, "fwrite wrote %zd, not %zd\n", bytes_written, sizeof(value));
+    fprintf(
+        stderr, "fwrite wrote %zd, not %zd\n", bytes_written, sizeof(value));
   }
   CHECK(bytes_written == sizeof(value));
 }
@@ -78,8 +73,7 @@ void write_str(FileHandle& fh, const std::string& str) {
 size_t get_filesize(FileHandle& fh) {
   auto fd = fileno(fh.get());
   struct stat dex_stat;
-  CHECK(fstat(fd, &dex_stat) == 0,
-        "fstat failed: %s", std::strerror(errno));
+  CHECK(fstat(fd, &dex_stat) == 0, "fstat failed: %s", std::strerror(errno));
   return dex_stat.st_size;
 }
 
@@ -91,7 +85,7 @@ void stream_file(FileHandle& in, FileHandle& out) {
     auto num_read = in.fread(buf.get(), 1, kBufSize);
     CHECK(!in.ferror());
     if (num_read > 0) {
-      write_buf(out, ConstBuffer { buf.get(), num_read });
+      write_buf(out, ConstBuffer{buf.get(), num_read});
     }
   } while (!in.feof());
 }

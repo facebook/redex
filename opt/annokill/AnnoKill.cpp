@@ -9,6 +9,7 @@
 
 #include "AnnoKill.h"
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -28,13 +29,16 @@ constexpr const char* METRIC_METHODPARAM_ASETS_CLEARED =
 constexpr const char* METRIC_METHODPARAM_ASETS_TOTAL = "num_methodparam_total";
 constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
+constexpr const char* METRIC_SIGNATURES_KILLED = "num_signatures_killed";
 
 AnnoKill::AnnoKill(Scope& scope,
+                   bool kill_bad_signatures,
                    bool only_force_kill,
                    const AnnoNames& keep,
                    const AnnoNames& kill,
-                   const AnnoNames& force_kill)
-  : m_scope(scope), m_only_force_kill(only_force_kill) {
+                   const AnnoNames& force_kill,
+                   const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos)
+  : m_scope(scope), m_only_force_kill(only_force_kill), m_kill_bad_signatures(kill_bad_signatures) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
   for (const auto& anno_name : keep) {
@@ -69,6 +73,26 @@ AnnoKill::AnnoKill(Scope& scope,
       m_force_kill.insert(anno);
     } else {
       TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+    }
+  }
+
+  // Populate class hierarchy keep map
+  auto ch = build_type_hierarchy(m_scope);
+  for (auto it : class_hierarchy_keep_annos) {
+    auto* type = DexType::get_type(it.first.c_str());
+    auto* type_cls = type ? type_class(type) : nullptr;
+    TypeSet type_refs;
+    get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
+    for (auto& anno : it.second) {
+      auto* anno_type = DexType::get_type(anno.c_str());
+      for (auto type_ref : type_refs) {
+        m_anno_class_hierarchy_keep[type_ref].insert(anno_type);
+      }
+    }
+  }
+  for (auto it : m_anno_class_hierarchy_keep) {
+    for (auto type : it.second) {
+      TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s\n", it.first->get_name()->c_str(), type->get_name()->c_str());
     }
   }
 }
@@ -308,7 +332,8 @@ void AnnoKill::count_annotation(const DexAnnotation* da) {
 }
 
 void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
-                            const AnnoKill::AnnoSet& referenced_annos) {
+                            const AnnoKill::AnnoSet& referenced_annos,
+                            const std::unordered_set<const DexType*>& keep_annos) {
   m_stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](DexAnnotation* da) {
@@ -322,6 +347,13 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
             "code, skipping...\n\tannotation: %s\n",
             SHOW(anno_type),
             SHOW(da));
+      return false;
+    }
+
+    if (keep_annos.count(anno_type) > 0) {
+      TRACE(ANNO,
+            4,
+            "Prohibited from removing annotation %s\n", SHOW(da));
       return false;
     }
 
@@ -365,9 +397,84 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       delete da;
       return true;
     }
+
+    if (anno_type == DexType::get_type("Ldalvik/annotation/Signature;")) {
+      if (should_kill_bad_signature(da)) {
+        m_stats.signatures_killed++;
+        delete da;
+        return true;
+      }
+    }
+
     return false;
   };
   annos.erase(std::remove_if(annos.begin(), annos.end(), fn), annos.end());
+}
+
+bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
+  if (!m_kill_bad_signatures) return false;
+  TRACE(ANNO, 3, "Examining @Signature instance %s\n", SHOW(da));
+  auto elems = da->anno_elems();
+  for (auto elem : elems) {
+    auto ev = elem.encoded_value;
+    if (ev->evtype() != DEVT_ARRAY) continue;
+    auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+    auto const& evs = arrayev->evalues();
+    for (auto strev : *evs) {
+      if (strev->evtype() != DEVT_STRING) continue;
+      auto sigstr = static_cast<DexEncodedValueString*>(strev)->string()->str();
+      always_assert(sigstr.length() > 0);
+      auto* sigcstr = sigstr.c_str();
+      // @Signature grammar is non-trivial[1], nevermind the fact that Signatures
+      // are broken up into arbitrary arrays of strings concatenated at runtime.
+      // It seems like types are reliably never broken apart, so we can usually
+      // find an entire type name in each DexEncodedValueString.
+      //
+      // We also crudely approximate that something looks like a typename in the
+      // first place since there's a lot of mark up in the @Signature grammar,
+      // e.g. formal type parameter names. We look for things that look like "L*/*",
+      // don't include ":" (formal type parameter separator), and may or may not
+      // end with a semicolon.
+      //
+      // I'm working on a C++ port of the AOSP generic signature parser so we can
+      // make this more robust in the future.
+      //
+      // [1] http://androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/reflect/GenericSignatureParser.java
+      if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
+        auto* sigtype = DexType::get_type(sigstr.c_str());
+        if (!sigtype) {
+          // Try with semicolon.
+          // TOOD: avoid wasting memory by needing to create a DexString here
+          auto sigstrsemi = sigstr+";";
+          sigtype = DexType::get_type(sigstrsemi.c_str());
+        }
+        if (sigtype) {
+          auto* sigcls = type_class(sigtype);
+          if (!sigcls) {
+            sigtype = nullptr;
+          } else if (!sigcls->is_external()) {
+            bool found = false;
+            for (auto cls : m_scope) {
+              if (cls == sigcls) {
+                // Valid class, we're good, go to element in array
+                found = true;
+                continue;
+              }
+            }
+            // Could not find the (non-external) class in Scope, so set signal to kill
+            if (!found) {
+              sigtype = nullptr;
+            }
+          }
+        }
+        if (!sigtype) {
+          TRACE(ANNO, 3, "Killing bad @Signature: %s\n", sigstr.c_str());
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 bool AnnoKill::kill_annotations() {
@@ -381,8 +488,10 @@ bool AnnoKill::kill_annotations() {
     if (!aset) {
       continue;
     }
+    auto& keep_list = m_anno_class_hierarchy_keep[clazz->get_type()];
+
     m_stats.class_asets++;
-    cleanup_aset(aset, referenced_annos);
+    cleanup_aset(aset, referenced_annos, keep_list);
     if (aset->size() == 0) {
       TRACE(ANNO,
             3,
@@ -508,7 +617,13 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  AnnoKill ak(scope, only_force_kill(), m_keep_annos, m_kill_annos, m_force_kill_annos);
+  AnnoKill ak(scope,
+              m_kill_bad_signatures,
+              only_force_kill(),
+              m_keep_annos,
+              m_kill_annos,
+              m_force_kill_annos,
+              m_class_hierarchy_keep_annos);
   bool classes_removed = ak.kill_annotations();
 
   if (classes_removed) {
@@ -556,6 +671,10 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
         3,
         "Total referenced System Annos: %d\n",
         stats.visibility_system_count);
+  TRACE(ANNO,
+        1,
+        "@Signatures Killed: %d\n",
+        stats.signatures_killed);
 
   mgr.incr_metric(METRIC_ANNO_KILLED, stats.annotations_killed);
   mgr.incr_metric(METRIC_ANNO_TOTAL, stats.annotations);
@@ -568,6 +687,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_METHODPARAM_ASETS_TOTAL, stats.method_param_asets);
   mgr.incr_metric(METRIC_FIELD_ASETS_CLEARED, stats.field_asets_cleared);
   mgr.incr_metric(METRIC_FIELD_ASETS_TOTAL, stats.field_asets);
+  mgr.incr_metric(METRIC_SIGNATURES_KILLED, stats.signatures_killed);
 }
 
 static AnnoKillPass s_pass;

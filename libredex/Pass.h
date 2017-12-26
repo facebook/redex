@@ -102,6 +102,38 @@ class PassConfig {
     }
   }
 
+  void get(
+           const char* name,
+           const std::unordered_map<std::string, std::vector<std::string>>& dflt,
+           std::unordered_map<std::string, std::vector<std::string>>& param
+           ) const {
+    auto cfg = m_config[name];
+    param.clear();
+    if (cfg == Json::nullValue) {
+      param = dflt;
+    } else {
+      if (!cfg.isObject()) {
+        throw std::runtime_error("Cannot convert JSON value to object: " + cfg.asString());
+      }
+      for (auto it = cfg.begin() ; it != cfg.end() ; ++it) {
+        auto key = it.key();
+        if (!key.isString()) {
+          throw std::runtime_error("Cannot convert JSON value to string: " + key.asString());
+        }
+        auto& val = *it;
+        if (!val.isArray()) {
+          throw std::runtime_error("Cannot convert JSON value to array: " + val.asString());
+        }
+        for (auto& str : val) {
+          if (!str.isString()) {
+            throw std::runtime_error("Cannot convert JSON value to string: " + str.asString());
+          }
+          param[key.asString()].push_back(str.asString());
+        }
+      }
+    }
+  }
+
   void get(const char* name, const Json::Value dflt, Json::Value& param) const {
     param = m_config.get(name, dflt);
   }

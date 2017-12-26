@@ -9,16 +9,17 @@
 
 #pragma once
 
+#include "dump-oat.h"
 #include "util.h"
 
 #include <native/museum/5.0.0/elf.h>
 
-#include <vector>
 #include <string>
+#include <vector>
 
 // Used for both the shstrtab and dynstr section.
 class ElfStringTable {
-public:
+ public:
   ElfStringTable() = default;
   UNCOPYABLE(ElfStringTable);
 
@@ -52,29 +53,25 @@ public:
     return ret;
   }
 
-  void finalize() {
-    finalized_ = true;
-  }
+  void finalize() { finalized_ = true; }
 
   const std::string& at(int idx) const;
 
-private:
+ private:
   bool finalized_ = false;
   std::vector<std::string> strings_;
 };
 
 // Used for writing the ELF packaging around an ART oat file.
 class ElfWriter {
-public:
+ public:
   explicit ElfWriter(OatVersion oat_version) : oat_version_(oat_version) {}
 
-  void build(InstructionSet isa,
-             Elf32_Word oat_size,
-             Elf32_Word bss_size);
+  void build(InstructionSet isa, Elf32_Word oat_size, Elf32_Word bss_size);
 
   void write(FileHandle& fh);
 
-private:
+ private:
   void build_dynstr_table();
 
   void add_empty_section_header();
@@ -99,17 +96,16 @@ private:
 
   uint32_t hash_dynsym(int sym_idx) const;
 
-  Elf32_Word add_section_header(
-    Elf32_Word str_idx,
-    Elf32_Word sh_type,
-    Elf32_Word sh_flags,
-    Elf32_Word addr,
-    Elf32_Word offset,
-    Elf32_Word size,
-    Elf32_Word link,
-    Elf32_Word info,
-    Elf32_Word align,
-    Elf32_Word entsize);
+  Elf32_Word add_section_header(Elf32_Word str_idx,
+                                Elf32_Word sh_type,
+                                Elf32_Word sh_flags,
+                                Elf32_Word addr,
+                                Elf32_Word offset,
+                                Elf32_Word size,
+                                Elf32_Word link,
+                                Elf32_Word info,
+                                Elf32_Word align,
+                                Elf32_Word entsize);
 
   OatVersion oat_version_;
 
