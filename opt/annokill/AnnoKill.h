@@ -46,9 +46,12 @@ class AnnoKill {
            const AnnoNames& keep,
            const AnnoNames& kill,
            const AnnoNames& force_kill,
-           const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos);
+           const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos,
+           const std::unordered_map<std::string, std::vector<std::string>>& annotated_keep_annos
+           );
 
   bool kill_annotations();
+  std::unordered_set<const DexType*> build_anno_keep(DexAnnotationSet* aset);
   bool should_kill_bad_signature(DexAnnotation* da);
   AnnoKillStats get_stats() const { return m_stats; }
 
@@ -80,6 +83,7 @@ class AnnoKill {
   std::map<std::string, size_t> m_runtime_anno_map;
   std::map<std::string, size_t> m_system_anno_map;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>> m_anno_class_hierarchy_keep;
+  std::unordered_map<const DexType*, std::unordered_set<const DexType*>> m_annotated_keep_annos;
 };
 
 class AnnoKillPass : public Pass {
@@ -94,6 +98,7 @@ class AnnoKillPass : public Pass {
     pc.get("kill_bad_signatures", false, m_kill_bad_signatures);
     std::unordered_map<std::string, std::vector<std::string>> dflt;
     pc.get("class_hierarchy_keep_annos", dflt, m_class_hierarchy_keep_annos);
+    pc.get("annotated_keep_annos", dflt, m_annotated_keep_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -105,5 +110,6 @@ class AnnoKillPass : public Pass {
   std::vector<std::string> m_kill_annos;
   std::vector<std::string> m_force_kill_annos;
   std::unordered_map<std::string, std::vector<std::string>> m_class_hierarchy_keep_annos;
+  std::unordered_map<std::string, std::vector<std::string>> m_annotated_keep_annos;
   bool m_kill_bad_signatures;
 };
