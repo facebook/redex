@@ -37,7 +37,9 @@ AnnoKill::AnnoKill(Scope& scope,
                    const AnnoNames& keep,
                    const AnnoNames& kill,
                    const AnnoNames& force_kill,
-                   const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos)
+                   const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos,
+                   const std::unordered_map<std::string, std::vector<std::string>>& annotated_keep_annos
+                   )
   : m_scope(scope), m_only_force_kill(only_force_kill), m_kill_bad_signatures(kill_bad_signatures) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
@@ -93,6 +95,14 @@ AnnoKill::AnnoKill(Scope& scope,
   for (auto it : m_anno_class_hierarchy_keep) {
     for (auto type : it.second) {
       TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s\n", it.first->get_name()->c_str(), type->get_name()->c_str());
+    }
+  }
+  // Populate anno keep map
+  for (auto it : annotated_keep_annos) {
+    auto* type = DexType::get_type(it.first.c_str());
+    for (auto& anno : it.second) {
+      auto* anno_type = DexType::get_type(anno.c_str());
+      m_annotated_keep_annos[type].insert(anno_type);
     }
   }
 }
@@ -477,6 +487,15 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
   return false;
 }
 
+std::unordered_set<const DexType*> AnnoKill::build_anno_keep(DexAnnotationSet* aset) {
+  std::unordered_set<const DexType*> keep_list;
+  for (const auto& anno : aset->get_annotations()) {
+    auto& keeps = m_annotated_keep_annos[anno->type()];
+    keep_list.insert(keeps.begin(), keeps.end());
+  }
+  return keep_list;
+}
+
 bool AnnoKill::kill_annotations() {
   const auto& referenced_annos = get_referenced_annos();
   if (!m_only_force_kill) {
@@ -488,7 +507,9 @@ bool AnnoKill::kill_annotations() {
     if (!aset) {
       continue;
     }
-    auto& keep_list = m_anno_class_hierarchy_keep[clazz->get_type()];
+    auto keep_list = build_anno_keep(aset);
+    auto& class_hier_keep_list = m_anno_class_hierarchy_keep[clazz->get_type()];
+    keep_list.insert(class_hier_keep_list.begin(), class_hier_keep_list.end());
 
     m_stats.class_asets++;
     cleanup_aset(aset, referenced_annos, keep_list);
@@ -507,7 +528,8 @@ bool AnnoKill::kill_annotations() {
     auto method_aset = method->get_anno_set();
     if (method_aset) {
       m_stats.method_asets++;
-      cleanup_aset(method_aset, referenced_annos);
+      auto keep_list = build_anno_keep(method_aset);
+      cleanup_aset(method_aset, referenced_annos, keep_list);
       if (method_aset->size() == 0) {
         TRACE(ANNO,
               3,
@@ -530,7 +552,8 @@ bool AnnoKill::kill_annotations() {
         if (param_aset->size() == 0) {
           continue;
         }
-        cleanup_aset(param_aset, referenced_annos);
+        auto keep_list = build_anno_keep(param_aset);
+        cleanup_aset(param_aset, referenced_annos, keep_list);
         if (param_aset->size() == 0) {
           continue;
         }
@@ -558,7 +581,8 @@ bool AnnoKill::kill_annotations() {
       return;
     }
     m_stats.field_asets++;
-    cleanup_aset(aset, referenced_annos);
+    auto keep_list = build_anno_keep(aset);
+    cleanup_aset(aset, referenced_annos, keep_list);
     if (aset->size() == 0) {
       TRACE(ANNO,
             3,
@@ -623,7 +647,8 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
               m_keep_annos,
               m_kill_annos,
               m_force_kill_annos,
-              m_class_hierarchy_keep_annos);
+              m_class_hierarchy_keep_annos,
+              m_annotated_keep_annos);
   bool classes_removed = ak.kill_annotations();
 
   if (classes_removed) {
