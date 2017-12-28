@@ -34,6 +34,17 @@ import pyredex.unpacker as unpacker
 from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs
 from pyredex.logger import log
 
+# See http://bugs.python.org/issue14315
+def patch_zip_file():
+    old_decode_extra = zipfile.ZipInfo._decodeExtra
+    def decodeExtra(self):
+        try:
+            old_decode_extra(self)
+        except struct.error:
+            pass
+    zipfile.ZipInfo._decodeExtra = decodeExtra
+patch_zip_file()
+
 timer = timeit.default_timer
 
 per_file_compression = {}
