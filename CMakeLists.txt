@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.1.0)
 project("Redex")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})
@@ -62,6 +62,7 @@ target_link_libraries(redex-all
         ${Boost_LIBRARIES}
         ${JSONCPP_LIBRARY}
         ${ZLIB_LIBRARIES}
+        Threads::Threads
         redex-lib
         resource
         )

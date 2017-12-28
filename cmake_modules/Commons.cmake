@@ -44,6 +44,9 @@ macro(add_dependent_packages_for_redex)
     find_package(ZLIB REQUIRED)
     print_dirs("${ZLIB_INCLUDE_DIRS}" "ZLIB_INCLUDE_DIRS")
     print_dirs("${ZLIB_LIBRARIES}" "ZLIB_LIBRARIES")
+
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
 endmacro()
 
 function(set_link_whole target_name lib_name)
