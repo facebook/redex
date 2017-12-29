@@ -25,7 +25,7 @@ include_directories(
         ${ZLIB_INCLUDE_DIRS}
         ${includes})
 
-file(GLOB_RECURSE redex_srcs
+file(GLOB_RECURSE redex_lib_srcs
         "libredex/*.cpp"
         "libredex/*.h"
         "opt/*.cpp"
@@ -35,7 +35,7 @@ file(GLOB_RECURSE redex_srcs
         "liblocator/*.h"
         )
 
-add_library(redex STATIC ${redex_srcs})
+add_library(redex-lib STATIC ${redex_lib_srcs})
 
 file(GLOB_RECURSE tool_srcs
         "tools/tool/*.cpp"
@@ -62,10 +62,19 @@ target_link_libraries(redex-all
         ${Boost_LIBRARIES}
         ${JSONCPP_LIBRARY}
         ${ZLIB_LIBRARIES}
-        redex
+        redex-lib
         resource
         )
 
 target_compile_definitions(redex-all PRIVATE)
 
-set_link_whole(redex-all redex)
+set_link_whole(redex-all redex-lib)
+
+add_custom_target(redex
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:redex-all> "${CMAKE_SOURCE_DIR}"
+        COMMAND "./bundle-redex.sh"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/redex" "${CMAKE_CURRENT_BINARY_DIR}/redex"
+        DEPENDS redex-all
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Packing redex-all into a bundle..."
+        )

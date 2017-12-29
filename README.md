@@ -80,7 +80,7 @@ sudo make install
 
 ### Experimental: CMake for Mac, Linux, and Windows
 
-Alternatively, build using CMake. Note that the current `CMakeLists.txt` only implements a rule for `redex-all` binary. We will support installation and testing soon.
+Alternatively, build using CMake. Note that the current `CMakeLists.txt` only implements rules for `redex-all` binary and `redex` package. We will support installation and testing soon.
 
 Generate build files. By default, it uses Makefile:
 ```
@@ -103,7 +103,7 @@ cmake .. -G "Visual Studio 15 2017 Win64"
  -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
 ```
 
-Build `redex-all`:
+Build `redex-all` and `redex`:
 
 ```
 cmake --build .
