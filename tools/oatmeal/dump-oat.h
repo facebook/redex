@@ -16,6 +16,7 @@
 #include <vector>
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
+constexpr uint32_t kVdexMagicNum = 0x78656476;
 
 enum class OatVersion : uint32_t {
   UNKNOWN = 0,
@@ -25,7 +26,14 @@ enum class OatVersion : uint32_t {
   V_067 = 0x00373630, // 6.0, api level 23
   V_079 = 0x00393730, // 7.0, api level 24
   V_088 = 0x00383830, // 7.1, api level 25
-  V_124 = 0x00343231 // 8.0, api level 26
+  V_124 = 0x00343231, // 8.0, api level 26
+  V_131 = 0x00313331 // 8.1, api level 27
+};
+
+enum class VdexVersion : uint32_t {
+  UNKNOWN = 0,
+  V_006 = 0x00363030, // 8.0, api level 26
+  V_010 = 0x00303130 // 8.1, api level 27
 };
 
 struct DexInput {

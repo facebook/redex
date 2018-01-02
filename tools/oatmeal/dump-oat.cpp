@@ -39,6 +39,17 @@ namespace {
 // 'created_by_oatmeal'.
 const char* kCreatedByOatmeal = "86827de6f1ef3407f8dc98b76382d3a6e0759ab3";
 
+VdexVersion vdexVersion(OatVersion oat_version) {
+  switch (oat_version) {
+  case OatVersion::V_124:
+    return VdexVersion::V_006;
+  case OatVersion::V_131:
+    return VdexVersion::V_010;
+  default:
+    return VdexVersion::UNKNOWN;
+  }
+}
+
 OatVersion versionInt(const std::string& version_str) {
   if (version_str == "039") {
     return OatVersion::V_039;
@@ -54,6 +65,8 @@ OatVersion versionInt(const std::string& version_str) {
     return OatVersion::V_088;
   } else if (version_str == "124") {
     return OatVersion::V_124;
+  } else if (version_str == "131") {
+    return OatVersion::V_131;
   } else {
     CHECK(false, "Bad version %s", version_str.c_str());
   }
@@ -171,6 +184,7 @@ struct PACKED OatHeader {
   InstructionSet instruction_set = InstructionSet::kNone;
   uint32_t instruction_set_features_bitmap = 0;
   uint32_t dex_file_count = 0;
+  uint32_t oat_dex_files_offset = 0; // Only on API 27
   uint32_t executable_offset = 0;
   uint32_t interpreter_to_interpreter_bridge_offset = 0;
   uint32_t interpreter_to_compiled_code_bridge_offset = 0;
@@ -198,9 +212,16 @@ struct PACKED OatHeader {
 
   static size_t size(OatVersion version) {
     if (version == OatVersion::V_039 || version == OatVersion::V_045) {
-      return sizeof(OatHeader);
-    } else {
+      // Subtract the size of oat_dex_files_offset which is only present
+      // in API 27.
+      return sizeof(OatHeader) - 1 * sizeof(uint32_t);
+    } else if (version == OatVersion::V_131) {
+      // Minus the 3 fields that are not present in 064 and above.
       return sizeof(OatHeader) - 3 * sizeof(uint32_t);
+    } else {
+      // Minus the 3 fields not in 064 and oat_dex_files_offset which only
+      // shows up in 131.
+      return sizeof(OatHeader) - 4 * sizeof(uint32_t);
     }
   }
 
@@ -218,6 +239,11 @@ struct PACKED OatHeader {
     READ_WORD(&header.instruction_set, ptr);
     READ_WORD(&header.instruction_set_features_bitmap, ptr);
     READ_WORD(&header.dex_file_count, ptr);
+
+    if (header.common.version == static_cast<uint32_t>(OatVersion::V_131)) {
+      READ_WORD(&header.oat_dex_files_offset, ptr);
+    }
+
     READ_WORD(&header.executable_offset, ptr);
     READ_WORD(&header.interpreter_to_interpreter_bridge_offset, ptr);
     READ_WORD(&header.interpreter_to_compiled_code_bridge_offset, ptr);
@@ -250,6 +276,11 @@ struct PACKED OatHeader {
     write_word(fh, static_cast<uint32_t>(instruction_set));
     write_word(fh, instruction_set_features_bitmap);
     write_word(fh, dex_file_count);
+
+    if (common.version == static_cast<uint32_t>(OatVersion::V_131)) {
+      write_word(fh, oat_dex_files_offset);
+    }
+
     write_word(fh, executable_offset);
     write_word(fh, interpreter_to_interpreter_bridge_offset);
     write_word(fh, interpreter_to_compiled_code_bridge_offset);
@@ -845,12 +876,33 @@ class DexFileListing_124 : public DexFileListing_079 {
   DexFileListing_124(int numDexFiles, ConstBuffer buf)
       : DexFileListing_079(numDexFiles, buf) {
     CHECK(numDexFiles <= 1,
-          "For V124 we only support one dex per odex/vdex pair");
+          "For V124/V131 we only support one dex per odex/vdex pair");
   }
 
   static std::vector<DexFile_124> build(const std::vector<DexInput>& dexes,
                                         uint32_t& next_offset,
                                         bool samsung_mode);
+};
+
+// Shows up only in API 27
+struct OatDexFileRecord {
+  OatDexFileRecord() = default;
+  OatDexFileRecord(uint32_t loc_size,
+                   const std::string& location,
+                   uint32_t file_checksum,
+                   uint32_t file_offset)
+      : location_size(loc_size),
+        location_data(location),
+        dex_file_checksum(file_checksum),
+        dex_file_offset(file_offset) {}
+
+  uint32_t location_size;
+  std::string location_data;
+  uint32_t dex_file_checksum;
+  uint32_t dex_file_offset;
+
+  static OatDexFileRecord build(const DexInput& dex, uint32_t& next_offset);
+  static void write(FileHandle& oat_fh, const OatDexFileRecord& record);
 };
 
 // Dex File listing for OAT versions 064 and 045.
@@ -2096,7 +2148,7 @@ class OatFile_079 : public OatFile {
   size_t oat_offset_;
 };
 
-// OatFile format for 124.
+// OatFile format for 124/V131
 // Key difference is the parsing of OAT and DEX has to be done in different
 // files instead on a single everything.oat file.
 class OatFile_124 : public OatFile {
@@ -2110,8 +2162,8 @@ class OatFile_124 : public OatFile {
                                         const std::vector<DexInput>& dexes) {
     if (dexes.size() != 1) {
       fprintf(stderr,
-              "V124 odex files must come accompained with one and only one "
-              "vdex file\n");
+              "V124/V131 odex files must come accompained with one and only "
+              "one vdex file\n");
       return nullptr;
     }
 
@@ -2398,6 +2450,7 @@ static std::unique_ptr<OatFile> parse_oatfile_impl(
     // 079 and 088 are the same as far as I can tell.
     return OatFile_079::parse(dex_files_only, oatfile_buffer, oat_offset);
   case OatVersion::V_124:
+  case OatVersion::V_131:
     return OatFile_124::parse(
         dex_files_only, oatfile_buffer, oat_offset, dexes);
   case OatVersion::UNKNOWN:
@@ -2679,6 +2732,25 @@ std::vector<DexFileListing_124::DexFile_124> DexFileListing_124::build(
   return dex_files;
 }
 
+OatDexFileRecord OatDexFileRecord::build(const DexInput& dex,
+                                         uint32_t& next_offset) {
+  auto dex_location = dex.location;
+  OatDexFileRecord record(
+      static_cast<uint32_t>(dex_location.size()), dex_location, 0x0, 0x0);
+  return record;
+}
+
+void OatDexFileRecord::write(FileHandle& oat_fh,
+                             const OatDexFileRecord& record) {
+  write_word(oat_fh, record.location_size);
+  auto buf =
+      ConstBuffer{reinterpret_cast<const char*>(record.location_data.data()),
+                  record.location_size};
+  write_buf(oat_fh, buf);
+  write_word(oat_fh, record.dex_file_checksum);
+  write_word(oat_fh, record.dex_file_offset);
+}
+
 template <typename DexFileListingType>
 void write_dex_files(const std::vector<DexInput>& dex_input,
                      const std::vector<DexFileListingType>& dex_files,
@@ -2866,16 +2938,14 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
 }
 
 void write_vdex_header(FileHandle& fh,
+                       VdexVersion vdex_version,
                        uint32_t num_dex_files,
                        uint32_t dex_size,
                        uint32_t verifier_deps_size,
                        uint32_t quickening_info_size,
                        uint32_t vdex_checksum) {
-  constexpr uint8_t kVdexMagic[] = {'v', 'd', 'e', 'x'};
-  constexpr uint8_t kVdexVersion[] = {'0', '0', '6', '\0'};
-
-  write_obj(fh, kVdexMagic);
-  write_obj(fh, kVdexVersion);
+  write_word(fh, kVdexMagicNum);
+  write_word(fh, static_cast<uint32_t>(vdex_version));
   write_word(fh, num_dex_files);
   write_word(fh, dex_size);
   write_word(fh, verifier_deps_size);
@@ -2883,12 +2953,13 @@ void write_vdex_header(FileHandle& fh,
   write_word(fh, vdex_checksum);
 }
 
-OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
-                                     const DexInput& dex_input,
-                                     InstructionSet isa,
-                                     bool write_elf,
-                                     const std::string& art_image_location,
-                                     bool samsung_mode) {
+OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
+                                      OatVersion oat_version,
+                                      const DexInput& dex_input,
+                                      InstructionSet isa,
+                                      bool write_elf,
+                                      const std::string& art_image_location,
+                                      bool samsung_mode) {
   const std::vector<KeyValueStore::KeyValue> key_value = {
       {"classpath", ""},
       {"compiler-filter", "assume-verified"},
@@ -2913,18 +2984,22 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
       DexFileListing_124::compute_size(single_dex_input, samsung_mode);
 
   // Neither the keyvalue store or the DexFileListing require alignment.
-  uint32_t next_offset = align<4>(OatHeader::size(OatVersion::V_124) +
-                                  +keyvalue_size + dex_file_listing_size);
+  uint32_t next_offset = align<4>(OatHeader::size(oat_version) + keyvalue_size +
+                                  dex_file_listing_size);
 
   auto dex_files =
       DexFileListing_124::build(single_dex_input, next_offset, samsung_mode);
+
+  OatDexFileRecord dex_file_record;
+  uint32_t oat_dex_files_offset = 0;
+  if (oat_version == OatVersion::V_131) {
+    oat_dex_files_offset = next_offset;
+    dex_file_record = OatDexFileRecord::build(dex_input, next_offset);
+  }
+
   auto oat_size = align<0x1000>(next_offset);
-  auto header = build_header(OatVersion::V_124,
-                             single_dex_input,
-                             isa,
-                             keyvalue_size,
-                             oat_size,
-                             nullptr);
+  auto header = build_header(
+      oat_version, single_dex_input, isa, keyvalue_size, oat_size, nullptr);
 
   printf("Oat Size: %u\n", oat_size);
 
@@ -2939,6 +3014,11 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
     write_padding(oat_fh, 0, 0x1000);
     oat_fh.set_seek_reference_to_fpos();
     oat_fh.reset_bytes_written();
+  }
+
+  if (oat_version == OatVersion::V_131) {
+    CHECK(oat_dex_files_offset != 0, "OatDexFiles offset can't be zero");
+    header.oat_dex_files_offset = oat_dex_files_offset;
   }
 
   header.write(oat_fh);
@@ -2960,7 +3040,7 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
   }
 
   CHECK(oat_file_name.substr(oat_file_name.size() - 5) == std::string(".odex"),
-        "V124 Oatmeal should generate .odex files");
+        "V124/V131 Oatmeal should generate .odex files");
 
   auto vdex_file_name =
       oat_file_name.substr(0, oat_file_name.size() - 4) + std::string("vdex");
@@ -2984,7 +3064,8 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
 
   auto vdex_fh = FileHandle(fopen(vdex_file_name.c_str(), "w"));
 
-  write_vdex_header(vdex_fh, 1, dex_file_size, 0, 0, dex_checksum);
+  write_vdex_header(
+      vdex_fh, vdexVersion(oat_version), 1, dex_file_size, 0, 0, dex_checksum);
 
   stream_file(dex_fh, vdex_fh);
 
@@ -2992,11 +3073,16 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
 
   LookupTables::write(single_dex_input, dex_files, oat_fh);
 
-  // Pad with 0s up to oat_size
-  // write_padding(oat_fh, 0, oat_size - oat_fh.bytes_written());
+  if (oat_version == OatVersion::V_131) {
+    dex_file_record.dex_file_checksum = dex_checksum;
+    // Advance past the VDEX header plus the DEX file checksum inside the .vdex
+    // file.
+    dex_file_record.dex_file_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
+  }
+
+  OatDexFileRecord::write(oat_fh, dex_file_record);
 
   ////////// Update header with final checksum.
-
   CHECK(oat_fh.seek_begin());
 
   // Note: So far, I can't replicate the checksum computation done by
@@ -3013,7 +3099,7 @@ OatFile::Status build_v124_vdex_odex(const std::string& oat_file_name,
     oat_fh.set_seek_reference(0);
     oat_fh.seek_begin();
 
-    ElfWriter section_headers(OatVersion::V_124);
+    ElfWriter section_headers(oat_version);
     section_headers.build(
         isa, oat_size, compute_bss_size_079(single_dex_input));
     section_headers.write(oat_fh);
@@ -3029,7 +3115,7 @@ OatFile::Status build_oatfile<DexFileListing_124,
                               SamsungLookupTablesNil>(
     const std::string& oat_file_name,
     const std::vector<DexInput>& dex_input,
-    const OatVersion,
+    const OatVersion oat_version,
     InstructionSet isa,
     bool write_elf,
     const std::string& art_image_location,
@@ -3044,14 +3130,24 @@ OatFile::Status build_oatfile<DexFileListing_124,
     auto odex_file_name = dex.filename.substr(found);
     odex_file_name.erase(odex_file_name.size() - 3);
     odex_file_name = oat_file_name + odex_file_name + std::string("odex");
-    auto partial_result = build_v124_vdex_odex(
-        odex_file_name, dex, isa, write_elf, art_image_location, samsung_mode);
+
+    CHECK(oat_version == OatVersion::V_124 || oat_version == OatVersion::V_131,
+          "must not build vdex/odex pairs for non-Oreo builds");
+
+    auto partial_result = build_vdex_odex_pairs(odex_file_name,
+                                                oat_version,
+                                                dex,
+                                                isa,
+                                                write_elf,
+                                                art_image_location,
+                                                samsung_mode);
+
     if (partial_result != OatFile::Status::BUILD_SUCCESS) {
-      fprintf(
-          stderr,
-          "Building V124 ODEX/VDEX pair failed for DEX input: %s, Result: %d\n",
-          dex.filename.c_str(),
-          static_cast<int>(partial_result));
+      fprintf(stderr,
+              "Building V124/V131 ODEX/VDEX pair failed for DEX input: %s, "
+              "Result: %d\n",
+              dex.filename.c_str(),
+              static_cast<int>(partial_result));
       result = partial_result;
     }
   }
@@ -3150,6 +3246,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 art_image_location,
                                 samsung_mode);
     case OatVersion::V_124:
+    case OatVersion::V_131:
       return OatFile_124::build(oat_file_name,
                                 dexes,
                                 version,
