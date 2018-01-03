@@ -63,6 +63,7 @@ class MultiMethodInliner {
  public:
   struct Config {
     bool throws_inline;
+    bool enforce_method_size_limit{true};
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
     std::unordered_set<DexType*> whitelist_no_method_limit;

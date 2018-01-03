@@ -314,6 +314,10 @@ bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
 bool MultiMethodInliner::caller_too_large(DexType* caller_type,
                                           size_t estimated_insn_size,
                                           const DexMethod* callee) {
+  if (!m_config.enforce_method_size_limit) {
+    return false;
+  }
+
   if (m_config.whitelist_no_method_limit.count(caller_type)) {
     return false;
   }
