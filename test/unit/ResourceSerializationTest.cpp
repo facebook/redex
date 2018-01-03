@@ -28,11 +28,13 @@ void assert_u16_string(std::u16string actual_str, std::string expected) {
 TEST(ResStringPool, AppendToEmptyTable) {
   const size_t header_size = sizeof(android::ResStringPool_header);
   android::ResStringPool_header header = {
-      {0x0001, header_size, header_size},
+      {htods(android::RES_STRING_POOL_TYPE),
+       htods(header_size),
+       htodl(header_size)},
       0,
       0,
-      android::ResStringPool_header::UTF8_FLAG |
-          android::ResStringPool_header::SORTED_FLAG,
+      htodl(android::ResStringPool_header::UTF8_FLAG |
+            android::ResStringPool_header::SORTED_FLAG),
       0,
       0};
   android::ResStringPool pool((void*)&header, header_size, false);
@@ -50,7 +52,7 @@ TEST(ResStringPool, AppendToEmptyTable) {
   android::ResStringPool after(data, v.size(), false);
 
   // Ensure sort bit was cleared.
-  auto flags = ((android::ResStringPool_header*)data)->flags;
+  auto flags = dtohl(((android::ResStringPool_header*)data)->flags);
   ASSERT_FALSE(flags & android::ResStringPool_header::SORTED_FLAG);
 
   size_t out_len;
