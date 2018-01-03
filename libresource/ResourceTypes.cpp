@@ -469,6 +469,10 @@ void ResStringPool::appendString(String8 s) {
   mAppendedStrings.push_back(s);
 }
 
+size_t ResStringPool::appendedStringCount() {
+  return mAppendedStrings.size();
+}
+
 void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
   LOG_FATAL_IF(
     mHeader->styleCount > 0,
@@ -3279,7 +3283,13 @@ struct ResTable::Package
             push_short(cVec, package->name[i]);
         }
         push_long(cVec, header_size); // type strings start (skip over header)
-        push_long(cVec, package->lastPublicType);
+        auto last_public_type = dtohl(package->lastPublicType);
+        // If 0 types are marked as public, keep the count at 0 regardless of
+        // any appended types.
+        if (last_public_type > 0) {
+          last_public_type += typeStrings.appendedStringCount();
+        }
+        push_long(cVec, last_public_type);
         push_long(cVec, header_size + typestr_size); // key strings start
         push_long(cVec, package->lastPublicKey);
         push_long(cVec, package->typeIdOffset);
