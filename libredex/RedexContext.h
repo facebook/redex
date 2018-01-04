@@ -16,6 +16,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
@@ -135,4 +136,46 @@ struct RedexContext {
   const std::vector<const DexType*> m_empty_types;
 
   bool m_next_release_gate{false};
+};
+
+class malformed_dex : public std::exception {
+ public:
+  malformed_dex(const std::string& class_name,
+                const std::string& dex_1,
+                const std::string& dex_2)
+      : m_class_name(class_name),
+        m_dex_1(dex_1),
+        m_dex_2(dex_2),
+        m_msg(make_msg(class_name, dex_1, dex_2)) {}
+
+  virtual const char* what() const throw() { return m_msg.c_str(); }
+
+  const std::string m_class_name;
+  const std::string m_dex_1;
+  const std::string m_dex_2;
+
+ private:
+  const std::string m_msg;
+
+  std::string make_msg(const std::string& class_name,
+                       const std::string& dex_1,
+                       const std::string& dex_2) {
+    std::ostringstream oss;
+    oss << "Found duplicate class in two different dex files. Class "
+        << m_class_name;
+
+    return oss.str();
+  }
+};
+
+// One or more exceptions
+class aggregate_exception : public std::exception {
+ public:
+  explicit aggregate_exception(const std::vector<std::exception_ptr>& exns)
+      : m_exceptions(exns) {}
+
+  // We do not really want to have this called directly
+  virtual const char* what() const throw() { return "one or more exception"; }
+
+  const std::vector<std::exception_ptr> m_exceptions;
 };

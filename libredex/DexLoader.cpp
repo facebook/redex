@@ -17,6 +17,10 @@
 #include "Walkers.h"
 #include "WorkQueue.h"
 
+#include <exception>
+#include <stdexcept>
+#include <vector>
+
 class DexLoader {
   DexIdx* m_idx;
   const dex_class_def* m_class_defs;
@@ -51,8 +55,29 @@ struct class_load_work {
   int num;
 };
 
-static void class_work(class_load_work* clw) {
-  clw->dl->load_dex_class(clw->num);
+static std::vector<std::exception_ptr> class_work(class_load_work* clw) {
+  try {
+    clw->dl->load_dex_class(clw->num);
+    return {}; // no exception
+  } catch (const std::exception& exc) {
+    TRACE(MAIN, 1, "Worker throw the exception:%s\n", exc.what());
+
+    return {std::current_exception()};
+  }
+}
+
+static std::vector<std::exception_ptr> exc_reducer(
+    const std::vector<std::exception_ptr>& v1,
+    const std::vector<std::exception_ptr>& v2) {
+  if (v1.empty()) {
+    return v2;
+  } else if (v2.empty()) {
+    return v1;
+  } else {
+    std::vector<std::exception_ptr> result (v1);
+    result.insert(result.end(), v2.begin(), v2.end());
+    return result;
+  }
 }
 
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
@@ -169,14 +194,22 @@ DexClasses DexLoader::load_dex(const char* location, dex_stats_t* stats) {
   m_classes = &classes;
 
   auto lwork = new class_load_work[dh->class_defs_size];
-  auto wq = workqueue_foreach<class_load_work*>(class_work);
+  auto wq =
+      workqueue_mapreduce<class_load_work*, std::vector<std::exception_ptr>>(
+        class_work, exc_reducer);
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;
     wq.add_item(&lwork[i]);
   }
-  wq.run_all();
+  const auto exceptions = wq.run_all();
   delete[] lwork;
+
+  if (!exceptions.empty()) {
+    // At least one of the workers raised an exception
+    aggregate_exception ae(exceptions);
+    throw ae;
+  }
 
   gather_input_stats(stats, dh);
 
@@ -200,7 +233,9 @@ DexClasses load_classes_from_dex(const char* location, bool balloon) {
   return load_classes_from_dex(location, &stats, balloon);
 }
 
-DexClasses load_classes_from_dex(const char* location, dex_stats_t* stats, bool balloon) {
+DexClasses load_classes_from_dex(const char* location,
+                                 dex_stats_t* stats,
+                                 bool balloon) {
   TRACE(MAIN, 1, "Loading classes from dex from %s\n", location);
   DexLoader dl(location);
   auto classes = dl.load_dex(location, stats);
