@@ -21,6 +21,11 @@
 #include "Match.h"
 #include "WorkQueue.h"
 
+/**
+ * This code usually runs on a processor with Hyperthreading, where the number
+ * of physical cores is half the number of logical cores. Setting num_threads
+ * to that number often gets us good results, so that's the default.
+ */
 inline unsigned int walkers_default_num_threads() {
   unsigned int threads = std::thread::hardware_concurrency() / 2;
   return std::max(1u, threads);
@@ -30,10 +35,6 @@ inline unsigned int walkers_default_num_threads() {
  * Walk all methods of all classes defined in 'scope' calling back
  * the walker function in parallel.  Make sure all global
  * information needed is copied locally per thread using DataInitializerFn.
- *
- * This code usually runs on a processor with Hyperthreading, where the number
- * of physical cores is half the number of logical cores. Setting num_threads
- * to that number often gets us good results, so that's the default.
  */
 template <class Data,
           class Output,
@@ -74,7 +75,9 @@ Output walk_methods_parallel(
 // The simple version. Call `walker` on all methods in `scope` in parallel.
 template <class Scope>
 void walk_methods_parallel_simple(
-    const Scope& scope, const std::function<void(DexMethod*)>& walker) {
+    const Scope& scope,
+    const std::function<void(DexMethod*)>& walker,
+    size_t num_threads = walkers_default_num_threads()) {
   walk_methods_parallel<std::nullptr_t, std::nullptr_t, Scope>(
       scope,
       [&walker](std::nullptr_t, DexMethod* m) {
@@ -82,5 +85,7 @@ void walk_methods_parallel_simple(
         return nullptr;
       },
       [](std::nullptr_t, std::nullptr_t) { return nullptr; },
-      [](int) { return nullptr; });
+      [](int) { return nullptr; },
+      nullptr,
+      num_threads);
 }
