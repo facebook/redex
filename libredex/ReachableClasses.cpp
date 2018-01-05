@@ -19,9 +19,11 @@
 #include "Walkers.h"
 #include "DexClass.h"
 #include "Match.h"
+#include "ParallelWalkers.h"
 #include "RedexResources.h"
 #include "SimpleReflectionAnalysis.h"
 #include "StringUtil.h"
+#include "Timer.h"
 
 namespace {
 
@@ -89,69 +91,103 @@ void analyze_reflection(const Scope& scope) {
   const auto ATOMIC_LONG_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
   const auto ATOMIC_REF_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
-  std::map<std::string, std::map<std::string, ReflectionType>> refls;
-  refls[JAVA_LANG_CLASS]["getField"] = GET_FIELD;
-  refls[JAVA_LANG_CLASS]["getDeclaredField"] = GET_DECLARED_FIELD;
-  refls[JAVA_LANG_CLASS]["getMethod"] = GET_METHOD;
-  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
-  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
-  refls[ATOMIC_INT_FIELD_UPDATER]["newUpdater"]  = INT_UPDATER;
-  refls[ATOMIC_LONG_FIELD_UPDATER]["newUpdater"]  = LONG_UPDATER;
-  refls[ATOMIC_REF_FIELD_UPDATER]["newUpdater"]  = REF_UPDATER;
+  const std::unordered_map<std::string,
+                           std::unordered_map<std::string, ReflectionType>>
+      refls = {
+          {JAVA_LANG_CLASS,
+           {
+               {"getField", GET_FIELD},
+               {"getDeclaredField", GET_DECLARED_FIELD},
+               {"getMethod", GET_METHOD},
+               {"getDeclaredMethod", GET_DECLARED_METHOD},
+           }},
+          {ATOMIC_INT_FIELD_UPDATER,
+           {
+               {"newUpdater", INT_UPDATER},
+           }},
+          {ATOMIC_LONG_FIELD_UPDATER,
+           {
+               {"newUpdater", LONG_UPDATER},
+           }},
+          {ATOMIC_REF_FIELD_UPDATER,
+           {
+               {"newUpdater", REF_UPDATER},
+           }},
+      };
 
-  walk_methods(scope, [&](DexMethod* method) {
+  Timer t("walk_methods in analyze_reflection");
+  walk_methods_parallel_simple(scope, [&refls](DexMethod* method) {
       if (!method->get_code()) return;
-      SimpleReflectionAnalysis analysis(method);
+      std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
       for (auto& mie : InstructionIterable(method->get_code())) {
         IRInstruction* insn = mie.insn;
-        if (!insn->has_method() || !is_invoke(insn->opcode())) continue;
+        if (!is_invoke(insn->opcode())) {
+          continue;
+        }
+
         // See if it matches something in refls
         auto& method_name = insn->get_method()->get_name()->str();
         auto& method_class_name = insn->get_method()->get_class()->get_name()->str();
-        if (refls.find(method_class_name) != refls.end() &&
-            refls[method_class_name].find(method_name) != refls[method_class_name].end()) {
-          ReflectionType refl_type = refls[method_class_name][method_name];
-          int arg_cls_idx = 0;
-          int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
-          auto arg_cls = analysis.get_abstract_object(insn->src(arg_cls_idx), insn);
-          auto arg_str = analysis.get_abstract_object(insn->src(arg_str_idx), insn);
-          if ((arg_cls && arg_cls->kind == AbstractObjectKind::CLASS) &&
-              (arg_str && arg_str->kind == AbstractObjectKind::STRING)) {
-            TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %d %s %s\n",
-                  insn->get_method()->get_name()->str().c_str(),
-                  refl_type,
-                  method_class_name.c_str(),
-                  method_name.c_str(),
-                  arg_cls->kind, SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
-                  arg_str->kind, SHOW(arg_str->dex_type), SHOW(arg_str->dex_string)
-                  );
-          switch (refl_type) {
-            case GET_FIELD:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case GET_DECLARED_FIELD:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, false);
-              break;
-            case GET_METHOD:
-              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case GET_DECLARED_METHOD:
-              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, false);
-              break;
-            case INT_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case LONG_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case REF_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            }
+        auto method_map = refls.find(method_class_name);
+        if (method_map == refls.end()) {
+          continue;
+        }
+
+        auto refl_entry = method_map->second.find(method_name);
+        if (refl_entry == method_map->second.end()) {
+          continue;
+        }
+
+        ReflectionType refl_type = refl_entry->second;
+        int arg_cls_idx = 0;
+        int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
+
+        // Instantiating the analysis object also runs the reflection analysis
+        // on the method. So, we wait until we're sure we need it.
+        // We use a unique_ptr so that we'll still only have one per method.
+        if (!analysis) {
+          analysis = std::make_unique<SimpleReflectionAnalysis>(method);
+        }
+
+        auto arg_cls = analysis->get_abstract_object(insn->src(arg_cls_idx), insn);
+        auto arg_str = analysis->get_abstract_object(insn->src(arg_str_idx), insn);
+        if ((arg_cls && arg_cls->kind == AbstractObjectKind::CLASS) &&
+            (arg_str && arg_str->kind == AbstractObjectKind::STRING)) {
+          TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %d %s %s\n",
+                insn->get_method()->get_name()->str().c_str(),
+                refl_type,
+                method_class_name.c_str(),
+                method_name.c_str(),
+                arg_cls->kind, SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
+                arg_str->kind, SHOW(arg_str->dex_type), SHOW(arg_str->dex_string)
+                );
+        switch (refl_type) {
+          case GET_FIELD:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case GET_DECLARED_FIELD:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, false);
+            break;
+          case GET_METHOD:
+            blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case GET_DECLARED_METHOD:
+            blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, false);
+            break;
+          case INT_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case LONG_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case REF_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
           }
         }
       }
-    });
+    }
+  );
 }
 
 template<typename DexMember>
@@ -340,6 +376,7 @@ void init_permanently_reachable_classes(
   const Json::Value& config,
   const std::unordered_set<DexType*>& no_optimizations_anno
 ) {
+  Timer t("init perm reachable");
   PassConfig pc(config);
 
   auto match = std::make_tuple(
@@ -351,23 +388,26 @@ void init_permanently_reachable_classes(
                            m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
                        m::has_n_args(1)));
 
-  walk_matching_opcodes(
-      scope,
-      match,
-      [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
-        auto const_string = insns[0];
-        auto move_result_pseudo = insns[1];
-        auto invoke_static = insns[2];
-        // Make sure that the registers agree
-        if (move_result_pseudo->dest() == invoke_static->src(0)) {
-          auto classname = JavaNameUtil::external_to_internal(
-              const_string->get_string()->c_str());
-          TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
-                const_string->get_string()->c_str(),
-                classname.c_str());
-          mark_reachable_by_classname(classname, true);
-        }
-      });
+  {
+    Timer t_walk("walk matching in perm reachable");
+    walk_matching_opcodes(
+        scope,
+        match,
+        [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
+          auto const_string = insns[0];
+          auto move_result_pseudo = insns[1];
+          auto invoke_static = insns[2];
+          // Make sure that the registers agree
+          if (move_result_pseudo->dest() == invoke_static->src(0)) {
+            auto classname = JavaNameUtil::external_to_internal(
+                const_string->get_string()->c_str());
+            TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
+                  const_string->get_string()->c_str(),
+                  classname.c_str());
+            mark_reachable_by_classname(classname, true);
+          }
+        });
+  }
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
