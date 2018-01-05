@@ -22,7 +22,6 @@
 #include "RedexResources.h"
 #include "SimpleReflectionAnalysis.h"
 #include "StringUtil.h"
-#include "Timer.h"
 #include "Walkers.h"
 
 namespace {
@@ -115,7 +114,6 @@ void analyze_reflection(const Scope& scope) {
            }},
       };
 
-  Timer t("walk_methods in analyze_reflection");
   walk::parallel::code(scope, [&refls](DexMethod* method, IRCode& code) {
       std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
       for (auto& mie : InstructionIterable(code)) {
@@ -375,7 +373,6 @@ void init_permanently_reachable_classes(
   const Json::Value& config,
   const std::unordered_set<DexType*>& no_optimizations_anno
 ) {
-  Timer t("init perm reachable");
   PassConfig pc(config);
 
   auto match = std::make_tuple(
@@ -387,26 +384,25 @@ void init_permanently_reachable_classes(
                            m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
                        m::has_n_args(1)));
 
-  {
-    Timer t_walk("walk matching in perm reachable");
-    walk::matching_opcodes(
-        scope,
-        match,
-        [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
-          auto const_string = insns[0];
-          auto move_result_pseudo = insns[1];
-          auto invoke_static = insns[2];
-          // Make sure that the registers agree
-          if (move_result_pseudo->dest() == invoke_static->src(0)) {
-            auto classname = JavaNameUtil::external_to_internal(
-                const_string->get_string()->c_str());
-            TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
-                  const_string->get_string()->c_str(),
-                  classname.c_str());
-            mark_reachable_by_classname(classname, true);
-          }
-        });
-  }
+  walk::parallel::matching_opcodes(
+      scope,
+      match,
+      [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
+        auto const_string = insns[0];
+        auto move_result_pseudo = insns[1];
+        auto invoke_static = insns[2];
+        // Make sure that the registers agree
+        if (move_result_pseudo->dest() == invoke_static->src(0)) {
+          auto classname = JavaNameUtil::external_to_internal(
+              const_string->get_string()->c_str());
+          TRACE(PGR,
+                4,
+                "Found Class.forName of: %s, marking %s reachable\n",
+                const_string->get_string()->c_str(),
+                classname.c_str());
+          mark_reachable_by_classname(classname, true);
+        }
+      });
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
