@@ -51,7 +51,6 @@ class LivenessFixpointIterator final
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       current_state->add(insn->src(i));
     }
-    always_assert(!opcode::has_range(insn->opcode()));
   }
 
   LivenessDomain get_live_in_vars_at(const NodeId& block) const {

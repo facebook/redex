@@ -10,7 +10,7 @@
 #include "PointsToSemanticsUtils.h"
 
 #include "DexClass.h"
-#include "DexOpcode.h"
+#include "IROpcode.h"
 #include "Resolver.h"
 
 bool PointsToSemanticsUtils::is_primitive_type_class_object_retrieval(

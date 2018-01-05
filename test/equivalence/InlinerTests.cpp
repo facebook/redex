@@ -110,7 +110,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     cls->add_method(m_callee);
   }
 
-  virtual DexOpcode if_op() = 0;
+  virtual IROpcode if_op() = 0;
 
   void build_method(DexMethod* m) override {
     using namespace dex_asm;
@@ -158,9 +158,7 @@ class InlinerTestLargeIfOffsetTrueBranch : public InlinerTestLargeIfOffset {
     return "InlinerTestLargeIfOffsetTrueBranch";
   }
 
-  virtual DexOpcode if_op() {
-    return OPCODE_IF_NEZ;
-  }
+  virtual IROpcode if_op() { return OPCODE_IF_NEZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetTrueBranch);
@@ -171,9 +169,7 @@ class InlinerTestLargeIfOffsetFalseBranch : public InlinerTestLargeIfOffset {
     return "InlinerTestLargeIfOffsetFalseBranch";
   }
 
-  virtual DexOpcode if_op() {
-    return OPCODE_IF_EQZ;
-  }
+  virtual IROpcode if_op() { return OPCODE_IF_EQZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetFalseBranch);

@@ -14,14 +14,14 @@
 
 #include "ControlFlow.h"
 #include "Creators.h"
-#include "DexClass.h"
 #include "DexAnnotation.h"
-#include "DexInstruction.h"
+#include "DexClass.h"
 #include "DexDebugInstruction.h"
-#include "DexOpcode.h"
 #include "DexIdx.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 
 namespace {
 
@@ -118,499 +118,407 @@ std::string show_opcode(const DexInstruction* insn) {
   std::stringstream ss;
   auto opcode = insn->opcode();
   switch (opcode) {
-  case OPCODE_NOP:
+  case DOPCODE_NOP:
     return "nop";
-  case OPCODE_MOVE:
+  case DOPCODE_MOVE:
     return "move";
-  case OPCODE_MOVE_WIDE:
+  case DOPCODE_MOVE_WIDE:
     return "move-wide";
-  case OPCODE_MOVE_OBJECT:
+  case DOPCODE_MOVE_OBJECT:
     return "move-object";
-  case OPCODE_MOVE_RESULT:
+  case DOPCODE_MOVE_RESULT:
     return "move-result";
-  case OPCODE_MOVE_RESULT_WIDE:
+  case DOPCODE_MOVE_RESULT_WIDE:
     return "move-result-wide";
-  case OPCODE_MOVE_RESULT_OBJECT:
+  case DOPCODE_MOVE_RESULT_OBJECT:
     return "move-result-object";
-  case OPCODE_MOVE_EXCEPTION:
+  case DOPCODE_MOVE_EXCEPTION:
     return "move-exception";
-  case OPCODE_RETURN_VOID:
+  case DOPCODE_RETURN_VOID:
     return "return-void";
-  case OPCODE_RETURN:
+  case DOPCODE_RETURN:
     return "return";
-  case OPCODE_RETURN_WIDE:
+  case DOPCODE_RETURN_WIDE:
     return "return-wide";
-  case OPCODE_RETURN_OBJECT:
+  case DOPCODE_RETURN_OBJECT:
     return "return-object";
-  case OPCODE_CONST_4:
+  case DOPCODE_CONST_4:
     return "const/4";
-  case OPCODE_MONITOR_ENTER:
+  case DOPCODE_MONITOR_ENTER:
     return "monitor-enter";
-  case OPCODE_MONITOR_EXIT:
+  case DOPCODE_MONITOR_EXIT:
     return "monitor-exit";
-  case OPCODE_THROW:
+  case DOPCODE_THROW:
     return "throw";
-  case OPCODE_GOTO:
+  case DOPCODE_GOTO:
     return "goto";
-  case OPCODE_NEG_INT:
+  case DOPCODE_NEG_INT:
     return "neg-int";
-  case OPCODE_NOT_INT:
+  case DOPCODE_NOT_INT:
     return "not-int";
-  case OPCODE_NEG_LONG:
+  case DOPCODE_NEG_LONG:
     return "neg-long";
-  case OPCODE_NOT_LONG:
+  case DOPCODE_NOT_LONG:
     return "not-long";
-  case OPCODE_NEG_FLOAT:
+  case DOPCODE_NEG_FLOAT:
     return "neg-float";
-  case OPCODE_NEG_DOUBLE:
+  case DOPCODE_NEG_DOUBLE:
     return "neg-double";
-  case OPCODE_INT_TO_LONG:
+  case DOPCODE_INT_TO_LONG:
     return "int-to-long";
-  case OPCODE_INT_TO_FLOAT:
+  case DOPCODE_INT_TO_FLOAT:
     return "int-to-float";
-  case OPCODE_INT_TO_DOUBLE:
+  case DOPCODE_INT_TO_DOUBLE:
     return "int-to-double";
-  case OPCODE_LONG_TO_INT:
+  case DOPCODE_LONG_TO_INT:
     return "long-to-int";
-  case OPCODE_LONG_TO_FLOAT:
+  case DOPCODE_LONG_TO_FLOAT:
     return "long-to-float";
-  case OPCODE_LONG_TO_DOUBLE:
+  case DOPCODE_LONG_TO_DOUBLE:
     return "long-to-double";
-  case OPCODE_FLOAT_TO_INT:
+  case DOPCODE_FLOAT_TO_INT:
     return "float-to-int";
-  case OPCODE_FLOAT_TO_LONG:
+  case DOPCODE_FLOAT_TO_LONG:
     return "float-to-long";
-  case OPCODE_FLOAT_TO_DOUBLE:
+  case DOPCODE_FLOAT_TO_DOUBLE:
     return "float-to-double";
-  case OPCODE_DOUBLE_TO_INT:
+  case DOPCODE_DOUBLE_TO_INT:
     return "double-to-int";
-  case OPCODE_DOUBLE_TO_LONG:
+  case DOPCODE_DOUBLE_TO_LONG:
     return "double-to-long";
-  case OPCODE_DOUBLE_TO_FLOAT:
+  case DOPCODE_DOUBLE_TO_FLOAT:
     return "double-to-float";
-  case OPCODE_INT_TO_BYTE:
+  case DOPCODE_INT_TO_BYTE:
     return "int-to-byte";
-  case OPCODE_INT_TO_CHAR:
+  case DOPCODE_INT_TO_CHAR:
     return "int-to-char";
-  case OPCODE_INT_TO_SHORT:
+  case DOPCODE_INT_TO_SHORT:
     return "int-to-short";
-  case OPCODE_ADD_INT_2ADDR:
-    return "add-int/2addr";
-  case OPCODE_SUB_INT_2ADDR:
-    return "sub-int/2addr";
-  case OPCODE_MUL_INT_2ADDR:
-    return "mul-int/2addr";
-  case OPCODE_DIV_INT_2ADDR:
-    return "div-int/2addr";
-  case OPCODE_REM_INT_2ADDR:
-    return "rem-int/2addr";
-  case OPCODE_AND_INT_2ADDR:
-    return "and-int/2addr";
-  case OPCODE_OR_INT_2ADDR:
-    return "or-int/2addr";
-  case OPCODE_XOR_INT_2ADDR:
-    return "xor-int/2addr";
-  case OPCODE_SHL_INT_2ADDR:
-    return "shl-int/2addr";
-  case OPCODE_SHR_INT_2ADDR:
-    return "shr-int/2addr";
-  case OPCODE_USHR_INT_2ADDR:
-    return "ushr-int/2addr";
-  case OPCODE_ADD_LONG_2ADDR:
-    return "add-long/2addr";
-  case OPCODE_SUB_LONG_2ADDR:
-    return "sub-long/2addr";
-  case OPCODE_MUL_LONG_2ADDR:
-    return "mul-long/2addr";
-  case OPCODE_DIV_LONG_2ADDR:
-    return "div-long/2addr";
-  case OPCODE_REM_LONG_2ADDR:
-    return "rem-long/2addr";
-  case OPCODE_AND_LONG_2ADDR:
-    return "and-long/2addr";
-  case OPCODE_OR_LONG_2ADDR:
-    return "or-long/2addr";
-  case OPCODE_XOR_LONG_2ADDR:
-    return "xor-long/2addr";
-  case OPCODE_SHL_LONG_2ADDR:
-    return "shl-long/2addr";
-  case OPCODE_SHR_LONG_2ADDR:
-    return "shr-long/2addr";
-  case OPCODE_USHR_LONG_2ADDR:
-    return "ushr-long/2addr";
-  case OPCODE_ADD_FLOAT_2ADDR:
-    return "add-float/2addr";
-  case OPCODE_SUB_FLOAT_2ADDR:
-    return "sub-float/2addr";
-  case OPCODE_MUL_FLOAT_2ADDR:
-    return "mul-float/2addr";
-  case OPCODE_DIV_FLOAT_2ADDR:
-    return "div-float/2addr";
-  case OPCODE_REM_FLOAT_2ADDR:
-    return "rem-float/2addr";
-  case OPCODE_ADD_DOUBLE_2ADDR:
-    return "add-double/2addr";
-  case OPCODE_SUB_DOUBLE_2ADDR:
-    return "sub-double/2addr";
-  case OPCODE_MUL_DOUBLE_2ADDR:
-    return "mul-double/2addr";
-  case OPCODE_DIV_DOUBLE_2ADDR:
-    return "div-double/2addr";
-  case OPCODE_REM_DOUBLE_2ADDR:
-    return "rem-double/2addr";
-  case OPCODE_ARRAY_LENGTH:
+  case DOPCODE_ARRAY_LENGTH:
     return "array-length";
-  case OPCODE_MOVE_FROM16:
+  case DOPCODE_MOVE_FROM16:
     return "move/from16";
-  case OPCODE_MOVE_WIDE_FROM16:
+  case DOPCODE_MOVE_WIDE_FROM16:
     return "move-wide/from16";
-  case OPCODE_MOVE_OBJECT_FROM16:
+  case DOPCODE_MOVE_OBJECT_FROM16:
     return "move-object/from16";
-  case OPCODE_CONST_16:
+  case DOPCODE_CONST_16:
     return "const/16";
-  case OPCODE_CONST_HIGH16:
+  case DOPCODE_CONST_HIGH16:
     return "const/high16";
-  case OPCODE_CONST_WIDE_16:
+  case DOPCODE_CONST_WIDE_16:
     return "const-wide/16";
-  case OPCODE_CONST_WIDE_HIGH16:
+  case DOPCODE_CONST_WIDE_HIGH16:
     return "const-wide/high16";
-  case OPCODE_GOTO_16:
+  case DOPCODE_GOTO_16:
     return "goto/16";
-  case OPCODE_CMPL_FLOAT:
+  case DOPCODE_CMPL_FLOAT:
     return "cmpl-float";
-  case OPCODE_CMPG_FLOAT:
+  case DOPCODE_CMPG_FLOAT:
     return "cmpg-float";
-  case OPCODE_CMPL_DOUBLE:
+  case DOPCODE_CMPL_DOUBLE:
     return "cmpl-double";
-  case OPCODE_CMPG_DOUBLE:
+  case DOPCODE_CMPG_DOUBLE:
     return "cmpg-double";
-  case OPCODE_CMP_LONG:
+  case DOPCODE_CMP_LONG:
     return "cmp-long";
-  case OPCODE_IF_EQ:
+  case DOPCODE_IF_EQ:
     return "if-eq";
-  case OPCODE_IF_NE:
+  case DOPCODE_IF_NE:
     return "if-ne";
-  case OPCODE_IF_LT:
+  case DOPCODE_IF_LT:
     return "if-lt";
-  case OPCODE_IF_GE:
+  case DOPCODE_IF_GE:
     return "if-ge";
-  case OPCODE_IF_GT:
+  case DOPCODE_IF_GT:
     return "if-gt";
-  case OPCODE_IF_LE:
+  case DOPCODE_IF_LE:
     return "if-le";
-  case OPCODE_IF_EQZ:
+  case DOPCODE_IF_EQZ:
     return "if-eqz";
-  case OPCODE_IF_NEZ:
+  case DOPCODE_IF_NEZ:
     return "if-nez";
-  case OPCODE_IF_LTZ:
+  case DOPCODE_IF_LTZ:
     return "if-ltz";
-  case OPCODE_IF_GEZ:
+  case DOPCODE_IF_GEZ:
     return "if-gez";
-  case OPCODE_IF_GTZ:
+  case DOPCODE_IF_GTZ:
     return "if-gtz";
-  case OPCODE_IF_LEZ:
+  case DOPCODE_IF_LEZ:
     return "if-lez";
-  case OPCODE_AGET:
+  case DOPCODE_AGET:
     return "aget";
-  case OPCODE_AGET_WIDE:
+  case DOPCODE_AGET_WIDE:
     return "aget-wide";
-  case OPCODE_AGET_OBJECT:
+  case DOPCODE_AGET_OBJECT:
     return "aget-object";
-  case OPCODE_AGET_BOOLEAN:
+  case DOPCODE_AGET_BOOLEAN:
     return "aget-boolean";
-  case OPCODE_AGET_BYTE:
+  case DOPCODE_AGET_BYTE:
     return "aget-byte";
-  case OPCODE_AGET_CHAR:
+  case DOPCODE_AGET_CHAR:
     return "aget-char";
-  case OPCODE_AGET_SHORT:
+  case DOPCODE_AGET_SHORT:
     return "aget-short";
-  case OPCODE_APUT:
+  case DOPCODE_APUT:
     return "aput";
-  case OPCODE_APUT_WIDE:
+  case DOPCODE_APUT_WIDE:
     return "aput-wide";
-  case OPCODE_APUT_OBJECT:
+  case DOPCODE_APUT_OBJECT:
     return "aput-object";
-  case OPCODE_APUT_BOOLEAN:
+  case DOPCODE_APUT_BOOLEAN:
     return "aput-boolean";
-  case OPCODE_APUT_BYTE:
+  case DOPCODE_APUT_BYTE:
     return "aput-byte";
-  case OPCODE_APUT_CHAR:
+  case DOPCODE_APUT_CHAR:
     return "aput-char";
-  case OPCODE_APUT_SHORT:
+  case DOPCODE_APUT_SHORT:
     return "aput-short";
-  case OPCODE_ADD_INT:
+  case DOPCODE_ADD_INT:
     return "add-int";
-  case OPCODE_SUB_INT:
+  case DOPCODE_SUB_INT:
     return "sub-int";
-  case OPCODE_MUL_INT:
+  case DOPCODE_MUL_INT:
     return "mul-int";
-  case OPCODE_DIV_INT:
+  case DOPCODE_DIV_INT:
     return "div-int";
-  case OPCODE_REM_INT:
+  case DOPCODE_REM_INT:
     return "rem-int";
-  case OPCODE_AND_INT:
+  case DOPCODE_AND_INT:
     return "and-int";
-  case OPCODE_OR_INT:
+  case DOPCODE_OR_INT:
     return "or-int";
-  case OPCODE_XOR_INT:
+  case DOPCODE_XOR_INT:
     return "xor-int";
-  case OPCODE_SHL_INT:
+  case DOPCODE_SHL_INT:
     return "shl-int";
-  case OPCODE_SHR_INT:
+  case DOPCODE_SHR_INT:
     return "shr-int";
-  case OPCODE_USHR_INT:
+  case DOPCODE_USHR_INT:
     return "ushr-int";
-  case OPCODE_ADD_LONG:
+  case DOPCODE_ADD_LONG:
     return "add-long";
-  case OPCODE_SUB_LONG:
+  case DOPCODE_SUB_LONG:
     return "sub-long";
-  case OPCODE_MUL_LONG:
+  case DOPCODE_MUL_LONG:
     return "mul-long";
-  case OPCODE_DIV_LONG:
+  case DOPCODE_DIV_LONG:
     return "div-long";
-  case OPCODE_REM_LONG:
+  case DOPCODE_REM_LONG:
     return "rem-long";
-  case OPCODE_AND_LONG:
+  case DOPCODE_AND_LONG:
     return "and-long";
-  case OPCODE_OR_LONG:
+  case DOPCODE_OR_LONG:
     return "or-long";
-  case OPCODE_XOR_LONG:
+  case DOPCODE_XOR_LONG:
     return "xor-long";
-  case OPCODE_SHL_LONG:
+  case DOPCODE_SHL_LONG:
     return "shl-long";
-  case OPCODE_SHR_LONG:
+  case DOPCODE_SHR_LONG:
     return "shr-long";
-  case OPCODE_USHR_LONG:
+  case DOPCODE_USHR_LONG:
     return "ushr-long";
-  case OPCODE_ADD_FLOAT:
+  case DOPCODE_ADD_FLOAT:
     return "add-float";
-  case OPCODE_SUB_FLOAT:
+  case DOPCODE_SUB_FLOAT:
     return "sub-float";
-  case OPCODE_MUL_FLOAT:
+  case DOPCODE_MUL_FLOAT:
     return "mul-float";
-  case OPCODE_DIV_FLOAT:
+  case DOPCODE_DIV_FLOAT:
     return "div-float";
-  case OPCODE_REM_FLOAT:
+  case DOPCODE_REM_FLOAT:
     return "rem-float";
-  case OPCODE_ADD_DOUBLE:
+  case DOPCODE_ADD_DOUBLE:
     return "add-double";
-  case OPCODE_SUB_DOUBLE:
+  case DOPCODE_SUB_DOUBLE:
     return "sub-double";
-  case OPCODE_MUL_DOUBLE:
+  case DOPCODE_MUL_DOUBLE:
     return "mul-double";
-  case OPCODE_DIV_DOUBLE:
+  case DOPCODE_DIV_DOUBLE:
     return "div-double";
-  case OPCODE_REM_DOUBLE:
+  case DOPCODE_REM_DOUBLE:
     return "rem-double";
-  case OPCODE_ADD_INT_LIT16:
+  case DOPCODE_ADD_INT_LIT16:
     return "add-int/lit16";
-  case OPCODE_RSUB_INT:
+  case DOPCODE_RSUB_INT:
     return "rsub-int";
-  case OPCODE_MUL_INT_LIT16:
+  case DOPCODE_MUL_INT_LIT16:
     return "mul-int/lit16";
-  case OPCODE_DIV_INT_LIT16:
+  case DOPCODE_DIV_INT_LIT16:
     return "div-int/lit16";
-  case OPCODE_REM_INT_LIT16:
+  case DOPCODE_REM_INT_LIT16:
     return "rem-int/lit16";
-  case OPCODE_AND_INT_LIT16:
+  case DOPCODE_AND_INT_LIT16:
     return "and-int/lit16";
-  case OPCODE_OR_INT_LIT16:
+  case DOPCODE_OR_INT_LIT16:
     return "or-int/lit16";
-  case OPCODE_XOR_INT_LIT16:
+  case DOPCODE_XOR_INT_LIT16:
     return "xor-int/lit16";
-  case OPCODE_ADD_INT_LIT8:
+  case DOPCODE_ADD_INT_LIT8:
     return "add-int/lit8";
-  case OPCODE_RSUB_INT_LIT8:
+  case DOPCODE_RSUB_INT_LIT8:
     return "rsub-int/lit8";
-  case OPCODE_MUL_INT_LIT8:
+  case DOPCODE_MUL_INT_LIT8:
     return "mul-int/lit8";
-  case OPCODE_DIV_INT_LIT8:
+  case DOPCODE_DIV_INT_LIT8:
     return "div-int/lit8";
-  case OPCODE_REM_INT_LIT8:
+  case DOPCODE_REM_INT_LIT8:
     return "rem-int/lit8";
-  case OPCODE_AND_INT_LIT8:
+  case DOPCODE_AND_INT_LIT8:
     return "and-int/lit8";
-  case OPCODE_OR_INT_LIT8:
+  case DOPCODE_OR_INT_LIT8:
     return "or-int/lit8";
-  case OPCODE_XOR_INT_LIT8:
+  case DOPCODE_XOR_INT_LIT8:
     return "xor-int/lit8";
-  case OPCODE_SHL_INT_LIT8:
+  case DOPCODE_SHL_INT_LIT8:
     return "shl-int/lit8";
-  case OPCODE_SHR_INT_LIT8:
+  case DOPCODE_SHR_INT_LIT8:
     return "shr-int/lit8";
-  case OPCODE_USHR_INT_LIT8:
+  case DOPCODE_USHR_INT_LIT8:
     return "ushr-int/lit8";
-  case OPCODE_MOVE_16:
+  case DOPCODE_MOVE_16:
     return "move/16";
-  case OPCODE_MOVE_WIDE_16:
+  case DOPCODE_MOVE_WIDE_16:
     return "move-wide/16";
-  case OPCODE_MOVE_OBJECT_16:
+  case DOPCODE_MOVE_OBJECT_16:
     return "move-object/16";
-  case OPCODE_CONST:
+  case DOPCODE_CONST:
     return "const";
-  case OPCODE_CONST_WIDE_32:
+  case DOPCODE_CONST_WIDE_32:
     return "const-wide/32";
-  case OPCODE_FILL_ARRAY_DATA:
+  case DOPCODE_FILL_ARRAY_DATA:
     return "fill-array-data";
-  case OPCODE_GOTO_32:
+  case DOPCODE_GOTO_32:
     return "goto/32";
-  case OPCODE_PACKED_SWITCH:
+  case DOPCODE_PACKED_SWITCH:
     return "packed-switch";
-  case OPCODE_SPARSE_SWITCH:
+  case DOPCODE_SPARSE_SWITCH:
     return "sparse-switch";
-  case OPCODE_CONST_WIDE:
+  case DOPCODE_CONST_WIDE:
     return "const-wide";
   // field opcode
-  case OPCODE_IGET:
+  case DOPCODE_IGET:
     ss << "iget " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_WIDE:
+  case DOPCODE_IGET_WIDE:
     ss << "iget-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_OBJECT:
+  case DOPCODE_IGET_OBJECT:
     ss << "iget-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_BOOLEAN:
+  case DOPCODE_IGET_BOOLEAN:
     ss << "iget-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_BYTE:
+  case DOPCODE_IGET_BYTE:
     ss << "iget-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_CHAR:
+  case DOPCODE_IGET_CHAR:
     ss << "iget-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IGET_SHORT:
+  case DOPCODE_IGET_SHORT:
     ss << "iget-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT:
+  case DOPCODE_IPUT:
     ss << "iput " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_WIDE:
+  case DOPCODE_IPUT_WIDE:
     ss << "iput-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_OBJECT:
+  case DOPCODE_IPUT_OBJECT:
     ss << "iput-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_BOOLEAN:
+  case DOPCODE_IPUT_BOOLEAN:
     ss << "iput-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_BYTE:
+  case DOPCODE_IPUT_BYTE:
     ss << "iput-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_CHAR:
+  case DOPCODE_IPUT_CHAR:
     ss << "iput-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_IPUT_SHORT:
+  case DOPCODE_IPUT_SHORT:
     ss << "iput-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET:
+  case DOPCODE_SGET:
     ss << "sget " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_WIDE:
+  case DOPCODE_SGET_WIDE:
     ss << "sget-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_OBJECT:
+  case DOPCODE_SGET_OBJECT:
     ss << "sget-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_BOOLEAN:
+  case DOPCODE_SGET_BOOLEAN:
     ss << "sget-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_BYTE:
+  case DOPCODE_SGET_BYTE:
     ss << "sget-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_CHAR:
+  case DOPCODE_SGET_CHAR:
     ss << "sget-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SGET_SHORT:
+  case DOPCODE_SGET_SHORT:
     ss << "sget-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT:
+  case DOPCODE_SPUT:
     ss << "sput " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_WIDE:
+  case DOPCODE_SPUT_WIDE:
     ss << "sput-wide " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_OBJECT:
+  case DOPCODE_SPUT_OBJECT:
     ss << "sput-object " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_BOOLEAN:
+  case DOPCODE_SPUT_BOOLEAN:
     ss << "sput-boolean " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_BYTE:
+  case DOPCODE_SPUT_BYTE:
     ss << "sput-byte " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_CHAR:
+  case DOPCODE_SPUT_CHAR:
     ss << "sput-char " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_SPUT_SHORT:
+  case DOPCODE_SPUT_SHORT:
     ss << "sput-short " << show(((DexOpcodeField*)insn)->get_field());
     return ss.str();
-  case OPCODE_INVOKE_VIRTUAL:
+  case DOPCODE_INVOKE_VIRTUAL:
     ss << "invoke-virtual " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
-  case OPCODE_INVOKE_SUPER:
+  case DOPCODE_INVOKE_SUPER:
     ss << "invoke-super " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
-  case OPCODE_INVOKE_DIRECT:
+  case DOPCODE_INVOKE_DIRECT:
     ss << "invoke-direct " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
-  case OPCODE_INVOKE_STATIC:
+  case DOPCODE_INVOKE_STATIC:
     ss << "invoke-static " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
-  case OPCODE_INVOKE_INTERFACE:
+  case DOPCODE_INVOKE_INTERFACE:
     ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)insn)->get_method());
-    return ss.str();
-  case OPCODE_INVOKE_SUPER_RANGE:
-    ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
-    return ss.str();
-  case OPCODE_INVOKE_DIRECT_RANGE:
-    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)insn)->get_method());
-    return ss.str();
-  case OPCODE_INVOKE_STATIC_RANGE:
-    ss << "invoke-static/range " << show(((DexOpcodeMethod*)insn)->get_method());
-    return ss.str();
-  case OPCODE_INVOKE_INTERFACE_RANGE:
-    ss << "invoke-interface/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
-    return ss.str();
-  case OPCODE_CONST_STRING:
+  case DOPCODE_CONST_STRING:
     ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();
-  case OPCODE_CONST_STRING_JUMBO:
+  case DOPCODE_CONST_STRING_JUMBO:
     ss << "const-string/jumbo " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();
-  case OPCODE_CONST_CLASS:
+  case DOPCODE_CONST_CLASS:
     ss << "const-class " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
-  case OPCODE_CHECK_CAST:
+  case DOPCODE_CHECK_CAST:
     ss << "check-cast " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
-  case OPCODE_INSTANCE_OF:
+  case DOPCODE_INSTANCE_OF:
     ss << "instance-of " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
-  case OPCODE_NEW_INSTANCE:
+  case DOPCODE_NEW_INSTANCE:
     ss << "new-instance " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
-  case OPCODE_NEW_ARRAY:
+  case DOPCODE_NEW_ARRAY:
     ss << "new-array " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
-  case OPCODE_FILLED_NEW_ARRAY:
+  case DOPCODE_FILLED_NEW_ARRAY:
     ss << "filled-new-array " << show(((DexOpcodeType*)insn)->get_type());
-    return ss.str();
-  case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    ss << "filled-new-array/range " << show(((DexOpcodeType*)insn)->get_type());
-    return ss.str();
-  case FOPCODE_PACKED_SWITCH:
-    ss << "packed-switch";
-    return ss.str();
-  case FOPCODE_SPARSE_SWITCH:
-    ss << "sparse-switch";
-    return ss.str();
-  case FOPCODE_FILLED_ARRAY:
-    ss << "filled-array";
     return ss.str();
   default:
     return "unknown_op_code";
@@ -892,19 +800,13 @@ std::string show(const DexAnnotationDirectory* p) {
   return ss.str();
 }
 
-std::string show(DexOpcode opcode) {
+std::string show(IROpcode opcode) {
   switch (opcode) {
 #define OP(op, ...) \
   case OPCODE_##op: \
     return #op;
     OPS
 #undef OP
-  case FOPCODE_PACKED_SWITCH:
-    return "PACKED_SWITCH_DATA";
-  case FOPCODE_SPARSE_SWITCH:
-    return "SPARSE_SWITCH_DATA";
-  case FOPCODE_FILLED_ARRAY:
-    return "FILLED_ARRAY_DATA";
   case IOPCODE_LOAD_PARAM:
     return "IOPCODE_LOAD_PARAM";
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -922,6 +824,22 @@ std::string show(DexOpcode opcode) {
   return "";
 }
 
+std::string show(DexOpcode opcode) {
+  switch (opcode) {
+#define OP(op, ...)  \
+  case DOPCODE_##op: \
+    return #op;
+    DOPS
+#undef OP
+  case FOPCODE_PACKED_SWITCH:
+    return "PACKED_SWITCH_DATA";
+  case FOPCODE_SPARSE_SWITCH:
+    return "SPARSE_SWITCH_DATA";
+  case FOPCODE_FILLED_ARRAY:
+    return "FILLED_ARRAY_DATA";
+  }
+}
+
 std::string show(const DexInstruction* insn) {
   if (!insn) return "";
   std::stringstream ss;
@@ -936,7 +854,7 @@ std::string show(const DexInstruction* insn) {
     ss << " v" << insn->src(i);
     first = false;
   }
-  if (opcode::has_literal(insn->opcode())) {
+  if (dex_opcode::has_literal(insn->opcode())) {
     if (!first) ss << ",";
     ss << " " << insn->get_literal();
     first = false;

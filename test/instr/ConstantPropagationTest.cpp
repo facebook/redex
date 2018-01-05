@@ -24,7 +24,7 @@ int count_ifs(IRCode* code) {
   return num_ifs;
 }
 
-int count_ops(IRCode* code, DexOpcode op) {
+int count_ops(IRCode* code, IROpcode op) {
   size_t result = 0;
   for (const auto& mie : InstructionIterable(code)) {
     if (mie.insn->opcode() == op) {

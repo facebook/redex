@@ -143,10 +143,12 @@ size_t dest_bit_width(FatMethod::iterator it) {
     if (primary_op == OPCODE_CHECK_CAST) {
       return 4;
     } else {
-      return opcode_impl::dest_bit_width(primary_op);
+      return dex_opcode::dest_bit_width(opcode::to_dex_opcode(primary_op));
     }
+  } else if (opcode::is_internal(op)) {
+    return 16;
   } else {
-    return opcode_impl::dest_bit_width(op);
+    return dex_opcode::dest_bit_width(opcode::to_dex_opcode(op));
   }
 }
 
@@ -180,7 +182,8 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
       // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`
       max_vreg = max_unsigned_value(16);
     } else {
-      max_vreg = max_unsigned_value(insn->src_bit_width(i));
+      auto dex_op = opcode::to_dex_opcode(op);
+      max_vreg = max_unsigned_value(dex_opcode::src_bit_width(dex_op, i));
       if (is_invoke(op) && type == RegisterType::WIDE) {
         // invoke instructions need to address both pairs of a wide register in
         // their denormalized form. We are dealing with the normalized form

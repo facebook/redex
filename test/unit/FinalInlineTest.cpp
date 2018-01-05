@@ -15,15 +15,15 @@
 #include "Creators.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "FinalInline.h"
+#include "IRCode.h"
+#include "IROpcode.h"
 #include "Resolver.h"
 
 // Map of type string -> (sget opcode, sput opcode)
-static std::unordered_map<std::string, std::pair<DexOpcode, DexOpcode>>
-    init_ops = {
+static std::unordered_map<std::string, std::pair<IROpcode, IROpcode>> init_ops =
+    {
         {"I", {OPCODE_SGET, OPCODE_SPUT}},
         {"Z", {OPCODE_SGET_BOOLEAN, OPCODE_SPUT_BOOLEAN}},
         {"B", {OPCODE_SGET_BYTE, OPCODE_SPUT_BYTE}},

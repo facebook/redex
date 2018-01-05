@@ -23,11 +23,11 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "Match.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
@@ -848,61 +848,6 @@ class TypeInference final
       set_double(current_state, insn->dest());
       break;
     }
-    // In 2addr instructions, the destination and the source registers are
-    // identical. Hence, there's no need to update the type of the destination
-    // register.
-    case OPCODE_ADD_INT_2ADDR:
-    case OPCODE_SUB_INT_2ADDR:
-    case OPCODE_MUL_INT_2ADDR:
-    case OPCODE_DIV_INT_2ADDR:
-    case OPCODE_REM_INT_2ADDR:
-    case OPCODE_AND_INT_2ADDR:
-    case OPCODE_OR_INT_2ADDR:
-    case OPCODE_XOR_INT_2ADDR:
-    case OPCODE_SHL_INT_2ADDR:
-    case OPCODE_SHR_INT_2ADDR:
-    case OPCODE_USHR_INT_2ADDR: {
-      assume_integer(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_LONG_2ADDR:
-    case OPCODE_SUB_LONG_2ADDR:
-    case OPCODE_MUL_LONG_2ADDR:
-    case OPCODE_DIV_LONG_2ADDR:
-    case OPCODE_REM_LONG_2ADDR:
-    case OPCODE_AND_LONG_2ADDR:
-    case OPCODE_OR_LONG_2ADDR:
-    case OPCODE_XOR_LONG_2ADDR: {
-      assume_long(current_state, insn->src(0));
-      assume_long(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_SHL_LONG_2ADDR:
-    case OPCODE_SHR_LONG_2ADDR:
-    case OPCODE_USHR_LONG_2ADDR: {
-      assume_long(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_FLOAT_2ADDR:
-    case OPCODE_SUB_FLOAT_2ADDR:
-    case OPCODE_MUL_FLOAT_2ADDR:
-    case OPCODE_DIV_FLOAT_2ADDR:
-    case OPCODE_REM_FLOAT_2ADDR: {
-      assume_float(current_state, insn->src(0));
-      assume_float(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_DOUBLE_2ADDR:
-    case OPCODE_SUB_DOUBLE_2ADDR:
-    case OPCODE_MUL_DOUBLE_2ADDR:
-    case OPCODE_DIV_DOUBLE_2ADDR:
-    case OPCODE_REM_DOUBLE_2ADDR: {
-      assume_double(current_state, insn->src(0));
-      assume_double(current_state, insn->src(1));
-      break;
-    }
     case OPCODE_ADD_INT_LIT16:
     case OPCODE_RSUB_INT:
     case OPCODE_MUL_INT_LIT16:
@@ -929,18 +874,6 @@ class TypeInference final
       assume_integer(current_state, insn->src(0));
       set_integer(current_state, RESULT_REGISTER);
       break;
-    }
-    case FOPCODE_PACKED_SWITCH:
-    case FOPCODE_SPARSE_SWITCH:
-    case FOPCODE_FILLED_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
-      // Pseudo-opcodes and range opcodes have been simplified away by the IR.
-      always_assert_log(false, "Unexpected instruction: %s.\n", SHOW(insn));
     }
     }
   }

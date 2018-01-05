@@ -48,7 +48,7 @@ struct DedupBlocksTest : testing::Test {
     return method;
   }
 
-  Branch create_branch(DexOpcode op) {
+  Branch create_branch(IROpcode op) {
     using namespace dex_asm;
 
     IRInstruction* insn = nullptr;

@@ -15,8 +15,8 @@
 
 namespace {
 
-#define OP(OP, CODE, FORMAT, KIND, STR) {OPCODE_##OP, STR},
-std::unordered_map<DexOpcode, std::string, boost::hash<DexOpcode>>
+#define OP(OP, KIND, STR) {OPCODE_##OP, STR},
+std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
         OPS
         {IOPCODE_LOAD_PARAM, "load-param"},
@@ -28,8 +28,8 @@ std::unordered_map<DexOpcode, std::string, boost::hash<DexOpcode>>
 };
 #undef OP
 
-#define OP(OP, CODE, FORMAT, KIND, STR) {STR, OPCODE_##OP},
-std::unordered_map<std::string, DexOpcode> string_to_opcode_table = {
+#define OP(OP, KIND, STR) {STR, OPCODE_##OP},
+std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
     OPS
     {"load-param", IOPCODE_LOAD_PARAM},
     {"load-param-object", IOPCODE_LOAD_PARAM_OBJECT},
@@ -63,7 +63,7 @@ s_expr to_s_expr(const IRInstruction* insn,
   if (insn->dests_size()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
   }
-  if (opcode::has_arg_word_count(op)) {
+  if (opcode::has_variable_srcs_size(op)) {
     std::vector<s_expr> src_s_exprs;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       src_s_exprs.emplace_back(reg_to_str(insn->src(i)));
@@ -75,28 +75,29 @@ s_expr to_s_expr(const IRInstruction* insn,
     }
   }
   switch (opcode::ref(op)) {
-    case opcode::Ref::None:
-      break;
-    case opcode::Ref::Data:
-      always_assert_log(false, "Not yet supported");
-      break;
-    case opcode::Ref::Field:
-      s_exprs.emplace_back(show(insn->get_field()));
-      break;
-    case opcode::Ref::Method:
-      s_exprs.emplace_back(show(insn->get_method()));
-      break;
-    case opcode::Ref::String:
-      s_exprs.emplace_back(insn->get_string()->str());
-      break;
-    case opcode::Ref::Literal:
-      s_exprs.emplace_back(std::to_string(insn->get_literal()));
-      break;
-    case opcode::Ref::Type:
-      s_exprs.emplace_back(insn->get_type()->get_name()->str());
-      break;
+  case opcode::Ref::None:
+    break;
+  case opcode::Ref::Data:
+    always_assert_log(false, "Not yet supported");
+    break;
+  case opcode::Ref::Field:
+    s_exprs.emplace_back(show(insn->get_field()));
+    break;
+  case opcode::Ref::Method:
+    s_exprs.emplace_back(show(insn->get_method()));
+    break;
+  case opcode::Ref::String:
+    s_exprs.emplace_back(insn->get_string()->str());
+    break;
+  case opcode::Ref::Literal:
+    s_exprs.emplace_back(std::to_string(insn->get_literal()));
+    break;
+  case opcode::Ref::Type:
+    s_exprs.emplace_back(insn->get_type()->get_name()->str());
+    break;
   }
-  if (opcode::has_offset(op)) {
+  if (is_branch(op)) {
+    always_assert_log(!is_switch(op), "Not yet supported");
     s_exprs.emplace_back(insn_to_label.at(insn));
   }
   return s_expr(s_exprs);
@@ -126,7 +127,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
         .must_match(tail, "Expected dest reg for " + opcode_str);
     insn->set_dest(reg_from_str(reg_str));
   }
-  if (opcode::has_arg_word_count(op)) {
+  if (opcode::has_variable_srcs_size(op)) {
     auto srcs = tail[0];
     tail = tail.tail(1);
     insn->set_arg_word_count(srcs.size());
@@ -141,55 +142,56 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
     }
   }
   switch (opcode::ref(op)) {
-    case opcode::Ref::None:
-      break;
-    case opcode::Ref::Data:
-      always_assert_log(false, "Not yet supported");
-      break;
-    case opcode::Ref::Field: {
-      std::string str;
-      s_patn({s_patn(&str)}, tail)
-          .must_match(tail, "Expecting string literal for " + opcode_str);
-      auto* dex_field = DexField::make_field(str);
-      insn->set_field(dex_field);
-      break;
-    }
-    case opcode::Ref::Method: {
-      std::string str;
-      s_patn({s_patn(&str)}, tail)
-          .must_match(tail, "Expecting string literal for " + opcode_str);
-      auto* dex_method = DexMethod::make_method(str);
-      insn->set_method(dex_method);
-      break;
-    }
-    case opcode::Ref::String: {
-      std::string str;
-      s_patn({s_patn(&str)}, tail)
-          .must_match(tail, "Expecting string literal for " + opcode_str);
-      auto* dex_str = DexString::make_string(str);
-      insn->set_string(dex_str);
-      break;
-    }
-    case opcode::Ref::Literal: {
-      std::string num_str;
-      s_patn({s_patn(&num_str)}, tail)
-          .must_match(tail, "Expecting numeric literal for " + opcode_str);
-      int64_t num;
-      std::istringstream in(num_str);
-      in >> num;
-      insn->set_literal(num);
-      break;
-    }
-    case opcode::Ref::Type: {
-      std::string type_str;
-      s_patn({s_patn(&type_str)}, tail)
-          .must_match(tail, "Expecting type specifier for " + opcode_str);
-      DexType* ty = DexType::make_type(type_str.c_str());
-      insn->set_type(ty);
-      break;
-    }
+  case opcode::Ref::None:
+    break;
+  case opcode::Ref::Data:
+    always_assert_log(false, "Not yet supported");
+    break;
+  case opcode::Ref::Field: {
+    std::string str;
+    s_patn({s_patn(&str)}, tail)
+        .must_match(tail, "Expecting string literal for " + opcode_str);
+    auto* dex_field = DexField::make_field(str);
+    insn->set_field(dex_field);
+    break;
   }
-  if (opcode::has_offset(op)) {
+  case opcode::Ref::Method: {
+    std::string str;
+    s_patn({s_patn(&str)}, tail)
+        .must_match(tail, "Expecting string literal for " + opcode_str);
+    auto* dex_method = DexMethod::make_method(str);
+    insn->set_method(dex_method);
+    break;
+  }
+  case opcode::Ref::String: {
+    std::string str;
+    s_patn({s_patn(&str)}, tail)
+        .must_match(tail, "Expecting string literal for " + opcode_str);
+    auto* dex_str = DexString::make_string(str);
+    insn->set_string(dex_str);
+    break;
+  }
+  case opcode::Ref::Literal: {
+    std::string num_str;
+    s_patn({s_patn(&num_str)}, tail)
+        .must_match(tail, "Expecting numeric literal for " + opcode_str);
+    int64_t num;
+    std::istringstream in(num_str);
+    in >> num;
+    insn->set_literal(num);
+    break;
+  }
+  case opcode::Ref::Type: {
+    std::string type_str;
+    s_patn({s_patn(&type_str)}, tail)
+        .must_match(tail, "Expecting type specifier for " + opcode_str);
+    DexType* ty = DexType::make_type(type_str.c_str());
+    insn->set_type(ty);
+    break;
+  }
+  }
+  if (is_branch(op)) {
+    always_assert_log(!is_switch(op), "Not yet supported");
     std::string label_str;
     s_patn({s_patn(&label_str)}, tail)
         .must_match(tail, "Expecting label for " + opcode_str);

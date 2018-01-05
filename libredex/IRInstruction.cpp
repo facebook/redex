@@ -13,19 +13,18 @@
 #include "DexUtil.h"
 
 DexOpcode convert_2to3addr(DexOpcode op) {
-  always_assert(op >= OPCODE_ADD_INT_2ADDR && op <= OPCODE_REM_DOUBLE_2ADDR);
-  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
+  always_assert(op >= DOPCODE_ADD_INT_2ADDR && op <= DOPCODE_REM_DOUBLE_2ADDR);
+  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
   return (DexOpcode)(op - offset);
 }
 
 DexOpcode convert_3to2addr(DexOpcode op) {
-  always_assert(op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE);
-  constexpr uint16_t offset = OPCODE_ADD_INT_2ADDR - OPCODE_ADD_INT;
+  always_assert(op >= DOPCODE_ADD_INT && op <= DOPCODE_REM_DOUBLE);
+  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
   return (DexOpcode)(op + offset);
 }
 
-IRInstruction::IRInstruction(DexOpcode op) : m_opcode(op) {
-  always_assert(!is_fopcode(op) && !opcode::has_range(op));
+IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
   m_srcs.resize(opcode_impl::min_srcs_size(op));
 }
 
@@ -40,6 +39,10 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
 }
 
 uint16_t IRInstruction::size() const {
+  auto op = m_opcode;
+  if (opcode::is_internal(op)) {
+    return 0;
+  }
   static int args[] = {
       0, /* FMT_f00x   */
       1, /* FMT_f10x   */
@@ -84,9 +87,8 @@ uint16_t IRInstruction::size() const {
       5, /* FMT_f5rc */
       5, /* FMT_f57c */
       0, /* FMT_fopcode   */
-      0, /* FMT_iopcode   */
   };
-  return args[opcode::format(opcode())];
+  return args[dex_opcode::format(opcode::to_dex_opcode(op))];
 }
 
 // The instruction format doesn't tell us the width of registers for invoke
@@ -156,27 +158,11 @@ bool IRInstruction::src_is_wide(size_t i) const {
   case OPCODE_MUL_DOUBLE:
   case OPCODE_DIV_DOUBLE:
   case OPCODE_REM_DOUBLE:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
     return i == 0 || i == 1;
 
   case OPCODE_SHL_LONG:
   case OPCODE_SHR_LONG:
   case OPCODE_USHR_LONG:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
     return i == 0;
 
   default:
@@ -184,15 +170,11 @@ bool IRInstruction::src_is_wide(size_t i) const {
   }
 }
 
-bit_width_t IRInstruction::src_bit_width(uint16_t i) const {
-  return opcode_impl::src_bit_width(m_opcode, i);
-}
-
 void IRInstruction::normalize_registers() {
-  if (is_invoke(opcode()) && !opcode::has_range(opcode())) {
+  if (is_invoke(opcode())) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
-    size_t old_srcs_idx {0};
-    size_t srcs_idx {0};
+    size_t old_srcs_idx{0};
+    size_t srcs_idx{0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       ++srcs_idx;
       ++old_srcs_idx;
@@ -213,7 +195,6 @@ void IRInstruction::normalize_registers() {
 }
 
 void IRInstruction::denormalize_registers() {
-  always_assert(!opcode::has_range(m_opcode));
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     std::vector<uint16_t> srcs;
@@ -263,11 +244,14 @@ bool needs_range_conversion(const IRInstruction* insn) {
   if (!opcode::has_range_form(op)) {
     return false;
   }
-  if (insn->srcs_size() > opcode::NON_RANGE_MAX) {
+  if (insn->srcs_size() > dex_opcode::NON_RANGE_MAX) {
     return true;
   }
+  always_assert(!opcode::is_internal(op));
+  auto dex_op = opcode::to_dex_opcode(op);
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    if (required_bit_width(insn->src(i)) > insn->src_bit_width(i)) {
+    if (required_bit_width(insn->src(i)) >
+        dex_opcode::src_bit_width(dex_op, i)) {
       return true;
     }
   }

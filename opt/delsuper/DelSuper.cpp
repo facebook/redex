@@ -32,23 +32,19 @@ constexpr const char* METRIC_REMOVED_TRIVIAL_METHODS =
 constexpr const char* METRIC_METHOD_RELAXED_VISIBILITY =
   "num_methods_relaxed_visibility";
 constexpr const char* METRIC_CLASS_RELAXED_VISIBILITY =
-  "num_class_relaxed_visibility";
+    "num_class_relaxed_visibility";
 
-static const DexOpcode s_return_invoke_super_void_opcs[2] = {
-  OPCODE_INVOKE_SUPER, OPCODE_RETURN_VOID
-};
+static const IROpcode s_return_invoke_super_void_opcs[2] = {OPCODE_INVOKE_SUPER,
+                                                            OPCODE_RETURN_VOID};
 
-static const DexOpcode s_return_invoke_super_opcs[3] = {
-  OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT, OPCODE_RETURN
-};
+static const IROpcode s_return_invoke_super_opcs[3] = {
+    OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT, OPCODE_RETURN};
 
-static const DexOpcode s_return_invoke_super_wide_opcs[3] = {
-  OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_WIDE, OPCODE_RETURN_WIDE
-};
+static const IROpcode s_return_invoke_super_wide_opcs[3] = {
+    OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_WIDE, OPCODE_RETURN_WIDE};
 
-static const DexOpcode s_return_invoke_super_obj_opcs[3] = {
-  OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_OBJECT, OPCODE_RETURN_OBJECT
-};
+static const IROpcode s_return_invoke_super_obj_opcs[3] = {
+    OPCODE_INVOKE_SUPER, OPCODE_MOVE_RESULT_OBJECT, OPCODE_RETURN_OBJECT};
 
 class DelSuper {
 
@@ -120,12 +116,11 @@ private:
     return true;
   }
 
-  bool are_opcs_equal(
-    const std::vector<IRInstruction*> insns,
-    const DexOpcode* opcs,
-    size_t opcs_len) {
+  bool are_opcs_equal(const std::vector<IRInstruction*> insns,
+                      const IROpcode* opcs,
+                      size_t opcs_len) {
     if (insns.size() != opcs_len) return false;
-    for (size_t i = 0 ; i < opcs_len ; ++i) {
+    for (size_t i = 0; i < opcs_len; ++i) {
       if (insns[i]->opcode() != opcs[i]) return false;
     }
     return true;

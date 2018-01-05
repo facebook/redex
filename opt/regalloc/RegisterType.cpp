@@ -63,7 +63,7 @@ std::string show(RegisterType type) {
   not_reached();
 }
 
-static DexOpcode move_op_for_type(RegisterType type) {
+static IROpcode move_op_for_type(RegisterType type) {
   switch (type) {
   case RegisterType::ZERO:
   case RegisterType::NORMAL:
@@ -166,40 +166,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_INT_TO_CHAR:
   case OPCODE_INT_TO_SHORT:
     return RegisterType::NORMAL;
-  case OPCODE_ADD_INT_2ADDR:
-  case OPCODE_SUB_INT_2ADDR:
-  case OPCODE_MUL_INT_2ADDR:
-  case OPCODE_DIV_INT_2ADDR:
-  case OPCODE_REM_INT_2ADDR:
-  case OPCODE_AND_INT_2ADDR:
-  case OPCODE_OR_INT_2ADDR:
-  case OPCODE_XOR_INT_2ADDR:
-  case OPCODE_SHL_INT_2ADDR:
-  case OPCODE_SHR_INT_2ADDR:
-  case OPCODE_USHR_INT_2ADDR:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
-  case OPCODE_ADD_FLOAT_2ADDR:
-  case OPCODE_SUB_FLOAT_2ADDR:
-  case OPCODE_MUL_FLOAT_2ADDR:
-  case OPCODE_DIV_FLOAT_2ADDR:
-  case OPCODE_REM_FLOAT_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
-    always_assert_log(false, "Unhandled opcode");
-    not_reached();
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::NORMAL;
   case OPCODE_MOVE_FROM16:
@@ -376,11 +342,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-  case OPCODE_INVOKE_SUPER_RANGE:
-  case OPCODE_INVOKE_DIRECT_RANGE:
-  case OPCODE_INVOKE_STATIC_RANGE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:
@@ -393,7 +354,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
-  case OPCODE_FILLED_NEW_ARRAY_RANGE:
     return RegisterType::OBJECT;
   case IOPCODE_LOAD_PARAM:
     return RegisterType::NORMAL;
@@ -501,40 +461,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_INT_TO_CHAR:
   case OPCODE_INT_TO_SHORT:
     return RegisterType::NORMAL;
-  case OPCODE_ADD_INT_2ADDR:
-  case OPCODE_SUB_INT_2ADDR:
-  case OPCODE_MUL_INT_2ADDR:
-  case OPCODE_DIV_INT_2ADDR:
-  case OPCODE_REM_INT_2ADDR:
-  case OPCODE_AND_INT_2ADDR:
-  case OPCODE_OR_INT_2ADDR:
-  case OPCODE_XOR_INT_2ADDR:
-  case OPCODE_SHL_INT_2ADDR:
-  case OPCODE_SHR_INT_2ADDR:
-  case OPCODE_USHR_INT_2ADDR:
-  case OPCODE_ADD_LONG_2ADDR:
-  case OPCODE_SUB_LONG_2ADDR:
-  case OPCODE_MUL_LONG_2ADDR:
-  case OPCODE_DIV_LONG_2ADDR:
-  case OPCODE_REM_LONG_2ADDR:
-  case OPCODE_AND_LONG_2ADDR:
-  case OPCODE_OR_LONG_2ADDR:
-  case OPCODE_XOR_LONG_2ADDR:
-  case OPCODE_SHL_LONG_2ADDR:
-  case OPCODE_SHR_LONG_2ADDR:
-  case OPCODE_USHR_LONG_2ADDR:
-  case OPCODE_ADD_FLOAT_2ADDR:
-  case OPCODE_SUB_FLOAT_2ADDR:
-  case OPCODE_MUL_FLOAT_2ADDR:
-  case OPCODE_DIV_FLOAT_2ADDR:
-  case OPCODE_REM_FLOAT_2ADDR:
-  case OPCODE_ADD_DOUBLE_2ADDR:
-  case OPCODE_SUB_DOUBLE_2ADDR:
-  case OPCODE_MUL_DOUBLE_2ADDR:
-  case OPCODE_DIV_DOUBLE_2ADDR:
-  case OPCODE_REM_DOUBLE_2ADDR:
-    always_assert_log(false, "Unhandled opcode");
-    not_reached();
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::OBJECT;
   case OPCODE_MOVE_FROM16:
@@ -715,13 +641,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
     return invoke_src_type(insn, i);
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-  case OPCODE_INVOKE_SUPER_RANGE:
-  case OPCODE_INVOKE_DIRECT_RANGE:
-  case OPCODE_INVOKE_STATIC_RANGE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
-    always_assert_log(false, "Unhandled opcode");
-    not_reached();
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
@@ -739,9 +658,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
     return is_primitive(get_array_type(insn->get_type()))
                ? RegisterType::NORMAL
                : RegisterType::OBJECT;
-  case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    always_assert_log(false, "Unhandled opcode");
-    not_reached();
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:

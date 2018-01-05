@@ -16,11 +16,11 @@
 
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 

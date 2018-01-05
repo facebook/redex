@@ -419,16 +419,16 @@ IRInstruction* make_sget(DexField* field) {
   return (new IRInstruction(opcode))->set_field(field);
 }
 
-DexOpcode move_result_to_pseudo(DexOpcode op) {
+IROpcode move_result_to_pseudo(IROpcode op) {
   switch (op) {
-    case OPCODE_MOVE_RESULT:
-      return IOPCODE_MOVE_RESULT_PSEUDO;
-    case OPCODE_MOVE_RESULT_OBJECT:
-      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-    case OPCODE_MOVE_RESULT_WIDE:
-      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-    default:
-      always_assert(false);
+  case OPCODE_MOVE_RESULT:
+    return IOPCODE_MOVE_RESULT_PSEUDO;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+  default:
+    always_assert(false);
   }
 }
 

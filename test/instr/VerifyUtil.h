@@ -53,14 +53,10 @@ DexClass* find_class_named(const DexClasses& classes, const char* name);
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 /* Find the first invoke instruction that calls a particular method name */
-DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
+DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
     const char* mname);
-DexOpcodeMethod* find_invoke(
-    std::vector<DexInstruction*>::iterator begin,
-    std::vector<DexInstruction*>::iterator end,
-    uint32_t opcode, const char* target_mname);
-IRInstruction* find_instruction(DexMethod* m, uint32_t opcode);
-IRInstruction* find_instruction(
-    InstructionIterator begin,
-    InstructionIterator end,
-    uint32_t opcode);
+DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
+                             std::vector<DexInstruction*>::iterator end,
+                             DexOpcode opcode,
+                             const char* target_mname);
+DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);

@@ -36,7 +36,7 @@ constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
  * These instructions have observable side effects so must always be considered
  * live, regardless of whether their output is consumed by another instruction.
  */
-static bool has_side_effects(DexOpcode opc) {
+static bool has_side_effects(IROpcode opc) {
   switch (opc) {
   case OPCODE_RETURN_VOID:
   case OPCODE_RETURN:
@@ -90,9 +90,6 @@ static bool has_side_effects(DexOpcode opc) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case FOPCODE_PACKED_SWITCH:
-  case FOPCODE_SPARSE_SWITCH:
-  case FOPCODE_FILLED_ARRAY:
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:

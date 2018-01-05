@@ -430,7 +430,7 @@ struct Matcher {
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
       assert(replace.kind == DexPattern::Kind::method);
-      return (new IRInstruction((DexOpcode)opcode))
+      return (new IRInstruction((IROpcode)opcode))
           ->set_method(replace.method)
           ->set_arg_word_count(replace.srcs.size());
 
@@ -442,7 +442,7 @@ struct Matcher {
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_NEG_INT:
       assert(replace.kind == DexPattern::Kind::none);
-      return new IRInstruction((DexOpcode)opcode);
+      return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_CONST_STRING:
       assert(replace.kind == DexPattern::Kind::string);
@@ -452,7 +452,7 @@ struct Matcher {
     case OPCODE_CONST_16:
     case OPCODE_CONST:
       assert(replace.kind == DexPattern::Kind::literal);
-      return new IRInstruction((DexOpcode)opcode);
+      return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_IPUT:
     case OPCODE_IPUT_BYTE:
@@ -469,7 +469,7 @@ struct Matcher {
     case OPCODE_IGET_WIDE:
     case OPCODE_IGET_OBJECT:
       assert(replace.kind == DexPattern::Kind::field);
-      return new IRInstruction(static_cast<DexOpcode>(opcode));
+      return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
     always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
@@ -1184,12 +1184,12 @@ static bool second_get_non_volatile(const Matcher& m) {
   return !(field->get_access() & ACC_VOLATILE);
 }
 
-DexPattern put_x_op(DexOpcode op_code,
+DexPattern put_x_op(IROpcode op_code,
                     Register src,
                     Register obj_register,
                     Field field) {
   static const auto* kPutOpcodes =
-      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
           {OPCODE_IPUT,
            OPCODE_IPUT_WIDE,
            OPCODE_IPUT_OBJECT,
@@ -1198,15 +1198,15 @@ DexPattern put_x_op(DexOpcode op_code,
            OPCODE_IPUT_BYTE,
            OPCODE_IPUT_BOOLEAN});
   if (kPutOpcodes->find(op_code) == kPutOpcodes->end()) {
-    always_assert_log(false, "Not supported DexOpcode");
+    always_assert_log(false, "Not supported IROpcode");
   }
 
   return {{op_code}, {src, obj_register}, {}, field};
 }
 
-DexPattern get_x_op(DexOpcode op_code, Register src, Field field) {
+DexPattern get_x_op(IROpcode op_code, Register src, Field field) {
   static const auto* kGetOpcodes =
-      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
           {OPCODE_IGET,
            OPCODE_IGET_WIDE,
            OPCODE_IGET_OBJECT,
@@ -1215,24 +1215,23 @@ DexPattern get_x_op(DexOpcode op_code, Register src, Field field) {
            OPCODE_IGET_BYTE,
            OPCODE_IGET_BOOLEAN});
   if (kGetOpcodes->find(op_code) == kGetOpcodes->end()) {
-    always_assert_log(false, "Not supported DexOpcode");
+    always_assert_log(false, "Not supported IROpcode");
   }
 
   return {{op_code}, {src}, {}, field};
 }
 
-std::vector<DexPattern> put_x_patterns(DexOpcode put_code) {
+std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
   return {put_x_op(put_code, Register::A, Register::B, Field::A)};
 }
 
-std::vector<DexPattern> put_get_x_patterns(DexOpcode put_code,
-                          DexOpcode get_code,
-                          DexPattern (*move_pseudo_func)(Register reg)) {
-  return {
-    put_x_op(put_code, Register::A, Register::B, Field::A),
-    get_x_op(get_code, Register::B, Field::A),
-    move_pseudo_func(Register::A)
-  };
+std::vector<DexPattern> put_get_x_patterns(
+    IROpcode put_code,
+    IROpcode get_code,
+    DexPattern (*move_pseudo_func)(Register reg)) {
+  return {put_x_op(put_code, Register::A, Register::B, Field::A),
+          get_x_op(get_code, Register::B, Field::A),
+          move_pseudo_func(Register::A)};
 }
 
 const std::vector<Pattern>& get_putget_patterns() {

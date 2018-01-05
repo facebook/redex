@@ -19,7 +19,7 @@
 std::vector<int64_t> get_lits(IRCode* code) {
   std::vector<int64_t> result;
   for (const auto& mie : InstructionIterable(code)) {
-    if (opcode::has_literal(mie.insn->opcode())) {
+    if (mie.insn->has_literal()) {
       result.push_back(mie.insn->get_literal());
     }
   }

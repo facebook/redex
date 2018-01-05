@@ -732,20 +732,20 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
     auto param_op = param_it->insn->opcode();
-    DexOpcode op;
+    IROpcode op;
     switch (param_op) {
-      case IOPCODE_LOAD_PARAM:
-        op = OPCODE_MOVE;
-        break;
-      case IOPCODE_LOAD_PARAM_OBJECT:
-        op = OPCODE_MOVE_OBJECT;
-        break;
-      case IOPCODE_LOAD_PARAM_WIDE:
-        op = OPCODE_MOVE_WIDE;
-        break;
-      default:
-        always_assert_log("Expected param op, got %s", SHOW(param_op));
-        not_reached();
+    case IOPCODE_LOAD_PARAM:
+      op = OPCODE_MOVE;
+      break;
+    case IOPCODE_LOAD_PARAM_OBJECT:
+      op = OPCODE_MOVE_OBJECT;
+      break;
+    case IOPCODE_LOAD_PARAM_WIDE:
+      op = OPCODE_MOVE_WIDE;
+      break;
+    default:
+      always_assert_log("Expected param op, got %s", SHOW(param_op));
+      not_reached();
     }
     auto mov =
         (new IRInstruction(op))

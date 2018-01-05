@@ -62,11 +62,8 @@ TEST_F(RegAllocTest, RegTypeDestWide) {
   // check for consistency...
   for (auto op : all_opcodes) {
     // We cannot create IRInstructions from these opcodes
-    if (is_fopcode(op) || opcode::has_range(op)) {
-      continue;
-    }
     auto insn = std::make_unique<IRInstruction>(op);
-    if (insn->dests_size() && !opcode::dest_is_src(op)) {
+    if (insn->dests_size()) {
       EXPECT_EQ(insn->dest_is_wide(),
                 regalloc::dest_reg_type(insn.get()) == RegisterType::WIDE)
           << "mismatch for " << show(op);

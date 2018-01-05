@@ -1065,16 +1065,18 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
     }
     auto insn = mie.dex_insn;
     auto op = insn->opcode();
-    if (op != OPCODE_CONST_STRING && op != OPCODE_CONST_STRING_JUMBO) continue;
+    if (op != DOPCODE_CONST_STRING && op != DOPCODE_CONST_STRING_JUMBO) {
+      continue;
+    }
 
     auto str = static_cast<DexOpcodeString*>(insn)->get_string();
     uint32_t stridx = dodx->stringidx(str);
     bool jumbo = ((stridx >> 16) != 0);
 
     if (jumbo) {
-      insn->set_opcode(OPCODE_CONST_STRING_JUMBO);
+      insn->set_opcode(DOPCODE_CONST_STRING_JUMBO);
     } else if (!jumbo) {
-      insn->set_opcode(OPCODE_CONST_STRING);
+      insn->set_opcode(DOPCODE_CONST_STRING);
     }
   }
 }

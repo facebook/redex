@@ -19,6 +19,7 @@
 #include "DexDefs.h"
 #include "DexOpcode.h"
 #include "Gatherable.h"
+#include "IROpcode.h"
 
 #define MAX_ARG_COUNT (4)
 
@@ -59,10 +60,10 @@ class DexInstruction : public Gatherable {
   }
 
  public:
-  DexInstruction(uint16_t op)
+  DexInstruction(DexOpcode op)
       : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
 
-  DexInstruction(uint16_t opcode, uint16_t arg) : DexInstruction(opcode) {
+  DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
     assert(m_count == 1);
     m_arg[0] = arg;
   }
@@ -79,7 +80,8 @@ class DexInstruction : public Gatherable {
   }
 
  public:
-  static DexInstruction* make_instruction(DexIdx* idx, const uint16_t*& insns);
+  static DexInstruction* make_instruction(DexIdx* idx,
+                                          const uint16_t** insns_ptr);
   /* Creates the right subclass of DexInstruction for the given opcode */
   static DexInstruction* make_instruction(DexOpcode);
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
@@ -146,14 +148,14 @@ class DexOpcodeString : public DexInstruction {
   virtual void gather_strings(std::vector<DexString*>& lstring) const;
   virtual DexOpcodeString* clone() const { return new DexOpcodeString(*this); }
 
-  DexOpcodeString(uint16_t opcode, DexString* str) : DexInstruction(opcode) {
+  DexOpcodeString(DexOpcode opcode, DexString* str) : DexInstruction(opcode) {
     m_string = str;
     m_ref_type = REF_STRING;
   }
 
   DexString* get_string() const { return m_string; }
 
-  bool jumbo() const { return opcode() == OPCODE_CONST_STRING_JUMBO; }
+  bool jumbo() const { return opcode() == DOPCODE_CONST_STRING_JUMBO; }
 
   void set_string(DexString* str) { m_string = str; }
 };
@@ -168,12 +170,12 @@ class DexOpcodeType : public DexInstruction {
   virtual void gather_types(std::vector<DexType*>& ltype) const;
   virtual DexOpcodeType* clone() const { return new DexOpcodeType(*this); }
 
-  DexOpcodeType(uint16_t opcode, DexType* type) : DexInstruction(opcode) {
+  DexOpcodeType(DexOpcode opcode, DexType* type) : DexInstruction(opcode) {
     m_type = type;
     m_ref_type = REF_TYPE;
   }
 
-  DexOpcodeType(uint16_t opcode, DexType* type, uint16_t arg)
+  DexOpcodeType(DexOpcode opcode, DexType* type, uint16_t arg)
       : DexInstruction(opcode, arg) {
     m_type = type;
     m_ref_type = REF_TYPE;
@@ -194,7 +196,8 @@ class DexOpcodeField : public DexInstruction {
   virtual void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   virtual DexOpcodeField* clone() const { return new DexOpcodeField(*this); }
 
-  DexOpcodeField(uint16_t opcode, DexFieldRef* field) : DexInstruction(opcode) {
+  DexOpcodeField(DexOpcode opcode, DexFieldRef* field)
+      : DexInstruction(opcode) {
     m_field = field;
     m_ref_type = REF_FIELD;
   }
@@ -213,7 +216,7 @@ class DexOpcodeMethod : public DexInstruction {
   virtual void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   virtual DexOpcodeMethod* clone() const { return new DexOpcodeMethod(*this); }
 
-  DexOpcodeMethod(uint16_t opcode, DexMethodRef* meth, uint16_t arg = 0)
+  DexOpcodeMethod(DexOpcode opcode, DexMethodRef* meth, uint16_t arg = 0)
       : DexInstruction(opcode, arg) {
     m_method = meth;
     m_ref_type = REF_METHOD;
@@ -271,81 +274,70 @@ DexInstruction* copy_insn(DexInstruction* insn);
 ////////////////////////////////////////////////////////////////////////////////
 // Convenient predicates for opcode classes.
 
-inline bool is_iget(DexOpcode op) {
+inline bool is_iget(IROpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IGET_SHORT;
 }
 
-inline bool is_iput(DexOpcode op) {
+inline bool is_iput(IROpcode op) {
   return op >= OPCODE_IPUT && op <= OPCODE_IPUT_SHORT;
 }
 
-inline bool is_ifield_op(DexOpcode op) {
+inline bool is_ifield_op(IROpcode op) {
   return op >= OPCODE_IGET && op <= OPCODE_IPUT_SHORT;
 }
 
-inline bool is_sget(DexOpcode op) {
+inline bool is_sget(IROpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SGET_SHORT;
 }
 
-inline bool is_sput(DexOpcode op) {
+inline bool is_sput(IROpcode op) {
   return op >= OPCODE_SPUT && op <= OPCODE_SPUT_SHORT;
 }
 
-inline bool is_sfield_op(DexOpcode op) {
+inline bool is_sfield_op(IROpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
 }
 
-inline bool is_move(DexOpcode op) {
+inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT_16;
 }
 
-inline bool is_return(DexOpcode op) {
+inline bool is_return(IROpcode op) {
   return op >= OPCODE_RETURN_VOID && op <= OPCODE_RETURN_OBJECT;
 }
 
-inline bool is_return_value(DexOpcode op) {
+inline bool is_return_value(IROpcode op) {
   // OPCODE_RETURN_VOID is deliberately excluded because void isn't a "value".
   return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
 }
 
-inline bool is_move_result(DexOpcode op) {
+inline bool is_move_result(IROpcode op) {
   return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
 }
 
-inline bool is_invoke(DexOpcode op) {
-  return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE_RANGE;
+inline bool is_invoke(IROpcode op) {
+  return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE;
 }
 
-inline bool is_invoke_virtual(DexOpcode op) {
-  return op == OPCODE_INVOKE_VIRTUAL || op == OPCODE_INVOKE_VIRTUAL_RANGE;
+inline bool is_invoke_virtual(IROpcode op) {
+  return op == OPCODE_INVOKE_VIRTUAL;
 }
 
-inline bool is_invoke_super(DexOpcode op) {
-  return op == OPCODE_INVOKE_SUPER || op == OPCODE_INVOKE_SUPER_RANGE;
+inline bool is_invoke_super(IROpcode op) { return op == OPCODE_INVOKE_SUPER; }
+
+inline bool is_invoke_direct(IROpcode op) { return op == OPCODE_INVOKE_DIRECT; }
+
+inline bool is_invoke_static(IROpcode op) { return op == OPCODE_INVOKE_STATIC; }
+
+inline bool is_filled_new_array(IROpcode op) {
+  return op == OPCODE_FILLED_NEW_ARRAY;
 }
 
-inline bool is_invoke_direct(DexOpcode op) {
-  return op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_DIRECT_RANGE;
-}
-
-inline bool is_invoke_static(DexOpcode op) {
-  return op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_STATIC_RANGE;
-}
-
-inline bool is_invoke_range(DexOpcode op) {
-  return op >= OPCODE_INVOKE_VIRTUAL_RANGE &&
-      op <= OPCODE_INVOKE_INTERFACE_RANGE;
-}
-
-inline bool is_filled_new_array(DexOpcode op) {
-  return op == OPCODE_FILLED_NEW_ARRAY || op == OPCODE_FILLED_NEW_ARRAY_RANGE;
-}
-
-inline bool writes_result_register(DexOpcode op) {
+inline bool writes_result_register(IROpcode op) {
   return is_invoke(op) || is_filled_new_array(op);
 }
 
-inline bool is_branch(DexOpcode op) {
+inline bool is_branch(IROpcode op) {
   switch (op) {
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
@@ -370,7 +362,7 @@ inline bool is_branch(DexOpcode op) {
   }
 }
 
-inline bool is_goto(DexOpcode op) {
+inline bool is_goto(IROpcode op) {
   switch (op) {
   case OPCODE_GOTO_32:
   case OPCODE_GOTO_16:
@@ -381,7 +373,7 @@ inline bool is_goto(DexOpcode op) {
   }
 }
 
-inline bool is_conditional_branch(DexOpcode op) {
+inline bool is_conditional_branch(IROpcode op) {
   switch (op) {
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
@@ -401,23 +393,18 @@ inline bool is_conditional_branch(DexOpcode op) {
   }
 }
 
-inline bool is_multi_branch(DexOpcode op) {
+inline bool is_switch(IROpcode op) {
   return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
 }
 
-inline bool is_literal_const(DexOpcode op) {
+inline bool is_literal_const(IROpcode op) {
   return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16;
 }
 
-inline bool is_const(DexOpcode op) {
+inline bool is_const(IROpcode op) {
   return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_CLASS;
 }
 
-inline bool is_fopcode(DexOpcode op) {
-  return op == FOPCODE_PACKED_SWITCH || op == FOPCODE_SPARSE_SWITCH ||
-         op == FOPCODE_FILLED_ARRAY;
-}
-
-inline bool is_monitor(DexOpcode op) {
+inline bool is_monitor(IROpcode op) {
   return op == OPCODE_MONITOR_ENTER || op == OPCODE_MONITOR_EXIT;
 }

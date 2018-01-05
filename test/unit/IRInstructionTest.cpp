@@ -28,8 +28,12 @@ std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
 }
 
-std::ostream& operator<<(std::ostream& os, const DexOpcode& to_show) {
+std::ostream& operator<<(std::ostream& os, const IROpcode& to_show) {
   return os << show(to_show);
+}
+
+bool is_move(DexOpcode op) {
+  return op >= DOPCODE_MOVE && op <= DOPCODE_MOVE_OBJECT_16;
 }
 
 TEST(IRInstruction, RoundTrip) {
@@ -43,23 +47,23 @@ TEST(IRInstruction, RoundTrip) {
       ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({}))));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
-  for (DexOpcode op : all_opcodes) {
+  for (auto op : all_dex_opcodes) {
     // XXX we currently aren't testing these opcodes because they change when
     // we do the round-trip conversion. For example, `const v0` gets converted
     // to `const/4 v0`. To prevent these changes from happening, we can set the
     // operands to the largest values that can be encoded for a given opcode.
     if (is_move(op) ||
-        (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16)) {
+        (op >= DOPCODE_CONST_4 && op <= DOPCODE_CONST_WIDE_HIGH16)) {
       continue;
     }
     // XXX we can test these opcodes if we create a corresponding data payload
-    if (op == OPCODE_FILL_ARRAY_DATA) {
+    if (op == DOPCODE_FILL_ARRAY_DATA) {
       continue;
     }
     // XXX we eliminate NOPs, so no point testing them. As for opcodes with
     // offsets, they are tricky to test as sync() can change them depending on
     // the size of the offset.
-    if (op == OPCODE_NOP || opcode::has_offset(op)) {
+    if (op == DOPCODE_NOP || dex_opcode::has_offset(op)) {
       continue;
     }
 
@@ -72,14 +76,14 @@ TEST(IRInstruction, RoundTrip) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, i + 1);
     }
-    if (opcode::has_literal(op)) {
+    if (dex_opcode::has_literal(op)) {
       insn->set_literal(0xface);
     }
-    if (opcode::has_range(op)) {
+    if (dex_opcode::has_range(op)) {
       insn->set_range_base(0xf);
       insn->set_range_size(0xf);
     }
-    if (opcode::has_arg_word_count(op)) {
+    if (dex_opcode::has_arg_word_count(op)) {
       insn->set_arg_word_count(5);
     }
     if (insn->has_string()) {
@@ -168,40 +172,41 @@ TEST(IRInstruction, TwoAddr) {
   };
 
   // Check that we recognize IRInstructions that can be converted to 2addr form
-  do_test(
-      dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
-      (new DexInstruction(OPCODE_ADD_INT_2ADDR))->set_src(0, 0)->set_src(1, 1));
+  do_test(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}),
+          (new DexInstruction(DOPCODE_ADD_INT_2ADDR))
+              ->set_src(0, 0)
+              ->set_src(1, 1));
 
   // IRInstructions that have registers beyond 4 bits can't benefit, however
   do_test(dasm(OPCODE_ADD_INT, {17_v, 17_v, 1_v}),
-          (new DexInstruction(OPCODE_ADD_INT))
+          (new DexInstruction(DOPCODE_ADD_INT))
               ->set_dest(17)
               ->set_src(0, 17)
               ->set_src(1, 1));
 
   do_test(dasm(OPCODE_ADD_INT, {0_v, 0_v, 17_v}),
-          (new DexInstruction(OPCODE_ADD_INT))
+          (new DexInstruction(DOPCODE_ADD_INT))
               ->set_dest(0)
               ->set_src(0, 0)
               ->set_src(1, 17));
 
   // Check that we take advantage of commutativity
   do_test(dasm(OPCODE_ADD_INT, {1_v, 0_v, 1_v}),
-          (new DexInstruction(OPCODE_ADD_INT_2ADDR))
+          (new DexInstruction(DOPCODE_ADD_INT_2ADDR))
               ->set_src(0, 1)
               ->set_src(1, 0));
 
   // Check that we don't abuse commutativity if the operators aren't
   // commutative
   do_test(dasm(OPCODE_SUB_INT, {1_v, 0_v, 1_v}),
-          (new DexInstruction(OPCODE_SUB_INT))
+          (new DexInstruction(DOPCODE_SUB_INT))
               ->set_dest(1)
               ->set_src(0, 0)
               ->set_src(1, 1));
 
   // check registers beyond 4 bits can't benefit
   do_test(dasm(OPCODE_ADD_INT, {17_v, 1_v, 17_v}),
-          (new DexInstruction(OPCODE_ADD_INT))
+          (new DexInstruction(DOPCODE_ADD_INT))
               ->set_dest(17)
               ->set_src(0, 1)
               ->set_src(1, 17));
@@ -226,10 +231,10 @@ TEST(IRInstruction, SelectCheckCast) {
   auto it = code->begin();
   EXPECT_EQ(
       *it->dex_insn,
-      *(new DexInstruction(OPCODE_MOVE_OBJECT))->set_dest(0)->set_src(0, 1));
+      *(new DexInstruction(DOPCODE_MOVE_OBJECT))->set_dest(0)->set_src(0, 1));
   ++it;
   EXPECT_EQ(*it->dex_insn,
-            *(new DexOpcodeType(OPCODE_CHECK_CAST, get_object_type()))
+            *(new DexOpcodeType(DOPCODE_CHECK_CAST, get_object_type()))
                  ->set_src(0, 0));
 
   delete g_redex;
@@ -240,17 +245,17 @@ TEST(IRInstruction, SelectMove) {
   using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
-  EXPECT_EQ(OPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
-  EXPECT_EQ(OPCODE_MOVE_FROM16,
+  EXPECT_EQ(DOPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
+  EXPECT_EQ(DOPCODE_MOVE_FROM16,
             select_move_opcode(dasm(OPCODE_MOVE_16, {255_v, 65535_v})));
-  EXPECT_EQ(OPCODE_MOVE_16,
+  EXPECT_EQ(DOPCODE_MOVE_16,
             select_move_opcode(dasm(OPCODE_MOVE_16, {65535_v, 65535_v})));
-  EXPECT_EQ(OPCODE_MOVE_OBJECT,
+  EXPECT_EQ(DOPCODE_MOVE_OBJECT,
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {0_v, 0_v})));
-  EXPECT_EQ(OPCODE_MOVE_OBJECT_FROM16,
+  EXPECT_EQ(DOPCODE_MOVE_OBJECT_FROM16,
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {255_v, 65535_v})));
   EXPECT_EQ(
-      OPCODE_MOVE_OBJECT_16,
+      DOPCODE_MOVE_OBJECT_16,
       select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {65535_v, 65535_v})));
 
   delete g_redex;
@@ -263,31 +268,31 @@ TEST(IRInstruction, SelectConst) {
 
   auto insn = dasm(OPCODE_CONST, {0_v});
 
-  EXPECT_EQ(OPCODE_CONST_4, select_const_opcode(insn));
+  EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
 
   insn->set_literal(std::numeric_limits<int16_t>::max());
-  EXPECT_EQ(OPCODE_CONST_16, select_const_opcode(insn));
+  EXPECT_EQ(DOPCODE_CONST_16, select_const_opcode(insn));
   insn->set_literal(std::numeric_limits<int16_t>::min());
-  EXPECT_EQ(OPCODE_CONST_16, select_const_opcode(insn));
+  EXPECT_EQ(DOPCODE_CONST_16, select_const_opcode(insn));
 
   insn->set_literal(static_cast<int32_t>(0xffff0000));
-  EXPECT_EQ(OPCODE_CONST_HIGH16, select_const_opcode(insn));
+  EXPECT_EQ(DOPCODE_CONST_HIGH16, select_const_opcode(insn));
 
   insn->set_literal(static_cast<int32_t>(0xffff0001));
-  EXPECT_EQ(OPCODE_CONST, select_const_opcode(insn));
+  EXPECT_EQ(DOPCODE_CONST, select_const_opcode(insn));
 
   auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
 
-  EXPECT_EQ(OPCODE_CONST_WIDE_16, select_const_opcode(wide_insn));
+  EXPECT_EQ(DOPCODE_CONST_WIDE_16, select_const_opcode(wide_insn));
 
   wide_insn->set_literal(static_cast<int32_t>(0xffff0001));
-  EXPECT_EQ(OPCODE_CONST_WIDE_32, select_const_opcode(wide_insn));
+  EXPECT_EQ(DOPCODE_CONST_WIDE_32, select_const_opcode(wide_insn));
 
   wide_insn->set_literal(0xffff000000000000);
-  EXPECT_EQ(OPCODE_CONST_WIDE_HIGH16, select_const_opcode(wide_insn));
+  EXPECT_EQ(DOPCODE_CONST_WIDE_HIGH16, select_const_opcode(wide_insn));
 
   wide_insn->set_literal(0xffff000000000001);
-  EXPECT_EQ(OPCODE_CONST_WIDE, select_const_opcode(wide_insn));
+  EXPECT_EQ(DOPCODE_CONST_WIDE, select_const_opcode(wide_insn));
 
   delete g_redex;
 }

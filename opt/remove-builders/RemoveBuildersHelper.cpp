@@ -82,7 +82,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
 }
 
-DexOpcode get_move_opcode(const IRInstruction* insn) {
+IROpcode get_move_opcode(const IRInstruction* insn) {
   always_assert(insn != nullptr);
   always_assert(is_iget(insn->opcode()));
 
@@ -97,14 +97,14 @@ DexOpcode get_move_opcode(const IRInstruction* insn) {
 
 IRInstruction* construct_move_instr(uint16_t dest_reg,
                                     uint16_t src_reg,
-                                    DexOpcode move_opcode) {
+                                    IROpcode move_opcode) {
   IRInstruction* insn = new IRInstruction(move_opcode);
   insn->set_dest(dest_reg);
   insn->set_src(0, src_reg);
   return insn;
 }
 
-IRInstruction* construct_null_instr(uint16_t reg, DexOpcode move_opcode) {
+IRInstruction* construct_null_instr(uint16_t reg, IROpcode move_opcode) {
   IRInstruction* insn;
   if (move_opcode == OPCODE_MOVE_WIDE) {
     insn = new IRInstruction(OPCODE_CONST_WIDE);
@@ -120,14 +120,13 @@ IRInstruction* construct_null_instr(uint16_t reg, DexOpcode move_opcode) {
  * Adds instructions that initializes registers with null.
  */
 void null_initializations(
-    IRCode* code,
-    const std::vector<std::pair<uint16_t, DexOpcode>>& null_regs) {
+    IRCode* code, const std::vector<std::pair<uint16_t, IROpcode>>& null_regs) {
   always_assert(code != nullptr);
 
   auto params = code->get_param_instructions();
   for (auto& null_reg_info : null_regs) {
     uint16_t null_reg = null_reg_info.first;
-    DexOpcode move_opcode = null_reg_info.second;
+    IROpcode move_opcode = null_reg_info.second;
     code->insert_before(params.end(),
                         construct_null_instr(null_reg, move_opcode));
   }
@@ -429,7 +428,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   uint16_t next_available_reg = regs_size;
   uint16_t extra_regs = 0;
   size_t num_builders = 0;
-  std::vector<std::pair<uint16_t, DexOpcode>> extra_null_regs;
+  std::vector<std::pair<uint16_t, IROpcode>> extra_null_regs;
   ZeroRegs undef_fields_regs;
 
   // Instructions where the builder gets moved to a different
@@ -443,7 +442,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
-      DexOpcode opcode = insn->opcode();
+      IROpcode opcode = insn->opcode();
 
       auto& fields_in_insn = fields_in->at(it->insn);
 
@@ -458,7 +457,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field == nullptr) continue;
         if (field->get_class() == builder->get_type()) {
-          DexOpcode move_opcode = get_move_opcode(insn);
+          IROpcode move_opcode = get_move_opcode(insn);
           bool is_wide = move_opcode == OPCODE_MOVE_WIDE;
 
           if (fields_in_insn.field_to_reg[field] ==
@@ -594,27 +593,27 @@ bool has_only_argument(DexMethod* method, DexType* type) {
   return true;
 }
 
-DexOpcode get_iget_type(DexField* field) {
+IROpcode get_iget_type(DexField* field) {
   switch (type_to_datatype(field->get_type())) {
-    case DataType::Array:
-    case DataType::Object:
-      return OPCODE_IGET_OBJECT;
-    case DataType::Boolean:
-      return OPCODE_IGET_BOOLEAN;
-    case DataType::Byte:
-      return OPCODE_IGET_BYTE;
-    case DataType::Char:
-      return OPCODE_IGET_CHAR;
-    case DataType::Short:
-      return OPCODE_IGET_SHORT;
-    case DataType::Int:
-    case DataType::Float:
-      return OPCODE_IGET;
-    case DataType::Long:
-    case DataType::Double:
-      return OPCODE_IGET_WIDE;
-    case DataType::Void:
-      assert(false);
+  case DataType::Array:
+  case DataType::Object:
+    return OPCODE_IGET_OBJECT;
+  case DataType::Boolean:
+    return OPCODE_IGET_BOOLEAN;
+  case DataType::Byte:
+    return OPCODE_IGET_BYTE;
+  case DataType::Char:
+    return OPCODE_IGET_CHAR;
+  case DataType::Short:
+    return OPCODE_IGET_SHORT;
+  case DataType::Int:
+  case DataType::Float:
+    return OPCODE_IGET;
+  case DataType::Long:
+  case DataType::Double:
+    return OPCODE_IGET_WIDE;
+  case DataType::Void:
+    assert(false);
   }
   not_reached();
 }
@@ -717,7 +716,7 @@ std::vector<IRInstruction*> generate_load_params(
   load_params.push_back(insn);
 
   for (DexField* field : fields) {
-    DexOpcode op;
+    IROpcode op;
     if (is_wide_type(field->get_type())) {
       op = IOPCODE_LOAD_PARAM_WIDE;
     } else {
@@ -778,7 +777,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
 
         // Replace `iget <v_dest>, <v_builder>` with `move <v_dest>, <v_field>`
         uint16_t current_reg = std::next(it)->insn->dest();
-        DexOpcode move_opcode = get_move_opcode(insn);
+        IROpcode move_opcode = get_move_opcode(insn);
         auto* move = new IRInstruction(move_opcode);
         move->set_src(0, field_to_reg[field]);
         move->set_dest(current_reg);

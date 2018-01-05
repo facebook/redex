@@ -24,12 +24,13 @@ void check_no_builder(DexMethod* method, DexType* builder_type) {
   auto& insns = method->get_dex_code()->get_instructions();
 
   for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
+    auto opcode = insn->opcode();
 
-    if (opcode == OPCODE_NEW_INSTANCE || is_invoke(insn->opcode())) {
+    if (opcode == DOPCODE_NEW_INSTANCE ||
+        dex_opcode::is_invoke(insn->opcode())) {
       DexType* cls_type = static_cast<DexOpcodeType*>(insn)->get_type();
       EXPECT_NE(builder_type, cls_type);
-    } else if (is_iget(opcode) || is_iput(opcode)) {
+    } else if (dex_opcode::is_iget(opcode) || dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
           static_cast<const DexOpcodeField*>(insn)->get_field();
       EXPECT_NE(builder_type, field->get_class());
@@ -118,9 +119,9 @@ TEST_F(PostVerify, RemoveBarBuilder) {
   // No build call.
   EXPECT_EQ(nullptr,
             find_invoke(
-                initialize_bar_different_regs, OPCODE_INVOKE_VIRTUAL, "build"));
+                initialize_bar_different_regs, DOPCODE_INVOKE_VIRTUAL, "build"));
   EXPECT_EQ(nullptr,
-            find_invoke(initialize_bar, OPCODE_INVOKE_VIRTUAL, "build"));
+            find_invoke(initialize_bar, DOPCODE_INVOKE_VIRTUAL, "build"));
 }
 
 TEST_F(PostVerify, RemoveBarBuilder_simpleCase) {
@@ -159,14 +160,14 @@ TEST_F(PostVerify, RemoveBarBuilder_differentRegs) {
   std::vector<uint16_t> values;
   std::vector<uint16_t> expected_values = {6, 7};
   for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
+    auto opcode = insn->opcode();
 
-    if (opcode == OPCODE_CONST_4) {
+    if (opcode == DOPCODE_CONST_4) {
       uint16_t dest = insn->dest();
       if (insn->dest() == POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG) {
         values.push_back(insn->get_literal());
       }
-    } else if (is_invoke(opcode)) {
+    } else if (dex_opcode::is_invoke(opcode)) {
       auto invoked = static_cast<DexOpcodeMethod*>(insn)->get_method();
       if (invoked->get_class() == bar->get_type()) {
         EXPECT_EQ(POST_VERIFY_INITIALIZE_BAR_DIFFERENT_REG, insn->src(1));
@@ -245,12 +246,12 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   auto insns = initialize_null_model->get_dex_code()->get_instructions();
 
   // First instruction should hold the null value.
-  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
+  EXPECT_EQ(DOPCODE_CONST_4, insns[0]->opcode());
   uint16_t null_reg = insns[0]->dest();
 
   for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
-    if (is_iput(opcode)) {
+    auto opcode = insn->opcode();
+    if (dex_opcode::is_iput(opcode)) {
       DexFieldRef* field =
           static_cast<const DexOpcodeField*>(insn)->get_field();
       if (field->get_class() == car->get_type()) {
@@ -292,7 +293,7 @@ TEST_F(PostVerify, RemoveDarBuilder) {
   // Build call not inlined.
   EXPECT_NE(nullptr,
             find_invoke(
-                initialize_dar, OPCODE_INVOKE_VIRTUAL, "build"));
+                initialize_dar, DOPCODE_INVOKE_VIRTUAL, "build"));
 }
 
 TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
@@ -310,13 +311,13 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
 
   // First instruction should hold the null value, since 'model' can be
   // undefined.
-  EXPECT_EQ(OPCODE_CONST_4, insns[0]->opcode());
+  EXPECT_EQ(DOPCODE_CONST_4, insns[0]->opcode());
   uint16_t different_reg = insns[0]->dest();
 
   for (const auto& insn : insns) {
-    DexOpcode opcode = insn->opcode();
+    auto opcode = insn->opcode();
 
-    if (opcode == OPCODE_CONST_STRING) {
+    if (opcode == DOPCODE_CONST_STRING) {
       EXPECT_EQ(different_reg, insn->dest());
     }
   }

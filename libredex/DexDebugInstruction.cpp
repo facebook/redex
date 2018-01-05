@@ -67,8 +67,9 @@ void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   encdata = write_uleb128(encdata, m_uvalue);
 }
 
-DexDebugInstruction* DexDebugInstruction::make_instruction(DexIdx* idx,
-                                            const uint8_t*& encdata) {
+DexDebugInstruction* DexDebugInstruction::make_instruction(
+    DexIdx* idx, const uint8_t** encdata_ptr) {
+  auto& encdata = *encdata_ptr;
   uint8_t opcode = *encdata++;
   switch (opcode) {
   case DBG_END_SEQUENCE:

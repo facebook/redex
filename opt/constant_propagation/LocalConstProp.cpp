@@ -29,10 +29,10 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "InstructionLowering.h"
 #include "Walkers.h"
 
@@ -64,12 +64,12 @@ static Out reinterpret_bits(In in) {
   return *reinterpret_cast<Out*>(&in);
 }
 
-bool is_compare_floating(DexOpcode op) {
+bool is_compare_floating(IROpcode op) {
   return op == OPCODE_CMPG_DOUBLE || op == OPCODE_CMPL_DOUBLE ||
          op == OPCODE_CMPG_FLOAT || op == OPCODE_CMPL_FLOAT;
 }
 
-bool is_less_than_bias(DexOpcode op) {
+bool is_less_than_bias(IROpcode op) {
   return op == OPCODE_CMPL_DOUBLE || op == OPCODE_CMPL_FLOAT;
 }
 
@@ -83,7 +83,7 @@ bool is_less_than_bias(DexOpcode op) {
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* inst,
                      ConstPropEnvironment* current_state) {
-  DexOpcode op = inst->opcode();
+  IROpcode op = inst->opcode();
   Stored left_value;
   Stored right_value;
   auto left = get_constant_value(*current_state, inst->src(0), left_value);

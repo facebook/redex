@@ -29,7 +29,7 @@ using namespace regalloc;
  * possible opcodes for the given operands, essentially undoing this operation
  * if it is found to be unnecessary.
  */
-static DexOpcode pessimize_opcode(DexOpcode op) {
+static IROpcode pessimize_opcode(IROpcode op) {
   switch (op) {
   case OPCODE_MOVE:
   case OPCODE_MOVE_FROM16:

@@ -20,7 +20,7 @@ bool default_constructor(const DexMethod* meth) {
     auto it = ii.begin();
     auto end = ii.end();
     auto op = it->insn->opcode();
-    if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC_RANGE) {
+    if (op != OPCODE_INVOKE_DIRECT) {
       return false;
     }
     ++it;
