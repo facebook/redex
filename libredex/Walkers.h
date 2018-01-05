@@ -278,8 +278,9 @@ class walk {
           for (auto& mie : InstructionIterable(ir_code)) {
             insns.emplace_back(mie.insn);
           }
-          std::vector<std::vector<IRInstruction*>> matches =
-              m::find_matches(insns, predicate);
+
+          std::vector<std::vector<IRInstruction*>> matches;
+          m::find_matches(insns, predicate, matches);
           for (const std::vector<IRInstruction*>& matching_insns : matches) {
             walker(m, matching_insns);
           }
@@ -302,15 +303,7 @@ class walk {
             for (const MethodItemEntry& mie : InstructionIterable(block)) {
               insns.emplace_back(mie.insn);
             }
-            std::vector<std::vector<IRInstruction*>> block_matches =
-                m::find_matches(insns, predicate);
-
-            // move the matches from this block into the vector for this method
-            size_t old_size = method_matches.size();
-            method_matches.resize(old_size + block_matches.size());
-            std::move(block_matches.begin(),
-                      block_matches.end(),
-                      std::next(method_matches.begin(), old_size));
+            m::find_matches(insns, predicate, method_matches);
           }
 
           for (const std::vector<IRInstruction*>& matching_insns :

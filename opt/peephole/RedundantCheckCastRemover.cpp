@@ -20,19 +20,6 @@ RedundantCheckCastRemover::RedundantCheckCastRemover(
     PassManager& mgr, const std::vector<DexClass*>& scope)
     : m_mgr(mgr), m_scope(scope) {}
 
-void remove_instructions(
-    const std::unordered_map<DexMethod*, std::vector<IRInstruction*>>&
-        to_remove) {
-  for (auto& method_instrs : to_remove) {
-    DexMethod* method = method_instrs.first;
-    const auto& instrs = method_instrs.second;
-    auto code = method->get_code();
-    for (auto instr : instrs) {
-      code->remove_opcode(instr);
-    }
-  }
-}
-
 void RedundantCheckCastRemover::run() {
   auto match = std::make_tuple(m::invoke(),
                                m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
@@ -41,25 +28,23 @@ void RedundantCheckCastRemover::run() {
 
   std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
-  auto& mgr =
-      this->m_mgr; // so the lambda doesn't have to capture all of `this`
-  walk::matching_opcodes_in_block(
+  std::atomic<uint32_t> num_check_casts_removed;
+  walk::parallel::matching_opcodes_in_block(
       m_scope,
       match,
-      [&mgr, &to_remove](const DexMethod* method,
-                         const std::vector<IRInstruction*>& insns) {
+      [](DexMethod* method, const std::vector<IRInstruction*>& insns) {
         if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
-          to_remove[const_cast<DexMethod*>(method)].push_back(insns[2]);
-          mgr.incr_metric("redundant_check_casts_removed", 1);
+          IRInstruction* check_cast = insns[2];
+          method->get_code()->remove_opcode(check_cast);
 
-          TRACE(PEEPHOLE, 8, "found redundant check cast\n");
+          TRACE(PEEPHOLE, 8, "redundant check cast in %s\n", SHOW(method));
           for (IRInstruction* insn : insns) {
-            TRACE(PEEPHOLE, 8, "%s\n", SHOW(insn));
+            TRACE(PEEPHOLE, 8, "  %s\n", SHOW(insn));
           }
         }
       });
 
-  remove_instructions(to_remove);
+  m_mgr.incr_metric("redundant_check_casts_removed", num_check_casts_removed);
 }
 
 bool RedundantCheckCastRemover::can_remove_check_cast(
