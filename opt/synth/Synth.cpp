@@ -835,11 +835,7 @@ void do_transform(const ClassHierarchy& ch,
     }
   }
   // check that invokes to promoted static method is correct
-  walk::parallel::methods(classes, [&](DexMethod* meth) {
-    auto* code = meth->get_code();
-    if (code == nullptr) {
-      return;
-    }
+  walk::parallel::code(classes, [&](DexMethod* meth, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto opcode = insn->opcode();

@@ -116,10 +116,9 @@ void analyze_reflection(const Scope& scope) {
       };
 
   Timer t("walk_methods in analyze_reflection");
-  walk::parallel::methods(scope, [&refls](DexMethod* method) {
-      if (!method->get_code()) return;
+  walk::parallel::code(scope, [&refls](DexMethod* method, IRCode& code) {
       std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
-      for (auto& mie : InstructionIterable(method->get_code())) {
+      for (auto& mie : InstructionIterable(code)) {
         IRInstruction* insn = mie.insn;
         if (!is_invoke(insn->opcode())) {
           continue;

@@ -106,18 +106,13 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   void run() {
-    walk::parallel::methods(m_scope, [this](DexMethod* method) {
+    walk::parallel::code(m_scope, [this](DexMethod* method, IRCode& code) {
       if (m_config.method_black_list.count(method) != 0) {
         return;
       }
+      code.build_cfg();
 
-      IRCode* code = method->get_code();
-      if (code == nullptr) {
-        return;
-      }
-      code->build_cfg();
-
-      duplicates_t dups = collect_duplicates(code);
+      duplicates_t dups = collect_duplicates(&code);
       if (dups.size() > 0) {
         record_stats(dups);
         deduplicate(dups, method);

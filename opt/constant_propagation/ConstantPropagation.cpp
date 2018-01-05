@@ -194,10 +194,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  walk::parallel::methods(scope, [&](DexMethod* method) {
-    if (!method->get_code()) {
-      return;
-    }
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     // Skipping blacklisted classes
     if (m_config.blacklist.count(method->get_class()) > 0) {
       TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
@@ -206,15 +203,14 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
     TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
 
-    auto code = method->get_code();
-    code->build_cfg();
-    auto& cfg = code->cfg();
+    code.build_cfg();
+    auto& cfg = code.cfg();
 
     TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
     IntraProcConstantPropagation rcp(cfg, m_config);
     rcp.run(ConstPropEnvironment());
     rcp.simplify();
-    rcp.apply_changes(code);
+    rcp.apply_changes(&code);
 
     {
       std::lock_guard<std::mutex> lock{m_stats_mutex};

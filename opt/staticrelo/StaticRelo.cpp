@@ -164,12 +164,10 @@ void build_refs(
     }
   });
   // collect all exceptions and add to the set of references for the app
-  walk::methods(scope,
-      [&](DexMethod* method) {
-        auto code = method->get_code();
-        if (code == nullptr) return;
+  walk::code(scope,
+      [&](DexMethod* method, IRCode& code) {
         std::vector<DexType*> exceptions;
-        code->gather_catch_types(exceptions);
+        code.gather_catch_types(exceptions);
         for (const auto& exception : exceptions) {
           auto cls = type_class(exception);
           if (cls == nullptr || cls->is_external()) continue;

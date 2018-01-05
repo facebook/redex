@@ -178,12 +178,10 @@ void collect_throwing_blocks(
  */
 void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
-  walk::methods(scope,
-      [&](DexMethod* meth) {
-        if (meth->get_code() == nullptr) return;
-        auto mt = meth->get_code();
-        mt->build_cfg();
-        const auto& cfg = mt->cfg();
+  walk::code(scope,
+      [&](DexMethod* meth, IRCode& code) {
+        code.build_cfg();
+        const auto& cfg = code.cfg();
         for (const auto& block : cfg.blocks()) {
           if (is_throw_block(meth, block)) {
             // do the analysis to find the blocks contributing to the throw
