@@ -12,8 +12,8 @@
 #include "DexUtil.h"
 #include "GlobalConstProp.h"
 #include "LocalConstProp.h"
-#include "ParallelWalkers.h"
 #include "Transform.h"
+#include "Walkers.h"
 
 using namespace constant_propagation_impl;
 using std::placeholders::_1;
@@ -194,7 +194,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  walk_methods_parallel_simple(scope, [&](DexMethod* method) {
+  walk::parallel::methods(scope, [&](DexMethod* method) {
     if (!method->get_code()) {
       return;
     }

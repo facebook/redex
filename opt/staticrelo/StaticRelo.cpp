@@ -79,7 +79,7 @@ void visit_classes(
 template<typename P, typename V = void(DexMethod*, IRInstruction*)>
 void visit_opcodes(
   const Scope& scope, const m::match_t<IRInstruction, P>& p, const V& v) {
-  walk_opcodes(
+  walk::opcodes(
     scope,
     [](const DexMethod*) { return true; },
     [&](const DexMethod* m, IRInstruction* insn) {
@@ -164,7 +164,7 @@ void build_refs(
     }
   });
   // collect all exceptions and add to the set of references for the app
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* method) {
         auto code = method->get_code();
         if (code == nullptr) return;

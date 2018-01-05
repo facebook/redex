@@ -250,7 +250,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   }
 
   std::unordered_set<DexType*> escaped_builders;
-  walk_methods(scope, [&](DexMethod* m) {
+  walk::methods(scope, [&](DexMethod* m) {
     auto builders = created_builders(m);
     for (DexType* builder : builders) {
       if (escapes_stack(builder, m)) {
@@ -332,7 +332,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   BuilderTransform b_transform(pc, scope, stores, false);
 
   // Inline non init methods.
-  walk_methods(scope, [&](DexMethod* method) {
+  walk::methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
 
     for (DexType* builder : builders) {

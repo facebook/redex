@@ -170,7 +170,7 @@ void report_hotness_scores(
     all_scores.clear();
     method_scores.clear();
 
-    walk_opcodes(
+    walk::opcodes(
         coldstart_scopes[i], [](DexMethod*) { return true; }, collect_stats);
 
     // Printing the stats. The header is:

@@ -29,7 +29,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
   auto is_definitely_virtual = [&](const DexMethod* method) {
     return method->is_virtual() && non_virtual.count(method) == 0;
   };
-  walk_methods(scope, [&](DexMethod* caller) {
+  walk::methods(scope, [&](DexMethod* caller) {
     auto* code = caller->get_code();
     if (!code) {
       return;

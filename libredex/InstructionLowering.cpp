@@ -8,7 +8,7 @@
  */
 
 #include "InstructionLowering.h"
-#include "ParallelWalkers.h"
+#include "Walkers.h"
 
 namespace instruction_lowering {
 
@@ -365,7 +365,7 @@ Stats lower(DexMethod* method) {
 Stats run(DexStoresVector& stores) {
   using Data = std::nullptr_t;
   auto scope = build_class_scope(stores);
-  return walk_methods_parallel<Data, Stats>(
+  return walk::parallel::reduce_methods<Data, Stats>(
       scope,
       [](Data&, DexMethod* m) {
         Stats stats;

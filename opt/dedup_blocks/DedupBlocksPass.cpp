@@ -21,9 +21,9 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "ParallelWalkers.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "Walkers.h"
 
 /*
  * This pass removes blocks that are duplicates in a method.
@@ -106,7 +106,7 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   void run() {
-    walk_methods_parallel_simple(m_scope, [this](DexMethod* method) {
+    walk::parallel::methods(m_scope, [this](DexMethod* method) {
       if (m_config.method_black_list.count(method) != 0) {
         return;
       }

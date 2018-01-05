@@ -13,7 +13,6 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
-#include "ParallelWalkers.h"
 #include "Walkers.h"
 
 std::vector<int64_t> get_lits(IRCode* code) {
@@ -34,7 +33,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* unused */,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  walk_methods_parallel_simple(scope, [](DexMethod* m) {
+  walk::parallel::methods(scope, [](DexMethod* m) {
     IRCode* code = m->get_code();
 
     if (code == nullptr) {

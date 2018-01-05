@@ -286,7 +286,7 @@ class Breadcrumbs {
 
   // verify that all field definitions are of a type not deleted
   void check_fields() {
-    walk_fields(scope,
+    walk::fields(scope,
         [&](DexField* field) {
           const auto& type = check_type(field->get_type());
           if (type == nullptr) {
@@ -303,7 +303,7 @@ class Breadcrumbs {
 
   // verify that all method definitions use not deleted types in their sig
   void check_methods() {
-    walk_methods(scope,
+    walk::methods(scope,
         [&](DexMethod* method) {
           const auto& type = check_method(method);
           if (type == nullptr) return;
@@ -404,7 +404,7 @@ class Breadcrumbs {
   }
 
   void check_opcodes() {
-    walk_opcodes(scope,
+    walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_type()) {

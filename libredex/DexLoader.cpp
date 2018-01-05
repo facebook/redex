@@ -220,7 +220,7 @@ static void mt_balloon(DexMethod* method) { method->balloon(); }
 
 static void balloon_all(const Scope& scope) {
   auto wq = workqueue_foreach<DexMethod*>(mt_balloon);
-  walk_methods(scope, [&](DexMethod* m) {
+  walk::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
       wq.add_item(m);
     }

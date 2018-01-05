@@ -167,7 +167,7 @@ void remove_primary_dex_refs(
     const DexClasses& primary_dex,
     std::vector<DexMethod*>& statics) {
   std::unordered_set<DexMethod*> ref_set;
-  walk_opcodes(
+  walk::opcodes(
     primary_dex,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* insn) {
@@ -334,7 +334,7 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
   std::unordered_set<DexClass*> class_set(classes.begin(), classes.end());
   std::unordered_set<DexMethod*> static_set(statics.begin(), statics.end());
   auto scope = build_class_scope(stores);
-  walk_opcodes(
+  walk::opcodes(
     scope,
     [&](DexMethod* m) {
       auto cls = type_class(m->get_class());

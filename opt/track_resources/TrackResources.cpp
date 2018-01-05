@@ -101,7 +101,7 @@ void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
       inline_field.emplace(sfield);
     }
   }
-  walk_opcodes(
+  walk::opcodes(
       fullscope,
       [](DexMethod* method) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {

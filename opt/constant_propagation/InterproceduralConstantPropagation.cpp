@@ -14,7 +14,6 @@
 #include "CallGraph.h"
 #include "ConstantPropagation.h"
 #include "GlobalConstProp.h"
-#include "ParallelWalkers.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -119,7 +118,7 @@ class Propagator {
     // Rebuild all CFGs here -- this should be more efficient than doing them
     // within FixpointIterator::analyze_node(), since that can get called
     // multiple times for a given method
-    walk_methods_parallel_simple(m_scope, [](DexMethod* m) {
+    walk::parallel::methods(m_scope, [](DexMethod* m) {
       auto* code = m->get_code();
       if (code) {
         code->build_cfg();
@@ -136,7 +135,7 @@ class Propagator {
    */
   void optimize(const FixpointIterator& fp_iter) {
     std::mutex stats_mutex;
-    walk_methods_parallel_simple(m_scope, [&](DexMethod* method) {
+    walk::parallel::methods(m_scope, [&](DexMethod* method) {
       auto* code = method->get_code();
       if (code == nullptr) {
         return;

@@ -131,7 +131,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   }
 
   // all annotations in methods
-  walk_methods(m_scope, [&](DexMethod* method) {
+  walk::methods(m_scope, [&](DexMethod* method) {
     annos_in_aset(method->get_anno_set());
     auto param_annos = method->get_param_anno();
     if (!param_annos) {
@@ -142,14 +142,14 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     }
   });
   // all annotations in fields
-  walk_fields(m_scope,
+  walk::fields(m_scope,
               [&](DexField* field) { annos_in_aset(field->get_anno_set()); });
 
   AnnoKill::AnnoSet referenced_annos;
 
   // mark an annotation as "unremovable" if a field is typed with that
   // annotation
-  walk_fields(m_scope, [&](DexField* field) {
+  walk::fields(m_scope, [&](DexField* field) {
     // don't look at fields defined on the annotation itself
     const auto field_cls_type = field->get_class();
     if (all_annos.count(field_cls_type) > 0) {
@@ -175,7 +175,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
   // mark an annotation as "unremovable" if a method signature contains a type
   // with that annotation
-  walk_methods(m_scope, [&](DexMethod* meth) {
+  walk::methods(m_scope, [&](DexMethod* meth) {
     // don't look at methods defined on the annotation itself
     const auto meth_cls_type = meth->get_class();
     if (all_annos.count(meth_cls_type) > 0) {
@@ -208,7 +208,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
   // mark an annotation as "unremovable" if any opcode references the annotation
   // type
-  walk_opcodes(
+  walk::opcodes(
       m_scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
@@ -523,7 +523,7 @@ bool AnnoKill::kill_annotations() {
     }
   }
 
-  walk_methods(m_scope, [&](DexMethod* method) {
+  walk::methods(m_scope, [&](DexMethod* method) {
     // Method annotations
     auto method_aset = method->get_anno_set();
     if (method_aset) {
@@ -575,7 +575,7 @@ bool AnnoKill::kill_annotations() {
     }
   });
 
-  walk_fields(m_scope, [&](DexField* field) {
+  walk::fields(m_scope, [&](DexField* field) {
     DexAnnotationSet* aset = field->get_anno_set();
     if (!aset) {
       return;

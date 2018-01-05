@@ -17,8 +17,8 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
-#include "ParallelWalkers.h"
 #include "Transform.h"
+#include "Walkers.h"
 
 using namespace regalloc;
 
@@ -59,7 +59,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   using Data = std::nullptr_t;
   using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<Data, Output>(
+  auto stats = walk::parallel::reduce_methods<Data, Output>(
       scope,
       [this](Data&, DexMethod* m) { // mapper
         graph_coloring::Allocator::Stats stats;

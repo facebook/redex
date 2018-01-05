@@ -253,7 +253,7 @@ void AnalysisImpl::remove_escaped() {
  * Find all fields typed with the single impl interface.
  */
 void AnalysisImpl::collect_field_defs() {
-  walk_fields(scope,
+  walk::fields(scope,
               [&](DexField* field) {
                 auto type = field->get_type();
                 auto intf = get_and_check_single_impl(type);
@@ -282,7 +282,7 @@ void AnalysisImpl::collect_method_defs() {
     single_impls[intf].methoddefs.insert(method);
   };
 
-  walk_methods(scope,
+  walk::methods(scope,
     [&](DexMethod* method) {
       auto proto = method->get_proto();
       bool native = is_native(method);
@@ -330,7 +330,7 @@ void AnalysisImpl::analyze_opcodes() {
     }
   };
 
-  walk_opcodes(scope,
+  walk::opcodes(scope,
                [](DexMethod* method) { return true; },
                [&](DexMethod* method, IRInstruction* insn) {
                  auto op = insn->opcode();

@@ -24,7 +24,7 @@
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
-#include "ParallelWalkers.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -302,7 +302,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<std::nullptr_t, LocalDce::Stats>(
+  auto stats = walk::parallel::reduce_methods<std::nullptr_t, LocalDce::Stats>(
       scope,
       [&](std::nullptr_t, DexMethod* m) {
         auto* code = m->get_code();

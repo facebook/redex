@@ -393,7 +393,7 @@ std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
     old_no_ref = new_no_ref;
     new_no_ref = 0;
     cold_cold_references.clear();
-    walk_code(
+    walk::code(
       input_scope,
       [&](DexMethod* meth) {
         return coldstart_classes.count(type_class(meth->get_class())) > 0;

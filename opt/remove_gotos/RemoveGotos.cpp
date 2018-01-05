@@ -22,7 +22,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "ParallelWalkers.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -125,7 +125,7 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t total_gotos_removed = walk_methods_parallel<RemoveGotos, size_t>(
+  size_t total_gotos_removed = walk::parallel::reduce_methods<RemoveGotos, size_t>(
       scope,
       [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
         if (!m->get_code()) {

@@ -265,7 +265,7 @@ void GatheredTypes::build_cls_load_map() {
     // locality if a random class in a dex is loaded and then executes some methods
     std::vector<const DexClass*> v;
     v.push_back(cls);
-    walk_methods(v, [&](DexMethod* m) {
+    walk::methods(v, [&](DexMethod* m) {
       std::vector<DexString*> method_strings;
       m->gather_strings(method_strings);
       for (const auto& s : method_strings) {
@@ -742,7 +742,7 @@ void DexOutput::generate_class_data_items() {
 static void sync_all(const Scope& scope) {
   constexpr bool serial = false; // for debugging
   auto wq = workqueue_foreach<DexMethod*>([](DexMethod* m){m->sync();});
-  walk_code(scope,
+  walk::code(scope,
             [](DexMethod*) { return true; },
             [&](DexMethod* m, IRCode&) {
               if (serial) {
@@ -1082,7 +1082,7 @@ static void fix_method_jumbos(DexMethod* method, const DexOutputIdx* dodx) {
 }
 
 static void fix_jumbos(DexClasses* classes, DexOutputIdx* dodx) {
-  walk_methods(*classes, [&](DexMethod* m) { fix_method_jumbos(m, dodx); });
+  walk::methods(*classes, [&](DexMethod* m) { fix_method_jumbos(m, dodx); });
 }
 
 void DexOutput::init_header_offsets() {

@@ -164,7 +164,7 @@ class BridgeRemover {
       m_potential_bridgee_refs;
 
   void find_bridges() {
-    walk_methods(*m_scope,
+    walk::methods(*m_scope,
                  [&](DexMethod* m) {
                    if (has_bridgelike_access(m)) {
                      auto bridgee = find_bridgee(m);
@@ -326,7 +326,7 @@ class BridgeRemover {
       m_bridges_to_bridgees.erase(kill);
     }
 
-    walk_code(*m_scope,
+    walk::code(*m_scope,
               [](DexMethod*) { return true; },
               [&](DexMethod* m, IRCode& code) {
                 exclude_referenced_bridgee(m, code);

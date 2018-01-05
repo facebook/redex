@@ -280,7 +280,7 @@ public:
   }
 
   void run(bool do_delete, PassManager& mgr) {
-    walk_methods(m_scope,
+    walk::methods(m_scope,
       [&](DexMethod* meth) {
         m_num_methods++;
         auto invoked_meth = get_trivial_return_invoke_super(meth);
@@ -296,7 +296,7 @@ public:
       // remove the method declarations and the runtime semantics would be
       // unchanged -- but this ensures that we have no more references to
       // that method_id and can avoid emitting it in the dex output.
-      walk_opcodes(m_scope,
+      walk::opcodes(m_scope,
                    [](DexMethod* meth) { return true; },
                    [&](DexMethod* meth, IRInstruction* insn) {
                      if (is_invoke(insn->opcode())) {

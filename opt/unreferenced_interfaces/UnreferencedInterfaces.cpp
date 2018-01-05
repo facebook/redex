@@ -110,11 +110,11 @@ void remove_referenced(const Scope& scope,
     }
   };
 
-  walk_fields(scope,
+  walk::fields(scope,
       [&](DexField* field) {
         check_type(field->get_type(), metric.field_refs);
       });
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         const auto proto = meth->get_proto();
         check_type(proto->get_rtype(), metric.sig_refs);
@@ -122,7 +122,7 @@ void remove_referenced(const Scope& scope,
           check_type(type, metric.sig_refs);
         }
       });
-  walk_annotations(scope,
+  walk::annotations(scope,
       [&](DexAnnotation* anno) {
         std::vector<DexType*> types_in_anno;
         anno->gather_types(types_in_anno);
@@ -130,7 +130,7 @@ void remove_referenced(const Scope& scope,
           check_type(type, metric.anno_refs);
         }
       });
-  walk_opcodes(scope,
+  walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         if (insn->has_type()) {

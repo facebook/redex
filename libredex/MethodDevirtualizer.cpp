@@ -66,7 +66,7 @@ void fix_call_sites_and_drop_this_arg(
     }
   };
 
-  walk_code(scope, [](DexMethod*) { return true; }, fixer);
+  walk::code(scope, [](DexMethod*) { return true; }, fixer);
 }
 
 void fix_call_sites(const std::vector<DexClass*>& scope,
@@ -86,7 +86,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
     patch_call_site(method, opcode, metrics);
   };
 
-  walk_opcodes(scope, [](DexMethod*) { return true; }, fixer);
+  walk::opcodes(scope, [](DexMethod*) { return true; }, fixer);
 }
 
 void make_methods_static(const std::unordered_set<DexMethod*>& methods,

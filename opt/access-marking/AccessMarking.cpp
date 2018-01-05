@@ -15,7 +15,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Mutators.h"
-#include "ParallelWalkers.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "VirtualScope.h"
@@ -89,7 +88,7 @@ std::unordered_set<DexMethod*> find_private_methods(
       candidates.emplace(m);
     }
   }
-  walk_opcodes(
+  walk::opcodes(
       scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* caller, IRInstruction* inst) {
@@ -105,7 +104,7 @@ std::unordered_set<DexMethod*> find_private_methods(
 
 void fix_call_sites_private(const std::vector<DexClass*>& scope,
                             const std::unordered_set<DexMethod*>& privates) {
-  walk_methods_parallel_simple(scope, [&](DexMethod* caller) {
+  walk::parallel::methods(scope, [&](DexMethod* caller) {
     IRCode* code = caller->get_code();
     if (code == nullptr) {
       return;

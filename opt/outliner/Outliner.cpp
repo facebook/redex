@@ -161,7 +161,7 @@ void Outliner::run_pass(DexStoresVector& stores,
 
   // Collect all throws we should outline
   std::vector<outlined_t> outlined_throws;
-  walk_matching_opcodes_in_block(
+  walk::matching_opcodes_in_block(
       scope,
       match,
       [&](const DexMethod* method,

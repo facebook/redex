@@ -176,7 +176,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
  */
 void update_impl_refereces(Scope& scope, Unterface& unterface) {
   std::vector<DexMethod*> to_change;
-  walk_code(scope,
+  walk::code(scope,
       [&](DexMethod* meth) {
         return !find_impl(meth->get_class(), unterface);
       },

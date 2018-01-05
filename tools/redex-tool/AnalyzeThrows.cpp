@@ -178,7 +178,7 @@ void collect_throwing_blocks(
  */
 void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
         auto mt = meth->get_code();

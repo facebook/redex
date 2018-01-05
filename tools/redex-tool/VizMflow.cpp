@@ -23,7 +23,7 @@ void dump_viz(
   const Scope& scope,
   const char* cls_filter,
   const char* meth_filter) {
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_code() == nullptr) return;
         if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;

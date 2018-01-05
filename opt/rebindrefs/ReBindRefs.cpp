@@ -122,7 +122,7 @@ struct Rebinder {
   Rebinder(Scope& scope, PassManager& mgr) : m_scope(scope), m_pass_mgr(mgr) {}
 
   void rewrite_refs() {
-    walk_opcodes(
+    walk::opcodes(
       m_scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {

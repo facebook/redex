@@ -19,9 +19,9 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
+#include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // PeepholeOptimizer implementation
@@ -1518,7 +1518,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
   std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  walk_methods_parallel<PeepholeOptimizer*, std::nullptr_t>(
+  walk::parallel::reduce_methods<PeepholeOptimizer*, std::nullptr_t>(
       scope,
       [](PeepholeOptimizer*& ph, DexMethod* m) { // walker
         ph->run_method(m);

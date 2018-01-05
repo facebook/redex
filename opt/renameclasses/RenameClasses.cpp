@@ -71,11 +71,11 @@ void get_next_ident(char *out, int &num) {
 }
 
 void unpackage_private(Scope &scope) {
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod *method) {
         if (is_package_protected(method)) set_public(method);
       });
-  walk_fields(scope,
+  walk::fields(scope,
       [&](DexField *field) {
         if (is_package_protected(field)) set_public(field);
       });
@@ -223,7 +223,7 @@ void rename_classes(
     auto target = DexString::make_string(buf);
     aliases[dstring] = target;
   }
-  walk_annotations(scope, [&](DexAnnotation* anno) {
+  walk::annotations(scope, [&](DexAnnotation* anno) {
     static DexType *dalviksig =
       DexType::get_type("Ldalvik/annotation/Signature;");
     if (anno->type() != dalviksig) return;

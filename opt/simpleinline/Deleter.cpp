@@ -18,7 +18,7 @@ size_t delete_methods(
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
           auto callee = resolver(insn->get_method(), opcode_to_search(insn));

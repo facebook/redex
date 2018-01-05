@@ -37,12 +37,12 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "ParallelWalkers.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 s_expr PointsToVariable::to_s_expr() const {
   return s_expr({s_expr("V"), s_expr(m_id)});
@@ -1591,7 +1591,7 @@ PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
   }
 
   // We generate a system of points-to actions for each Dex method in parallel.
-  walk_methods_parallel_simple(scope, [this](DexMethod* dex_method) {
+  walk::parallel::methods(scope, [this](DexMethod* dex_method) {
     generate_points_to_actions(dex_method);
   });
 }

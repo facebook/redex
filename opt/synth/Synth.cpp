@@ -27,11 +27,11 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Mutators.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "SynthConfig.h"
+#include "Walkers.h"
 
 
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
@@ -835,7 +835,7 @@ void do_transform(const ClassHierarchy& ch,
     }
   }
   // check that invokes to promoted static method is correct
-  walk_methods_parallel_simple(classes, [&](DexMethod* meth) {
+  walk::parallel::methods(classes, [&](DexMethod* meth) {
     auto* code = meth->get_code();
     if (code == nullptr) {
       return;

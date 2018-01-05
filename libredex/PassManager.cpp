@@ -27,13 +27,13 @@
 #include "InterDex.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
-#include "ParallelWalkers.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
+#include "Walkers.h"
 
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
@@ -87,7 +87,7 @@ void PassManager::run_type_checker(const Scope& scope,
                                    bool verify_moves) {
   TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
-  walk_methods_parallel_simple(scope, [=](DexMethod* dex_method) {
+  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method);
     if (polymorphic_constants) {
       checker.enable_polymorphic_constants();

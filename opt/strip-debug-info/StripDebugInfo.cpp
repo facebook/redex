@@ -118,7 +118,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   m_num_epilogue_dropped = 0;
   m_num_empty_dropped = 0;
   auto scope = build_class_scope(stores);
-  walk_methods(scope, [&](DexMethod* meth) {
+  walk::methods(scope, [&](DexMethod* meth) {
     IRCode* code = meth->get_code();
     if (!code) return;
     if (!method_passes_filter(meth)) return;

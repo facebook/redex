@@ -43,7 +43,7 @@ void RedundantCheckCastRemover::run() {
 
   auto& mgr =
       this->m_mgr; // so the lambda doesn't have to capture all of `this`
-  walk_matching_opcodes_in_block(
+  walk::matching_opcodes_in_block(
       m_scope,
       match,
       [&mgr, &to_remove](const DexMethod* method,

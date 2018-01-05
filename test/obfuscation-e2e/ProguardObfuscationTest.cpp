@@ -86,7 +86,7 @@ bool ProguardObfuscationTest::method_is_renamed(const DexClass* cls,
 bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
   bool res = false;
   DexClasses& classes(dexen.front());
-  walk_opcodes(classes,
+  walk::opcodes(classes,
     [](DexMethod*){return true;},
     [&](DexMethod* method, IRInstruction* instr) {
       if (!is_ifield_op(instr->opcode())) return;

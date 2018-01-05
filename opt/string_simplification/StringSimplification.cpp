@@ -21,7 +21,7 @@ void StringSimplificationPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& /* cfg */,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  walk_methods(scope, [&](DexMethod* m) {
+  walk::methods(scope, [&](DexMethod* m) {
     TRACE(STR_SIMPLE, 8, "Method: %s\n", SHOW(m));
     if (!m->get_code()) {
       return;

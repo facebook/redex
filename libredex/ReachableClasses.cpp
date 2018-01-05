@@ -19,11 +19,11 @@
 #include "Walkers.h"
 #include "DexClass.h"
 #include "Match.h"
-#include "ParallelWalkers.h"
 #include "RedexResources.h"
 #include "SimpleReflectionAnalysis.h"
 #include "StringUtil.h"
 #include "Timer.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -116,7 +116,7 @@ void analyze_reflection(const Scope& scope) {
       };
 
   Timer t("walk_methods in analyze_reflection");
-  walk_methods_parallel_simple(scope, [&refls](DexMethod* method) {
+  walk::parallel::methods(scope, [&refls](DexMethod* method) {
       if (!method->get_code()) return;
       std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
       for (auto& mie : InstructionIterable(method->get_code())) {
@@ -390,7 +390,7 @@ void init_permanently_reachable_classes(
 
   {
     Timer t_walk("walk matching in perm reachable");
-    walk_matching_opcodes(
+    walk::matching_opcodes(
         scope,
         match,
         [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
@@ -500,7 +500,7 @@ void init_permanently_reachable_classes(
  */
 void recompute_classes_reachable_from_code(const Scope& scope) {
   // Matches methods marked as native
-  walk_methods(scope,
+  walk::methods(scope,
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
                    TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));

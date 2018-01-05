@@ -396,7 +396,7 @@ int VirtualRenamer::rename_virtual_scopes(
  * Collect all method refs to concrete methods (definitions).
  */
 void collect_refs(Scope& scope, RefsMap& def_refs) {
-  walk_opcodes(scope, [](DexMethod*) { return true; },
+  walk::opcodes(scope, [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* insn) {
       if (!insn->has_method()) return;
       auto callee = insn->get_method();

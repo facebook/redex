@@ -157,7 +157,7 @@ MultiMethodInliner::MultiMethodInliner(
         , m_config(config) {
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
           auto callee = resolver(insn->get_method(), opcode_to_search(insn));
@@ -584,7 +584,7 @@ void MultiMethodInliner::invoke_direct_to_static() {
     TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
     mutators::make_static(method);
   }
-  walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(m_scope, [](DexMethod* meth) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT) {
@@ -607,7 +607,7 @@ void select_inlinable(
     calls[method] = 0;
   }
   // count call sites for each method
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
           auto callee = resolve_method(

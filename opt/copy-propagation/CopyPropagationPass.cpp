@@ -17,8 +17,8 @@
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
 #include "IRTypeChecker.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
+#include "Walkers.h"
 
 // This pass eliminates writes to registers that already hold the written value.
 //
@@ -261,7 +261,7 @@ Stats Stats::operator+(const Stats& other) {
 Stats CopyPropagation::run(Scope scope) {
   using Data = std::nullptr_t;
   using Output = Stats;
-  return walk_methods_parallel<Data, Output>(
+  return walk::parallel::reduce_methods<Data, Output>(
       scope,
       [this](Data&, DexMethod* m) {
         IRCode* code = m->get_code();
@@ -294,7 +294,7 @@ Stats CopyPropagation::run(Scope scope) {
       [](Output a, Output b) { return a + b; },
       [](unsigned int /* thread_index */) { return nullptr; },
       Output(),
-      m_config.debug ? 1 : walkers_default_num_threads());
+      m_config.debug ? 1 : walk::parallel::default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code) {

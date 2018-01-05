@@ -57,7 +57,7 @@ class ReorderInterfacesImpl {
  */
 void ReorderInterfacesImpl::run() {
   // Check out each instruction and process if it is a function invoke
-  walk_opcodes(m_scope,
+  walk::opcodes(m_scope,
                [](DexMethod*) { return true; },
                [this](DexMethod* /* unused */, IRInstruction* insn) {
                  compute_call_frequencies(insn);
