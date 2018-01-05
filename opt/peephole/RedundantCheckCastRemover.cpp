@@ -47,17 +47,14 @@ void RedundantCheckCastRemover::run() {
       m_scope,
       match,
       [&mgr, &to_remove](const DexMethod* method,
-                         IRCode* /* unused */,
-                         Block* /* unused */,
-                         size_t size,
-                         IRInstruction** insns) {
-        if (RedundantCheckCastRemover::can_remove_check_cast(insns, size)) {
+                         const std::vector<IRInstruction*>& insns) {
+        if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
           to_remove[const_cast<DexMethod*>(method)].push_back(insns[2]);
           mgr.incr_metric("redundant_check_casts_removed", 1);
 
           TRACE(PEEPHOLE, 8, "found redundant check cast\n");
-          for (size_t i = 0; i < size; ++i) {
-            TRACE(PEEPHOLE, 8, "%s\n", SHOW(insns[i]));
+          for (IRInstruction* insn : insns) {
+            TRACE(PEEPHOLE, 8, "%s\n", SHOW(insn));
           }
         }
       });
@@ -65,9 +62,9 @@ void RedundantCheckCastRemover::run() {
   remove_instructions(to_remove);
 }
 
-bool RedundantCheckCastRemover::can_remove_check_cast(IRInstruction** insns,
-                                                      size_t size) {
-  always_assert(size == 4);
+bool RedundantCheckCastRemover::can_remove_check_cast(
+    const std::vector<IRInstruction*>& insns) {
+  always_assert(insns.size() == 4);
   IRInstruction* invoke_op = insns[0];
   IRInstruction* move_result_op = insns[1];
   IRInstruction* check_cast_op = insns[2];

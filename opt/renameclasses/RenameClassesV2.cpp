@@ -222,7 +222,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
     m::const_string(/* const-string {vX}, <any string> */)
   );
   walk::matching_opcodes(scope, match,
-      [&](const DexMethod*, size_t, IRInstruction** insns){
+      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
         IRInstruction* const_string = insns[0];
         auto classname = JavaNameUtil::external_to_internal(
           const_string->get_string()->c_str());
@@ -813,7 +813,7 @@ void RenameClassesPassV2::rename_classes(
   );
 
   walk::matching_opcodes(scope, match,
-      [&](const DexMethod*, size_t, IRInstruction** insns){
+      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
         IRInstruction* insn = insns[0];
         DexString* str = insn->get_string();
         // get_string instead of make_string here because if the string doesn't

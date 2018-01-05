@@ -387,7 +387,7 @@ void init_permanently_reachable_classes(
   walk::parallel::matching_opcodes(
       scope,
       match,
-      [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
+      [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
         auto const_string = insns[0];
         auto move_result_pseudo = insns[1];
         auto invoke_static = insns[2];

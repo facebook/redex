@@ -86,6 +86,30 @@ struct insns_matcher<T, std::integral_constant<size_t, std::tuple_size<T>::value
   }
 };
 
+// Find all sequences in `insns` that match `p`
+template <typename P, size_t N = std::tuple_size<P>::value>
+std::vector<std::vector<IRInstruction*>> find_matches(
+    const std::vector<IRInstruction*>& insns, const P& p) {
+
+  std::vector<std::vector<IRInstruction*>> result;
+  // No way to match if we have fewer insns than N
+  if (insns.size() >= N) {
+    // Try to match starting at i
+    for (size_t i = 0; i <= insns.size() - N; ++i) {
+      if (m::insns_matcher<P, std::integral_constant<size_t, 0>>::matches_at(
+              i, insns, p)) {
+        std::vector<IRInstruction*> matching_insns;
+        matching_insns.reserve(N);
+        for (size_t c = 0; c < N; ++c) {
+          matching_insns.push_back(insns.at(i + c));
+        }
+        result.emplace_back(std::move(matching_insns));
+      }
+    }
+  }
+  return result;
+}
+
 } // namespace
 
 namespace m {
