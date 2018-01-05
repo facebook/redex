@@ -341,7 +341,6 @@ inline bool is_branch(IROpcode op) {
   switch (op) {
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
-  case OPCODE_GOTO_32:
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
@@ -354,18 +353,6 @@ inline bool is_branch(IROpcode op) {
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
   case OPCODE_IF_LEZ:
-  case OPCODE_GOTO_16:
-  case OPCODE_GOTO:
-    return true;
-  default:
-    return false;
-  }
-}
-
-inline bool is_goto(IROpcode op) {
-  switch (op) {
-  case OPCODE_GOTO_32:
-  case OPCODE_GOTO_16:
   case OPCODE_GOTO:
     return true;
   default:

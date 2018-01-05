@@ -847,7 +847,7 @@ void IRCode::remove_debug_line_info(Block* block) {
 }
 
 void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
-  IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
+  IRInstruction* to = new IRInstruction(OPCODE_GOTO);
   auto miter = m_fmethod->begin();
   for (; miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;

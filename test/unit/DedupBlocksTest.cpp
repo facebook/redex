@@ -52,7 +52,7 @@ struct DedupBlocksTest : testing::Test {
     using namespace dex_asm;
 
     IRInstruction* insn = nullptr;
-    if (is_goto(op)) {
+    if (op == OPCODE_GOTO) {
       insn = dasm(op);
     } else {
       insn = dasm(op, {0_v});

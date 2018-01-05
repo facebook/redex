@@ -191,7 +191,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_CONST_WIDE_HIGH16:
     return OPCODE_CONST_WIDE_HIGH16;
   case DOPCODE_GOTO_16:
-    return OPCODE_GOTO_16;
+    return OPCODE_GOTO;
   case DOPCODE_CMPL_FLOAT:
     return OPCODE_CMPL_FLOAT;
   case DOPCODE_CMPG_FLOAT:
@@ -369,7 +369,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_FILL_ARRAY_DATA:
     return OPCODE_FILL_ARRAY_DATA;
   case DOPCODE_GOTO_32:
-    return OPCODE_GOTO_32;
+    return OPCODE_GOTO;
   case DOPCODE_PACKED_SWITCH:
     return OPCODE_PACKED_SWITCH;
   case DOPCODE_SPARSE_SWITCH:
@@ -574,8 +574,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_CONST_WIDE_16;
   case OPCODE_CONST_WIDE_HIGH16:
     return DOPCODE_CONST_WIDE_HIGH16;
-  case OPCODE_GOTO_16:
-    return DOPCODE_GOTO_16;
   case OPCODE_CMPL_FLOAT:
     return DOPCODE_CMPL_FLOAT;
   case OPCODE_CMPG_FLOAT:
@@ -752,8 +750,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_CONST_WIDE_32;
   case OPCODE_FILL_ARRAY_DATA:
     return DOPCODE_FILL_ARRAY_DATA;
-  case OPCODE_GOTO_32:
-    return DOPCODE_GOTO_32;
   case OPCODE_PACKED_SWITCH:
     return DOPCODE_PACKED_SWITCH;
   case OPCODE_SPARSE_SWITCH:
@@ -969,8 +965,6 @@ Branchingness branchingness(IROpcode op) {
   case OPCODE_THROW:
     return BRANCH_THROW;
   case OPCODE_GOTO:
-  case OPCODE_GOTO_16:
-  case OPCODE_GOTO_32:
     return BRANCH_GOTO;
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
@@ -1251,9 +1245,6 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_CONST_WIDE_16:
   case OPCODE_CONST_WIDE_HIGH16:
     return false;
-  case OPCODE_GOTO_16:
-    always_assert_log(false, "No dest");
-    not_reached();
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
   case OPCODE_CMPL_DOUBLE:
@@ -1354,7 +1345,6 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_CONST_WIDE_32:
     return false;
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_GOTO_32:
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
     always_assert_log(false, "No dest");

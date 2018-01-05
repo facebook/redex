@@ -214,7 +214,7 @@ size_t split_for_block(const SplitPlan& split_plan,
           }
         } else if (succ->type() == EDGE_GOTO) {
           if (lastmei->type != MFLOW_OPCODE ||
-              !is_goto(lastmei->insn->opcode())) {
+              lastmei->insn->opcode() != OPCODE_GOTO) {
             // Fall throughs, don't need to change target.
             block_load_info->mode_and_insn[block_edge].add_insn_mode(
                 mov, FALLTHROUGH);
@@ -411,7 +411,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
         code->insert_before(pos_it, insn);
         ++split_move;
       }
-      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO_16));
+      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
       code->insert_before(pos_it, *goto_entry);
       succ_target->target->src = goto_entry;
       succ_target->target->type = BRANCH_SIMPLE;
@@ -423,7 +423,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
         code->insert_before(pos_it, insn);
         ++split_move;
       }
-      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO_16));
+      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
       code->insert_before(pos_it, *goto_entry);
       BranchTarget* bt = new BranchTarget();
       bt->type = BRANCH_SIMPLE;

@@ -69,8 +69,6 @@ enum class Ref {
   OP(FILL_ARRAY_DATA   , Ref::Data, "fill-array-data") \
   OP(THROW             , Ref::None, "throw") \
   OP(GOTO              , Ref::None, "goto") \
-  OP(GOTO_16           , Ref::None, "goto/16") \
-  OP(GOTO_32           , Ref::None, "goto-32") \
   OP(PACKED_SWITCH     , Ref::None, "packed-switch") \
   OP(SPARSE_SWITCH     , Ref::None, "sparse-switch") \
   OP(CMPL_FLOAT        , Ref::None, "cmpl-float") \

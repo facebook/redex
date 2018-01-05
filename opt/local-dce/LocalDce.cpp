@@ -48,8 +48,6 @@ static bool has_side_effects(IROpcode opc) {
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-  case OPCODE_GOTO_16:
-  case OPCODE_GOTO_32:
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
   case OPCODE_IF_EQ:

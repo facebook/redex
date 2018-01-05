@@ -285,7 +285,8 @@ class DedupBlocksImpl {
     always_assert_log(has_opcodes(edge->src()), "need opcodes");
     const auto& last_of_block = last_opcode(edge->src());
 
-    return edge->type() == EDGE_GOTO && !is_goto(last_of_block->insn->opcode());
+    return edge->type() == EDGE_GOTO &&
+           last_of_block->insn->opcode() != OPCODE_GOTO;
   }
 
   void record_stats(const duplicates_t& duplicates) {

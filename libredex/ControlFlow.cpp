@@ -198,10 +198,10 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     if (lastmei->type == MFLOW_OPCODE) {
       auto lastop = lastmei->insn->opcode();
       if (is_branch(lastop)) {
-        fallthrough = !is_goto(lastop);
+        fallthrough = lastop != OPCODE_GOTO;
         auto const& targets = branch_to_targets[&*lastmei];
         for (auto target : targets) {
-          add_edge(b, target, is_goto(lastop) ? EDGE_GOTO : EDGE_BRANCH);
+          add_edge(b, target, lastop == OPCODE_GOTO ? EDGE_GOTO : EDGE_BRANCH);
         }
       } else if (is_return(lastop) || lastop == OPCODE_THROW) {
         fallthrough = false;
@@ -377,7 +377,7 @@ std::vector<Block*> ControlFlowGraph::order() {
 
 FatMethod::iterator Block::get_goto() {
   for (auto it = m_entries.begin(); it != m_entries.end(); it++) {
-    if (it->type == MFLOW_OPCODE && is_goto(it->insn->opcode())) {
+    if (it->type == MFLOW_OPCODE && it->insn->opcode() == OPCODE_GOTO) {
       return it;
     }
   }

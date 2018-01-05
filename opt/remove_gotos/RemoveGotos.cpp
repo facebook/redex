@@ -31,9 +31,7 @@ constexpr const char* METRIC_GOTO_REMOVED = "num_goto_removed";
 class RemoveGotos {
  private:
   static bool is_goto(const MethodItemEntry& mie) {
-    return mie.type == MFLOW_OPCODE && (mie.insn->opcode() == OPCODE_GOTO ||
-                                        mie.insn->opcode() == OPCODE_GOTO_16 ||
-                                        mie.insn->opcode() == OPCODE_GOTO_32);
+    return mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_GOTO;
   }
 
   static bool has_goto(Block* block_ptr) {

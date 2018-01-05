@@ -412,9 +412,7 @@ class TypeInference final
       assume_reference(current_state, insn->src(0));
       break;
     }
-    case OPCODE_GOTO:
-    case OPCODE_GOTO_16:
-    case OPCODE_GOTO_32: {
+    case OPCODE_GOTO: {
       break;
     }
     case OPCODE_PACKED_SWITCH:
