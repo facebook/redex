@@ -299,7 +299,7 @@ inline bool is_sfield_op(IROpcode op) {
 }
 
 inline bool is_move(IROpcode op) {
-  return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT_16;
+  return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }
 
 inline bool is_return(IROpcode op) {

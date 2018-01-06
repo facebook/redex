@@ -121,9 +121,7 @@ class Analyzer final
   void analyze_instruction(IRInstruction* insn,
                            AbstractObjectEnvironment* current_state) const {
     switch (insn->opcode()) {
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }

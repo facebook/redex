@@ -49,13 +49,13 @@ struct RegAllocTest : testing::Test {
 TEST_F(RegAllocTest, MoveGen) {
   using namespace dex_asm;
   EXPECT_EQ(*gen_move(RegisterType::NORMAL, 1, 2),
-            *dasm(OPCODE_MOVE_16, {1_v, 2_v}));
+            *dasm(OPCODE_MOVE, {1_v, 2_v}));
   EXPECT_EQ(*gen_move(RegisterType::ZERO, 1, 2),
-            *dasm(OPCODE_MOVE_16, {1_v, 2_v}));
+            *dasm(OPCODE_MOVE, {1_v, 2_v}));
   EXPECT_EQ(*gen_move(RegisterType::OBJECT, 1, 2),
-            *dasm(OPCODE_MOVE_OBJECT_16, {1_v, 2_v}));
+            *dasm(OPCODE_MOVE_OBJECT, {1_v, 2_v}));
   EXPECT_EQ(*gen_move(RegisterType::WIDE, 1, 2),
-            *dasm(OPCODE_MOVE_WIDE_16, {1_v, 2_v}));
+            *dasm(OPCODE_MOVE_WIDE, {1_v, 2_v}));
 }
 
 TEST_F(RegAllocTest, RegTypeDestWide) {
@@ -631,15 +631,15 @@ TEST_F(RegAllocTest, Spill) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const/4 v3 1)
-     (move/16 v0 v3)
+     (move v0 v3)
      (const/4 v4 1)
-     (move/16 v1 v4)
+     (move v1 v4)
 
      (add-int v5 v0 v1) ; srcs not spilled -- add-int can address up to
                         ; 8-bit-sized operands
-     (move/16 v2 v5)
+     (move v2 v5)
 
-     (move/16 v6 v2)
+     (move v6 v2)
      (return v6)
     )
 )");
@@ -706,12 +706,13 @@ TEST_F(RegAllocTest, ContainmentGraph) {
 TEST_F(RegAllocTest, FindSplit) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 1)
-     (move v2 v1)
-     (move v4 v1)
-     (move v3 v0)
-     (return v3)
+     (sget "LFoo.a:I")
+     (move-result-pseudo v0)
+     (sget "LFoo.a:I")
+     (move-result-pseudo v1)
+     (sput v1 "LFoo.a:I")
+     (sput v1 "LFoo.a:I")
+     (return v0)
     )
 )");
   code->set_registers_size(5);
@@ -728,9 +729,9 @@ TEST_F(RegAllocTest, FindSplit) {
   SplitCosts split_costs;
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{{1, 16}};
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{{1, 256}};
   graph_coloring::RegisterTransform reg_transform;
-  reg_transform.map = transform::RegMap{{0, 0}, {2, 1}, {4, 1}, {3, 1}};
+  reg_transform.map = transform::RegMap{{0, 0}};
   graph_coloring::Allocator allocator;
   allocator.spill_costs(code.get(), ig, range_set, &spill_plan);
   calc_split_costs(fixpoint_iter, code.get(), &split_costs);
@@ -776,12 +777,12 @@ TEST_F(RegAllocTest, Split) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const/4 v0 1)
-     (move/16 v5 v0)
+     (move v5 v0)
 
      (const/4 v1 1)
      (move v2 v1)
      (move v4 v1)
-     (move/16 v0 v5)
+     (move v0 v5)
 
      (move v3 v0)
      (return v3)
@@ -826,13 +827,13 @@ TEST_F(RegAllocTest, ParamFirstUse) {
 
      ; Since v1 was getting overwritten in the original code, we insert a load
      ; immediately after the load-param instructions
-     (move/16 v1 v5)
+     (move v1 v5)
      (const/4 v1 0)
      (const/4 v2 0)
 
      ; Since v0 did not get overwritten in the original code, we are able to
      ; insert the load before its first use
-     (move/16 v0 v4)
+     (move v0 v4)
      (add-int v3 v0 v2)
      (return v3)
     )

@@ -67,11 +67,11 @@ static IROpcode move_op_for_type(RegisterType type) {
   switch (type) {
   case RegisterType::ZERO:
   case RegisterType::NORMAL:
-    return OPCODE_MOVE_16;
+    return OPCODE_MOVE;
   case RegisterType::OBJECT:
-    return OPCODE_MOVE_OBJECT_16;
+    return OPCODE_MOVE_OBJECT;
   case RegisterType::WIDE:
-    return OPCODE_MOVE_WIDE_16;
+    return OPCODE_MOVE_WIDE;
   case RegisterType::UNKNOWN:
   case RegisterType::CONFLICT:
     always_assert_log(
@@ -168,12 +168,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return RegisterType::NORMAL;
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::NORMAL;
-  case OPCODE_MOVE_FROM16:
-    return RegisterType::NORMAL;
-  case OPCODE_MOVE_WIDE_FROM16:
-    return RegisterType::WIDE;
-  case OPCODE_MOVE_OBJECT_FROM16:
-    return RegisterType::OBJECT;
   case OPCODE_CONST_16:
   case OPCODE_CONST_HIGH16:
     return const_dest_type(insn);
@@ -276,12 +270,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_SHR_INT_LIT8:
   case OPCODE_USHR_INT_LIT8:
     return RegisterType::NORMAL;
-  case OPCODE_MOVE_16:
-    return RegisterType::NORMAL;
-  case OPCODE_MOVE_WIDE_16:
-    return RegisterType::WIDE;
-  case OPCODE_MOVE_OBJECT_16:
-    return RegisterType::OBJECT;
   case OPCODE_CONST:
     return const_dest_type(insn);
   case OPCODE_CONST_WIDE_32:
@@ -459,12 +447,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
     return RegisterType::NORMAL;
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::OBJECT;
-  case OPCODE_MOVE_FROM16:
-    return RegisterType::NORMAL;
-  case OPCODE_MOVE_WIDE_FROM16:
-    return RegisterType::WIDE;
-  case OPCODE_MOVE_OBJECT_FROM16:
-    return RegisterType::OBJECT;
   case OPCODE_CONST_16:
   case OPCODE_CONST_HIGH16:
   case OPCODE_CONST_WIDE_16:
@@ -569,12 +551,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_SHR_INT_LIT8:
   case OPCODE_USHR_INT_LIT8:
     return RegisterType::NORMAL;
-  case OPCODE_MOVE_16:
-    return RegisterType::NORMAL;
-  case OPCODE_MOVE_WIDE_16:
-    return RegisterType::WIDE;
-  case OPCODE_MOVE_OBJECT_16:
-    return RegisterType::OBJECT;
   case OPCODE_CONST:
   case OPCODE_CONST_WIDE_32:
     always_assert_log(false, "No src");

@@ -177,11 +177,11 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_ARRAY_LENGTH:
     return OPCODE_ARRAY_LENGTH;
   case DOPCODE_MOVE_FROM16:
-    return OPCODE_MOVE_FROM16;
+    return OPCODE_MOVE;
   case DOPCODE_MOVE_WIDE_FROM16:
-    return OPCODE_MOVE_WIDE_FROM16;
+    return OPCODE_MOVE_WIDE;
   case DOPCODE_MOVE_OBJECT_FROM16:
-    return OPCODE_MOVE_OBJECT_FROM16;
+    return OPCODE_MOVE_OBJECT;
   case DOPCODE_CONST_16:
     return OPCODE_CONST_16;
   case DOPCODE_CONST_HIGH16:
@@ -357,11 +357,11 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_USHR_INT_LIT8:
     return OPCODE_USHR_INT_LIT8;
   case DOPCODE_MOVE_16:
-    return OPCODE_MOVE_16;
+    return OPCODE_MOVE;
   case DOPCODE_MOVE_WIDE_16:
-    return OPCODE_MOVE_WIDE_16;
+    return OPCODE_MOVE_WIDE;
   case DOPCODE_MOVE_OBJECT_16:
-    return OPCODE_MOVE_OBJECT_16;
+    return OPCODE_MOVE_OBJECT;
   case DOPCODE_CONST:
     return OPCODE_CONST;
   case DOPCODE_CONST_WIDE_32:
@@ -560,12 +560,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_INT_TO_SHORT;
   case OPCODE_ARRAY_LENGTH:
     return DOPCODE_ARRAY_LENGTH;
-  case OPCODE_MOVE_FROM16:
-    return DOPCODE_MOVE_FROM16;
-  case OPCODE_MOVE_WIDE_FROM16:
-    return DOPCODE_MOVE_WIDE_FROM16;
-  case OPCODE_MOVE_OBJECT_FROM16:
-    return DOPCODE_MOVE_OBJECT_FROM16;
   case OPCODE_CONST_16:
     return DOPCODE_CONST_16;
   case OPCODE_CONST_HIGH16:
@@ -738,12 +732,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_SHR_INT_LIT8;
   case OPCODE_USHR_INT_LIT8:
     return DOPCODE_USHR_INT_LIT8;
-  case OPCODE_MOVE_16:
-    return DOPCODE_MOVE_16;
-  case OPCODE_MOVE_WIDE_16:
-    return DOPCODE_MOVE_WIDE_16;
-  case OPCODE_MOVE_OBJECT_16:
-    return DOPCODE_MOVE_OBJECT_16;
   case OPCODE_CONST:
     return DOPCODE_CONST;
   case OPCODE_CONST_WIDE_32:
@@ -1125,8 +1113,6 @@ unsigned min_srcs_size(IROpcode op) {
 bool dest_is_wide(IROpcode op) {
   switch (op) {
   case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
   case OPCODE_MOVE_RESULT_WIDE:
 
   case OPCODE_CONST_WIDE_16:
@@ -1235,11 +1221,7 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_INT_TO_CHAR:
   case OPCODE_INT_TO_SHORT:
   case OPCODE_ARRAY_LENGTH:
-  case OPCODE_MOVE_FROM16:
-  case OPCODE_MOVE_WIDE_FROM16:
     return false;
-  case OPCODE_MOVE_OBJECT_FROM16:
-    return true;
   case OPCODE_CONST_16:
   case OPCODE_CONST_HIGH16:
   case OPCODE_CONST_WIDE_16:
@@ -1336,11 +1318,7 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_SHL_INT_LIT8:
   case OPCODE_SHR_INT_LIT8:
   case OPCODE_USHR_INT_LIT8:
-  case OPCODE_MOVE_16:
-  case OPCODE_MOVE_WIDE_16:
     return false;
-  case OPCODE_MOVE_OBJECT_16:
-    return true;
   case OPCODE_CONST:
   case OPCODE_CONST_WIDE_32:
     return false;

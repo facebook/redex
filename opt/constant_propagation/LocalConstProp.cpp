@@ -160,18 +160,12 @@ void LocalConstantPropagation::analyze_instruction(
     ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
     break;
   }
-  case OPCODE_MOVE_FROM16:
-  case OPCODE_MOVE_16:
-  case OPCODE_MOVE_OBJECT_FROM16:
-  case OPCODE_MOVE_OBJECT_16:
   case OPCODE_MOVE:
   case OPCODE_MOVE_OBJECT: {
     analyze_non_branch(inst, current_state, false /* is_wide */);
     break;
   }
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16: {
+  case OPCODE_MOVE_WIDE: {
     analyze_non_branch(inst, current_state, true /* is_wide */);
     break;
   }
@@ -388,15 +382,11 @@ void LocalConstantPropagation::simplify_instruction(
     IRInstruction*& inst, const ConstPropEnvironment& current_state) {
   switch (inst->opcode()) {
   case OPCODE_MOVE:
-  case OPCODE_MOVE_FROM16:
-  case OPCODE_MOVE_16:
     if (m_config.replace_moves_with_consts) {
       simplify_non_branch(inst, current_state, false /* is_wide */);
     }
     break;
   case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
     if (m_config.replace_moves_with_consts) {
       simplify_non_branch(inst, current_state, true /* is_wide */);
     }

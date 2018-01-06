@@ -245,18 +245,18 @@ TEST(IRInstruction, SelectMove) {
   using namespace instruction_lowering::impl;
   g_redex = new RedexContext();
 
-  EXPECT_EQ(DOPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE_16, {0_v, 0_v})));
+  EXPECT_EQ(DOPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE, {0_v, 0_v})));
   EXPECT_EQ(DOPCODE_MOVE_FROM16,
-            select_move_opcode(dasm(OPCODE_MOVE_16, {255_v, 65535_v})));
+            select_move_opcode(dasm(OPCODE_MOVE, {255_v, 65535_v})));
   EXPECT_EQ(DOPCODE_MOVE_16,
-            select_move_opcode(dasm(OPCODE_MOVE_16, {65535_v, 65535_v})));
+            select_move_opcode(dasm(OPCODE_MOVE, {65535_v, 65535_v})));
   EXPECT_EQ(DOPCODE_MOVE_OBJECT,
-            select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {0_v, 0_v})));
+            select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {0_v, 0_v})));
   EXPECT_EQ(DOPCODE_MOVE_OBJECT_FROM16,
-            select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {255_v, 65535_v})));
+            select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {255_v, 65535_v})));
   EXPECT_EQ(
       DOPCODE_MOVE_OBJECT_16,
-      select_move_opcode(dasm(OPCODE_MOVE_OBJECT_16, {65535_v, 65535_v})));
+      select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {65535_v, 65535_v})));
 
   delete g_redex;
 }

@@ -271,23 +271,17 @@ class TypeInference final
     case OPCODE_NOP: {
       break;
     }
-    case OPCODE_MOVE:
-    case OPCODE_MOVE_FROM16:
-    case OPCODE_MOVE_16: {
+    case OPCODE_MOVE: {
       assume_scalar(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case OPCODE_MOVE_WIDE:
-    case OPCODE_MOVE_WIDE_FROM16:
-    case OPCODE_MOVE_WIDE_16: {
+    case OPCODE_MOVE_WIDE: {
       assume_wide_scalar(current_state, insn->src(0));
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       set_type(current_state,

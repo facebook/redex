@@ -45,17 +45,11 @@ static bool signed_int_fits_high16(int64_t v) {
 static std::array<DexOpcode, 3> move_opcode_tuple(IROpcode op) {
   switch (op) {
   case OPCODE_MOVE:
-  case OPCODE_MOVE_FROM16:
-  case OPCODE_MOVE_16:
     return {{DOPCODE_MOVE, DOPCODE_MOVE_FROM16, DOPCODE_MOVE_16}};
   case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-  case OPCODE_MOVE_WIDE_16:
     return {
         {DOPCODE_MOVE_WIDE, DOPCODE_MOVE_WIDE_FROM16, DOPCODE_MOVE_WIDE_16}};
   case OPCODE_MOVE_OBJECT:
-  case OPCODE_MOVE_OBJECT_FROM16:
-  case OPCODE_MOVE_OBJECT_16:
     return {{DOPCODE_MOVE_OBJECT,
              DOPCODE_MOVE_OBJECT_FROM16,
              DOPCODE_MOVE_OBJECT_16}};
@@ -251,7 +245,7 @@ static size_t lower_check_cast(IRCode* code, FatMethod::iterator* it_) {
     //   move v0, v1
     //   check-cast v0
     // TODO: factor this code a little
-    auto move_template = std::make_unique<IRInstruction>(OPCODE_MOVE_OBJECT_16);
+    auto move_template = std::make_unique<IRInstruction>(OPCODE_MOVE_OBJECT);
     move_template->set_dest(move->dest());
     move_template->set_src(0, insn->src(0));
     auto* dex_mov = new DexInstruction(select_move_opcode(move_template.get()));

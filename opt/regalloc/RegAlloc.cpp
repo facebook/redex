@@ -31,15 +31,6 @@ using namespace regalloc;
  */
 static IROpcode pessimize_opcode(IROpcode op) {
   switch (op) {
-  case OPCODE_MOVE:
-  case OPCODE_MOVE_FROM16:
-    return OPCODE_MOVE_16;
-  case OPCODE_MOVE_OBJECT:
-  case OPCODE_MOVE_OBJECT_FROM16:
-    return OPCODE_MOVE_OBJECT_16;
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_WIDE_FROM16:
-    return OPCODE_MOVE_WIDE_16;
   case OPCODE_CONST_4:
   case OPCODE_CONST_16:
   case OPCODE_CONST_HIGH16:

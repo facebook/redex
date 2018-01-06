@@ -121,7 +121,13 @@ class IRInstruction final {
    */
   void denormalize_registers();
 
+  /*
+   * Estimates the number of 16-bit code units required to encode this
+   * IRInstruction. Since the exact encoding is only determined during
+   * instruction lowering, this is just an estimate.
+   */
   uint16_t size() const;
+
   bool operator==(const IRInstruction&) const;
   bool operator!=(const IRInstruction& that) const {
     return !(*this == that);

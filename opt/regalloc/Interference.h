@@ -250,7 +250,19 @@ class Graph {
   friend class impl::GraphBuilder;
 };
 
+/*
+ * The number of bits that will be available for encoding the dest register of
+ * the given IROpcode when it is converted to a DexInstruction in the
+ * instruction lowering process.
+ */
 size_t dest_bit_width(FatMethod::iterator it);
+
+/*
+ * The number of bits that will be available for encoding the src register of
+ * the given IROpcode when it is converted to a DexInstruction in the
+ * instruction lowering process.
+ */
+size_t src_bit_width(IROpcode op, int i);
 
 namespace impl {
 

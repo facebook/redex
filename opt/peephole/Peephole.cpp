@@ -435,7 +435,7 @@ struct Matcher {
           ->set_arg_word_count(replace.srcs.size());
 
     case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_16:
+    case OPCODE_MOVE:
     case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT:
     case IOPCODE_MOVE_RESULT_PSEUDO:
@@ -1298,21 +1298,19 @@ DexPattern add_lit(Register src, Register dst) {
 }
 
 const std::vector<Pattern>& get_arith_patterns() {
-  // Note: these arith patterns emit full 16-bit reg indices
-  // Another pass will tighten these when possible
   static const std::vector<Pattern> kArithPatterns = {
       // Replace *1 with move
       {"Arith_MulLit_Pos1",
        {mul_lit(Register::A, Register::B)},
        {// x = y * 1 -> x = y
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<1>},
 
       // Replace /1 with move
       {"Arith_DivLit_Pos1",
        {div_lit(Register::A, Register::B)},
        {// x = y * 1 -> x = y
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<1>},
 
       // Replace multiplies by -1 with negation
@@ -1333,7 +1331,7 @@ const std::vector<Pattern>& get_arith_patterns() {
       {"Arith_AddLit_0",
        {add_lit(Register::A, Register::B)},
        {// Eliminates the literal-carrying halfword
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<0>},
   };
   return kArithPatterns;

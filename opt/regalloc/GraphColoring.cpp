@@ -658,9 +658,7 @@ reg_t max_value_for_src(const interference::Graph& ig,
                         const IRInstruction* insn,
                         size_t src_index) {
   auto& node = ig.get_node(insn->src(src_index));
-  auto dex_op = opcode::to_dex_opcode(insn->opcode());
-  auto max_value =
-      max_unsigned_value(dex_opcode::src_bit_width(dex_op, src_index));
+  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
   if (is_invoke(insn->opcode()) && node.width() == 2) {
     // We need to reserve one vreg for denormalization. See the
     // comments in GraphBuilder::update_node_constraints() for details.

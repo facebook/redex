@@ -251,7 +251,7 @@ class PeepholeTest : public ::testing::Test {
 };
 
 TEST_F(PeepholeTest, Arithmetic) {
-  IRInstructionList move16 = op_unary(OPCODE_MOVE_16); // move v0, v1
+  IRInstructionList move16 = op_unary(OPCODE_MOVE); // move v0, v1
   IRInstructionList negate = op_unary(OPCODE_NEG_INT); // neg v0, v1
   test_1("add8_0_to_move", op_lit(OPCODE_ADD_INT_LIT8, 0), move16);
   test_1("add16_0_to_move", op_lit(OPCODE_ADD_INT_LIT16, 0), move16);

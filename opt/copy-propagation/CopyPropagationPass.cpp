@@ -200,11 +200,7 @@ class AliasFixpointIterator final
   const RegisterValue get_src_value(IRInstruction* insn) const {
     switch (insn->opcode()) {
     case OPCODE_MOVE:
-    case OPCODE_MOVE_FROM16:
-    case OPCODE_MOVE_16:
     case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16:
       return RegisterValue{insn->src(0)};
     case OPCODE_CONST:
     case OPCODE_CONST_4:

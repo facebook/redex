@@ -31,14 +31,8 @@ enum class Ref {
 #define OPS \
   OP(NOP               , Ref::None, "nop") \
   OP(MOVE              , Ref::None, "move") \
-  OP(MOVE_FROM16       , Ref::None, "move/from16") \
-  OP(MOVE_16           , Ref::None, "move/16") \
   OP(MOVE_WIDE         , Ref::None, "move-wide") \
-  OP(MOVE_WIDE_FROM16  , Ref::None, "move-wide/from16") \
-  OP(MOVE_WIDE_16      , Ref::None, "move-wide/16") \
   OP(MOVE_OBJECT       , Ref::None, "move-object") \
-  OP(MOVE_OBJECT_FROM16, Ref::None, "move-object/from16") \
-  OP(MOVE_OBJECT_16    , Ref::None, "move-object/16") \
   OP(MOVE_RESULT       , Ref::None, "move-result") \
   OP(MOVE_RESULT_WIDE  , Ref::None, "move-result-wide") \
   OP(MOVE_RESULT_OBJECT, Ref::None, "move-result-object") \
@@ -232,6 +226,9 @@ Ref ref(IROpcode);
 /*
  * 2addr and non-2addr DexOpcode pairs will get mapped to the same IROpcode.
  * range and non-range DexOpcode pairs will get mapped to the same IROpcode.
+ * goto, goto/16, and goto/32 will get mapped to the same IROpcode.
+ * move, move/from16, and move/16 will get mapped to the same IROpcode. Same
+ * for the move-object and move-wide opcode families.
  * All other DexOpcodes have a 1-1 mapping with an IROpcode.
  */
 IROpcode from_dex_opcode(DexOpcode);
@@ -239,8 +236,8 @@ IROpcode from_dex_opcode(DexOpcode);
 /*
  * Only non-internal IROpcodes are valid inputs to this function.
  *
- * If we exclude 2addr and range DexOpcodes from the domain of
- * `from_dex_opcode`, this function is its inverse.
+ * If we exclude move, 2addr, range, and goto/{16,32} DexOpcodes from the
+ * domain of `from_dex_opcode`, this function is its inverse.
  */
 DexOpcode to_dex_opcode(IROpcode);
 
