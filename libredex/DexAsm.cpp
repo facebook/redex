@@ -15,8 +15,6 @@ namespace dex_asm {
 bool unsupported(IROpcode opcode) {
   switch (opcode) {
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
-
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
   case OPCODE_INSTANCE_OF:

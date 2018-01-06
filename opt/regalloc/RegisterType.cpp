@@ -329,7 +329,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
     return RegisterType::OBJECT;
@@ -610,7 +609,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_INVOKE_INTERFACE:
     return invoke_src_type(insn, i);
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
     always_assert_log(false, "No src");
     not_reached();

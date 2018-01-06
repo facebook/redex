@@ -777,7 +777,6 @@ class AnchorPropagation final
       break;
     }
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS:
     case OPCODE_CHECK_CAST:
     case OPCODE_NEW_INSTANCE:
@@ -980,7 +979,6 @@ class PointsToActionGenerator final {
     case IOPCODE_LOAD_PARAM_OBJECT:
     case OPCODE_MOVE_EXCEPTION:
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS:
     case OPCODE_CHECK_CAST:
     case OPCODE_NEW_INSTANCE:
@@ -1015,8 +1013,7 @@ class PointsToActionGenerator final {
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
     }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       m_semantics->add(PointsToAction::load_operation(
           PointsToOperation(PTS_CONST_STRING, insn->get_string()),
           get_variable_from_anchor(insn)));

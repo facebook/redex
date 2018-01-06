@@ -130,8 +130,7 @@ class Analyzer final
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       current_state->set(
           RESULT_REGISTER,
           AbstractObjectDomain(AbstractObject(insn->get_string())));

@@ -53,7 +53,8 @@ TEST(IRInstruction, RoundTrip) {
     // to `const/4 v0`. To prevent these changes from happening, we can set the
     // operands to the largest values that can be encoded for a given opcode.
     if (is_move(op) ||
-        (op >= DOPCODE_CONST_4 && op <= DOPCODE_CONST_WIDE_HIGH16)) {
+        (op >= DOPCODE_CONST_4 && op <= DOPCODE_CONST_WIDE_HIGH16) ||
+        op == DOPCODE_CONST_STRING_JUMBO) {
       continue;
     }
     // XXX we can test these opcodes if we create a corresponding data payload

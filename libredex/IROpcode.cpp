@@ -453,9 +453,8 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_INVOKE_INTERFACE_RANGE:
     return OPCODE_INVOKE_INTERFACE;
   case DOPCODE_CONST_STRING:
-    return OPCODE_CONST_STRING;
   case DOPCODE_CONST_STRING_JUMBO:
-    return OPCODE_CONST_STRING_JUMBO;
+    return OPCODE_CONST_STRING;
   case DOPCODE_CONST_CLASS:
     return OPCODE_CONST_CLASS;
   case DOPCODE_CHECK_CAST:
@@ -812,8 +811,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_INVOKE_INTERFACE;
   case OPCODE_CONST_STRING:
     return DOPCODE_CONST_STRING;
-  case OPCODE_CONST_STRING_JUMBO:
-    return DOPCODE_CONST_STRING_JUMBO;
   case OPCODE_CONST_CLASS:
     return DOPCODE_CONST_CLASS;
   case OPCODE_CHECK_CAST:
@@ -868,7 +865,6 @@ bool has_variable_srcs_size(IROpcode op) {
 bool may_throw(IROpcode op) {
   switch (op) {
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
@@ -1374,7 +1370,6 @@ bool dest_is_object(IROpcode op) {
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
     return true;

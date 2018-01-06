@@ -83,8 +83,7 @@ match_t<IRInstruction> const_string() {
   return {
     [](const IRInstruction* insn) {
       auto opcode = insn->opcode();
-      return opcode == OPCODE_CONST_STRING ||
-        opcode == OPCODE_CONST_STRING_JUMBO;
+      return opcode == OPCODE_CONST_STRING;
     }
   };
 }

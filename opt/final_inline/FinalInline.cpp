@@ -297,7 +297,6 @@ class FinalInlineImpl {
     case OPCODE_CONST_16:
     case OPCODE_CONST:
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_WIDE_16:
     case OPCODE_CONST_WIDE_32:
     case OPCODE_CONST_WIDE:
@@ -391,8 +390,7 @@ class FinalInlineImpl {
       auto sput_op = pair.second;
       auto field = resolve_field(sput_op->get_field(), FieldSearch::Static);
       DexEncodedValue* ev;
-      if (const_op->opcode() == OPCODE_CONST_STRING ||
-          const_op->opcode() == OPCODE_CONST_STRING_JUMBO) {
+      if (const_op->opcode() == OPCODE_CONST_STRING) {
         TRACE(FINALINLINE,
               8,
               "- String Field: %s, \"%s\"\n",

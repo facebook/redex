@@ -352,7 +352,6 @@ class TypeInference final
       break;
     }
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS: {
       set_reference(current_state, RESULT_REGISTER);
       break;

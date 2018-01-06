@@ -50,7 +50,6 @@ enum class Ref {
   OP(CONST_WIDE        , Ref::Literal, "const-wide") \
   OP(CONST_WIDE_HIGH16 , Ref::Literal, "const-wide-high16") \
   OP(CONST_STRING      , Ref::String, "const-string") \
-  OP(CONST_STRING_JUMBO, Ref::String, "const-string-jumbo") \
   OP(CONST_CLASS       , Ref::Type, "const-class") \
   OP(MONITOR_ENTER     , Ref::None, "monitor-enter") \
   OP(MONITOR_EXIT      , Ref::None, "monitor-exit") \

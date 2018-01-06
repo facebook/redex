@@ -210,8 +210,7 @@ class AliasFixpointIterator final
       } else {
         return RegisterValue::none();
       }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       if (m_config.eliminate_const_strings) {
         DexString* str = insn->get_string();
         return RegisterValue{str};
