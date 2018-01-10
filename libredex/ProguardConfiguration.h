@@ -18,7 +18,7 @@
 namespace redex {
 
 struct MemberSpecification {
-  unsigned long count{0};
+  mutable unsigned long count{0};
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
   DexAccessFlags requiredUnsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
@@ -41,7 +41,7 @@ struct ClassSpecification {
 };
 
 struct KeepSpec {
-  unsigned long count{0};
+  mutable unsigned long count{0};
   bool includedescriptorclasses{false};
   bool allowshrinking{false};
   bool allowoptimization{false};
