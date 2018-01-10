@@ -1339,6 +1339,13 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
             }
           }
         }
+        // Treat anything bigger than 2^31 as 0
+        if (line_start > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+          line_start = 0;
+        }
+        if (line_end > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+          line_end = 0;
+        }
         ss << line_start << ":" << line_end << ":";
       }
       auto* rtype = proto->get_rtype();
