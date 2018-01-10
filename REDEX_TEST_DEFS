@@ -18,6 +18,7 @@ def redex_instr_test(
     manifest=None,
 ):
   deps = java_deps + [
+      "//native/fb:fb",
       "//third-party/java/fest:fest",
       "//third-party/java/jsr-305:jsr-305",  ### @Nullable
       "//third-party/java/junit:junit",
