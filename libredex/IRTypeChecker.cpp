@@ -332,10 +332,7 @@ class TypeInference final
       assume_reference(current_state, insn->src(0));
       break;
     }
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
-    case OPCODE_CONST:
-    case OPCODE_CONST_HIGH16: {
+    case OPCODE_CONST: {
       if (insn->get_literal() == 0) {
         set_type(current_state, insn->dest(), TypeDomain(ZERO));
       } else {
@@ -343,10 +340,7 @@ class TypeInference final
       }
       break;
     }
-    case OPCODE_CONST_WIDE_16:
-    case OPCODE_CONST_WIDE_32:
-    case OPCODE_CONST_WIDE:
-    case OPCODE_CONST_WIDE_HIGH16: {
+    case OPCODE_CONST_WIDE: {
       set_type(current_state, insn->dest(), TypeDomain(CONST1));
       set_type(current_state, insn->dest() + 1, TypeDomain(CONST2));
       break;

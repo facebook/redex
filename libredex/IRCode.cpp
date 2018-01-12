@@ -1231,15 +1231,15 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
  *
  *   .pos "LFoo;.a()V" Foo.java 123
  *   .pos "LFoo;.a()V" Foo.java 124 # this can be deleted
- *   const/4 v0 0
+ *   const v0 0
  *
  * 2) If we have two identical consecutive DexPositions, only the first one
  * needs to be emitted. Concretely:
  *
  *   .pos "LFoo;.a()V" Foo.java 123
- *   const/4 v0 0
+ *   const v0 0
  *   .pos "LFoo;.a()V" Foo.java 123 # this can be deleted
- *   const/4 v0 0
+ *   const v0 0
  *
  * Note that this pruning is not done as part of StripDebugInfoPass as that
  * pass needs to run before inlining. Pruning needs to be done after all

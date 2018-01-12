@@ -816,7 +816,7 @@ class AnchorPropagation final
     default: {
       // Since registers can be reused in different contexts, we need to
       // invalidate the corresponding anchor sets. Note that this case also
-      // encompasses the initialization to null, like `const/4 v1, 0`.
+      // encompasses the initialization to null, like `const v1, 0`.
       if (insn->dests_size() > 0) {
         current_state->set(insn->dest(), AnchorDomain());
         if (insn->dest_is_wide()) {

@@ -16,7 +16,7 @@ TEST(IRAssembler, disassemble) {
 
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
      :foo-label
      (if-eqz v0 :foo-label)
      (invoke-virtual (v0 v1) "LFoo;.bar:(II)V")
@@ -27,7 +27,7 @@ TEST(IRAssembler, disassemble) {
 )");
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s,
-            "((const/4 v0 0) "
+            "((const v0 0) "
             ":L0 "
             "(if-eqz v0 :L0) "
             "(invoke-virtual (v0 v1) \"LFoo;.bar:(II)V\") "

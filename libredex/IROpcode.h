@@ -41,14 +41,8 @@ enum class Ref {
   OP(RETURN            , Ref::None, "return") \
   OP(RETURN_WIDE       , Ref::None, "return-wide") \
   OP(RETURN_OBJECT     , Ref::None, "return-object") \
-  OP(CONST_4           , Ref::Literal, "const/4") \
-  OP(CONST_16          , Ref::Literal, "const/16") \
   OP(CONST             , Ref::Literal, "const") \
-  OP(CONST_HIGH16      , Ref::Literal, "const-high16") \
-  OP(CONST_WIDE_16     , Ref::Literal, "const-wide/16") \
-  OP(CONST_WIDE_32     , Ref::Literal, "const-wide-32") \
   OP(CONST_WIDE        , Ref::Literal, "const-wide") \
-  OP(CONST_WIDE_HIGH16 , Ref::Literal, "const-wide-high16") \
   OP(CONST_STRING      , Ref::String, "const-string") \
   OP(CONST_CLASS       , Ref::Type, "const-class") \
   OP(MONITOR_ENTER     , Ref::None, "monitor-enter") \
@@ -228,6 +222,8 @@ Ref ref(IROpcode);
  * goto, goto/16, and goto/32 will get mapped to the same IROpcode.
  * move, move/from16, and move/16 will get mapped to the same IROpcode. Same
  * for the move-object and move-wide opcode families.
+ * const/4, const/16, and const will all get mapped to the same IROpcode. Same
+ * for the const-wide opcode family.
  * All other DexOpcodes have a 1-1 mapping with an IROpcode.
  */
 IROpcode from_dex_opcode(DexOpcode);
@@ -235,8 +231,9 @@ IROpcode from_dex_opcode(DexOpcode);
 /*
  * Only non-internal IROpcodes are valid inputs to this function.
  *
- * If we exclude move, 2addr, range, and goto/{16,32} DexOpcodes from the
- * domain of `from_dex_opcode`, this function is its inverse.
+ * This function is roughly the inverse of `from_dex_opcode`. When there are
+ * are multiple DexOpcodes that map to a single IROpcode, we pick one of them
+ * to return here.
  */
 DexOpcode to_dex_opcode(IROpcode);
 

@@ -268,7 +268,15 @@ TEST(IRInstruction, SelectConst) {
   g_redex = new RedexContext();
 
   auto insn = dasm(OPCODE_CONST, {0_v});
+  EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
 
+  insn->set_literal(0xf);
+  // This has to be const/16 and not const/4 because sign extension will cause
+  // const/4 0xf to load the value 0xffffffff into the dest register
+  EXPECT_EQ(DOPCODE_CONST_16, select_const_opcode(insn));
+
+  insn->set_literal(0xffffffffffffffff);
+  // Conversely, this can use const/4 because of sign extension
   EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
 
   insn->set_literal(std::numeric_limits<int16_t>::max());
@@ -281,6 +289,9 @@ TEST(IRInstruction, SelectConst) {
 
   insn->set_literal(static_cast<int32_t>(0xffff0001));
   EXPECT_EQ(DOPCODE_CONST, select_const_opcode(insn));
+
+  insn->set_literal(0xf0ffffffffffffff);
+  EXPECT_THROW(select_const_opcode(insn), std::runtime_error);
 
   auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
 

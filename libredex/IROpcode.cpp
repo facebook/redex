@@ -59,7 +59,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_RETURN_OBJECT:
     return OPCODE_RETURN_OBJECT;
   case DOPCODE_CONST_4:
-    return OPCODE_CONST_4;
+    return OPCODE_CONST;
   case DOPCODE_MONITOR_ENTER:
     return OPCODE_MONITOR_ENTER;
   case DOPCODE_MONITOR_EXIT:
@@ -183,13 +183,13 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_MOVE_OBJECT_FROM16:
     return OPCODE_MOVE_OBJECT;
   case DOPCODE_CONST_16:
-    return OPCODE_CONST_16;
+    return OPCODE_CONST;
   case DOPCODE_CONST_HIGH16:
-    return OPCODE_CONST_HIGH16;
+    return OPCODE_CONST;
   case DOPCODE_CONST_WIDE_16:
-    return OPCODE_CONST_WIDE_16;
+    return OPCODE_CONST_WIDE;
   case DOPCODE_CONST_WIDE_HIGH16:
-    return OPCODE_CONST_WIDE_HIGH16;
+    return OPCODE_CONST_WIDE;
   case DOPCODE_GOTO_16:
     return OPCODE_GOTO;
   case DOPCODE_CMPL_FLOAT:
@@ -365,7 +365,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_CONST:
     return OPCODE_CONST;
   case DOPCODE_CONST_WIDE_32:
-    return OPCODE_CONST_WIDE_32;
+    return OPCODE_CONST_WIDE;
   case DOPCODE_FILL_ARRAY_DATA:
     return OPCODE_FILL_ARRAY_DATA;
   case DOPCODE_GOTO_32:
@@ -505,8 +505,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_RETURN_WIDE;
   case OPCODE_RETURN_OBJECT:
     return DOPCODE_RETURN_OBJECT;
-  case OPCODE_CONST_4:
-    return DOPCODE_CONST_4;
   case OPCODE_MONITOR_ENTER:
     return DOPCODE_MONITOR_ENTER;
   case OPCODE_MONITOR_EXIT:
@@ -559,14 +557,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_INT_TO_SHORT;
   case OPCODE_ARRAY_LENGTH:
     return DOPCODE_ARRAY_LENGTH;
-  case OPCODE_CONST_16:
-    return DOPCODE_CONST_16;
-  case OPCODE_CONST_HIGH16:
-    return DOPCODE_CONST_HIGH16;
-  case OPCODE_CONST_WIDE_16:
-    return DOPCODE_CONST_WIDE_16;
-  case OPCODE_CONST_WIDE_HIGH16:
-    return DOPCODE_CONST_WIDE_HIGH16;
   case OPCODE_CMPL_FLOAT:
     return DOPCODE_CMPL_FLOAT;
   case OPCODE_CMPG_FLOAT:
@@ -733,8 +723,6 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_USHR_INT_LIT8;
   case OPCODE_CONST:
     return DOPCODE_CONST;
-  case OPCODE_CONST_WIDE_32:
-    return DOPCODE_CONST_WIDE_32;
   case OPCODE_FILL_ARRAY_DATA:
     return DOPCODE_FILL_ARRAY_DATA;
   case OPCODE_PACKED_SWITCH:
@@ -1111,10 +1099,7 @@ bool dest_is_wide(IROpcode op) {
   case OPCODE_MOVE_WIDE:
   case OPCODE_MOVE_RESULT_WIDE:
 
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
   case OPCODE_CONST_WIDE:
-  case OPCODE_CONST_WIDE_HIGH16:
 
   case OPCODE_AGET_WIDE:
   case OPCODE_IGET_WIDE:
@@ -1187,8 +1172,6 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_RETURN_OBJECT:
     always_assert_log(false, "No dest");
     not_reached();
-  case OPCODE_CONST_4:
-    return false;
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
@@ -1217,11 +1200,6 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_INT_TO_CHAR:
   case OPCODE_INT_TO_SHORT:
   case OPCODE_ARRAY_LENGTH:
-    return false;
-  case OPCODE_CONST_16:
-  case OPCODE_CONST_HIGH16:
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_HIGH16:
     return false;
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
@@ -1316,7 +1294,6 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_USHR_INT_LIT8:
     return false;
   case OPCODE_CONST:
-  case OPCODE_CONST_WIDE_32:
     return false;
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_PACKED_SWITCH:

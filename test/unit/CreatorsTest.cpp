@@ -46,7 +46,7 @@ TEST(CreatorsTest, Alloc) {
   ++it;
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_WIDE, {3_v}));
   ++it;
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_16, {0_v, 123_L}));
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {0_v, 123_L}));
 
   delete g_redex;
 }
@@ -86,10 +86,10 @@ TEST(MakeSwitch, MultiIndices) {
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {1_v}));
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM, {2_v}));
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM_WIDE, {3_v}));
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST_16, {0_v, 1_L}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST, {0_v, 1_L}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_PACKED_SWITCH, {0_v}));
 
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST_16, {2_v, 0_L}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST, {2_v, 0_L}));
 
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT16, {2_v, 2_v, 0_L}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_GOTO, {}));

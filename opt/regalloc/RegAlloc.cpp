@@ -22,28 +22,6 @@
 
 using namespace regalloc;
 
-/*
- * Pick the opcode that can address the largest register operands. This gives
- * the register allocator more flexibility in allocating the corresponding live
- * ranges. The IR -> DexCode conversion that runs later will pick the smallest
- * possible opcodes for the given operands, essentially undoing this operation
- * if it is found to be unnecessary.
- */
-static IROpcode pessimize_opcode(IROpcode op) {
-  switch (op) {
-  case OPCODE_CONST_4:
-  case OPCODE_CONST_16:
-  case OPCODE_CONST_HIGH16:
-    return OPCODE_CONST;
-  case OPCODE_CONST_WIDE_HIGH16:
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
-    return OPCODE_CONST_WIDE;
-  default:
-    return op;
-  }
-}
-
 void RegAllocPass::run_pass(DexStoresVector& stores,
                             ConfigFiles&,
                             PassManager& mgr) {
@@ -66,10 +44,6 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
               code.get_registers_size(),
               SHOW(&code));
         try {
-          for (auto& mie : InstructionIterable(&code)) {
-            mie.insn->set_opcode(pessimize_opcode(mie.insn->opcode()));
-          }
-
           // The transformations below all require a CFG. Build it once
           // here instead of requiring each transform to build it.
           code.build_cfg();

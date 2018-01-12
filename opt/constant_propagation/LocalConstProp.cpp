@@ -136,10 +136,7 @@ void LocalConstantPropagation::analyze_instruction(
     const IRInstruction* inst, ConstPropEnvironment* current_state) {
   TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
   switch (inst->opcode()) {
-  case OPCODE_CONST:
-  case OPCODE_CONST_HIGH16:
-  case OPCODE_CONST_4:
-  case OPCODE_CONST_16: {
+  case OPCODE_CONST: {
     TRACE(CONSTP,
           5,
           "Discovered new narrow constant for reg: %d, value: %d\n",
@@ -148,10 +145,7 @@ void LocalConstantPropagation::analyze_instruction(
     ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->get_literal());
     break;
   }
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
-  case OPCODE_CONST_WIDE:
-  case OPCODE_CONST_WIDE_HIGH16: {
+  case OPCODE_CONST_WIDE: {
     TRACE(CONSTP,
           5,
           "Discovered new wide constant for reg: %d value: %ld\n",

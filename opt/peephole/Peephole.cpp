@@ -448,8 +448,6 @@ struct Matcher {
       assert(replace.kind == DexPattern::Kind::string);
       return new IRInstruction(OPCODE_CONST_STRING);
 
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
     case OPCODE_CONST:
       assert(replace.kind == DexPattern::Kind::literal);
       return new IRInstruction((IROpcode)opcode);
@@ -779,18 +777,18 @@ DexPattern const_literal(uint16_t opcode, Register dest, Literal literal) {
 };
 
 DexPattern const_wide(Register dest, Literal literal) {
-  return {{OPCODE_CONST_WIDE_16, OPCODE_CONST_WIDE_32, OPCODE_CONST_WIDE},
+  return {{OPCODE_CONST_WIDE},
           {},
           {dest},
           literal};
 };
 
 DexPattern const_integer(Register dest, Literal literal) {
-  return {{OPCODE_CONST_4, OPCODE_CONST_16, OPCODE_CONST}, {}, {dest}, literal};
+  return {{OPCODE_CONST}, {}, {dest}, literal};
 };
 
 DexPattern const_float(Register dest, Literal literal) {
-  return {{OPCODE_CONST_4, OPCODE_CONST}, {}, {dest}, literal};
+  return {{OPCODE_CONST}, {}, {dest}, literal};
 };
 
 DexPattern const_char(Register dest, Literal literal) {
@@ -878,7 +876,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result(Register::B)},
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
-        const_literal(OPCODE_CONST_16, Register::B, Literal::Length_String_A)}},
+        const_literal(OPCODE_CONST, Register::B, Literal::Length_String_A)}},
 
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing
@@ -1007,7 +1005,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A),
+        const_literal(OPCODE_CONST, Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "Z"),
         move_result_object(Register::E)},
        // pre opt write order: B, C, D, E
@@ -1017,7 +1015,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::B),
         move_object(Register::C, Register::A), // maybe dead
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A), // maybe dead
+        const_literal(OPCODE_CONST, Register::D, Literal::A), // maybe dead
         move_object(Register::E, Register::C)}}, // maybe dead
       // post opt write order: B, B, C, D, E
 
@@ -1026,7 +1024,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A),
+        const_literal(OPCODE_CONST, Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "Z")},
        // pre opt write order: B, C, D
        {const_string(String::concat_string_A_boolean_A),
@@ -1035,7 +1033,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::B),
         move_object(Register::C, Register::A), // maybe dead
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A)}}, // maybe dead
+        const_literal(OPCODE_CONST, Register::D, Literal::A)}}, // maybe dead
       // post opt write order: B, B, C, D
 
       // It coalesces append(string) and append(long int) into append(string).
@@ -1092,15 +1090,15 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::B), // maybe dead
         move_result_pseudo_object(Register::B),
         const_literal(
-            OPCODE_CONST_4, Register::C, Literal::Compare_Strings_A_B)}},
+            OPCODE_CONST, Register::C, Literal::Compare_Strings_A_B)}},
 
       // It replaces valueOf on a boolean value by "true" or "false" directly.
       // String.valueof(true/false) ==> "true" or "false"
       {"Replace_ValueOfBoolean",
-       {const_literal(OPCODE_CONST_4, Register::A, Literal::A),
+       {const_literal(OPCODE_CONST, Register::A, Literal::A),
         invoke_String_valueOf(Register::A, "Z"),
         move_result_object(Register::B)},
-       {const_literal(OPCODE_CONST_4, Register::A, Literal::A), // maybe dead
+       {const_literal(OPCODE_CONST, Register::A, Literal::A), // maybe dead
         const_string(String::boolean_A_to_string),
         move_result_pseudo_object(Register::B)}},
 

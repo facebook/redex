@@ -122,8 +122,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_RETURN_OBJECT:
     always_assert_log(false, "No dest");
     not_reached();
-  case OPCODE_CONST_4:
-    return const_dest_type(insn);
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
@@ -168,12 +166,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return RegisterType::NORMAL;
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::NORMAL;
-  case OPCODE_CONST_16:
-  case OPCODE_CONST_HIGH16:
-    return const_dest_type(insn);
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_HIGH16:
-    return RegisterType::WIDE;
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
   case OPCODE_CMPL_DOUBLE:
@@ -272,8 +264,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return RegisterType::NORMAL;
   case OPCODE_CONST:
     return const_dest_type(insn);
-  case OPCODE_CONST_WIDE_32:
-    return RegisterType::WIDE;
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
@@ -404,9 +394,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
     return RegisterType::WIDE;
   case OPCODE_RETURN_OBJECT:
     return RegisterType::OBJECT;
-  case OPCODE_CONST_4:
-    always_assert_log(false, "No src");
-    not_reached();
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
@@ -446,12 +433,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
     return RegisterType::NORMAL;
   case OPCODE_ARRAY_LENGTH:
     return RegisterType::OBJECT;
-  case OPCODE_CONST_16:
-  case OPCODE_CONST_HIGH16:
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_HIGH16:
-    always_assert_log(false, "No src");
-    not_reached();
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
     return RegisterType::NORMAL;
@@ -551,7 +532,6 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_USHR_INT_LIT8:
     return RegisterType::NORMAL;
   case OPCODE_CONST:
-  case OPCODE_CONST_WIDE_32:
     always_assert_log(false, "No src");
     not_reached();
   case OPCODE_FILL_ARRAY_DATA:

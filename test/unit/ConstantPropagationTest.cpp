@@ -23,13 +23,13 @@ static void do_const_prop(IRCode* code, const ConstPropConfig& config) {
 TEST(ConstantPropagation, IfToGoto) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
 
      (if-eqz v0 :if-true-label)
-     (const/4 v0 1)
+     (const v0 1)
 
      :if-true-label
-     (const/4 v0 2)
+     (const v0 2)
     )
 )");
 
@@ -39,13 +39,13 @@ TEST(ConstantPropagation, IfToGoto) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
 
      (goto :if-true-label)
-     (const/4 v0 1)
+     (const v0 1)
 
      :if-true-label
-     (const/4 v0 2)
+     (const v0 2)
     )
 )");
   EXPECT_EQ(assembler::to_s_expr(code.get()),
@@ -55,15 +55,15 @@ TEST(ConstantPropagation, IfToGoto) {
 TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
-     (const/4 v1 0)
+     (const v0 0)
+     (const v1 0)
 
      (if-eqz v0 :if-true-label-1)
-     (const/4 v1 1) ; the preceding opcode always jumps, so this is unreachable
+     (const v1 1) ; the preceding opcode always jumps, so this is unreachable
 
      :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is always true
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -76,15 +76,15 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
-     (const/4 v1 0)
+     (const v0 0)
+     (const v1 0)
 
      (goto :if-true-label-1)
-     (const/4 v1 1)
+     (const v1 1)
 
      :if-true-label-1
      (goto :if-true-label-2)
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -97,15 +97,15 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
 TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 1)
+     (const v0 1)
+     (const v1 1)
 
      (if-eqz v0 :if-true-label-1)
-     (const/4 v1 0) ; the preceding opcode never jumps, so this is always
+     (const v1 0) ; the preceding opcode never jumps, so this is always
                     ; executed
      :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is always true
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -118,13 +118,13 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 1)
+     (const v0 1)
+     (const v1 1)
 
-     (const/4 v1 0)
+     (const v1 0)
 
      (goto :if-true-label-2)
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -137,15 +137,15 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
 TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
-     (const/4 v1 1)
+     (const v0 0)
+     (const v1 1)
 
      (if-lt v0 v1 :if-true-label-1)
-     (const/4 v1 0) ; the preceding opcode always jumps, so this is never
+     (const v1 0) ; the preceding opcode always jumps, so this is never
                     ; executed
      :if-true-label-1
      (if-eqz v1 :if-true-label-2) ; therefore this is never true
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -158,14 +158,14 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
-     (const/4 v1 1)
+     (const v0 0)
+     (const v1 1)
 
      (goto :if-true-label-1)
-     (const/4 v1 0)
+     (const v1 0)
 
      :if-true-label-1
-     (const/4 v1 2)
+     (const v1 2)
 
      (return-void)
     )
@@ -177,15 +177,15 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
 TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 0)
+     (const v0 1)
+     (const v1 0)
 
      (if-lt v0 v1 :if-true-label-1)
-     (const/4 v0 0) ; the preceding opcode never jumps, so this is always
+     (const v0 0) ; the preceding opcode never jumps, so this is always
                     ; executed
      :if-true-label-1
      (if-eqz v0 :if-true-label-2) ; therefore this is always true
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -198,13 +198,13 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 0)
+     (const v0 1)
+     (const v1 0)
 
-     (const/4 v0 0)
+     (const v0 0)
 
      (goto :if-true-label-2)
-     (const/4 v1 2)
+     (const v1 2)
 
      :if-true-label-2
      (return-void)
@@ -222,7 +222,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
      (if-nez v0 :exit)
      (if-eqz v0 :exit) ; we know v0 must be zero here, so this is always true
 
-     (const/4 v0 1)
+     (const v0 1)
 
      :exit
      (return-void)
@@ -240,7 +240,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
      (if-nez v0 :exit)
      (goto :exit)
 
-     (const/4 v0 1)
+     (const v0 1)
 
      :exit
      (return-void)
@@ -258,7 +258,7 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
      (if-lez v0 :exit)
      (if-gtz v0 :exit) ; we know v0 must be > 0 here, so this is always true
 
-     (const/4 v0 1)
+     (const v0 1)
 
      :exit
      (return-void)
@@ -276,7 +276,7 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
      (if-lez v0 :exit)
      (goto :exit)
 
-     (const/4 v0 1)
+     (const v0 1)
 
      :exit
      (return-void)
@@ -296,7 +296,7 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
                        ; is identical to the 'false' block.
      :next
      (if-eqz v0 :end)
-     (const/4 v0 1)
+     (const v0 1)
      :end
      (return-void)
     )
@@ -312,7 +312,7 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
      (if-eqz v0 :next)
      :next
      (if-eqz v0 :end)
-     (const/4 v0 1)
+     (const v0 1)
      :end
      (return-void)
     )

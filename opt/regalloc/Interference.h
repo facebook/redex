@@ -133,7 +133,7 @@ class Node {
    * handle code that didn't. For example, the following code should verify,
    * but fails our requirement:
    *
-   *   const/4 v0, 0 # v0 => RegisterType::ZERO
+   *   const v0, 0 # v0 => RegisterType::ZERO
    *   if-eqz v1
    *   if-true-branch:
    *   add-int v0, v0, v0 # v0 => RegisterType::NORMAL

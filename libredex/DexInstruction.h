@@ -385,11 +385,11 @@ inline bool is_switch(IROpcode op) {
 }
 
 inline bool is_literal_const(IROpcode op) {
-  return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE_HIGH16;
+  return op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE;
 }
 
 inline bool is_const(IROpcode op) {
-  return op >= OPCODE_CONST_4 && op <= OPCODE_CONST_CLASS;
+  return op >= OPCODE_CONST && op <= OPCODE_CONST_CLASS;
 }
 
 inline bool is_monitor(IROpcode op) {

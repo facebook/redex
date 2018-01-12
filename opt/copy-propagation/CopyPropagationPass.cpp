@@ -203,8 +203,6 @@ class AliasFixpointIterator final
     case OPCODE_MOVE_OBJECT:
       return RegisterValue{insn->src(0)};
     case OPCODE_CONST:
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
       if (m_config.eliminate_const_literals) {
         return RegisterValue{insn->get_literal()};
       } else {

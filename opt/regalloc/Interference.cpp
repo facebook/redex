@@ -148,6 +148,9 @@ size_t dest_bit_width(FatMethod::iterator it) {
   } else if (opcode::is_internal(op) || is_move(op)) {
     // move-* opcodes can always be encoded as move-*/16
     return 16;
+  } else if (is_literal_const(op)) {
+    // const opcodes can always be encoded in a form that addresses 8-bit regs
+    return 8;
   } else {
     return dex_opcode::dest_bit_width(opcode::to_dex_opcode(op));
   }
@@ -229,7 +232,7 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
  *   B0:
  *     load-param v1 Ljava/lang/Object;
  *     TRY_START
- *     const/4 v0 123
+ *     const v0 123
  *     check-cast v1 LFoo;
  *   B1:
  *     move-result-pseudo v0

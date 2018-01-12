@@ -244,7 +244,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
     (
      (load-param v0)
      (load-param v1)
-     (const/4 v2 0)
+     (const v2 0)
      (add-int v3 v0 v2)
      (return v3)
     )
@@ -274,7 +274,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   EXPECT_EQ(ig.get_node(1).max_vreg(), 65535);
   EXPECT_EQ(ig.get_node(1).adjacent(), std::vector<reg_t>{0});
   EXPECT_EQ(ig.get_node(1).type(), RegisterType::NORMAL);
-  EXPECT_EQ(ig.get_node(2).max_vreg(), 15);
+  EXPECT_EQ(ig.get_node(2).max_vreg(), 255);
   EXPECT_EQ(ig.get_node(2).adjacent(), std::vector<reg_t>{0});
   EXPECT_EQ(ig.get_node(2).type(), RegisterType::NORMAL);
   EXPECT_EQ(ig.get_node(3).max_vreg(), 255);
@@ -350,7 +350,7 @@ TEST_F(RegAllocTest, CombineAdjacentNodes) {
 TEST_F(RegAllocTest, Coalesce) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
      (move v1 v0)
      (return v1)
     )
@@ -371,7 +371,7 @@ TEST_F(RegAllocTest, Coalesce) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
      ; move opcode was coalesced
      (return v0)
     )
@@ -519,7 +519,7 @@ TEST_F(RegAllocTest, SelectRange) {
      ; the invoke instruction references the param registers in order; make
      ; sure we map them 1:1 without any spills, and map v6 to the start of the
      ; frame (since the params must be at the end)
-     (const/4 v6 0)
+     (const v6 0)
      (invoke-static (v0 v1 v2 v3 v4 v5) "Lfoo;.baz:(IIIIII)V")
 
      (add-int v3 v0 v6)
@@ -565,7 +565,7 @@ TEST_F(RegAllocTest, SelectRange) {
 TEST_F(RegAllocTest, SelectAliasedRange) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 0)
+     (const v0 0)
      (invoke-static (v0 v0) "Lfoo;.baz:(II)V")
      (return-void)
     )
@@ -600,13 +600,16 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
 TEST_F(RegAllocTest, Spill) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 1)
+     (load-param-object v3)
+     (iget v3 "LFoo;.a:I")
+     (move-result-pseudo v0)
+     (iget v3 "LFoo;.b:I")
+     (move-result-pseudo v1)
      (add-int v2 v0 v1)
      (return v2)
     )
 )");
-  code->set_registers_size(3);
+  code->set_registers_size(4);
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
@@ -630,17 +633,20 @@ TEST_F(RegAllocTest, Spill) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v3 1)
-     (move v0 v3)
-     (const/4 v4 1)
-     (move v1 v4)
+     (load-param-object v3)
+     (iget v3 "LFoo;.a:I")
+     (move-result-pseudo v4)
+     (move v0 v4)
+     (iget v3 "LFoo;.b:I")
+     (move-result-pseudo v5)
+     (move v1 v5)
 
-     (add-int v5 v0 v1) ; srcs not spilled -- add-int can address up to
+     (add-int v6 v0 v1) ; srcs not spilled -- add-int can address up to
                         ; 8-bit-sized operands
-     (move v2 v5)
+     (move v2 v6)
 
-     (move v6 v2)
-     (return v6)
+     (move v7 v2)
+     (return v7)
     )
 )");
   EXPECT_EQ(assembler::to_s_expr(code.get()),
@@ -743,8 +749,8 @@ TEST_F(RegAllocTest, FindSplit) {
 TEST_F(RegAllocTest, Split) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
-     (const/4 v1 1)
+     (const v0 1)
+     (const v1 1)
      (move v2 v1)
      (move v4 v1)
      (move v3 v0)
@@ -776,10 +782,10 @@ TEST_F(RegAllocTest, Split) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-     (const/4 v0 1)
+     (const v0 1)
      (move v5 v0)
 
-     (const/4 v1 1)
+     (const v1 1)
      (move v2 v1)
      (move v4 v1)
      (move v0 v5)
@@ -797,8 +803,8 @@ TEST_F(RegAllocTest, ParamFirstUse) {
     (
      (load-param v0)
      (load-param v1)
-     (const/4 v1 0)
-     (const/4 v2 0)
+     (const v1 0)
+     (const v2 0)
      (add-int v3 v0 v2)
      (return v3)
     )
@@ -828,8 +834,8 @@ TEST_F(RegAllocTest, ParamFirstUse) {
      ; Since v1 was getting overwritten in the original code, we insert a load
      ; immediately after the load-param instructions
      (move v1 v5)
-     (const/4 v1 0)
-     (const/4 v2 0)
+     (const v1 0)
+     (const v2 0)
 
      ; Since v0 did not get overwritten in the original code, we are able to
      ; insert the load before its first use

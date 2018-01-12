@@ -63,7 +63,7 @@
  * For example, say we have the following Dex code:
  *
  *   sget-object v1 <some field of type LQux;>
- *   const/4 v0 #0
+ *   const v0 #0
  *   start try block
  *   iget-object v0 v1 LQux;.a:LFoo;
  *   return-void
@@ -72,16 +72,16 @@
  *   // exception handler
  *   invoke-static {v0} LQux;.a(LFoo;)V
  *
- * If `iget-object` throws, it will not have written to v0, so the `const/4` is
+ * If `iget-object` throws, it will not have written to v0, so the `const` is
  * necessary to ensure that v0 is always initialized when control flow reaches
- * B2. In other words, v0 must be live-out at const/4.
+ * B2. In other words, v0 must be live-out at `const v0 #0`.
  *
  * Prior to this diff, we dealt with this by putting any potentially throwing
  * opcodes in the subsequent basic block when converting from Dex to IR:
  *
  *   B0:
  *     sget-object v1 <some field of type LQux;>
- *     const/4 v0 #0
+ *     const v0 #0
  *   B1: <throws to B2> // v1 is live-in here
  *     iget-object v0 v1 LQux;.a:LFoo;
  *     return-void
@@ -89,7 +89,7 @@
  *     invoke-static {v0} LQux;.a(LFoo;)V
  *
  * This way, straightforward liveness analysis will consider v0 to be
- * live-out at const/4. Obviously, this is still somewhat inaccurate: we end
+ * live-out at `const`. Obviously, this is still somewhat inaccurate: we end
  * up considering v1 as live-in at B1 when it should really be dead. Being
  * conservative about liveness generally doesn't create wrong behavior, but
  * can result in poorer optimizations.
@@ -98,7 +98,7 @@
  *
  *   B0:
  *     sget-object v1 <some field of type LQux;>
- *     const/4 v0 #0
+ *     const v0 #0
  *     iget-object v1 LQux;.a:LFoo;
  *   B1: <throws to B2> // no registers are live-in here
  *     move-result-pseudo-object v0

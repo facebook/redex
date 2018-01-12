@@ -356,7 +356,7 @@ void MethodBlock::ret(DexType* rtype, Location loc) {
 
 void MethodBlock::load_const(Location& loc, int32_t value) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRInstruction(OPCODE_CONST_16);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(value);
   loc.type = get_int_type();
@@ -398,7 +398,7 @@ void MethodBlock::load_const(Location& loc, DexType* value) {
 
 void MethodBlock::load_null(Location& loc) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRInstruction(OPCODE_CONST_4);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(0);
   loc.type = get_object_type();

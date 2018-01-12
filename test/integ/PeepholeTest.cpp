@@ -72,7 +72,7 @@ static IRInstructionList op_lit(IROpcode opcode,
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
-      dasm(OPCODE_CONST_16, {0_v, 42_L}),
+      dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode,
            {Operand{VREG, dst_reg},
             0_v,
@@ -86,7 +86,7 @@ static IRInstructionList op_lit_move_result_pseudo(IROpcode opcode,
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
-      dasm(OPCODE_CONST_16, {0_v, 42_L}),
+      dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode, {0_v, Operand{LITERAL, static_cast<uint64_t>(literal)}}),
       dasm(IOPCODE_MOVE_RESULT_PSEUDO, {Operand{VREG, dst_reg}})};
 }
@@ -94,7 +94,7 @@ static IRInstructionList op_lit_move_result_pseudo(IROpcode opcode,
 // Builds arithmetic involving an opcode like MOVE or NEG
 static IRInstructionList op_unary(IROpcode opcode) {
   using namespace dex_asm;
-  return IRInstructionList{dasm(OPCODE_CONST_16, {0_v, 42_L}),
+  return IRInstructionList{dasm(OPCODE_CONST, {0_v, 42_L}),
                            dasm(opcode, {1_v, 0_v})};
 }
 

@@ -27,7 +27,7 @@ class DceTest : public EquivalenceTest {
 EQUIVALENCE_TEST(DceTest, TrailingIf)(DexMethod* m) {
   using namespace dex_asm;
   auto mt = m->get_code();
-  mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
+  mt->push_back(dasm(OPCODE_CONST, {0_v, 0x1_L}));
   mt->push_back(dasm(OPCODE_RETURN, {0_v}));
   auto branch_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {0_v}));
   mt->push_back(*branch_mie);
@@ -35,6 +35,6 @@ EQUIVALENCE_TEST(DceTest, TrailingIf)(DexMethod* m) {
   target->type = BRANCH_SIMPLE;
   target->src = branch_mie;
   mt->push_back(target);
-  mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x2_L}));
+  mt->push_back(dasm(OPCODE_CONST, {0_v, 0x2_L}));
   m->get_code()->set_registers_size(1);
 }

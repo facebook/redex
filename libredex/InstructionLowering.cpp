@@ -79,9 +79,6 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   always_assert(dest_width <= 8);
   auto literal = insn->get_literal();
   switch (op) {
-  case OPCODE_CONST_4:
-  case OPCODE_CONST_16:
-  case OPCODE_CONST_HIGH16:
   case OPCODE_CONST:
     if (dest_width <= 4 && signed_int_fits<4>(literal)) {
       return DOPCODE_CONST_4;
@@ -90,11 +87,9 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
     } else if (signed_int_fits_high16<32>(literal)) {
       return DOPCODE_CONST_HIGH16;
     } else {
+      always_assert(signed_int_fits<32>(literal));
       return DOPCODE_CONST;
     }
-  case OPCODE_CONST_WIDE_16:
-  case OPCODE_CONST_WIDE_32:
-  case OPCODE_CONST_WIDE_HIGH16:
   case OPCODE_CONST_WIDE:
     if (signed_int_fits<16>(literal)) {
       return DOPCODE_CONST_WIDE_16;
@@ -293,7 +288,7 @@ static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
   DexInstruction* dex_insn;
   if (is_move(op)) {
     dex_insn = new DexInstruction(select_move_opcode(insn));
-  } else if (op >= OPCODE_CONST_4 && op <= OPCODE_CONST_WIDE) {
+  } else if (op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE) {
     dex_insn = new DexInstruction(select_const_opcode(insn));
   } else {
     dex_insn = create_dex_instruction(insn);

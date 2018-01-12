@@ -293,12 +293,8 @@ class FinalInlineImpl {
       return false;
     }
     switch (op->opcode()) {
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
     case OPCODE_CONST:
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_WIDE_16:
-    case OPCODE_CONST_WIDE_32:
     case OPCODE_CONST_WIDE:
       return true;
     default:
