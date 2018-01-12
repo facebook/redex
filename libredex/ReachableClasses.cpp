@@ -515,9 +515,7 @@ std::string ReferencedState::str() const {
   s << m_bystring;
   s << m_computed;
   s << m_keep;
-  s << m_includedescriptorclasses;
   s << m_allowshrinking;
-  s << m_allowoptimization;
   s << m_allowobfuscation;
   s << m_assumenosideeffects;
   s << m_blanket_keep;

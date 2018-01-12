@@ -178,12 +178,8 @@ struct ClassMatcher {
 // Updates a class, field or method to add keep modifiers.
 template <class DexMember>
 void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
-  if (k.includedescriptorclasses) {
-    member->rstate.set_includedescriptorclasses();
-  }
-  if (k.allowoptimization) {
-    member->rstate.set_allowoptimization();
-  }
+  // Note: includedescriptorclasses and allowoptimization are not implemented.
+
   // Only set allowshrinking when no other keep has been applied to this
   // class or member.
   if (k.allowshrinking) {
@@ -293,21 +289,22 @@ void keep_fields(RegexMap& regex_map,
                  const std::function<void(DexField*)>& keeper,
                  const boost::regex& fieldname_regex) {
   for (DexField* field : fields) {
-    if (field_level_match(
+    if (!field_level_match(
             regex_map, fieldSpecification, field, fieldname_regex)) {
-      if (apply_modifiers) {
-        apply_keep_modifiers(keep_rule, field);
-      }
-      keeper(field);
-      if (field->rstate.report_whyareyoukeeping()) {
-        TRACE(PGR,
-              2,
-              "whyareyoukeeping Field %s kept by %s\n",
-              SHOW(field),
-              show_keep(keep_rule).c_str());
-      }
-      fieldSpecification.count++;
+      continue;
     }
+    if (apply_modifiers) {
+      apply_keep_modifiers(keep_rule, field);
+    }
+    keeper(field);
+    if (field->rstate.report_whyareyoukeeping()) {
+      TRACE(PGR,
+            2,
+            "whyareyoukeeping Field %s kept by %s\n",
+            SHOW(field),
+            show_keep(keep_rule).c_str());
+    }
+    fieldSpecification.count++;
   }
 }
 
@@ -322,8 +319,8 @@ std::string field_regex(const MemberSpecification& field_spec) {
 void apply_field_keeps(RegexMap& regex_map,
                        const DexClass* cls,
                        const redex::KeepSpec& keep_rule,
-                       const std::function<void(DexField*)>& keeper,
-                       bool apply_modifiers) {
+                       bool apply_modifiers,
+                       const std::function<void(DexField*)>& keeper) {
   for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
     auto fieldname_regex = field_regex(field_spec);
     const boost::regex& matcher = register_matcher(regex_map, fieldname_regex);
@@ -617,9 +614,13 @@ void mark_class_and_members_for_keep(RegexMap& regex_map,
   }
   // Mark descriptor classes
   if (keep_rule.includedescriptorclasses) {
+    std::cerr << "WARNING: 'includedescriptorclasses' keep modifier is NOT "
+                 "implemented: "
+              << redex::show_keep(keep_rule) << std::endl;
+  }
+  if (keep_rule.allowoptimization) {
     std::cerr
-        << "WARNING: keep rule uses includedescriptorclasses which is NOT "
-           "implemented: "
+        << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
         << redex::show_keep(keep_rule) << std::endl;
   }
   keep_rule.count++;
@@ -648,11 +649,10 @@ void mark_class_and_members_for_keep(RegexMap& regex_map,
   bool apply_modifiers = true;
   while (class_to_mark != nullptr && !class_to_mark->is_external()) {
     // Mark unconditionally.
-    apply_field_keeps(regex_map,
-                      class_to_mark,
-                      keep_rule,
-                      [](DexField* f) { f->rstate.set_keep(); },
-                      apply_modifiers);
+    apply_field_keeps(
+        regex_map, class_to_mark, keep_rule, apply_modifiers, [](DexField* f) {
+          f->rstate.set_keep();
+        });
     apply_method_keeps(
         regex_map, class_to_mark, keep_rule, apply_modifiers, [](DexMethod* m) {
           m->rstate.set_keep();
@@ -671,11 +671,9 @@ void process_whyareyoukeeping(RegexMap& regex_map,
                               DexClass* cls) {
   cls->rstate.set_whyareyoukeeping();
 
-  apply_field_keeps(regex_map,
-                    cls,
-                    keep_rule,
-                    [](DexField* f) { f->rstate.set_whyareyoukeeping(); },
-                    false);
+  apply_field_keeps(regex_map, cls, keep_rule, false, [](DexField* f) {
+    f->rstate.set_whyareyoukeeping();
+  });
   // Set any method-level keep whyareyoukeeping bits.
   apply_method_keeps(regex_map, cls, keep_rule, false, [](DexMethod* m) {
     m->rstate.set_whyareyoukeeping();
@@ -770,7 +768,6 @@ void process_keep(
   }
 }
 
-// TODO(satnamsingh@fb.com): Replace with a user defined hash function.
 inline bool operator==(const MemberSpecification& lhs,
                        const MemberSpecification& rhs) {
   return lhs.requiredSetAccessFlags == rhs.requiredSetAccessFlags &&
