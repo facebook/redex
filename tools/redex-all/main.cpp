@@ -66,14 +66,12 @@ struct Arguments {
   Json::Value config{Json::nullValue};
   std::set<std::string> jar_paths;
   std::vector<std::string> proguard_config_paths;
-  std::string seeds_filename;
   std::string out_dir;
   std::vector<std::string> dex_files;
   bool verify_none_mode{false};
 };
 
 UNUSED void dump_args(const Arguments& args) {
-  std::cout << "seeds_filename: " << args.seeds_filename << std::endl;
   std::cout << "out_dir: " << args.out_dir << std::endl;
   std::cout << "verify_none_mode: " << args.verify_none_mode << std::endl;
   std::cout << "jar_paths: " << std::endl;
@@ -195,9 +193,6 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("proguard-config,p",
                    po::value<std::vector<std::string>>(), // Accumulation
                    "ProGuard config file");
-  od.add_options()("seeds,s",
-                   po::value<std::vector<std::string>>(),
-                   "seeds file specifiying roots of classes to keep");
   od.add_options()("printseeds,q",
                    po::value<std::vector<std::string>>(),
                    "file to report seeds computed by redex");
@@ -299,10 +294,6 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("outdir")) {
     args.out_dir = take_last(vm["outdir"]);
-  }
-
-  if (vm.count("seeds")) {
-    args.seeds_filename = take_last(vm["seeds"]);
   }
 
   if (vm.count("proguard-config")) {
@@ -594,14 +585,7 @@ int main(int argc, char* argv[]) {
         apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
       }
     }
-    cfg.using_seeds = false;
     cfg.outdir = args.out_dir;
-    if (!args.seeds_filename.empty()) {
-      Timer t("Initialized seed classes from incoming seeds file");
-      auto nseeds =
-          init_seed_classes(args.seeds_filename, cfg.get_proguard_map());
-      cfg.using_seeds = nseeds > 0;
-    }
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode);

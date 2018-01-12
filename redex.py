@@ -124,8 +124,6 @@ def run_pass(
     if script_args.warn:
         args += ['--warn', script_args.warn]
     args += ['--proguard-config=' + x for x in script_args.proguard_configs]
-    if script_args.keep:
-        args += ['--seeds', script_args.keep]
     if script_args.proguard_map:
         args += ['-Sproguard_map=' + script_args.proguard_map]
 
@@ -442,7 +440,7 @@ Given an APK, produce a better APK!
             action='append', default=[], help='Path to proguard config')
 
     parser.add_argument('-k', '--keep', nargs='?',
-            help='Path to file containing classes to keep')
+            help='[deprecated] Path to file containing classes to keep')
 
     parser.add_argument('-S', dest='passthru', action='append', default=[],
             help='Arguments passed through to redex')

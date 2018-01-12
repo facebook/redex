@@ -716,14 +716,4 @@ match_t<T, std::tuple<> > keep() {
   };
 }
 
-/** Match which checks is_seed helper for DexMembers */
-template<typename T>
-match_t<T, std::tuple<> > is_seed() {
-  return {
-    [](const T* t) {
-      return is_seed(t);
-    }
-  };
-}
-
 } // namespace m

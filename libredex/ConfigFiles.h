@@ -71,7 +71,6 @@ struct ConfigFiles {
   }
 
  public:
-  bool using_seeds{false};
   std::string outdir;
 
  private:

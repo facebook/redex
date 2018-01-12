@@ -47,6 +47,4 @@ void print_class(std::ostream& output,
 void print_classes(std::ostream& output,
                    const ProguardMap& pg_map,
                    const Scope& classes);
-
-void alert_seeds(std::ostream& output, const Scope& classes);
 }

@@ -24,7 +24,6 @@ class ReferencedState {
    * target to be re-evaluated.
    */
   bool m_computed{true};
-  bool m_seed{false};
 
   // ProGuard keep settings
   // Specify classes and class members that are entry-points.
@@ -58,11 +57,6 @@ class ReferencedState {
     return !m_keep_name && !m_bystring && (!m_keep || m_allowobfuscation) &&
            !m_allowshrinking;
   }
-
-  /**
-   * Is this item a "seed" according to ProGuard's analysis?
-   */
-  bool is_seed() const { return m_seed; }
 
   // ProGuard keep options
   bool keep() const { return m_keep; }
@@ -100,9 +94,6 @@ class ReferencedState {
       m_bytype = m_bystring = false;
     }
   }
-
-  // A class marked to be kept from the list of seeds from ProGuard
-  void ref_by_seed() { m_seed = true; }
 
   // ProGuard keep information.
   void set_keep() { m_keep = true; }

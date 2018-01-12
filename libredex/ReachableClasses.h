@@ -95,10 +95,6 @@ inline bool keepclasseswithmembernames(DexMember* member) {
   return keepclasseswithmembers(member) && allowshrinking(member);
 }
 
-// deprecated: DO NOT USE
-template<class DexMember>
-inline bool is_seed(DexMember* member) { return member->rstate.is_seed(); }
-
 // root is an attempt to identify a root for reachability analysis by
 // using any class or member that has keep set on it but does not have
 // allowshrinking set on it.

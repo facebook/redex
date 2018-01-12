@@ -258,7 +258,6 @@ void PassManager::run_passes(DexStoresVector& stores,
     scope = build_class_scope(it);
     std::ofstream outgoing(cfg.get_printseeds() + ".outgoing");
     redex::print_classes(outgoing, cfg.get_proguard_map(), scope);
-    redex::alert_seeds(std::cerr, scope);
   }
 }
 

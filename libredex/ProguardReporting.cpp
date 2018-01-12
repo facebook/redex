@@ -227,18 +227,3 @@ void redex::print_classes(std::ostream& output,
     }
   }
 }
-
-void alert_seeds(std::ostream& output, const DexClass* cls) {
-  if (is_seed(cls) && !keep(cls)) {
-    auto name = cls->get_deobfuscated_name();
-    output << "SEEDS CLASS ERROR: " << name << std::endl;
-  }
-}
-
-void redex::alert_seeds(std::ostream& output, const Scope& classes) {
-  for (const auto& cls : classes) {
-    if (!cls->is_external()) {
-      alert_seeds(output, cls);
-    }
-  }
-}
