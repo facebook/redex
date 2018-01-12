@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "GlobalConstProp.h"
+#include "ConstPropEnvironment.h"
 
 std::ostream& operator<<(std::ostream& o, const ConstantValue& cv) {
   o << "ConstantValue[Type:";

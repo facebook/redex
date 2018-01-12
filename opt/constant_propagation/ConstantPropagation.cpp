@@ -10,27 +10,15 @@
 #include "ConstantPropagation.h"
 
 #include "DexUtil.h"
-#include "GlobalConstProp.h"
+#include "ConstPropEnvironment.h"
 #include "LocalConstProp.h"
 #include "Transform.h"
 #include "Walkers.h"
 
 using namespace constant_propagation_impl;
-using std::placeholders::_1;
-using std::string;
-using std::vector;
-
-void IntraProcConstantPropagation::simplify_instruction(
-    Block* const& block,
-    MethodItemEntry& mie,
-    const ConstPropEnvironment& current_state) const {
-  auto insn = mie.insn;
-  m_lcp.simplify_instruction(insn, current_state);
-}
 
 void IntraProcConstantPropagation::analyze_instruction(
-    const MethodItemEntry& mie, ConstPropEnvironment* current_state) const {
-  auto insn = mie.insn;
+    const IRInstruction* insn, ConstPropEnvironment* current_state) const {
   auto op = insn->opcode();
   if (opcode::is_load_param(op)) {
     // We assume that the initial environment passed to run() has parameter
@@ -38,6 +26,14 @@ void IntraProcConstantPropagation::analyze_instruction(
     return;
   } else {
     m_lcp.analyze_instruction(insn, current_state);
+  }
+}
+
+void IntraProcConstantPropagation::analyze_node(
+    const NodeId& block, ConstPropEnvironment* state_at_entry) const {
+  TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
+  for (auto& mie : InstructionIterable(block)) {
+    analyze_instruction(mie.insn, state_at_entry);
   }
 }
 
@@ -149,6 +145,23 @@ ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
   return current_state;
 }
 
+void IntraProcConstantPropagation::simplify_instruction(
+    Block* const& block,
+    IRInstruction* insn,
+    const ConstPropEnvironment& current_state) const {
+  m_lcp.simplify_instruction(insn, current_state);
+}
+
+void IntraProcConstantPropagation::simplify() const {
+  for (const auto& block : m_cfg.blocks()) {
+    auto state = this->get_entry_state_at(block);
+    for (auto& mie : InstructionIterable(block)) {
+      analyze_instruction(mie.insn, &state);
+      simplify_instruction(block, mie.insn, state);
+    }
+  }
+}
+
 void IntraProcConstantPropagation::apply_changes(IRCode* code) const {
   for (auto const& p : m_lcp.insn_replacements()) {
     IRInstruction* old_op = p.first;
@@ -177,7 +190,7 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
   pc.get("propagate_conditions", false, m_config.propagate_conditions);
-  vector<string> blacklist_names;
+  std::vector<std::string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 
   for (auto const& name : blacklist_names) {

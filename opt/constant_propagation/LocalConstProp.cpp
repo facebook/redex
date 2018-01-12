@@ -40,7 +40,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
  *
  * This analysis goes instruction by instruction at the basic block boundary
  * and gathers facts about constants and propagates them inside the constant
- * value lattice model defined in GlobalConstProp.h
+ * value lattice model defined in ConstPropEnvironment.h
  *
  * This alone can be used to drive a simple constant propagation analysis that
  * will reset itself after traversing a basic block and moving on to another.

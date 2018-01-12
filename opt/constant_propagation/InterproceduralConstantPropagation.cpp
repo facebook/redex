@@ -13,7 +13,7 @@
 
 #include "CallGraph.h"
 #include "ConstantPropagation.h"
-#include "GlobalConstProp.h"
+#include "ConstPropEnvironment.h"
 #include "Timer.h"
 #include "Walkers.h"
 

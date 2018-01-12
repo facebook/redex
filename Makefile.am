@@ -166,7 +166,7 @@ redex_all_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
-	opt/constant_propagation/GlobalConstProp.cpp \
+	opt/constant_propagation/ConstPropEnvironment.cpp \
 	opt/constant_propagation/InterproceduralConstantPropagation.cpp \
 	opt/constant_propagation/SignDomain.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \

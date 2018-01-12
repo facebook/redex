@@ -367,3 +367,71 @@ TEST(ConstantPropagation, SignedConstantDomainOperations) {
   EXPECT_EQ(min_val.meet(negative), min_val);
   EXPECT_TRUE(min_val.meet(positive).is_bottom());
 }
+
+TEST(ConstantPropagation, WhiteBox1) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (const v1 0)
+     (const v2 1)
+     (move v3 v1)
+     (if-eqz v0 :if-true-label)
+
+     (const v2 0)
+     (if-gez v0 :if-true-label)
+
+     :if-true-label
+     (return-void)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  IntraProcConstantPropagation rcp(cfg, config);
+  rcp.run(ConstPropEnvironment());
+
+  auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
+  EXPECT_EQ(exit_state.get(0), SignedConstantDomain::top());
+  EXPECT_EQ(exit_state.get(1),
+            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+  // v2 can contain either the value 0 or 1
+  EXPECT_EQ(exit_state.get(2),
+            SignedConstantDomain(sign_domain::Interval::GEZ));
+  EXPECT_EQ(exit_state.get(3),
+            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+}
+
+TEST(ConstantPropagation, WhiteBox2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     :loop
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop)
+     ; if we get here, that means v0 >= 0
+
+     :if-true-label
+     (return-void)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  IntraProcConstantPropagation rcp(cfg, config);
+  rcp.run(ConstPropEnvironment());
+
+  auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
+  EXPECT_EQ(exit_state.get(0),
+            SignedConstantDomain(sign_domain::Interval::GEZ));
+  EXPECT_EQ(exit_state.get(1),
+            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+}

@@ -12,7 +12,7 @@
 #include <boost/optional.hpp>
 
 #include "ConstPropConfig.h"
-#include "GlobalConstProp.h"
+#include "ConstPropEnvironment.h"
 #include "Pass.h"
 
 class LocalConstantPropagation {

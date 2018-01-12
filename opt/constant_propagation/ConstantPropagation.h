@@ -12,37 +12,42 @@
 #include <mutex>
 
 #include "ConstPropConfig.h"
-#include "GlobalConstProp.h"
+#include "ConstPropEnvironment.h"
 #include "IRCode.h"
 #include "LocalConstProp.h"
 #include "Pass.h"
 
-using std::placeholders::_1;
-using std::vector;
-
-/** Intraprocedural Constant propagation
+/**
+ * Intraprocedural Constant propagation
+ *
  * This code leverages the analysis built by LocalConstantPropagation
- * with works at the basic block level and extends its capabilities by
- * leveraging the Abstract Interpretation Framework's FixPointIterator
+ * which works at the basic block level and extends its capabilities by
+ * leveraging the Abstract Interpretation Framework's FixpointIterator
  * and HashedAbstractEnvironment facilities.
  *
- * By running the fix point iterator, instead of having no knowledge at
+ * By running the fixpoint iterator, instead of having no knowledge at
  * the start of a basic block, we can now run the analysis with constants
- * that have been propagated beyond the basic block boundary making this
- * more powerful than its predecessor pass.
+ * that have been propagated beyond the basic block boundary.
+ *
+ * This code works in two phases:
+ *
+ * Phase 1:  First, gather all the facts about constant and model them inside
+ *           the constants lattice (described above). Run the fixpoint analysis
+ *           and propagate all facts throughout the CFG. In code these are all
+ *           the analyze_*() functions.
+ *
+ * Phase 2:  Once we reached a fixpoint, then replay the analysis but this
+ *           time use the previously gathered facts about constant and use them
+ *           to replace instructions.  These are all the simplify_* functions.
  */
 class IntraProcConstantPropagation final
-    : public ConstantPropFixpointAnalysis<cfg::GraphInterface,
-                                          MethodItemEntry,
-                                          std::vector<Block*>,
-                                          InstructionIterable> {
+    : public MonotonicFixpointIterator<cfg::GraphInterface,
+                                       ConstPropEnvironment> {
  public:
   explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
                                         const ConstPropConfig& config)
-      : ConstantPropFixpointAnalysis<cfg::GraphInterface,
-                                     MethodItemEntry,
-                                     vector<Block*>,
-                                     InstructionIterable>(cfg, cfg.blocks()),
+      : MonotonicFixpointIterator(cfg),
+        m_cfg(cfg),
         m_config(config),
         m_lcp{config} {}
 
@@ -50,26 +55,34 @@ class IntraProcConstantPropagation final
       const std::shared_ptr<cfg::Edge>&,
       const ConstPropEnvironment& exit_state_at_source) const override;
 
+  void analyze_instruction(const IRInstruction* insn,
+                           ConstPropEnvironment* current_state) const;
+
+  void analyze_node(const NodeId& block,
+                    ConstPropEnvironment* state_at_entry) const override;
+
   void simplify_instruction(
       Block* const& block,
-      MethodItemEntry& mie,
-      const ConstPropEnvironment& current_state) const override;
-  void analyze_instruction(const MethodItemEntry& mie,
-                           ConstPropEnvironment* current_state) const override;
+      IRInstruction* insn,
+      const ConstPropEnvironment& current_state) const;
+
+  void simplify() const;
+
   void apply_changes(IRCode*) const;
 
   size_t branches_removed() const { return m_lcp.num_branch_propagated(); }
+
   size_t materialized_consts() const { return m_lcp.num_materialized_consts(); }
 
  private:
+  const ControlFlowGraph& m_cfg;
   const ConstPropConfig m_config;
   mutable LocalConstantPropagation m_lcp;
 };
 
 class ConstantPropagationPass : public Pass {
  public:
-  ConstantPropagationPass()
-      : Pass("ConstantPropagationPass"), m_branches_removed(0) {}
+  ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override;
   virtual void run_pass(DexStoresVector& stores,
@@ -82,6 +95,6 @@ class ConstantPropagationPass : public Pass {
 
   // stats
   std::mutex m_stats_mutex;
-  size_t m_branches_removed;
-  size_t m_materialized_consts;
+  size_t m_branches_removed{0};
+  size_t m_materialized_consts{0};
 };
