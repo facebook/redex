@@ -321,6 +321,114 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST(ConstantPropagation, FoldArithmeticAddLit) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 2147483646)
+     (add-int/lit8 v0 v0 1) ; this should be converted to a const opcode
+     (const v1 2147483647)
+     (if-eq v0 v1 :end)
+     (const v0 2147483647)
+     (add-int/lit8 v0 v0 1) ; we don't handle overflows, so this should be
+                            ; unchanged
+     :end
+     (return-void)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  config.fold_arithmetic = true;
+  do_const_prop(code.get(), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 2147483646)
+     (const v0 2147483647)
+     (const v1 2147483647)
+     (goto :end)
+     (const v0 2147483647)
+     (add-int/lit8 v0 v0 1)
+     :end
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ConstantPropagation, AnalyzeCmp) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :b1) ; make sure all blocks appear reachable to constprop
+      (if-gez v0 :b2)
+
+      :b0 ; case v0 < v1
+      (const-wide v0 0)
+      (const-wide v1 1)
+      (cmp-long v2 v0 v1)
+      (const v3 -1)
+      (if-eq v2 v3 :end)
+
+      :b1 ; case v0 == v1
+      (const-wide v0 1)
+      (const-wide v1 1)
+      (cmp-long v2 v0 v1)
+      (const v3 0)
+      (if-eq v2 v3 :end)
+
+      :b2 ; case v0 > v1
+      (const-wide v0 1)
+      (const-wide v1 0)
+      (cmp-long v2 v0 v1)
+      (const v3 1)
+      (if-eq v2 v3 :end)
+
+      :end
+      (return v2)
+    )
+)");
+
+  ConstPropConfig config;
+  config.propagate_conditions = true;
+  do_const_prop(code.get(), config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :b1)
+      (if-gez v0 :b2)
+
+      :b0
+      (const-wide v0 0)
+      (const-wide v1 1)
+      (cmp-long v2 v0 v1)
+      (const v3 -1)
+      (goto :end)
+
+      :b1
+      (const-wide v0 1)
+      (const-wide v1 1)
+      (cmp-long v2 v0 v1)
+      (const v3 0)
+      (goto :end)
+
+      :b2
+      (const-wide v0 1)
+      (const-wide v1 0)
+      (cmp-long v2 v0 v1)
+      (const v3 1)
+      (goto :end)
+
+      :end
+      (return v2)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, SignedConstantDomainOperations) {
   using namespace sign_domain;
   auto one = SignedConstantDomain(1, ConstantValue::ConstantType::NARROW);
