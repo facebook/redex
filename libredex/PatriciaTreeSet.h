@@ -19,6 +19,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <boost/functional/hash.hpp>
+
 #include "Debug.h"
 #include "PatriciaTreeUtil.h"
 #include "Util.h"
@@ -67,6 +69,11 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> merge(
 
 template <typename IntegerType>
 inline std::shared_ptr<PatriciaTree<IntegerType>> intersect(
+    std::shared_ptr<PatriciaTree<IntegerType>> s,
+    std::shared_ptr<PatriciaTree<IntegerType>> t);
+
+template <typename IntegerType>
+inline std::shared_ptr<PatriciaTree<IntegerType>> diff(
     std::shared_ptr<PatriciaTree<IntegerType>> s,
     std::shared_ptr<PatriciaTree<IntegerType>> t);
 
@@ -201,6 +208,11 @@ class PatriciaTreeSet final {
     return *this;
   }
 
+  PatriciaTreeSet& difference_with(const PatriciaTreeSet& other) {
+    m_tree = pt_impl::diff<IntegerType>(m_tree, other.m_tree);
+    return *this;
+  }
+
   PatriciaTreeSet get_union_with(const PatriciaTreeSet& other) const {
     auto result = *this;
     result.union_with(other);
@@ -212,6 +224,18 @@ class PatriciaTreeSet final {
     result.intersection_with(other);
     return result;
   }
+
+  PatriciaTreeSet get_difference_with(const PatriciaTreeSet& other) const {
+    auto result = *this;
+    result.difference_with(other);
+    return result;
+  }
+
+  /*
+   * The hash codes are computed incrementally when the Patricia trees are
+   * constructed. Hence, this method has complexity O(1).
+   */
+  size_t hash() const { return m_tree == nullptr ? 0 : m_tree->hash(); }
 
   void clear() { m_tree.reset(); }
 
@@ -299,6 +323,13 @@ class PatriciaTree {
   virtual bool is_leaf() const = 0;
 
   bool is_branch() const { return !is_leaf(); }
+
+  size_t hash() const { return m_hash; }
+
+  void set_hash(size_t h) { m_hash = h; }
+
+ private:
+  size_t m_hash;
 };
 
 // This defines an internal node of a Patricia tree. Patricia trees are
@@ -317,15 +348,22 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
                      std::shared_ptr<PatriciaTree<IntegerType>> left_tree,
                      std::shared_ptr<PatriciaTree<IntegerType>> right_tree)
       : m_prefix(prefix),
-        m_stacking_bit(branching_bit),
+        m_branching_bit(branching_bit),
         m_left_tree(left_tree),
-        m_right_tree(right_tree) {}
+        m_right_tree(right_tree) {
+    size_t seed = 0;
+    boost::hash_combine(seed, m_prefix);
+    boost::hash_combine(seed, m_branching_bit);
+    boost::hash_combine(seed, left_tree->hash());
+    boost::hash_combine(seed, right_tree->hash());
+    this->set_hash(seed);
+  }
 
   bool is_leaf() const override { return false; }
 
   IntegerType prefix() const { return m_prefix; }
 
-  IntegerType branching_bit() const { return m_stacking_bit; }
+  IntegerType branching_bit() const { return m_branching_bit; }
 
   std::shared_ptr<PatriciaTree<IntegerType>> left_tree() const {
     return m_left_tree;
@@ -337,7 +375,7 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
 
  private:
   IntegerType m_prefix;
-  IntegerType m_stacking_bit;
+  IntegerType m_branching_bit;
   std::shared_ptr<PatriciaTree<IntegerType>> m_left_tree;
   std::shared_ptr<PatriciaTree<IntegerType>> m_right_tree;
 };
@@ -345,7 +383,10 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
 template <typename IntegerType>
 class PatriciaTreeLeaf final : public PatriciaTree<IntegerType> {
  public:
-  explicit PatriciaTreeLeaf(IntegerType key) : m_key(key) {}
+  explicit PatriciaTreeLeaf(IntegerType key) : m_key(key) {
+    boost::hash<IntegerType> hasher;
+    this->set_hash(hasher(key));
+  }
 
   bool is_leaf() const override { return true; }
 
@@ -465,6 +506,11 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType>> tree1,
     return tree2 == nullptr;
   }
   if (tree2 == nullptr) {
+    return false;
+  }
+  // Since the hash codes are readily available (they're computed when the trees
+  // are constructed), we can use them to cut short the equality test.
+  if (tree1->hash() != tree2->hash()) {
     return false;
   }
   if (tree1->is_leaf()) {
@@ -615,13 +661,16 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> merge(
   if (t == nullptr) {
     return s;
   }
-  if (s->is_leaf()) {
-    auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
-    return insert(leaf->key(), t);
-  }
+  // We need to check whether t is a leaf before we do the same for s.
+  // Otherwise, if s and t are both leaves, we would end up inserting s into t.
+  // This would violate the assumptions required by `reference_equals()`.
   if (t->is_leaf()) {
     auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
     return insert(leaf->key(), s);
+  }
+  if (s->is_leaf()) {
+    auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
+    return insert(leaf->key(), t);
   }
   auto s_branch = std::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(s);
   auto t_branch = std::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
@@ -731,6 +780,64 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> intersect(
   }
   // The prefixes disagree.
   return nullptr;
+}
+
+template <typename IntegerType>
+inline std::shared_ptr<PatriciaTree<IntegerType>> diff(
+    std::shared_ptr<PatriciaTree<IntegerType>> s,
+    std::shared_ptr<PatriciaTree<IntegerType>> t) {
+  if (s == t) {
+    // This conditional is what allows the intersection operation to complete in
+    // sublinear time when the operands share some structure.
+    return nullptr;
+  }
+  if (s == nullptr) {
+    return nullptr;
+  }
+  if (t == nullptr) {
+    return s;
+  }
+  if (s->is_leaf()) {
+    auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
+    return contains(leaf->key(), t) ? nullptr : leaf;
+  }
+  if (t->is_leaf()) {
+    auto leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
+    return remove(leaf->key(), s);
+  }
+  auto s_branch = std::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(s);
+  auto t_branch = std::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
+  IntegerType m = s_branch->branching_bit();
+  IntegerType n = t_branch->branching_bit();
+  IntegerType p = s_branch->prefix();
+  IntegerType q = t_branch->prefix();
+  auto s0 = s_branch->left_tree();
+  auto s1 = s_branch->right_tree();
+  auto t0 = t_branch->left_tree();
+  auto t1 = t_branch->right_tree();
+  if (m == n && p == q) {
+    // The two trees have the same prefix. We merge the difference of the
+    // corresponding subtrees.
+    return merge(diff(s0, t0), diff(s1, t1));
+  }
+  if (m < n && match_prefix(q, p, m)) {
+    // q contains p. Diff t with a subtree of s.
+    if (is_zero_bit(q, m)) {
+      return merge(diff(s0, t), s1);
+    } else {
+      return merge(s0, diff(s1, t));
+    }
+  }
+  if (m > n && match_prefix(p, q, n)) {
+    // p contains q. Diff s with a subtree of t.
+    if (is_zero_bit(p, n)) {
+      return diff(s, t0);
+    } else {
+      return diff(s, t1);
+    }
+  }
+  // The prefixes disagree.
+  return s;
 }
 
 // The iterator basically performs a post-order traversal of the tree, pausing

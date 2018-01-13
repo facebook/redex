@@ -14,6 +14,7 @@
 #include <random>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 #include "PatriciaTreeSet.h"
@@ -158,6 +159,43 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   EXPECT_EQ(elements3.size(), s3.size());
   s3.clear();
   EXPECT_EQ(0, s3.size());
+
+  std::vector<uint32_t> elements4 = {
+      0, 1, 2, 5, 101, 4096, 8137, 1234567, bigint};
+  pt_set t3(elements3.begin(), elements3.end());
+  pt_set t4(elements4.begin(), elements4.end());
+  pt_set d34 = t3;
+  d34.difference_with(t4);
+  {
+    std::vector<uint32_t> v(d34.begin(), d34.end());
+    EXPECT_THAT(v, ::testing::UnorderedElementsAre(1023, 13001));
+  }
+  pt_set d43 = t4.get_difference_with(t3);
+  {
+    std::vector<uint32_t> v(d43.begin(), d43.end());
+    EXPECT_THAT(v,
+                ::testing::UnorderedElementsAre(0, 1, 5, 101, 8137, 1234567));
+  }
+
+  struct Hash {
+    size_t operator()(const pt_set& s) const { return s.hash(); }
+  };
+  struct Equal {
+    bool operator()(const pt_set& s1, const pt_set& s2) const {
+      return s1.equals(s2);
+    }
+  };
+  std::unordered_set<pt_set, Hash, Equal> set_of_pt_sets{
+      empty_set, s1, s2, u13, t3, t4};
+  EXPECT_EQ(6, set_of_pt_sets.size());
+  EXPECT_EQ(1, set_of_pt_sets.count(empty_set));
+  EXPECT_EQ(1, set_of_pt_sets.count(s1));
+  EXPECT_EQ(1, set_of_pt_sets.count(s2));
+  EXPECT_EQ(1, set_of_pt_sets.count(u13));
+  EXPECT_EQ(1, set_of_pt_sets.count(t3));
+  EXPECT_EQ(1, set_of_pt_sets.count(t4));
+  EXPECT_EQ(0, set_of_pt_sets.count(i13));
+  EXPECT_EQ(0, set_of_pt_sets.count(d34));
 }
 
 TEST_F(PatriciaTreeSetTest, robustness) {
@@ -188,6 +226,12 @@ TEST_F(PatriciaTreeSetTest, whiteBox) {
   // unchanged by an operation are not reconstructed (i.e., the result of an
   // operation shares structure with the operands whenever possible). This is
   // what we check here.
+
+  pt_set s1{1};
+  pt_set t1{1};
+  pt_set u1 = s1.get_union_with(t1);
+  EXPECT_TRUE(s1.reference_equals(u1));
+
   for (size_t k = 0; k < 10; ++k) {
     pt_set s = this->generate_random_set();
     pt_set u = s.get_union_with(s);
