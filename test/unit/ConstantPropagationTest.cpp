@@ -15,7 +15,7 @@
 static void do_const_prop(IRCode* code, const ConstPropConfig& config) {
   code->build_cfg();
   IntraProcConstantPropagation rcp(code->cfg(), config);
-  rcp.run(ConstPropEnvironment());
+  rcp.run(ConstantEnvironment());
   rcp.simplify();
   rcp.apply_changes(code);
 }
@@ -431,18 +431,16 @@ TEST(ConstantPropagation, AnalyzeCmp) {
 
 TEST(ConstantPropagation, SignedConstantDomainOperations) {
   using namespace sign_domain;
-  auto one = SignedConstantDomain(1, ConstantValue::ConstantType::NARROW);
-  auto minus_one =
-      SignedConstantDomain(-1, ConstantValue::ConstantType::NARROW);
-  auto zero = SignedConstantDomain(0, ConstantValue::ConstantType::NARROW);
-  auto max_val = SignedConstantDomain(std::numeric_limits<int64_t>::max(),
-                                      ConstantValue::ConstantType::WIDE);
-  auto min_val = SignedConstantDomain(std::numeric_limits<int64_t>::min(),
-                                      ConstantValue::ConstantType::WIDE);
+  auto one = SignedConstantDomain(1);
+  auto minus_one = SignedConstantDomain(-1);
+  auto zero = SignedConstantDomain(0);
+  auto max_val = SignedConstantDomain(std::numeric_limits<int64_t>::max());
+  auto min_val = SignedConstantDomain(std::numeric_limits<int64_t>::min());
 
   EXPECT_EQ(one.interval(), Interval::GTZ);
   EXPECT_EQ(minus_one.interval(), Interval::LTZ);
   EXPECT_EQ(zero.interval(), Interval::EQZ);
+  EXPECT_EQ(SignedConstantDomain(Interval::EQZ), zero);
   EXPECT_EQ(max_val.interval(), Interval::GTZ);
   EXPECT_EQ(min_val.interval(), Interval::LTZ);
 
@@ -500,17 +498,15 @@ TEST(ConstantPropagation, WhiteBox1) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   IntraProcConstantPropagation rcp(cfg, config);
-  rcp.run(ConstPropEnvironment());
+  rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
   EXPECT_EQ(exit_state.get(0), SignedConstantDomain::top());
-  EXPECT_EQ(exit_state.get(1),
-            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+  EXPECT_EQ(exit_state.get(1), SignedConstantDomain(0));
   // v2 can contain either the value 0 or 1
   EXPECT_EQ(exit_state.get(2),
             SignedConstantDomain(sign_domain::Interval::GEZ));
-  EXPECT_EQ(exit_state.get(3),
-            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+  EXPECT_EQ(exit_state.get(3), SignedConstantDomain(0));
 }
 
 TEST(ConstantPropagation, WhiteBox2) {
@@ -535,11 +531,10 @@ TEST(ConstantPropagation, WhiteBox2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   IntraProcConstantPropagation rcp(cfg, config);
-  rcp.run(ConstPropEnvironment());
+  rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
   EXPECT_EQ(exit_state.get(0),
             SignedConstantDomain(sign_domain::Interval::GEZ));
-  EXPECT_EQ(exit_state.get(1),
-            SignedConstantDomain(0, ConstantValue::ConstantType::NARROW));
+  EXPECT_EQ(exit_state.get(1), SignedConstantDomain(0));
 }

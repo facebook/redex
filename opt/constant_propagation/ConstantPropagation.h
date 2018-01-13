@@ -12,7 +12,7 @@
 #include <mutex>
 
 #include "ConstPropConfig.h"
-#include "ConstPropEnvironment.h"
+#include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "LocalConstProp.h"
 #include "Pass.h"
@@ -42,7 +42,7 @@
  */
 class IntraProcConstantPropagation final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       ConstPropEnvironment> {
+                                       ConstantEnvironment> {
  public:
   explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
                                         const ConstPropConfig& config)
@@ -51,20 +51,19 @@ class IntraProcConstantPropagation final
         m_config(config),
         m_lcp{config} {}
 
-  ConstPropEnvironment analyze_edge(
+  ConstantEnvironment analyze_edge(
       const std::shared_ptr<cfg::Edge>&,
-      const ConstPropEnvironment& exit_state_at_source) const override;
+      const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,
-                           ConstPropEnvironment* current_state) const;
+                           ConstantEnvironment* current_state) const;
 
   void analyze_node(const NodeId& block,
-                    ConstPropEnvironment* state_at_entry) const override;
+                    ConstantEnvironment* state_at_entry) const override;
 
-  void simplify_instruction(
-      Block* const& block,
-      IRInstruction* insn,
-      const ConstPropEnvironment& current_state) const;
+  void simplify_instruction(Block* const& block,
+                            IRInstruction* insn,
+                            const ConstantEnvironment& current_state) const;
 
   void simplify() const;
 

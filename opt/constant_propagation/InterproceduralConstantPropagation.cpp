@@ -12,8 +12,8 @@
 #include <mutex>
 
 #include "CallGraph.h"
+#include "ConstantEnvironment.h"
 #include "ConstantPropagation.h"
-#include "ConstPropEnvironment.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -26,7 +26,7 @@ namespace {
  * callsite. The n'th parameter will be represented by a binding of n to a
  * ConstantDomain instance.
  */
-using ArgumentDomain = ConstPropEnvironment;
+using ArgumentDomain = ConstantEnvironment;
 
 /*
  * Map of invoke-* instructions contained in some method M to their respective
@@ -41,10 +41,10 @@ constexpr IRInstruction* INPUT_ARGS = nullptr;
 /*
  * Return an environment populated with parameter values.
  */
-static ConstPropEnvironment env_with_params(const IRCode* code,
-                                            const ArgumentDomain& args) {
+static ConstantEnvironment env_with_params(const IRCode* code,
+                                           const ArgumentDomain& args) {
   size_t idx{0};
-  ConstPropEnvironment env;
+  ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
@@ -96,7 +96,7 @@ class FixpointIterator
     Domain entry_state_at_dest;
     auto it = edge->invoke_iterator();
     if (it == FatMethod::iterator()) {
-      entry_state_at_dest.set(INPUT_ARGS, ConstPropEnvironment::top());
+      entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
     } else {
       auto insn = it->insn;
       entry_state_at_dest.set(INPUT_ARGS, exit_state_at_source.get(insn));

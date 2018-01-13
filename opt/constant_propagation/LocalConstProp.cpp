@@ -40,7 +40,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
  *
  * This analysis goes instruction by instruction at the basic block boundary
  * and gathers facts about constants and propagates them inside the constant
- * value lattice model defined in ConstPropEnvironment.h
+ * value lattice model defined in ConstantEnvironment.h
  *
  * This alone can be used to drive a simple constant propagation analysis that
  * will reset itself after traversing a basic block and moving on to another.
@@ -49,8 +49,6 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
  * which properly combines different facts about constants at the cross basic
  * block level.
  */
-
-using namespace constant_propagation_impl;
 
 namespace {
 
@@ -82,17 +80,16 @@ bool is_less_than_bias(IROpcode op) {
 //   Should be float, double, or int64_t
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* inst,
-                     ConstPropEnvironment* current_state) {
+                     ConstantEnvironment* current_state) {
   IROpcode op = inst->opcode();
-  Stored left_value;
-  Stored right_value;
-  auto left = get_constant_value(*current_state, inst->src(0), left_value);
-  auto right = get_constant_value(*current_state, inst->src(1), right_value);
+  auto left = current_state->get(inst->src(0)).constant_domain().get_constant();
+  auto right =
+      current_state->get(inst->src(1)).constant_domain().get_constant();
 
   if (left && right) {
     int32_t result;
-    auto l_val = reinterpret_bits<Operand, Stored>(left_value);
-    auto r_val = reinterpret_bits<Operand, Stored>(right_value);
+    auto l_val = reinterpret_bits<Operand, Stored>(*left);
+    auto r_val = reinterpret_bits<Operand, Stored>(*right);
     if (is_compare_floating(op) && (std::isnan(l_val) || std::isnan(r_val))) {
       if (is_less_than_bias(op)) {
         result = -1;
@@ -114,15 +111,15 @@ void analyze_compare(const IRInstruction* inst,
           l_val,
           r_val,
           result);
-    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), result);
+    current_state->set(inst->dest(), SignedConstantDomain(result));
   } else {
-    ConstPropEnvUtil::set_top(*current_state, inst->dest());
+    current_state->set(inst->dest(), SignedConstantDomain::top());
   }
 }
 
 } // namespace
 
-bool addition_out_of_bounds(int32_t a, int32_t b) {
+bool addition_out_of_bounds(int64_t a, int64_t b) {
   int32_t max = std::numeric_limits<int32_t>::max();
   int32_t min = std::numeric_limits<int32_t>::min();
   if ((b > 0 && a > max - b) || (b < 0 && a < min - b)) {
@@ -133,34 +130,26 @@ bool addition_out_of_bounds(int32_t a, int32_t b) {
 }
 
 void LocalConstantPropagation::analyze_instruction(
-    const IRInstruction* inst, ConstPropEnvironment* current_state) {
+    const IRInstruction* inst, ConstantEnvironment* current_state) {
   TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
   switch (inst->opcode()) {
-  case OPCODE_CONST: {
-    TRACE(CONSTP,
-          5,
-          "Discovered new narrow constant for reg: %d, value: %d\n",
-          inst->dest(),
-          inst->get_literal());
-    ConstPropEnvUtil::set_narrow(*current_state, inst->dest(), inst->get_literal());
-    break;
-  }
+  case OPCODE_CONST:
   case OPCODE_CONST_WIDE: {
     TRACE(CONSTP,
           5,
-          "Discovered new wide constant for reg: %d value: %ld\n",
+          "Discovered new constant for reg: %d value: %ld\n",
           inst->dest(),
           inst->get_literal());
-    ConstPropEnvUtil::set_wide(*current_state, inst->dest(), inst->get_literal());
+    current_state->set(inst->dest(), SignedConstantDomain(inst->get_literal()));
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_OBJECT: {
-    analyze_non_branch(inst, current_state, false /* is_wide */);
+    analyze_non_branch(inst, current_state);
     break;
   }
   case OPCODE_MOVE_WIDE: {
-    analyze_non_branch(inst, current_state, true /* is_wide */);
+    analyze_non_branch(inst, current_state);
     break;
   }
 
@@ -187,7 +176,7 @@ void LocalConstantPropagation::analyze_instruction(
     // all instructions. All other arithmetic instructions are less than .05%
     if (m_config.fold_arithmetic) {
       int32_t lit = inst->get_literal();
-      auto add_in_bounds = [lit](int32_t v) -> boost::optional<int32_t> {
+      auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
         if (addition_out_of_bounds(lit, v)) {
           return boost::none;
         }
@@ -198,7 +187,7 @@ void LocalConstantPropagation::analyze_instruction(
             "Attempting to fold %s with literal %lu\n",
             SHOW(inst),
             lit);
-      analyze_non_branch(inst, current_state, false, add_in_bounds);
+      analyze_non_branch(inst, current_state, add_in_bounds);
       break;
     }
     // fallthrough
@@ -211,8 +200,7 @@ void LocalConstantPropagation::analyze_instruction(
             "Marking value unknown [Reg: %d, Is wide: %d]\n",
             inst->dest(),
             inst->dest_is_wide());
-      ConstPropEnvUtil::set_top(
-          *current_state, inst->dest(), inst->dest_is_wide());
+      current_state->set(inst->dest(), SignedConstantDomain::top());
     }
   }
   }
@@ -222,74 +210,40 @@ void LocalConstantPropagation::analyze_instruction(
 // is just an arithmetic instruction with identity as its transform function
 void LocalConstantPropagation::analyze_non_branch(
     const IRInstruction* inst,
-    ConstPropEnvironment* current_state,
-    bool is_wide,
-    value_transform_t value_transform, // default is identity
-    wide_value_transform_t wide_value_transform // default is identity
+    ConstantEnvironment* current_state,
+    value_transform_t value_transform // default is identity
 ) {
   auto src = inst->src(0);
   auto dst = inst->dest();
 
-  auto mark_unknown = [&]() {
-    TRACE(CONSTP,
-          5,
-          "Marking value unknown [Reg: %d, Is wide: %d]\n",
-          dst,
-          is_wide);
-    ConstPropEnvUtil::set_top(*current_state, dst, is_wide);
-  };
-
-  if (!is_wide && ConstPropEnvUtil::is_narrow_constant(*current_state, src)) {
-    boost::optional<int32_t> option =
-        value_transform(ConstPropEnvUtil::get_narrow(*current_state, src));
-    if (option == boost::none) {
-      mark_unknown();
-      return;
-    }
-    int32_t value = *option;
-
-    TRACE(CONSTP,
-          5,
-          "Propagating narrow constant [Value: %X] -> [Reg: %d]\n",
-          src,
-          value,
-          dst);
-    ConstPropEnvUtil::set_narrow(*current_state, dst, value);
-  } else if (is_wide &&
-             ConstPropEnvUtil::is_wide_constant(*current_state, src)) {
-    boost::optional<int64_t> option =
-        wide_value_transform(ConstPropEnvUtil::get_wide(*current_state, src));
-    if (option == boost::none) {
-      mark_unknown();
-      return;
-    }
-    int64_t value = *option;
-
-    TRACE(CONSTP,
-          5,
-          "Propagating wide constant [Value: %lX] -> [Reg: %d]\n",
-          src,
-          value,
-          dst);
-    ConstPropEnvUtil::set_wide(*current_state, dst, value);
-  } else {
-    mark_unknown();
+  auto cst = current_state->get(src).constant_domain().get_constant();
+  auto value = cst ? value_transform(*cst) : boost::none;
+  if (!value) {
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", dst);
+    current_state->set(dst, SignedConstantDomain::top());
+    return;
   }
+  TRACE(CONSTP,
+        5,
+        "Propagating constant [Value: %X] -> [Reg: %d]\n",
+        src,
+        *value,
+        dst);
+  current_state->set(dst, SignedConstantDomain(*value));
 }
 
 // Evaluate the guard expression of an if opcode. Return boost::none if the
 // branch cannot be determined to jump the same way every time. Otherwise
 // return true if the branch is always taken and false if it is never taken.
 boost::optional<bool> eval_if(IRInstruction*& insn,
-                              const ConstPropEnvironment& state) {
+                              const ConstantEnvironment& state) {
   if (state.is_bottom()) {
     return boost::none;
   }
   auto op = insn->opcode();
   auto scd_left = state.get(insn->src(0));
-  auto scd_right = insn->srcs_size() > 1
-                       ? state.get(insn->src(1))
-                       : SignedConstantDomain(0, ConstantValue::NARROW);
+  auto scd_right =
+      insn->srcs_size() > 1 ? state.get(insn->src(1)) : SignedConstantDomain(0);
   switch (op) {
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
@@ -301,9 +255,9 @@ boost::optional<bool> eval_if(IRInstruction*& insn,
       return boost::none;
     }
     if (op == OPCODE_IF_EQ || op == OPCODE_IF_EQZ) {
-      return cd_left.value().constant() == cd_right.value().constant();
+      return *cd_left.get_constant() == *cd_right.get_constant();
     } else { // IF_NE / IF_NEZ
-      return cd_left.value().constant() != cd_right.value().constant();
+      return *cd_left.get_constant() != *cd_right.get_constant();
     }
   }
   case OPCODE_IF_LE:
@@ -354,7 +308,7 @@ boost::optional<bool> eval_if(IRInstruction*& insn,
 // If we can prove the operands of a branch instruction are constant values
 // replace the conditional branch with an unconditional one.
 void LocalConstantPropagation::simplify_branch(
-    IRInstruction*& inst, const ConstPropEnvironment& current_state) {
+    IRInstruction*& inst, const ConstantEnvironment& current_state) {
   auto constant_branch = eval_if(inst, current_state);
 
   if (!constant_branch) {
@@ -373,7 +327,7 @@ void LocalConstantPropagation::simplify_branch(
 }
 
 void LocalConstantPropagation::simplify_instruction(
-    IRInstruction*& inst, const ConstPropEnvironment& current_state) {
+    IRInstruction*& inst, const ConstantEnvironment& current_state) {
   switch (inst->opcode()) {
   case OPCODE_MOVE:
     if (m_config.replace_moves_with_consts) {
@@ -419,26 +373,17 @@ void LocalConstantPropagation::simplify_instruction(
 // register
 void LocalConstantPropagation::simplify_non_branch(
     IRInstruction* inst,
-    const ConstPropEnvironment& current_state,
+    const ConstantEnvironment& current_state,
     bool is_wide) {
-  uint16_t dst = inst->dest();
-
-  int64_t value;
-  IRInstruction* replacement = nullptr;
-  // we read from `dst` because analyze has put the new value of dst there
-  if (!is_wide && ConstPropEnvUtil::is_narrow_constant(current_state, dst)) {
-    value = ConstPropEnvUtil::get_narrow(current_state, dst);
-    replacement = new IRInstruction(OPCODE_CONST);
-  } else if (is_wide &&
-             ConstPropEnvUtil::is_wide_constant(current_state, dst)) {
-    value = ConstPropEnvUtil::get_wide(current_state, dst);
-    replacement = new IRInstruction(OPCODE_CONST_WIDE);
-  } else {
+  // we read from `dest` because analyze has put the new value of dst there
+  auto cst = current_state.get(inst->dest()).constant_domain().get_constant();
+  if (!cst) {
     return;
   }
-
-  replacement->set_literal(value);
-  replacement->set_dest(dst);
+  IRInstruction* replacement =
+      new IRInstruction(is_wide ? OPCODE_CONST_WIDE : OPCODE_CONST);
+  replacement->set_literal(*cst);
+  replacement->set_dest(inst->dest());
 
   TRACE(CONSTP, 5, "Replacing %s with %s\n", SHOW(inst), SHOW(replacement));
   m_insn_replacements.emplace_back(inst, replacement);

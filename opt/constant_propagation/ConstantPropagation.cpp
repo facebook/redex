@@ -9,16 +9,14 @@
 
 #include "ConstantPropagation.h"
 
+#include "ConstantEnvironment.h"
 #include "DexUtil.h"
-#include "ConstPropEnvironment.h"
 #include "LocalConstProp.h"
 #include "Transform.h"
 #include "Walkers.h"
 
-using namespace constant_propagation_impl;
-
 void IntraProcConstantPropagation::analyze_instruction(
-    const IRInstruction* insn, ConstPropEnvironment* current_state) const {
+    const IRInstruction* insn, ConstantEnvironment* current_state) const {
   auto op = insn->opcode();
   if (opcode::is_load_param(op)) {
     // We assume that the initial environment passed to run() has parameter
@@ -30,7 +28,7 @@ void IntraProcConstantPropagation::analyze_instruction(
 }
 
 void IntraProcConstantPropagation::analyze_node(
-    const NodeId& block, ConstPropEnvironment* state_at_entry) const {
+    const NodeId& block, ConstantEnvironment* state_at_entry) const {
   TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
   for (auto& mie : InstructionIterable(block)) {
     analyze_instruction(mie.insn, state_at_entry);
@@ -43,7 +41,7 @@ void IntraProcConstantPropagation::analyze_node(
  * block.
  */
 static void analyze_if(const IRInstruction* insn,
-                       ConstPropEnvironment* state,
+                       ConstantEnvironment* state,
                        bool is_true_branch) {
   if (state->is_bottom()) {
     return;
@@ -54,9 +52,8 @@ static void analyze_if(const IRInstruction* insn,
                             : insn->opcode();
 
   auto scd_left = state->get(insn->src(0));
-  auto scd_right = insn->srcs_size() > 1
-                       ? state->get(insn->src(1))
-                       : SignedConstantDomain(0, ConstantValue::NARROW);
+  auto scd_right = insn->srcs_size() > 1 ? state->get(insn->src(1))
+                                         : SignedConstantDomain(0);
 
   switch (op) {
   case OPCODE_IF_EQ: {
@@ -66,8 +63,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_EQZ: {
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(0, ConstantValue::NARROW)));
+    state->set(insn->src(0), scd_left.meet(SignedConstantDomain(0)));
     break;
   }
   case OPCODE_IF_NE:
@@ -77,7 +73,7 @@ static void analyze_if(const IRInstruction* insn,
     if (!(cd_left.is_value() && cd_right.is_value())) {
       break;
     }
-    if (cd_left.value().constant() == cd_right.value().constant()) {
+    if (*cd_left.get_constant() == *cd_right.get_constant()) {
       state->set_to_bottom();
     }
     break;
@@ -124,9 +120,9 @@ static void analyze_if(const IRInstruction* insn,
   }
 }
 
-ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
+ConstantEnvironment IntraProcConstantPropagation::analyze_edge(
     const std::shared_ptr<cfg::Edge>& edge,
-    const ConstPropEnvironment& exit_state_at_source) const {
+    const ConstantEnvironment& exit_state_at_source) const {
   auto current_state = exit_state_at_source;
   if (!m_config.propagate_conditions) {
     return current_state;
@@ -148,7 +144,7 @@ ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
 void IntraProcConstantPropagation::simplify_instruction(
     Block* const& block,
     IRInstruction* insn,
-    const ConstPropEnvironment& current_state) const {
+    const ConstantEnvironment& current_state) const {
   m_lcp.simplify_instruction(insn, current_state);
 }
 
@@ -221,7 +217,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
     TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
     IntraProcConstantPropagation rcp(cfg, m_config);
-    rcp.run(ConstPropEnvironment());
+    rcp.run(ConstantEnvironment());
     rcp.simplify();
     rcp.apply_changes(&code);
 
