@@ -98,6 +98,7 @@ libredex_la_SOURCES = \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
+	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Match.cpp \
@@ -165,7 +166,7 @@ redex_all_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant_propagation/ConstantPropagation.cpp \
-	opt/constant_propagation/GlobalConstProp.cpp \
+	opt/constant_propagation/ConstantEnvironment.cpp \
 	opt/constant_propagation/InterproceduralConstantPropagation.cpp \
 	opt/constant_propagation/SignDomain.cpp \
 	opt/constant_propagation/LocalConstProp.cpp \

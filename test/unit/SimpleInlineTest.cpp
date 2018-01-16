@@ -42,29 +42,29 @@ TEST(SimpleInlineTest, insertMoves) {
   invoke->set_src(1, 2);
 
   auto caller_code = caller->get_code();
-  caller_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
-  caller_code->push_back(dasm(OPCODE_CONST_4, {2_v, 0_L})); // load null ref
+  caller_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
+  caller_code->push_back(dasm(OPCODE_CONST, {2_v, 0_L})); // load null ref
   caller_code->push_back(invoke);
   auto invoke_it = std::prev(caller_code->end());
   caller_code->push_back(dasm(OPCODE_RETURN_VOID));
   caller_code->set_registers_size(3);
 
   auto callee_code = callee->get_code();
-  callee_code->push_back(dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  callee_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
   inliner::inline_method(caller->get_code(), callee->get_code(), invoke_it);
 
   auto it = InstructionIterable(caller_code).begin();
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {1_v, 1_L}));
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {1_v, 1_L}));
   ++it;
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {2_v, 0_L}));
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {2_v, 0_L}));
   ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE, {3_v, 1_v}));
   ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_MOVE_OBJECT, {4_v, 2_v}));
   ++it;
-  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST_4, {4_v, 1_L}));
+  EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {4_v, 1_L}));
   ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_RETURN_VOID));
 

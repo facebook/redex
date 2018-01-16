@@ -23,7 +23,6 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "ParallelWalkers.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -54,7 +53,7 @@ class FinalInlineImpl {
 
   std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
     std::vector<DexFieldRef*> field_refs;
-    walk_methods(scope,
+    walk::methods(scope,
                  [&](DexMethod* method) { method->gather_fields(field_refs); });
     sort_unique(field_refs);
     /* Okay, now we have a complete list of field refs
@@ -244,7 +243,7 @@ class FinalInlineImpl {
       }
     }
 
-    return walk_methods_parallel<std::nullptr_t, size_t, Scope>(
+    return walk::parallel::reduce_methods<std::nullptr_t, size_t, Scope>(
         m_full_scope,
         [&inline_field, this](std::nullptr_t, DexMethod* m) -> size_t {
           auto* code = m->get_code();
@@ -294,13 +293,8 @@ class FinalInlineImpl {
       return false;
     }
     switch (op->opcode()) {
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
     case OPCODE_CONST:
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
-    case OPCODE_CONST_WIDE_16:
-    case OPCODE_CONST_WIDE_32:
     case OPCODE_CONST_WIDE:
       return true;
     default:
@@ -392,8 +386,7 @@ class FinalInlineImpl {
       auto sput_op = pair.second;
       auto field = resolve_field(sput_op->get_field(), FieldSearch::Static);
       DexEncodedValue* ev;
-      if (const_op->opcode() == OPCODE_CONST_STRING ||
-          const_op->opcode() == OPCODE_CONST_STRING_JUMBO) {
+      if (const_op->opcode() == OPCODE_CONST_STRING) {
         TRACE(FINALINLINE,
               8,
               "- String Field: %s, \"%s\"\n",

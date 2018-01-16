@@ -86,9 +86,27 @@ struct insns_matcher<T, std::integral_constant<size_t, std::tuple_size<T>::value
   }
 };
 
-} // namespace
-
-namespace m {
+// Find all sequences in `insns` that match `p` and put them into `matches`
+template <typename P, size_t N = std::tuple_size<P>::value>
+void find_matches(const std::vector<IRInstruction*>& insns,
+                  const P& p,
+                  std::vector<std::vector<IRInstruction*>>& matches) {
+  // No way to match if we have fewer insns than N
+  if (insns.size() >= N) {
+    // Try to match starting at i
+    for (size_t i = 0; i <= insns.size() - N; ++i) {
+      if (m::insns_matcher<P, std::integral_constant<size_t, 0>>::matches_at(
+              i, insns, p)) {
+        matches.emplace_back();
+        auto& matching_insns = matches.back();
+        matching_insns.reserve(N);
+        for (size_t c = 0; c < N; ++c) {
+          matching_insns.push_back(insns.at(i + c));
+        }
+      }
+    }
+  }
+}
 
 /** N-ary match template */
 template <
@@ -336,16 +354,14 @@ inline match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
 match_t<IRInstruction> return_void();
 
 /** Matches instructions with specified number of arguments. Supports /range. */
-match_t<IRInstruction, std::tuple<int> > has_n_args(int n);
+match_t<IRInstruction, std::tuple<int>> has_n_args(int n);
 
 /** Matches instructions with specified opcode */
-inline match_t<IRInstruction, std::tuple<DexOpcode> > is_opcode(DexOpcode opcode) {
-  return {
-    [](const IRInstruction* insn, const DexOpcode& opcode) {
-      return insn->opcode() == opcode;
-    },
-    opcode
-  };
+inline match_t<IRInstruction, std::tuple<IROpcode>> is_opcode(IROpcode opcode) {
+  return {[](const IRInstruction* insn, const IROpcode& opcode) {
+            return insn->opcode() == opcode;
+          },
+          opcode};
 }
 
 /** Matchers that map from IRInstruction -> other types */
@@ -696,16 +712,6 @@ match_t<T, std::tuple<> > keep() {
   return {
     [](const T* t) {
       return keep(t);
-    }
-  };
-}
-
-/** Match which checks is_seed helper for DexMembers */
-template<typename T>
-match_t<T, std::tuple<> > is_seed() {
-  return {
-    [](const T* t) {
-      return is_seed(t);
     }
   };
 }

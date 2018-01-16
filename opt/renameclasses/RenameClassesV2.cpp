@@ -87,11 +87,11 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
 }
 
 void unpackage_private(Scope &scope) {
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod *method) {
         if (is_package_protected(method)) set_public(method);
       });
-  walk_fields(scope,
+  walk::fields(scope,
       [&](DexField *field) {
         if (is_package_protected(field)) set_public(field);
       });
@@ -104,7 +104,7 @@ void unpackage_private(Scope &scope) {
   static DexType *dalvikinner =
     DexType::get_type("Ldalvik/annotation/InnerClass;");
 
-  walk_annotations(scope, [&](DexAnnotation* anno) {
+  walk::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalvikinner) return;
     auto elems = anno->anno_elems();
     for (auto elem : elems) {
@@ -221,8 +221,8 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   auto match = std::make_tuple(
     m::const_string(/* const-string {vX}, <any string> */)
   );
-  walk_matching_opcodes(scope, match,
-      [&](const DexMethod*, size_t, IRInstruction** insns){
+  walk::matching_opcodes(scope, match,
+      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
         IRInstruction* const_string = insns[0];
         auto classname = JavaNameUtil::external_to_internal(
           const_string->get_string()->c_str());
@@ -258,7 +258,7 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
     }
   }
 
-  walk_opcodes(scope,
+  walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
@@ -812,8 +812,8 @@ void RenameClassesPassV2::rename_classes(
     m::const_string()
   );
 
-  walk_matching_opcodes(scope, match,
-      [&](const DexMethod*, size_t, IRInstruction** insns){
+  walk::matching_opcodes(scope, match,
+      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
         IRInstruction* insn = insns[0];
         DexString* str = insn->get_string();
         // get_string instead of make_string here because if the string doesn't
@@ -879,7 +879,7 @@ void RenameClassesPassV2::rename_classes(
   }
   static DexType *dalviksig =
     DexType::get_type("Ldalvik/annotation/Signature;");
-  walk_annotations(scope, [&](DexAnnotation* anno) {
+  walk::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
     auto elems = anno->anno_elems();
     for (auto elem : elems) {

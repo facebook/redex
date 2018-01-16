@@ -141,14 +141,14 @@ TEST(ConstantPropagationTest, constantPropagation) {
           const InstructionIterable& it = InstructionIterable(dm->get_code());
           TRACE(CONSTP, 1, "%s\n", SHOW(it));
           for (auto& mie : it) {
-            DexOpcode op = mie.insn->opcode();
+            IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_true") == 0) {
           const InstructionIterable& it = InstructionIterable(dm->get_code());
           TRACE(CONSTP, 1, "%s\n", SHOW(it));
           for (auto& mie : it) {
-            DexOpcode op = mie.insn->opcode();
+            IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
@@ -156,7 +156,7 @@ TEST(ConstantPropagationTest, constantPropagation) {
           TRACE(CONSTP, 1, "%s\n", SHOW(it));
           bool has_if = false;
           for (auto& mie : it) {
-            DexOpcode op = mie.insn->opcode();
+            IROpcode op = mie.insn->opcode();
             if (is_conditional_branch(op)) {
               has_if = true;
             }

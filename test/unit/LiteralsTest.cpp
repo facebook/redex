@@ -16,7 +16,7 @@
 // while lshift_amt is how many bits that value is expected to be shifted left
 // lshift_amt is only nonzero for high opcodes
 static void test_1_opcode(const char* name,
-                          uint16_t opcode,
+                          DexOpcode opcode,
                           int width,
                           int lshift) {
   DexInstruction insn(opcode);
@@ -46,9 +46,10 @@ static void test_1_opcode(const char* name,
   perform_1_test(max);
 }
 
-#define TEST_1_OPCODE(code, width) test_1_opcode(#code, OPCODE_##code, width, 0)
+#define TEST_1_OPCODE(code, width) \
+  test_1_opcode(#code, DOPCODE_##code, width, 0)
 #define TEST_1_HI_OPCODE(code, width, lshift) \
-  test_1_opcode(#code, OPCODE_##code, width, lshift)
+  test_1_opcode(#code, DOPCODE_##code, width, lshift)
 
 TEST(LiteralRoundTrip, empty) {
   TEST_1_OPCODE(CONST_4, 4);

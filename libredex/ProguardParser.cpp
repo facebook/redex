@@ -705,9 +705,9 @@ ClassSpecification parse_class_specification(
 bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 token keep_kind,
                 std::vector<KeepSpec>* spec,
-                const bool& mark_classes,
-                const bool& mark_conditionally,
-                const bool& allowshrinking,
+                bool mark_classes,
+                bool mark_conditionally,
+                bool allowshrinking,
                 bool* ok) {
   if ((**it)->type == keep_kind) {
     ++(*it); // Consume the keep token

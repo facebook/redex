@@ -20,7 +20,7 @@ bool default_constructor(const DexMethod* meth) {
     auto it = ii.begin();
     auto end = ii.end();
     auto op = it->insn->opcode();
-    if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC_RANGE) {
+    if (op != OPCODE_INVOKE_DIRECT) {
       return false;
     }
     ++it;
@@ -83,8 +83,7 @@ match_t<IRInstruction> const_string() {
   return {
     [](const IRInstruction* insn) {
       auto opcode = insn->opcode();
-      return opcode == OPCODE_CONST_STRING ||
-        opcode == OPCODE_CONST_STRING_JUMBO;
+      return opcode == OPCODE_CONST_STRING;
     }
   };
 }

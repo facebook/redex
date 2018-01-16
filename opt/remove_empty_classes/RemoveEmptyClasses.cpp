@@ -109,10 +109,10 @@ size_t remove_empty_classes(Scope& classes) {
   // which should not be deleted even if they are deemed to be empty.
   std::unordered_set<const DexType*> class_references;
 
-  walk_annotations(classes, [&](DexAnnotation* annotation)
+  walk::annotations(classes, [&](DexAnnotation* annotation)
     { process_annotation(&class_references, annotation); });
 
-  walk_code(classes,
+  walk::code(classes,
             [](DexMethod*) { return true; },
             [&](DexMethod* meth, IRCode& code)
                { process_code(&class_references, meth, code); });

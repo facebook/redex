@@ -469,6 +469,10 @@ void ResStringPool::appendString(String8 s) {
   mAppendedStrings.push_back(s);
 }
 
+size_t ResStringPool::appendedStringCount() {
+  return mAppendedStrings.size();
+}
+
 void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
   LOG_FATAL_IF(
     mHeader->styleCount > 0,
@@ -504,14 +508,12 @@ void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
   }
   align_vec(serialized_strings, 4);
   // ResChunk_header
-  auto header_size = mHeader->header.headerSize;
-  push_short(cVec, mHeader->header.type);
+  auto header_size = dtohs(mHeader->header.headerSize);
+  push_short(cVec, RES_STRING_POOL_TYPE);
   push_short(cVec, header_size);
   // Sum of header size, plus the size of all the String/style data.
-  auto total_size =
-    header_size +
-    string_idx.size() * sizeof(uint32_t) +
-    serialized_strings.size() * sizeof(char);
+  auto total_size = header_size + string_idx.size() * sizeof(uint32_t) +
+                    serialized_strings.size() * sizeof(char);
   push_long(cVec, total_size);
   // ResStringPool_header
   auto string_count = string_idx.size();
@@ -519,11 +521,11 @@ void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
   push_long(cVec, 0); // style count
   // May have wrecked the sort order (not supporting resort right now), so clear
   // the bit.
-  auto flags = mHeader->flags & ~ResStringPool_header::SORTED_FLAG;
+  auto flags = dtohl(mHeader->flags) & ~ResStringPool_header::SORTED_FLAG;
   push_long(cVec, flags);
   // strings start
   push_long(cVec, header_size + sizeof(uint32_t) * string_count);
-   // styles start
+  // styles start
   push_long(cVec, 0);
   for (const uint32_t &i : string_idx) {
     push_long(cVec, i);
@@ -3270,19 +3272,25 @@ struct ResTable::Package
 
         auto header_size = sizeof(ResTable_package); // should be 288
         auto total_size = header_size + serialized_strings.size();
-        push_short(cVec, package->header.type); // 0x0200
+        push_short(cVec, RES_TABLE_PACKAGE_TYPE);
         push_short(cVec, header_size);
         push_long(cVec, total_size);
-        push_long(cVec, package->id);
+        push_long(cVec, dtohl(package->id));
         auto num_elements = sizeof(package->name) / sizeof(package->name[0]);
         for (size_t i = 0; i < num_elements; i++) {
-            push_short(cVec, package->name[i]);
+          push_short(cVec, dtohs(package->name[i]));
         }
         push_long(cVec, header_size); // type strings start (skip over header)
-        push_long(cVec, package->lastPublicType);
+        auto last_public_type = dtohl(package->lastPublicType);
+        // If 0 types are marked as public, keep the count at 0 regardless of
+        // any appended types.
+        if (last_public_type > 0) {
+          last_public_type += typeStrings.appendedStringCount();
+        }
+        push_long(cVec, last_public_type);
         push_long(cVec, header_size + typestr_size); // key strings start
-        push_long(cVec, package->lastPublicKey);
-        push_long(cVec, package->typeIdOffset);
+        push_long(cVec, dtohl(package->lastPublicKey));
+        push_long(cVec, dtohl(package->typeIdOffset));
         cVec.appendVector(serialized_strings);
     }
 
@@ -7246,7 +7254,7 @@ void ResTable::serializeSingleResType(
   }
   // Write out the header struct, followed by each offset uint32_t, followed by
   // all the entry bytes we already serialized.
-  push_short(output, 0x201);
+  push_short(output, RES_TABLE_TYPE_TYPE);
   auto type_header_size = sizeof(ResTable_type);
   push_short(output, type_header_size);
   auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
@@ -7309,8 +7317,8 @@ void ResTable::defineNewType(
   // This is a ResTable_typeSpec followed by a ResTable_type.
   const auto typespec_header_size = sizeof(ResTable_typeSpec);
   const auto typespec_total_size =
-    typespec_header_size + sizeof(uint32_t) * num_ids;
-  push_short(output, 0x202); // ResTable_typeSpec identifier
+      typespec_header_size + sizeof(uint32_t) * num_ids;
+  push_short(output, RES_TABLE_TYPE_SPEC_TYPE);
   push_short(output, typespec_header_size); // header size
   push_long(output, typespec_total_size);
   output.push_back(type_id);

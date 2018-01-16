@@ -146,7 +146,7 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   }
   std::vector<std::unique_ptr<DexDebugInstruction>> insns;
   DexDebugInstruction* dbgp;
-  while ((dbgp = DexDebugInstruction::make_instruction(idx, encdata)) !=
+  while ((dbgp = DexDebugInstruction::make_instruction(idx, &encdata)) !=
          nullptr) {
     insns.emplace_back(dbgp);
   }
@@ -353,7 +353,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (code->insns_size) {
     const uint16_t* end = cdata + code->insns_size;
     while (cdata < end) {
-      DexInstruction* dop = DexInstruction::make_instruction(idx, cdata);
+      DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata);
       always_assert_log(
           dop != nullptr, "Failed to parse method at offset 0x%08x", offset);
       dc->m_insns->push_back(dop);
@@ -1154,7 +1154,7 @@ void DexMethodRef::gather_strings_shallow(
 uint32_t DexCode::size() const {
   uint32_t size = 0;
   for (auto const& opc : get_instructions()) {
-    if (!is_fopcode(opc->opcode())) {
+    if (!dex_opcode::is_fopcode(opc->opcode())) {
       size += opc->size();
     }
   }

@@ -287,8 +287,7 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
 //========== dasm helpers ==========
 
 bool StringIterator::is_const_string(FatMethod::iterator it) const {
-  return it->insn->opcode() == OPCODE_CONST_STRING ||
-         it->insn->opcode() == OPCODE_CONST_STRING_JUMBO;
+  return it->insn->opcode() == OPCODE_CONST_STRING;
 }
 
 bool StringIterator::is_sb_new_instance(FatMethod::iterator it) const {

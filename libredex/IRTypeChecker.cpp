@@ -23,11 +23,11 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "Match.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
@@ -271,23 +271,17 @@ class TypeInference final
     case OPCODE_NOP: {
       break;
     }
-    case OPCODE_MOVE:
-    case OPCODE_MOVE_FROM16:
-    case OPCODE_MOVE_16: {
+    case OPCODE_MOVE: {
       assume_scalar(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case OPCODE_MOVE_WIDE:
-    case OPCODE_MOVE_WIDE_FROM16:
-    case OPCODE_MOVE_WIDE_16: {
+    case OPCODE_MOVE_WIDE: {
       assume_wide_scalar(current_state, insn->src(0));
       set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
       set_type(current_state,
@@ -338,10 +332,7 @@ class TypeInference final
       assume_reference(current_state, insn->src(0));
       break;
     }
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
-    case OPCODE_CONST:
-    case OPCODE_CONST_HIGH16: {
+    case OPCODE_CONST: {
       if (insn->get_literal() == 0) {
         set_type(current_state, insn->dest(), TypeDomain(ZERO));
       } else {
@@ -349,16 +340,12 @@ class TypeInference final
       }
       break;
     }
-    case OPCODE_CONST_WIDE_16:
-    case OPCODE_CONST_WIDE_32:
-    case OPCODE_CONST_WIDE:
-    case OPCODE_CONST_WIDE_HIGH16: {
+    case OPCODE_CONST_WIDE: {
       set_type(current_state, insn->dest(), TypeDomain(CONST1));
       set_type(current_state, insn->dest() + 1, TypeDomain(CONST2));
       break;
     }
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS: {
       set_reference(current_state, RESULT_REGISTER);
       break;
@@ -412,9 +399,7 @@ class TypeInference final
       assume_reference(current_state, insn->src(0));
       break;
     }
-    case OPCODE_GOTO:
-    case OPCODE_GOTO_16:
-    case OPCODE_GOTO_32: {
+    case OPCODE_GOTO: {
       break;
     }
     case OPCODE_PACKED_SWITCH:
@@ -848,61 +833,6 @@ class TypeInference final
       set_double(current_state, insn->dest());
       break;
     }
-    // In 2addr instructions, the destination and the source registers are
-    // identical. Hence, there's no need to update the type of the destination
-    // register.
-    case OPCODE_ADD_INT_2ADDR:
-    case OPCODE_SUB_INT_2ADDR:
-    case OPCODE_MUL_INT_2ADDR:
-    case OPCODE_DIV_INT_2ADDR:
-    case OPCODE_REM_INT_2ADDR:
-    case OPCODE_AND_INT_2ADDR:
-    case OPCODE_OR_INT_2ADDR:
-    case OPCODE_XOR_INT_2ADDR:
-    case OPCODE_SHL_INT_2ADDR:
-    case OPCODE_SHR_INT_2ADDR:
-    case OPCODE_USHR_INT_2ADDR: {
-      assume_integer(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_LONG_2ADDR:
-    case OPCODE_SUB_LONG_2ADDR:
-    case OPCODE_MUL_LONG_2ADDR:
-    case OPCODE_DIV_LONG_2ADDR:
-    case OPCODE_REM_LONG_2ADDR:
-    case OPCODE_AND_LONG_2ADDR:
-    case OPCODE_OR_LONG_2ADDR:
-    case OPCODE_XOR_LONG_2ADDR: {
-      assume_long(current_state, insn->src(0));
-      assume_long(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_SHL_LONG_2ADDR:
-    case OPCODE_SHR_LONG_2ADDR:
-    case OPCODE_USHR_LONG_2ADDR: {
-      assume_long(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_FLOAT_2ADDR:
-    case OPCODE_SUB_FLOAT_2ADDR:
-    case OPCODE_MUL_FLOAT_2ADDR:
-    case OPCODE_DIV_FLOAT_2ADDR:
-    case OPCODE_REM_FLOAT_2ADDR: {
-      assume_float(current_state, insn->src(0));
-      assume_float(current_state, insn->src(1));
-      break;
-    }
-    case OPCODE_ADD_DOUBLE_2ADDR:
-    case OPCODE_SUB_DOUBLE_2ADDR:
-    case OPCODE_MUL_DOUBLE_2ADDR:
-    case OPCODE_DIV_DOUBLE_2ADDR:
-    case OPCODE_REM_DOUBLE_2ADDR: {
-      assume_double(current_state, insn->src(0));
-      assume_double(current_state, insn->src(1));
-      break;
-    }
     case OPCODE_ADD_INT_LIT16:
     case OPCODE_RSUB_INT:
     case OPCODE_MUL_INT_LIT16:
@@ -929,18 +859,6 @@ class TypeInference final
       assume_integer(current_state, insn->src(0));
       set_integer(current_state, RESULT_REGISTER);
       break;
-    }
-    case FOPCODE_PACKED_SWITCH:
-    case FOPCODE_SPARSE_SWITCH:
-    case FOPCODE_FILLED_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY_RANGE:
-    case OPCODE_INVOKE_VIRTUAL_RANGE:
-    case OPCODE_INVOKE_SUPER_RANGE:
-    case OPCODE_INVOKE_DIRECT_RANGE:
-    case OPCODE_INVOKE_STATIC_RANGE:
-    case OPCODE_INVOKE_INTERFACE_RANGE: {
-      // Pseudo-opcodes and range opcodes have been simplified away by the IR.
-      always_assert_log(false, "Unexpected instruction: %s.\n", SHOW(insn));
     }
     }
   }

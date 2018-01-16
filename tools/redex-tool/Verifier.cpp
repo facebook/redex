@@ -84,7 +84,7 @@ void build_refs(
     const Scope& scope,
     refs_t& class_refs) {
   // TODO: walk through annotations
-  walk_opcodes(
+  walk::opcodes(
     scope,
     [](const DexMethod*) { return true; },
     [&](const DexMethod* meth, IRInstruction* insn) {

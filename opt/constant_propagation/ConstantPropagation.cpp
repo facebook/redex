@@ -9,28 +9,14 @@
 
 #include "ConstantPropagation.h"
 
+#include "ConstantEnvironment.h"
 #include "DexUtil.h"
-#include "GlobalConstProp.h"
 #include "LocalConstProp.h"
-#include "ParallelWalkers.h"
 #include "Transform.h"
-
-using namespace constant_propagation_impl;
-using std::placeholders::_1;
-using std::string;
-using std::vector;
-
-void IntraProcConstantPropagation::simplify_instruction(
-    Block* const& block,
-    MethodItemEntry& mie,
-    const ConstPropEnvironment& current_state) const {
-  auto insn = mie.insn;
-  m_lcp.simplify_instruction(insn, current_state);
-}
+#include "Walkers.h"
 
 void IntraProcConstantPropagation::analyze_instruction(
-    const MethodItemEntry& mie, ConstPropEnvironment* current_state) const {
-  auto insn = mie.insn;
+    const IRInstruction* insn, ConstantEnvironment* current_state) const {
   auto op = insn->opcode();
   if (opcode::is_load_param(op)) {
     // We assume that the initial environment passed to run() has parameter
@@ -41,13 +27,21 @@ void IntraProcConstantPropagation::analyze_instruction(
   }
 }
 
+void IntraProcConstantPropagation::analyze_node(
+    const NodeId& block, ConstantEnvironment* state_at_entry) const {
+  TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
+  for (auto& mie : InstructionIterable(block)) {
+    analyze_instruction(mie.insn, state_at_entry);
+  }
+}
+
 /*
  * If we can determine that a branch is not taken based on the constants in the
  * environment, set the environment to bottom upon entry into the unreachable
  * block.
  */
 static void analyze_if(const IRInstruction* insn,
-                       ConstPropEnvironment* state,
+                       ConstantEnvironment* state,
                        bool is_true_branch) {
   if (state->is_bottom()) {
     return;
@@ -58,9 +52,8 @@ static void analyze_if(const IRInstruction* insn,
                             : insn->opcode();
 
   auto scd_left = state->get(insn->src(0));
-  auto scd_right = insn->srcs_size() > 1
-                       ? state->get(insn->src(1))
-                       : SignedConstantDomain(0, ConstantValue::NARROW);
+  auto scd_right = insn->srcs_size() > 1 ? state->get(insn->src(1))
+                                         : SignedConstantDomain(0);
 
   switch (op) {
   case OPCODE_IF_EQ: {
@@ -70,8 +63,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_EQZ: {
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(0, ConstantValue::NARROW)));
+    state->set(insn->src(0), scd_left.meet(SignedConstantDomain(0)));
     break;
   }
   case OPCODE_IF_NE:
@@ -81,7 +73,7 @@ static void analyze_if(const IRInstruction* insn,
     if (!(cd_left.is_value() && cd_right.is_value())) {
       break;
     }
-    if (cd_left.value().constant() == cd_right.value().constant()) {
+    if (*cd_left.get_constant() == *cd_right.get_constant()) {
       state->set_to_bottom();
     }
     break;
@@ -128,9 +120,9 @@ static void analyze_if(const IRInstruction* insn,
   }
 }
 
-ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
+ConstantEnvironment IntraProcConstantPropagation::analyze_edge(
     const std::shared_ptr<cfg::Edge>& edge,
-    const ConstPropEnvironment& exit_state_at_source) const {
+    const ConstantEnvironment& exit_state_at_source) const {
   auto current_state = exit_state_at_source;
   if (!m_config.propagate_conditions) {
     return current_state;
@@ -147,6 +139,23 @@ ConstPropEnvironment IntraProcConstantPropagation::analyze_edge(
     analyze_if(insn, &current_state, edge->type() == EDGE_BRANCH);
   }
   return current_state;
+}
+
+void IntraProcConstantPropagation::simplify_instruction(
+    Block* const& block,
+    IRInstruction* insn,
+    const ConstantEnvironment& current_state) const {
+  m_lcp.simplify_instruction(insn, current_state);
+}
+
+void IntraProcConstantPropagation::simplify() const {
+  for (const auto& block : m_cfg.blocks()) {
+    auto state = this->get_entry_state_at(block);
+    for (auto& mie : InstructionIterable(block)) {
+      analyze_instruction(mie.insn, &state);
+      simplify_instruction(block, mie.insn, state);
+    }
+  }
 }
 
 void IntraProcConstantPropagation::apply_changes(IRCode* code) const {
@@ -177,7 +186,7 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
   pc.get("propagate_conditions", false, m_config.propagate_conditions);
-  vector<string> blacklist_names;
+  std::vector<std::string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 
   for (auto const& name : blacklist_names) {
@@ -194,10 +203,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  walk_methods_parallel_simple(scope, [&](DexMethod* method) {
-    if (!method->get_code()) {
-      return;
-    }
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     // Skipping blacklisted classes
     if (m_config.blacklist.count(method->get_class()) > 0) {
       TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
@@ -206,15 +212,14 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
     TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
 
-    auto code = method->get_code();
-    code->build_cfg();
-    auto& cfg = code->cfg();
+    code.build_cfg();
+    auto& cfg = code.cfg();
 
     TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
     IntraProcConstantPropagation rcp(cfg, m_config);
-    rcp.run(ConstPropEnvironment());
+    rcp.run(ConstantEnvironment());
     rcp.simplify();
-    rcp.apply_changes(code);
+    rcp.apply_changes(&code);
 
     {
       std::lock_guard<std::mutex> lock{m_stats_mutex};

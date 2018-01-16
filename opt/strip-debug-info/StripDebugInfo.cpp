@@ -118,22 +118,20 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   m_num_epilogue_dropped = 0;
   m_num_empty_dropped = 0;
   auto scope = build_class_scope(stores);
-  walk_methods(scope, [&](DexMethod* meth) {
-    IRCode* code = meth->get_code();
-    if (!code) return;
+  walk::code(scope, [&](DexMethod* meth, IRCode& code) {
     if (!method_passes_filter(meth)) return;
     ++m_num_matches;
     bool debug_info_empty = true;
     bool force_discard = m_drop_all_dbg_info || should_drop_for_synth(meth);
 
-    for (auto it = code->begin(); it != code->end();) {
+    for (auto it = code.begin(); it != code.end();) {
       const auto& mei = *it;
       if (should_remove(mei) || (force_discard && is_debug_entry(mei))) {
         // Even though force_discard will drop the debug item below, preventing
         // any of the debug entries for :meth to be output, we still want to
         // erase those entries here so that transformations like inlining won't
         // move these entries into a method that does have a debug item.
-        it = code->erase(it);
+        it = code.erase(it);
       } else {
         switch (mei.type) {
         case MFLOW_DEBUG:
@@ -155,7 +153,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
     if (m_drop_all_dbg_info ||
         (debug_info_empty && m_drop_all_dbg_info_if_empty) || force_discard) {
       ++m_num_empty_dropped;
-      code->release_debug_item();
+      code.release_debug_item();
     }
   });
 

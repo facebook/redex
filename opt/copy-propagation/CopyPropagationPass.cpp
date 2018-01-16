@@ -17,8 +17,8 @@
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
 #include "IRTypeChecker.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
+#include "Walkers.h"
 
 // This pass eliminates writes to registers that already hold the written value.
 //
@@ -200,22 +200,15 @@ class AliasFixpointIterator final
   const RegisterValue get_src_value(IRInstruction* insn) const {
     switch (insn->opcode()) {
     case OPCODE_MOVE:
-    case OPCODE_MOVE_FROM16:
-    case OPCODE_MOVE_16:
     case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16:
       return RegisterValue{insn->src(0)};
     case OPCODE_CONST:
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
       if (m_config.eliminate_const_literals) {
         return RegisterValue{insn->get_literal()};
       } else {
         return RegisterValue::none();
       }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       if (m_config.eliminate_const_strings) {
         DexString* str = insn->get_string();
         return RegisterValue{str};
@@ -261,7 +254,7 @@ Stats Stats::operator+(const Stats& other) {
 Stats CopyPropagation::run(Scope scope) {
   using Data = std::nullptr_t;
   using Output = Stats;
-  return walk_methods_parallel<Data, Output>(
+  return walk::parallel::reduce_methods<Data, Output>(
       scope,
       [this](Data&, DexMethod* m) {
         IRCode* code = m->get_code();
@@ -294,7 +287,7 @@ Stats CopyPropagation::run(Scope scope) {
       [](Output a, Output b) { return a + b; },
       [](unsigned int /* thread_index */) { return nullptr; },
       Output(),
-      m_config.debug ? 1 : walkers_default_num_threads());
+      m_config.debug ? 1 : walk::parallel::default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code) {

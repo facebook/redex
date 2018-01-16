@@ -94,7 +94,7 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
     DexMethodManager& method_name_mapping) {
   std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
   std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
-  walk_opcodes(scope,
+  walk::opcodes(scope,
     [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* instr) {
       if (instr->has_field()) {

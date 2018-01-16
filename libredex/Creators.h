@@ -108,7 +108,7 @@ struct MethodBlock {
    * At some point, when importing external dependency, we could remove this
    * function as all references would be known.
    */
-  void invoke(DexOpcode opcode,
+  void invoke(IROpcode opcode,
               DexMethodRef* meth,
               const std::vector<Location>& args);
 
@@ -139,7 +139,7 @@ struct MethodBlock {
    * The field can be a field ref.
    * This function can be used when the field is unknown to redex.
    */
-  void ifield_op(DexOpcode opcode,
+  void ifield_op(IROpcode opcode,
                  DexField* field,
                  Location obj,
                  Location& src_or_dst);
@@ -161,9 +161,7 @@ struct MethodBlock {
    * The field can be a field ref.
    * This function can be used when the field is unknown to redex.
    */
-  void sfield_op(DexOpcode opcode,
-                 DexField* field,
-                 Location& src_or_dst);
+  void sfield_op(IROpcode opcode, DexField* field, Location& src_or_dst);
 
   //
   // simple instruction (location based)
@@ -235,12 +233,11 @@ struct MethodBlock {
   // Helper
   void init_loc(Location& loc);
 
-  void binop_2addr(DexOpcode op, const Location& dest, const Location& src);
-  void binop_lit16(DexOpcode op,
+  void binop_lit16(IROpcode op,
                    const Location& dest,
                    const Location& src,
                    int16_t literal);
-  void binop_lit8(DexOpcode op,
+  void binop_lit8(IROpcode op,
                   const Location& dest,
                   const Location& src,
                   int8_t literal);
@@ -262,9 +259,7 @@ struct MethodBlock {
    *   code4
    *   ret
    */
-  MethodBlock* if_test(DexOpcode if_op,
-                       Location first,
-                       Location second);
+  MethodBlock* if_test(IROpcode if_op, Location first, Location second);
 
   /**
    * Emit an if* opcode that tests a Location against 0.
@@ -279,7 +274,7 @@ struct MethodBlock {
    *   code4
    *   ret
    */
-  MethodBlock* if_testz(DexOpcode if_op, Location test);
+  MethodBlock* if_testz(IROpcode if_op, Location test);
 
   /**
    * Emit an if* opcode that tests 2 Locations.
@@ -298,7 +293,7 @@ struct MethodBlock {
    *   code4
    *   got end_if_label // emitted automatically
    */
-  MethodBlock* if_else_test(DexOpcode if_op,
+  MethodBlock* if_else_test(IROpcode if_op,
                             Location first,
                             Location second,
                             MethodBlock** true_block);
@@ -320,7 +315,7 @@ struct MethodBlock {
    *   code4
    *   got end_if_label // emitted automatically
    */
-  MethodBlock* if_else_testz(DexOpcode if_op,
+  MethodBlock* if_else_testz(IROpcode if_op,
                              Location test,
                              MethodBlock** true_block);
 

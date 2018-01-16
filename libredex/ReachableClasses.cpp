@@ -22,6 +22,7 @@
 #include "RedexResources.h"
 #include "SimpleReflectionAnalysis.h"
 #include "StringUtil.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -89,69 +90,101 @@ void analyze_reflection(const Scope& scope) {
   const auto ATOMIC_LONG_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
   const auto ATOMIC_REF_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
-  std::map<std::string, std::map<std::string, ReflectionType>> refls;
-  refls[JAVA_LANG_CLASS]["getField"] = GET_FIELD;
-  refls[JAVA_LANG_CLASS]["getDeclaredField"] = GET_DECLARED_FIELD;
-  refls[JAVA_LANG_CLASS]["getMethod"] = GET_METHOD;
-  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
-  refls[JAVA_LANG_CLASS]["getDeclaredMethod"] = GET_DECLARED_METHOD;
-  refls[ATOMIC_INT_FIELD_UPDATER]["newUpdater"]  = INT_UPDATER;
-  refls[ATOMIC_LONG_FIELD_UPDATER]["newUpdater"]  = LONG_UPDATER;
-  refls[ATOMIC_REF_FIELD_UPDATER]["newUpdater"]  = REF_UPDATER;
+  const std::unordered_map<std::string,
+                           std::unordered_map<std::string, ReflectionType>>
+      refls = {
+          {JAVA_LANG_CLASS,
+           {
+               {"getField", GET_FIELD},
+               {"getDeclaredField", GET_DECLARED_FIELD},
+               {"getMethod", GET_METHOD},
+               {"getDeclaredMethod", GET_DECLARED_METHOD},
+           }},
+          {ATOMIC_INT_FIELD_UPDATER,
+           {
+               {"newUpdater", INT_UPDATER},
+           }},
+          {ATOMIC_LONG_FIELD_UPDATER,
+           {
+               {"newUpdater", LONG_UPDATER},
+           }},
+          {ATOMIC_REF_FIELD_UPDATER,
+           {
+               {"newUpdater", REF_UPDATER},
+           }},
+      };
 
-  walk_methods(scope, [&](DexMethod* method) {
-      if (!method->get_code()) return;
-      SimpleReflectionAnalysis analysis(method);
-      for (auto& mie : InstructionIterable(method->get_code())) {
+  walk::parallel::code(scope, [&refls](DexMethod* method, IRCode& code) {
+      std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
+      for (auto& mie : InstructionIterable(code)) {
         IRInstruction* insn = mie.insn;
-        if (!insn->has_method() || !is_invoke(insn->opcode())) continue;
+        if (!is_invoke(insn->opcode())) {
+          continue;
+        }
+
         // See if it matches something in refls
         auto& method_name = insn->get_method()->get_name()->str();
         auto& method_class_name = insn->get_method()->get_class()->get_name()->str();
-        if (refls.find(method_class_name) != refls.end() &&
-            refls[method_class_name].find(method_name) != refls[method_class_name].end()) {
-          ReflectionType refl_type = refls[method_class_name][method_name];
-          int arg_cls_idx = 0;
-          int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
-          auto arg_cls = analysis.get_abstract_object(insn->src(arg_cls_idx), insn);
-          auto arg_str = analysis.get_abstract_object(insn->src(arg_str_idx), insn);
-          if ((arg_cls && arg_cls->kind == AbstractObjectKind::CLASS) &&
-              (arg_str && arg_str->kind == AbstractObjectKind::STRING)) {
-            TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %d %s %s\n",
-                  insn->get_method()->get_name()->str().c_str(),
-                  refl_type,
-                  method_class_name.c_str(),
-                  method_name.c_str(),
-                  arg_cls->kind, SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
-                  arg_str->kind, SHOW(arg_str->dex_type), SHOW(arg_str->dex_string)
-                  );
-          switch (refl_type) {
-            case GET_FIELD:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case GET_DECLARED_FIELD:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, false);
-              break;
-            case GET_METHOD:
-              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case GET_DECLARED_METHOD:
-              blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, false);
-              break;
-            case INT_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case LONG_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            case REF_UPDATER:
-              blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
-              break;
-            }
+        auto method_map = refls.find(method_class_name);
+        if (method_map == refls.end()) {
+          continue;
+        }
+
+        auto refl_entry = method_map->second.find(method_name);
+        if (refl_entry == method_map->second.end()) {
+          continue;
+        }
+
+        ReflectionType refl_type = refl_entry->second;
+        int arg_cls_idx = 0;
+        int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
+
+        // Instantiating the analysis object also runs the reflection analysis
+        // on the method. So, we wait until we're sure we need it.
+        // We use a unique_ptr so that we'll still only have one per method.
+        if (!analysis) {
+          analysis = std::make_unique<SimpleReflectionAnalysis>(method);
+        }
+
+        auto arg_cls = analysis->get_abstract_object(insn->src(arg_cls_idx), insn);
+        auto arg_str = analysis->get_abstract_object(insn->src(arg_str_idx), insn);
+        if ((arg_cls && arg_cls->kind == AbstractObjectKind::CLASS) &&
+            (arg_str && arg_str->kind == AbstractObjectKind::STRING)) {
+          TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %d %s %s\n",
+                insn->get_method()->get_name()->str().c_str(),
+                refl_type,
+                method_class_name.c_str(),
+                method_name.c_str(),
+                arg_cls->kind, SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
+                arg_str->kind, SHOW(arg_str->dex_type), SHOW(arg_str->dex_string)
+                );
+        switch (refl_type) {
+          case GET_FIELD:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case GET_DECLARED_FIELD:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, false);
+            break;
+          case GET_METHOD:
+            blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case GET_DECLARED_METHOD:
+            blacklist<DexMethod*>(arg_cls->dex_type, arg_str->dex_string, false);
+            break;
+          case INT_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case LONG_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
+          case REF_UPDATER:
+            blacklist<DexField*>(arg_cls->dex_type, arg_str->dex_string, true);
+            break;
           }
         }
       }
-    });
+    }
+  );
 }
 
 template<typename DexMember>
@@ -204,17 +237,6 @@ void mark_reachable_by_classname(std::string& classname, bool from_code) {
   if (dtype == nullptr) return;
   DexClass* dclass = type_class_internal(dtype);
   mark_reachable_by_classname(dclass, from_code);
-}
-
-template<typename T>
-void mark_reachable_by_seed(T dclass) {
-  if (dclass == nullptr) return;
-  dclass->rstate.ref_by_seed();
-}
-
-void mark_reachable_by_seed(DexType* dtype) {
-  if (dtype == nullptr) return;
-  mark_reachable_by_seed(type_class_internal(dtype));
 }
 
 template <typename DexMember>
@@ -351,10 +373,10 @@ void init_permanently_reachable_classes(
                            m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
                        m::has_n_args(1)));
 
-  walk_matching_opcodes(
+  walk::parallel::matching_opcodes(
       scope,
       match,
-      [&](const DexMethod* meth, size_t n, IRInstruction** insns) {
+      [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
         auto const_string = insns[0];
         auto move_result_pseudo = insns[1];
         auto invoke_static = insns[2];
@@ -362,7 +384,9 @@ void init_permanently_reachable_classes(
         if (move_result_pseudo->dest() == invoke_static->src(0)) {
           auto classname = JavaNameUtil::external_to_internal(
               const_string->get_string()->c_str());
-          TRACE(PGR, 4, "Found Class.forName of: %s, marking %s reachable\n",
+          TRACE(PGR,
+                4,
+                "Found Class.forName of: %s, marking %s reachable\n",
                 const_string->get_string()->c_str(),
                 classname.c_str());
           mark_reachable_by_classname(classname, true);
@@ -460,7 +484,7 @@ void init_permanently_reachable_classes(
  */
 void recompute_classes_reachable_from_code(const Scope& scope) {
   // Matches methods marked as native
-  walk_methods(scope,
+  walk::methods(scope,
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
                    TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
@@ -485,203 +509,13 @@ void init_reachable_classes(
   recompute_classes_reachable_from_code(scope);
 }
 
-namespace {
-struct SeedsParser {
-  SeedsParser(const ProguardMap& pgmap) : m_pgmap(pgmap) {}
-
-  bool parse_seed_line(std::string line) {
-    if (line.find(':') == std::string::npos) {
-      return parse_class(line);
-    }
-    if (line.find('(') == std::string::npos) {
-      return parse_field(line);
-    }
-    return parse_method(line);
-  }
-
- private:
-  bool parse_class(std::string line) {
-    auto canon_name = convert_type(line);
-    auto xlate_name = m_pgmap.translate_class(canon_name);
-    auto dex_type = DexType::get_type(xlate_name.c_str());
-    TRACE(PGR, 2,
-          "Parsing seed class: %s\n"
-          "  canon: %s\n"
-          "  xlate: %s\n"
-          "  interned: %s\n",
-          line.c_str(), canon_name.c_str(), xlate_name.c_str(), SHOW(dex_type));
-    auto nonrenamed_type = DexType::get_type(canon_name.c_str());
-    if (!dex_type && !nonrenamed_type) {
-      TRACE(PGR, 2,
-            "Seed file contains class for which Dex type can't be found: %s\n",
-            line.c_str());
-      return false;
-    }
-    if (dex_type) {
-      mark_reachable_by_seed(dex_type);
-    }
-    if (line.find('$') == std::string::npos) {
-      if (nonrenamed_type) {
-        mark_reachable_by_seed(nonrenamed_type);
-      }
-    }
-    return true;
-  }
-
-  std::string convert_field(
-    std::string cls,
-    std::string type,
-    std::string name
-  ) {
-    return convert_type(cls) + "." + name + ":" + convert_type(type);
-  }
-
-  std::string normalize_field(std::string line) {
-    auto cpos = line.find(':');
-    auto cls = line.substr(0, cpos);
-    auto spos = line.find(' ', cpos + 2);
-    auto type = line.substr(cpos + 2, spos - (cpos + 2));
-    auto name = line.substr(spos + 1);
-    return convert_field(cls, type, name);
-  }
-
-  bool parse_field(std::string line) {
-    auto canon_field = normalize_field(line);
-    auto xlate_name = m_pgmap.translate_field(canon_field);
-    auto cls_end = xlate_name.find('.');
-    auto name_start = cls_end + 1;
-    auto name_end = xlate_name.find(':', name_start);
-    auto type_start = name_end + 1;
-    auto clsstr = xlate_name.substr(0, cls_end);
-    auto namestr = xlate_name.substr(name_start, name_end - name_start);
-    auto typestr = xlate_name.substr(type_start);
-    auto dex_field = DexField::get_field(
-      DexType::get_type(clsstr.c_str()),
-      DexString::get_string(namestr.c_str()),
-      DexType::get_type(typestr.c_str()));
-    TRACE(PGR, 2,
-          "Parsing seed field: %s\n"
-          "  canon: %s\n"
-          "  xlate: %s\n"
-          "  interned: %s\n",
-          line.c_str(), canon_field.c_str(), xlate_name.c_str(),
-          SHOW(dex_field));
-    if (!dex_field || !dex_field->is_def()) {
-      TRACE(PGR, 2,
-            "Seed file contains field not found in dex: %s (obfuscated: %s)\n",
-            canon_field.c_str(), xlate_name.c_str());
-      return false;
-    }
-    mark_reachable_by_seed(static_cast<DexField*>(dex_field));
-    return true;
-  }
-
-  std::string convert_args(std::string args) {
-    std::string ret;
-    std::stringstream ss(args);
-    std::string arg;
-    while (std::getline(ss, arg, ',')) {
-      ret += convert_type(arg);
-    }
-    return ret;
-  }
-
-  std::string convert_method(
-    std::string cls,
-    std::string type,
-    std::string name,
-    std::string args
-  ) {
-    return
-      convert_type(cls)
-      + "." + name
-      + ":(" + convert_args(args) + ")"
-      + convert_type(type);
-  }
-
-  std::string normalize_method(std::string line) {
-    auto cls_end = line.find(':');
-    auto type_start = cls_end + 2;
-    auto type_end = line.find(' ', type_start);
-    if (type_end == std::string::npos) {
-      // It's an <init> constructor.
-      auto args_start = line.find('(', type_start) + 1;
-      auto args_end = line.find(')', args_start);
-      auto cls = line.substr(0, cls_end);
-      auto args = line.substr(args_start, args_end - args_start);
-      return convert_method(cls, "void", "<init>", args);
-    }
-    auto name_start = type_end + 1;
-    auto name_end = line.find('(', name_start);
-    auto args_start = name_end + 1;
-    auto args_end = line.find(')', args_start);
-    auto cls = line.substr(0, cls_end);
-    auto type = line.substr(type_start, type_end - type_start);
-    auto name = line.substr(name_start, name_end - name_start);
-    auto args = line.substr(args_start, args_end - args_start);
-    return convert_method(cls, type, name, args);
-  }
-
-  bool parse_method(std::string line) {
-    auto canon_method = normalize_method(line);
-    auto xlate_method = m_pgmap.translate_method(canon_method);
-    auto dex_method = DexMethod::get_method(xlate_method);
-    TRACE(PGR, 2,
-          "Parsing seed method: %s\n"
-          "  canon: %s\n"
-          "  xlate: %s\n"
-          "  interned: %s\n",
-          line.c_str(), canon_method.c_str(), xlate_method.c_str(),
-          SHOW(dex_method));
-    if (!dex_method || !dex_method->is_def()) {
-      TRACE(PGR, 2,
-            "Seed file contains method not found in dex: %s (obfuscated: %s)\n",
-            canon_method.c_str(), xlate_method.c_str());
-      return false;
-    }
-    mark_reachable_by_seed(static_cast<DexMethod*>(dex_method));
-    return true;
-  }
-
- private:
-  const ProguardMap& m_pgmap;
-};
-}
-
-unsigned int init_seed_classes(
-  const std::string seeds_filename, const ProguardMap& pgmap
-) {
-  TRACE(PGR, 8, "Reading seed classes from %s\n", seeds_filename.c_str());
-  auto start = std::chrono::high_resolution_clock::now();
-  std::ifstream seeds_file(seeds_filename);
-  SeedsParser parser(pgmap);
-  unsigned int count = 0;
-  if (!seeds_file) {
-    TRACE(PGR, 8, "Seeds file %s was not found (ignoring error).",
-          seeds_filename.c_str());
-    return 0;
-  }
-  std::string line;
-  while (getline(seeds_file, line)) {
-    TRACE(PGR, 2, "Parsing seeds line: %s\n", line.c_str());
-    if (parser.parse_seed_line(line)) ++count;
-  }
-  auto end = std::chrono::high_resolution_clock::now();
-  TRACE(PGR, 1, "Read %d seed classes in %.1lf seconds\n", count,
-        std::chrono::duration<double>(end - start).count());
-  return count;
-}
-
 std::string ReferencedState::str() const {
   std::stringstream s;
   s << m_bytype;
   s << m_bystring;
   s << m_computed;
-  s << m_seed;
   s << m_keep;
-  s << m_includedescriptorclasses;
   s << m_allowshrinking;
-  s << m_allowoptimization;
   s << m_allowobfuscation;
   s << m_assumenosideeffects;
   s << m_blanket_keep;

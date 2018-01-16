@@ -133,7 +133,7 @@ class Node {
    * handle code that didn't. For example, the following code should verify,
    * but fails our requirement:
    *
-   *   const/4 v0, 0 # v0 => RegisterType::ZERO
+   *   const v0, 0 # v0 => RegisterType::ZERO
    *   if-eqz v1
    *   if-true-branch:
    *   add-int v0, v0, v0 # v0 => RegisterType::NORMAL
@@ -250,7 +250,19 @@ class Graph {
   friend class impl::GraphBuilder;
 };
 
+/*
+ * The number of bits that will be available for encoding the dest register of
+ * the given IROpcode when it is converted to a DexInstruction in the
+ * instruction lowering process.
+ */
 size_t dest_bit_width(FatMethod::iterator it);
+
+/*
+ * The number of bits that will be available for encoding the src register of
+ * the given IROpcode when it is converted to a DexInstruction in the
+ * instruction lowering process.
+ */
+size_t src_bit_width(IROpcode op, int i);
 
 namespace impl {
 

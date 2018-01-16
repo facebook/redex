@@ -16,9 +16,9 @@
 
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "LocalDce.h"
 #include "RedexContext.h"
@@ -65,7 +65,7 @@ class IRTypeCheckerTest : public ::testing::Test {
 TEST_F(IRTypeCheckerTest, load_param) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 6_v}),
+      dasm(OPCODE_ADD_INT, {5_v, 5_v, 6_v}),
       dasm(IOPCODE_LOAD_PARAM, {5_v}),
   };
   add_code(insns);
@@ -402,21 +402,6 @@ TEST_F(IRTypeCheckerTest, comparisonOperation) {
       checker.what());
 }
 
-TEST_F(IRTypeCheckerTest, 2addr) {
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 5_v}),
-      dasm(OPCODE_SUB_LONG_2ADDR, {7_v, 7_v}),
-      dasm(OPCODE_SHL_LONG_2ADDR, {7_v, 12_v}),
-      dasm(OPCODE_MUL_FLOAT_2ADDR, {13_v, 13_v}),
-      dasm(OPCODE_DIV_DOUBLE_2ADDR, {10_v, 10_v}),
-  };
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.good()) << checker.what();
-}
-
 TEST_F(IRTypeCheckerTest, verifyMoves) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
@@ -479,8 +464,8 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants1) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_CONST, {0_v, 128_L}),
-      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 0_v}),
-      dasm(OPCODE_MUL_FLOAT_2ADDR, {13_v, 0_v}),
+      dasm(OPCODE_ADD_INT, {5_v, 5_v, 0_v}),
+      dasm(OPCODE_MUL_FLOAT, {13_v, 13_v, 0_v}),
   };
   add_code(insns);
   IRTypeChecker polymorphic_checker(m_method);
@@ -491,7 +476,7 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants1) {
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
   EXPECT_EQ(
-      "Type error in method testMethod at instruction 'MUL_FLOAT_2ADDR v13, "
+      "Type error in method testMethod at instruction 'MUL_FLOAT v13, "
       "v13, v0' for register v0: expected type FLOAT, but found INT instead",
       regular_checker.what());
 }
@@ -500,8 +485,8 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants2) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_CONST_WIDE, {0_v, 128_L}),
-      dasm(OPCODE_ADD_LONG_2ADDR, {7_v, 0_v}),
-      dasm(OPCODE_MUL_DOUBLE_2ADDR, {10_v, 0_v}),
+      dasm(OPCODE_ADD_LONG, {7_v, 7_v, 0_v}),
+      dasm(OPCODE_MUL_DOUBLE, {10_v, 10_v, 0_v}),
   };
   add_code(insns);
   IRTypeChecker polymorphic_checker(m_method);
@@ -512,7 +497,7 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants2) {
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
   EXPECT_EQ(
-      "Type error in method testMethod at instruction 'MUL_DOUBLE_2ADDR v10, "
+      "Type error in method testMethod at instruction 'MUL_DOUBLE v10, "
       "v10, v0' for register v0: expected type (DOUBLE1, DOUBLE2), but found "
       "(LONG1, LONG2) instead",
       regular_checker.what());
@@ -524,7 +509,7 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
       dasm(OPCODE_CONST, {0_v, 0_L}),
       dasm(OPCODE_AGET, {0_v, 5_v}),
       dasm(IOPCODE_MOVE_RESULT_PSEUDO, {1_v}),
-      dasm(OPCODE_ADD_INT_2ADDR, {5_v, 0_v}),
+      dasm(OPCODE_ADD_INT, {5_v, 5_v, 0_v}),
   };
   add_code(insns);
   IRTypeChecker polymorphic_checker(m_method);
@@ -535,7 +520,7 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
   EXPECT_EQ(
-      "Type error in method testMethod at instruction 'ADD_INT_2ADDR v5, v5, "
+      "Type error in method testMethod at instruction 'ADD_INT v5, v5, "
       "v0' for register v0: expected type INT, but found REFERENCE instead",
       regular_checker.what());
 }

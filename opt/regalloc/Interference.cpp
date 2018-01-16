@@ -143,11 +143,25 @@ size_t dest_bit_width(FatMethod::iterator it) {
     if (primary_op == OPCODE_CHECK_CAST) {
       return 4;
     } else {
-      return opcode_impl::dest_bit_width(primary_op);
+      return dex_opcode::dest_bit_width(opcode::to_dex_opcode(primary_op));
     }
+  } else if (opcode::is_internal(op) || is_move(op)) {
+    // move-* opcodes can always be encoded as move-*/16
+    return 16;
+  } else if (is_literal_const(op)) {
+    // const opcodes can always be encoded in a form that addresses 8-bit regs
+    return 8;
   } else {
-    return opcode_impl::dest_bit_width(op);
+    return dex_opcode::dest_bit_width(opcode::to_dex_opcode(op));
   }
+}
+
+size_t src_bit_width(IROpcode op, int i) {
+  // move-* opcodes can always be encoded as move-*/16
+  if (is_move(op)) {
+    return 16;
+  }
+  return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
 }
 
 void GraphBuilder::update_node_constraints(FatMethod::iterator it,
@@ -180,7 +194,7 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
       // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`
       max_vreg = max_unsigned_value(16);
     } else {
-      max_vreg = max_unsigned_value(insn->src_bit_width(i));
+      max_vreg = max_unsigned_value(src_bit_width(op, i));
       if (is_invoke(op) && type == RegisterType::WIDE) {
         // invoke instructions need to address both pairs of a wide register in
         // their denormalized form. We are dealing with the normalized form
@@ -218,7 +232,7 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
  *   B0:
  *     load-param v1 Ljava/lang/Object;
  *     TRY_START
- *     const/4 v0 123
+ *     const v0 123
  *     check-cast v1 LFoo;
  *   B1:
  *     move-result-pseudo v0

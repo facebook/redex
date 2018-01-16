@@ -28,11 +28,13 @@ void assert_u16_string(std::u16string actual_str, std::string expected) {
 TEST(ResStringPool, AppendToEmptyTable) {
   const size_t header_size = sizeof(android::ResStringPool_header);
   android::ResStringPool_header header = {
-      {0x0001, header_size, header_size},
+      {htods(android::RES_STRING_POOL_TYPE),
+       htods(header_size),
+       htodl(header_size)},
       0,
       0,
-      android::ResStringPool_header::UTF8_FLAG |
-          android::ResStringPool_header::SORTED_FLAG,
+      htodl(android::ResStringPool_header::UTF8_FLAG |
+            android::ResStringPool_header::SORTED_FLAG),
       0,
       0};
   android::ResStringPool pool((void*)&header, header_size, false);
@@ -50,7 +52,7 @@ TEST(ResStringPool, AppendToEmptyTable) {
   android::ResStringPool after(data, v.size(), false);
 
   // Ensure sort bit was cleared.
-  auto flags = ((android::ResStringPool_header*)data)->flags;
+  auto flags = dtohl(((android::ResStringPool_header*)data)->flags);
   ASSERT_FALSE(flags & android::ResStringPool_header::SORTED_FLAG);
 
   size_t out_len;
@@ -218,6 +220,9 @@ TEST(ResTable, AppendNewType) {
   auto fp = map_file(std::getenv("test_arsc_path"), file_descriptor, length);
   android::ResTable table;
   ASSERT_EQ(table.add(fp, length), 0);
+  // Read the number of original types.
+  android::Vector<android::String8> original_type_names;
+  table.getTypeNamesForPackage(0, &original_type_names);
 
   // Copy some existing entries to a different table, verify serialization
   const uint8_t dest_type = 3;
@@ -276,6 +281,10 @@ TEST(ResTable, AppendNewType) {
     ASSERT_EQ((int) val, 20);
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
+
+  android::Vector<android::String8> type_names;
+  round_trip.getTypeNamesForPackage(0, &type_names);
+  ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
 
   unmap_and_close(file_descriptor, fp, length);
 }

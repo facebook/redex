@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
- *
+ * All rights reserved. *
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree. An additional grant
  * of patent rights can be found in the PATENTS file in the same directory.
@@ -9,9 +8,14 @@
 
 #include "OpcodeList.h"
 
-std::vector<DexOpcode> all_opcodes {
+std::vector<DexOpcode> all_dex_opcodes {
+#define OP(op, ...) DOPCODE_ ## op,
+  DOPS
+#undef OP
+};
+
+std::vector<IROpcode> all_opcodes {
 #define OP(op, ...) OPCODE_ ## op,
   OPS
 #undef OP
 };
-

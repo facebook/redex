@@ -32,17 +32,17 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "ParallelWalkers.h"
+#include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 s_expr PointsToVariable::to_s_expr() const {
   return s_expr({s_expr("V"), s_expr(m_id)});
@@ -777,7 +777,6 @@ class AnchorPropagation final
       break;
     }
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS:
     case OPCODE_CHECK_CAST:
     case OPCODE_NEW_INSTANCE:
@@ -792,9 +791,7 @@ class AnchorPropagation final
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
     }
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
@@ -819,7 +816,7 @@ class AnchorPropagation final
     default: {
       // Since registers can be reused in different contexts, we need to
       // invalidate the corresponding anchor sets. Note that this case also
-      // encompasses the initialization to null, like `const/4 v1, 0`.
+      // encompasses the initialization to null, like `const v1, 0`.
       if (insn->dests_size() > 0) {
         current_state->set(insn->dest(), AnchorDomain());
         if (insn->dest_is_wide()) {
@@ -982,7 +979,6 @@ class PointsToActionGenerator final {
     case IOPCODE_LOAD_PARAM_OBJECT:
     case OPCODE_MOVE_EXCEPTION:
     case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO:
     case OPCODE_CONST_CLASS:
     case OPCODE_CHECK_CAST:
     case OPCODE_NEW_INSTANCE:
@@ -1017,8 +1013,7 @@ class PointsToActionGenerator final {
           get_variable_from_anchor_set(state.get(insn->src(0)))));
       break;
     }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       m_semantics->add(PointsToAction::load_operation(
           PointsToOperation(PTS_CONST_STRING, insn->get_string()),
           get_variable_from_anchor(insn)));
@@ -1591,7 +1586,7 @@ PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
   }
 
   // We generate a system of points-to actions for each Dex method in parallel.
-  walk_methods_parallel_simple(scope, [this](DexMethod* dex_method) {
+  walk::parallel::methods(scope, [this](DexMethod* dex_method) {
     generate_points_to_actions(dex_method);
   });
 }

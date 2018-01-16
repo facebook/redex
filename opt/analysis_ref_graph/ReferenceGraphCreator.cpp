@@ -193,17 +193,17 @@ void CreateReferenceGraphPass::build_refs(const Scope& scope, refs_t& class_refs
   } else {
     if (CreateReferenceGraphPass::config.refs_in_annotations) {
       build_class_annot_refs(scope, class_refs);
-      walk_methods(scope, method_annot_ref_builder(scope, class_refs));
-      walk_fields(scope, field_annot_ref_builder(scope, class_refs));
+      walk::methods(scope, method_annot_ref_builder(scope, class_refs));
+      walk::fields(scope, field_annot_ref_builder(scope, class_refs));
     }
     if (CreateReferenceGraphPass::config.refs_in_class_structure) {
       build_super_and_interface_refs(scope, class_refs);
-      walk_methods(scope, method_ref_builder(scope, class_refs));
-      walk_fields(scope, field_ref_builder(scope, class_refs));
+      walk::methods(scope, method_ref_builder(scope, class_refs));
+      walk::fields(scope, field_ref_builder(scope, class_refs));
     }
     if (CreateReferenceGraphPass::config.refs_in_code) {
-      walk_methods(scope, exception_ref_builder(scope, class_refs));
-      walk_opcodes(
+      walk::methods(scope, exception_ref_builder(scope, class_refs));
+      walk::opcodes(
         scope,
         [](const DexMethod*) { return true; },
         instruction_ref_builder(scope, class_refs)

@@ -24,7 +24,7 @@
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
-#include "ParallelWalkers.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -36,7 +36,7 @@ constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
  * These instructions have observable side effects so must always be considered
  * live, regardless of whether their output is consumed by another instruction.
  */
-static bool has_side_effects(DexOpcode opc) {
+static bool has_side_effects(IROpcode opc) {
   switch (opc) {
   case OPCODE_RETURN_VOID:
   case OPCODE_RETURN:
@@ -48,8 +48,6 @@ static bool has_side_effects(DexOpcode opc) {
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-  case OPCODE_GOTO_16:
-  case OPCODE_GOTO_32:
   case OPCODE_PACKED_SWITCH:
   case OPCODE_SPARSE_SWITCH:
   case OPCODE_IF_EQ:
@@ -90,9 +88,6 @@ static bool has_side_effects(DexOpcode opc) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case FOPCODE_PACKED_SWITCH:
-  case FOPCODE_SPARSE_SWITCH:
-  case FOPCODE_FILLED_ARRAY:
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
@@ -307,7 +302,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto stats = walk_methods_parallel<std::nullptr_t, LocalDce::Stats>(
+  auto stats = walk::parallel::reduce_methods<std::nullptr_t, LocalDce::Stats>(
       scope,
       [&](std::nullptr_t, DexMethod* m) {
         auto* code = m->get_code();

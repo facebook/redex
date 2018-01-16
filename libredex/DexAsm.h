@@ -34,21 +34,19 @@ inline Operand operator "" _v(unsigned long long v) {
   return {VREG, v};
 }
 
-inline Operand operator "" _L(unsigned long long v) {
-  return {LITERAL, v};
-}
+inline Operand operator"" _L(unsigned long long v) { return {LITERAL, v}; }
 
-IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> = {});
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> = {});
+IRInstruction* dasm(IROpcode opcode,
                     DexString* string,
                     std::initializer_list<Operand> = {});
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexType* type,
                     std::initializer_list<Operand> = {});
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexFieldRef* field,
                     std::initializer_list<Operand> = {});
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexMethodRef* method,
                     std::initializer_list<Operand> = {});
-}
+} // namespace dex_asm

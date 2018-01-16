@@ -13,13 +13,12 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
-#include "ParallelWalkers.h"
 #include "Walkers.h"
 
 std::vector<int64_t> get_lits(IRCode* code) {
   std::vector<int64_t> result;
   for (const auto& mie : InstructionIterable(code)) {
-    if (opcode::has_literal(mie.insn->opcode())) {
+    if (mie.insn->has_literal()) {
       result.push_back(mie.insn->get_literal());
     }
   }
@@ -34,21 +33,15 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* unused */,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  walk_methods_parallel_simple(scope, [](DexMethod* m) {
-    IRCode* code = m->get_code();
-
-    if (code == nullptr) {
-      return;
-    }
-
-    const auto& before_lits = get_lits(code);
+  walk::parallel::code(scope, [](DexMethod* m, IRCode& code) {
+    const auto& before_lits = get_lits(&code);
 
     // build and linearize the CFG
-    code->build_cfg(/* editable */ true);
+    code.build_cfg(/* editable */ true);
     TRACE(CFG, 5, "  cfg build done\n");
-    code->clear_cfg();
+    code.clear_cfg();
     TRACE(CFG, 5, "  cfg linearize done\n");
-    TRACE(CFG, 5, "fm after:\n%s", SHOW(code));
+    TRACE(CFG, 5, "fm after:\n%s", SHOW(&code));
 
     // Run the IR type checker
     IRTypeChecker checker(m);
@@ -60,7 +53,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
       always_assert(false);
     }
 
-    const auto& after_lits = get_lits(code);
+    const auto& after_lits = get_lits(&code);
 
     size_t i = 0;
     for (auto v : after_lits) {
@@ -69,7 +62,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                         SHOW(m),
                         v,
                         before_lits[i],
-                        SHOW(code));
+                        SHOW(&code));
       ++i;
     }
   });

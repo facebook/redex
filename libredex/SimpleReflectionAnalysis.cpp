@@ -16,11 +16,11 @@
 
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 
@@ -121,9 +121,7 @@ class Analyzer final
   void analyze_instruction(IRInstruction* insn,
                            AbstractObjectEnvironment* current_state) const {
     switch (insn->opcode()) {
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
@@ -132,8 +130,7 @@ class Analyzer final
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
-    case OPCODE_CONST_STRING:
-    case OPCODE_CONST_STRING_JUMBO: {
+    case OPCODE_CONST_STRING: {
       current_state->set(
           RESULT_REGISTER,
           AbstractObjectDomain(AbstractObject(insn->get_string())));

@@ -176,7 +176,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
     }
   };
 
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* method) {
         all_methods++;
         if (method->is_virtual()) return;

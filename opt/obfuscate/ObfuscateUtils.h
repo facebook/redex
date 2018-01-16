@@ -33,8 +33,6 @@ void rename_method(DexMethod* method, const std::string& new_name);
 // an element being a seed trumps allowobfuscation.
 template <class T>
 bool should_rename_elem(const T* member) {
-  /*return !member->is_external() && !is_seed(member) &&
-      (!keep(member) || allowobfuscation(member));*/
   auto cls = type_class(member->get_class());
   return can_rename(member) && !member->is_external() &&
       cls != nullptr && !cls->is_external();

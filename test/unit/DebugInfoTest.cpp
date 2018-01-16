@@ -24,7 +24,7 @@ TEST(DexPositionTest, multiplePositionBeforeOpcode) {
     (
       (.pos "LFoo;.bar:()V" "Foo.java" 123)
       (.pos "LFoo;.bar:()V" "Foo.java" 124)
-      (const/4 v0 0)
+      (const v0 0)
       (return-void)
     )
   )");
@@ -38,7 +38,7 @@ TEST(DexPositionTest, multiplePositionBeforeOpcode) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (.pos "LFoo;.bar:()V" "Foo.java" 124)
-      (const/4 v0 0)
+      (const v0 0)
       (return-void)
     )
   )");
@@ -59,9 +59,9 @@ TEST(DexPositionTest, consecutiveIdenticalPositions) {
   auto code = assembler::ircode_from_string(R"(
     (
       (.pos "LFoo;.bar:()V" "Foo.java" 123)
-      (const/4 v0 0)
+      (const v0 0)
       (.pos "LFoo;.bar:()V" "Foo.java" 123)
-      (const/4 v0 0)
+      (const v0 0)
       (return-void)
     )
   )");
@@ -75,8 +75,8 @@ TEST(DexPositionTest, consecutiveIdenticalPositions) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (.pos "LFoo;.bar:()V" "Foo.java" 123)
-      (const/4 v0 0)
-      (const/4 v0 0)
+      (const v0 0)
+      (const v0 0)
       (return-void)
     )
   )");

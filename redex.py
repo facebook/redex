@@ -437,10 +437,10 @@ Given an APK, produce a better APK!
             help='File to print seeds to')
 
     parser.add_argument('-P', '--proguard-config', dest='proguard_configs',
-            action='append', default=[], help='[deprecated] Path to proguard config')
+            action='append', default=[], help='Path to proguard config')
 
     parser.add_argument('-k', '--keep', nargs='?',
-            help='Path to file containing classes to keep')
+            help='[deprecated] Path to file containing classes to keep')
 
     parser.add_argument('-S', dest='passthru', action='append', default=[],
             help='Arguments passed through to redex')

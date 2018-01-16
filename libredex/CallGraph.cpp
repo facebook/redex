@@ -29,11 +29,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
   auto is_definitely_virtual = [&](const DexMethod* method) {
     return method->is_virtual() && non_virtual.count(method) == 0;
   };
-  walk_methods(scope, [&](DexMethod* caller) {
-    auto* code = caller->get_code();
-    if (!code) {
-      return;
-    }
+  walk::code(scope, [&](DexMethod* caller, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
@@ -42,7 +38,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
           continue;
         }
         if (callee->is_concrete()) {
-          add_edge(caller, callee, code->iterator_to(mie));
+          add_edge(caller, callee, code.iterator_to(mie));
         }
       }
     }

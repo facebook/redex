@@ -64,9 +64,7 @@ RegisterType dest_reg_type(const IRInstruction*);
 RegisterType src_reg_type(const IRInstruction*, reg_t);
 
 /*
- * Generate the right move instruction for a given type. Always generates the
- * largest opcode regardless of operand size -- e.g. `move/16 v1, v2` instead
- * of `move v1, v2`. The caller is expected to clean it up later.
+ * Generate the right move instruction for a given type.
  */
 IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src);
 

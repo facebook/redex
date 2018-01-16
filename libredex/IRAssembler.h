@@ -18,7 +18,7 @@
  *
  * Example:
  *
- *   (const/4 v0 0)
+ *   (const v0 0)
  *   :L0
  *   (sget-object "LFoo.bar:I")
  *   (move-result-pseudo-object v1)

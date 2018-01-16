@@ -49,7 +49,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
   void build_method(DexMethod* m) override {
     using namespace dex_asm;
     auto mt = m->get_code();
-    mt->push_back(dasm(OPCODE_CONST_16, {0_v, 0x1_L}));
+    mt->push_back(dasm(OPCODE_CONST, {0_v, 0x1_L}));
 
     auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
     invoke->set_method(m_callee)->set_arg_word_count(2);
@@ -102,7 +102,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     // insert enough opcodes such that the offset overflows that width.
     // These are essentially NOPs, but we don't use actual NOPs because
     // Transform filters them out.
-    mt->push_back(dasm(OPCODE_CONST_4, {0_v, 0_L}));
+    mt->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
     for (size_t i = 0; i < NOP_COUNT; ++i) {
       mt->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
     }
@@ -110,13 +110,13 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     cls->add_method(m_callee);
   }
 
-  virtual DexOpcode if_op() = 0;
+  virtual IROpcode if_op() = 0;
 
   void build_method(DexMethod* m) override {
     using namespace dex_asm;
     auto mt = m->get_code();
-    mt->push_back(dasm(OPCODE_CONST_4, {1_v, 0_L}));
-    mt->push_back(dasm(OPCODE_CONST_4, {2_v, 1_L}));
+    mt->push_back(dasm(OPCODE_CONST, {1_v, 0_L}));
+    mt->push_back(dasm(OPCODE_CONST, {2_v, 1_L}));
     // if block
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
     mt->push_back(*branch);
@@ -158,9 +158,7 @@ class InlinerTestLargeIfOffsetTrueBranch : public InlinerTestLargeIfOffset {
     return "InlinerTestLargeIfOffsetTrueBranch";
   }
 
-  virtual DexOpcode if_op() {
-    return OPCODE_IF_NEZ;
-  }
+  virtual IROpcode if_op() { return OPCODE_IF_NEZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetTrueBranch);
@@ -171,9 +169,7 @@ class InlinerTestLargeIfOffsetFalseBranch : public InlinerTestLargeIfOffset {
     return "InlinerTestLargeIfOffsetFalseBranch";
   }
 
-  virtual DexOpcode if_op() {
-    return OPCODE_IF_EQZ;
-  }
+  virtual IROpcode if_op() { return OPCODE_IF_EQZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetFalseBranch);

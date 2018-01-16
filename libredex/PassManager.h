@@ -12,6 +12,7 @@
 #include "Pass.h"
 #include "ProguardConfiguration.h"
 
+#include <boost/optional.hpp>
 #include <json/json.h>
 #include <string>
 #include <unordered_map>
@@ -82,4 +83,13 @@ class PassManager {
   redex::ProguardConfiguration m_pg_config;
   bool m_testing_mode;
   bool m_verify_none_mode;
+
+  struct ProfilerInfo {
+    std::string command;
+    const Pass* pass;
+    ProfilerInfo(const std::string& command, const Pass* pass)
+        : command(command), pass(pass) {}
+  };
+
+  boost::optional<ProfilerInfo> m_profiler_info;
 };

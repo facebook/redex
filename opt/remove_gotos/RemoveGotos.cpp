@@ -22,7 +22,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "ParallelWalkers.h"
+#include "Walkers.h"
 
 namespace {
 
@@ -31,9 +31,7 @@ constexpr const char* METRIC_GOTO_REMOVED = "num_goto_removed";
 class RemoveGotos {
  private:
   static bool is_goto(const MethodItemEntry& mie) {
-    return mie.type == MFLOW_OPCODE && (mie.insn->opcode() == OPCODE_GOTO ||
-                                        mie.insn->opcode() == OPCODE_GOTO_16 ||
-                                        mie.insn->opcode() == OPCODE_GOTO_32);
+    return mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_GOTO;
   }
 
   static bool has_goto(Block* block_ptr) {
@@ -127,7 +125,7 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t total_gotos_removed = walk_methods_parallel<RemoveGotos, size_t>(
+  size_t total_gotos_removed = walk::parallel::reduce_methods<RemoveGotos, size_t>(
       scope,
       [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
         if (!m->get_code()) {

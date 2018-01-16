@@ -48,11 +48,11 @@ struct DedupBlocksTest : testing::Test {
     return method;
   }
 
-  Branch create_branch(DexOpcode op) {
+  Branch create_branch(IROpcode op) {
     using namespace dex_asm;
 
     IRInstruction* insn = nullptr;
-    if (is_goto(op)) {
+    if (op == OPCODE_GOTO) {
       insn = dasm(op);
     } else {
       insn = dasm(op, {0_v});

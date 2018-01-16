@@ -92,7 +92,7 @@ void process_signature_anno(DexString* dstring) {
 
 void find_referenced_classes(const Scope& scope) {
   std::unordered_set<DexString*> maybetypes;
-  walk_annotations(
+  walk::annotations(
     scope,
     [&](DexAnnotation* anno) {
       static DexType* dalviksig =
@@ -132,7 +132,7 @@ void find_referenced_classes(const Scope& scope) {
       }
     });
 
-  walk_code(
+  walk::code(
     scope,
     [](DexMethod*) { return true; },
     [&](DexMethod* meth, IRCode& code) {
@@ -389,7 +389,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
  */
 void DeadRefs::track_callers(Scope& scope) {
   called.clear();
-  walk_opcodes(scope,
+  walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {

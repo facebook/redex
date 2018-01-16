@@ -533,6 +533,7 @@ public:
     // serialization, and has several caveats (doesn't support sorting, assumes
     // there are no styles.)
     void appendString(String8 s);
+    size_t appendedStringCount();
 
 private:
     // Saves the changes made via appendString(). Will fatal if any of the

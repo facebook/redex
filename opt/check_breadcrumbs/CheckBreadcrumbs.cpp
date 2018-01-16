@@ -59,21 +59,22 @@ using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
 using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
-void illegal_elements(const MethodInsns& method_to_insns,
-                      const char* msj,
-                      std::stringstream& ss,
-                      size_t& illegal_cross_store_refs) {
-
+size_t illegal_elements(const MethodInsns& method_to_insns,
+                        const char* msj,
+                        std::stringstream& ss) {
+  size_t num_illegal_cross_store_refs = 0;
   for (const auto& pair : method_to_insns) {
     const auto method = pair.first;
     const auto& insns = pair.second;
     ss << "Illegal " << msj << " in method "
        << method->get_deobfuscated_name() << std::endl;
-    illegal_cross_store_refs += insns.size();
+    num_illegal_cross_store_refs += insns.size();
     for (const auto insn : insns) {
       ss << "\t" << show_deobfuscated(insn) << std::endl;
     }
   }
+
+  return num_illegal_cross_store_refs;
 }
 
 /**
@@ -201,12 +202,12 @@ class Breadcrumbs {
 
 
   void report_illegal_refs(bool fail_if_illegal_refs, PassManager& mgr) {
-    size_t illegal_cross_store_refs = 0;
+    size_t num_illegal_fields = 0;
     std::stringstream ss;
     for (const auto& pair : illegal_field) {
       const auto type = pair.first;
       const auto& fields = pair.second;
-      illegal_cross_store_refs += fields.size();
+      num_illegal_fields += fields.size();
 
       ss << "Illegal fields in class "
          << type_class(type)->get_deobfuscated_name()
@@ -216,15 +217,34 @@ class Breadcrumbs {
       }
     }
 
-    illegal_elements(illegal_type, "type refs", ss, illegal_cross_store_refs);
-    illegal_elements(
-        illegal_field_type, "field type refs", ss, illegal_cross_store_refs);
-    illegal_elements(
-        illegal_field_cls, "field class refs", ss, illegal_cross_store_refs);
-    illegal_elements(
-        illegal_method_call, "method call", ss, illegal_cross_store_refs);
+    size_t num_illegal_type_refs =
+      illegal_elements(illegal_type, "type refs", ss);
+    size_t num_illegal_field_type_refs =
+      illegal_elements(illegal_field_type, "field type refs", ss);
+    size_t num_illegal_field_cls =
+      illegal_elements(illegal_field_cls, "field class refs", ss);
+    size_t num_illegal_method_calls =
+      illegal_elements(illegal_method_call, "method call", ss);
 
-    mgr.set_metric(METRIC_ILLEGAL_CROSS_STORE_REFS, illegal_cross_store_refs);
+    size_t num_illegal_cross_store_refs =
+      num_illegal_fields + num_illegal_type_refs +
+      num_illegal_field_cls + num_illegal_field_type_refs +
+      num_illegal_method_calls;
+    mgr.set_metric(METRIC_ILLEGAL_CROSS_STORE_REFS, num_illegal_cross_store_refs);
+
+    TRACE(BRCR,
+          1,
+          "Illegal fields : %ld\n"
+          "Illegal type refs : %ld\n"
+          "Illegal field type refs : %ld\n"
+          "Illegal field cls refs : %ld\n"
+          "Illegal method calls : %ld\n",
+          num_illegal_fields,
+          num_illegal_type_refs,
+          num_illegal_field_type_refs,
+          num_illegal_field_cls,
+          num_illegal_method_calls);
+    TRACE(BRCR, 2, "%s", ss.str().c_str());
 
     always_assert_log(ss.str().empty() || !fail_if_illegal_refs,
                       "ERROR - illegal cross store references "
@@ -286,7 +306,7 @@ class Breadcrumbs {
 
   // verify that all field definitions are of a type not deleted
   void check_fields() {
-    walk_fields(scope,
+    walk::fields(scope,
         [&](DexField* field) {
           const auto& type = check_type(field->get_type());
           if (type == nullptr) {
@@ -303,7 +323,7 @@ class Breadcrumbs {
 
   // verify that all method definitions use not deleted types in their sig
   void check_methods() {
-    walk_methods(scope,
+    walk::methods(scope,
         [&](DexMethod* method) {
           const auto& type = check_method(method);
           if (type == nullptr) return;
@@ -404,7 +424,7 @@ class Breadcrumbs {
   }
 
   void check_opcodes() {
-    walk_opcodes(scope,
+    walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {
         if (insn->has_type()) {

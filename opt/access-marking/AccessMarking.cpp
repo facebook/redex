@@ -35,8 +35,9 @@ size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
   return n_classes_finalized;
 }
 
-const DexMethod* find_override(
-    const DexMethod* method, const DexClass* cls, const ClassHierarchy& ch) {
+const DexMethod* find_override(const DexMethod* method,
+                               const DexClass* cls,
+                               const ClassHierarchy& ch) {
   TypeSet children;
   get_all_children(ch, cls->get_type(), children);
   for (auto const& childtype : children) {
@@ -79,9 +80,7 @@ std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
 }
 
 std::unordered_set<DexMethod*> find_private_methods(
-  const std::vector<DexClass*>& scope,
-  const std::vector<DexMethod*>& cv
-) {
+    const std::vector<DexClass*>& scope, const std::vector<DexMethod*>& cv) {
   std::unordered_set<DexMethod*> candidates;
   for (auto m : cv) {
     TRACE(ACCESS, 3, "Considering for privatization: %s\n", SHOW(m));
@@ -89,39 +88,36 @@ std::unordered_set<DexMethod*> find_private_methods(
       candidates.emplace(m);
     }
   }
-  walk_opcodes(
-    scope,
-    [](DexMethod*) { return true; },
-    [&](DexMethod* caller, IRInstruction* inst) {
-      if (!inst->has_method()) return;
-      auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
-      if (callee == nullptr || callee->get_class() == caller->get_class()) {
-        return;
-      }
-      candidates.erase(callee);
-    }
-  );
+  walk::opcodes(
+      scope,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* caller, IRInstruction* inst) {
+        if (!inst->has_method()) return;
+        auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
+        if (callee == nullptr || callee->get_class() == caller->get_class()) {
+          return;
+        }
+        candidates.erase(callee);
+      });
   return candidates;
 }
 
-void fix_call_sites_private(
-  const std::vector<DexClass*>& scope,
-  const std::unordered_set<DexMethod*>& privates
-) {
-  walk_opcodes(
-    scope,
-    [](DexMethod*) { return true; },
-    [&](DexMethod*, IRInstruction* inst) {
-      if (!inst->has_method()) return;
-      auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
+void fix_call_sites_private(const std::vector<DexClass*>& scope,
+                            const std::unordered_set<DexMethod*>& privates) {
+  walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
+    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+      IRInstruction* insn = mie.insn;
+      if (!insn->has_method()) continue;
+      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      // should be safe to read `privates` here because there are no writers
       if (callee != nullptr && privates.count(callee)) {
-        inst->set_method(callee);
+        insn->set_method(callee);
         if (!is_static(callee)) {
-          inst->set_opcode(OPCODE_INVOKE_DIRECT);
+          insn->set_opcode(OPCODE_INVOKE_DIRECT);
         }
       }
     }
-  );
+  });
 }
 
 void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
@@ -134,13 +130,11 @@ void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
     cls->add_method(method);
   }
 }
-}
+} // namespace
 
-void AccessMarkingPass::run_pass(
-  DexStoresVector& stores,
-  ConfigFiles& cfg,
-  PassManager& pm
-) {
+void AccessMarkingPass::run_pass(DexStoresVector& stores,
+                                 ConfigFiles& cfg,
+                                 PassManager& pm) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);

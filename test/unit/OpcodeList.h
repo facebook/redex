@@ -13,4 +13,6 @@
 
 #include "DexInstruction.h"
 
-extern std::vector<DexOpcode> all_opcodes;
+extern std::vector<DexOpcode> all_dex_opcodes;
+
+extern std::vector<IROpcode> all_opcodes;

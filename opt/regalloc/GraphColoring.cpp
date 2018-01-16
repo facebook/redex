@@ -96,9 +96,9 @@ RangeSet init_range_set(IRCode* code) {
     auto op = insn->opcode();
     bool is_range{false};
     if (op == OPCODE_FILLED_NEW_ARRAY) {
-      is_range = insn->srcs_size() > opcode::NON_RANGE_MAX;
+      is_range = insn->srcs_size() > dex_opcode::NON_RANGE_MAX;
     } else if (is_invoke(op)) {
-      is_range = sum_src_sizes(insn) > opcode::NON_RANGE_MAX;
+      is_range = sum_src_sizes(insn) > dex_opcode::NON_RANGE_MAX;
     }
     if (is_range) {
       range_set.emplace(insn);
@@ -308,7 +308,7 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   params_spill_early += that.params_spill_early;
 }
 
-static bool has_2addr_form(DexOpcode op) {
+static bool has_2addr_form(IROpcode op) {
   return op >= OPCODE_ADD_INT && op <= OPCODE_REM_DOUBLE;
 }
 
@@ -658,7 +658,7 @@ reg_t max_value_for_src(const interference::Graph& ig,
                         const IRInstruction* insn,
                         size_t src_index) {
   auto& node = ig.get_node(insn->src(src_index));
-  auto max_value = max_unsigned_value(insn->src_bit_width(src_index));
+  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
   if (is_invoke(insn->opcode()) && node.width() == 2) {
     // We need to reserve one vreg for denormalization. See the
     // comments in GraphBuilder::update_node_constraints() for details.

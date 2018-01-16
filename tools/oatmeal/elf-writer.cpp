@@ -110,6 +110,7 @@ void ElfWriter::build(InstructionSet isa,
     break;
 
   case OatVersion::V_124:
+  case OatVersion::V_131:
     // First 4k is reserved for ELF header and program headers.
     next_offset_ = 0x1000;
     next_addr_ = 0x1000;
@@ -178,6 +179,7 @@ unsigned int ElfWriter::get_num_dynsymbols() const {
     return 5;
 
   case OatVersion::V_124:
+  case OatVersion::V_131:
     // There are 3 symbols in the dynsym section:
     // 0: Empty
     // 1: oatdata
@@ -279,8 +281,8 @@ static int get_strtab_alignment(OatVersion version) {
   case OatVersion::V_079:
   case OatVersion::V_088:
   case OatVersion::V_124:
+  case OatVersion::V_131:
     return 0x1000;
-
   case OatVersion::UNKNOWN:
   default: {
     fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
@@ -299,8 +301,8 @@ static Elf32_Word get_str_entsize(OatVersion version) {
   case OatVersion::V_079:
   case OatVersion::V_088:
   case OatVersion::V_124:
+  case OatVersion::V_131:
     return 0;
-
   case OatVersion::UNKNOWN:
   default: {
     fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
@@ -600,11 +602,11 @@ void ElfWriter::write_hash(FileHandle& fh) {
   }
   case OatVersion::V_079:
   case OatVersion::V_088:
-  case OatVersion::V_124: {
+  case OatVersion::V_124:
+  case OatVersion::V_131: {
     // Everything goes in 1 bucket, chained.
     hash.push_back(1);
     hash.push_back(num_dynsymbols); // Number of chains.
-
     hash.push_back(1);
     hash.push_back(0);
     for (unsigned int i = 1; i < num_dynsymbols - 1; i++) {
@@ -677,6 +679,7 @@ unsigned int ElfWriter::get_num_program_headers() const {
   case OatVersion::V_079:
   case OatVersion::V_088:
   case OatVersion::V_124:
+  case OatVersion::V_131:
     return 6;
 
   case OatVersion::UNKNOWN:
@@ -741,7 +744,8 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
                                       0x1000});
   }
   // fallthrough
-  case OatVersion::V_124: {
+  case OatVersion::V_124:
+  case OatVersion::V_131: {
     // LOAD dynstr, dynsym, hash
     const auto dynstr_offset = section_headers_.at(dynstr_idx_).sh_offset;
     const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;

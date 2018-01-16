@@ -19,9 +19,9 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
+#include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // PeepholeOptimizer implementation
@@ -430,29 +430,27 @@ struct Matcher {
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
       assert(replace.kind == DexPattern::Kind::method);
-      return (new IRInstruction((DexOpcode)opcode))
+      return (new IRInstruction((IROpcode)opcode))
           ->set_method(replace.method)
           ->set_arg_word_count(replace.srcs.size());
 
     case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_16:
+    case OPCODE_MOVE:
     case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT:
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_NEG_INT:
       assert(replace.kind == DexPattern::Kind::none);
-      return new IRInstruction((DexOpcode)opcode);
+      return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_CONST_STRING:
       assert(replace.kind == DexPattern::Kind::string);
       return new IRInstruction(OPCODE_CONST_STRING);
 
-    case OPCODE_CONST_4:
-    case OPCODE_CONST_16:
     case OPCODE_CONST:
       assert(replace.kind == DexPattern::Kind::literal);
-      return new IRInstruction((DexOpcode)opcode);
+      return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_IPUT:
     case OPCODE_IPUT_BYTE:
@@ -469,7 +467,7 @@ struct Matcher {
     case OPCODE_IGET_WIDE:
     case OPCODE_IGET_OBJECT:
       assert(replace.kind == DexPattern::Kind::field);
-      return new IRInstruction(static_cast<DexOpcode>(opcode));
+      return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
     always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
@@ -779,18 +777,18 @@ DexPattern const_literal(uint16_t opcode, Register dest, Literal literal) {
 };
 
 DexPattern const_wide(Register dest, Literal literal) {
-  return {{OPCODE_CONST_WIDE_16, OPCODE_CONST_WIDE_32, OPCODE_CONST_WIDE},
+  return {{OPCODE_CONST_WIDE},
           {},
           {dest},
           literal};
 };
 
 DexPattern const_integer(Register dest, Literal literal) {
-  return {{OPCODE_CONST_4, OPCODE_CONST_16, OPCODE_CONST}, {}, {dest}, literal};
+  return {{OPCODE_CONST}, {}, {dest}, literal};
 };
 
 DexPattern const_float(Register dest, Literal literal) {
-  return {{OPCODE_CONST_4, OPCODE_CONST}, {}, {dest}, literal};
+  return {{OPCODE_CONST}, {}, {dest}, literal};
 };
 
 DexPattern const_char(Register dest, Literal literal) {
@@ -878,7 +876,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result(Register::B)},
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
-        const_literal(OPCODE_CONST_16, Register::B, Literal::Length_String_A)}},
+        const_literal(OPCODE_CONST, Register::B, Literal::Length_String_A)}},
 
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing
@@ -1007,7 +1005,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A),
+        const_literal(OPCODE_CONST, Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "Z"),
         move_result_object(Register::E)},
        // pre opt write order: B, C, D, E
@@ -1017,7 +1015,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::B),
         move_object(Register::C, Register::A), // maybe dead
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A), // maybe dead
+        const_literal(OPCODE_CONST, Register::D, Literal::A), // maybe dead
         move_object(Register::E, Register::C)}}, // maybe dead
       // post opt write order: B, B, C, D, E
 
@@ -1026,7 +1024,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A),
+        const_literal(OPCODE_CONST, Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "Z")},
        // pre opt write order: B, C, D
        {const_string(String::concat_string_A_boolean_A),
@@ -1035,7 +1033,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::B),
         move_object(Register::C, Register::A), // maybe dead
-        const_literal(OPCODE_CONST_4, Register::D, Literal::A)}}, // maybe dead
+        const_literal(OPCODE_CONST, Register::D, Literal::A)}}, // maybe dead
       // post opt write order: B, B, C, D
 
       // It coalesces append(string) and append(long int) into append(string).
@@ -1092,15 +1090,15 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::B), // maybe dead
         move_result_pseudo_object(Register::B),
         const_literal(
-            OPCODE_CONST_4, Register::C, Literal::Compare_Strings_A_B)}},
+            OPCODE_CONST, Register::C, Literal::Compare_Strings_A_B)}},
 
       // It replaces valueOf on a boolean value by "true" or "false" directly.
       // String.valueof(true/false) ==> "true" or "false"
       {"Replace_ValueOfBoolean",
-       {const_literal(OPCODE_CONST_4, Register::A, Literal::A),
+       {const_literal(OPCODE_CONST, Register::A, Literal::A),
         invoke_String_valueOf(Register::A, "Z"),
         move_result_object(Register::B)},
-       {const_literal(OPCODE_CONST_4, Register::A, Literal::A), // maybe dead
+       {const_literal(OPCODE_CONST, Register::A, Literal::A), // maybe dead
         const_string(String::boolean_A_to_string),
         move_result_pseudo_object(Register::B)}},
 
@@ -1184,12 +1182,12 @@ static bool second_get_non_volatile(const Matcher& m) {
   return !(field->get_access() & ACC_VOLATILE);
 }
 
-DexPattern put_x_op(DexOpcode op_code,
+DexPattern put_x_op(IROpcode op_code,
                     Register src,
                     Register obj_register,
                     Field field) {
   static const auto* kPutOpcodes =
-      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
           {OPCODE_IPUT,
            OPCODE_IPUT_WIDE,
            OPCODE_IPUT_OBJECT,
@@ -1198,15 +1196,15 @@ DexPattern put_x_op(DexOpcode op_code,
            OPCODE_IPUT_BYTE,
            OPCODE_IPUT_BOOLEAN});
   if (kPutOpcodes->find(op_code) == kPutOpcodes->end()) {
-    always_assert_log(false, "Not supported DexOpcode");
+    always_assert_log(false, "Not supported IROpcode");
   }
 
   return {{op_code}, {src, obj_register}, {}, field};
 }
 
-DexPattern get_x_op(DexOpcode op_code, Register src, Field field) {
+DexPattern get_x_op(IROpcode op_code, Register src, Field field) {
   static const auto* kGetOpcodes =
-      new std::unordered_set<DexOpcode, Matcher::EnumClassHash>(
+      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
           {OPCODE_IGET,
            OPCODE_IGET_WIDE,
            OPCODE_IGET_OBJECT,
@@ -1215,24 +1213,23 @@ DexPattern get_x_op(DexOpcode op_code, Register src, Field field) {
            OPCODE_IGET_BYTE,
            OPCODE_IGET_BOOLEAN});
   if (kGetOpcodes->find(op_code) == kGetOpcodes->end()) {
-    always_assert_log(false, "Not supported DexOpcode");
+    always_assert_log(false, "Not supported IROpcode");
   }
 
   return {{op_code}, {src}, {}, field};
 }
 
-std::vector<DexPattern> put_x_patterns(DexOpcode put_code) {
+std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
   return {put_x_op(put_code, Register::A, Register::B, Field::A)};
 }
 
-std::vector<DexPattern> put_get_x_patterns(DexOpcode put_code,
-                          DexOpcode get_code,
-                          DexPattern (*move_pseudo_func)(Register reg)) {
-  return {
-    put_x_op(put_code, Register::A, Register::B, Field::A),
-    get_x_op(get_code, Register::B, Field::A),
-    move_pseudo_func(Register::A)
-  };
+std::vector<DexPattern> put_get_x_patterns(
+    IROpcode put_code,
+    IROpcode get_code,
+    DexPattern (*move_pseudo_func)(Register reg)) {
+  return {put_x_op(put_code, Register::A, Register::B, Field::A),
+          get_x_op(get_code, Register::B, Field::A),
+          move_pseudo_func(Register::A)};
 }
 
 const std::vector<Pattern>& get_putget_patterns() {
@@ -1299,21 +1296,19 @@ DexPattern add_lit(Register src, Register dst) {
 }
 
 const std::vector<Pattern>& get_arith_patterns() {
-  // Note: these arith patterns emit full 16-bit reg indices
-  // Another pass will tighten these when possible
   static const std::vector<Pattern> kArithPatterns = {
       // Replace *1 with move
       {"Arith_MulLit_Pos1",
        {mul_lit(Register::A, Register::B)},
        {// x = y * 1 -> x = y
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<1>},
 
       // Replace /1 with move
       {"Arith_DivLit_Pos1",
        {div_lit(Register::A, Register::B)},
        {// x = y * 1 -> x = y
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<1>},
 
       // Replace multiplies by -1 with negation
@@ -1334,7 +1329,7 @@ const std::vector<Pattern>& get_arith_patterns() {
       {"Arith_AddLit_0",
        {add_lit(Register::A, Register::B)},
        {// Eliminates the literal-carrying halfword
-        {{OPCODE_MOVE_16}, {Register::A}, {Register::B}}},
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<0>},
   };
   return kArithPatterns;
@@ -1519,7 +1514,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
   std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  walk_methods_parallel<PeepholeOptimizer*, std::nullptr_t>(
+  walk::parallel::reduce_methods<PeepholeOptimizer*, std::nullptr_t>(
       scope,
       [](PeepholeOptimizer*& ph, DexMethod* m) { // walker
         ph->run_method(m);

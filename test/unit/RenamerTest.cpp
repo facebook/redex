@@ -122,7 +122,7 @@ TEST(NoOverload, empty) {
   EXPECT_EQ(2, rename_virtuals(scope));
   const auto a_t = DexType::get_type("LA;");
   const auto b_t = DexType::get_type("LB;");
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -152,7 +152,7 @@ TEST(Override, empty) {
 
   print_scope(scope);
   EXPECT_EQ(5, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -191,7 +191,7 @@ TEST(OverrideOverload, empty) {
 
   print_scope(scope);
   EXPECT_EQ(9, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -248,7 +248,7 @@ TEST(Interface, empty) {
 
   print_scope(scope);
   EXPECT_EQ(10, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -320,7 +320,7 @@ TEST(Interface1, empty) {
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -360,7 +360,7 @@ TEST(Interface2, empty) {
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -400,7 +400,7 @@ TEST(Interface3, empty) {
 
   print_scope(scope);
   EXPECT_EQ(17, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -442,7 +442,7 @@ TEST(Interface3Miranda, empty) {
 
   print_scope(scope);
   EXPECT_EQ(16, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -486,7 +486,7 @@ TEST(Interface3MirandaMultiIntf, empty) {
 
   print_scope(scope);
   EXPECT_EQ(17, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -535,7 +535,7 @@ TEST(Interface3IntfOverride, empty) {
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         ASSERT_NE(meth->get_name(), DexString::make_string("f"));
         ASSERT_NE(meth->get_name(), DexString::make_string("g"));
@@ -589,7 +589,7 @@ TEST(Interface3IntfOverEscape, empty) {
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));
-  walk_methods(scope,
+  walk::methods(scope,
       [&](DexMethod* meth) {
         if (meth->get_name() == DexString::make_string("f")) {
           EXPECT_TRUE(meth->get_class() == DexType::get_type("LM;"));

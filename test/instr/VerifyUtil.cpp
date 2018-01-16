@@ -42,7 +42,7 @@ DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
   return it == dmethods.end() ? nullptr : *it;
 }
 
-DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
+DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
     const char* target_mname) {
   auto insns = m->get_dex_code()->get_instructions();
   return find_invoke(insns.begin(), insns.end(), opcode, target_mname);
@@ -51,7 +51,7 @@ DexOpcodeMethod* find_invoke(const DexMethod* m, uint32_t opcode,
 DexOpcodeMethod* find_invoke(
     std::vector<DexInstruction*>::iterator begin,
     std::vector<DexInstruction*>::iterator end,
-    uint32_t opcode,
+    DexOpcode opcode,
     const char* target_mname) {
   auto it = std::find_if(begin, end,
     [opcode, target_mname](DexInstruction* insn) {
@@ -63,27 +63,6 @@ DexOpcodeMethod* find_invoke(
       return mname == DexString::get_string(target_mname);
     });
   return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
-}
-
-IRInstruction* find_instruction(DexMethod* m, uint32_t opcode) {
-  m->balloon();
-  auto insns = InstructionIterable(m->get_code());
-  return find_instruction(insns.begin(), insns.end(), opcode);
-}
-
-IRInstruction* find_instruction(
-    InstructionIterator begin,
-    InstructionIterator end,
-    uint32_t opcode) {
-  auto it = std::find_if(begin, end,
-    [opcode](MethodItemEntry& mie) {
-      IRInstruction* insn = mie.insn;
-      if (mie.insn->opcode() != opcode) {
-        return false;
-      }
-      return true;
-    });
-  return it == end ? nullptr : (*it).insn;
 }
 
 // Given a semicolon delimited list of extracted files from the APK, return a
@@ -106,4 +85,13 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
     }
   }
   return files;
+}
+
+DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
+  auto& insns = m->get_dex_code()->get_instructions();
+  auto it =
+      std::find_if(insns.begin(), insns.end(), [opcode](DexInstruction* insn) {
+        return insn->opcode() == opcode;
+      });
+  return it == insns.end() ? nullptr : *it;
 }

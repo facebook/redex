@@ -15,26 +15,21 @@ class ReferencedState {
  private:
   bool m_bytype{false};
   bool m_bystring{false};
-  /* m_computed is a "clear-only" flag;  If one of the reflects is
-   * non-computed, all subsequents should be non-computed.
-   * Reflect marking which is computed from code means that
-   * it can/should be recomputed periodically when doing
-   * optimizations.  For instance, deleting a method with
-   * a reflection target will then allow that reflection
-   * target to be re-evaluated.
-   */
+  // m_computed is a "clear-only" flag; If one of the reflects is non-computed,
+  // all subsequents should be non-computed. Reflect marking which is computed
+  // from code means that it can/should be recomputed periodically when doing
+  // optimizations. For instance, deleting a method with a reflection target
+  // will then allow that reflection target to be re-evaluated.
   bool m_computed{true};
-  bool m_seed{false};
 
   // ProGuard keep settings
+  // Note: includedescriptorclasses and allowoptimization are not implemented.
+  //       The parser will take them, but we don't keep here.
+  //
   // Specify classes and class members that are entry-points.
   bool m_keep{false};
-  // Useful for keeping native methods.
-  bool m_includedescriptorclasses{false};
   // Specify items that can be deleted.
   bool m_allowshrinking{false};
-  // Not used by the Redex ProGuard rule matcher.
-  bool m_allowoptimization{false};
   // Not used by the Redex ProGuard rule matcher.
   bool m_allowobfuscation{false};
   // assumenosideeffects allows certain methods to be removed.
@@ -59,17 +54,11 @@ class ReferencedState {
            !m_allowshrinking;
   }
 
-  /**
-   * Is this item a "seed" according to ProGuard's analysis?
-   */
-  bool is_seed() const { return m_seed; }
-
   // ProGuard keep options
   bool keep() const { return m_keep; }
+
   // ProGaurd keep option modifiers
-  bool includedescriptorclasses() const { return m_includedescriptorclasses; }
   bool allowshrinking() const { return m_allowshrinking; }
-  bool allowoptimization() const { return m_allowoptimization; }
   bool allowobfuscation() const { return m_allowobfuscation; }
   bool assumenosideeffects() const { return m_assumenosideeffects; }
 
@@ -86,35 +75,26 @@ class ReferencedState {
     m_bytype = m_bystring = true;
     m_computed = m_computed && from_code;
   }
-
-  bool is_referenced_by_string() { return m_bystring; }
+  bool is_referenced_by_string() const { return m_bystring; }
 
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
+  bool is_referenced_by_type() const { return m_bytype; }
 
-  bool is_referenced_by_type() { return m_bytype; }
-
-  /* Called before recompute */
+  // Called before recompute
   void clear_if_compute() {
     if (m_computed) {
       m_bytype = m_bystring = false;
     }
   }
 
-  // A class marked to be kept from the list of seeds from ProGuard
-  void ref_by_seed() { m_seed = true; }
-
   // ProGuard keep information.
   void set_keep() { m_keep = true; }
 
   void set_keep_name() { m_keep_name = true; }
 
-  void set_includedescriptorclasses() { m_includedescriptorclasses = true; }
-
   void set_allowshrinking() { m_allowshrinking = true; }
   void unset_allowshrinking() { m_allowshrinking = false; }
-
-  void set_allowoptimization() { m_allowoptimization = true; }
 
   void set_allowobfuscation() { m_allowobfuscation = true; }
   void unset_allowobfuscation() { m_allowobfuscation = false; }

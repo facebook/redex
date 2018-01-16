@@ -21,14 +21,10 @@ void StringSimplificationPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& /* cfg */,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  walk_methods(scope, [&](DexMethod* m) {
+  walk::code(scope, [&](DexMethod* m, IRCode& code) {
     TRACE(STR_SIMPLE, 8, "Method: %s\n", SHOW(m));
-    if (!m->get_code()) {
-      return;
-    }
-    auto code = m->get_code();
-    code->build_cfg();
-    StringIterator iter(code, code->cfg().entry_block());
+    code.build_cfg();
+    StringIterator iter(&code, code.cfg().entry_block());
     iter.run(StringProdEnvironment());
     iter.simplify();
     mgr.incr_metric(NUM_CONST_STRINGS_ADDED, iter.get_strings_added());

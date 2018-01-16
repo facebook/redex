@@ -18,11 +18,11 @@
 
 #include "AbstractDomain.h"
 #include "ControlFlow.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 
 std::string AccessPath::to_string() const {
@@ -189,9 +189,7 @@ class Analyzer final
       // initialization of the fixpoint iteration. There's nothing more to do.
       break;
     }
-    case OPCODE_MOVE_OBJECT:
-    case OPCODE_MOVE_OBJECT_FROM16:
-    case OPCODE_MOVE_OBJECT_16: {
+    case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }

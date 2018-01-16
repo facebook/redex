@@ -138,7 +138,7 @@ TEST(SynthTest1, synthetic) {
           for (auto& mie : InstructionIterable(method->get_code())) {
             auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
-            ASSERT_NE(instruction->opcode(), OPCODE_CONST_4);
+            ASSERT_NE(instruction->opcode(), OPCODE_CONST);
   			  }
   			}
       }

@@ -21,9 +21,9 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "ParallelWalkers.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "Walkers.h"
 
 /*
  * This pass removes blocks that are duplicates in a method.
@@ -106,18 +106,13 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   void run() {
-    walk_methods_parallel_simple(m_scope, [this](DexMethod* method) {
+    walk::parallel::code(m_scope, [this](DexMethod* method, IRCode& code) {
       if (m_config.method_black_list.count(method) != 0) {
         return;
       }
+      code.build_cfg();
 
-      IRCode* code = method->get_code();
-      if (code == nullptr) {
-        return;
-      }
-      code->build_cfg();
-
-      duplicates_t dups = collect_duplicates(code);
+      duplicates_t dups = collect_duplicates(&code);
       if (dups.size() > 0) {
         record_stats(dups);
         deduplicate(dups, method);
@@ -285,7 +280,8 @@ class DedupBlocksImpl {
     always_assert_log(has_opcodes(edge->src()), "need opcodes");
     const auto& last_of_block = last_opcode(edge->src());
 
-    return edge->type() == EDGE_GOTO && !is_goto(last_of_block->insn->opcode());
+    return edge->type() == EDGE_GOTO &&
+           last_of_block->insn->opcode() != OPCODE_GOTO;
   }
 
   void record_stats(const duplicates_t& duplicates) {

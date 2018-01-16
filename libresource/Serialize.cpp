@@ -27,13 +27,13 @@
  }
 
  void push_short(android::Vector<char>& cVec, uint16_t data) {
-   auto swapped = dtohs(data);
+   auto swapped = htods(data);
    cVec.push_back(swapped);
    cVec.push_back(swapped >> 8);
  }
 
  void push_long(android::Vector<char>& cVec, uint32_t data) {
-   auto swapped = dtohl(data);
+   auto swapped = htodl(data);
    cVec.push_back(swapped);
    cVec.push_back(swapped >> 8);
    cVec.push_back(swapped >> 16);

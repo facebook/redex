@@ -20,19 +20,6 @@ RedundantCheckCastRemover::RedundantCheckCastRemover(
     PassManager& mgr, const std::vector<DexClass*>& scope)
     : m_mgr(mgr), m_scope(scope) {}
 
-void remove_instructions(
-    const std::unordered_map<DexMethod*, std::vector<IRInstruction*>>&
-        to_remove) {
-  for (auto& method_instrs : to_remove) {
-    DexMethod* method = method_instrs.first;
-    const auto& instrs = method_instrs.second;
-    auto code = method->get_code();
-    for (auto instr : instrs) {
-      code->remove_opcode(instr);
-    }
-  }
-}
-
 void RedundantCheckCastRemover::run() {
   auto match = std::make_tuple(m::invoke(),
                                m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
@@ -41,33 +28,28 @@ void RedundantCheckCastRemover::run() {
 
   std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
-  auto& mgr =
-      this->m_mgr; // so the lambda doesn't have to capture all of `this`
-  walk_matching_opcodes_in_block(
+  std::atomic<uint32_t> num_check_casts_removed;
+  walk::parallel::matching_opcodes_in_block(
       m_scope,
       match,
-      [&mgr, &to_remove](const DexMethod* method,
-                         IRCode* /* unused */,
-                         Block* /* unused */,
-                         size_t size,
-                         IRInstruction** insns) {
-        if (RedundantCheckCastRemover::can_remove_check_cast(insns, size)) {
-          to_remove[const_cast<DexMethod*>(method)].push_back(insns[2]);
-          mgr.incr_metric("redundant_check_casts_removed", 1);
+      [](DexMethod* method, const std::vector<IRInstruction*>& insns) {
+        if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
+          IRInstruction* check_cast = insns[2];
+          method->get_code()->remove_opcode(check_cast);
 
-          TRACE(PEEPHOLE, 8, "found redundant check cast\n");
-          for (size_t i = 0; i < size; ++i) {
-            TRACE(PEEPHOLE, 8, "%s\n", SHOW(insns[i]));
+          TRACE(PEEPHOLE, 8, "redundant check cast in %s\n", SHOW(method));
+          for (IRInstruction* insn : insns) {
+            TRACE(PEEPHOLE, 8, "  %s\n", SHOW(insn));
           }
         }
       });
 
-  remove_instructions(to_remove);
+  m_mgr.incr_metric("redundant_check_casts_removed", num_check_casts_removed);
 }
 
-bool RedundantCheckCastRemover::can_remove_check_cast(IRInstruction** insns,
-                                                      size_t size) {
-  always_assert(size == 4);
+bool RedundantCheckCastRemover::can_remove_check_cast(
+    const std::vector<IRInstruction*>& insns) {
+  always_assert(insns.size() == 4);
   IRInstruction* invoke_op = insns[0];
   IRInstruction* move_result_op = insns[1];
   IRInstruction* check_cast_op = insns[2];

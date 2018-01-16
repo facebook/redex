@@ -20,8 +20,8 @@ static void test_opcode(DexOpcode opcode) {
   const size_t src_count = insn.srcs_size();
   const bool has_dest = (insn.dests_size() > 0);
   const int dest_width =
-      has_dest ? opcode_impl::dest_bit_width(insn.opcode()) : 0;
-  const bool dest_is_src0 = opcode::dest_is_src(insn.opcode());
+      has_dest ? dex_opcode::dest_bit_width(insn.opcode()) : 0;
+  const bool dest_is_src0 = dex_opcode::dest_is_src(insn.opcode());
 
   // Populate source test values
   // We want to ensure that setting registers don't stomp each other
@@ -29,7 +29,7 @@ static void test_opcode(DexOpcode opcode) {
   uint16_t dest_value = (1U << dest_width) - 1;
   uint16_t src_values[kMaxSources];
   for (int src_idx = 0; src_idx < src_count; src_idx++) {
-    int src_width = opcode_impl::src_bit_width(insn.opcode(), src_idx);
+    int src_width = dex_opcode::src_bit_width(insn.opcode(), src_idx);
     EXPECT_GE(src_width, 0) << text;
     uint16_t bits = (src_idx + 5);
     bits |= (bits << 4);
@@ -63,7 +63,7 @@ static void test_opcode(DexOpcode opcode) {
     EXPECT_EQ(insn.dest(), max) << text;
   }
   for (int i = 0; i < src_count; i++) {
-    uint16_t max = (1U << opcode_impl::src_bit_width(insn.opcode(), i)) - 1;
+    uint16_t max = (1U << dex_opcode::src_bit_width(insn.opcode(), i)) - 1;
     insn.set_src(i, 0);
     EXPECT_EQ(insn.src(i), 0) << text;
     insn.set_src(i, max);
@@ -72,7 +72,7 @@ static void test_opcode(DexOpcode opcode) {
 }
 
 TEST(Registers, RoundTrip) {
-  for (DexOpcode op : all_opcodes) {
+  for (auto op : all_dex_opcodes) {
     test_opcode(op);
   }
 }

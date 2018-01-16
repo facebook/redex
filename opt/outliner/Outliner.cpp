@@ -161,15 +161,12 @@ void Outliner::run_pass(DexStoresVector& stores,
 
   // Collect all throws we should outline
   std::vector<outlined_t> outlined_throws;
-  walk_matching_opcodes_in_block(
+  walk::matching_opcodes_in_block(
       scope,
       match,
-      [&](const DexMethod* method,
-          IRCode* mt,
-          Block* bb,
-          size_t n,
-          IRInstruction** insns) {
-        always_assert(n == 6);
+      [&](DexMethod* method,
+          const std::vector<IRInstruction*>& insns) {
+        always_assert(insns.size() == 6);
 
         auto new_instance = insns[0];
         auto new_instance_result = insns[1];
@@ -183,9 +180,8 @@ void Outliner::run_pass(DexStoresVector& stores,
             new_instance_result->dest() == throwex->src(0)) {
           TRACE(OUTLINE,
                 1,
-                "Found pattern in %s (%p):\n  %s\n  %s\n  %s\n  %s\n",
+                "Found pattern in %s:\n  %s\n  %s\n  %s\n  %s\n",
                 SHOW(method),
-                bb,
                 SHOW(new_instance),
                 SHOW(const_string),
                 SHOW(invoke_direct),
@@ -214,10 +210,11 @@ void Outliner::run_pass(DexStoresVector& stores,
                               const_string->get_string()};
           outlined_throws.emplace_back(outlined);
 
-          mt->replace_opcode(new_instance, const_int_extype);
-          mt->replace_opcode(const_string, invoke_static);
-          mt->replace_opcode_with_infinite_loop(invoke_direct);
-          mt->remove_opcode(throwex);
+          IRCode* code = method->get_code();
+          code->replace_opcode(new_instance, const_int_extype);
+          code->replace_opcode(const_string, invoke_static);
+          code->replace_opcode_with_infinite_loop(invoke_direct);
+          code->remove_opcode(throwex);
         }
       });
 

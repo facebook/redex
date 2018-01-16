@@ -31,11 +31,11 @@ struct DevirtualizerConfigs {
 };
 
 struct DevirtualizerMetrics {
-  uint32_t num_methods_not_using_this;
-  uint32_t num_methods_using_this;
-  uint32_t num_virtual_calls;
-  uint32_t num_direct_calls;
-  uint32_t num_super_calls;
+  uint32_t num_methods_not_using_this{0};
+  uint32_t num_methods_using_this{0};
+  uint32_t num_virtual_calls{0};
+  uint32_t num_direct_calls{0};
+  uint32_t num_super_calls{0};
 };
 
 class MethodDevirtualizer {
@@ -67,9 +67,9 @@ class MethodDevirtualizer {
 
  private:
   DevirtualizerConfigs m_config;
-  DevirtualizerMetrics m_metrics = {0, 0, 0, 0, 0};
+  DevirtualizerMetrics m_metrics;
 
-  void reset_metrics() { m_metrics = {0, 0, 0, 0, 0}; }
+  void reset_metrics() { m_metrics = DevirtualizerMetrics(); }
 
   void staticize_methods_using_this(
       const std::vector<DexClass*>& scope,

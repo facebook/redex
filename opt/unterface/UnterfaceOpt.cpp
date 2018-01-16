@@ -124,7 +124,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
       for (size_t i = 0; i < unterface.impls.size(); i++) {
         auto impl = unterface.impls[i];
         if (impl->get_type() == cls) {
-          auto load = new IRInstruction(OPCODE_CONST_16);
+          auto load = new IRInstruction(OPCODE_CONST);
           load->set_dest(0);
           load->set_literal(static_cast<int32_t>(i));
           invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
@@ -176,7 +176,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
  */
 void update_impl_refereces(Scope& scope, Unterface& unterface) {
   std::vector<DexMethod*> to_change;
-  walk_code(scope,
+  walk::code(scope,
       [&](DexMethod* meth) {
         return !find_impl(meth->get_class(), unterface);
       },

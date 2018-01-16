@@ -144,7 +144,7 @@ DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   stores.emplace_back(std::move(root_store));
   DexMethodInfoMap result;
 
-  walk_methods(build_class_scope(stores), [&result](DexMethod* method) {
+  walk::methods(build_class_scope(stores), [&result](DexMethod* method) {
     auto key = show(method);
     always_assert(result.find(key) == end(result));
     const auto* code = method->get_dex_code();

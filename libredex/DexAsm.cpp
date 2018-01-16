@@ -12,18 +12,15 @@
 
 namespace dex_asm {
 
-bool unsupported(DexOpcode opcode) {
+bool unsupported(IROpcode opcode) {
   switch (opcode) {
   case OPCODE_CONST_STRING:
-  case OPCODE_CONST_STRING_JUMBO:
-
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
   case OPCODE_INSTANCE_OF:
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
-  case OPCODE_FILLED_NEW_ARRAY_RANGE:
 
   case OPCODE_IGET:
   case OPCODE_IGET_WIDE:
@@ -59,14 +56,9 @@ bool unsupported(DexOpcode opcode) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL_RANGE:
-  case OPCODE_INVOKE_SUPER_RANGE:
-  case OPCODE_INVOKE_DIRECT_RANGE:
-  case OPCODE_INVOKE_STATIC_RANGE:
-  case OPCODE_INVOKE_INTERFACE_RANGE:
-      return true;
-    default:
-      return false;
+    return true;
+  default:
+    return false;
   }
 }
 
@@ -75,9 +67,7 @@ void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
   if (insn->dests_size()) {
     always_assert(arg->tag == VREG);
     insn->set_dest(arg->v);
-    if (!opcode::dest_is_src(insn->opcode())) {
-      arg = std::next(arg);
-    }
+    ++arg;
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     always_assert(arg->tag == VREG);
@@ -101,14 +91,14 @@ void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
                     insn->opcode());
 }
 
-IRInstruction* dasm(DexOpcode opcode, std::initializer_list<Operand> args) {
+IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> args) {
   assert_log(!unsupported(opcode), "%s is unsupported", SHOW(opcode));
   auto insn = new IRInstruction(opcode);
   assemble(insn, args);
   return insn;
 }
 
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexString* string,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
@@ -117,7 +107,7 @@ IRInstruction* dasm(DexOpcode opcode,
   return insn;
 }
 
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexType* type,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
@@ -126,7 +116,7 @@ IRInstruction* dasm(DexOpcode opcode,
   return insn;
 }
 
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexFieldRef* field,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
@@ -135,7 +125,7 @@ IRInstruction* dasm(DexOpcode opcode,
   return insn;
 }
 
-IRInstruction* dasm(DexOpcode opcode,
+IRInstruction* dasm(IROpcode opcode,
                     DexMethodRef* method,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);

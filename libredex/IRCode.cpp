@@ -21,9 +21,9 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
-#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "Transform.h"
 #include "Util.h"
 
@@ -187,7 +187,8 @@ opcode::Branchingness MethodItemEntry::branchingness() const {
   case MFLOW_OPCODE:
     return opcode::branchingness(insn->opcode());
   case MFLOW_DEX_OPCODE:
-    return opcode::branchingness(dex_insn->opcode());
+    always_assert_log(false, "Not expecting dex instructions here");
+    not_reached();
   default:
     return opcode::BRANCH_NONE;
   }
@@ -287,15 +288,15 @@ int bytecount(int32_t v) {
 
 DexOpcode goto_for_offset(int32_t offset) {
   if (offset == 0) {
-    return OPCODE_GOTO_32;
+    return DOPCODE_GOTO_32;
   }
   switch (bytecount(offset)) {
   case 1:
-    return OPCODE_GOTO;
+    return DOPCODE_GOTO;
   case 2:
-    return OPCODE_GOTO_16;
+    return DOPCODE_GOTO_16;
   case 4:
-    return OPCODE_GOTO_32;
+    return DOPCODE_GOTO_32;
   default:
     always_assert_log(false, "Invalid bytecount %d", offset);
   }
@@ -345,16 +346,16 @@ static void insert_branch_target(FatMethod* fm,
 bool encode_offset(FatMethod* fm,
                    MethodItemEntry* branch_op_mie,
                    int32_t offset) {
-  DexOpcode bop = branch_op_mie->dex_insn->opcode();
-  if (is_goto(bop)) {
-    DexOpcode goto_op = goto_for_offset(offset);
+  auto bop = branch_op_mie->dex_insn->opcode();
+  if (dex_opcode::is_goto(bop)) {
+    auto goto_op = goto_for_offset(offset);
     if (goto_op != bop) {
       auto insn = branch_op_mie->dex_insn;
       branch_op_mie->dex_insn = new DexInstruction(goto_op);
       delete insn;
       return false;
     }
-  } else if (is_conditional_branch(bop)) {
+  } else if (dex_opcode::is_conditional_branch(bop)) {
     // if-* opcodes can only encode up to 16-bit offsets. To handle larger ones
     // we use a goto/32 and have the inverted if-* opcode skip over it. E.g.
     //
@@ -369,9 +370,9 @@ bool encode_offset(FatMethod* fm,
     //   nop
     if (bytecount(offset) > 2) {
       auto insn = branch_op_mie->dex_insn;
-      branch_op_mie->dex_insn = new DexInstruction(OPCODE_GOTO_32);
+      branch_op_mie->dex_insn = new DexInstruction(DOPCODE_GOTO_32);
 
-      DexOpcode inverted = opcode::invert_conditional_branch(bop);
+      auto inverted = dex_opcode::invert_conditional_branch(bop);
       MethodItemEntry* mei = new MethodItemEntry(new DexInstruction(inverted));
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         mei->dex_insn->set_src(i, insn->src(i));
@@ -387,7 +388,7 @@ bool encode_offset(FatMethod* fm,
       return false;
     }
   } else {
-    always_assert_log(bop == OPCODE_FILL_ARRAY_DATA,
+    always_assert_log(bop == DOPCODE_FILL_ARRAY_DATA,
                       "Unexpected opcode %s",
                       SHOW(*branch_op_mie));
   }
@@ -465,8 +466,8 @@ static void generate_branch_targets(
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_DEX_OPCODE) {
       auto insn = mentry->dex_insn;
-      if (is_branch(insn->opcode())) {
-        if (is_multi_branch(insn->opcode())) {
+      if (dex_opcode::is_branch(insn->opcode())) {
+        if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
           auto* fopcode = entry_to_data.at(fopcode_entry);
           shard_multi_target(fm, fopcode, mentry, bm);
@@ -551,7 +552,7 @@ void generate_load_params(const DexMethod* method,
     code->push_back(insn);
   }
   for (DexType* arg : args) {
-    DexOpcode op;
+    IROpcode op;
     auto prev_reg = param_reg;
     if (is_wide_type(arg)) {
       param_reg += 2;
@@ -576,10 +577,9 @@ void translate_dex_to_ir(
       continue;
     }
     auto* dex_insn = it->dex_insn;
-    auto op = dex_insn->opcode();
-    auto* insn = new IRInstruction(
-        opcode::has_range(op) ? opcode::no_range_version(op) : op);
-    always_assert(!is_fopcode(op));
+    auto dex_op = dex_insn->opcode();
+    auto op = opcode::from_dex_opcode(dex_op);
+    auto* insn = new IRInstruction(op);
 
     IRInstruction* move_result_pseudo{nullptr};
     if (insn->dests_size()) {
@@ -590,7 +590,7 @@ void translate_dex_to_ir(
             new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(dex_insn->src(0));
       } else if (dex_insn->dests_size()) {
-        DexOpcode move_op;
+        IROpcode move_op;
         if (opcode_impl::dest_is_wide(op)) {
           move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
         } else if (opcode_impl::dest_is_object(op)) {
@@ -607,18 +607,11 @@ void translate_dex_to_ir(
     for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
       insn->set_src(i, dex_insn->src(i));
     }
-    if (opcode::dest_is_src(op)) {
-      insn->set_opcode(convert_2to3addr(op));
-    }
-    if (opcode::has_literal(op)) {
-      insn->set_literal(dex_insn->get_literal());
-    }
-    if (opcode::has_range(op)) {
+    if (dex_opcode::has_range(dex_op)) {
       insn->set_arg_word_count(dex_insn->range_size());
       for (size_t i = 0; i < dex_insn->range_size(); ++i) {
         insn->set_src(i, dex_insn->range_base() + i);
       }
-      insn->set_opcode(opcode::no_range_version(op));
     }
     if (dex_insn->has_string()) {
       insn->set_string(
@@ -630,6 +623,8 @@ void translate_dex_to_ir(
     } else if (dex_insn->has_method()) {
       insn->set_method(
           static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+    } else if (dex_opcode::has_literal(dex_op)) {
+      insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       insn->set_data(entry_to_data.at(get_target(&*it, bm)));
     }
@@ -656,12 +651,13 @@ void balloon(DexMethod* method, FatMethod* fmethod) {
   uint32_t addr = 0;
   for (auto insn : *instructions) {
     MethodItemEntry* mei;
-    if (insn->opcode() == OPCODE_NOP || is_fopcode(insn->opcode())) {
+    if (insn->opcode() == DOPCODE_NOP ||
+        dex_opcode::is_fopcode(insn->opcode())) {
       // We have to insert dummy entries for these opcodes so that try items
       // and debug entries that are adjacent to them can find the right
       // address.
       mei = new MethodItemEntry();
-      if (is_fopcode(insn->opcode())) {
+      if (dex_opcode::is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       }
     } else {
@@ -851,7 +847,7 @@ void IRCode::remove_debug_line_info(Block* block) {
 }
 
 void IRCode::replace_opcode_with_infinite_loop(IRInstruction* from) {
-  IRInstruction* to = new IRInstruction(OPCODE_GOTO_32);
+  IRInstruction* to = new IRInstruction(OPCODE_GOTO);
   auto miter = m_fmethod->begin();
   for (; miter != m_fmethod->end(); miter++) {
     MethodItemEntry* mentry = &*miter;
@@ -961,7 +957,7 @@ void IRCode::remove_switch_case(IRInstruction* insn) {
     if (opcode::is_load_param(op)) {
       continue;
     }
-    assert_log(is_multi_branch(op), " Method is not a switch");
+    assert_log(is_switch(op), " Method is not a switch");
     switch_mei = &mei;
     break;
   }
@@ -1199,9 +1195,9 @@ uint16_t calc_outs_size(const IRCode* code) {
       continue;
     }
     auto insn = mie.dex_insn;
-    if (is_invoke_range(insn->opcode())) {
+    if (dex_opcode::is_invoke_range(insn->opcode())) {
       size = std::max(size, boost::numeric_cast<uint16_t>(insn->range_size()));
-    } else if (is_invoke(insn->opcode())) {
+    } else if (dex_opcode::is_invoke(insn->opcode())) {
       size = std::max(size, boost::numeric_cast<uint16_t>(insn->srcs_size()));
     }
   }
@@ -1235,15 +1231,15 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
  *
  *   .pos "LFoo;.a()V" Foo.java 123
  *   .pos "LFoo;.a()V" Foo.java 124 # this can be deleted
- *   const/4 v0 0
+ *   const v0 0
  *
  * 2) If we have two identical consecutive DexPositions, only the first one
  * needs to be emitted. Concretely:
  *
  *   .pos "LFoo;.a()V" Foo.java 123
- *   const/4 v0 0
+ *   const v0 0
  *   .pos "LFoo;.a()V" Foo.java 123 # this can be deleted
- *   const/4 v0 0
+ *   const v0 0
  *
  * Note that this pruning is not done as part of StripDebugInfoPass as that
  * pass needs to run before inlining. Pruning needs to be done after all
@@ -1347,7 +1343,7 @@ bool IRCode::try_sync(DexCode* code) {
     }
     if (mentry->type == MFLOW_DEX_OPCODE) {
       auto opcode = mentry->dex_insn->opcode();
-      if (is_multi_branch(opcode)) {
+      if (dex_opcode::is_switch(opcode)) {
         multi_branches.push_back(mentry);
       }
     }
@@ -1359,7 +1355,7 @@ bool IRCode::try_sync(DexCode* code) {
         // We can't fix the primary switch opcodes address until we emit
         // the fopcode, which comes later.
       } else if (bt->type == BRANCH_SIMPLE &&
-                 is_branch(bt->src->dex_insn->opcode())) {
+                 dex_opcode::is_branch(bt->src->dex_insn->opcode())) {
         MethodItemEntry* branch_op_mie = bt->src;
         auto branch_addr = entry_to_addr.find(branch_op_mie);
         always_assert_log(branch_addr != entry_to_addr.end(),
@@ -1391,11 +1387,11 @@ bool IRCode::try_sync(DexCode* code) {
     // branch relaxation.
     entry_to_addr.at(&mie) += num_align_nops;
     if (mie.type == MFLOW_TARGET &&
-        mie.target->src->dex_insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+        mie.target->src->dex_insn->opcode() == DOPCODE_FILL_ARRAY_DATA) {
       // This MFLOW_TARGET is right before a fill-array-data-payload opcode,
       // so we should make sure its address is aligned
       if (entry_to_addr.at(&mie) & 1) {
-        opout.push_back(new DexInstruction(OPCODE_NOP));
+        opout.push_back(new DexInstruction(DOPCODE_NOP));
         ++entry_to_addr.at(&mie);
         ++num_align_nops;
       }
@@ -1433,7 +1429,7 @@ bool IRCode::try_sync(DexCode* code) {
       }
       // Emit align nop
       if (addr & 1) {
-        DexInstruction* nop = new DexInstruction(OPCODE_NOP);
+        DexInstruction* nop = new DexInstruction(DOPCODE_NOP);
         opout.push_back(nop);
         addr++;
       }
@@ -1444,7 +1440,7 @@ bool IRCode::try_sync(DexCode* code) {
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
       multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
-      multi_insn->set_opcode(OPCODE_SPARSE_SWITCH);
+      multi_insn->set_opcode(DOPCODE_SPARSE_SWITCH);
       addr += count;
     } else {
       // Emit packed.
@@ -1459,7 +1455,7 @@ bool IRCode::try_sync(DexCode* code) {
       }
       // Emit align nop
       if (addr & 1) {
-        DexInstruction* nop = new DexInstruction(0);
+        DexInstruction* nop = new DexInstruction(DOPCODE_NOP);
         opout.push_back(nop);
         addr++;
       }
@@ -1470,7 +1466,7 @@ bool IRCode::try_sync(DexCode* code) {
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
       multi_insn->set_offset(addr - entry_to_addr.at(multiopcode));
-      multi_insn->set_opcode(OPCODE_PACKED_SWITCH);
+      multi_insn->set_opcode(DOPCODE_PACKED_SWITCH);
       addr += count;
     }
   }

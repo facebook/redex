@@ -16,11 +16,11 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexOpcode.h"
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "JarLoader.h"
 #include "RedexContext.h"
 

@@ -157,7 +157,7 @@ MultiMethodInliner::MultiMethodInliner(
         , m_config(config) {
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
           auto callee = resolver(insn->get_method(), opcode_to_search(insn));
@@ -314,6 +314,10 @@ bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
 bool MultiMethodInliner::caller_too_large(DexType* caller_type,
                                           size_t estimated_insn_size,
                                           const DexMethod* callee) {
+  if (!m_config.enforce_method_size_limit) {
+    return false;
+  }
+
   if (m_config.whitelist_no_method_limit.count(caller_type)) {
     return false;
   }
@@ -580,7 +584,7 @@ void MultiMethodInliner::invoke_direct_to_static() {
     TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
     mutators::make_static(method);
   }
-  walk_opcodes(m_scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(m_scope, [](DexMethod* meth) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         auto op = insn->opcode();
         if (op == OPCODE_INVOKE_DIRECT) {
@@ -603,7 +607,7 @@ void select_inlinable(
     calls[method] = 0;
   }
   // count call sites for each method
-  walk_opcodes(scope, [](DexMethod* meth) { return true; },
+  walk::opcodes(scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (is_invoke(insn->opcode())) {
           auto callee = resolve_method(
@@ -728,20 +732,20 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
     auto param_op = param_it->insn->opcode();
-    DexOpcode op;
+    IROpcode op;
     switch (param_op) {
-      case IOPCODE_LOAD_PARAM:
-        op = OPCODE_MOVE;
-        break;
-      case IOPCODE_LOAD_PARAM_OBJECT:
-        op = OPCODE_MOVE_OBJECT;
-        break;
-      case IOPCODE_LOAD_PARAM_WIDE:
-        op = OPCODE_MOVE_WIDE;
-        break;
-      default:
-        always_assert_log("Expected param op, got %s", SHOW(param_op));
-        not_reached();
+    case IOPCODE_LOAD_PARAM:
+      op = OPCODE_MOVE;
+      break;
+    case IOPCODE_LOAD_PARAM_OBJECT:
+      op = OPCODE_MOVE_OBJECT;
+      break;
+    case IOPCODE_LOAD_PARAM_WIDE:
+      op = OPCODE_MOVE_WIDE;
+      break;
+    default:
+      always_assert_log("Expected param op, got %s", SHOW(param_op));
+      not_reached();
     }
     auto mov =
         (new IRInstruction(op))

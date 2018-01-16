@@ -12,9 +12,8 @@
 #include <mutex>
 
 #include "CallGraph.h"
+#include "ConstantEnvironment.h"
 #include "ConstantPropagation.h"
-#include "GlobalConstProp.h"
-#include "ParallelWalkers.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -27,7 +26,7 @@ namespace {
  * callsite. The n'th parameter will be represented by a binding of n to a
  * ConstantDomain instance.
  */
-using ArgumentDomain = ConstPropEnvironment;
+using ArgumentDomain = ConstantEnvironment;
 
 /*
  * Map of invoke-* instructions contained in some method M to their respective
@@ -42,10 +41,10 @@ constexpr IRInstruction* INPUT_ARGS = nullptr;
 /*
  * Return an environment populated with parameter values.
  */
-static ConstPropEnvironment env_with_params(const IRCode* code,
-                                            const ArgumentDomain& args) {
+static ConstantEnvironment env_with_params(const IRCode* code,
+                                           const ArgumentDomain& args) {
   size_t idx{0};
-  ConstPropEnvironment env;
+  ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
@@ -97,7 +96,7 @@ class FixpointIterator
     Domain entry_state_at_dest;
     auto it = edge->invoke_iterator();
     if (it == FatMethod::iterator()) {
-      entry_state_at_dest.set(INPUT_ARGS, ConstPropEnvironment::top());
+      entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
     } else {
       auto insn = it->insn;
       entry_state_at_dest.set(INPUT_ARGS, exit_state_at_source.get(insn));
@@ -119,11 +118,8 @@ class Propagator {
     // Rebuild all CFGs here -- this should be more efficient than doing them
     // within FixpointIterator::analyze_node(), since that can get called
     // multiple times for a given method
-    walk_methods_parallel_simple(m_scope, [](DexMethod* m) {
-      auto* code = m->get_code();
-      if (code) {
-        code->build_cfg();
-      }
+    walk::parallel::code(m_scope, [](DexMethod*, IRCode& code) {
+      code.build_cfg();
     });
     auto fp_iter = std::make_unique<FixpointIterator>(cg, m_config);
     fp_iter->run({{INPUT_ARGS, ArgumentDomain()}});
@@ -136,11 +132,7 @@ class Propagator {
    */
   void optimize(const FixpointIterator& fp_iter) {
     std::mutex stats_mutex;
-    walk_methods_parallel_simple(m_scope, [&](DexMethod* method) {
-      auto* code = method->get_code();
-      if (code == nullptr) {
-        return;
-      }
+    walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
       auto args = fp_iter.get_entry_state_at(method);
       // If the callgraph isn't complete, reachable methods may appear
       // unreachable
@@ -150,10 +142,10 @@ class Propagator {
         TRACE(ICONSTP, 3, "Have args for %s: %s\n",
               SHOW(method), args.str().c_str());
       }
-      IntraProcConstantPropagation intra_cp(code->cfg(), m_config);
-      intra_cp.run(env_with_params(code, args.get(INPUT_ARGS)));
+      IntraProcConstantPropagation intra_cp(code.cfg(), m_config);
+      intra_cp.run(env_with_params(&code, args.get(INPUT_ARGS)));
       intra_cp.simplify();
-      intra_cp.apply_changes(code);
+      intra_cp.apply_changes(&code);
       {
         std::lock_guard<std::mutex> lock{stats_mutex};
         m_stats.branches_removed += intra_cp.branches_removed();

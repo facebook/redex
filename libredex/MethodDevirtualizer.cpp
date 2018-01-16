@@ -19,19 +19,32 @@ namespace {
 using CallSiteReferences =
     std::map<const DexMethod*, std::vector<IRInstruction*>>;
 
+struct CallCounter {
+  uint32_t virtuals{0};
+  uint32_t supers{0};
+  uint32_t directs{0};
+
+  static CallCounter plus(CallCounter a, CallCounter b) {
+    a.virtuals += b.virtuals;
+    a.supers += b.supers;
+    a.directs += b.directs;
+    return a;
+  }
+};
+
 void patch_call_site(DexMethod* callee,
                      IRInstruction* method_inst,
-                     DevirtualizerMetrics& metrics) {
+                     CallCounter& counter) {
   auto op = method_inst->opcode();
   if (is_invoke_virtual(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
-    metrics.num_virtual_calls++;
+    counter.virtuals++;
   } else if (is_invoke_super(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
-    metrics.num_super_calls++;
+    counter.supers++;
   } else if (is_invoke_direct(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
-    metrics.num_direct_calls++;
+    counter.directs++;
   } else {
     always_assert_log(false, SHOW(op));
   }
@@ -39,54 +52,60 @@ void patch_call_site(DexMethod* callee,
   method_inst->set_method(callee);
 }
 
-void fix_call_sites_and_drop_this_arg(
-    const std::vector<DexClass*>& scope,
-    const std::unordered_set<DexMethod*>& statics,
-    DevirtualizerMetrics& metrics) {
-  const auto fixer = [&](DexMethod*, IRCode& code) {
-    std::vector<std::pair<IRInstruction*, IRInstruction*>> replacements;
-    for (auto& mie : InstructionIterable(&code)) {
-      auto inst = mie.insn;
-      if (!inst->has_method()) {
-        continue;
-      }
-      auto method = resolve_method(inst->get_method(), MethodSearch::Any);
-      if (method == nullptr || !statics.count(method)) {
-        continue;
-      }
-      patch_call_site(method, inst, metrics);
-      auto nargs = inst->arg_word_count();
-      for (uint16_t i = 0; i < nargs - 1; i++) {
-        inst->set_src(i, inst->src(i + 1));
-      }
-      inst->set_arg_word_count(nargs - 1);
-    }
-    for (auto& pair : replacements) {
-      code.replace_opcode(pair.first, pair.second);
-    }
-  };
-
-  walk_code(scope, [](DexMethod*) { return true; }, fixer);
-}
-
 void fix_call_sites(const std::vector<DexClass*>& scope,
                     const std::unordered_set<DexMethod*>& target_methods,
-                    DevirtualizerMetrics& metrics) {
-  const auto fixer = [&](DexMethod*, IRInstruction* opcode) {
-    if (!opcode->has_method()) {
-      return;
+                    DevirtualizerMetrics& metrics,
+                    bool drop_this = false) {
+  const auto fixer = [&target_methods, drop_this](std::nullptr_t,
+                                                  DexMethod* m) -> CallCounter {
+    CallCounter call_counter;
+    IRCode* code = m->get_code();
+    if (code == nullptr) {
+      return call_counter;
     }
 
-    auto method = resolve_method(opcode->get_method(), MethodSearch::Virtual);
-    if (method == nullptr || !target_methods.count(method)) {
-      return;
+    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+      IRInstruction* insn = mie.insn;
+      if (!insn->has_method()) {
+        continue;
+      }
+
+      MethodSearch type = drop_this ? MethodSearch::Any : MethodSearch::Virtual;
+      auto method = resolve_method(insn->get_method(), type);
+      if (method == nullptr || !target_methods.count(method)) {
+        continue;
+      }
+
+      always_assert(drop_this || !is_invoke_static(insn->opcode()));
+      patch_call_site(method, insn, call_counter);
+
+      if (drop_this) {
+        auto nargs = insn->arg_word_count();
+        for (uint16_t i = 0; i < nargs - 1; i++) {
+          insn->set_src(i, insn->src(i + 1));
+        }
+        insn->set_arg_word_count(nargs - 1);
+      }
     }
 
-    always_assert(!is_invoke_static(opcode->opcode()));
-    patch_call_site(method, opcode, metrics);
+    return call_counter;
   };
 
-  walk_opcodes(scope, [](DexMethod*) { return true; }, fixer);
+  CallCounter call_counter =
+      walk::parallel::reduce_methods<std::nullptr_t, CallCounter, Scope>(
+          scope,
+          fixer,
+          [](CallCounter a, CallCounter b) -> CallCounter {
+            a.virtuals += b.virtuals;
+            a.supers += b.supers;
+            a.directs += b.directs;
+            return a;
+          },
+          [](int) { return nullptr; });
+
+  metrics.num_virtual_calls += call_counter.virtuals;
+  metrics.num_super_calls += call_counter.supers;
+  metrics.num_direct_calls += call_counter.directs;
 }
 
 void make_methods_static(const std::unordered_set<DexMethod*>& methods,
@@ -205,7 +224,7 @@ void MethodDevirtualizer::verify_and_split(
 void MethodDevirtualizer::staticize_methods_not_using_this(
     const std::vector<DexClass*>& scope,
     const std::unordered_set<DexMethod*>& methods) {
-  fix_call_sites_and_drop_this_arg(scope, methods, m_metrics);
+  fix_call_sites(scope, methods, m_metrics, true /* drop_this */);
   make_methods_static(methods, false);
   TRACE(VIRT, 1, "Staticized %lu methods not using this\n", methods.size());
   m_metrics.num_methods_not_using_this += methods.size();
@@ -214,7 +233,7 @@ void MethodDevirtualizer::staticize_methods_not_using_this(
 void MethodDevirtualizer::staticize_methods_using_this(
     const std::vector<DexClass*>& scope,
     const std::unordered_set<DexMethod*>& methods) {
-  fix_call_sites(scope, methods, m_metrics);
+  fix_call_sites(scope, methods, m_metrics, false /* drop_this */);
   make_methods_static(methods, true);
   TRACE(VIRT, 1, "Staticized %lu methods using this\n", methods.size());
   m_metrics.num_methods_using_this += methods.size();

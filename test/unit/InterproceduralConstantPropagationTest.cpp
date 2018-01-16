@@ -30,7 +30,7 @@ TEST(InterproceduralConstantPropagation, constantArgument) {
   auto code1 = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; the `this` argument
-     (const/4 v1 0)
+     (const v1 0)
      (invoke-direct (v0 v1) "LFoo;.baz:(I)V")
      (return-void)
     )
@@ -46,7 +46,7 @@ TEST(InterproceduralConstantPropagation, constantArgument) {
      (load-param v0) ; the `this` argument
      (load-param v1)
      (if-eqz v1 :label)
-     (const/4 v0 0)
+     (const v0 0)
      :label
      (return-void)
     )
@@ -64,7 +64,7 @@ TEST(InterproceduralConstantPropagation, constantArgument) {
      (load-param v0)
      (load-param v1)
      (goto :label)
-     (const/4 v0 0)
+     (const v0 0)
      :label
      (return-void)
     )
@@ -91,7 +91,7 @@ TEST(InterproceduralConstantPropagation, nonConstantArgument) {
   auto code1 = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; the `this` argument
-     (const/4 v1 0)
+     (const v1 0)
      (invoke-direct (v0 v1) "LFoo;.baz:(I)V")
      (return-void)
     )
@@ -105,7 +105,7 @@ TEST(InterproceduralConstantPropagation, nonConstantArgument) {
   auto code2 = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; the `this` argument
-     (const/4 v1 1)
+     (const v1 1)
      (invoke-direct (v0 v1) "LFoo;.baz:(I)V")
      (return-void)
     )
@@ -121,7 +121,7 @@ TEST(InterproceduralConstantPropagation, nonConstantArgument) {
      (load-param v0) ; the `this` argument
      (load-param v1)
      (if-eqz v1 :label)
-     (const/4 v0 0)
+     (const v0 0)
      :label
      (return-void)
     )
@@ -156,7 +156,7 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
   auto code1 = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; the `this` argument
-     (const/4 v1 1)
+     (const v1 1)
      (invoke-direct (v0 v1) "LFoo;.baz:(I)V")
      (return-void)
     )
@@ -170,7 +170,7 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
   auto code2 = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; the `this` argument
-     (const/4 v1 2)
+     (const v1 2)
      (invoke-direct (v0 v1) "LFoo;.baz:(I)V")
      (return-void)
     )
@@ -186,7 +186,7 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
      (load-param v0) ; the `this` argument
      (load-param v1)
      (if-gtz v1 :label)
-     (const/4 v0 0)
+     (const v0 0)
      :label
      (return-void)
     )
@@ -204,7 +204,7 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
      (load-param v0)
      (load-param v1)
      (goto :label)
-     (const/4 v0 0)
+     (const v0 0)
      :label
      (return-void)
     )

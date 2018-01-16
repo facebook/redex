@@ -66,13 +66,13 @@ static void PrintTo(const IRInstructionList& insn_list, std::ostream* os) {
 // Builds some arithmetic involving a literal instruction
 // The opcode should be a literal-carrying opcode like OPCODE_ADD_INT_LIT16
 // The source register is src_reg, dest register is 1
-static IRInstructionList op_lit(DexOpcode opcode,
+static IRInstructionList op_lit(IROpcode opcode,
                                 int64_t literal,
                                 unsigned dst_reg = 1) {
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
-      dasm(OPCODE_CONST_16, {0_v, 42_L}),
+      dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode,
            {Operand{VREG, dst_reg},
             0_v,
@@ -80,21 +80,21 @@ static IRInstructionList op_lit(DexOpcode opcode,
   };
 }
 
-static IRInstructionList op_lit_move_result_pseudo(DexOpcode opcode,
+static IRInstructionList op_lit_move_result_pseudo(IROpcode opcode,
                                                    int64_t literal,
                                                    unsigned dst_reg = 1) {
   using namespace dex_asm;
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
-      dasm(OPCODE_CONST_16, {0_v, 42_L}),
+      dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode, {0_v, Operand{LITERAL, static_cast<uint64_t>(literal)}}),
       dasm(IOPCODE_MOVE_RESULT_PSEUDO, {Operand{VREG, dst_reg}})};
 }
 
 // Builds arithmetic involving an opcode like MOVE or NEG
-static IRInstructionList op_unary(DexOpcode opcode) {
+static IRInstructionList op_unary(IROpcode opcode) {
   using namespace dex_asm;
-  return IRInstructionList{dasm(OPCODE_CONST_16, {0_v, 42_L}),
+  return IRInstructionList{dasm(OPCODE_CONST, {0_v, 42_L}),
                            dasm(opcode, {1_v, 0_v})};
 }
 
@@ -175,7 +175,7 @@ class PeepholeTest : public ::testing::Test {
     test_1(name, src, src);
   }
 
-  IRInstructionList op_put(DexOpcode put, bool is_wide = false) {
+  IRInstructionList op_put(IROpcode put, bool is_wide = false) {
     using namespace dex_asm;
 
     DexFieldRef* field =
@@ -191,9 +191,9 @@ class PeepholeTest : public ::testing::Test {
         dasm(put, field, {0_v, 5_v})};
   }
 
-  IRInstructionList op_putget(DexOpcode put,
-                              DexOpcode get,
-                              DexOpcode move_result_pseudo,
+  IRInstructionList op_putget(IROpcode put,
+                              IROpcode get,
+                              IROpcode move_result_pseudo,
                               bool is_wide = false,
                               bool use_same_register = true,
                               bool make_field_volatile = false) {
@@ -224,9 +224,9 @@ class PeepholeTest : public ::testing::Test {
   }
 
   void put_get_test_helper(const std::string& test_name,
-                           DexOpcode put,
-                           DexOpcode get,
-                           DexOpcode move_result_pseudo,
+                           IROpcode put,
+                           IROpcode get,
+                           IROpcode move_result_pseudo,
                            bool is_wide = false) {
     IRInstructionList input = op_putget(put, get, move_result_pseudo, is_wide);
     IRInstructionList expected = op_put(put, is_wide);
@@ -234,9 +234,9 @@ class PeepholeTest : public ::testing::Test {
   }
 
   void put_get_test_helper_nochange(const std::string& test_name,
-                                    DexOpcode put,
-                                    DexOpcode get,
-                                    DexOpcode move_result_pseudo,
+                                    IROpcode put,
+                                    IROpcode get,
+                                    IROpcode move_result_pseudo,
                                     bool is_wide = false,
                                     bool use_same_register = true,
                                     bool make_field_volative = false) {
@@ -251,7 +251,7 @@ class PeepholeTest : public ::testing::Test {
 };
 
 TEST_F(PeepholeTest, Arithmetic) {
-  IRInstructionList move16 = op_unary(OPCODE_MOVE_16); // move v0, v1
+  IRInstructionList move16 = op_unary(OPCODE_MOVE); // move v0, v1
   IRInstructionList negate = op_unary(OPCODE_NEG_INT); // neg v0, v1
   test_1("add8_0_to_move", op_lit(OPCODE_ADD_INT_LIT8, 0), move16);
   test_1("add16_0_to_move", op_lit(OPCODE_ADD_INT_LIT16, 0), move16);

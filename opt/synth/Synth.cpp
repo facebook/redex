@@ -27,11 +27,11 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Mutators.h"
-#include "ParallelWalkers.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "SynthConfig.h"
+#include "Walkers.h"
 
 
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
@@ -419,16 +419,16 @@ IRInstruction* make_sget(DexField* field) {
   return (new IRInstruction(opcode))->set_field(field);
 }
 
-DexOpcode move_result_to_pseudo(DexOpcode op) {
+IROpcode move_result_to_pseudo(IROpcode op) {
   switch (op) {
-    case OPCODE_MOVE_RESULT:
-      return IOPCODE_MOVE_RESULT_PSEUDO;
-    case OPCODE_MOVE_RESULT_OBJECT:
-      return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-    case OPCODE_MOVE_RESULT_WIDE:
-      return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-    default:
-      always_assert(false);
+  case OPCODE_MOVE_RESULT:
+    return IOPCODE_MOVE_RESULT_PSEUDO;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+  default:
+    always_assert(false);
   }
 }
 
@@ -835,11 +835,7 @@ void do_transform(const ClassHierarchy& ch,
     }
   }
   // check that invokes to promoted static method is correct
-  walk_methods_parallel_simple(classes, [&](DexMethod* meth) {
-    auto* code = meth->get_code();
-    if (code == nullptr) {
-      return;
-    }
+  walk::parallel::code(classes, [&](DexMethod* meth, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto opcode = insn->opcode();

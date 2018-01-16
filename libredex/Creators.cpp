@@ -11,7 +11,7 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
-#include "DexOpcode.h"
+#include "IROpcode.h"
 #include "Transform.h"
 
 namespace {
@@ -41,7 +41,7 @@ MethodBlock::MethodBlock(FatMethod::iterator iterator, MethodCreator* creator)
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());
-  DexOpcode opcode;
+  IROpcode opcode;
   if (meth->is_virtual()) {
     if (is_interface(type_class(meth->get_class()))) {
       opcode = OPCODE_INVOKE_INTERFACE;
@@ -58,7 +58,7 @@ void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   invoke(opcode, meth, args);
 }
 
-void MethodBlock::invoke(DexOpcode opcode,
+void MethodBlock::invoke(IROpcode opcode,
                          DexMethodRef* meth,
                          const std::vector<Location>& args) {
   always_assert(is_invoke(opcode));
@@ -88,7 +88,7 @@ void MethodBlock::throwex(Location ex) {
 
 void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
   always_assert(field->is_concrete() && !is_static(field));
-  DexOpcode opcode;
+  IROpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -124,7 +124,7 @@ void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
 
 void MethodBlock::iput(DexField* field, Location obj, Location src) {
   always_assert(field->is_concrete() && !is_static(field));
-  DexOpcode opcode;
+  IROpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -158,7 +158,7 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
   ifield_op(opcode, field, obj, src);
 }
 
-void MethodBlock::ifield_op(DexOpcode opcode,
+void MethodBlock::ifield_op(IROpcode opcode,
                             DexField* field,
                             Location obj,
                             Location& src_or_dst) {
@@ -183,7 +183,7 @@ void MethodBlock::ifield_op(DexOpcode opcode,
 
 void MethodBlock::sget(DexField* field, Location& dst) {
   always_assert(field->is_concrete() && is_static(field));
-  DexOpcode opcode;
+  IROpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -219,7 +219,7 @@ void MethodBlock::sget(DexField* field, Location& dst) {
 
 void MethodBlock::sput(DexField* field, Location src) {
   always_assert(field->is_concrete() && is_static(field));
-  DexOpcode opcode;
+  IROpcode opcode;
   char t = type_shorty(field->get_type());
   switch (t) {
   case 'Z':
@@ -253,7 +253,7 @@ void MethodBlock::sput(DexField* field, Location src) {
   sfield_op(opcode, field, src);
 }
 
-void MethodBlock::sfield_op(DexOpcode opcode,
+void MethodBlock::sfield_op(IROpcode opcode,
                             DexField* field,
                             Location& src_or_dst) {
   always_assert(is_sfield_op(opcode));
@@ -276,7 +276,7 @@ void MethodBlock::move(Location src, Location& dst) {
   always_assert(src.is_compatible(dst.type));
   auto ch = type_shorty(dst.type);
   assert(ch != 'V');
-  DexOpcode opcode;
+  IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_OBJECT;
   else if (ch == 'J' || ch == 'D')
@@ -294,7 +294,7 @@ void MethodBlock::move_result(Location& dst, DexType* type) {
   always_assert(dst.is_compatible(type));
   auto ch = type_shorty(type);
   assert(ch != 'V');
-  DexOpcode opcode;
+  IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_RESULT_OBJECT;
   else if (ch == 'J' || ch == 'D')
@@ -331,7 +331,7 @@ void MethodBlock::instance_of(Location& obj, Location& dst, DexType* type) {
 void MethodBlock::ret(Location loc) {
   auto ch = type_shorty(loc.type);
   assert(ch != 'V');
-  DexOpcode opcode;
+  IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_RETURN_OBJECT;
   else if (ch == 'J' || ch == 'D')
@@ -356,7 +356,7 @@ void MethodBlock::ret(DexType* rtype, Location loc) {
 
 void MethodBlock::load_const(Location& loc, int32_t value) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRInstruction(OPCODE_CONST_16);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(value);
   loc.type = get_int_type();
@@ -398,7 +398,7 @@ void MethodBlock::load_const(Location& loc, DexType* value) {
 
 void MethodBlock::load_null(Location& loc) {
   always_assert(!loc.is_wide());
-  IRInstruction* load = new IRInstruction(OPCODE_CONST_4);
+  IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(0);
   loc.type = get_object_type();
@@ -415,18 +415,7 @@ void MethodBlock::init_loc(Location& loc) {
   }
 }
 
-void MethodBlock::binop_2addr(DexOpcode op,
-                              const Location& dest,
-                              const Location& src) {
-  always_assert(OPCODE_ADD_INT_2ADDR <= op && op <= OPCODE_REM_DOUBLE_2ADDR);
-  always_assert(dest.type == src.type);
-  IRInstruction* insn = new IRInstruction(op);
-  insn->set_src(0, dest.get_reg());
-  insn->set_src(1, src.get_reg());
-  push_instruction(insn);
-}
-
-void MethodBlock::binop_lit16(DexOpcode op,
+void MethodBlock::binop_lit16(IROpcode op,
                               const Location& dest,
                               const Location& src,
                               int16_t literal) {
@@ -440,7 +429,7 @@ void MethodBlock::binop_lit16(DexOpcode op,
   push_instruction(insn);
 }
 
-void MethodBlock::binop_lit8(DexOpcode op,
+void MethodBlock::binop_lit8(IROpcode op,
                              const Location& dest,
                              const Location& src,
                              int8_t literal) {
@@ -454,7 +443,7 @@ void MethodBlock::binop_lit8(DexOpcode op,
   push_instruction(insn);
 }
 
-MethodBlock* MethodBlock::if_test(DexOpcode if_op,
+MethodBlock* MethodBlock::if_test(IROpcode if_op,
                                   Location first,
                                   Location second) {
   always_assert(OPCODE_IF_EQ <= if_op && if_op <= OPCODE_IF_LE);
@@ -464,14 +453,14 @@ MethodBlock* MethodBlock::if_test(DexOpcode if_op,
   return make_if_block(op);
 }
 
-MethodBlock* MethodBlock::if_testz(DexOpcode if_op, Location test) {
+MethodBlock* MethodBlock::if_testz(IROpcode if_op, Location test) {
   always_assert(OPCODE_IF_EQZ <= if_op && if_op <= OPCODE_IF_LEZ);
   IRInstruction* op = new IRInstruction(if_op);
   op->set_src(0, test.get_reg());
   return make_if_block(op);
 }
 
-MethodBlock* MethodBlock::if_else_test(DexOpcode if_op,
+MethodBlock* MethodBlock::if_else_test(IROpcode if_op,
                                        Location first,
                                        Location second,
                                        MethodBlock** true_block) {
@@ -482,7 +471,7 @@ MethodBlock* MethodBlock::if_else_test(DexOpcode if_op,
   return make_if_else_block(op, true_block);
 }
 
-MethodBlock* MethodBlock::if_else_testz(DexOpcode if_op,
+MethodBlock* MethodBlock::if_else_testz(IROpcode if_op,
                                         Location test,
                                         MethodBlock** true_block) {
   always_assert(OPCODE_IF_EQZ <= if_op && if_op <= OPCODE_IF_LEZ);

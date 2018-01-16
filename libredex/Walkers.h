@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <functional>
+#include <thread>
 #include <vector>
 
 #include "ControlFlow.h"
@@ -17,14 +19,182 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "WorkQueue.h"
 
 /**
- * Walk all methods of all classes defined in 'scope' calling back
- * the walker function.
+ * A collection of methods useful for iterating over elements of DexClasses.
+ *
+ * The name is intentionally lowercase. Think of this as a namespace with public
+ * and private visibility.
+ *
+ * This is header-only because of the template arguments.
  */
-template <class T, class MethodWalkerFn = void(DexMethod*)>
-void walk_methods(const T& scope, MethodWalkerFn walker) {
-  for (const auto& cls : scope) {
+
+class walk {
+ public:
+  // This is a "static class". Disallow construction.
+  walk() = delete;
+  ~walk() = delete;
+
+  using MethodWalkerFn = const std::function<void(DexMethod*)>&;
+  using FieldWalkerFn = const std::function<void(DexField*)>&;
+  using MethodFilterFn = const std::function<bool(DexMethod*)>&;
+  using CodeWalkerFn = const std::function<void(DexMethod*, IRCode&)>&;
+  using InsnWalkerFn = const std::function<void(DexMethod*, IRInstruction*)>&;
+  using AnnotationWalkerFn = const std::function<void(DexAnnotation*)>&;
+
+  /**
+   * Call walker on all methods defined in `classes`
+   */
+  template <class Classes>
+  static void methods(const Classes& classes, MethodWalkerFn walker) {
+    for (const auto& cls : classes) {
+      iterate_methods(cls, walker);
+    };
+  }
+
+  /**
+   * Call `walker` on all fields defined in `classes`
+   */
+  template <class Classes>
+  static void fields(const Classes& classes, FieldWalkerFn walker) {
+    for (const auto& cls : classes) {
+      iterate_fields(cls, walker);
+    };
+  }
+
+  /**
+   * Call `walker` on the code of every method defined in classes that
+   * satisfies the filter function
+   */
+  template <class Classes>
+  static void code(const Classes& classes,
+                   MethodFilterFn filter,
+                   CodeWalkerFn walker) {
+    for (const auto& cls : classes) {
+      iterate_code(cls, filter, walker);
+    };
+  }
+
+  /**
+   * Same as `code()` but with a filter that accepts all methods
+   */
+  template <class Classes>
+  static void code(const Classes& classes, CodeWalkerFn walker) {
+    walk::code(classes, all_methods, walker);
+  }
+
+  /**
+   * Call `walker` on every instruction in the code of every method defined in
+   * `classes` that satisfies the filter function.
+   */
+  template <class Classes>
+  static void opcodes(const Classes& classes,
+                      MethodFilterFn filter,
+                      InsnWalkerFn walker) {
+    for (const auto& cls : classes) {
+      iterate_opcodes(cls, filter, walker);
+    };
+  }
+
+  /**
+   * Same as `opcodes()` but with a filter that accepts all methods
+   */
+  template <class Classes>
+  static void opcodes(const Classes& classes, InsnWalkerFn walker) {
+    walk::opcodes(classes, all_methods, walker);
+  }
+
+  /**
+   * Call `walker` on every annotation on the classes (and its fields, methods,
+   * and method parameters) defined in `classes`
+   */
+  template <class Classes>
+  static void annotations(const Classes& classes, AnnotationWalkerFn walker) {
+    for (auto& cls : classes) {
+      iterate_annotations(cls, walker);
+    }
+  }
+
+  /**
+   * Visit sequences of opcodes that satisfy the give matcher.
+   *
+   * Example
+   * -------
+   *
+   * The following code (taken from ReachableClasses) visits all opcode
+   * sequences that match the the form "const-string, invoke-static" where
+   * invoke-static is specifically invoking Class.forName that takes one
+   * argument.
+   *
+   * In the walker callback, you can see that the opcodes are further inspected
+   * to ensure that the register that const-string loads into is actually the
+   * register that is referenced by invoke-static. (Without captures, this can't
+   * be expressed in the matcher language alone)
+   *
+   * The opcodes that match are passed in as a pointer to an array of
+   * IRInstruction pointers. The size of the array is passed in as 'n'.
+   *
+   * Example Code
+   * ------------
+   *
+   * auto match = std::make_tuple(
+   *     m::const_string(),
+   *     m::invoke_static(
+   *         m::opcode_method(m::named<DexMethod>("forName") &&
+   *                          m::on_class<DexMethod>("Ljava/lang/Class;")) &&
+   *         m::has_n_args(1)));
+   *
+   * match_opcodes(classes,
+   *               match,
+   *               [&](DexMethod* m, const std::vector<IRInstruction*>& insns) {
+   *                 auto const_string = insns[0];
+   *                 auto invoke_static = insns[1];
+   *                 // Make sure that the registers agree
+   *                 if (const_string->dest() == invoke_static->src(0)) {
+   *                   ...
+   *                 }
+   *               });
+   */
+
+  template <class Classes,
+            typename Predicate,
+            size_t N = std::tuple_size<Predicate>::value,
+            typename Walker = void(DexMethod*,
+                                   const std::vector<IRInstruction*>&)>
+  static void matching_opcodes(const Classes& classes,
+                               const Predicate& predicate,
+                               const Walker& walker) {
+    for (const auto& cls : classes) {
+      iterate_matching(cls, predicate, walker);
+    }
+  }
+
+  /**
+   * walker that respects basic block boundaries.
+   *
+   * It will not match a pattern that crosses block boundaries
+   */
+  template <class Classes,
+            typename Predicate,
+            size_t N = std::tuple_size<Predicate>::value,
+            typename Walker = void(DexMethod*,
+                                   const std::vector<IRInstruction*>&)>
+  static void matching_opcodes_in_block(const Classes& classes,
+                                        const Predicate& predicate,
+                                        const Walker& walker) {
+    for (const auto& cls : classes) {
+      iterate_matching_block(cls, predicate, walker);
+    }
+  }
+
+ private:
+  /* The iterate_* methods take a single dexclass and call the walker on the
+   * elements requested. The reason that these are done on a class level is so
+   * that we can share code with the `parallel::` methods.
+   */
+
+  static void iterate_methods(const DexClass* cls, MethodWalkerFn walker) {
     for (auto dmethod : cls->get_dmethods()) {
       TraceContext context(dmethod->get_deobfuscated_name());
       walker(dmethod);
@@ -33,239 +203,326 @@ void walk_methods(const T& scope, MethodWalkerFn walker) {
       TraceContext context(vmethod->get_deobfuscated_name());
       walker(vmethod);
     }
-  };
-}
+  }
 
-/**
- * Walk all fields of all classes defined in 'scope' calling back
- * the walker function.
- */
-template <class T, class FieldWalkerFn = void(DexField*)>
-void walk_fields(const T& scope, FieldWalkerFn walker) {
-  for (const auto& cls : scope) {
+  static void iterate_fields(const DexClass* cls, FieldWalkerFn walker) {
     for (auto ifield : cls->get_ifields()) {
       walker(ifield);
     }
     for (auto sfield : cls->get_sfields()) {
       walker(sfield);
     }
-  };
-}
-
-/**
- * Walk the code of every method that satisfies the filter function, for all
- * classes defined in 'scope' calling back the walker function.
- */
-template <class T,
-          class MethodFilterFn = bool(DexMethod*),
-          class CodeWalkerFn = void(DexMethod*, IRCode&)>
-void walk_code(const T& scope,
-               MethodFilterFn methodFilter,
-               CodeWalkerFn codeWalker) {
-  for (const auto& cls : scope) {
-    for (auto dmethod : cls->get_dmethods()) {
-      if (methodFilter(dmethod)) {
-        auto code = dmethod->get_code();
-        if (code) codeWalker(dmethod, *code);
-      }
-    }
-    for (auto vmethod : cls->get_vmethods()) {
-      if (methodFilter(vmethod)) {
-        auto code = vmethod->get_code();
-        if (code) codeWalker(vmethod, *code);
-      }
-    }
-  };
-}
-
-template <class T,
-          class MethodFilterFn = bool(DexMethod*),
-          class InstructionWalkerFn = void(DexMethod*, IRInstruction*)>
-void walk_opcodes(const T& scope,
-                  MethodFilterFn methodFilter,
-                  InstructionWalkerFn opcodeWalker) {
-  for (const auto& cls : scope) {
-    for (auto dmethod : cls->get_dmethods()) {
-      if (methodFilter(dmethod)) {
-        auto code = dmethod->get_code();
-        if (code) {
-          for (auto& mie : *code) {
-            if (mie.type != MFLOW_OPCODE) {
-              continue;
-            }
-            opcodeWalker(dmethod, mie.insn);
-          }
-        }
-      }
-    }
-    for (auto vmethod : cls->get_vmethods()) {
-      if (methodFilter(vmethod)) {
-        auto code = vmethod->get_code();
-        if (code) {
-          for (auto& mie : *code) {
-            if (mie.type != MFLOW_OPCODE) {
-              continue;
-            }
-            opcodeWalker(vmethod, mie.insn);
-          }
-        }
-      }
-    }
-  };
-}
-
-/**
- * Walk all annotations for all classes defined in 'scope' calling back the
- * walker function.
- */
-template <class T, class AnnotationWalkerFn = void(DexAnnotation*)>
-void call_annotation_walker(T* dex_thingy,
-                            AnnotationWalkerFn annotationsWalker) {
-  const auto& anno_set = dex_thingy->get_anno_set();
-  if (!anno_set) return;
-  auto& anno_list = anno_set->get_annotations();
-  for (auto& anno : anno_list) {
-    annotationsWalker(anno);
   }
-}
 
-template <class T, class AnnotationWalkerFn = void(DexAnnotation*)>
-void walk_annotations(const T& scope, AnnotationWalkerFn annotation_walker) {
-  for (auto& cls : scope) {
-    call_annotation_walker(cls, annotation_walker);
-  }
-  walk_fields(scope,
-              [&](DexField* field) {
-                call_annotation_walker(field, annotation_walker);
-              });
-  walk_methods(scope,
-               [&](DexMethod* method) {
-                 call_annotation_walker(method, annotation_walker);
-                 const auto& param_anno = method->get_param_anno();
-                 if (!param_anno) return;
-                 for (const auto& it : *param_anno) {
-                   auto& anno_list = it.second->get_annotations();
-                   for (auto& anno : anno_list) {
-                     annotation_walker(anno);
-                   }
-                 }
-               });
-}
-
-/**
- * Visit sequences of opcodes that satisfy the give matcher.
- *
- * Example
- * -------
- *
- * The following code (taken from ReachableClasses) visits all opcode sequences
- * that match the the form "const-string, invoke-static" where invoke-static is specifically
- * invoking Class.forName that takes one argument.
- *
- * In the walker callback, you can see that the opcodes are further inspected to ensure that
- * the register that const-string loads into is actually the register that is referenced by
- * invoke-static. (Without captures, this can't be expressed in the matcher language alone)
- *
- * The opcodes that match are passed in as a pointer to an array of IRInstruction pointers.
- * The size of the array is passed in as 'n'.
- *
- * Example Code
- * ------------
- *
- *  auto match = std::make_tuple(
- *    m::const_string(),
- *    m::invoke_static(
- *      m::opcode_method(
- *        m::named<DexMethod>("forName") &&
- *        m::on_class<DexMethod>("Ljava/lang/Class;"))
- *      && m::has_n_args(1))
- *  );
- *
- *  match_opcodes(scope, match, [&](const DexMethod* meth, size_t n, IRInstruction** insns){
- *    DexOpcodeString* const_string = (DexOpcodeString*)insns[0];
- *    DexOpcodeMethod* invoke_static = (DexOpcodeMethod*)insns[1];
- *    // Make sure that the registers agree
- *    if (const_string->dest() == invoke_static->src(0)) {
- *      TRACE(PGR, 1, "Class.forName: %s\n", const_string->get_string()->c_str());
- *    }
- *  });
- *
- */
-template<
-    typename P,
-    size_t N = std::tuple_size<P>::value,
-    typename V = void(const DexMethod*, size_t n, IRInstruction**)>
-void walk_matching_opcodes(
-  const Scope& scope, const P& p, const V& v) {
-  walk_methods(
-    scope,
-    [&](const DexMethod* m) {
-      auto code = m->get_code();
-      if (code) {
-        std::vector<IRInstruction*> insns;
-        for (auto& mie : InstructionIterable(code)) {
-          insns.emplace_back(mie.insn);
-        }
-        // No way to match if we have less insns than N
-        if (insns.size() < N) {
-          return;
-        }
-        // Try to match starting at i
-        for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
-          if (m::insns_matcher<P, std::integral_constant<size_t, 0> >::matches_at(i, insns, p)) {
-            IRInstruction* insns_array[N];
-            for ( size_t c = 0 ; c < N ; ++c ) {
-              insns_array[c] = insns.at(i+c);
-            }
-            v(m, N, insns_array);
-          }
+  static void iterate_code(const DexClass* cls,
+                           MethodFilterFn filter,
+                           CodeWalkerFn walker) {
+    iterate_methods(cls, [&filter, &walker](DexMethod* m) {
+      if (filter(m)) {
+        auto code = m->get_code();
+        if (code) {
+          walker(m, *code);
         }
       }
     });
-}
+  }
 
-/**
- * walker that respects basic block boundaries.
- *
- * It will not match a pattern that crosses block boundaries
- */
-template <
-    typename P,
-    size_t N = std::tuple_size<P>::value,
-    typename V = void(
-        const DexMethod*, IRCode*, Block*, size_t n, IRInstruction**)>
-void walk_matching_opcodes_in_block(const Scope& scope,
-                                    const P& p,
-                                    const V& v) {
-  walk_methods(
-    scope,
-    [&](DexMethod* m) {
-      auto code = m->get_code();
-      if (!code) {
-        return;
+  static void iterate_opcodes(const DexClass* cls,
+                              MethodFilterFn filter,
+                              InsnWalkerFn walker) {
+    iterate_code(cls, filter, [&walker](DexMethod* m, IRCode& code) {
+      for (const MethodItemEntry& mie : InstructionIterable(code)) {
+        walker(m, mie.insn);
       }
-      code->build_cfg();
-      for (Block* block : code->cfg().blocks()) {
-        std::vector<IRInstruction*> insns;
-        for (auto mie = block->begin() ; mie != block->end() ; mie++) {
-          if (mie->type == MFLOW_OPCODE) {
-            insns.emplace_back(mie->insn);
-          }
-        }
-        // No way to match if we have less insns than N
-        if (insns.size() >= N) {
-          // Try to match starting at i
-          for (size_t i = 0 ; i <= insns.size() - N ; ++i) {
-            if (m::insns_matcher<P, std::integral_constant<size_t, 0>>::
-                    matches_at(i, insns, p)) {
-              IRInstruction* insns_array[N];
-              for (size_t c = 0 ; c < N ; ++c) {
-                insns_array[c] = insns.at(i+c);
-              }
-              v(m, &*code, block, N, insns_array);
-            }
-          }
+    });
+  }
+
+  static void iterate_annotations(DexClass* cls, AnnotationWalkerFn walker) {
+    call_annotation_walker(cls, walker);
+    iterate_fields(cls, [&walker](DexField* field) {
+      call_annotation_walker(field, walker);
+    });
+    iterate_methods(cls, [&walker](DexMethod* method) {
+      call_annotation_walker(method, walker);
+      const auto& param_anno = method->get_param_anno();
+      if (!param_anno) return;
+      for (const auto& it : *param_anno) {
+        auto& anno_list = it.second->get_annotations();
+        for (auto& anno : anno_list) {
+          walker(anno);
         }
       }
     });
-}
+  }
+
+  template <class T>
+  static void call_annotation_walker(T* dex_thingy, AnnotationWalkerFn walker) {
+    const auto& anno_set = dex_thingy->get_anno_set();
+    if (!anno_set) return;
+    auto& anno_list = anno_set->get_annotations();
+    for (auto& anno : anno_list) {
+      walker(anno);
+    }
+  }
+
+  template <typename Predicate,
+            size_t N = std::tuple_size<Predicate>::value,
+            typename Walker = void(DexMethod*,
+                                   const std::vector<IRInstruction*>&)>
+  static void iterate_matching(DexClass* cls,
+                               const Predicate& predicate,
+                               const Walker& walker) {
+    iterate_code(
+        cls, all_methods, [&predicate, &walker](DexMethod* m, IRCode& ir_code) {
+          std::vector<IRInstruction*> insns;
+          for (auto& mie : InstructionIterable(ir_code)) {
+            insns.emplace_back(mie.insn);
+          }
+
+          std::vector<std::vector<IRInstruction*>> matches;
+          m::find_matches(insns, predicate, matches);
+          for (const std::vector<IRInstruction*>& matching_insns : matches) {
+            walker(m, matching_insns);
+          }
+        });
+  }
+
+  template <typename Predicate,
+            size_t N = std::tuple_size<Predicate>::value,
+            typename Walker = void(DexMethod*,
+                                   const std::vector<IRInstruction*>&)>
+  static void iterate_matching_block(DexClass* cls,
+                                     const Predicate& predicate,
+                                     const Walker& walker) {
+    iterate_code(
+        cls, all_methods, [&predicate, &walker](DexMethod* m, IRCode& ir_code) {
+          std::vector<std::vector<IRInstruction*>> method_matches;
+          ir_code.build_cfg();
+          for (Block* block : ir_code.cfg().blocks()) {
+            std::vector<IRInstruction*> insns;
+            for (const MethodItemEntry& mie : InstructionIterable(block)) {
+              insns.emplace_back(mie.insn);
+            }
+            m::find_matches(insns, predicate, method_matches);
+          }
+
+          for (const std::vector<IRInstruction*>& matching_insns :
+               method_matches) {
+            walker(m, matching_insns);
+          }
+        });
+  }
+
+  static constexpr bool all_methods(DexMethod*) { return true; }
+
+ public:
+  /**
+   * The parallel:: methods have very similar signatures (and names) to their
+   * sequential counterparts.
+   * The unit of parallelization is a DexClass. The reason is that we don't want
+   * to create too many tasks on the WorkQueue, paying the overhead for each.
+   */
+  class parallel {
+   public:
+    parallel() = delete;
+    ~parallel() = delete;
+
+    /**
+     * Call `walker` on all methods in `classes` in parallel.
+     */
+    template <class Classes>
+    static void methods(const Classes& classes,
+                        MethodWalkerFn walker,
+                        size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&walker](DexClass* cls) { walk::iterate_methods(cls, walker); },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Call `walker` on all methods in `classes` in parallel. Then combine the
+     * Output with `reducer` function. Make sure all global information needed
+     * is copied locally per thread using DataInitializerFn.
+     */
+    template <class Data,
+              class Output,
+              class Classes,
+              class MethodWalkerFn = Output(Data&, DexMethod*),
+              class OutputReducerFn = Output(Output, Output),
+              class DataInitializerFn = Data(int)>
+    Output static reduce_methods(const Classes& classes,
+                                 MethodWalkerFn walker,
+                                 OutputReducerFn reducer,
+                                 DataInitializerFn data_initializer,
+                                 const Output& init = Output(),
+                                 size_t num_threads = default_num_threads()) {
+      auto wq = WorkQueue<DexClass*, Data, Output>(
+          [&](Data& data, DexClass* cls) {
+            Output out = init;
+            for (auto dmethod : cls->get_dmethods()) {
+              TraceContext context(dmethod->get_deobfuscated_name());
+              out = reducer(out, walker(data, dmethod));
+            }
+            for (auto vmethod : cls->get_vmethods()) {
+              TraceContext context(vmethod->get_deobfuscated_name());
+              out = reducer(out, walker(data, vmethod));
+            }
+            return out;
+          },
+          reducer,
+          data_initializer,
+          num_threads);
+
+      for (const auto& cls : classes) {
+        wq.add_item(cls);
+      };
+      return wq.run_all();
+    }
+
+    /**
+     * Call `walker` on all fields in `classes` in parallel.
+     */
+    template <class Classes>
+    static void fields(const Classes& classes,
+                       FieldWalkerFn walker,
+                       size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&walker](DexClass* cls) { walk::iterate_fields(cls, walker); },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Call `walker` on all code (of methods approved by `filter`) in `classes`
+     * in parallel.
+     */
+    template <class Classes>
+    static void code(const Classes& classes,
+                     MethodFilterFn filter,
+                     CodeWalkerFn walker,
+                     size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&filter, &walker](DexClass* cls) {
+            walk::iterate_code(cls, filter, walker);
+          },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Same as `code()` but with a filter function that accepts all methods
+     */
+    template <class Classes>
+    static void code(const Classes& classes,
+                     CodeWalkerFn walker,
+                     size_t num_threads = default_num_threads()) {
+      walk::parallel::code(classes, all_methods, walker, num_threads);
+    }
+
+    /**
+     * Call `walker` on all opcodes (of methods approved by `filter`) in
+     * `classes` in parallel.
+     */
+    template <class Classes>
+    static void opcodes(const Classes& classes,
+                        MethodFilterFn filter,
+                        InsnWalkerFn walker,
+                        size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&filter, &walker](DexClass* cls) {
+            walk::iterate_opcodes(cls, filter, walker);
+          },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Same as `opcodes()` but with a filter function that accepts all methods
+     */
+    template <class Classes>
+    static void opcodes(const Classes& classes,
+                        InsnWalkerFn walker,
+                        size_t num_threads = default_num_threads()) {
+      walk::parallel::opcodes(classes, all_methods, walker, num_threads);
+    }
+
+    /**
+     * Call `walker` on all annotations in `classes` in parallel.
+     */
+    template <class Classes>
+    static void annotations(const Classes& classes,
+                            AnnotationWalkerFn walker,
+                            size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&walker](DexClass* cls) { walk::iterate_annotations(cls, walker); },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Call `walker` on all matching opcodes (according to `predicate`) in
+     * `classes` in parallel.
+     * This will match across basic block boundaries. So be careful!
+     */
+    template <class Classes,
+              typename Predicate,
+              size_t N = std::tuple_size<Predicate>::value,
+              typename Walker = void(DexMethod*,
+                                     const std::vector<IRInstruction*>&)>
+    static void matching_opcodes(const Classes& classes,
+                                 const Predicate& predicate,
+                                 const Walker& walker,
+                                 size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&predicate, &walker](DexClass* cls) {
+            walk::iterate_matching(cls, predicate, walker);
+          },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * Call `walker` on all matching opcodes (according to `predicate`) in
+     * `classes` in parallel.
+     * This will not match across basic block boundaries.
+     */
+    template <class Classes,
+              typename Predicate,
+              size_t N = std::tuple_size<Predicate>::value,
+              typename Walker = void(DexMethod*,
+                                     const std::vector<IRInstruction*>&)>
+    static void matching_opcodes_in_block(
+        const Classes& classes,
+        const Predicate& predicate,
+        const Walker& walker,
+        size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
+          [&predicate, &walker](DexClass* cls) {
+            walk::iterate_matching_block(cls, predicate, walker);
+          },
+          num_threads);
+      run_all(wq, classes);
+    }
+
+    /**
+     * This code usually runs on a processor with Hyperthreading, where the
+     * number of physical cores is half the number of logical cores. Setting
+     * num_threads to that number often gets us good results, so that's the
+     * default.
+     */
+    static unsigned int default_num_threads() {
+      unsigned int threads = std::thread::hardware_concurrency() / 2;
+      return std::max(1u, threads);
+    }
+
+   private:
+    template <class WQ, class Classes>
+    static void run_all(WQ& wq, const Classes& classes) {
+      for (const auto& cls : classes) {
+        wq.add_item(cls);
+      };
+      wq.run_all();
+    }
+  };
+};

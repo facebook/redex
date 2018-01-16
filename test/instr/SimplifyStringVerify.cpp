@@ -45,8 +45,8 @@ namespace {
   WORK(test_Replace_ValueOfFloat, 3 * 2)                         \
   WORK(test_Replace_ValueOfDouble, 3 * 2)
 
-void loadMethodSizes(DexClasses& classes,
-                     std::unordered_map<std::string, int>& map) {
+void load_method_sizes(DexClasses& classes,
+                       std::unordered_map<std::string, int>& map) {
   auto cls = find_class_named(classes,
                               "Lcom/facebook/redex/test/instr/SimplifyString;");
   ASSERT_NE(nullptr, cls);
@@ -55,7 +55,7 @@ void loadMethodSizes(DexClasses& classes,
   {                                                       \
     auto method_##name = find_vmethod_named(*cls, #name); \
     ASSERT_NE(nullptr, method_##name);                    \
-    map[#name] = method_##name->get_code()->sum_opcode_sizes();\
+    map[#name] = method_##name->get_dex_code()->size();\
   }
   TESTS
 #undef WORK
@@ -68,13 +68,15 @@ struct PrePostVerify : testing::Test {
 
   PrePostVerify() {
     g_redex = new RedexContext;
-    DexClasses before_classes(load_classes_from_dex(std::getenv("dex_pre")));
-    loadMethodSizes(before_classes, before_sizes);
+    DexClasses before_classes(
+        load_classes_from_dex(std::getenv("dex_pre"), /* balloon */ false));
+    load_method_sizes(before_classes, before_sizes);
     delete g_redex;
 
     g_redex = new RedexContext;
-    DexClasses after_classes(load_classes_from_dex(std::getenv("dex_post")));
-    loadMethodSizes(after_classes, after_sizes);
+    DexClasses after_classes(
+        load_classes_from_dex(std::getenv("dex_post"), /* balloon */ false));
+    load_method_sizes(after_classes, after_sizes);
     delete g_redex;
 
     g_redex = nullptr;

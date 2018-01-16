@@ -25,6 +25,9 @@ class SimpleInlinePass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("virtual", true, m_virtual_inline);
     pc.get("throws", false, m_inliner_config.throws_inline);
+    pc.get("enforce_method_size_limit",
+           true,
+           m_inliner_config.enforce_method_size_limit);
     pc.get("no_inline_annos", {}, m_no_inline_annos);
     pc.get("force_inline_annos", {}, m_force_inline_annos);
     pc.get("multiple_callers", false, m_multiple_callers);

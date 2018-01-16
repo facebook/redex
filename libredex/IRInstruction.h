@@ -12,18 +12,18 @@
 #include "DexInstruction.h"
 
 /*
- * IRInstruction is very similar to the Dalvik instruction set, but with a few
- * tweaks to make it easier to analyze and manipulate. Key differences are:
+ * Our IR is very similar to the Dalvik instruction set, but with a few tweaks
+ * to make it easier to analyze and manipulate. Key differences are:
  *
  * 1. Registers of arbitrary size can be addressed. For example, neg-int is no
  *    longer limited to addressing registers < 16. The expectation is that the
  *    register allocator will sort things out.
  *
- * 2. 2addr opcodes no longer exist. They are converted to the non-2addr form.
+ * 2. 2addr opcodes do not exist in IROpcode. Not aliasing src and dest values
+ *    simplifies analyses.
  *
- * 3. range instructions no longer exist. They are represented as their
- *    non-range forms, which are not constrained in their number of src
- *    operands.
+ * 3. range instructions do not exist in IROpcode. invoke-* instructions in our
+ *    IR are not constrained in their number of src operands.
  *
  * 4. invoke-* instructions no longer reference both halves of a wide register.
  *    I.e. our IR represents them like `invoke-static {v0} LFoo;.bar(J)V` even
@@ -32,8 +32,8 @@
  *    format only refer to the lower half of a wide pair, so this makes things
  *    uniform.
  *
- * 5. Any Dex opcode that can both throw and write to a dest register is split
- *    into two separate pieces in our IR: one piece that may throw but does not
+ * 5. Any opcode that can both throw and write to a dest register is split into
+ *    two separate pieces in our IR: one piece that may throw but does not
  *    write to a dest, and one move-result-pseudo instruction that writes to a
  *    dest but does not throw. This makes accurate liveness analysis easy.
  *    This is elaborated further below.
@@ -63,7 +63,7 @@
  * For example, say we have the following Dex code:
  *
  *   sget-object v1 <some field of type LQux;>
- *   const/4 v0 #0
+ *   const v0 #0
  *   start try block
  *   iget-object v0 v1 LQux;.a:LFoo;
  *   return-void
@@ -72,16 +72,16 @@
  *   // exception handler
  *   invoke-static {v0} LQux;.a(LFoo;)V
  *
- * If `iget-object` throws, it will not have written to v0, so the `const/4` is
+ * If `iget-object` throws, it will not have written to v0, so the `const` is
  * necessary to ensure that v0 is always initialized when control flow reaches
- * B2. In other words, v0 must be live-out at const/4.
+ * B2. In other words, v0 must be live-out at `const v0 #0`.
  *
  * Prior to this diff, we dealt with this by putting any potentially throwing
  * opcodes in the subsequent basic block when converting from Dex to IR:
  *
  *   B0:
  *     sget-object v1 <some field of type LQux;>
- *     const/4 v0 #0
+ *     const v0 #0
  *   B1: <throws to B2> // v1 is live-in here
  *     iget-object v0 v1 LQux;.a:LFoo;
  *     return-void
@@ -89,7 +89,7 @@
  *     invoke-static {v0} LQux;.a(LFoo;)V
  *
  * This way, straightforward liveness analysis will consider v0 to be
- * live-out at const/4. Obviously, this is still somewhat inaccurate: we end
+ * live-out at `const`. Obviously, this is still somewhat inaccurate: we end
  * up considering v1 as live-in at B1 when it should really be dead. Being
  * conservative about liveness generally doesn't create wrong behavior, but
  * can result in poorer optimizations.
@@ -98,7 +98,7 @@
  *
  *   B0:
  *     sget-object v1 <some field of type LQux;>
- *     const/4 v0 #0
+ *     const v0 #0
  *     iget-object v1 LQux;.a:LFoo;
  *   B1: <throws to B2> // no registers are live-in here
  *     move-result-pseudo-object v0
@@ -108,7 +108,7 @@
  */
 class IRInstruction final {
  public:
-  explicit IRInstruction(DexOpcode op);
+  explicit IRInstruction(IROpcode op);
 
   /*
    * Ensures that wide registers only have their first register referenced
@@ -121,7 +121,13 @@ class IRInstruction final {
    */
   void denormalize_registers();
 
+  /*
+   * Estimates the number of 16-bit code units required to encode this
+   * IRInstruction. Since the exact encoding is only determined during
+   * instruction lowering, this is just an estimate.
+   */
   uint16_t size() const;
+
   bool operator==(const IRInstruction&) const;
   bool operator!=(const IRInstruction& that) const {
     return !(*this == that);
@@ -144,14 +150,12 @@ class IRInstruction final {
   /*
    * Number of registers used.
    */
-  size_t dests_size() const {
-    return opcode_impl::dests_size(m_opcode) && !opcode::may_throw(m_opcode);
-  }
+  size_t dests_size() const { return opcode_impl::dests_size(m_opcode); }
+
   size_t srcs_size() const { return m_srcs.size(); }
 
   bool has_move_result_pseudo() const {
-    return m_opcode == OPCODE_CHECK_CAST ||
-           (opcode_impl::dests_size(m_opcode) && opcode::may_throw(m_opcode));
+    return opcode_impl::has_move_result_pseudo(m_opcode);
   }
 
   bool has_move_result() const {
@@ -182,12 +186,11 @@ class IRInstruction final {
     }
     return dests_size() && dest_is_wide();
   }
-  bit_width_t src_bit_width(uint16_t i) const;
 
   /*
    * Accessors for logical parts of the instruction.
    */
-  DexOpcode opcode() const { return m_opcode; }
+  IROpcode opcode() const { return m_opcode; }
   uint16_t dest() const {
     always_assert_log(dests_size(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
@@ -199,8 +202,7 @@ class IRInstruction final {
   /*
    * Setters for logical parts of the instruction.
    */
-  IRInstruction* set_opcode(DexOpcode op) {
-    always_assert(!is_fopcode(op) && !opcode::has_range(op));
+  IRInstruction* set_opcode(IROpcode op) {
     m_opcode = op;
     return this;
   }
@@ -316,9 +318,9 @@ class IRInstruction final {
   uint64_t hash();
 
  private:
-  DexOpcode m_opcode;
+  IROpcode m_opcode;
   std::vector<uint16_t> m_srcs;
-  uint16_t m_dest {0};
+  uint16_t m_dest{0};
   union {
     // Zero-initialize this union with the uint64_t member instead of a
     // pointer-type member so that it works properly even on 32-bit machines

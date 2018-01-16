@@ -18,7 +18,7 @@
 namespace redex {
 
 struct MemberSpecification {
-  unsigned long count{0};
+  mutable unsigned long count{0};
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
   DexAccessFlags requiredUnsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
@@ -41,10 +41,12 @@ struct ClassSpecification {
 };
 
 struct KeepSpec {
-  unsigned long count{0};
+  mutable unsigned long count{0};
+  // "includedescriptorclasses" is not implemented. We just parse this option
+  // and save for the future, but the actual behavior is not implemented.
   bool includedescriptorclasses{false};
   bool allowshrinking{false};
-  bool allowoptimization{false};
+  bool allowoptimization{false}; // Same. Not implemented.
   bool allowobfuscation{false};
   bool mark_classes{true};
   bool mark_conditionally{false};
