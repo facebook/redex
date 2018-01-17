@@ -634,6 +634,8 @@ class TypeInference final
         assume_reference(current_state, insn->src(src_idx++));
       }
       for (DexType* arg_type : arg_types) {
+        always_assert_log(
+            insn->arg_word_count() > src_idx, "invalid insn %s\n", SHOW(insn));
         if (is_object(arg_type)) {
           assume_reference(current_state, insn->src(src_idx++));
           continue;
