@@ -1083,6 +1083,22 @@ std::string show(const InstructionIterable& it) {
   return ss.str();
 }
 
+std::string show_context(IRCode const* code, IRInstruction const* insn) {
+  std::stringstream ss;
+  auto iter = code->begin();
+  while ((*iter).insn != insn) {
+    always_assert(iter != code->end());
+    iter++;
+  }
+  for (int i = 0; i < 6 && iter != code->begin(); i++) {
+    iter--;
+  }
+  for (int i = 0; i < 11 && iter != code->end(); i++) {
+    ss << SHOW(*iter++) << std::endl;
+  }
+  return ss.str();
+}
+
 std::string show_deobfuscated(const DexClass* cls) {
   if (!cls) {
     return "";
