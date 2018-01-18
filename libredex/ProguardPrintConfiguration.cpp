@@ -149,7 +149,7 @@ std::string show_methods(
   return ss.str();
 }
 
-std::string redex::show_keep(const KeepSpec& keep_rule) {
+std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
   std::stringstream text;
   auto field_count = 0;
   for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
@@ -190,7 +190,13 @@ std::string redex::show_keep(const KeepSpec& keep_rule) {
     text << show_methods(class_spec.methodSpecifications);
     text << "}";
   }
-  return text.str();
+
+  if (show_source) {
+    std::stringstream source;
+    source << keep_rule.source_filename << ":" << keep_rule.source_line;
+    return '\'' + text.str() + "\' from " + source.str();
+  }
+  return '\'' + text.str() + '\'';
 }
 
 void redex::show_configuration(std::ostream& output,

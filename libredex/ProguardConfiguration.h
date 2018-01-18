@@ -51,6 +51,9 @@ struct KeepSpec {
   bool mark_classes{true};
   bool mark_conditionally{false};
   ClassSpecification class_spec;
+  // For debugging and analysis
+  std::string source_filename;
+  uint32_t source_line;
 };
 
 struct ProguardConfiguration {

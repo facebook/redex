@@ -312,7 +312,7 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   };
 
   auto wq = workqueue_foreach<DexClass*>(
-      pm.empty() ? worker_empty_pg_map : worker_pg_map, 1);
+      pm.empty() ? worker_empty_pg_map : worker_pg_map);
 
   for (const auto& dex : dexen) {
     for (const auto& cls : dex) {
