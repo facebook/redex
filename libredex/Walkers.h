@@ -36,12 +36,23 @@ class walk {
   walk() = delete;
   ~walk() = delete;
 
+  using ClassWalkerFn = const std::function<void(DexClass*)>&;
   using MethodWalkerFn = const std::function<void(DexMethod*)>&;
   using FieldWalkerFn = const std::function<void(DexField*)>&;
   using MethodFilterFn = const std::function<bool(DexMethod*)>&;
   using CodeWalkerFn = const std::function<void(DexMethod*, IRCode&)>&;
   using InsnWalkerFn = const std::function<void(DexMethod*, IRInstruction*)>&;
   using AnnotationWalkerFn = const std::function<void(DexAnnotation*)>&;
+
+  /**
+   * Call walker on all classes in `classes`
+   */
+  template <class Classes>
+  static void classes(Classes const& classes, ClassWalkerFn walker) {
+    for (auto const& cls : classes) {
+      walker(cls);
+    }
+  }
 
   /**
    * Call walker on all methods defined in `classes`
@@ -326,6 +337,19 @@ class walk {
    public:
     parallel() = delete;
     ~parallel() = delete;
+
+    /**
+     * Call walker on all classes in `classes` in parallel.
+     */
+    template <class Classes>
+    static void classes(Classes const& classes,
+                        ClassWalkerFn walker,
+                        size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>( // over-parallelized maybe
+          [&walker](DexClass* cls) { walker(cls); },
+          num_threads);
+      run_all(wq, classes);
+    }
 
     /**
      * Call `walker` on all methods in `classes` in parallel.
