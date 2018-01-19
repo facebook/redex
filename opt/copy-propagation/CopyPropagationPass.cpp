@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "FixpointIterators.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "PassManager.h"
 #include "Walkers.h"
@@ -53,11 +54,22 @@
 // leading to more compact move instructions.
 //
 // Possible additions: (TODO?)
-//   wide registers (I tried it. it's only a tiny help. --jhendrick)
+//   track wide registers. NOTE: be careful of (de)normalization of registers
 
 using namespace copy_propagation_impl;
+using namespace aliased_registers;
 
 namespace {
+
+// Represents a register that may be wide.
+// There are three valid states:
+//   {-, -}      =  none
+//   {r, -}      =  narrow
+//   {r, r + 1}  =  wide
+struct RegisterPair {
+  Value lower;
+  Value upper;
+};
 
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
@@ -85,62 +97,56 @@ class AliasFixpointIterator final
   // if deletes is null, analyze only. Make no changes to the code.
   void run_on_block(Block* block,
                     AliasedRegisters& aliases,
-                    std::vector<IRInstruction*>* deletes) const {
+                    std::unordered_set<IRInstruction*>* deletes) const {
 
-    for (auto it = block->begin(); it != block->end(); ++it) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
+    const auto& iterable = InstructionIterable(block);
+    for (auto it = iterable.begin(); it != iterable.end(); ++it) {
       auto insn = it->insn;
       auto op = insn->opcode();
 
-      if (m_config.replace_with_representative && deletes != nullptr &&
-          m_config.all_representatives) {
+      if (m_config.replace_with_representative && deletes != nullptr) {
         replace_with_representative(insn, aliases);
       }
 
-      RegisterValue src;
-      if (opcode::is_move_result_pseudo(op)) {
-        src = get_src_value(primary_instruction_of_move_result_pseudo(it));
-      } else if (!insn->has_move_result_pseudo()) {
-        src = get_src_value(insn);
-      }
+      const RegisterPair& src = get_src_value(insn);
+      const RegisterPair& dst = get_dest_reg(it, iterable.end());
 
-      if (src != RegisterValue::none()) {
-        // either a move or a constant load into `dst`
-        RegisterValue dst = RegisterValue{insn->dest()};
-        if (aliases.are_aliases(dst, src)) {
+      if (!src.lower.is_none() && !dst.lower.is_none()) {
+        if (aliases.are_aliases(dst.lower, src.lower) &&
+            (dst.upper == src.upper || // Don't ask `aliases` about Value::none
+             aliases.are_aliases(dst.upper, src.upper))) {
+          // insn is a no-op. Delete it.
           if (deletes != nullptr) {
             if (opcode::is_move_result_pseudo(op)) {
-              deletes->push_back(primary_instruction_of_move_result_pseudo(it));
+              // WARNING: This assumes that the primary instruction of a
+              // move-result-pseudo has no side effects.
+              deletes->insert(
+                  primary_instruction_of_move_result_pseudo(it.unwrap()));
             } else {
-              deletes->push_back(insn);
+              deletes->insert(insn);
             }
           }
-        } else if (m_config.all_transitives) {
-          // move dst into src's alias group
-          aliases.move(dst, src);
         } else {
-          aliases.break_alias(dst);
-          aliases.make_aliased(dst, src);
-        }
-      } else {
-        if (m_config.replace_with_representative && deletes != nullptr &&
-            !m_config.all_representatives) {
-          replace_with_representative(insn, aliases);
-        }
-        if (insn->dests_size() > 0) {
-          // dest is being written to but not by a simple move from another
-          // register or a constant load. Break its aliases because we don't
-          // know what its value is.
-          RegisterValue dst{insn->dest()};
-          aliases.break_alias(dst);
-          if (insn->dest_is_wide()) {
-            Register wide_reg = insn->dest() + 1;
-            RegisterValue wide{wide_reg};
-            aliases.break_alias(wide);
+          // move dst into src's alias group
+          aliases.move(dst.lower, src.lower);
+          if (dst.upper != src.upper) { // Don't ask `aliases` about Value::none
+            aliases.move(dst.upper, src.upper);
           }
         }
+      } else if (!dst.lower.is_none()) {
+        // dest is being written to but not by a simple move from another
+        // register or a constant load. Break its aliases because we don't
+        // know what its value is.
+        aliases.break_alias(dst.lower);
+        if (!dst.upper.is_none()) {
+          aliases.break_alias(dst.upper);
+        }
+      }
+
+      // Result register can only be used by move-result(-pseudo).
+      // Clear it after the move-result(-pseudo) has been processed
+      if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+        aliases.break_alias(Value::create_register(RESULT_REGISTER));
       }
     }
   }
@@ -174,59 +180,75 @@ class AliasFixpointIterator final
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        RegisterValue val{insn->src(i)};
-        boost::optional<Register> rep = aliases.get_representative(val);
-        if (rep) {
-          // filter out uses of wide registers where the second register isn't
-          // also aliased
-          if (insn->src_is_wide(i)) {
-            RegisterValue orig_wide{(Register)(insn->src(i) + 1)};
-            RegisterValue rep_wide{(Register)(*rep + 1)};
-            bool wides_are_aliased = aliases.are_aliases(orig_wide, rep_wide);
-            if (!wides_are_aliased) {
-              continue;
-            }
-          }
-
-          if (insn->src(i) != *rep) {
-            insn->set_src(i, *rep);
-            m_stats.replaced_sources++;
-          }
+        auto val = Value::create_register(insn->src(i));
+        Register rep = aliases.get_representative(val);
+        if (rep != insn->src(i) && rep != RESULT_REGISTER) {
+          insn->set_src(i, rep);
+          m_stats.replaced_sources++;
         }
       }
     }
   }
 
-  const RegisterValue get_src_value(IRInstruction* insn) const {
+  // if insn has a destination register (including RESULT), return it.
+  //
+  // ALL destinations must be returned by this method (unlike get_src_value) if
+  // we miss a destination register, we'll fail to clobber it and think we know
+  // that a register holds a stale value.
+  RegisterPair get_dest_reg(InstructionIterator it,
+                            InstructionIterator end) const {
+    IRInstruction* insn = it->insn;
+    RegisterPair dest;
+
+    if (is_invoke(insn->opcode()) || insn->has_move_result_pseudo()) {
+      dest.lower = Value::create_register(RESULT_REGISTER);
+    } else if (insn->dests_size()) {
+      dest.lower = Value::create_register(insn->dest());
+      if (insn->dest_is_wide()) {
+        dest.upper = Value::create_register(insn->dest() + 1);
+      }
+    }
+    return dest;
+  }
+
+  // if the source of `insn` should be tracked by CopyProp, return it
+  RegisterPair get_src_value(IRInstruction* insn) const {
+    RegisterPair source;
+
     switch (insn->opcode()) {
     case OPCODE_MOVE:
     case OPCODE_MOVE_OBJECT:
-      return RegisterValue{insn->src(0)};
+      source.lower = Value::create_register(insn->src(0));
+      break;
+    case OPCODE_MOVE_RESULT:
+    case OPCODE_MOVE_RESULT_OBJECT:
+    case IOPCODE_MOVE_RESULT_PSEUDO:
+    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+      source.lower = Value::create_register(RESULT_REGISTER);
+      break;
     case OPCODE_CONST:
       if (m_config.eliminate_const_literals) {
-        return RegisterValue{insn->get_literal()};
-      } else {
-        return RegisterValue::none();
+        source.lower = Value::create_literal(insn->get_literal());
       }
+      break;
     case OPCODE_CONST_STRING: {
       if (m_config.eliminate_const_strings) {
         DexString* str = insn->get_string();
-        return RegisterValue{str};
-      } else {
-        return RegisterValue::none();
+        source.lower = Value{str};
       }
+      break;
     }
     case OPCODE_CONST_CLASS: {
       if (m_config.eliminate_const_classes) {
         DexType* type = insn->get_type();
-        return RegisterValue{type};
-      } else {
-        return RegisterValue::none();
+        source.lower = Value{type};
       }
+      break;
     }
     default:
-      return RegisterValue::none();
+      break;
     }
+    return source;
   }
 
   void analyze_node(Block* const& node,
@@ -264,6 +286,7 @@ Stats CopyPropagation::run(Scope scope) {
 
         const std::string& before_code =
             m_config.debug ? show(m->get_code()) : "";
+        TRACE(RME, 1, "before code:\n%s\n", before_code.c_str());
         const auto& result = run(code);
 
         if (m_config.debug) {
@@ -307,7 +330,7 @@ Stats CopyPropagation::run(IRCode* code) {
     }
   }
 
-  std::vector<IRInstruction*> deletes;
+  std::unordered_set<IRInstruction*> deletes;
   Stats stats;
 
   code->build_cfg();
@@ -315,19 +338,12 @@ Stats CopyPropagation::run(IRCode* code) {
 
   AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);
 
-  if (m_config.full_method_analysis) {
-    fixpoint.run(AliasDomain());
-    for (auto block : blocks) {
-      AliasDomain domain = fixpoint.get_entry_state_at(block);
-      domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
-        fixpoint.run_on_block(block, aliases, &deletes);
-      });
-    }
-  } else {
-    for (auto block : blocks) {
-      AliasedRegisters aliases;
+  fixpoint.run(AliasDomain());
+  for (auto block : blocks) {
+    AliasDomain domain = fixpoint.get_entry_state_at(block);
+    domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
       fixpoint.run_on_block(block, aliases, &deletes);
-    }
+    });
   }
 
   stats.moves_eliminated += deletes.size();

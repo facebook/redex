@@ -204,7 +204,6 @@ TEST(CopyPropagationTest, cliqueAliasing) {
   code->set_registers_size(4);
 
   CopyPropagationPass::Config config;
-  config.all_transitives = true;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -332,6 +331,31 @@ TEST(CopyPropagationTest, intersect) {
 
       :end
       (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, wideClobber) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v4)
+      (move-wide v0 v2)
+      (move v1 v4)
+    )
+  )");
+  code->set_registers_size(5);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v4)
+      (move-wide v0 v2)
+      (move v1 v4)
     )
   )");
 
