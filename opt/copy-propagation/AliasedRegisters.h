@@ -129,12 +129,12 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   // Are r1 and r2 aliases?
   // (including transitive aliases)
-  bool are_aliases(const Value& r1, const Value& r2);
+  bool are_aliases(const Value& r1, const Value& r2) const;
 
   // Each alias group has one representative register
   Register get_representative(
       const Value& r,
-      const boost::optional<Register>& max_addressable = boost::none);
+      const boost::optional<Register>& max_addressable = boost::none) const;
 
   // ---- extends AbstractValue ----
 
@@ -183,12 +183,15 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   vertex_t find_or_create(const Value& r);
 
   bool has_edge_between(const Value& r1, const Value& r2) const;
+  bool are_adjacent(vertex_t v1, vertex_t v2) const;
 
   // return a vector of all vertices in v's alias group (including v itself)
   std::vector<vertex_t> vertices_in_group(vertex_t v) const;
 
   // merge r1's group with r2. This operation is symmetric
-  void merge_groups_of(const Value& r1, const Value& r2);
+  void merge_groups_of(const Value& r1,
+                       const Value& r2,
+                       const AliasedRegisters& other);
 
   // return all groups (not including singletons)
   std::vector<std::vector<vertex_t>> all_groups();
@@ -200,6 +203,12 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
                           const std::vector<vertex_t>& grp);
   void clear_insert_number(vertex_t v);
   void handle_edge_intersection_insert_order(const AliasedRegisters& other);
+  void handle_insert_order_at_merge(const std::vector<vertex_t>& group,
+                                    const AliasedRegisters& other);
+
+  void renumber_insert_order(
+      std::vector<vertex_t> group,
+      const std::function<bool(vertex_t, vertex_t)>& less_than);
 
   // return true if v has any neighboring vertices
   bool has_neighbors(vertex_t v);

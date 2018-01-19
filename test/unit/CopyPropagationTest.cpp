@@ -299,7 +299,7 @@ TEST(CopyPropagationTest, branchNoChange) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(CopyPropagationTest, intersect) {
+TEST(CopyPropagationTest, intersect1) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -334,6 +334,36 @@ TEST(CopyPropagationTest, intersect) {
       (return-void)
     )
   )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, intersect2) {
+  auto no_change = R"(
+    (
+      (move v0 v1)
+      (if-eqz v0 :true)
+
+      (move v3 v1)
+      (goto :end)
+
+      :true
+      (move v4 v1)
+
+      :end
+      (move v3 v4)
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(no_change);
+  code->set_registers_size(5);
+
+  CopyPropagationPass::Config config;
+  config.replace_with_representative = false;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(no_change);
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));

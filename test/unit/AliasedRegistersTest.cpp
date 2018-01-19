@@ -295,11 +295,13 @@ TEST(AliasedRegistersTest, AbstractValueMeet) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.add_edge(zero, one);
-  b.add_edge(one, two);
+  a.move(zero, one);
+  b.move(two, one);
 
   a.meet_with(b);
 
+  EXPECT_TRUE(a.are_aliases(zero, one));
+  EXPECT_TRUE(a.are_aliases(two, one));
   EXPECT_TRUE(a.are_aliases(zero, two));
   EXPECT_FALSE(a.are_aliases(zero, three));
 

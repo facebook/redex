@@ -127,7 +127,7 @@ void AliasedRegisters::clear_insert_number(vertex_t v) {
 // We only need to check for single edge paths because `move` adds an edge to
 // every node in the alias group, thus maintaining transitive closure of the
 // graph
-bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) {
+bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
   if (r1 == r2) {
     return true;
   }
@@ -151,7 +151,7 @@ bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) {
 //
 // `max_addressable` is useful for instructions that can only address up to v15
 Register AliasedRegisters::get_representative(
-    const Value& orig, const boost::optional<Register>& max_addressable) {
+    const Value& orig, const boost::optional<Register>& max_addressable) const {
   always_assert(orig.is_register());
 
   // if r is not in the graph, then it has no representative
@@ -227,11 +227,15 @@ bool AliasedRegisters::has_edge_between(const Value& r1,
     return false;
   }
 
+  return are_adjacent(*search1, *search2);
+}
+
+bool AliasedRegisters::are_adjacent(vertex_t v1, vertex_t v2) const {
   // and check that they have an edge between them
-  const auto& adj = boost::adjacent_vertices(*search1, m_graph);
+  const auto& adj = boost::adjacent_vertices(v1, m_graph);
   const auto& adj_begin = adj.first;
   const auto& adj_end = adj.second;
-  const auto& edge_search = std::find(adj_begin, adj_end, *search2);
+  const auto& edge_search = std::find(adj_begin, adj_end, v2);
   return edge_search != adj_end;
 }
 
@@ -247,17 +251,6 @@ std::vector<AliasedRegisters::vertex_t> AliasedRegisters::vertices_in_group(
     result.push_back(*it);
   }
   return result;
-}
-
-void AliasedRegisters::merge_groups_of(const Value& r1, const Value& r2) {
-  vertex_t v1 = find_or_create(r1);
-  vertex_t v2 = find_or_create(r2);
-
-  for (vertex_t g1 : vertices_in_group(v1)) {
-    for (vertex_t g2 : vertices_in_group(v2)) {
-      boost::add_edge(g1, g2, m_graph);
-    }
-  }
 }
 
 // return true if v has any neighboring vertices
@@ -318,9 +311,20 @@ bool AliasedRegisters::equals(const AliasedRegisters& other) const {
          leq(other);
 }
 
+AliasedRegisters::Kind AliasedRegisters::narrow_with(
+    const AliasedRegisters& other) {
+  return meet_with(other);
+}
+
+AliasedRegisters::Kind AliasedRegisters::widen_with(
+    const AliasedRegisters& other) {
+  return join_with(other);
+}
+
 // alias group union
 AliasedRegisters::Kind AliasedRegisters::meet_with(
     const AliasedRegisters& other) {
+
   const auto& iters = boost::edges(other.m_graph);
   const auto& begin = iters.first;
   const auto& end = iters.second;
@@ -328,15 +332,31 @@ AliasedRegisters::Kind AliasedRegisters::meet_with(
     const Value& r1 = other.m_graph[boost::source(*it, other.m_graph)];
     const Value& r2 = other.m_graph[boost::target(*it, other.m_graph)];
     if (!this->are_aliases(r1, r2)) {
-      this->merge_groups_of(r1, r2);
+      this->merge_groups_of(r1, r2, other);
     }
   }
   return AliasedRegisters::Kind::Value;
 }
 
-AliasedRegisters::Kind AliasedRegisters::narrow_with(
-    const AliasedRegisters& other) {
-  return join_with(other);
+void AliasedRegisters::merge_groups_of(const Value& r1,
+                                       const Value& r2,
+                                       const AliasedRegisters& other) {
+  vertex_t v1 = find_or_create(r1);
+  vertex_t v2 = find_or_create(r2);
+
+  const auto& group1 = vertices_in_group(v1);
+  const auto& group2 = vertices_in_group(v2);
+  std::vector<vertex_t> union_group;
+  union_group.reserve(group1.size() + group2.size());
+  union_group.insert(union_group.begin(), group1.begin(), group1.end());
+  union_group.insert(union_group.begin(), group2.begin(), group2.end());
+
+  handle_insert_order_at_merge(union_group, other);
+  for (vertex_t g1 : group1) {
+    for (vertex_t g2 : group2) {
+      boost::add_edge(g1, g2, m_graph);
+    }
+  }
 }
 
 // edge intersection
@@ -379,49 +399,81 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
       clear_insert_number(*it);
     }
   }
-  // TODO: Is this okay even though other hasn't been updated after the join?
 
   // Assign new insertion numbers while taking into account both insertion maps.
   for (auto& group : all_groups()) {
-    // Filter out non registers.
-    group.erase(std::remove_if(
-                    group.begin(),
-                    group.end(),
-                    [this](vertex_t v) { return !m_graph[v].is_register(); }),
-                group.end());
+    handle_insert_order_at_merge(group, other);
+  }
+}
 
-    // Sort into new order taking into account both insertion maps.
-    std::sort(
-        group.begin(), group.end(), [this, &other](vertex_t a, vertex_t b) {
-          // return true if a occurs before b.
-          // return false if they compare equal or if b occurs before a.
-          bool this_less_than =
-              this->m_insert_order.at(a) < this->m_insert_order.at(b);
+// Merge the ordering in other.m_insert_order into this->m_insert_order.
+//
+// When both graphs know about an edge (and they don't agree about insertion
+// order), use register number.
+// When only one graph knows about an edge, use insertion order from that graph.
+// When neither graph knows about the edge, use register number.
+// This function can be used (carefully) for both union and intersection.
+void AliasedRegisters::handle_insert_order_at_merge(
+    const std::vector<vertex_t>& group, const AliasedRegisters& other) {
+  renumber_insert_order(group, [this, &other](vertex_t a, vertex_t b) {
+    // return true if a occurs before b.
+    // return false if they compare equal or if b occurs before a.
 
-          // `a` and `b` only index into this, not other.
-          const Value& val_a = m_graph[a];
-          const Value& val_b = m_graph[b];
-          vertex_t other_a = *other.find(val_a);
-          vertex_t other_b = *other.find(val_b);
-          bool other_less_than = other.m_insert_order.at(other_a) <
-                                 other.m_insert_order.at(other_b);
+    // `a` and `b` only index into this, not other.
+    const Value& val_a = this->m_graph[a];
+    const Value& val_b = this->m_graph[b];
+    auto other_a = other.find(val_a);
+    auto other_b = other.find(val_b);
 
-          if (this_less_than == other_less_than) {
-            // The graphs agree on the order of these two vertices.
-            // Preserve that order.
-            return this_less_than;
-          } else {
-            // The graphs do not agree. Choose a deterministic order
-            return val_a.reg() < val_b.reg();
-          }
-        });
+    bool this_has_edge = this->are_adjacent(a, b);
+    bool other_has_edge = other.are_aliases(val_a, val_b);
 
-    // Assign new insertion numbers based on sorting.
-    size_t i = 0;
-    for (vertex_t v : group) {
-      this->m_insert_order[v] = i;
-      ++i;
+    if (this_has_edge && other_has_edge) {
+      // Intersection case should always come here
+      bool this_less_than =
+          this->m_insert_order.at(a) < this->m_insert_order.at(b);
+
+      bool other_less_than =
+          other.m_insert_order.at(*other_a) < other.m_insert_order.at(*other_b);
+
+      if (this_less_than == other_less_than) {
+        // The graphs agree on the order of these two vertices.
+        // Preserve that order.
+        return this_less_than;
+      } else {
+        // The graphs do not agree. Choose a deterministic order
+        return val_a.reg() < val_b.reg();
+      }
+    } else if (this_has_edge) {
+      return this->m_insert_order.at(a) < this->m_insert_order.at(b);
+    } else if (other_has_edge) {
+      return other.m_insert_order.at(*other_a) <
+             other.m_insert_order.at(*other_b);
+    } else {
+      return val_a.reg() < val_b.reg();
     }
+  });
+}
+
+// Rewrite the insertion number of all registers in `group` in an order defined
+// by less_than
+void AliasedRegisters::renumber_insert_order(
+    std::vector<vertex_t> group,
+    const std::function<bool(vertex_t, vertex_t)>& less_than) {
+
+  // Filter out non registers.
+  group.erase(
+      std::remove_if(group.begin(),
+                     group.end(),
+                     [this](vertex_t v) { return !m_graph[v].is_register(); }),
+      group.end());
+
+  // Assign new insertion numbers based on sorting.
+  std::sort(group.begin(), group.end(), less_than);
+  size_t i = 0;
+  for (vertex_t v : group) {
+    this->m_insert_order[v] = i;
+    ++i;
   }
 }
 
@@ -446,10 +498,5 @@ AliasedRegisters::all_groups() {
     }
   }
   return result;
-}
-
-AliasedRegisters::Kind AliasedRegisters::widen_with(
-    const AliasedRegisters& other) {
-  return meet_with(other);
 }
 } // namespace aliased_registers
