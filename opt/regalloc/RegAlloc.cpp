@@ -91,6 +91,8 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("spill_count", stats.moves_inserted());
   mgr.incr_metric("coalesce_count", stats.moves_coalesced);
   mgr.incr_metric("net_moves", stats.net_moves());
+
+  mgr.record_running_regalloc();
 }
 
 static RegAllocPass s_pass;

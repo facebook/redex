@@ -585,6 +585,7 @@ TEST(CopyPropagationTest, wideInvokeSources) {
   CopyPropagationPass::Config config;
   config.replace_with_representative = true;
   config.wide_registers = true;
+  config.regalloc_has_run = true;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);

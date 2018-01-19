@@ -51,6 +51,9 @@ class CopyPropagationPass : public Pass {
     bool replace_with_representative{true};
     bool wide_registers{false};
     bool debug{false};
+
+    // this is set by PassManager, not by PassConfig
+    bool regalloc_has_run{false};
   } m_config;
 };
 

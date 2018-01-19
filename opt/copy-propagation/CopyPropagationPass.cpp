@@ -178,26 +178,8 @@ class AliasFixpointIterator final
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        auto src_bit_width =
-            dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
-        // 2 ** width - 1
-        Register max_addressable = (1 << src_bit_width) - 1;
-
-        // We have to be careful not to create an instruction like this
-        //
-        //   invoke-virtual v15 Lcom;.foo:(J)V
-        //
-        // because lowering to Dex Instructions would change it to
-        //
-        //   invoke-virtual v15, v16 Lcom;.foo:(J)V
-        //
-        // which is a malformed instruction (v16 is too big).
-        //
-        // Normally, RegAlloc handles this case, but CopyProp can run after
-        // RegAlloc
-        bool upper_is_addressable = is_invoke(op) && insn->src_is_wide(i);
         Register r = insn->src(i);
-        Register rep = get_rep(r, aliases, max_addressable - (upper_is_addressable ? 1 : 0));
+        Register rep = get_rep(r, aliases, get_max_addressable(insn, i));
         if (rep != r) {
           // Make sure the upper half of the wide pair is also aliased.
           // but we don't track the upper half of RESULT
@@ -227,6 +209,33 @@ class AliasFixpointIterator final
       return rep;
     }
     return orig;
+  }
+
+  // return the highest allowed source register for this instruction.
+  // `none` means no limit.
+  Register get_max_addressable(IRInstruction* insn, size_t src_index) const {
+    IROpcode op = insn->opcode();
+    auto src_bit_width =
+        dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_index);
+    // 2 ** width - 1
+    Register max_addressable_reg = (1 << src_bit_width) - 1;
+    if (m_config.regalloc_has_run) {
+      // We have to be careful not to create an instruction like this
+      //
+      //   invoke-virtual v15 Lcom;.foo:(J)V
+      //
+      // because lowering to Dex Instructions would change it to
+      //
+      //   invoke-virtual v15, v16 Lcom;.foo:(J)V
+      //
+      // which is a malformed instruction (v16 is too big).
+      //
+      // Normally, RegAlloc handles this case, but CopyProp can run after
+      // RegAlloc
+      bool upper_is_addressable = is_invoke(op) && insn->src_is_wide(src_index);
+      return max_addressable_reg - (upper_is_addressable ? 1 : 0);
+    }
+    return max_addressable_reg;
   }
 
   // if insn has a destination register (including RESULT), return it.
@@ -422,6 +431,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
           "Ignoring eliminate_const_literals because verify-none is not "
           "enabled.\n");
   }
+  m_config.regalloc_has_run = mgr.regalloc_has_run();
 
   CopyPropagation impl(m_config);
   auto stats = impl.run(scope);
