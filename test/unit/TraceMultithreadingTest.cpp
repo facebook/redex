@@ -8,7 +8,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
+#include <boost/thread/thread.hpp>
 #include <vector>
 
 #include "Trace.h"
@@ -21,10 +21,10 @@ TEST(TraceMultithreadingTest, singleThread) {
 }
 
 TEST(TraceMultithreadingTest, multipleThreadsOnePrint) {
-  std::vector<std::thread> threads;
+  std::vector<boost::thread> threads;
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
     threads.emplace_back(
-        std::thread([]() { TRACE(TIME, 1, "Test output!\n"); }));
+        boost::thread([]() { TRACE(TIME, 1, "Test output!\n"); }));
   }
   for (auto& thread : threads) {
     thread.join();
@@ -32,9 +32,9 @@ TEST(TraceMultithreadingTest, multipleThreadsOnePrint) {
 }
 
 TEST(TraceMultithreadingTest, multipleThreadsMultiplePrints) {
-  std::vector<std::thread> threads;
+  std::vector<boost::thread> threads;
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
-    threads.emplace_back(std::thread([]() {
+    threads.emplace_back(boost::thread([]() {
       for (int j = 0; j < NUM_ITERS; ++j) {
         TRACE(TIME, 1, "Test output count %d\n", j);
       }
@@ -46,9 +46,9 @@ TEST(TraceMultithreadingTest, multipleThreadsMultiplePrints) {
 }
 
 TEST(TraceMultithreadingTest, localThreadContext) {
-  std::vector<std::thread> threads;
+  std::vector<boost::thread> threads;
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
-    threads.emplace_back(std::thread([]() {
+    threads.emplace_back(boost::thread([]() {
       for (int j = 0; j < NUM_ITERS; ++j) {
         TraceContext context("thread context");
         TRACE(TIME, 1, "Test output count %d\n", j);
