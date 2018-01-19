@@ -32,7 +32,7 @@ TEST(AliasedRegistersTest, identity) {
 TEST(AliasedRegistersTest, simpleMake) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
 
   EXPECT_TRUE(a.are_aliases(zero, zero));
   EXPECT_TRUE(a.are_aliases(zero, one));
@@ -45,7 +45,7 @@ TEST(AliasedRegistersTest, simpleMake) {
 TEST(AliasedRegistersTest, makeBreakLow) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   EXPECT_TRUE(a.are_aliases(zero, one));
 
   a.break_alias(zero);
@@ -55,7 +55,7 @@ TEST(AliasedRegistersTest, makeBreakLow) {
 TEST(AliasedRegistersTest, makeBreakHigh) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   EXPECT_TRUE(a.are_aliases(zero, one));
 
   a.break_alias(one);
@@ -65,7 +65,7 @@ TEST(AliasedRegistersTest, makeBreakHigh) {
 TEST(AliasedRegistersTest, transitiveBreakFirst) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -77,7 +77,7 @@ TEST(AliasedRegistersTest, transitiveBreakFirst) {
 TEST(AliasedRegistersTest, transitiveBreakMiddle) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -88,7 +88,7 @@ TEST(AliasedRegistersTest, transitiveBreakMiddle) {
 TEST(AliasedRegistersTest, transitiveBreakEnd) {
   AliasedRegisters a;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -164,28 +164,28 @@ TEST(AliasedRegistersTest, transitiveCycleBreak) {
 
 TEST(AliasedRegistersTest, getRepresentative) {
   AliasedRegisters a;
-  a.add_edge(zero, one);
+  a.move(zero, one);
   Register zero_rep = a.get_representative(zero);
   Register one_rep = a.get_representative(one);
-  EXPECT_EQ(0, zero_rep);
-  EXPECT_EQ(0, one_rep);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
 }
 
 TEST(AliasedRegistersTest, getRepresentativeTwoLinks) {
   AliasedRegisters a;
-  a.add_edge(zero, one);
-  a.add_edge(one, two);
+  a.move(zero, one);
+  a.move(two, zero);
   Register zero_rep = a.get_representative(zero);
   Register one_rep = a.get_representative(one);
-  Register two_rep = a.get_representative(one);
-  EXPECT_EQ(0, zero_rep);
-  EXPECT_EQ(0, one_rep);
-  EXPECT_EQ(0, two_rep);
+  Register two_rep = a.get_representative(two);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
+  EXPECT_EQ(1, two_rep);
 }
 
 TEST(AliasedRegistersTest, breakLineGraph) {
   AliasedRegisters a;
-  a.add_edge(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   a.break_alias(one);
   EXPECT_TRUE(a.are_aliases(zero, two));
@@ -208,23 +208,23 @@ TEST(AliasedRegistersTest, getRepresentativeNone) {
 
 TEST(AliasedRegistersTest, getRepresentativeTwoComponents) {
   AliasedRegisters a;
-  a.add_edge(zero, one);
-  a.add_edge(two, three);
+  a.move(zero, one);
+  a.move(two, three);
 
   Register zero_rep = a.get_representative(zero);
   Register one_rep = a.get_representative(one);
-  EXPECT_EQ(0, zero_rep);
-  EXPECT_EQ(0, one_rep);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
 
   Register two_rep = a.get_representative(two);
   Register three_rep = a.get_representative(three);
-  EXPECT_EQ(2, two_rep);
-  EXPECT_EQ(2, three_rep);
+  EXPECT_EQ(3, two_rep);
+  EXPECT_EQ(3, three_rep);
 }
 
 TEST(AliasedRegistersTest, getRepresentativeNoLits) {
   AliasedRegisters a;
-  a.add_edge(two, one_lit);
+  a.move(two, one_lit);
   auto two_rep = a.get_representative(two);
   EXPECT_EQ(2, two_rep);
 }
@@ -235,12 +235,12 @@ TEST(AliasedRegistersTest, AbstractValueLeq) {
   EXPECT_TRUE(a.leq(b));
   EXPECT_TRUE(b.leq(a));
 
-  a.add_edge(zero, one);
-  b.add_edge(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.leq(b));
 
-  b.add_edge(zero, two);
+  b.move(two, zero);
   EXPECT_FALSE(a.leq(b));
   EXPECT_TRUE(b.leq(a));
 }
@@ -249,8 +249,8 @@ TEST(AliasedRegistersTest, AbstractValueLeqAndNotEqual) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.add_edge(zero, one);
-  b.add_edge(two, three);
+  a.move(zero, one);
+  b.move(two, three);
 
   EXPECT_FALSE(a.leq(b));
   EXPECT_FALSE(b.leq(a));
@@ -264,13 +264,13 @@ TEST(AliasedRegistersTest, AbstractValueEquals) {
   EXPECT_TRUE(a.equals(b));
   EXPECT_TRUE(b.equals(a));
 
-  a.add_edge(zero, one);
-  b.add_edge(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.equals(b));
   EXPECT_TRUE(b.equals(a));
 
-  b.add_edge(zero, two);
+  b.move(two, zero);
   EXPECT_FALSE(a.equals(b));
   EXPECT_FALSE(b.equals(a));
 }
@@ -280,8 +280,8 @@ TEST(AliasedRegistersTest, AbstractValueEqualsAndClear) {
   AliasedRegisters b;
   EXPECT_TRUE(a.equals(b));
 
-  a.add_edge(zero, one);
-  b.add_edge(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.equals(b));
 
@@ -313,8 +313,8 @@ TEST(AliasedRegistersTest, AbstractValueJoinNone) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.add_edge(zero, one);
-  b.add_edge(one, two);
+  a.move(zero, one);
+  b.move(one, two);
 
   a.join_with(b);
 
@@ -328,8 +328,8 @@ TEST(AliasedRegistersTest, AbstractValueJoinSome) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.add_edge(zero, one);
-  b.add_edge(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
   b.move(two, one);
 
   a.join_with(b);
@@ -349,11 +349,11 @@ TEST(AliasedRegistersTest, AbstractValueJoin) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.add_edge(zero, one);
+  a.move(zero, one);
   a.move(two, zero);
   a.move(three, zero);
 
-  b.add_edge(four, one);
+  b.move(four, one);
   b.move(two, four);
   b.move(three, four);
 

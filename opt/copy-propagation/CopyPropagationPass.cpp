@@ -166,6 +166,7 @@ class AliasFixpointIterator final
   //   invoke-static v0 bar
   void replace_with_representative(IRInstruction* insn,
                                    AliasedRegisters& aliases) const {
+    IROpcode op = insn->opcode();
     if (insn->srcs_size() > 0 &&
         m_range_set.count(insn) == 0 && // range has to stay in order
         // we need to make sure the dest and src of check-cast stay identical,
@@ -177,13 +178,35 @@ class AliasFixpointIterator final
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        auto src_bit_width =
+            dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
+        // 2 ** width - 1
+        Register max_addressable = (1 << src_bit_width) - 1;
+
+        // We have to be careful not to create an instruction like this
+        //
+        //   invoke-virtual v15 Lcom;.foo:(J)V
+        //
+        // because lowering to Dex Instructions would change it to
+        //
+        //   invoke-virtual v15, v16 Lcom;.foo:(J)V
+        //
+        // which is a malformed instruction (v16 is too big).
+        //
+        // Normally, RegAlloc handles this case, but CopyProp can run after
+        // RegAlloc
+        bool upper_is_addressable = is_invoke(op) && insn->src_is_wide(i);
         Register r = insn->src(i);
-        Register rep = get_rep(r, aliases);
+        Register rep = get_rep(r, aliases, max_addressable - (upper_is_addressable ? 1 : 0));
         if (rep != r) {
           // Make sure the upper half of the wide pair is also aliased.
           // but we don't track the upper half of RESULT
           if (insn->src_is_wide(i) && r != RESULT_REGISTER) {
-            Register upper = get_rep(r + 1, aliases);
+
+            // We don't give a `max_addressable` register to get_rep() because
+            // the upper half of a register is never addressed in IR
+            Register upper = get_rep(r + 1, aliases, boost::none);
+
             if (upper != rep + 1) {
               continue;
             }
@@ -195,13 +218,15 @@ class AliasFixpointIterator final
     }
   }
 
-  Register get_rep(Register r, AliasedRegisters& aliases) const {
-    auto val = Value::create_register(r);
-    Register rep = aliases.get_representative(val);
+  Register get_rep(Register orig,
+                   AliasedRegisters& aliases,
+                   const boost::optional<Register>& max_addressable) const {
+    auto val = Value::create_register(orig);
+    Register rep = aliases.get_representative(val, max_addressable);
     if (rep < RESULT_REGISTER) {
       return rep;
     }
-    return r;
+    return orig;
   }
 
   // if insn has a destination register (including RESULT), return it.

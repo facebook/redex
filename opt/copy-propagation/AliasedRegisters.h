@@ -110,18 +110,18 @@ class Value {
 
   bool is_register() const { return m_kind == Kind::REGISTER; }
 
-  Register reg() const { return m_reg; }
+  Register reg() const {
+    always_assert(m_kind == Kind::REGISTER);
+    return m_reg;
+  }
 };
 
 class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
-  // Declare that r1 and r2 are aliases of each other.
-  // This does NOT handle all transitive aliases. It's mostly used for testing
-  void add_edge(const Value& r1, const Value& r2);
-
-  // move `moving` into the alias group of `group`
+  // Declare that `moving` is an alias of `group`
+  // by adding `moving` into the alias group of `group`
   void move(const Value& moving, const Value& group);
 
   // break every alias that any register has to `r`
@@ -132,7 +132,9 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   bool are_aliases(const Value& r1, const Value& r2);
 
   // Each alias group has one representative register
-  Register get_representative(const Value& r);
+  Register get_representative(
+      const Value& r,
+      const boost::optional<Register>& max_addressable = boost::none);
 
   // ---- extends AbstractValue ----
 
@@ -160,8 +162,20 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
                                       boost::vecS, // vertex container
                                       boost::undirectedS, // undirected graph
                                       Value>; // node property
-  typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;
+  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
   Graph m_graph;
+
+  // For keeping track of the oldest representative.
+  //
+  // When adding a vertex to a group, it gets 1 + the max insertion number of
+  // the group. When choosing a representative, we prefer lower insertion
+  // numbers. Vertices in a group are guaranteed to have an entry in this map.
+  // Do not query this map if the vertex is not in a group.
+  //
+  // We only track the insertion for registers because they're the only type
+  // that could be chosen as a representative.
+  using InsertionOrder = std::unordered_map<vertex_t, size_t>;
+  InsertionOrder m_insert_order;
 
   const boost::range_detail::integer_iterator<vertex_t> find(
       const Value& r) const;
@@ -175,6 +189,20 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   // merge r1's group with r2. This operation is symmetric
   void merge_groups_of(const Value& r1, const Value& r2);
+
+  // return all groups (not including singletons)
+  std::vector<std::vector<vertex_t>> all_groups();
+
+  void track_insert_order(const Value& moving,
+                          vertex_t v_moving,
+                          const Value& group,
+                          vertex_t v_group,
+                          const std::vector<vertex_t>& grp);
+  void clear_insert_number(vertex_t v);
+  void handle_edge_intersection_insert_order(const AliasedRegisters& other);
+
+  // return true if v has any neighboring vertices
+  bool has_neighbors(vertex_t v);
 };
 
 class AliasDomain

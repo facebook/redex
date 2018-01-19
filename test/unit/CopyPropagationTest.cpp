@@ -204,6 +204,7 @@ TEST(CopyPropagationTest, cliqueAliasing) {
   code->set_registers_size(4);
 
   CopyPropagationPass::Config config;
+  config.replace_with_representative = false;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -441,4 +442,125 @@ TEST(CopyPropagationTest, repWide) {
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
+}
+
+// whichRep and whichRep2 make sure that we deterministically choose the
+// representative after a merge point.
+TEST(CopyPropagationTest, whichRep) {
+  auto no_change = R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v2 v1)
+
+      :end
+      (move v3 v1)
+    )
+  )";
+  auto code = assembler::ircode_from_string(no_change);
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  config.replace_with_representative = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(no_change);
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, whichRep2) {
+  auto no_change = R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v2 v1)
+      (goto :end)
+
+      :true
+      (move v1 v2)
+
+      :end
+      (move v3 v1)
+    )
+  )";
+  auto code = assembler::ircode_from_string(no_change);
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  config.replace_with_representative = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(no_change);
+}
+
+// make sure we keep using the oldest representative even after a merge
+TEST(CopyPropagationTest, whichRepPreserve) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v1 v2)
+
+      :end
+      (move v3 v1)
+    )
+  )");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  config.replace_with_representative = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :true)
+
+      (move v1 v2)
+      (goto :end)
+
+      :true
+      (move v1 v2)
+
+      :end
+      (move v3 v2)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, wideInvokeSources) {
+  g_redex = new RedexContext();
+
+  auto no_change = R"(
+    (
+      (move-wide v0 v15)
+      (invoke-static (v0) "Lcom;.foo:(J)V")
+    )
+  )";
+  auto code = assembler::ircode_from_string(no_change);
+  code->set_registers_size(16);
+
+  CopyPropagationPass::Config config;
+  config.replace_with_representative = true;
+  config.wide_registers = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(no_change);
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
 }
