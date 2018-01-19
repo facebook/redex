@@ -52,9 +52,6 @@
 // that if we use fewer registers, DCE could clean up some more moves after
 // us. Another reason is that representatives are likely to be v15 or less,
 // leading to more compact move instructions.
-//
-// Possible additions: (TODO?)
-//   track wide registers. NOTE: be careful of (de)normalization of registers
 
 using namespace copy_propagation_impl;
 using namespace aliased_registers;
@@ -180,14 +177,31 @@ class AliasFixpointIterator final
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(insn->opcode())) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        auto val = Value::create_register(insn->src(i));
-        Register rep = aliases.get_representative(val);
-        if (rep != insn->src(i) && rep != RESULT_REGISTER) {
+        Register r = insn->src(i);
+        Register rep = get_rep(r, aliases);
+        if (rep != r) {
+          // Make sure the upper half of the wide pair is also aliased.
+          // but we don't track the upper half of RESULT
+          if (insn->src_is_wide(i) && r != RESULT_REGISTER) {
+            Register upper = get_rep(r + 1, aliases);
+            if (upper != rep + 1) {
+              continue;
+            }
+          }
           insn->set_src(i, rep);
           m_stats.replaced_sources++;
         }
       }
     }
+  }
+
+  Register get_rep(Register r, AliasedRegisters& aliases) const {
+    auto val = Value::create_register(r);
+    Register rep = aliases.get_representative(val);
+    if (rep < RESULT_REGISTER) {
+      return rep;
+    }
+    return r;
   }
 
   // if insn has a destination register (including RESULT), return it.
@@ -220,7 +234,16 @@ class AliasFixpointIterator final
     case OPCODE_MOVE_OBJECT:
       source.lower = Value::create_register(insn->src(0));
       break;
+    case OPCODE_MOVE_WIDE:
+      if (m_config.wide_registers) {
+        source.lower = Value::create_register(insn->src(0));
+        source.upper = Value::create_register(insn->src(0) + 1);
+      }
+      break;
     case OPCODE_MOVE_RESULT:
+    case OPCODE_MOVE_RESULT_WIDE:
+      // We don't track the upper half of the result register because
+      // it's not addressable. No need to set source.upper
     case OPCODE_MOVE_RESULT_OBJECT:
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
@@ -229,6 +252,12 @@ class AliasFixpointIterator final
     case OPCODE_CONST:
       if (m_config.eliminate_const_literals) {
         source.lower = Value::create_literal(insn->get_literal());
+      }
+      break;
+    case OPCODE_CONST_WIDE:
+      if (m_config.eliminate_const_literals && m_config.wide_registers) {
+        source.lower = Value::create_literal(insn->get_literal());
+        source.upper = Value::create_literal_upper(insn->get_literal());
       }
       break;
     case OPCODE_CONST_STRING: {
@@ -248,6 +277,7 @@ class AliasFixpointIterator final
     default:
       break;
     }
+
     return source;
   }
 
@@ -286,7 +316,6 @@ Stats CopyPropagation::run(Scope scope) {
 
         const std::string& before_code =
             m_config.debug ? show(m->get_code()) : "";
-        TRACE(RME, 1, "before code:\n%s\n", before_code.c_str());
         const auto& result = run(code);
 
         if (m_config.debug) {

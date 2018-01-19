@@ -34,6 +34,7 @@ class Value {
   enum class Kind {
     REGISTER,
     CONST_LITERAL,
+    CONST_LITERAL_UPPER,
     CONST_STRING,
     CONST_TYPE,
     NONE,
@@ -57,7 +58,7 @@ class Value {
     m_reg = r;
   }
   explicit Value(Kind k, int64_t l) {
-    always_assert(k == Kind::CONST_LITERAL);
+    always_assert(k == Kind::CONST_LITERAL || k == Kind::CONST_LITERAL_UPPER);
     m_kind = k;
     m_literal = l;
   }
@@ -67,6 +68,10 @@ class Value {
 
   static Value create_literal(int64_t l) {
     return Value{Kind::CONST_LITERAL, l};
+  }
+
+  static Value create_literal_upper(int64_t l) {
+    return Value{Kind::CONST_LITERAL_UPPER, l};
   }
 
   explicit Value(DexString* s) : m_kind(Kind::CONST_STRING), m_str(s) {}
@@ -82,6 +87,8 @@ class Value {
     case Kind::REGISTER:
       return m_reg == other.m_reg;
     case Kind::CONST_LITERAL:
+      return m_literal == other.m_literal;
+    case Kind::CONST_LITERAL_UPPER:
       return m_literal == other.m_literal;
     case Kind::CONST_STRING:
       return m_str == other.m_str;

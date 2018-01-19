@@ -338,6 +338,29 @@ TEST(CopyPropagationTest, intersect) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST(CopyPropagationTest, wide) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v0 v2)
+      (move-wide v0 v2)
+    )
+  )");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  config.wide_registers = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v0 v2)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(CopyPropagationTest, wideClobber) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -349,6 +372,7 @@ TEST(CopyPropagationTest, wideClobber) {
   code->set_registers_size(5);
 
   CopyPropagationPass::Config config;
+  config.wide_registers = false;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -356,6 +380,62 @@ TEST(CopyPropagationTest, wideClobber) {
       (move v1 v4)
       (move-wide v0 v2)
       (move v1 v4)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, wideClobberWideTrue) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v4)
+      (move-wide v0 v2)
+      (move v1 v4)
+    )
+  )");
+  code->set_registers_size(5);
+
+  CopyPropagationPass::Config config;
+  config.wide_registers = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move v1 v4)
+      (move-wide v0 v2)
+      (move v1 v4)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(CopyPropagationTest, repWide) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-wide v0 0)
+      (move-wide v2 v0)
+      (const v1 0)
+      (move-wide v4 v2)
+    )
+  )");
+  code->set_registers_size(5);
+
+  CopyPropagationPass::Config config;
+  config.wide_registers = true;
+  config.replace_with_representative = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-wide v0 0)
+      (move-wide v2 v0)
+      (const v1 0)
+      (move-wide v4 v2) ; don't switch v2 to v0
+                        ; because `const v1` invalidated v0
     )
   )");
 
