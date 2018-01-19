@@ -41,6 +41,7 @@ class CopyPropagationPass : public Pass {
            true,
            m_config.replace_with_representative);
     pc.get("wide_registers", false, m_config.wide_registers);
+    pc.get("static_finals", false, m_config.static_finals);
     pc.get("debug", false, m_config.debug);
   }
 
@@ -50,6 +51,7 @@ class CopyPropagationPass : public Pass {
     bool eliminate_const_classes{true};
     bool replace_with_representative{true};
     bool wide_registers{false};
+    bool static_finals{false};
     bool debug{false};
 
     // this is set by PassManager, not by PassConfig

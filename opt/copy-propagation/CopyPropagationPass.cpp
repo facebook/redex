@@ -19,6 +19,7 @@
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "Walkers.h"
 
 // This pass eliminates writes to registers that already hold the written value.
@@ -144,6 +145,9 @@ class AliasFixpointIterator final
       // Clear it after the move-result(-pseudo) has been processed
       if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
         aliases.break_alias(Value::create_register(RESULT_REGISTER));
+        if (insn->dest_is_wide()) {
+          aliases.break_alias(Value::create_register(RESULT_REGISTER + 1));
+        }
       }
     }
   }
@@ -182,8 +186,7 @@ class AliasFixpointIterator final
         Register rep = get_rep(r, aliases, get_max_addressable(insn, i));
         if (rep != r) {
           // Make sure the upper half of the wide pair is also aliased.
-          // but we don't track the upper half of RESULT
-          if (insn->src_is_wide(i) && r != RESULT_REGISTER) {
+          if (insn->src_is_wide(i)) {
 
             // We don't give a `max_addressable` register to get_rep() because
             // the upper half of a register is never addressed in IR
@@ -250,6 +253,16 @@ class AliasFixpointIterator final
 
     if (is_invoke(insn->opcode()) || insn->has_move_result_pseudo()) {
       dest.lower = Value::create_register(RESULT_REGISTER);
+
+      // It's easier to check the following move-result for the width of the
+      // RESULT_REGISTER
+      auto next = std::next(it);
+      if (next != end &&
+          (is_move_result(next->insn->opcode()) ||
+           opcode::is_move_result_pseudo(next->insn->opcode())) &&
+          next->insn->dest_is_wide()) {
+        dest.upper = Value::create_register(RESULT_REGISTER + 1);
+      }
     } else if (insn->dests_size()) {
       dest.lower = Value::create_register(insn->dest());
       if (insn->dest_is_wide()) {
@@ -262,6 +275,7 @@ class AliasFixpointIterator final
   // if the source of `insn` should be tracked by CopyProp, return it
   RegisterPair get_src_value(IRInstruction* insn) const {
     RegisterPair source;
+    auto op = insn->opcode();
 
     switch (insn->opcode()) {
     case OPCODE_MOVE:
@@ -275,13 +289,17 @@ class AliasFixpointIterator final
       }
       break;
     case OPCODE_MOVE_RESULT:
-    case OPCODE_MOVE_RESULT_WIDE:
-      // We don't track the upper half of the result register because
-      // it's not addressable. No need to set source.upper
     case OPCODE_MOVE_RESULT_OBJECT:
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
       source.lower = Value::create_register(RESULT_REGISTER);
+      break;
+    case OPCODE_MOVE_RESULT_WIDE:
+    case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+      if (m_config.wide_registers) {
+        source.lower = Value::create_register(RESULT_REGISTER);
+        source.upper = Value::create_register(RESULT_REGISTER + 1);
+      }
       break;
     case OPCODE_CONST:
       if (m_config.eliminate_const_literals) {
@@ -308,6 +326,26 @@ class AliasFixpointIterator final
       }
       break;
     }
+    case OPCODE_SGET:
+    case OPCODE_SGET_WIDE:
+    case OPCODE_SGET_OBJECT:
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET_SHORT:
+      if (m_config.static_finals) {
+        DexField* field = resolve_field(insn->get_field(), FieldSearch::Static);
+        // non-final fields could have been written to since we last made an
+        // alias. Exclude them.
+        if (field != nullptr && is_final(field->get_access())) {
+          if (op != OPCODE_SGET_WIDE) {
+            source.lower = Value::create_field(field);
+          } else if (m_config.wide_registers) {
+            source.lower = Value::create_field(field);
+            source.upper = Value::create_field_upper(field);
+          }
+        }
+      }
     default:
       break;
     }
