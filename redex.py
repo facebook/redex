@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,19 @@ import pyredex.logger as logger
 import pyredex.unpacker as unpacker
 from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs
 from pyredex.logger import log
+
+
+def patch_zip_file():
+    # See http://bugs.python.org/issue14315
+    old_decode_extra = zipfile.ZipInfo._decodeExtra
+
+    def decodeExtra(self):
+        try:
+            old_decode_extra(self)
+        except struct.error:
+            pass
+    zipfile.ZipInfo._decodeExtra = decodeExtra
+
 
 timer = timeit.default_timer
 
@@ -220,16 +234,18 @@ def unzip_apk(apk, destination_directory):
         z.extractall(destination_directory)
 
 
-def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign):
+def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
     try:
         zipalign = [join(find_android_build_tools(), 'zipalign')]
     except Exception:
         # We couldn't find zipalign via ANDROID_SDK.  Try PATH.
         zipalign = ['zipalign']
+    args = ['4', unaligned_apk_path, output_apk_path]
+    if page_align:
+        args = ['-p'] + args
     try:
-        subprocess.check_call(zipalign +
-                              ['4', unaligned_apk_path, output_apk_path])
+        subprocess.check_call(zipalign + args)
     except subprocess.CalledProcessError:
         print("Couldn't find zipalign. See README.md to resolve this.")
         if not ignore_zipalign:
@@ -239,7 +255,7 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign):
 
 
 def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
-        key_alias, key_password, ignore_zipalign):
+        key_alias, key_password, ignore_zipalign, page_align):
 
     # Remove old signature files
     for f in abs_glob(extracted_apk_dir, 'META-INF/*'):
@@ -280,7 +296,7 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
-    zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign)
+    zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
 
 
 def merge_proguard_maps(
@@ -451,6 +467,8 @@ Given an APK, produce a better APK!
     parser.add_argument('--gdb', action='store_true', help='Run redex binary in gdb')
     parser.add_argument('--ignore-zipalign', action='store_true', help='Ignore if zipalign is not found')
     parser.add_argument('--verify-none-mode', action='store_true', help='Enable verify-none mode on redex')
+    parser.add_argument('--page-align-libs', action='store_true',
+           help='Preserve 4k page alignment for uncompressed libs')
 
     return parser
 
@@ -619,7 +637,7 @@ def run_redex(args):
 
     log('Creating output apk')
     create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
-            args.keyalias, args.keypass, args.ignore_zipalign)
+            args.keyalias, args.keypass, args.ignore_zipalign, args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
     copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
@@ -661,6 +679,7 @@ def run_redex(args):
 
 
 if __name__ == '__main__':
+    patch_zip_file()
     keys = {}
     try:
         keystore = join(os.environ['HOME'], '.android', 'debug.keystore')

@@ -6,6 +6,7 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -216,7 +217,7 @@ class Api21DexMode(BaseDexMode):
                                store=self._store_id,
                                dependencies=self._dependencies,
                                locator_store_id=locator_store_id)
-        for i in range(2, 100):
+        for i in itertools.count(2):
             dex_path = join(dex_dir, self._dex_prefix + '%d.dex' % i)
             if not isfile(dex_path):
                 break
@@ -298,7 +299,7 @@ class SubdirDexMode(BaseDexMode):
                                store=self._store_id,
                                dependencies=self._dependencies,
                                locator_store_id=locator_store_id)
-        for i in range(1, 100):
+        for i in itertools.count(1):
             oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
             dexpath = join(dex_dir, self._store_name + '-%d.dex' % i)
             if not isfile(oldpath):
@@ -431,7 +432,7 @@ class XZSDexMode(BaseDexMode):
                                    locator_store_id=locator_store_id)
 
         with open(concat_jar_path, 'wb') as concat_jar:
-            for i in range(1, 100):
+            for i in itertools.count(1):
                 oldpath = join(dex_dir, self._dex_prefix + '%d.dex' % (i + 1))
                 if not isfile(oldpath):
                     break
