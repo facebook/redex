@@ -70,6 +70,10 @@ struct BranchTarget {
   BranchTargetType type;
   MethodItemEntry* src;
   int32_t index;
+  BranchTarget() = default;
+  BranchTarget(MethodItemEntry* src): type(BRANCH_SIMPLE), src(src) {}
+  BranchTarget(MethodItemEntry* src, int32_t index)
+      : type(BRANCH_MULTI), src(src), index(index) {}
 };
 
 enum MethodItemType {

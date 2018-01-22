@@ -12,6 +12,7 @@
 #include <atomic>
 
 #include "ConstPropConfig.h"
+#include "ConstantEnvironment.h"
 #include "Pass.h"
 
 namespace interprocedural_constant_propagation {
@@ -24,6 +25,14 @@ struct Stats {
 
 } // namespace interprocedural_constant_propagation
 
+namespace interprocedural_constant_propagation_impl {
+
+void insert_runtime_input_checks(const ConstantEnvironment&,
+                                 DexMethodRef*,
+                                 DexMethod*);
+
+} // namespace interprocedural_constant_propagation_impl
+
 class InterproceduralConstantPropagationPass : public Pass {
  public:
   InterproceduralConstantPropagationPass()
@@ -35,6 +44,7 @@ class InterproceduralConstantPropagationPass : public Pass {
     pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
     pc.get("propagate_conditions", false, m_config.propagate_conditions);
     pc.get("include_virtuals", false, m_config.include_virtuals);
+    pc.get("dynamic_input_checks", false, m_config.dynamic_input_checks);
   }
 
   // run() is exposed for testing purposes -- run_pass takes a PassManager
@@ -46,4 +56,5 @@ class InterproceduralConstantPropagationPass : public Pass {
                 PassManager& mgr) override;
  private:
   ConstPropConfig m_config;
+  DexMethodRef* m_dynamic_check_fail_handler;
 };

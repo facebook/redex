@@ -11,4 +11,5 @@ struct ConstPropConfig {
   bool fold_arithmetic{false};
   bool propagate_conditions{false};
   bool include_virtuals{false};
+  bool dynamic_input_checks{false};
 };

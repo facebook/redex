@@ -215,3 +215,161 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
 
   delete g_redex;
 }
+
+struct RuntimeInputCheckTest : testing::Test {
+  DexMethodRef* m_fail_handler;
+
+  RuntimeInputCheckTest() {
+    g_redex = new RedexContext();
+    m_fail_handler = DexMethod::make_method(
+        "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V");
+  }
+
+  ~RuntimeInputCheckTest() {
+    delete g_redex;
+  }
+};
+
+TEST_F(RuntimeInputCheckTest, RuntimeInputEqualityCheck) {
+  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(1);
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(I)V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code), false);
+
+  ConstantEnvironment env{{0, SignedConstantDomain(5)}};
+  insert_runtime_input_checks(env, m_fail_handler, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 5)
+      (if-eq v0 v1 :assertion-true)
+      (const v2 0)
+      (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V")
+      :assertion-true
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(RuntimeInputCheckTest, RuntimeInputSignCheck) {
+  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
+  using sign_domain::Interval;
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(2);
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(II)V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code), false);
+
+  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
+                          {1, SignedConstantDomain(Interval::LTZ)}};
+  insert_runtime_input_checks(env, m_fail_handler, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-gez v0 :assertion-true-1)
+      (const v2 0)
+      (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V")
+      :assertion-true-1
+      (if-ltz v1 :assertion-true-2)
+      (const v3 1)
+      (invoke-static (v3) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V")
+      :assertion-true-2
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(RuntimeInputCheckTest, RuntimeInputCheckIntOnly) {
+  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
+  using sign_domain::Interval;
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0) ; long -- we don't handle this yet
+      (load-param v1) ; int
+      (return-void)
+    )
+  )");
+  code->set_registers_size(2);
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(JI)V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code), false);
+
+  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
+                          {1, SignedConstantDomain(Interval::LTZ)}};
+  insert_runtime_input_checks(env, m_fail_handler, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-ltz v1 :assertion-true-1)
+      (const v2 1)
+      (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V")
+      :assertion-true-1
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(RuntimeInputCheckTest, RuntimeInputCheckVirtualMethod) {
+  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
+  using sign_domain::Interval;
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0) ; `this` argument
+      (load-param v1)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(2);
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(I)V"));
+  method->make_concrete(ACC_PUBLIC, std::move(code), true);
+
+  ConstantEnvironment env{{1, SignedConstantDomain(Interval::LTZ)}};
+  insert_runtime_input_checks(env, m_fail_handler, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0) ; `this` argument
+      (load-param v1)
+      (if-ltz v1 :assertion-true-1)
+      (const v2 0)
+      (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fail:(I)V")
+      :assertion-true-1
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}

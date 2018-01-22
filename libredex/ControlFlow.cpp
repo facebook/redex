@@ -97,7 +97,7 @@ ControlFlowGraph::ControlFlowGraph(FatMethod* fm, bool editable)
   remove_unreachable_succ_edges();
 
   if (m_editable) {
-    add_fallthru_gotos();
+    add_fallthrough_gotos();
     sanity_check();
   }
 
@@ -298,7 +298,7 @@ void ControlFlowGraph::fill_blocks(FatMethod* fm, Boundaries& boundaries) {
   TRACE(CFG, 5, "  build: splicing finished\n");
 }
 
-void ControlFlowGraph::add_fallthru_gotos() {
+void ControlFlowGraph::add_fallthrough_gotos() {
   always_assert(m_editable);
   // Assumption: m_blocks is still in original execution order.
   for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
@@ -307,12 +307,12 @@ void ControlFlowGraph::add_fallthru_gotos() {
     Block* next_b = next->second;
     if (next != m_blocks.end() && !b->succs().empty() &&
         b->rbegin()->branchingness() == opcode::BRANCH_NONE) {
-      MethodItemEntry* fallthru_goto =
+      MethodItemEntry* fallthrough_goto =
           new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
-      MethodItemEntry* fallthru_target = new MethodItemEntry(
-          new BranchTarget{BRANCH_SIMPLE, fallthru_goto, 0});
-      b->m_entries.push_back(*fallthru_goto);
-      next_b->m_entries.push_front(*fallthru_target);
+      MethodItemEntry* fallthrough_target =
+          new MethodItemEntry(new BranchTarget(fallthrough_goto));
+      b->m_entries.push_back(*fallthrough_goto);
+      next_b->m_entries.push_front(*fallthrough_target);
     }
   }
 }
@@ -394,7 +394,7 @@ std::vector<FatMethod::iterator> Block::get_targets() {
   return result;
 }
 
-void ControlFlowGraph::remove_fallthru_gotos(
+void ControlFlowGraph::remove_fallthrough_gotos(
     const std::vector<Block*> ordering) {
   // remove unnecesary GOTOs
   Block* prev = nullptr;
@@ -454,7 +454,7 @@ FatMethod* ControlFlowGraph::linearize() {
   }
 
   const std::vector<Block*>& ordering = order();
-  remove_fallthru_gotos(ordering);
+  remove_fallthrough_gotos(ordering);
 
   // add back the TRY START and ENDS
   Block* prev = nullptr;
