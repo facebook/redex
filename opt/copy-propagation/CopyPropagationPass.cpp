@@ -176,11 +176,11 @@ class AliasFixpointIterator final
         // we need to make sure the dest and src of check-cast stay identical,
         // because the dest is simply an alias to the src. See the comments in
         // IRInstruction.h for details.
-        insn->opcode() != OPCODE_CHECK_CAST &&
+        op != OPCODE_CHECK_CAST &&
         // The ART verifier checks that monitor-{enter,exit} instructions use
         // the same register:
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
-        !is_monitor(insn->opcode())) {
+        !is_monitor(op)) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         Register r = insn->src(i);
         Register rep = get_rep(r, aliases, get_max_addressable(insn, i));
