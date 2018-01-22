@@ -149,8 +149,7 @@ libredex_la_LIBADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_IOSTREAMS_LIB) \
-	-lpthread \
-	-lboost_thread
+	-lpthread
 
 #
 # redex-all: the main executable
@@ -235,8 +234,7 @@ redex_all_LDADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
-	-lpthread \
-	-lboost_thread
+	-lpthread
 
 redex_all_LDFLAGS = \
 	-rdynamic # function names in stack traces
@@ -253,8 +251,7 @@ redexdump_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
-	-lpthread \
-	-lboost_thread
+	-lpthread
 
 #
 # redex: Python driver script
