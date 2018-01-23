@@ -515,10 +515,10 @@ std::string ReferencedState::str() const {
   s << m_bystring;
   s << m_computed;
   s << m_keep;
-  s << m_allowshrinking;
-  s << m_allowobfuscation;
+  s << allowshrinking();
+  s << allowobfuscation();
   s << m_assumenosideeffects;
-  s << m_blanket_keep;
+  s << m_blanket_keepnames;
   s << m_whyareyoukeeping;
   s << ' ';
   s << m_keep_count;

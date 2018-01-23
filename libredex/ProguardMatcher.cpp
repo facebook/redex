@@ -176,35 +176,42 @@ struct ClassMatcher {
 } // namespace
 
 // Updates a class, field or method to add keep modifiers.
+// Note: includedescriptorclasses and allowoptimization are not implemented.
 template <class DexMember>
 void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
-  // Note: includedescriptorclasses and allowoptimization are not implemented.
-
-  // Only set allowshrinking when no other keep has been applied to this
+  // We only set allowshrinking when no other keep rule has been applied to this
   // class or member.
+  //
+  // Note that multiple keep rules could set or unset the modifier
+  // *conflictingly*. It would be best if all the keep rules are never
+  // contradictory each other. But verifying the integrity takes some time, and
+  // programmers must fix the rules. Instead, we pick a conservative choice:
+  // don't shrink or don't obfuscate.
   if (k.allowshrinking) {
     if (!keep(member)) {
       member->rstate.set_allowshrinking();
+    } else {
+      // We already observed a keep rule for this member. So, even if another
+      // "-keep,allowshrinking" tries to set allowshrinking, we must ignore it.
     }
   } else {
-    // Otherwise reset it.
+    // Otherwise reset it: don't allow shrinking.
     member->rstate.unset_allowshrinking();
   }
-  // Only set allowobfuscation when no other keep has been applied to this
-  // class or member.
+  // The same case: unsetting allowobfuscation has a priority.
   if (k.allowobfuscation) {
     if (!keep(member) && strcmp(member->get_name()->c_str(), "<init>") != 0) {
       member->rstate.set_allowobfuscation();
     }
   } else {
-    // Otherwise reset it.
     member->rstate.unset_allowobfuscation();
   }
 }
 
 // Is this keep_rule an application of a blanket top-level keep
-// -keep,allowshrinking class * rule?
-inline bool is_blanket_keep_rule(const KeepSpec& keep_rule) {
+// "-keep,allowshrinking class *" or "-keepnames class *" rule?
+// See keepclassnames.pro, or T1890454.
+inline bool is_blanket_keepnames_rule(const KeepSpec& keep_rule) {
   if (keep_rule.allowshrinking) {
     const auto& spec = keep_rule.class_spec;
     if (spec.className == "*" && spec.annotationType == "" &&
@@ -638,8 +645,8 @@ void mark_class_and_members_for_keep(RegexMap& regex_map,
     if (!keep_rule.allowobfuscation) {
       cls->rstate.increment_keep_count();
     }
-    if (is_blanket_keep_rule(keep_rule)) {
-      cls->rstate.set_blanket_keep();
+    if (is_blanket_keepnames_rule(keep_rule)) {
+      cls->rstate.set_blanket_keepnames();
     }
     // Mark non-empty <clinit> methods as seeds.
     keep_clinits(cls);
