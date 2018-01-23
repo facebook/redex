@@ -277,9 +277,11 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   EXPECT_EQ(ig.get_node(2).max_vreg(), 255);
   EXPECT_EQ(ig.get_node(2).adjacent(), std::vector<reg_t>{0});
   EXPECT_EQ(ig.get_node(2).type(), RegisterType::NORMAL);
+  EXPECT_EQ(ig.get_node(2).spill_cost(), 2);
   EXPECT_EQ(ig.get_node(3).max_vreg(), 255);
   EXPECT_EQ(ig.get_node(3).adjacent(), std::vector<reg_t>{});
   EXPECT_EQ(ig.get_node(3).type(), RegisterType::NORMAL);
+  EXPECT_EQ(ig.get_node(3).spill_cost(), 2);
 
   // Check that the adjacency matrix is consistent with the adjacency lists
   for (auto& pair : ig.nodes()) {
@@ -739,7 +741,6 @@ TEST_F(RegAllocTest, FindSplit) {
   graph_coloring::RegisterTransform reg_transform;
   reg_transform.map = transform::RegMap{{0, 0}};
   graph_coloring::Allocator allocator;
-  allocator.spill_costs(code.get(), ig, range_set, &spill_plan);
   calc_split_costs(fixpoint_iter, code.get(), &split_costs);
   allocator.find_split(
       ig, split_costs, &reg_transform, &spill_plan, &split_plan);
