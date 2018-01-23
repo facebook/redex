@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
 
 class ReferencedState {
@@ -45,12 +46,37 @@ class ReferencedState {
   bool m_set_allowobfuscation{false};
   bool m_unset_allowobfuscation{false};
 
-  // The number of keep rules that touch this class.
-  unsigned int m_keep_count{0};
   bool m_keep_name{false};
+
+  // The number of keep rules that touch this class.
+  std::atomic<unsigned int> m_keep_count{0};
 
  public:
   ReferencedState() = default;
+
+  // std::atomic requires an explicitly user-defined assignment operator.
+  ReferencedState& operator=(const ReferencedState& other) {
+    if (this != &other) {
+      this->m_bytype = other.m_bytype;
+      this->m_bystring = other.m_bystring;
+      this->m_computed = other.m_computed;
+      
+      this->m_keep = other.m_keep;
+      this->m_assumenosideeffects = other.m_assumenosideeffects;
+      this->m_blanket_keepnames = other.m_blanket_keepnames;
+      this->m_whyareyoukeeping = other.m_whyareyoukeeping;
+      
+      this->m_set_allowshrinking = other.m_set_allowshrinking;
+      this->m_unset_allowshrinking = other.m_unset_allowshrinking;
+      this->m_set_allowobfuscation = other.m_set_allowobfuscation;
+      this->m_unset_allowobfuscation = other.m_unset_allowobfuscation;
+      
+      this->m_keep_name = other.m_keep_name;
+      
+      this->m_keep_count = other.m_keep_count.load();
+    }
+    return *this;
+  }
 
   std::string str() const;
 

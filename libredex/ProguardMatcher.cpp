@@ -8,24 +8,19 @@
  */
 
 #include <boost/regex.hpp>
-#include <cstring>
 #include <iostream>
-#include <memory>
-#include <set>
-#include <string>
-#include <vector>
+#include <thread>
 
 #include "ClassHierarchy.h"
-#include "DexAccess.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Timer.h"
+#include "WorkQueue.h"
 
 namespace redex {
 
@@ -606,6 +601,13 @@ bool process_mark_conditionally(RegexMap& regex_map,
 // access modifier filters match, then start to apply the keep control
 // bits to the class, members and appropriate classes and members
 // in the class hierarchy.
+//
+// Parallelization note: We parallelize process_keep, and this function will be
+// eventually executed concurrently. There are potential races in rstate:
+// (1) m_keep, (2) m_(un)set_allow(shrinking|obfuscation), (3)
+// m_blanket_keepnames, and (4) m_keep_count. We use an atomic value for
+// m_keep_count, but the other boolean values are always overwritten. These WAW
+// (write-after-write) races are benign and do not affect the results.
 void mark_class_and_members_for_keep(RegexMap& regex_map,
                                      KeepSpec& keep_rule,
                                      DexClass* cls) {
@@ -673,6 +675,7 @@ void mark_class_and_members_for_keep(RegexMap& regex_map,
   }
 }
 
+// This function is also executed concurrently.
 void process_whyareyoukeeping(RegexMap& regex_map,
                               KeepSpec& keep_rule,
                               DexClass* cls) {
@@ -687,6 +690,7 @@ void process_whyareyoukeeping(RegexMap& regex_map,
   });
 }
 
+// This function is also executed concurrently.
 void process_assumenosideeffects(RegexMap& regex_map,
                                  KeepSpec& keep_rule,
                                  DexClass* cls) {
@@ -729,6 +733,7 @@ void process_keep(
     std::function<void(RegexMap&, KeepSpec&, DexClass*)> keep_processor,
     const std::string& name) {
   Timer t("Process keep for " + name);
+
   auto process_single_keep = [&keep_processor](ClassMatcher& class_match,
                                                KeepSpec& keep_rule,
                                                DexClass* cls,
@@ -742,10 +747,22 @@ void process_keep(
     }
   };
 
+  // We only parallelize if keep_rule needs to be applied to all classes.
+  auto wq = workqueue_foreach<KeepSpec*>(
+      [&keep_processor, &process_single_keep, &classes](KeepSpec* keep_rule) {
+        RegexMap regex_map;
+        ClassMatcher class_match(*keep_rule);
+
+        for (const auto& cls : classes) {
+          process_single_keep(class_match, *keep_rule, cls, regex_map);
+        }
+      });
+
   for (auto& keep_rule : keep_rules) {
     RegexMap regex_map;
     ClassMatcher class_match(keep_rule);
 
+    // This case is very fast. Just process it immediately in the main thread.
     const auto& className = keep_rule.class_spec.className;
     if (!classname_contains_wildcard(className)) {
       DexClass* cls = find_single_class(pg_map, className);
@@ -753,6 +770,7 @@ void process_keep(
       continue;
     }
 
+    // This is also very fast. Process it in the main thread, too.
     const auto& extendsClassName = keep_rule.class_spec.extendsClassName;
     if (extendsClassName != "" &&
         !classname_contains_wildcard(extendsClassName)) {
@@ -769,10 +787,11 @@ void process_keep(
       continue;
     }
 
-    for (const auto& cls : classes) {
-      process_single_keep(class_match, keep_rule, cls, regex_map);
-    }
+    // Otherwise, it might take a longer time. Add to the work queue.
+    wq.add_item(&keep_rule);
   }
+
+  wq.run_all();
 }
 
 inline bool operator==(const MemberSpecification& lhs,
