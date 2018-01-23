@@ -412,7 +412,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    if (!is_native(method)) {
+    if (!is_native(method) && !keep(method)) {
       m_make_static.insert(method);
     } else {
       info.need_vmethod++;
