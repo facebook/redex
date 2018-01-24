@@ -16,6 +16,7 @@
 #include <cstring>
 #include <ctime>
 #include <mutex>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -38,6 +39,20 @@ struct Tracer {
     if (!traceenv) {
       return;
     }
+
+    std::cerr << "Trace settings:" << std::endl;
+    std::cerr << "TRACEFILE=" << (envfile == nullptr ? "" : envfile)
+              << std::endl;
+    std::cerr << "SHOW_TIMESTAMPS="
+              << (show_timestamps == nullptr ? "" : show_timestamps)
+              << std::endl;
+    std::cerr << "SHOW_TRACEMODULE="
+              << (show_tracemodule == nullptr ? "" : show_tracemodule)
+              << std::endl;
+    std::cerr << "TRACE_METHOD_FILTER="
+              << (m_method_filter == nullptr ? "" : m_method_filter)
+              << std::endl;
+
     init_trace_modules(traceenv);
     init_trace_file(envfile);
 
