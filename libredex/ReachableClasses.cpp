@@ -364,41 +364,13 @@ void init_permanently_reachable_classes(
 ) {
   PassConfig pc(config);
 
-  auto match = std::make_tuple(
-      m::const_string(/* const-string {vX}, <any string> */),
-      m::move_result_pseudo(/* const-string {vX}, <any string> */),
-      m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
-                       m::opcode_method(
-                           m::named<DexMethodRef>("forName") &&
-                           m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
-                       m::has_n_args(1)));
-
-  walk::parallel::matching_opcodes(
-      scope,
-      match,
-      [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
-        auto const_string = insns[0];
-        auto move_result_pseudo = insns[1];
-        auto invoke_static = insns[2];
-        // Make sure that the registers agree
-        if (move_result_pseudo->dest() == invoke_static->src(0)) {
-          auto classname = JavaNameUtil::external_to_internal(
-              const_string->get_string()->c_str());
-          TRACE(PGR,
-                4,
-                "Found Class.forName of: %s, marking %s reachable\n",
-                const_string->get_string()->c_str(),
-                classname.c_str());
-          mark_reachable_by_classname(classname, true);
-        }
-      });
-
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
   bool legacy_xml_reachability;
+  bool legacy_reflection_reachability;
 
   pc.get("apk_dir", "", apk_dir);
   pc.get("keep_packages", {}, reflected_package_names);
@@ -406,6 +378,38 @@ void init_permanently_reachable_classes(
   pc.get("keep_class_members", {}, class_members);
   pc.get("keep_methods", {}, methods);
   pc.get("legacy_xml_reachability", true, legacy_xml_reachability);
+  pc.get("legacy_reflection_reachability", true, legacy_reflection_reachability);
+
+  if (legacy_reflection_reachability) {
+    auto match = std::make_tuple(
+        m::const_string(/* const-string {vX}, <any string> */),
+        m::move_result_pseudo(/* const-string {vX}, <any string> */),
+        m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
+                         m::opcode_method(
+                             m::named<DexMethodRef>("forName") &&
+                             m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
+                         m::has_n_args(1)));
+
+    walk::parallel::matching_opcodes(
+        scope,
+        match,
+        [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
+          auto const_string = insns[0];
+          auto move_result_pseudo = insns[1];
+          auto invoke_static = insns[2];
+          // Make sure that the registers agree
+          if (move_result_pseudo->dest() == invoke_static->src(0)) {
+            auto classname = JavaNameUtil::external_to_internal(
+                const_string->get_string()->c_str());
+            TRACE(PGR,
+                  4,
+                  "Found Class.forName of: %s, marking %s reachable\n",
+                  const_string->get_string()->c_str(),
+                  classname.c_str());
+            mark_reachable_by_classname(classname, true);
+          }
+        });
+  }
 
   std::unordered_set<DexType*> annotation_types(
     no_optimizations_anno.begin(),
