@@ -26,6 +26,7 @@
   TM(CFG)                \
   TM(CFP)                \
   TM(CLP_GQL)            \
+  TM(CLP_LITHO)          \
   TM(CONSTP)             \
   TM(CPG)                \
   TM(CUSTOMSORT)         \
