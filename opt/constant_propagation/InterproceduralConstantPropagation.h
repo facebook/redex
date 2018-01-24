@@ -11,6 +11,7 @@
 
 #include <atomic>
 
+#include "CallGraph.h"
 #include "ConstPropConfig.h"
 #include "ConstantEnvironment.h"
 #include "Pass.h"
@@ -26,6 +27,43 @@ struct Stats {
 } // namespace interprocedural_constant_propagation
 
 namespace interprocedural_constant_propagation_impl {
+
+/*
+ * Describes the constant-valued arguments (if any) for a given method or
+ * callsite. The n'th parameter will be represented by a binding of n to a
+ * ConstantDomain instance.
+ */
+using ArgumentDomain = ConstantEnvironment;
+
+/*
+ * Map of invoke-* instructions contained in some method M to their respective
+ * ArgumentDomains. The ArgumentDomain at the entry to M (that is, the input
+ * parameters to M) is bound to the null pointer.
+ */
+using Domain =
+    PatriciaTreeMapAbstractEnvironment<const IRInstruction*, ArgumentDomain>;
+
+constexpr IRInstruction* INPUT_ARGS = nullptr;
+
+/*
+ * Performs intraprocedural constant propagation of stack / register values.
+ */
+class FixpointIterator
+    : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
+ public:
+  FixpointIterator(const call_graph::Graph& call_graph,
+                   const ConstPropConfig& config)
+      : MonotonicFixpointIterator(call_graph), m_config(config) {}
+
+  void analyze_node(DexMethod* const& method,
+                    Domain* current_state) const override;
+
+  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
+                      const Domain& exit_state_at_source) const override;
+
+ private:
+  ConstPropConfig m_config;
+};
 
 void insert_runtime_input_checks(const ConstantEnvironment&,
                                  DexMethodRef*,

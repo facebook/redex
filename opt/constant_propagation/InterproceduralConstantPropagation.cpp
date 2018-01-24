@@ -11,32 +11,15 @@
 
 #include <mutex>
 
-#include "CallGraph.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagation.h"
 #include "Timer.h"
 #include "Walkers.h"
 
 using namespace interprocedural_constant_propagation;
+using namespace interprocedural_constant_propagation_impl;
 
 namespace {
-
-/*
- * Describes the constant-valued arguments (if any) for a given method or
- * callsite. The n'th parameter will be represented by a binding of n to a
- * ConstantDomain instance.
- */
-using ArgumentDomain = ConstantEnvironment;
-
-/*
- * Map of invoke-* instructions contained in some method M to their respective
- * ArgumentDomains. The ArgumentDomain at the entry to M (that is, the input
- * parameters to M) is bound to the null pointer.
- */
-using Domain =
-    PatriciaTreeMapAbstractEnvironment<const IRInstruction*, ArgumentDomain>;
-
-constexpr IRInstruction* INPUT_ARGS = nullptr;
 
 /*
  * Return an environment populated with parameter values.
@@ -51,68 +34,55 @@ static ConstantEnvironment env_with_params(const IRCode* code,
   return env;
 }
 
-/*
- * Performs intraprocedural constant propagation of stack / register values.
- */
-class FixpointIterator
-    : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
- public:
-  FixpointIterator(const call_graph::Graph& call_graph,
-                   const ConstPropConfig& config)
-      : MonotonicFixpointIterator(call_graph), m_config(config) {}
-
-  void analyze_node(DexMethod* const& method,
-                    Domain* current_state) const override {
-    // The entry node has no associated method.
-    if (method == nullptr) {
-      return;
-    }
-    auto code = method->get_code();
-    if (code == nullptr) {
-      return;
-    }
-    auto& cfg = code->cfg();
-    IntraProcConstantPropagation intra_cp(cfg, m_config);
-    intra_cp.run(env_with_params(code, current_state->get(INPUT_ARGS)));
-
-    for (auto* block : cfg.blocks()) {
-      auto state = intra_cp.get_entry_state_at(block);
-      for (auto& mie : InstructionIterable(block)) {
-        auto* insn = mie.insn;
-        if (is_invoke(insn->opcode())) {
-          ArgumentDomain out_args;
-          for (size_t i = 0; i < insn->srcs_size(); ++i) {
-            out_args.set(i, state.get(insn->src(i)));
-          }
-          current_state->set(insn, out_args);
-        }
-        intra_cp.analyze_instruction(insn, &state);
-      }
-    }
-  }
-
-  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
-                      const Domain& exit_state_at_source) const override {
-    Domain entry_state_at_dest;
-    auto it = edge->invoke_iterator();
-    if (it == FatMethod::iterator()) {
-      entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
-    } else {
-      auto insn = it->insn;
-      entry_state_at_dest.set(INPUT_ARGS, exit_state_at_source.get(insn));
-    }
-    return entry_state_at_dest;
-  }
-
- private:
-  ConstPropConfig m_config;
-};
-
 } // namespace
 
 namespace interprocedural_constant_propagation_impl {
 
-IROpcode opcode_for_interval(const sign_domain::Interval intv) {
+void FixpointIterator::analyze_node(DexMethod* const& method,
+                                    Domain* current_state) const {
+  // The entry node has no associated method.
+  if (method == nullptr) {
+    return;
+  }
+  auto code = method->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  auto& cfg = code->cfg();
+  IntraProcConstantPropagation intra_cp(cfg, m_config);
+  intra_cp.run(env_with_params(code, current_state->get(INPUT_ARGS)));
+
+  for (auto* block : cfg.blocks()) {
+    auto state = intra_cp.get_entry_state_at(block);
+    for (auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        ArgumentDomain out_args;
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          out_args.set(i, state.get(insn->src(i)));
+        }
+        current_state->set(insn, out_args);
+      }
+      intra_cp.analyze_instruction(insn, &state);
+    }
+  }
+}
+
+Domain FixpointIterator::analyze_edge(
+    const std::shared_ptr<call_graph::Edge>& edge,
+    const Domain& exit_state_at_source) const {
+  Domain entry_state_at_dest;
+  auto it = edge->invoke_iterator();
+  if (it == FatMethod::iterator()) {
+    entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
+  } else {
+    auto insn = it->insn;
+    entry_state_at_dest.set(INPUT_ARGS, exit_state_at_source.get(insn));
+  }
+  return entry_state_at_dest;
+}
+
+static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
   using namespace sign_domain;
   switch (intv) {
   case Interval::ALL:
@@ -208,8 +178,6 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
 }
 
 } // interprocedural_constant_propagation_impl
-
-using namespace interprocedural_constant_propagation_impl;
 
 namespace {
 
