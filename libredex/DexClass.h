@@ -965,7 +965,6 @@ class DexClass {
   DexTypeList* m_interfaces;
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
-  bool m_has_class_data;
   bool m_external;
   std::string m_deobfuscated_name;
   const std::string m_dex_location; // TODO: string interning
@@ -1046,8 +1045,7 @@ class DexClass {
   const char* c_str() const { return get_name()->c_str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   DexString* get_source_file() const { return m_source_file; }
-  bool has_class_data() const { return m_has_class_data; }
-  void set_class_data(bool has_class_data) { m_has_class_data = has_class_data; }
+  bool has_class_data() const;
   bool is_def() const { return true; }
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();

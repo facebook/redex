@@ -12,7 +12,6 @@
 #include "ClassHierarchy.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
-#define METRIC_SET_CLASS_DATA "num_set_class_data"
 #define METRIC_ORIGINAL_NAME_COUNT "num_original_name"
 
 static OriginalNamePass s_pass;
@@ -67,11 +66,6 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
     }
 
     DexClass* cls = type_class(cls_type);
-    if (!cls->has_class_data()) {
-      cls->set_class_data(true);
-      mgr.incr_metric(METRIC_SET_CLASS_DATA, 1);
-    }
-
     auto external_name =
         JavaNameUtil::internal_to_external(cls->get_deobfuscated_name());
     auto external_name_s = DexString::make_string(external_name.c_str());
