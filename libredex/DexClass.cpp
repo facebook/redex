@@ -612,7 +612,6 @@ void DexClass::load_class_data_item(DexIdx* idx,
                                     uint32_t cdi_off,
                                     DexEncodedValueArray* svalues) {
   if (cdi_off == 0) return;
-  m_has_class_data = true;
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
   uint32_t sfield_count = read_uleb128(&encd);
   uint32_t ifield_count = read_uleb128(&encd);
@@ -735,6 +734,13 @@ DexField* DexClass::find_field(const char* name, const DexType* field_type) cons
   }
 
   return nullptr;
+}
+
+bool DexClass::has_class_data() const {
+  return !m_vmethods.empty() ||
+         !m_dmethods.empty() ||
+         !m_ifields.empty() ||
+         !m_sfields.empty();
 }
 
 int DexClass::encode(DexOutputIdx* dodx,
@@ -940,7 +946,6 @@ DexClass::DexClass(DexIdx* idx,
       m_interfaces(idx->get_type_list(cdef->interfaces_off)),
       m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
       m_anno(nullptr),
-      m_has_class_data(false),
       m_external(false),
       m_dex_location(dex_location) {
   load_class_annotations(idx, cdef->annotations_off);

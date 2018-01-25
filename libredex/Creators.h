@@ -492,7 +492,6 @@ struct ClassCreator {
     m_cls->m_interfaces = DexTypeList::make_type_list({});
     m_cls->m_source_file = nullptr;
     m_cls->m_anno = nullptr;
-    m_cls->m_has_class_data = false;
     m_cls->m_external = false;
   }
 
@@ -572,7 +571,6 @@ struct ClassCreator {
                           "No supertype found for %s", SHOW(m_cls->m_self));
       }
     }
-    m_cls->m_has_class_data = true;
     m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
     g_redex->publish_class(m_cls);
     return m_cls;
