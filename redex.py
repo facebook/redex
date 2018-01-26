@@ -32,7 +32,7 @@ from os.path import abspath, basename, dirname, isdir, isfile, join
 
 import pyredex.logger as logger
 import pyredex.unpacker as unpacker
-from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs
+from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs, sign_apk
 from pyredex.logger import log
 
 
@@ -284,14 +284,7 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
 
     # Add new signature
     if sign:
-        subprocess.check_call([
-                'jarsigner',
-                '-sigalg', 'SHA1withRSA',
-                '-digestalg', 'SHA1',
-                '-keystore', keystore,
-                '-storepass', key_password,
-                unaligned_apk_path, key_alias],
-            stdout=sys.stderr)
+        sign_apk(keystore, key_password, key_alias, unaligned_apk_path)
 
     if isfile(output_apk_path):
         os.remove(output_apk_path)
