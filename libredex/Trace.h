@@ -61,6 +61,7 @@
   TM(PGR)                \
   TM(PM)                 \
   TM(PTA)                \
+  TM(QUICK)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REG)                \
