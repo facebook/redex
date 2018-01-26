@@ -114,6 +114,9 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
 void insert_runtime_input_checks(const ConstantEnvironment& env,
                                  DexMethodRef* dynamic_check_fail_handler,
                                  DexMethod* method) {
+  if (!env.is_value()) {
+    return;
+  }
   auto arg_types = method->get_proto()->get_args()->get_type_list();
   auto* code = method->get_code();
   auto param_insns = code->get_param_instructions();
@@ -215,7 +218,7 @@ class Propagator {
       // unreachable
       if (args.is_bottom()) {
         args.set_to_top();
-      } else if (args.is_value()) {
+      } else if (!args.is_top()) {
         TRACE(ICONSTP, 3, "Have args for %s: %s\n",
               SHOW(method), args.str().c_str());
       }

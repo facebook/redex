@@ -14,6 +14,7 @@
 #include "CallGraph.h"
 #include "ConstPropConfig.h"
 #include "ConstantEnvironment.h"
+#include "HashedAbstractPartition.h"
 #include "Pass.h"
 
 namespace interprocedural_constant_propagation {
@@ -30,18 +31,23 @@ namespace interprocedural_constant_propagation_impl {
 
 /*
  * Describes the constant-valued arguments (if any) for a given method or
- * callsite. The n'th parameter will be represented by a binding of n to a
+ * callsite. The n'th argument will be represented by a binding of n to a
  * ConstantDomain instance.
  */
 using ArgumentDomain = ConstantEnvironment;
 
 /*
- * Map of invoke-* instructions contained in some method M to their respective
- * ArgumentDomains. The ArgumentDomain at the entry to M (that is, the input
- * parameters to M) is bound to the null pointer.
+ * This map is an abstraction of the execution paths starting from the entry
+ * point of a method and ending at an invoke instruction, hence the use of an
+ * abstract partitioning.
+ *
+ * At method entry, this map contains a single item, a binding of the null
+ * pointer to an ArgumentDomain representing the input arguments. At method
+ * exit, this map will have bindings from all the invoke-* instructions
+ * contained in the method to the ArgumentDomains representing the arguments
+ * passed to the callee.
  */
-using Domain =
-    PatriciaTreeMapAbstractEnvironment<const IRInstruction*, ArgumentDomain>;
+using Domain = HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
 
 constexpr IRInstruction* INPUT_ARGS = nullptr;
 

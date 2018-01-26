@@ -14,6 +14,11 @@
 #include "Creators.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
+#include "Walkers.h"
+
+bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
+  return a.equals(b);
+}
 
 TEST(InterproceduralConstantPropagation, constantArgument) {
   g_redex = new RedexContext();
@@ -212,6 +217,79 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
 
   EXPECT_EQ(assembler::to_s_expr(m3->get_code()),
             assembler::to_s_expr(expected_code3.get()));
+
+  delete g_redex;
+}
+
+// We had a bug where an invoke instruction inside an unreachable block of code
+// would cause the whole IPC domain to be set to bottom. This test checks that
+// we handle it correctly.
+TEST(InterproceduralConstantPropagation, unreachableInvoke) {
+  using namespace interprocedural_constant_propagation_impl;
+
+  g_redex = new RedexContext();
+
+  Scope scope;
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto m1 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (goto :skip)
+     (invoke-static (v0) "LFoo;.qux:(I)V") ; this is unreachable
+     :skip
+     (invoke-static (v0) "LFoo;.baz:(I)V") ; this is reachable
+     (return-void)
+    )
+  )");
+  code1->set_registers_size(1);
+  m1->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code1), /* is_virtual */ false);
+  m1->rstate.set_keep();
+  creator.add_method(m1);
+
+  auto m2 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:(I)V"));
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (return-void)
+    )
+  )");
+  code2->set_registers_size(2);
+  m2->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code2), /* is_virtual */ false);
+  creator.add_method(m2);
+
+  auto m3 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.qux:(I)V"));
+  auto code3 = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (return-void)
+    )
+  )");
+  code3->set_registers_size(2);
+  m3->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code3), /* is_virtual */ false);
+  creator.add_method(m3);
+
+  auto cls = creator.create();
+  scope.push_back(cls);
+
+  call_graph::Graph cg(scope, /* include_virtuals */ false);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+  });
+  ConstPropConfig config;
+  FixpointIterator fp_iter(cg, config);
+  fp_iter.run({{INPUT_ARGS, ArgumentDomain()}});
+
+  // Check m2 is reachable, despite m3 being unreachable
+  EXPECT_EQ(fp_iter.get_entry_state_at(m2).get(INPUT_ARGS),
+            ArgumentDomain({{0, SignedConstantDomain(0)}}));
+  EXPECT_TRUE(fp_iter.get_entry_state_at(m3).is_bottom());
 
   delete g_redex;
 }
