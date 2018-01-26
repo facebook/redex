@@ -12,12 +12,12 @@
 #include "Debug.h"
 
 #include <algorithm>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <chrono>
-#include <mutex>
 #include <numeric>
 #include <queue>
 #include <random>
-#include <thread>
 
 namespace workqueue_impl {
 
@@ -44,14 +44,14 @@ inline std::vector<int> create_permutation(int num, unsigned int thread_idx) {
 template <class Input, class Data, class Output>
 struct WorkerState {
   std::queue<Input> queue;
-  std::mutex queue_mtx;
+  boost::mutex queue_mtx;
   Data data;
   Output result;
 
   WorkerState(const Data& initial) : data(initial) {}
 
   bool pop_task(Input& task) {
-    std::lock_guard<std::mutex> guard(queue_mtx);
+    boost::lock_guard<boost::mutex> guard(queue_mtx);
     if (!queue.empty()) {
       task = std::move(queue.front());
       queue.pop();
@@ -122,7 +122,7 @@ template <class Input>
 WorkQueue<Input, std::nullptr_t /*Data*/, std::nullptr_t /*Output*/>
 workqueue_foreach(const std::function<void(Input)>& func,
                   unsigned int num_threads =
-                      std::max(1u, std::thread::hardware_concurrency())) {
+                      std::max(1u, boost::thread::hardware_concurrency())) {
   using Data = std::nullptr_t;
   using Output = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
@@ -143,8 +143,8 @@ template <class Input, class Output>
 WorkQueue<Input, std::nullptr_t /*Data*/, Output> workqueue_mapreduce(
     const std::function<Output(Input)>& mapper,
     const std::function<Output(Output, Output)>& reducer,
-    unsigned int num_threads = std::max(1u,
-                                        std::thread::hardware_concurrency())) {
+    unsigned int num_threads =
+        std::max(1u, boost::thread::hardware_concurrency())) {
   using Data = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
       [mapper](Data&, Input a) -> Output { return mapper(a); },
@@ -157,7 +157,7 @@ template <class Input, class Data, class Output>
 void WorkQueue<Input, Data, Output>::add_item(Input task) {
   if (m_currently_running) {
     auto insert_idx = rand() % m_num_threads;
-    std::lock_guard<std::mutex> guard(m_states[insert_idx]->queue_mtx);
+    boost::lock_guard<boost::mutex> guard(m_states[insert_idx]->queue_mtx);
     m_states[insert_idx]->queue.push(task);
   } else {
     m_insert_idx = (m_insert_idx + 1) % m_num_threads;
@@ -172,7 +172,7 @@ void WorkQueue<Input, Data, Output>::add_item(Input task) {
 template <class Input, class Data, class Output>
 Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
   m_currently_running = true;
-  std::vector<std::thread> all_threads;
+  std::vector<boost::thread> all_threads;
   auto worker = [&](WorkerState<Input, Data, Output>* state, size_t state_idx) {
     state->result = init_output;
     auto attempts =
@@ -195,7 +195,10 @@ Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
   };
 
   for (size_t i = 0; i < m_num_threads; ++i) {
-    all_threads.emplace_back(worker, m_states[i].get(), i);
+    boost::thread::attributes attrs;
+    attrs.set_stack_size(8 * 1024 * 1024);
+    all_threads.emplace_back(attrs,
+                             boost::bind<void>(worker, m_states[i].get(), i));
   }
 
   for (auto& thread : all_threads) {

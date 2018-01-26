@@ -16,7 +16,6 @@
 #include <iterator>
 #include <limits>
 #include <stack>
-#include <thread>
 #include <vector>
 #include <unordered_map>
 
@@ -206,7 +205,6 @@ class WeakTopologicalOrdering final {
   }
 
  private:
-  constexpr size_t max_depth() { return 1000; }
 
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
@@ -219,20 +217,7 @@ class WeakTopologicalOrdering final {
       uint32_t succ_dfn = get_dfn(succ);
       uint32_t min;
       if (succ_dfn == 0) {
-        if (depth < max_depth()) {
-          min = visit(succ, partition, depth + 1);
-        } else {
-          // If the depth-first search dives too deep into the graph, we fork
-          // the computation into a new thread, which eases pressure on the
-          // stack (a new thread gets its own stack space).
-          std::packaged_task<uint32_t()> task(
-              [=] { return visit(succ, partition, 0); });
-          std::future<uint32_t> f = task.get_future();
-          std::thread t(std::move(task));
-          f.wait();
-          min = f.get();
-          t.join();
-        }
+        min = visit(succ, partition, depth + 1);
       } else {
         min = succ_dfn;
       };
