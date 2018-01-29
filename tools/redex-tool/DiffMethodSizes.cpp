@@ -66,7 +66,7 @@ void diff_in_out_jars_from_command_line(const std::string& command_line_path) {
   }
 
   redex::ProguardConfiguration pg_config;
-  redex::proguard_parser::parse(config, &pg_config);
+  redex::proguard_parser::parse(config, &pg_config, command_line_path);
   std::cout << "Number of -injar options: " << pg_config.injars.size()
             << std::endl;
   std::cout << "Number of -outjar options: " << pg_config.outjars.size()

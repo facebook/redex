@@ -86,6 +86,9 @@ std::string show(const std::unique_ptr<T>& ptr) {
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()
 
+std::string show_context(IRCode const*, IRInstruction const*);
+#define SHOW_CONTEXT(code, insn) (show_context(code, insn).c_str())
+
 /**
  * Verbose show functions.
  * They print the given member in source language style including annotations.

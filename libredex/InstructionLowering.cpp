@@ -10,6 +10,9 @@
 #include "InstructionLowering.h"
 #include "Walkers.h"
 
+#include "boost/algorithm/string/join.hpp"
+#include "boost/range/adaptors.hpp"
+
 namespace instruction_lowering {
 
 /*
@@ -229,7 +232,7 @@ static void remove_move_result_pseudo(FatMethod::iterator it) {
  * Returns the number of DexInstructions added during lowering (not including
  * the check-cast).
  */
-static size_t lower_check_cast(IRCode* code, FatMethod::iterator* it_) {
+static size_t lower_check_cast(DexMethod*, IRCode* code, FatMethod::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
@@ -257,7 +260,7 @@ static size_t lower_check_cast(IRCode* code, FatMethod::iterator* it_) {
   return extra_instructions;
 }
 
-static void lower_fill_array_data(IRCode* code, FatMethod::iterator it) {
+static void lower_fill_array_data(DexMethod*, IRCode* code, FatMethod::iterator it) {
   const auto* insn = it->insn;
   auto* dex_insn = new DexInstruction(DOPCODE_FILL_ARRAY_DATA);
   dex_insn->set_src(0, insn->src(0));
@@ -269,10 +272,18 @@ static void lower_fill_array_data(IRCode* code, FatMethod::iterator it) {
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_to_range_instruction(IRCode* code, FatMethod::iterator* it_) {
+static void lower_to_range_instruction(DexMethod* method, IRCode* code, FatMethod::iterator* it_) {
+  using boost::algorithm::join;
+  using boost::adaptors::transformed;
   auto& it = *it_;
   const auto* insn = it->insn;
-  always_assert(has_contiguous_srcs(insn));
+  always_assert_log(
+    has_contiguous_srcs(insn),
+    "Instruction %s has non-contiguous srcs (%s) in method %s.\nContext:\n%s\n",
+    SHOW(insn),
+    join(insn->srcs() | transformed((std::string(*)(int))std::to_string), ", ").c_str(),
+    SHOW(method),
+    SHOW_CONTEXT(code, insn));
   auto* dex_insn = create_dex_instruction(insn);
   dex_insn->set_opcode(opcode::range_version(insn->opcode()));
   dex_insn->set_range_base(insn->src(0));
@@ -280,7 +291,7 @@ static void lower_to_range_instruction(IRCode* code, FatMethod::iterator* it_) {
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_simple_instruction(IRCode* code, FatMethod::iterator* it_) {
+static void lower_simple_instruction(DexMethod*, IRCode*, FatMethod::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   auto op = insn->opcode();
@@ -331,13 +342,13 @@ Stats lower(DexMethod* method) {
     if (opcode::is_load_param(op)) {
       code->remove_opcode(it);
     } else if (op == OPCODE_CHECK_CAST) {
-      stats.move_for_check_cast += lower_check_cast(code, &it);
+      stats.move_for_check_cast += lower_check_cast(method, code, &it);
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
-      lower_fill_array_data(code, it);
+      lower_fill_array_data(method, code, it);
     } else if (needs_range_conversion(insn)) {
-      lower_to_range_instruction(code, &it);
+      lower_to_range_instruction(method, code, &it);
     } else {
-      lower_simple_instruction(code, &it);
+      lower_simple_instruction(method, code, &it);
     }
     // TODO: /lit8 and /lit16 instructions
   }

@@ -231,7 +231,7 @@ class ControlFlowGraph {
   // re-arrange blocks safely.
   // For use by the constructor. You probably don't want to call this from
   // elsewhere
-  void add_fallthru_gotos();
+  void add_fallthrough_gotos();
 
   // SIGABORT if the internal state of the CFG is invalid
   void sanity_check();
@@ -248,7 +248,7 @@ class ControlFlowGraph {
   // choose an order of blocks for output
   std::vector<Block*> order();
 
-  void remove_fallthru_gotos(const std::vector<Block*> ordering);
+  void remove_fallthrough_gotos(const std::vector<Block*> ordering);
 
   void remove_all_edges(Block* pred, Block* succ);
 

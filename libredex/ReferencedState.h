@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
 
 class ReferencedState {
@@ -23,46 +24,83 @@ class ReferencedState {
   bool m_computed{true};
 
   // ProGuard keep settings
-  // Note: includedescriptorclasses and allowoptimization are not implemented.
-  //       The parser will take them, but we don't keep here.
   //
   // Specify classes and class members that are entry-points.
   bool m_keep{false};
-  // Specify items that can be deleted.
-  bool m_allowshrinking{false};
-  // Not used by the Redex ProGuard rule matcher.
-  bool m_allowobfuscation{false};
   // assumenosideeffects allows certain methods to be removed.
   bool m_assumenosideeffects{false};
-  // Does this class have a blanket keep,allowshrinking applied to it?
-  bool m_blanket_keep{false};
-  // The number of keep rules that touch this class.
-  unsigned int m_keep_count{0};
+  // Does this class have a blanket "-keepnames class *" applied to it?
+  // "-keepnames" is synonym with "-keep,allowshrinking".
+  bool m_blanket_keepnames{false};
   // If m_whyareyoukeeping is true then report debugging information
   // about why this class or member is being kept.
   bool m_whyareyoukeeping{false};
+
+  // For keep modifiers: -keep,allowshrinking and -keep,allowobfuscation.
+  //
+  // Instead of m_allowshrinking and m_allowobfuscation, we need to have
+  // set/unset pairs for easier parallelization. The unset has a high priority.
+  // See the comments in apply_keep_modifiers.
+  bool m_set_allowshrinking{false};
+  bool m_unset_allowshrinking{false};
+  bool m_set_allowobfuscation{false};
+  bool m_unset_allowobfuscation{false};
+
   bool m_keep_name{false};
+
+  // The number of keep rules that touch this class.
+  std::atomic<unsigned int> m_keep_count{0};
 
  public:
   ReferencedState() = default;
 
+  // std::atomic requires an explicitly user-defined assignment operator.
+  ReferencedState& operator=(const ReferencedState& other) {
+    if (this != &other) {
+      this->m_bytype = other.m_bytype;
+      this->m_bystring = other.m_bystring;
+      this->m_computed = other.m_computed;
+      
+      this->m_keep = other.m_keep;
+      this->m_assumenosideeffects = other.m_assumenosideeffects;
+      this->m_blanket_keepnames = other.m_blanket_keepnames;
+      this->m_whyareyoukeeping = other.m_whyareyoukeeping;
+      
+      this->m_set_allowshrinking = other.m_set_allowshrinking;
+      this->m_unset_allowshrinking = other.m_unset_allowshrinking;
+      this->m_set_allowobfuscation = other.m_set_allowobfuscation;
+      this->m_unset_allowobfuscation = other.m_unset_allowobfuscation;
+      
+      this->m_keep_name = other.m_keep_name;
+      
+      this->m_keep_count = other.m_keep_count.load();
+    }
+    return *this;
+  }
+
   std::string str() const;
 
-  bool can_delete() const { return !m_bytype && (!m_keep || m_allowshrinking); }
+  bool can_delete() const { return !m_bytype && (!m_keep || allowshrinking()); }
   bool can_rename() const {
-    return !m_keep_name && !m_bystring && (!m_keep || m_allowobfuscation) &&
-           !m_allowshrinking;
+    return !m_keep_name && !m_bystring && (!m_keep || allowobfuscation()) &&
+           !allowshrinking();
   }
 
   // ProGuard keep options
   bool keep() const { return m_keep; }
 
   // ProGaurd keep option modifiers
-  bool allowshrinking() const { return m_allowshrinking; }
-  bool allowobfuscation() const { return m_allowobfuscation; }
+  bool allowshrinking() const {
+    return !m_unset_allowshrinking && m_set_allowshrinking;
+  }
+  bool allowobfuscation() const {
+    return !m_unset_allowobfuscation && m_set_allowobfuscation;
+  }
   bool assumenosideeffects() const { return m_assumenosideeffects; }
 
-  bool is_blanket_kept() const { return m_blanket_keep && m_keep_count == 1; }
+  bool is_blanket_names_kept() const {
+    return m_blanket_keepnames && m_keep_count == 1;
+  }
 
   bool report_whyareyoukeeping() const { return m_whyareyoukeeping; }
 
@@ -93,15 +131,15 @@ class ReferencedState {
 
   void set_keep_name() { m_keep_name = true; }
 
-  void set_allowshrinking() { m_allowshrinking = true; }
-  void unset_allowshrinking() { m_allowshrinking = false; }
+  void set_allowshrinking() { m_set_allowshrinking = true; }
+  void unset_allowshrinking() { m_unset_allowshrinking = true; }
 
-  void set_allowobfuscation() { m_allowobfuscation = true; }
-  void unset_allowobfuscation() { m_allowobfuscation = false; }
+  void set_allowobfuscation() { m_set_allowobfuscation = true; }
+  void unset_allowobfuscation() { m_unset_allowobfuscation = true; }
 
   void set_assumenosideeffects() { m_assumenosideeffects = true; }
 
-  void set_blanket_keep() { m_blanket_keep = true; }
+  void set_blanket_keepnames() { m_blanket_keepnames = true; }
 
   void increment_keep_count() { m_keep_count++; }
 

@@ -52,8 +52,8 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           // get confused.
           transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code);
-          graph_coloring::Allocator allocator;
-          allocator.allocate(m_use_splitting, &code);
+          graph_coloring::Allocator allocator(m_allocator_config);
+          allocator.allocate(&code);
           stats.accumulate(allocator.get_stats());
 
           TRACE(REG,
@@ -91,6 +91,8 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("spill_count", stats.moves_inserted());
   mgr.incr_metric("coalesce_count", stats.moves_coalesced);
   mgr.incr_metric("net_moves", stats.net_moves());
+
+  mgr.record_running_regalloc();
 }
 
 static RegAllocPass s_pass;

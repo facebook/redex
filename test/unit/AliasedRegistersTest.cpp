@@ -9,16 +9,19 @@
 
 #include <gtest/gtest.h>
 
+#include "AliasedRegisters.h"
 #include <boost/optional.hpp>
 #include <unordered_map>
-#include "AliasedRegisters.h"
 
-RegisterValue zero{(uint16_t)0};
-RegisterValue one{(uint16_t)1};
-RegisterValue one_lit{(int64_t)1};
-RegisterValue two{(uint16_t)2};
-RegisterValue three{(uint16_t)3};
-RegisterValue four{(uint16_t)4};
+using namespace aliased_registers;
+
+Value zero = Value::create_register(0);
+Value one = Value::create_register(1);
+Value two = Value::create_register(2);
+Value three = Value::create_register(3);
+Value four = Value::create_register(4);
+
+Value one_lit = Value::create_literal(1);
 
 TEST(AliasedRegistersTest, identity) {
   AliasedRegisters a;
@@ -29,7 +32,7 @@ TEST(AliasedRegistersTest, identity) {
 TEST(AliasedRegistersTest, simpleMake) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
 
   EXPECT_TRUE(a.are_aliases(zero, zero));
   EXPECT_TRUE(a.are_aliases(zero, one));
@@ -42,7 +45,7 @@ TEST(AliasedRegistersTest, simpleMake) {
 TEST(AliasedRegistersTest, makeBreakLow) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   EXPECT_TRUE(a.are_aliases(zero, one));
 
   a.break_alias(zero);
@@ -52,7 +55,7 @@ TEST(AliasedRegistersTest, makeBreakLow) {
 TEST(AliasedRegistersTest, makeBreakHigh) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   EXPECT_TRUE(a.are_aliases(zero, one));
 
   a.break_alias(one);
@@ -62,7 +65,7 @@ TEST(AliasedRegistersTest, makeBreakHigh) {
 TEST(AliasedRegistersTest, transitiveBreakFirst) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -74,7 +77,7 @@ TEST(AliasedRegistersTest, transitiveBreakFirst) {
 TEST(AliasedRegistersTest, transitiveBreakMiddle) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -85,7 +88,7 @@ TEST(AliasedRegistersTest, transitiveBreakMiddle) {
 TEST(AliasedRegistersTest, transitiveBreakEnd) {
   AliasedRegisters a;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   EXPECT_TRUE(a.are_aliases(zero, two));
 
@@ -161,33 +164,28 @@ TEST(AliasedRegistersTest, transitiveCycleBreak) {
 
 TEST(AliasedRegistersTest, getRepresentative) {
   AliasedRegisters a;
-  a.make_aliased(zero, one);
-  boost::optional<Register> zero_rep = a.get_representative(zero);
-  boost::optional<Register> one_rep = a.get_representative(one);
-  EXPECT_TRUE(bool(zero_rep));
-  EXPECT_TRUE(bool(one_rep));
-  EXPECT_EQ(0, *zero_rep);
-  EXPECT_EQ(0, *one_rep);
+  a.move(zero, one);
+  Register zero_rep = a.get_representative(zero);
+  Register one_rep = a.get_representative(one);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
 }
 
 TEST(AliasedRegistersTest, getRepresentativeTwoLinks) {
   AliasedRegisters a;
-  a.make_aliased(zero, one);
-  a.make_aliased(one, two);
-  boost::optional<Register> zero_rep = a.get_representative(zero);
-  boost::optional<Register> one_rep = a.get_representative(one);
-  boost::optional<Register> two_rep = a.get_representative(one);
-  EXPECT_TRUE(bool(zero_rep));
-  EXPECT_TRUE(bool(one_rep));
-  EXPECT_TRUE(bool(two_rep));
-  EXPECT_EQ(0, *zero_rep);
-  EXPECT_EQ(0, *one_rep);
-  EXPECT_EQ(0, *two_rep);
+  a.move(zero, one);
+  a.move(two, zero);
+  Register zero_rep = a.get_representative(zero);
+  Register one_rep = a.get_representative(one);
+  Register two_rep = a.get_representative(two);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
+  EXPECT_EQ(1, two_rep);
 }
 
 TEST(AliasedRegistersTest, breakLineGraph) {
   AliasedRegisters a;
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   a.move(two, one);
   a.break_alias(one);
   EXPECT_TRUE(a.are_aliases(zero, two));
@@ -204,36 +202,31 @@ TEST(AliasedRegistersTest, breakLineGraph) {
 
 TEST(AliasedRegistersTest, getRepresentativeNone) {
   AliasedRegisters a;
-  boost::optional<Register> zero_rep = a.get_representative(zero);
-  EXPECT_FALSE(bool(zero_rep));
+  Register zero_rep = a.get_representative(zero);
+  EXPECT_EQ(0, zero_rep);
 }
 
 TEST(AliasedRegistersTest, getRepresentativeTwoComponents) {
   AliasedRegisters a;
-  a.make_aliased(zero, one);
-  a.make_aliased(two, three);
+  a.move(zero, one);
+  a.move(two, three);
 
-  boost::optional<Register> zero_rep = a.get_representative(zero);
-  boost::optional<Register> one_rep = a.get_representative(one);
-  EXPECT_TRUE(bool(zero_rep));
-  EXPECT_TRUE(bool(one_rep));
-  EXPECT_EQ(0, *zero_rep);
-  EXPECT_EQ(0, *one_rep);
+  Register zero_rep = a.get_representative(zero);
+  Register one_rep = a.get_representative(one);
+  EXPECT_EQ(1, zero_rep);
+  EXPECT_EQ(1, one_rep);
 
-  boost::optional<Register> two_rep = a.get_representative(two);
-  boost::optional<Register> three_rep = a.get_representative(three);
-  EXPECT_TRUE(bool(two_rep));
-  EXPECT_TRUE(bool(three_rep));
-  EXPECT_EQ(2, *two_rep);
-  EXPECT_EQ(2, *three_rep);
+  Register two_rep = a.get_representative(two);
+  Register three_rep = a.get_representative(three);
+  EXPECT_EQ(3, two_rep);
+  EXPECT_EQ(3, three_rep);
 }
 
 TEST(AliasedRegistersTest, getRepresentativeNoLits) {
   AliasedRegisters a;
-  a.make_aliased(two, one_lit);
+  a.move(two, one_lit);
   auto two_rep = a.get_representative(two);
-  EXPECT_TRUE(bool(two_rep));
-  EXPECT_EQ(2, *two_rep);
+  EXPECT_EQ(2, two_rep);
 }
 
 TEST(AliasedRegistersTest, AbstractValueLeq) {
@@ -242,12 +235,12 @@ TEST(AliasedRegistersTest, AbstractValueLeq) {
   EXPECT_TRUE(a.leq(b));
   EXPECT_TRUE(b.leq(a));
 
-  a.make_aliased(zero, one);
-  b.make_aliased(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.leq(b));
 
-  b.make_aliased(zero, two);
+  b.move(two, zero);
   EXPECT_FALSE(a.leq(b));
   EXPECT_TRUE(b.leq(a));
 }
@@ -256,8 +249,8 @@ TEST(AliasedRegistersTest, AbstractValueLeqAndNotEqual) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.make_aliased(zero, one);
-  b.make_aliased(two, three);
+  a.move(zero, one);
+  b.move(two, three);
 
   EXPECT_FALSE(a.leq(b));
   EXPECT_FALSE(b.leq(a));
@@ -271,13 +264,13 @@ TEST(AliasedRegistersTest, AbstractValueEquals) {
   EXPECT_TRUE(a.equals(b));
   EXPECT_TRUE(b.equals(a));
 
-  a.make_aliased(zero, one);
-  b.make_aliased(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.equals(b));
   EXPECT_TRUE(b.equals(a));
 
-  b.make_aliased(zero, two);
+  b.move(two, zero);
   EXPECT_FALSE(a.equals(b));
   EXPECT_FALSE(b.equals(a));
 }
@@ -287,8 +280,8 @@ TEST(AliasedRegistersTest, AbstractValueEqualsAndClear) {
   AliasedRegisters b;
   EXPECT_TRUE(a.equals(b));
 
-  a.make_aliased(zero, one);
-  b.make_aliased(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
 
   EXPECT_TRUE(a.equals(b));
 
@@ -302,11 +295,13 @@ TEST(AliasedRegistersTest, AbstractValueMeet) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.make_aliased(zero, one);
-  b.make_aliased(one, two);
+  a.move(zero, one);
+  b.move(two, one);
 
   a.meet_with(b);
 
+  EXPECT_TRUE(a.are_aliases(zero, one));
+  EXPECT_TRUE(a.are_aliases(two, one));
   EXPECT_TRUE(a.are_aliases(zero, two));
   EXPECT_FALSE(a.are_aliases(zero, three));
 
@@ -320,8 +315,8 @@ TEST(AliasedRegistersTest, AbstractValueJoinNone) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.make_aliased(zero, one);
-  b.make_aliased(one, two);
+  a.move(zero, one);
+  b.move(one, two);
 
   a.join_with(b);
 
@@ -335,8 +330,8 @@ TEST(AliasedRegistersTest, AbstractValueJoinSome) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.make_aliased(zero, one);
-  b.make_aliased(zero, one);
+  a.move(zero, one);
+  b.move(zero, one);
   b.move(two, one);
 
   a.join_with(b);
@@ -356,11 +351,11 @@ TEST(AliasedRegistersTest, AbstractValueJoin) {
   AliasedRegisters a;
   AliasedRegisters b;
 
-  a.make_aliased(zero, one);
+  a.move(zero, one);
   a.move(two, zero);
   a.move(three, zero);
 
-  b.make_aliased(four, one);
+  b.move(four, one);
   b.move(two, four);
   b.move(three, four);
 

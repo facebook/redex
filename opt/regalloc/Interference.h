@@ -119,6 +119,12 @@ class Node {
   bool definitely_colorable() const;
 
   /*
+   * The number of moves that would need to be inserted if we were to spill
+   * this node.
+   */
+  uint32_t spill_cost() const { return m_spill_cost; }
+
+  /*
    * The maximum vreg this node can be mapped to without spilling. Since
    * different opcodes have different maximums, this ends up being a per-node
    * value instead of a global value.
@@ -154,6 +160,7 @@ class Node {
 
  private:
   uint32_t m_weight{0};
+  uint32_t m_spill_cost{0};
   reg_t m_max_vreg{max_unsigned_value(16)};
   // While the width is implicit in the register type, looking up the type to
   // determine the width is a little more expensive than storing the width

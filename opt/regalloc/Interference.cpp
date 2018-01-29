@@ -176,9 +176,12 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
       node.m_props.set(Node::PARAM);
     }
     node.m_type_domain.meet_with(RegisterTypeDomain(dest_reg_type(insn)));
-    node.m_max_vreg =
-        std::min(node.m_max_vreg, max_unsigned_value(dest_bit_width(it)));
+    auto max_vreg = max_unsigned_value(dest_bit_width(it));
+    node.m_max_vreg = std::min(node.m_max_vreg, max_vreg);
     node.m_width = insn->dest_is_wide() ? 2 : 1;
+    if (max_vreg < max_unsigned_value(16)) {
+      ++node.m_spill_cost;
+    }
   }
 
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
@@ -205,6 +208,9 @@ void GraphBuilder::update_node_constraints(FatMethod::iterator it,
       }
     }
     node.m_max_vreg = std::min(node.m_max_vreg, max_vreg);
+    if (max_vreg < max_unsigned_value(16)) {
+      ++node.m_spill_cost;
+    }
   }
 }
 

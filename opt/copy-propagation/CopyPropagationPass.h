@@ -31,6 +31,8 @@ class CopyPropagationPass : public Pass {
     // using v0 as a float gives it type float. But, in reality the bits in the
     // register are the same, so in verify none mode, we can eliminate the
     // second const load
+    //
+    // TODO: detect the type of constant for each alias group
     pc.get("eliminate_const_literals", false, m_config.eliminate_const_literals);
 
     pc.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
@@ -38,9 +40,8 @@ class CopyPropagationPass : public Pass {
     pc.get("replace_with_representative",
            true,
            m_config.replace_with_representative);
-    pc.get("full_method_analysis", true, m_config.full_method_analysis);
-    pc.get("all_representatives", false, m_config.all_representatives);
-    pc.get("all_transitives", false, m_config.all_transitives);
+    pc.get("wide_registers", false, m_config.wide_registers);
+    pc.get("static_finals", false, m_config.static_finals);
     pc.get("debug", false, m_config.debug);
   }
 
@@ -49,10 +50,12 @@ class CopyPropagationPass : public Pass {
     bool eliminate_const_strings{true};
     bool eliminate_const_classes{true};
     bool replace_with_representative{true};
-    bool full_method_analysis{true};
-    bool all_representatives{true};
-    bool all_transitives{true};
+    bool wide_registers{false};
+    bool static_finals{false};
     bool debug{false};
+
+    // this is set by PassManager, not by PassConfig
+    bool regalloc_has_run{false};
   } m_config;
 };
 

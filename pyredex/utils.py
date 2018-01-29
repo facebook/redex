@@ -5,14 +5,16 @@
 # LICENSE file in the root directory of this source tree. An additional grant
 # of patent rights can be found in the PATENTS file in the same directory.
 
-import atexit
 import glob
 import shutil
+import subprocess
+import sys
 import tempfile
 
 from os.path import join
 
 temp_dirs = []
+
 
 def abs_glob(directory, pattern='*'):
     """
@@ -36,3 +38,13 @@ def remove_temp_dirs():
     global temp_dirs
     for directory in temp_dirs:
         shutil.rmtree(directory)
+
+
+def sign_apk(keystore, keypass, keyalias, apk):
+    subprocess.check_call(
+        [
+            'jarsigner', '-sigalg', 'SHA1withRSA', '-digestalg', 'SHA1',
+            '-keystore', keystore, '-storepass', keypass, apk, keyalias
+        ],
+        stdout=sys.stderr
+    )

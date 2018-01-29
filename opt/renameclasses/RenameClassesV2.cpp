@@ -648,7 +648,7 @@ void RenameClassesPassV2::eval_classes(
       continue;
     }
 
-    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
+    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
       m_dont_rename_reasons[clazz] =
           { DontRenameReasonCode::ProguardCantRename, norule };
       continue;
@@ -704,7 +704,7 @@ void RenameClassesPassV2::eval_classes_post(
 
     // Don't rename anything if something changed and the class cannot be
     // renamed anymore.
-    if (!can_rename_if_ignoring_blanket_keep(clazz)) {
+    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
       m_dont_rename_reasons[clazz] =
         { DontRenameReasonCode::ProguardCantRename, norule };
     }

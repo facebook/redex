@@ -42,8 +42,8 @@ inline bool can_rename(DexMember* member) {
 // A temporary measure to allow the RenamerV2 pass to rename classes that would
 // other not be renamable due to any top level blanket keep rules.
 template <class DexMember>
-inline bool can_rename_if_ignoring_blanket_keep(DexMember* member) {
-  return can_rename(member) || member->rstate.is_blanket_kept();
+inline bool can_rename_if_ignoring_blanket_keepnames(DexMember* member) {
+  return can_rename(member) || member->rstate.is_blanket_names_kept();
 }
 
 template <class DexMember>
@@ -68,11 +68,6 @@ inline bool assumenosideeffects(DexMember* member) {
 
 // Note: Redex currently doesn't implement allowoptimization, -keepnames,
 // -keepclassmembernames, -keepclasseswithmembernames.
-
-template<class DexMember>
-inline bool keepclasseswithmembernames(DexMember* member) {
-  return keepclasseswithmembers(member) && allowshrinking(member);
-}
 
 // root is an attempt to identify a root for reachability analysis by using any
 // class or member that has keep set on it but does not have allowshrinking set

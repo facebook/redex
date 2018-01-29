@@ -26,6 +26,7 @@
   TM(CFG)                \
   TM(CFP)                \
   TM(CLP_GQL)            \
+  TM(CLP_LITHO)          \
   TM(CONSTP)             \
   TM(CPG)                \
   TM(CUSTOMSORT)         \
@@ -60,6 +61,7 @@
   TM(PGR)                \
   TM(PM)                 \
   TM(PTA)                \
+  TM(QUICK)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REG)                \

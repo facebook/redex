@@ -11,16 +11,18 @@
 
 #include <cstdio>
 
+#include "GraphColoring.h"
 #include "PassManager.h"
 
 class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
   virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("live_range_splitting", false, m_use_splitting);
+    pc.get("live_range_splitting", false, m_allocator_config.use_splitting);
+    pc.get("use_spill_costs", false, m_allocator_config.use_spill_costs);
   }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_use_splitting = false;
+  regalloc::graph_coloring::Allocator::Config m_allocator_config;
 };

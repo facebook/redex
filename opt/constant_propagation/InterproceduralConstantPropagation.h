@@ -11,7 +11,10 @@
 
 #include <atomic>
 
+#include "CallGraph.h"
 #include "ConstPropConfig.h"
+#include "ConstantEnvironment.h"
+#include "HashedAbstractPartition.h"
 #include "Pass.h"
 
 namespace interprocedural_constant_propagation {
@@ -24,6 +27,56 @@ struct Stats {
 
 } // namespace interprocedural_constant_propagation
 
+namespace interprocedural_constant_propagation_impl {
+
+/*
+ * Describes the constant-valued arguments (if any) for a given method or
+ * callsite. The n'th argument will be represented by a binding of n to a
+ * ConstantDomain instance.
+ */
+using ArgumentDomain = ConstantEnvironment;
+
+/*
+ * This map is an abstraction of the execution paths starting from the entry
+ * point of a method and ending at an invoke instruction, hence the use of an
+ * abstract partitioning.
+ *
+ * At method entry, this map contains a single item, a binding of the null
+ * pointer to an ArgumentDomain representing the input arguments. At method
+ * exit, this map will have bindings from all the invoke-* instructions
+ * contained in the method to the ArgumentDomains representing the arguments
+ * passed to the callee.
+ */
+using Domain = HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
+
+constexpr IRInstruction* INPUT_ARGS = nullptr;
+
+/*
+ * Performs intraprocedural constant propagation of stack / register values.
+ */
+class FixpointIterator
+    : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
+ public:
+  FixpointIterator(const call_graph::Graph& call_graph,
+                   const ConstPropConfig& config)
+      : MonotonicFixpointIterator(call_graph), m_config(config) {}
+
+  void analyze_node(DexMethod* const& method,
+                    Domain* current_state) const override;
+
+  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
+                      const Domain& exit_state_at_source) const override;
+
+ private:
+  ConstPropConfig m_config;
+};
+
+void insert_runtime_input_checks(const ConstantEnvironment&,
+                                 DexMethodRef*,
+                                 DexMethod*);
+
+} // namespace interprocedural_constant_propagation_impl
+
 class InterproceduralConstantPropagationPass : public Pass {
  public:
   InterproceduralConstantPropagationPass()
@@ -35,6 +88,7 @@ class InterproceduralConstantPropagationPass : public Pass {
     pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
     pc.get("propagate_conditions", false, m_config.propagate_conditions);
     pc.get("include_virtuals", false, m_config.include_virtuals);
+    pc.get("dynamic_input_checks", false, m_config.dynamic_input_checks);
   }
 
   // run() is exposed for testing purposes -- run_pass takes a PassManager
@@ -46,4 +100,5 @@ class InterproceduralConstantPropagationPass : public Pass {
                 PassManager& mgr) override;
  private:
   ConstPropConfig m_config;
+  DexMethodRef* m_dynamic_check_fail_handler;
 };

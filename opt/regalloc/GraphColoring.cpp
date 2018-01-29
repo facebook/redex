@@ -9,6 +9,7 @@
 
 #include "GraphColoring.h"
 
+#include <algorithm>
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
@@ -427,9 +428,6 @@ void Allocator::simplify(interference::Graph* ig,
   // Nodes that may not be colorable
   std::set<reg_t> high;
 
-  // XXX: We may benefit from having a custom sorting function for the sets
-  // above
-
   for (const auto& pair : ig->active_nodes()) {
     auto reg = pair.first;
     auto& node = pair.second;
@@ -469,14 +467,41 @@ void Allocator::simplify(interference::Graph* ig,
     if (high.size() == 0) {
       break;
     }
-    auto spill_candidate_it =
-        std::find_if(high.begin(), high.end(), [ig](reg_t reg) {
-          return !ig->get_node(reg).is_spilt();
+    // When picking the spill candidate, always prefer yet-unspilled nodes to
+    // already-spilled ones. Spilling the same node twice won't make the graph
+    // any easier to color.
+    // In case of a tie, pick the node with the lowest ratio of
+    // spill_cost / weight. For example, if we had to pick spill candidates in
+    // the following code:
+    //
+    //   sget v0 LFoo;.a:LFoo;
+    //   iget v2 v0 LFoo;.a:LBar;
+    //   iget v3 v0 LFoo;.a:LBaz;
+    //   iget v4 v0 LFoo;.a:LQux;
+    //   sget v1 LFoo;.b:LFoo;
+    //   iput v2 v1 LFoo;.a:LBar;
+    //   iput v3 v1 LFoo;.a:LBaz;
+    //   iput v4 v1 LFoo;.a:LQux;
+    //
+    // It would be preferable to spill v0 and v1 last because they have many
+    // uses (high spill cost), and interfere with fewer live ranges (have lower
+    // weight) compared to v2 and v3 (tying with v4, but v4 still has a lower
+    // spill cost).
+    auto spill_candidate_it = std::min_element(
+        high.begin(), high.end(), [ig, this](reg_t a, reg_t b) {
+          auto& node_a = ig->get_node(a);
+          auto& node_b = ig->get_node(b);
+          if (node_a.is_spilt() == node_b.is_spilt()) {
+            if (this->m_config.use_spill_costs) {
+              // Note that a / b < c / d <=> a * d < c * b.
+              return node_a.spill_cost() * node_b.weight() <
+                     node_b.spill_cost() * node_a.weight();
+            }
+            return false;
+          }
+          return !node_a.is_spilt() && node_b.is_spilt();
         });
-    if (spill_candidate_it == high.end()) {
-      spill_candidate_it = high.begin();
-    }
-    TRACE(REG, 6, "Potentially spilling %u\n", *high.begin());
+    TRACE(REG, 6, "Potentially spilling %u\n", *spill_candidate_it);
     // Our spill candidate has too many neighbors for us to be certain that we
     // can color it. Instead of spilling it immediately, we put it into `low`,
     // which will ensure that it ends up on the stack before any of the
@@ -513,7 +538,6 @@ void Allocator::select(const IRCode* code,
       reg_transform->map.emplace(reg, vreg);
     } else {
       spill_plan->global_spills.emplace(reg, vreg);
-      spill_plan->spill_costs.emplace(reg, 0);
     }
     vregs_size = std::max(vregs_size, vreg_file.size());
   }
@@ -667,42 +691,6 @@ reg_t max_value_for_src(const interference::Graph& ig,
   return max_value;
 }
 
-/*
- * Calculate spill costs for possible global spill
- */
-void Allocator::spill_costs(const IRCode* code,
-                            const interference::Graph& ig,
-                            const RangeSet& range_set,
-                            SpillPlan* spill_plan) {
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto* insn = it->insn;
-    if (range_set.contains(insn)) {
-      continue;
-    }
-    // increment spilling costs for non-range symregs
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      auto src = insn->src(i);
-      auto max_value = max_value_for_src(ig, insn, i);
-      auto sp_it = spill_plan->global_spills.find(src);
-      if (sp_it != spill_plan->global_spills.end() &&
-          sp_it->second > max_value) {
-        ++(spill_plan->spill_costs[src]);
-      }
-    }
-    if (insn->dests_size()) {
-      auto dest = insn->dest();
-      auto max_value = max_unsigned_value(dest_bit_width(it.unwrap()));
-      auto sp_it = spill_plan->global_spills.find(dest);
-      if (sp_it != spill_plan->global_spills.end() &&
-          sp_it->second > max_value) {
-        ++(spill_plan->spill_costs[dest]);
-      }
-    }
-  }
-}
-
 // Find out if there exist a
 //    invoke-xxx/fill-new-array v
 //    move-result u
@@ -750,7 +738,7 @@ void Allocator::find_split(const interference::Graph& ig,
   auto spill_it = spill_plan->global_spills.begin();
   while (spill_it != spill_plan->global_spills.end()) {
     auto reg = spill_it->first;
-    auto best_cost = spill_plan->spill_costs.at(reg);
+    auto best_cost = ig.get_node(reg).spill_cost();
     if (best_cost == 0) {
       ++spill_it;
       continue;
@@ -1000,7 +988,7 @@ void Allocator::spill(const interference::Graph& ig,
       // Spill non-param, non-range symregs
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
-        // We've already spilt this when handling range / param nodes above
+        // We've already spilled this when handling range / param nodes above
         if (new_temps->find(src) != new_temps->end()) {
           continue;
         }
@@ -1047,7 +1035,7 @@ void Allocator::spill(const interference::Graph& ig,
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(bool use_splitting, IRCode* code) {
+void Allocator::allocate(IRCode* code) {
 
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
@@ -1111,8 +1099,7 @@ void Allocator::allocate(bool use_splitting, IRCode* code) {
 
     if (!spill_plan.empty()) {
       TRACE(REG, 5, "Spill plan:\n%s\n", SHOW(spill_plan));
-      if (use_splitting) {
-        spill_costs(code, ig, range_set, &spill_plan);
+      if (m_config.use_splitting) {
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }

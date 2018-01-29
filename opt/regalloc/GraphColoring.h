@@ -40,8 +40,6 @@ struct SpillPlan {
   std::unordered_map<const IRInstruction*, std::unordered_set<reg_t>>
       range_spills;
 
-  std::unordered_map<reg_t, size_t> spill_costs;
-
   bool empty() const {
     return global_spills.empty() && param_spills.empty() &&
            range_spills.empty();
@@ -60,8 +58,8 @@ struct RegisterTransform {
  * This is a Chaitin-Briggs style allocator with some adaptations. See the
  * comment block of allocate() for details.
  *
- * The Allocator class exists solely to make it easy to track stats. All other
- * state is passed around through method arguments.
+ * The Allocator class exists solely to make it easy to track stats and read
+ * from the config. All other state is passed around through method arguments.
  *
  * Relevant sources consulted when implementing this:
  *
@@ -75,6 +73,11 @@ struct RegisterTransform {
 class Allocator {
 
  public:
+  struct Config {
+    bool use_splitting{false};
+    bool use_spill_costs{false};
+  };
+
   struct Stats {
     size_t reiteration_count{0};
     size_t param_spill_moves{0};
@@ -90,6 +93,10 @@ class Allocator {
     size_t net_moves() const { return moves_inserted() - moves_coalesced; }
     void accumulate(const Stats&);
   };
+
+  Allocator() = default; // use default config
+
+  Allocator(const Config& config): m_config(config) {}
 
   bool coalesce(interference::Graph*, IRCode*);
 
@@ -119,11 +126,6 @@ class Allocator {
                      RegisterTransform*,
                      SpillPlan*);
 
-  void spill_costs(const IRCode*,
-                   const interference::Graph&,
-                   const RangeSet&,
-                   SpillPlan*);
-
   void find_split(const interference::Graph&,
                   const SplitCosts&,
                   RegisterTransform*,
@@ -144,11 +146,12 @@ class Allocator {
              IRCode*,
              std::unordered_set<reg_t>*);
 
-  void allocate(bool use_splitting, IRCode*);
+  void allocate(IRCode*);
 
   const Stats& get_stats() const { return m_stats; }
 
  private:
+  Config m_config;
   Stats m_stats;
 };
 

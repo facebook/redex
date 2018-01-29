@@ -63,6 +63,14 @@ class PassManager {
 
   const PassInfo* get_current_pass_info() const { return m_current_pass_info; }
 
+  void record_running_regalloc() {
+    m_regalloc_has_run = true;
+  }
+
+  bool regalloc_has_run() {
+    return m_regalloc_has_run;
+  }
+
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
@@ -83,6 +91,7 @@ class PassManager {
   redex::ProguardConfiguration m_pg_config;
   bool m_testing_mode;
   bool m_verify_none_mode;
+  bool m_regalloc_has_run = false;
 
   struct ProfilerInfo {
     std::string command;

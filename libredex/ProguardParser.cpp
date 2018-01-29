@@ -9,14 +9,11 @@
 
 #include <fstream>
 #include <iostream>
-#include <memory>
 
 #include "ProguardLexer.h"
 #include "ProguardMap.h"
 #include "ProguardParser.h"
 #include "ProguardRegex.h"
-
-#include <algorithm>
 
 namespace redex {
 namespace proguard_parser {
@@ -708,6 +705,8 @@ bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 bool mark_classes,
                 bool mark_conditionally,
                 bool allowshrinking,
+                const std::string& filename,
+                uint32_t line,
                 bool* ok) {
   if ((**it)->type == keep_kind) {
     ++(*it); // Consume the keep token
@@ -715,6 +714,8 @@ bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
     keep.mark_classes = mark_classes;
     keep.mark_conditionally = mark_conditionally;
     keep.allowshrinking = allowshrinking;
+    keep.source_filename = filename;
+    keep.source_line = line;
     if (!parse_modifiers(it, &keep)) {
       skip_to_next_command(it);
       return true;
@@ -740,7 +741,8 @@ bool ignore_class_specification_command(
 void parse(std::vector<unique_ptr<Token>>::iterator it,
            std::vector<unique_ptr<Token>>::iterator tokens_end,
            ProguardConfiguration* pg_config,
-           unsigned int* parse_errors) {
+           unsigned int* parse_errors,
+           const std::string& filename) {
   *parse_errors = 0;
   bool ok;
   while (it != tokens_end) {
@@ -748,6 +750,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if ((*it)->type == token::eof_token) {
       break;
     }
+    uint32_t line = (*it)->line;
     if (!(*it)->is_command()) {
       cerr << "Expecting command but found " << (*it)->show() << " at line "
            << (*it)->line << endl;
@@ -795,9 +798,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keep,
                    &pg_config->keep_rules,
-                   true,
-                   false,
-                   false,
+                   true, // mark_classes
+                   false, // mark_conditionally
+                   false, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -807,9 +812,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keepclassmembers,
                    &pg_config->keep_rules,
-                   false,
-                   false,
-                   false,
+                   false, // mark_classes
+                   false, // mark_conditionally
+                   false, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -819,9 +826,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keepclasseswithmembers,
                    &pg_config->keep_rules,
-                   false,
-                   true,
-                   false,
+                   false, // mark_classes
+                   true, // mark_conditionally
+                   false, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -831,9 +840,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keepnames,
                    &pg_config->keep_rules,
-                   true,
-                   false,
-                   true,
+                   true, // mark_classes
+                   false, // mark_conditionally
+                   true, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -843,9 +854,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keepclassmembernames,
                    &pg_config->keep_rules,
-                   false,
-                   false,
-                   true,
+                   false, // mark_classes
+                   false, // mark_conditionally
+                   true, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -855,9 +868,11 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::keepclasseswithmembernames,
                    &pg_config->keep_rules,
-                   false,
-                   true,
-                   true,
+                   false, // mark_classes
+                   true, // mark_conditionally
+                   true, // allowshrinking
+                   filename,
+                   line,
                    &ok)) {
       if (!ok) {
         (*parse_errors)++;
@@ -888,17 +903,21 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     if (parse_keep(&it,
                    token::assumenosideeffects,
                    &pg_config->assumenosideeffects_rules,
-                   false,
-                   false,
-                   false,
+                   false, // mark_classes
+                   false, // mark_conditionally
+                   false, // allowshrinking
+                   filename,
+                   line,
                    &ok))
       continue;
     if (parse_keep(&it,
                    token::whyareyoukeeping,
                    &pg_config->whyareyoukeeping_rules,
-                   false,
-                   false,
-                   false,
+                   false, // mark_classes
+                   false, // mark_conditionally
+                   false, // allowshrinking
+                   filename,
+                   line,
                    &ok))
       continue;
 
@@ -952,8 +971,9 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
   }
 }
 
-void parse(istream& config, ProguardConfiguration* pg_config) {
-
+void parse(istream& config,
+           ProguardConfiguration* pg_config,
+           const std::string& filename) {
   std::vector<unique_ptr<Token>> tokens = lex(config);
   bool ok = true;
   // Check for bad tokens.
@@ -967,7 +987,7 @@ void parse(istream& config, ProguardConfiguration* pg_config) {
   }
   unsigned int parse_errors = 0;
   if (ok) {
-    parse(tokens.begin(), tokens.end(), pg_config, &parse_errors);
+    parse(tokens.begin(), tokens.end(), pg_config, &parse_errors, filename);
   }
 
   if (parse_errors == 0) {
@@ -978,21 +998,20 @@ void parse(istream& config, ProguardConfiguration* pg_config) {
   }
 }
 
-void parse_file(const std::string filename, ProguardConfiguration* pg_config) {
-
+void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
   ifstream config(filename);
   // First try relative path.
   if (!config.is_open()) {
     // Try with -basedirectory
     config.open(pg_config->basedirectory + "/" + filename);
     if (!config.is_open()) {
-      cerr << "ERROR: Failed to open ProGuard configuration file "
-           << filename << endl;
+      cerr << "ERROR: Failed to open ProGuard configuration file " << filename
+           << endl;
       exit(1);
     }
   }
 
-  parse(config, pg_config);
+  parse(config, pg_config, filename);
   // Parse the included files.
   for (const auto& included_filename : pg_config->includes) {
     if (pg_config->already_included.find(included_filename) !=
