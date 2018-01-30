@@ -44,12 +44,19 @@ class IntraProcConstantPropagation final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
                                        ConstantEnvironment> {
  public:
-  explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
-                                        const ConstPropConfig& config)
+  explicit IntraProcConstantPropagation(
+      ControlFlowGraph& cfg,
+      const ConstPropConfig& config,
+      ConstantStaticFieldEnvironment field_env)
       : MonotonicFixpointIterator(cfg),
         m_cfg(cfg),
         m_config(config),
-        m_lcp{config} {}
+        m_lcp{config, field_env} {}
+
+  explicit IntraProcConstantPropagation(ControlFlowGraph& cfg,
+                                        const ConstPropConfig& config)
+      : IntraProcConstantPropagation(
+            cfg, config, ConstantStaticFieldEnvironment()) {}
 
   ConstantEnvironment analyze_edge(
       const std::shared_ptr<cfg::Edge>&,

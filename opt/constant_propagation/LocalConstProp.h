@@ -20,8 +20,13 @@ class LocalConstantPropagation {
   using InsnReplaceVector =
       std::vector<std::pair<IRInstruction*, IRInstruction*>>;
 
-  explicit LocalConstantPropagation(const ConstPropConfig& config)
-      : m_branch_propagated{0}, m_materialized_consts{0}, m_config{config} {}
+  explicit LocalConstantPropagation(
+      const ConstPropConfig& config,
+      ConstantStaticFieldEnvironment field_env)
+      : m_branch_propagated{0},
+        m_materialized_consts{0},
+        m_config{config},
+        m_field_env(field_env) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            ConstantEnvironment* current_state);
@@ -57,6 +62,7 @@ class LocalConstantPropagation {
   size_t m_branch_propagated;
   size_t m_materialized_consts;
   const ConstPropConfig& m_config;
+  ConstantStaticFieldEnvironment m_field_env;
 };
 
 // Must be IEEE 754

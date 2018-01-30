@@ -217,8 +217,6 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
 
   EXPECT_EQ(assembler::to_s_expr(m3->get_code()),
             assembler::to_s_expr(expected_code3.get()));
-
-  delete g_redex;
 }
 
 // We had a bug where an invoke instruction inside an unreachable block of code
@@ -450,4 +448,145 @@ TEST_F(RuntimeInputCheckTest, RuntimeInputCheckVirtualMethod) {
 
   EXPECT_EQ(assembler::to_s_expr(method->get_code()),
             assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(InterproceduralConstantPropagation, nonConstantValueField) {
+  g_redex = new RedexContext();
+
+  Scope scope;
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
+  creator.add_field(field);
+
+  auto m1 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (sput v0 "LFoo;.qux:I")
+     (return-void)
+    )
+  )");
+  code1->set_registers_size(1);
+  m1->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code1), /* is_virtual */ false);
+  m1->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m1);
+
+  auto m2 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()V"));
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+     (sget "LFoo;.qux:I")
+     (move-result-pseudo v0)
+     (if-nez v0 :label)
+     (const v0 0)
+     :label
+     (return-void)
+    )
+  )");
+  code2->set_registers_size(1);
+  m2->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code2), /* is_virtual */ false);
+  m2->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m2);
+
+  auto cls = creator.create();
+  scope.push_back(cls);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+  });
+
+  ConstPropConfig config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(scope);
+
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (goto :label)
+     (const v0 0)
+     :label
+     (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
+            assembler::to_s_expr(expected_code2.get()));
+
+  delete g_redex;
+}
+
+TEST(InterproceduralConstantPropagation, constantValueField) {
+  g_redex = new RedexContext();
+
+  Scope scope;
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
+  creator.add_field(field);
+
+  auto m1 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+     (const v0 0) ; this differs from the original encoded value of Foo.qux
+     (sput v0 "LFoo;.qux:I")
+     (return-void)
+    )
+  )");
+  code1->set_registers_size(1);
+  m1->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code1), /* is_virtual */ false);
+  m1->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m1);
+
+  auto m2 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()V"));
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+     (sget "LFoo;.qux:I")
+     (move-result-pseudo v0)
+     (if-nez v0 :label)
+     (const v0 0)
+     :label
+     (return-void)
+    )
+  )");
+  code2->set_registers_size(1);
+  m2->make_concrete(
+      ACC_PUBLIC | ACC_STATIC, std::move(code2), /* is_virtual */ false);
+  m2->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m2);
+
+  auto cls = creator.create();
+  scope.push_back(cls);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+  });
+
+  ConstPropConfig config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(scope);
+
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+     (sget "LFoo;.qux:I")
+     (move-result-pseudo v0)
+     (if-nez v0 :label)
+     (const v0 0)
+     :label
+     (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
+            assembler::to_s_expr(expected_code2.get()));
+
+  delete g_redex;
 }

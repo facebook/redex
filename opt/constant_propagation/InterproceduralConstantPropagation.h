@@ -59,7 +59,8 @@ class FixpointIterator
  public:
   FixpointIterator(const call_graph::Graph& call_graph,
                    const ConstPropConfig& config)
-      : MonotonicFixpointIterator(call_graph), m_config(config) {}
+      : MonotonicFixpointIterator(call_graph),
+        m_config(config) {}
 
   void analyze_node(DexMethod* const& method,
                     Domain* current_state) const override;
@@ -67,8 +68,17 @@ class FixpointIterator
   Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
                       const Domain& exit_state_at_source) const override;
 
+  ConstantStaticFieldEnvironment get_field_environment() const {
+    return m_field_env;
+  }
+
+  void set_field_environment(ConstantStaticFieldEnvironment env) {
+    m_field_env = env;
+  }
+
  private:
   ConstPropConfig m_config;
+  ConstantStaticFieldEnvironment m_field_env;
 };
 
 void insert_runtime_input_checks(const ConstantEnvironment&,
@@ -79,8 +89,11 @@ void insert_runtime_input_checks(const ConstantEnvironment&,
 
 class InterproceduralConstantPropagationPass : public Pass {
  public:
+  InterproceduralConstantPropagationPass(const ConstPropConfig& config)
+      : Pass("InterproceduralConstantPropagationPass"), m_config(config) {}
+
   InterproceduralConstantPropagationPass()
-      : Pass("InterproceduralConstantPropagationPass") {}
+      : InterproceduralConstantPropagationPass(ConstPropConfig()) {}
 
   void configure_pass(const PassConfig& pc) override {
     pc.get(
@@ -89,6 +102,11 @@ class InterproceduralConstantPropagationPass : public Pass {
     pc.get("propagate_conditions", false, m_config.propagate_conditions);
     pc.get("include_virtuals", false, m_config.include_virtuals);
     pc.get("dynamic_input_checks", false, m_config.dynamic_input_checks);
+    long max_heap_analysis_iterations;
+    pc.get("max_heap_analysis_iterations", 0, max_heap_analysis_iterations);
+    always_assert(max_heap_analysis_iterations >= 0);
+    m_config.max_heap_analysis_iterations =
+        static_cast<size_t>(max_heap_analysis_iterations);
   }
 
   // run() is exposed for testing purposes -- run_pass takes a PassManager

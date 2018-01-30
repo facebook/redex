@@ -34,6 +34,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "InstructionLowering.h"
+#include "Resolver.h"
 #include "Walkers.h"
 
 /** Local (basic block level) constant propagation.
@@ -130,43 +131,64 @@ bool addition_out_of_bounds(int64_t a, int64_t b) {
 }
 
 void LocalConstantPropagation::analyze_instruction(
-    const IRInstruction* inst, ConstantEnvironment* current_state) {
-  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(inst));
-  switch (inst->opcode()) {
+    const IRInstruction* insn, ConstantEnvironment* current_state) {
+  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
+  switch (insn->opcode()) {
   case OPCODE_CONST:
   case OPCODE_CONST_WIDE: {
     TRACE(CONSTP,
           5,
           "Discovered new constant for reg: %d value: %ld\n",
-          inst->dest(),
-          inst->get_literal());
-    current_state->set(inst->dest(), SignedConstantDomain(inst->get_literal()));
+          insn->dest(),
+          insn->get_literal());
+    current_state->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_OBJECT: {
-    analyze_non_branch(inst, current_state);
+    analyze_non_branch(insn, current_state);
     break;
   }
   case OPCODE_MOVE_WIDE: {
-    analyze_non_branch(inst, current_state);
+    analyze_non_branch(insn, current_state);
     break;
   }
 
+  case OPCODE_MOVE_RESULT:
+  case OPCODE_MOVE_RESULT_WIDE:
+  case OPCODE_MOVE_RESULT_OBJECT:
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+    break;
+
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT: {
-    analyze_compare<float, int32_t>(inst, current_state);
+    analyze_compare<float, int32_t>(insn, current_state);
     break;
   }
 
   case OPCODE_CMPL_DOUBLE:
   case OPCODE_CMPG_DOUBLE: {
-    analyze_compare<double, int64_t>(inst, current_state);
+    analyze_compare<double, int64_t>(insn, current_state);
     break;
   }
 
   case OPCODE_CMP_LONG: {
-    analyze_compare<int64_t, int64_t>(inst, current_state);
+    analyze_compare<int64_t, int64_t>(insn, current_state);
+    break;
+  }
+
+  case OPCODE_SGET:
+  case OPCODE_SGET_WIDE:
+  case OPCODE_SGET_OBJECT:
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT: {
+    auto field = resolve_field(insn->get_field());
+    current_state->set(RESULT_REGISTER, m_field_env.get(field));
     break;
   }
 
@@ -175,7 +197,7 @@ void LocalConstantPropagation::analyze_instruction(
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
     if (m_config.fold_arithmetic) {
-      int32_t lit = inst->get_literal();
+      int32_t lit = insn->get_literal();
       auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
         if (addition_out_of_bounds(lit, v)) {
           return boost::none;
@@ -185,22 +207,21 @@ void LocalConstantPropagation::analyze_instruction(
       TRACE(CONSTP,
             5,
             "Attempting to fold %s with literal %lu\n",
-            SHOW(inst),
+            SHOW(insn),
             lit);
-      analyze_non_branch(inst, current_state, add_in_bounds);
+      analyze_non_branch(insn, current_state, add_in_bounds);
       break;
     }
     // fallthrough
   }
 
   default: {
-    if (inst->dests_size()) {
-      TRACE(CONSTP,
-            5,
-            "Marking value unknown [Reg: %d, Is wide: %d]\n",
-            inst->dest(),
-            inst->dest_is_wide());
-      current_state->set(inst->dest(), SignedConstantDomain::top());
+    if (insn->dests_size()) {
+      TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
+      current_state->set(insn->dest(), SignedConstantDomain::top());
+    } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      TRACE(CONSTP, 5, "Clearing result register\n");
+      current_state->set(RESULT_REGISTER, SignedConstantDomain::top());
     }
   }
   }

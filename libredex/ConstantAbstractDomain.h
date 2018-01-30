@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <sstream>
 #include <type_traits>
 #include <utility>
 
@@ -135,6 +136,8 @@ class ConstantAbstractDomain final
   static ConstantAbstractDomain top() {
     return ConstantAbstractDomain(AbstractValueKind::Top);
   }
+
+  std::string str() const;
 };
 
 template <typename Constant>
@@ -156,4 +159,11 @@ inline std::ostream& operator<<(std::ostream& out,
   }
   }
   return out;
+}
+
+template <typename Constant>
+std::string ConstantAbstractDomain<Constant>::str() const {
+  std::ostringstream os;
+  os << *this;
+  return os.str();
 }
