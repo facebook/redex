@@ -159,7 +159,8 @@ DexFieldRef* RedexContext::get_field(const DexType* container,
   }
 }
 
-void RedexContext::mutate_field(DexFieldRef* field, const DexFieldSpec& ref) {
+void RedexContext::mutate_field(
+    DexFieldRef* field, const DexFieldSpec& ref, bool rename_on_collision) {
   std::lock_guard<std::mutex> lock(s_field_lock);
   DexFieldSpec& r = field->m_spec;
   s_field_map.erase(r);
@@ -167,6 +168,19 @@ void RedexContext::mutate_field(DexFieldRef* field, const DexFieldSpec& ref) {
   r.name = ref.name != nullptr ? ref.name : field->m_spec.name;
   r.type = ref.type != nullptr ? ref.type : field->m_spec.type;
   field->m_spec = r;
+
+  if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
+    uint32_t i = 0;
+    while (true) {
+      r.name = DexString::make_string(
+          ("f$" + std::to_string(i++)).c_str());
+      if (s_field_map.find(r) == s_field_map.end()) {
+        break;
+      }
+    }
+  }
+  always_assert_log(s_field_map.find(r) == s_field_map.end(),
+                    "Another field with the same signature already exists");
   s_field_map.emplace(r, field);
 }
 

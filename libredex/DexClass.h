@@ -277,8 +277,8 @@ class DexFieldRef {
    void gather_types_shallow(std::vector<DexType*>& ltype) const;
    void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-   void change(const DexFieldSpec& ref) {
-     g_redex->mutate_field(this, ref);
+   void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
+     g_redex->mutate_field(this, ref, rename_on_collision);
    }
 };
 
