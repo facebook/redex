@@ -102,7 +102,7 @@ class InterproceduralConstantPropagationPass : public Pass {
     pc.get("propagate_conditions", false, m_config.propagate_conditions);
     pc.get("include_virtuals", false, m_config.include_virtuals);
     pc.get("dynamic_input_checks", false, m_config.dynamic_input_checks);
-    long max_heap_analysis_iterations;
+    int64_t max_heap_analysis_iterations;
     pc.get("max_heap_analysis_iterations", 0, max_heap_analysis_iterations);
     always_assert(max_heap_analysis_iterations >= 0);
     m_config.max_heap_analysis_iterations =
