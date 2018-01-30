@@ -178,7 +178,6 @@ void obfuscate(Scope& scope, RenameStats& stats) {
       }
 
       // Obfu private fields
-      f_ob_state.ids_to_avoid.clear();
       f_ob_state.populate_ids_to_avoid(cls, field_name_manager, false, ch);
 
       // Keep this for all public ids in the class (they shouldn't conflict)
@@ -222,7 +221,6 @@ void obfuscate(Scope& scope, RenameStats& stats) {
           method_name_manager);
 
       // Obfu private methods
-      m_ob_state.ids_to_avoid.clear();
       m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false, ch);
 
       obfuscate_elems(
