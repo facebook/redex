@@ -16,6 +16,8 @@
 #include "IRAssembler.h"
 #include "Walkers.h"
 
+using namespace constant_propagation::interprocedural;
+
 bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
   return a.equals(b);
 }
@@ -223,8 +225,6 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
 // would cause the whole IPC domain to be set to bottom. This test checks that
 // we handle it correctly.
 TEST(InterproceduralConstantPropagation, unreachableInvoke) {
-  using namespace interprocedural_constant_propagation_impl;
-
   g_redex = new RedexContext();
 
   Scope scope;
@@ -307,8 +307,6 @@ struct RuntimeInputCheckTest : testing::Test {
 };
 
 TEST_F(RuntimeInputCheckTest, RuntimeInputEqualityCheck) {
-  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
-
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -340,7 +338,6 @@ TEST_F(RuntimeInputCheckTest, RuntimeInputEqualityCheck) {
 }
 
 TEST_F(RuntimeInputCheckTest, RuntimeInputSignCheck) {
-  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
   using sign_domain::Interval;
 
   auto code = assembler::ircode_from_string(R"(
@@ -380,7 +377,6 @@ TEST_F(RuntimeInputCheckTest, RuntimeInputSignCheck) {
 }
 
 TEST_F(RuntimeInputCheckTest, RuntimeInputCheckIntOnly) {
-  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
   using sign_domain::Interval;
 
   auto code = assembler::ircode_from_string(R"(
@@ -416,7 +412,6 @@ TEST_F(RuntimeInputCheckTest, RuntimeInputCheckIntOnly) {
 }
 
 TEST_F(RuntimeInputCheckTest, RuntimeInputCheckVirtualMethod) {
-  using interprocedural_constant_propagation_impl::insert_runtime_input_checks;
   using sign_domain::Interval;
 
   auto code = assembler::ircode_from_string(R"(

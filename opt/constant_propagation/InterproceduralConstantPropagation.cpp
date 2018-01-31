@@ -9,15 +9,14 @@
 
 #include "InterproceduralConstantPropagation.h"
 
-#include <mutex>
-
 #include "ConstantEnvironment.h"
-#include "ConstantPropagation.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
 #include "Timer.h"
 #include "Walkers.h"
 
-using namespace interprocedural_constant_propagation;
-using namespace interprocedural_constant_propagation_impl;
+using namespace constant_propagation;
+using namespace constant_propagation::interprocedural;
 
 namespace {
 
@@ -113,7 +112,9 @@ void simplify_constant_fields(const Scope& scope,
 
 } // namespace
 
-namespace interprocedural_constant_propagation_impl {
+namespace constant_propagation {
+
+namespace interprocedural {
 
 void FixpointIterator::analyze_node(DexMethod* const& method,
                                     Domain* current_state) const {
@@ -126,7 +127,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
     return;
   }
   auto& cfg = code->cfg();
-  IntraProcConstantPropagation intra_cp(cfg, m_config, m_field_env);
+  intraprocedural::FixpointIterator intra_cp(cfg, m_config, m_field_env);
   intra_cp.run(env_with_params(code, current_state->get(INPUT_ARGS)));
 
   for (auto* block : cfg.blocks()) {
@@ -257,7 +258,9 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
   }
 }
 
-} // interprocedural_constant_propagation_impl
+} // namespace interprocedural
+
+} // namespace constant_propagation
 
 namespace {
 
@@ -282,9 +285,8 @@ class Propagator {
     // Rebuild all CFGs here -- this should be more efficient than doing them
     // within FixpointIterator::analyze_node(), since that can get called
     // multiple times for a given method
-    walk::parallel::code(m_scope, [](DexMethod*, IRCode& code) {
-      code.build_cfg();
-    });
+    walk::parallel::code(m_scope,
+                         [](DexMethod*, IRCode& code) { code.build_cfg(); });
     auto fp_iter = std::make_unique<FixpointIterator>(cg, m_config);
     fp_iter->run({{INPUT_ARGS, ArgumentDomain()}});
 
@@ -308,32 +310,48 @@ class Propagator {
    * information about constant method arguments that analyze() obtained.
    */
   void optimize(const FixpointIterator& fp_iter) {
-    std::mutex stats_mutex;
-    walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
-      auto args = fp_iter.get_entry_state_at(method);
-      // If the callgraph isn't complete, reachable methods may appear
-      // unreachable
-      if (args.is_bottom()) {
-        args.set_to_top();
-      } else if (!args.is_top()) {
-        TRACE(ICONSTP, 3, "Have args for %s: %s\n",
-              SHOW(method), args.str().c_str());
-      }
-      IntraProcConstantPropagation intra_cp(
-          code.cfg(), m_config, fp_iter.get_field_environment());
-      auto env = env_with_params(&code, args.get(INPUT_ARGS));
-      intra_cp.run(env);
-      intra_cp.simplify();
-      intra_cp.apply_changes(&code);
-      if (m_config.dynamic_input_checks) {
-        insert_runtime_input_checks(env, m_dynamic_check_fail_handler, method);
-      }
-      {
-        std::lock_guard<std::mutex> lock{stats_mutex};
-        m_stats.branches_removed += intra_cp.branches_removed();
-        m_stats.materialized_consts += intra_cp.materialized_consts();
-      }
-    });
+    using Data = std::nullptr_t;
+    m_stats.transform_stats =
+        walk::parallel::reduce_methods<Data, Transform::Stats>(
+            m_scope,
+            [&](Data&, DexMethod* method) {
+              if (method->get_code() == nullptr) {
+                return Transform::Stats();
+              }
+              auto& code = *method->get_code();
+              auto args = fp_iter.get_entry_state_at(method);
+              // If the callgraph isn't complete, reachable methods may appear
+              // unreachable
+              if (args.is_bottom()) {
+                args.set_to_top();
+              } else if (!args.is_top()) {
+                TRACE(ICONSTP,
+                      3,
+                      "Have args for %s: %s\n",
+                      SHOW(method),
+                      args.str().c_str());
+              }
+
+              intraprocedural::FixpointIterator intra_cp(
+                  code.cfg(), m_config, fp_iter.get_field_environment());
+              auto env = env_with_params(&code, args.get(INPUT_ARGS));
+              intra_cp.run(env);
+              Transform tf(m_config);
+              auto stats = tf.apply(intra_cp, &code);
+
+              if (m_config.dynamic_input_checks) {
+                insert_runtime_input_checks(
+                    env, m_dynamic_check_fail_handler, method);
+              }
+
+              return stats;
+            },
+            [](Transform::Stats a, Transform::Stats b) { // reducer
+              return a + b;
+            },
+            [&](unsigned int) { // data initializer
+              return nullptr;
+            });
     simplify_constant_fields(m_scope, fp_iter.get_field_environment());
   }
 
@@ -358,7 +376,7 @@ class Propagator {
       if (args.is_bottom()) {
         args.set_to_top();
       }
-      IntraProcConstantPropagation intra_cp(code->cfg(), m_config);
+      intraprocedural::FixpointIterator intra_cp(code->cfg(), m_config);
       intra_cp.run(env_with_params(code, args.get(nullptr)));
       for (Block* b : cfg.blocks()) {
         auto state = intra_cp.get_entry_state_at(b);
@@ -380,9 +398,7 @@ class Propagator {
     });
   }
 
-  const Stats& get_stats() const {
-    return m_stats;
-  }
+  const Stats& get_stats() const { return m_stats; }
 
  private:
   Stats m_stats;
@@ -415,9 +431,10 @@ void InterproceduralConstantPropagationPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   const auto& stats = run(scope);
+  mgr.incr_metric("branches_removed", stats.transform_stats.branches_removed);
+  mgr.incr_metric("materialized_consts",
+                  stats.transform_stats.materialized_consts);
   mgr.incr_metric("constant_fields", stats.constant_fields);
-  mgr.incr_metric("branches_removed", stats.branches_removed);
-  mgr.incr_metric("materialized_consts", stats.materialized_consts);
 }
 
 static InterproceduralConstantPropagationPass s_pass;

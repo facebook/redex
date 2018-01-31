@@ -9,177 +9,11 @@
 
 #include "ConstantPropagation.h"
 
-#include "ConstantEnvironment.h"
-#include "DexUtil.h"
-#include "LocalConstProp.h"
-#include "Transform.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
 #include "Walkers.h"
 
-void IntraProcConstantPropagation::analyze_instruction(
-    const IRInstruction* insn, ConstantEnvironment* current_state) const {
-  auto op = insn->opcode();
-  if (opcode::is_load_param(op)) {
-    // We assume that the initial environment passed to run() has parameter
-    // bindings already added, so do nothing here
-    return;
-  } else {
-    m_lcp.analyze_instruction(insn, current_state);
-  }
-}
-
-void IntraProcConstantPropagation::analyze_node(
-    const NodeId& block, ConstantEnvironment* state_at_entry) const {
-  TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
-  for (auto& mie : InstructionIterable(block)) {
-    analyze_instruction(mie.insn, state_at_entry);
-  }
-}
-
-/*
- * If we can determine that a branch is not taken based on the constants in the
- * environment, set the environment to bottom upon entry into the unreachable
- * block.
- */
-static void analyze_if(const IRInstruction* insn,
-                       ConstantEnvironment* state,
-                       bool is_true_branch) {
-  if (state->is_bottom()) {
-    return;
-  }
-  // Inverting the conditional here means that we only need to consider the
-  // "true" case of the if-* opcode
-  auto op = !is_true_branch ? opcode::invert_conditional_branch(insn->opcode())
-                            : insn->opcode();
-
-  auto scd_left = state->get(insn->src(0));
-  auto scd_right = insn->srcs_size() > 1 ? state->get(insn->src(1))
-                                         : SignedConstantDomain(0);
-
-  switch (op) {
-  case OPCODE_IF_EQ: {
-    auto refined_value = scd_left.meet(scd_right);
-    state->set(insn->src(0), refined_value);
-    state->set(insn->src(1), refined_value);
-    break;
-  }
-  case OPCODE_IF_EQZ: {
-    state->set(insn->src(0), scd_left.meet(SignedConstantDomain(0)));
-    break;
-  }
-  case OPCODE_IF_NE:
-  case OPCODE_IF_NEZ: {
-    auto cd_left = scd_left.constant_domain();
-    auto cd_right = scd_right.constant_domain();
-    if (!(cd_left.is_value() && cd_right.is_value())) {
-      break;
-    }
-    if (*cd_left.get_constant() == *cd_right.get_constant()) {
-      state->set_to_bottom();
-    }
-    break;
-  }
-  case OPCODE_IF_LT:
-    if (scd_left.min_element() >= scd_right.max_element()) {
-      state->set_to_bottom();
-    }
-    break;
-  case OPCODE_IF_LTZ:
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
-    break;
-  case OPCODE_IF_GE:
-    if (scd_left.max_element() < scd_right.min_element()) {
-      state->set_to_bottom();
-    }
-    break;
-  case OPCODE_IF_GEZ:
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
-    break;
-  case OPCODE_IF_GT:
-    if (scd_left.max_element() <= scd_right.min_element()) {
-      state->set_to_bottom();
-    }
-    break;
-  case OPCODE_IF_GTZ:
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
-    break;
-  case OPCODE_IF_LE:
-    if (scd_left.min_element() > scd_right.max_element()) {
-      state->set_to_bottom();
-    }
-    break;
-  case OPCODE_IF_LEZ:
-    state->set(insn->src(0),
-               scd_left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
-    break;
-  default:
-    always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
-    not_reached();
-  }
-}
-
-ConstantEnvironment IntraProcConstantPropagation::analyze_edge(
-    const std::shared_ptr<cfg::Edge>& edge,
-    const ConstantEnvironment& exit_state_at_source) const {
-  auto current_state = exit_state_at_source;
-  if (!m_config.propagate_conditions) {
-    return current_state;
-  }
-
-  auto last_insn_it = transform::find_last_instruction(edge->src());
-  if (last_insn_it == edge->src()->end()) {
-    return current_state;
-  }
-
-  auto insn = last_insn_it->insn;
-  auto op = insn->opcode();
-  if (is_conditional_branch(op)) {
-    analyze_if(insn, &current_state, edge->type() == EDGE_BRANCH);
-  }
-  return current_state;
-}
-
-void IntraProcConstantPropagation::simplify_instruction(
-    Block* const& block,
-    IRInstruction* insn,
-    const ConstantEnvironment& current_state) const {
-  m_lcp.simplify_instruction(insn, current_state);
-}
-
-void IntraProcConstantPropagation::simplify() const {
-  for (const auto& block : m_cfg.blocks()) {
-    auto state = this->get_entry_state_at(block);
-    for (auto& mie : InstructionIterable(block)) {
-      analyze_instruction(mie.insn, &state);
-      simplify_instruction(block, mie.insn, state);
-    }
-  }
-}
-
-void IntraProcConstantPropagation::apply_changes(IRCode* code) const {
-  for (auto const& p : m_lcp.insn_replacements()) {
-    IRInstruction* old_op = p.first;
-    IRInstruction* new_op = p.second;
-    if (new_op->opcode() == OPCODE_NOP) {
-      TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(old_op));
-      code->remove_opcode(old_op);
-      delete new_op;
-    } else {
-      TRACE(CONSTP,
-            4,
-            "Replacing instruction %s -> %s\n",
-            SHOW(old_op),
-            SHOW(new_op));
-      if (is_branch(old_op->opcode())) {
-        code->replace_branch(old_op, new_op);
-      } else {
-        code->replace_opcode(old_op, new_op);
-      }
-    }
-  }
-}
+using namespace constant_propagation;
 
 void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
   pc.get(
@@ -203,36 +37,47 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    // Skipping blacklisted classes
-    if (m_config.blacklist.count(method->get_class()) > 0) {
-      TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
-      return;
-    }
+  using Data = std::nullptr_t;
+  auto stats = walk::parallel::reduce_methods<Data, Transform::Stats>(
+      scope,
+      [&](Data&, DexMethod* method) {
+        if (method->get_code() == nullptr) {
+          return Transform::Stats();
+        }
+        auto& code = *method->get_code();
+        // Skipping blacklisted classes
+        if (m_config.blacklist.count(method->get_class()) > 0) {
+          TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
+          return Transform::Stats();
+        }
 
-    TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
+        TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
 
-    code.build_cfg();
-    auto& cfg = code.cfg();
+        code.build_cfg();
+        auto& cfg = code.cfg();
 
-    TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
-    IntraProcConstantPropagation rcp(cfg, m_config);
-    rcp.run(ConstantEnvironment());
-    rcp.simplify();
-    rcp.apply_changes(&code);
+        TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
+        intraprocedural::FixpointIterator fp_iter(cfg, m_config);
+        fp_iter.run(ConstantEnvironment());
+        constant_propagation::Transform tf(m_config);
+        return tf.apply(fp_iter, &code);
+      },
 
-    {
-      std::lock_guard<std::mutex> lock{m_stats_mutex};
-      m_branches_removed += rcp.branches_removed();
-      m_materialized_consts += rcp.materialized_consts();
-    }
-  });
+      [](Transform::Stats a, Transform::Stats b) { // reducer
+        return a + b;
+      },
+      [&](unsigned int) { // data initializer
+        return nullptr;
+      });
 
-  mgr.incr_metric("num_branch_propagated", m_branches_removed);
-  mgr.incr_metric("num_materialized_consts", m_materialized_consts);
+  mgr.incr_metric("num_branch_propagated", stats.branches_removed);
+  mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
 
-  TRACE(CONSTP, 1, "num_branch_propagated: %d\n", m_branches_removed);
-  TRACE(CONSTP, 1, "num_moves_replaced_by_const_loads: %d\n", m_materialized_consts);
+  TRACE(CONSTP, 1, "num_branch_propagated: %d\n", stats.branches_removed);
+  TRACE(CONSTP,
+        1,
+        "num_moves_replaced_by_const_loads: %d\n",
+        stats.materialized_consts);
 }
 
 static ConstantPropagationPass s_pass;

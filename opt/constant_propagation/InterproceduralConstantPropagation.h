@@ -14,20 +14,18 @@
 #include "CallGraph.h"
 #include "ConstPropConfig.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationTransform.h"
 #include "HashedAbstractPartition.h"
 #include "Pass.h"
 
-namespace interprocedural_constant_propagation {
+namespace constant_propagation {
 
 struct Stats {
+  Transform::Stats transform_stats;
   size_t constant_fields{0};
-  size_t branches_removed{0};
-  size_t materialized_consts{0};
 };
 
-} // namespace interprocedural_constant_propagation
-
-namespace interprocedural_constant_propagation_impl {
+namespace interprocedural {
 
 /*
  * Describes the constant-valued arguments (if any) for a given method or
@@ -52,7 +50,7 @@ using Domain = HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
 constexpr IRInstruction* INPUT_ARGS = nullptr;
 
 /*
- * Performs intraprocedural constant propagation of stack / register values.
+ * Performs interprocedural constant propagation of stack / register values.
  */
 class FixpointIterator
     : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
@@ -85,7 +83,9 @@ void insert_runtime_input_checks(const ConstantEnvironment&,
                                  DexMethodRef*,
                                  DexMethod*);
 
-} // namespace interprocedural_constant_propagation_impl
+} // namespace interprocedural
+
+} // namespace constant_propagation
 
 class InterproceduralConstantPropagationPass : public Pass {
  public:
@@ -111,11 +111,12 @@ class InterproceduralConstantPropagationPass : public Pass {
 
   // run() is exposed for testing purposes -- run_pass takes a PassManager
   // object, making it awkward to call in unit tests.
-  interprocedural_constant_propagation::Stats run(Scope&);
+  constant_propagation::Stats run(Scope&);
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& cfg,
                 PassManager& mgr) override;
+
  private:
   ConstPropConfig m_config;
   DexMethodRef* m_dynamic_check_fail_handler;

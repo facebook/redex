@@ -166,11 +166,12 @@ redex_all_SOURCES = \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
-	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/constant_propagation/ConstantEnvironment.cpp \
+	opt/constant_propagation/ConstantPropagation.cpp \
+	opt/constant_propagation/ConstantPropagationAnalysis.cpp \
+	opt/constant_propagation/ConstantPropagationTransform.cpp \
 	opt/constant_propagation/InterproceduralConstantPropagation.cpp \
 	opt/constant_propagation/SignDomain.cpp \
-	opt/constant_propagation/LocalConstProp.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
