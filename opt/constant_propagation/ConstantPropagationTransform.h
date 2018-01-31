@@ -39,20 +39,21 @@ class Transform final {
 
  private:
   /*
-   * The simplify_* methods queue up their transformations in
-   * m_insns_replacement. After they are done, the apply_changes() method
+   * The methods in this class queue up their transformations in
+   * m_insns_replacement. After they are all done, the apply_changes() method
    * does the actual modification of the IRCode.
    */
+  void apply_changes(IRCode*);
 
   void simplify_instruction(IRInstruction*, const ConstantEnvironment&);
 
-  void simplify_branch(IRInstruction*, const ConstantEnvironment&);
+  void eliminate_dead_branch(const intraprocedural::FixpointIterator& intra_cp,
+                             Block*,
+                             const ConstantEnvironment&);
 
-  void simplify_non_branch(IRInstruction*,
-                           const ConstantEnvironment&,
-                           bool is_wide);
-
-  void apply_changes(IRCode*);
+  void replace_with_const(IRInstruction*,
+                          const ConstantEnvironment&,
+                          bool is_wide);
 
   const ConstPropConfig& m_config;
   std::vector<std::pair<IRInstruction*, IRInstruction*>> m_insn_replacements;

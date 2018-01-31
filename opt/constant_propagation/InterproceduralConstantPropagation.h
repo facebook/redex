@@ -99,7 +99,6 @@ class InterproceduralConstantPropagationPass : public Pass {
     pc.get(
         "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
     pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
-    pc.get("propagate_conditions", false, m_config.propagate_conditions);
     pc.get("include_virtuals", false, m_config.include_virtuals);
     pc.get("dynamic_input_checks", false, m_config.dynamic_input_checks);
     int64_t max_heap_analysis_iterations;

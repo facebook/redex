@@ -36,7 +36,6 @@ TEST(ConstantPropagation, IfToGoto) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -73,7 +72,6 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -115,7 +113,6 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -155,7 +152,6 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -195,7 +191,6 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -232,7 +227,6 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -268,7 +262,6 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -305,7 +298,6 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -339,7 +331,6 @@ TEST(ConstantPropagation, FoldArithmeticAddLit) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   config.fold_arithmetic = true;
   do_const_prop(code.get(), config);
 
@@ -393,7 +384,6 @@ TEST(ConstantPropagation, AnalyzeCmp) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -495,7 +485,6 @@ TEST(ConstantPropagation, WhiteBox1) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
@@ -528,7 +517,6 @@ TEST(ConstantPropagation, WhiteBox2) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();

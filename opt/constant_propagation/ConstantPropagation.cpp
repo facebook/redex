@@ -19,7 +19,6 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
   pc.get(
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
-  pc.get("propagate_conditions", false, m_config.propagate_conditions);
   std::vector<std::string> blacklist_names;
   pc.get("blacklist", {}, blacklist_names);
 

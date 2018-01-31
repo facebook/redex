@@ -16,7 +16,6 @@ struct ConstPropConfig {
   std::unordered_set<DexType*> blacklist;
   bool replace_moves_with_consts{false};
   bool fold_arithmetic{false};
-  bool propagate_conditions{false};
   bool include_virtuals{false};
   bool dynamic_input_checks{false};
   // The maximum number of times we will try to refine our model of the heap.

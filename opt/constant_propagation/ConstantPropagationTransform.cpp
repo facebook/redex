@@ -9,112 +9,19 @@
 
 #include "ConstantPropagationTransform.h"
 
-#include <boost/optional.hpp>
+#include "Transform.h"
 
 namespace constant_propagation {
 
-// Evaluate the guard expression of an if opcode. Return boost::none if the
-// branch cannot be determined to jump the same way every time. Otherwise
-// return true if the branch is always taken and false if it is never taken.
-boost::optional<bool> eval_if(IRInstruction*& insn,
-                              const ConstantEnvironment& state) {
-  if (state.is_bottom()) {
-    return boost::none;
-  }
-  auto op = insn->opcode();
-  auto scd_left = state.get(insn->src(0));
-  auto scd_right =
-      insn->srcs_size() > 1 ? state.get(insn->src(1)) : SignedConstantDomain(0);
-  switch (op) {
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ: {
-    auto cd_left = scd_left.constant_domain();
-    auto cd_right = scd_right.constant_domain();
-    if (!(cd_left.is_value() && cd_right.is_value())) {
-      return boost::none;
-    }
-    if (op == OPCODE_IF_EQ || op == OPCODE_IF_EQZ) {
-      return *cd_left.get_constant() == *cd_right.get_constant();
-    } else { // IF_NE / IF_NEZ
-      return *cd_left.get_constant() != *cd_right.get_constant();
-    }
-  }
-  case OPCODE_IF_LE:
-  case OPCODE_IF_LEZ: {
-    if (scd_left.max_element() <= scd_right.min_element()) {
-      return true;
-    } else if (scd_left.min_element() > scd_right.max_element()) {
-      return false;
-    } else {
-      return boost::none;
-    }
-  }
-  case OPCODE_IF_LT:
-  case OPCODE_IF_LTZ: {
-    if (scd_left.max_element() < scd_right.min_element()) {
-      return true;
-    } else if (scd_left.min_element() >= scd_right.max_element()) {
-      return false;
-    } else {
-      return boost::none;
-    }
-  }
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GEZ: {
-    if (scd_left.min_element() >= scd_right.max_element()) {
-      return true;
-    } else if (scd_left.max_element() < scd_right.min_element()) {
-      return false;
-    } else {
-      return boost::none;
-    }
-  }
-  case OPCODE_IF_GT:
-  case OPCODE_IF_GTZ: {
-    if (scd_left.min_element() > scd_right.max_element()) {
-      return true;
-    } else if (scd_left.max_element() <= scd_right.min_element()) {
-      return false;
-    } else {
-      return boost::none;
-    }
-  }
-  default:
-    always_assert_log(false, "opcode %s must be an if", SHOW(op));
-  }
-}
-
-// If we can prove the operands of a branch instruction are constant values
-// replace the conditional branch with an unconditional one.
-void Transform::simplify_branch(IRInstruction* insn,
-                                const ConstantEnvironment& env) {
-  auto constant_branch = eval_if(insn, env);
-
-  if (!constant_branch) {
-    return;
-  }
-  TRACE(CONSTP,
-        2,
-        "Changed conditional branch %s as it is always %s\n",
-        SHOW(insn),
-        *constant_branch ? "true" : "false");
-  ++m_stats.branches_removed;
-  // Transform keeps track of the target and selects the right size
-  // instruction based on the offset
-  m_insn_replacements.emplace_back(
-      insn, new IRInstruction(*constant_branch ? OPCODE_GOTO : OPCODE_NOP));
-}
-
-// Replace an instruction that has a single destination register with a `const`
-// load. `env` holds the state of the registers after `insn` has been
-// evaluated. So, `env[dst]` holds the _new_ value of the destination
-// register
-void Transform::simplify_non_branch(IRInstruction* insn,
-                                    const ConstantEnvironment& env,
-                                    bool is_wide) {
-  // we read from `dest` because analyze has put the new value of dst there
+/*
+ * Replace an instruction that has a single destination register with a `const`
+ * load. `env` holds the state of the registers after `insn` has been
+ * evaluated. So, `env.get(dest)` holds the _new_ value of the destination
+ * register.
+ */
+void Transform::replace_with_const(IRInstruction* insn,
+                                   const ConstantEnvironment& env,
+                                   bool is_wide) {
   auto cst = env.get(insn->dest()).constant_domain().get_constant();
   if (!cst) {
     return;
@@ -134,37 +41,59 @@ void Transform::simplify_instruction(IRInstruction* insn,
   switch (insn->opcode()) {
   case OPCODE_MOVE:
     if (m_config.replace_moves_with_consts) {
-      simplify_non_branch(insn, env, false /* is_wide */);
+      replace_with_const(insn, env, false /* is_wide */);
     }
     break;
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
-      simplify_non_branch(insn, env, true /* is_wide */);
+      replace_with_const(insn, env, true /* is_wide */);
     }
     break;
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ: {
-    simplify_branch(insn, env);
-    break;
-  }
-
   case OPCODE_ADD_INT_LIT16:
   case OPCODE_ADD_INT_LIT8: {
-    simplify_non_branch(insn, env, false);
+    replace_with_const(insn, env, false /* is_wide */);
     break;
   }
 
   default: {}
+  }
+}
+
+/*
+ * If the last instruction in a basic block is an if-* instruction, determine
+ * whether it is dead (i.e. whether the branch always taken or never taken).
+ * If it is, we can replace it with either a nop or a goto.
+ */
+void Transform::eliminate_dead_branch(
+    const intraprocedural::FixpointIterator& intra_cp,
+    Block* block,
+    const ConstantEnvironment& env) {
+  auto insn_it = transform::find_last_instruction(block);
+  if (insn_it == block->end()) {
+    return;
+  }
+  auto* insn = insn_it->insn;
+  if (!is_conditional_branch(insn->opcode())) {
+    return;
+  }
+  always_assert(block->succs().size() == 2);
+  for (auto& edge : block->succs()) {
+    // Check if the fixpoint analysis has determined the successors to be
+    // unreachable
+    if (intra_cp.analyze_edge(edge, env).is_bottom()) {
+      auto is_fallthrough = edge->type() == EDGE_GOTO;
+      TRACE(CONSTP,
+            2,
+            "Changed conditional branch %s as it is always %s\n",
+            SHOW(insn),
+            is_fallthrough ? "true" : "false");
+      ++m_stats.branches_removed;
+      m_insn_replacements.emplace_back(
+          insn, new IRInstruction(is_fallthrough ? OPCODE_GOTO : OPCODE_NOP));
+      // Assuming :block is reachable, then at least one of its successors must
+      // be reachable, so we can break after finding one that's unreachable
+      break;
+    }
   }
 }
 
@@ -195,11 +124,17 @@ Transform::Stats Transform::apply(
     const intraprocedural::FixpointIterator& intra_cp, IRCode* code) {
   auto& cfg = code->cfg();
   for (const auto& block : cfg.blocks()) {
-    auto state = intra_cp.get_entry_state_at(block);
-    for (auto& mie : InstructionIterable(block)) {
-      intra_cp.analyze_instruction(mie.insn, &state);
-      simplify_instruction(mie.insn, state);
+    auto env = intra_cp.get_entry_state_at(block);
+    // This block is unreachable, no point mutating its instructions -- DCE
+    // will be removing it anyway
+    if (env.is_bottom()) {
+      continue;
     }
+    for (auto& mie : InstructionIterable(block)) {
+      intra_cp.analyze_instruction(mie.insn, &env);
+      simplify_instruction(mie.insn, env);
+    }
+    eliminate_dead_branch(intra_cp, block, env);
   }
   apply_changes(code);
   return m_stats;
