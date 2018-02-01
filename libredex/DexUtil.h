@@ -216,7 +216,27 @@ inline bool is_any_init(const DexMethod* method) {
   return is_init(method) || is_clinit(method);
 }
 
+/**
+ * Change the visibility of members accessed in a method.
+ * We make everything public but we could be more precise and only
+ * relax visibility as needed.
+ */
+void change_visibility(DexMethod* method);
+
+/**
+ * NOTE: Only relocates the method. Doesn't check the correctness here,
+ *       nor does it make sure that the members are accessible from the
+ *       new type.
+ */
 void relocate_method(DexMethod* method, DexType* to_type);
+
+/**
+ * Relocates the method only if it doesn't require any changes to the
+ * referenced methods (none of the referenced methods would need to change
+ * into a virtual / static method). It also updates the visibility of
+ * the accessed members.
+ */
+bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
 
 /**
  * Merge the 2 visibility access flags. Return the most permissive visibility.

@@ -18,6 +18,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "IRCode.h"
+#include "Resolver.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -421,4 +422,86 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   spec.cls = to_type;
   method->change(spec, true);
   to_cls->add_method(method);
+}
+
+void change_visibility(DexMethod* method) {
+  auto code = method->get_code();
+  always_assert(code != nullptr);
+
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+
+    if (insn->has_field()) {
+      auto cls = type_class(insn->get_field()->get_class());
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+      auto field =
+          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+              ? FieldSearch::Static : FieldSearch::Instance);
+      if (field != nullptr && field->is_concrete()) {
+        set_public(field);
+        set_public(type_class(field->get_class()));
+        // FIXME no point in rewriting opcodes in the method
+        insn->set_field(field);
+      }
+    } else if (insn->has_method()) {
+      auto cls = type_class(insn->get_method()->get_class());
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+      auto current_method = resolve_method(
+          insn->get_method(), opcode_to_search(insn));
+      if (current_method != nullptr && current_method->is_concrete()) {
+        set_public(current_method);
+        set_public(type_class(current_method->get_class()));
+        // FIXME no point in rewriting opcodes in the method
+        insn->set_method(current_method);
+      }
+    } else if (insn->has_type()) {
+      auto type = insn->get_type();
+      auto cls = type_class(type);
+      if (cls != nullptr && !cls->is_external()) {
+        set_public(cls);
+      }
+    }
+  }
+
+  std::vector<DexType*> types;
+  method->get_code()->gather_catch_types(types);
+  for (auto type : types) {
+    auto cls = type_class(type);
+    if (cls != nullptr && !cls->is_external()) {
+      set_public(cls);
+    }
+  }
+}
+
+bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
+  // Check that visibility / accessibility changes to the current method
+  // won't need to change a referenced method into a virtual or static one.
+  // If it does, we simply bail out.
+  auto code = method->get_code();
+  always_assert(code);
+
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
+      auto meth = resolve_method(insn->get_method(), MethodSearch::Direct);
+      if (!meth) {
+        return false;
+      }
+
+      always_assert(meth->is_def());
+      if (!is_init(meth)) {
+        return false;
+      }
+    }
+  }
+
+  set_public(method);
+  relocate_method(method, to_type);
+  change_visibility(method);
+
+  return true;
 }

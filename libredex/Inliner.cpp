@@ -648,58 +648,6 @@ void select_inlinable(
   }
 }
 
-void change_visibility(DexMethod* callee) {
-  auto code = callee->get_code();
-  always_assert(code != nullptr);
-
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-
-    if (insn->has_field()) {
-      auto cls = type_class(insn->get_field()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto field =
-          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-              ? FieldSearch::Static : FieldSearch::Instance);
-      if (field != nullptr && field->is_concrete()) {
-        set_public(field);
-        set_public(type_class(field->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_field(field);
-      }
-    } else if (insn->has_method()) {
-      auto cls = type_class(insn->get_method()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-      if (method != nullptr && method->is_concrete()) {
-        set_public(method);
-        set_public(type_class(method->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_method(method);
-      }
-    } else if (insn->has_type()) {
-      auto type = insn->get_type();
-      auto cls = type_class(type);
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-    }
-  }
-
-  std::vector<DexType*> types;
-  callee->get_code()->gather_catch_types(types);
-  for (auto type : types) {
-    auto cls = type_class(type);
-    if (cls != nullptr && !cls->is_external()) {
-      set_public(cls);
-    }
-  }
-}
-
 namespace {
 
 using RegMap = transform::RegMap;
