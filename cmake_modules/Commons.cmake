@@ -25,7 +25,7 @@ macro(set_common_cxx_flags_for_redex)
 endmacro()
 
 macro(add_dependent_packages_for_redex)
-    find_package(Boost 1.56.0 REQUIRED COMPONENTS regex filesystem program_options iostreams thread)
+    find_package(Boost 1.56.0 REQUIRED COMPONENTS system regex filesystem program_options iostreams thread)
     print_dirs("${Boost_INCLUDE_DIRS}" "Boost_INCLUDE_DIRS")
     print_dirs("${Boost_LIBRARIES}" "Boost_LIBRARIES")
 
