@@ -77,7 +77,7 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
     auto directory = file_path.substr(0, pos);
     if (boost::algorithm::ends_with(directory, suffix)) {
       auto original_name = file_path.substr(pos + 1);
-      // Undo simple escaping at buck_imports/redex_utils
+      // Undo simple escaping at buck_imports/redex_utils.bzl
       boost::replace_all(original_name, "zC", ":");
       boost::replace_all(original_name, "zS", "/");
       boost::replace_all(original_name, "zZ", "z");

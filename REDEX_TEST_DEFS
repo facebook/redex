@@ -1,7 +1,7 @@
 load("@xplat//configurations/buck/android:instrumentation_tests.bzl", "instrumentation_test_ci_config")
+load("//buck_imports:redex_utils.bzl", "redex_options", "redex_native_outliner_helper", "escape_path")
 
 include_defs("//native/redex-stable/REDEX_DEFS")
-include_defs("//buck_imports/redex_utils")
 
 REDEX_INSTR_ROOT = '%s/test/instr' % REDEX_ROOT
 
