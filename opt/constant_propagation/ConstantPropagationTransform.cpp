@@ -82,11 +82,8 @@ void Transform::eliminate_dead_branch(
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
       auto is_fallthrough = edge->type() == EDGE_GOTO;
-      TRACE(CONSTP,
-            2,
-            "Changed conditional branch %s as it is always %s\n",
-            SHOW(insn),
-            is_fallthrough ? "true" : "false");
+      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s\n",
+            SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;
       m_insn_replacements.emplace_back(
           insn, new IRInstruction(is_fallthrough ? OPCODE_GOTO : OPCODE_NOP));
@@ -106,10 +103,7 @@ void Transform::apply_changes(IRCode* code) {
       code->remove_opcode(old_op);
       delete new_op;
     } else {
-      TRACE(CONSTP,
-            4,
-            "Replacing instruction %s -> %s\n",
-            SHOW(old_op),
+      TRACE(CONSTP, 4, "Replacing instruction %s -> %s\n", SHOW(old_op),
             SHOW(new_op));
       if (is_branch(old_op->opcode())) {
         code->replace_branch(old_op, new_op);

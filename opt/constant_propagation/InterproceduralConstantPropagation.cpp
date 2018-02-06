@@ -80,10 +80,7 @@ void simplify_constant_fields(const Scope& scope,
       if (!field_env.get(field).constant_domain().is_value()) {
         continue;
       }
-      TRACE(ICONSTP,
-            3,
-            "%s has value %s\n",
-            SHOW(field),
+      TRACE(ICONSTP, 3, "%s has value %s\n", SHOW(field),
             field_env.get(field).constant_domain().str().c_str());
       if (is_sget(op)) {
         IRInstruction* replacement{nullptr};
@@ -325,10 +322,7 @@ class Propagator {
               if (args.is_bottom()) {
                 args.set_to_top();
               } else if (!args.is_top()) {
-                TRACE(ICONSTP,
-                      3,
-                      "Have args for %s: %s\n",
-                      SHOW(method),
+                TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method),
                       args.str().c_str());
               }
 

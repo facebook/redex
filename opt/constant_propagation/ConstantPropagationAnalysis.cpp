@@ -76,12 +76,8 @@ void analyze_non_branch(const IRInstruction* insn,
     env->set(dst, SignedConstantDomain::top());
     return;
   }
-  TRACE(CONSTP,
-        5,
-        "Propagating constant [Value: %X] -> [Reg: %d]\n",
-        src,
-        *value,
-        dst);
+  TRACE(CONSTP, 5, "Propagating constant [Value: %X] -> [Reg: %d]\n", src,
+        *value, dst);
   env->set(dst, SignedConstantDomain(*value));
 }
 
@@ -115,14 +111,10 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     } else { // l_val < r_val
       result = -1;
     }
-    TRACE(CONSTP,
-          5,
+    TRACE(CONSTP, 5,
           "Propagated constant in branch instruction %s, "
           "Operands [%d] [%d] -> Result: [%d]\n",
-          SHOW(insn),
-          l_val,
-          r_val,
-          result);
+          SHOW(insn), l_val, r_val, result);
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {
     env->set(insn->dest(), SignedConstantDomain::top());
@@ -149,11 +141,8 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 
   case OPCODE_CONST:
   case OPCODE_CONST_WIDE: {
-    TRACE(CONSTP,
-          5,
-          "Discovered new constant for reg: %d value: %ld\n",
-          insn->dest(),
-          insn->get_literal());
+    TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
+          insn->dest(), insn->get_literal());
     env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
     break;
   }
@@ -217,10 +206,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
         }
         return v + lit;
       };
-      TRACE(CONSTP,
-            5,
-            "Attempting to fold %s with literal %lu\n",
-            SHOW(insn),
+      TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
             lit);
       analyze_non_branch(insn, env, add_in_bounds);
       break;
