@@ -50,6 +50,11 @@ inline DexAccessFlags operator|(const DexAccessFlags a,
   return (DexAccessFlags)((uint32_t)a | (uint32_t)b);
 }
 
+inline DexAccessFlags& operator|=(DexAccessFlags& a, const DexAccessFlags b) {
+  a = a | b;
+  return a;
+}
+
 inline DexAccessFlags operator~(const DexAccessFlags a) {
   return (DexAccessFlags)(~(uint32_t)a);
 }

@@ -304,6 +304,17 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
+static uint16_t largest_reg_operand(const IRInstruction* insn) {
+  uint16_t max_reg{0};
+  if (insn->dests_size()) {
+    max_reg = insn->dest();
+  }
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    max_reg = std::max(max_reg, insn->src(i));
+  }
+  return max_reg;
+}
+
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   s_expr insns_expr;
   auto code = std::make_unique<IRCode>();
@@ -311,6 +322,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;
+  uint16_t max_reg;
 
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
@@ -332,11 +344,14 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
       } else {
         auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
         always_assert(insn != nullptr);
+        max_reg = std::max(max_reg, largest_reg_operand(insn.get()));
         code->push_back(insn.release());
       }
     }
   }
   handle_labels(code.get(), label_defs, label_refs);
+
+  code->set_registers_size(max_reg + 1);
 
   return code;
 }
@@ -356,4 +371,55 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
   return ircode_from_s_expr(expr);
 }
 
-} // assembler
+#define AF(uc, lc, val) {ACC_##uc, #lc},
+std::unordered_map<DexAccessFlags, std::string, boost::hash<DexAccessFlags>>
+    access_to_string_table = {ACCESSFLAGS};
+#undef AF
+
+#define AF(uc, lc, val) {#lc, ACC_##uc},
+std::unordered_map<std::string, DexAccessFlags> string_to_access_table = {
+    ACCESSFLAGS};
+#undef AF
+
+DexMethod* method_from_s_expr(const s_expr& e) {
+  s_expr tail;
+  s_patn({s_patn("method")}, tail)
+      .must_match(e, "method definitions must start with 'method'");
+
+  s_expr access_tokens;
+  std::string method_name;
+  s_patn({s_patn(access_tokens), s_patn(&method_name)}, tail)
+      .must_match(tail, "Expecting access list and method name");
+
+  auto method = static_cast<DexMethod*>(DexMethod::make_method(method_name));
+  DexAccessFlags access_flags = static_cast<DexAccessFlags>(0);
+  for (size_t i = 0; i < access_tokens.size(); ++i) {
+    access_flags |= string_to_access_table.at(access_tokens[i].str());
+  }
+
+  s_expr code_expr;
+  s_patn({s_patn(code_expr)}, tail).match_with(tail);
+  always_assert_log(code_expr.is_list(), "Expecting code listing");
+  bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
+  method->make_concrete(
+      access_flags, ircode_from_s_expr(code_expr), is_virtual);
+
+  return method;
+}
+
+DexMethod* method_from_string(const std::string& s) {
+  std::istringstream input(s);
+  s_expr_istream s_expr_input(input);
+  s_expr expr;
+  while (s_expr_input.good()) {
+    s_expr_input >> expr;
+    if (s_expr_input.eoi()) {
+      break;
+    }
+    always_assert_log(
+        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+  }
+  return method_from_s_expr(expr);
+}
+
+} // namespace assembler
