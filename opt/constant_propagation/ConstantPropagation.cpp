@@ -19,16 +19,6 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
   pc.get(
       "replace_moves_with_consts", false, m_config.replace_moves_with_consts);
   pc.get("fold_arithmetic", false, m_config.fold_arithmetic);
-  std::vector<std::string> blacklist_names;
-  pc.get("blacklist", {}, blacklist_names);
-
-  for (auto const& name : blacklist_names) {
-    DexType* entry = DexType::get_type(name.c_str());
-    if (entry) {
-      TRACE(CONSTP, 2, "Blacklisted class: %s\n", SHOW(entry));
-      m_config.blacklist.insert(entry);
-    }
-  }
 }
 
 void ConstantPropagationPass::run_pass(DexStoresVector& stores,
@@ -43,15 +33,9 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
-        auto& code = *method->get_code();
-        // Skipping blacklisted classes
-        if (m_config.blacklist.count(method->get_class()) > 0) {
-          TRACE(CONSTP, 2, "Skipping %s\n", SHOW(method));
-          return Transform::Stats();
-        }
 
         TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
-
+        auto& code = *method->get_code();
         code.build_cfg();
         auto& cfg = code.cfg();
 
