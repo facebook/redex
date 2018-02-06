@@ -9,15 +9,9 @@
 
 #pragma once
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-
-enum DexAccessBits {
-  DEX_ACCESS_ABSTRACT      = 0x0400,
-  DEX_ACCESS_INTERFACE     = 0x0200,
-  DEX_ACCESS_NATIVE        = 0x0100,
-};
+#include <stdlib.h>
 
 #define ACCESSFLAGS                         \
   AF(PUBLIC,       public,           0x1)   \
