@@ -990,9 +990,9 @@ std::string show(const MethodItemEntry& mei) {
   }
 }
 
-std::string show(const FatMethod* fm) {
+std::string show(const IRList* ir) {
   std::string ret;
-  for (auto const& mei : *fm) {
+  for (auto const& mei : *ir) {
     ret += show(mei);
     ret += "\n";
   }
@@ -1072,7 +1072,7 @@ std::string show(DexIdx* p) {
 }
 
 std::string show(const IRCode* mt) {
-  return show(mt->m_fmethod);
+  return show(mt->m_ir_list);
 }
 
 std::string show(const InstructionIterable& it) {

@@ -126,7 +126,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
   return insns_removed;
 }
 
-MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos) {
+MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
   while (++pos != code->end() && pos->type != MFLOW_TRY)
     ;
   return pos != code->end() && pos->tentry->type == TRY_END
@@ -134,7 +134,7 @@ MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos) {
              : nullptr;
 }
 
-FatMethod::iterator find_last_instruction(Block* block) {
+IRList::iterator find_last_instruction(Block* block) {
   for (auto it = block->rbegin(); it != block->rend(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       return std::prev(it.base());

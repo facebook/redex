@@ -34,15 +34,15 @@ namespace call_graph {
 
 class Edge {
  public:
-  Edge(DexMethod* caller, DexMethod* callee, FatMethod::iterator invoke_it);
-  FatMethod::iterator invoke_iterator() const { return m_invoke_it; }
+  Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it);
+  IRList::iterator invoke_iterator() const { return m_invoke_it; }
   DexMethod* caller() const { return m_caller; }
   DexMethod* callee() const { return m_callee; }
 
  private:
   DexMethod* m_caller;
   DexMethod* m_callee;
-  FatMethod::iterator m_invoke_it;
+  IRList::iterator m_invoke_it;
 };
 
 using Edges = std::vector<std::shared_ptr<Edge>>;
@@ -81,7 +81,7 @@ class Graph {
 
   void add_edge(DexMethod* caller,
                 DexMethod* callee,
-                FatMethod::iterator invoke_it);
+                IRList::iterator invoke_it);
 
   Node m_entry = Node(nullptr);
   std::unordered_map<DexMethod*, Node> m_nodes;

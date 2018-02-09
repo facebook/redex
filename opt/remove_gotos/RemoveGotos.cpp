@@ -38,7 +38,7 @@ class RemoveGotos {
     return is_goto(*std::prev(block_ptr->end()));
   }
 
-  static FatMethod::iterator find_goto(Block* block_ptr) {
+  static IRList::iterator find_goto(Block* block_ptr) {
     auto iter = std::find_if(block_ptr->begin(),
                              block_ptr->end(),
                              [](MethodItemEntry& mei) { return is_goto(mei); });

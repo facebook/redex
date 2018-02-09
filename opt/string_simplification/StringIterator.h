@@ -80,14 +80,14 @@ class StringIterator : public MonotonicFixpointIterator<cfg::GraphInterface,
   // to_string -> check result.
   // overwritten dest -> clear register pointer (object can exist elsewhere).
   void analyze_instruction(const NodeId blk,
-                           FatMethod::iterator& it,
+                           IRList::iterator& it,
                            Environment* env) const;
 
   // Modifies instructions by finding toString method calls and removing all
   // opcodes related to an object in the block, and then either inserting a
   // const-string or building a simpler invocation of the stringbuilder.
   void simplify_instruction(const NodeId block,
-                            FatMethod::iterator& it,
+                            IRList::iterator& it,
                             const Environment* current_state);
 
  private:
@@ -95,29 +95,29 @@ class StringIterator : public MonotonicFixpointIterator<cfg::GraphInterface,
   // points at the toString method, which will be deleted.
   // In the end, it will point to the valid instruction immediately before,
   // or the same instruction if it is the beginning of the block.
-  void remove_stringbuilder_instructions_in_block(FatMethod::iterator& it,
+  void remove_stringbuilder_instructions_in_block(IRList::iterator& it,
                                                   const Environment* env,
                                                   NodeId block,
                                                   string_register_t sb_reg);
 
-  bool is_const_string(FatMethod::iterator it) const;
-  bool is_sb_new_instance(FatMethod::iterator it) const;
-  bool is_sb_empty_init(FatMethod::iterator it) const;
-  bool is_sb_string_init(FatMethod::iterator it) const;
-  bool is_sb_append_string(FatMethod::iterator it) const;
-  bool is_sb_to_string(FatMethod::iterator it) const;
+  bool is_const_string(IRList::iterator it) const;
+  bool is_sb_new_instance(IRList::iterator it) const;
+  bool is_sb_empty_init(IRList::iterator it) const;
+  bool is_sb_string_init(IRList::iterator it) const;
+  bool is_sb_append_string(IRList::iterator it) const;
+  bool is_sb_to_string(IRList::iterator it) const;
 
-  void insert_const_string(FatMethod::iterator& it,
+  void insert_const_string(IRList::iterator& it,
                            string_register_t sb,
                            std::string s);
 
-  void insert_sb_init(FatMethod::iterator& it, string_register_t vreg);
+  void insert_sb_init(IRList::iterator& it, string_register_t vreg);
 
-  void insert_sb_append(FatMethod::iterator& it,
+  void insert_sb_append(IRList::iterator& it,
                         string_register_t sb,
                         string_register_t rhs);
 
-  void insert_sb_to_string(FatMethod::iterator& it,
+  void insert_sb_to_string(IRList::iterator& it,
                            string_register_t sb,
                            string_register_t dest);
 

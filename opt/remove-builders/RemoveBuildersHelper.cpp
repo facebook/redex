@@ -22,7 +22,7 @@ namespace {
 
 const IRInstruction* NULL_INSN = nullptr;
 
-void fields_mapping(FatMethod::iterator it,
+void fields_mapping(IRList::iterator it,
                     FieldsRegs* fregs,
                     DexClass* builder) {
   always_assert(fregs != nullptr);
@@ -74,8 +74,8 @@ void fields_mapping(FatMethod::iterator it,
 std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
     const std::vector<Block*>& blocks, DexClass* builder) {
 
-  std::function<void(FatMethod::iterator, FieldsRegs*)> trans = [&](
-      FatMethod::iterator it, FieldsRegs* fregs) {
+  std::function<void(IRList::iterator, FieldsRegs*)> trans = [&](
+      IRList::iterator it, FieldsRegs* fregs) {
     fields_mapping(it, fregs, builder);
   };
 
@@ -637,8 +637,8 @@ bool params_change_regs(DexMethod* method) {
   auto param_it = std::next(param_insns.begin());
 
   for (DexType* arg : args) {
-    std::function<void(FatMethod::iterator, TaintedRegs*)> trans =
-        [&](FatMethod::iterator it, TaintedRegs* tregs) {
+    std::function<void(IRList::iterator, TaintedRegs*)> trans =
+        [&](IRList::iterator it, TaintedRegs* tregs) {
           if (!opcode::is_load_param(it->insn->opcode())) {
             transfer_object_reach(arg, regs_size, it->insn, tregs->m_reg_set);
           }
@@ -759,7 +759,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
       fields, new_regs_size, field_to_reg);
   new_code->set_registers_size(new_regs_size);
 
-  std::vector<FatMethod::iterator> to_delete;
+  std::vector<IRList::iterator> to_delete;
   std::unordered_map<IRInstruction*, IRInstruction*> to_replace;
   auto ii = InstructionIterable(*new_code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -815,9 +815,9 @@ DexMethod* get_fields_constr(DexMethod* method, DexClass* cls) {
   return static_cast<DexMethod*>(fields_constr);
 }
 
-std::vector<FatMethod::iterator> get_invokes_for_method(IRCode* code,
+std::vector<IRList::iterator> get_invokes_for_method(IRCode* code,
                                                         DexMethod* method) {
-  std::vector<FatMethod::iterator> fms;
+  std::vector<IRList::iterator> fms;
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
@@ -862,7 +862,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   }
 
   auto code = method->get_code();
-  std::vector<FatMethod::iterator> buildee_constr_calls =
+  std::vector<IRList::iterator> buildee_constr_calls =
     get_invokes_for_method(code, buildee_constr);
   if (buildee_constr_calls.size()) {
 
@@ -1069,8 +1069,8 @@ get_tainted_regs(uint16_t regs_size,
                  const std::vector<Block*>& blocks,
                  DexType* type) {
 
-  std::function<void(FatMethod::iterator, TaintedRegs*)> trans =
-      [&](FatMethod::iterator it, TaintedRegs* tregs) {
+  std::function<void(IRList::iterator, TaintedRegs*)> trans =
+      [&](IRList::iterator it, TaintedRegs* tregs) {
         auto insn = it->insn;
         auto& regs = tregs->m_reg_set;
         auto op = insn->opcode();

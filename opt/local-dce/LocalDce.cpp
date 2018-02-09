@@ -170,7 +170,7 @@ void LocalDce::dce(DexMethod* method) {
   std::vector<boost::dynamic_bitset<>> liveness(
       cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
   bool changed;
-  std::vector<FatMethod::iterator> dead_instructions;
+  std::vector<IRList::iterator> dead_instructions;
 
   TRACE(DCE, 5, "%s\n", SHOW(method));
   TRACE(DCE, 5, "%s", SHOW(cfg));

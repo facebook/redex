@@ -38,7 +38,7 @@ namespace inliner {
  */
 void inline_tail_call(DexMethod* caller,
                       DexMethod* callee,
-                      FatMethod::iterator pos);
+                      IRList::iterator pos);
 
 /*
  * Inline `callee` into `caller` at `pos`.
@@ -46,7 +46,7 @@ void inline_tail_call(DexMethod* caller,
  */
 void inline_method(IRCode* caller,
                    IRCode* callee,
-                   FatMethod::iterator pos);
+                   IRList::iterator pos);
 
 } // namespace inliner
 

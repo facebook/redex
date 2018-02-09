@@ -221,7 +221,7 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
 // instructions in isolation -- it only removes them when the caller calls it
 // with the associated 'primary' prefix instruction -- so we use this function
 // specifically for this purpose.
-static void remove_move_result_pseudo(FatMethod::iterator it) {
+static void remove_move_result_pseudo(IRList::iterator it) {
   always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
   delete it->insn;
   it->insn = nullptr;
@@ -232,7 +232,7 @@ static void remove_move_result_pseudo(FatMethod::iterator it) {
  * Returns the number of DexInstructions added during lowering (not including
  * the check-cast).
  */
-static size_t lower_check_cast(DexMethod*, IRCode* code, FatMethod::iterator* it_) {
+static size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
@@ -260,7 +260,7 @@ static size_t lower_check_cast(DexMethod*, IRCode* code, FatMethod::iterator* it
   return extra_instructions;
 }
 
-static void lower_fill_array_data(DexMethod*, IRCode* code, FatMethod::iterator it) {
+static void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator it) {
   const auto* insn = it->insn;
   auto* dex_insn = new DexInstruction(DOPCODE_FILL_ARRAY_DATA);
   dex_insn->set_src(0, insn->src(0));
@@ -272,7 +272,7 @@ static void lower_fill_array_data(DexMethod*, IRCode* code, FatMethod::iterator 
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_to_range_instruction(DexMethod* method, IRCode* code, FatMethod::iterator* it_) {
+static void lower_to_range_instruction(DexMethod* method, IRCode* code, IRList::iterator* it_) {
   using boost::algorithm::join;
   using boost::adaptors::transformed;
   auto& it = *it_;
@@ -291,7 +291,7 @@ static void lower_to_range_instruction(DexMethod* method, IRCode* code, FatMetho
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_simple_instruction(DexMethod*, IRCode*, FatMethod::iterator* it_) {
+static void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   auto op = insn->opcode();

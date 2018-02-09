@@ -66,7 +66,7 @@ void simplify_constant_fields(const Scope& scope,
   return walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     std::unordered_map<const IRInstruction*, IRInstruction*> replacements;
-    std::vector<FatMethod::iterator> deletes;
+    std::vector<IRList::iterator> deletes;
     if (code == nullptr) {
       return;
     }
@@ -148,7 +148,7 @@ Domain FixpointIterator::analyze_edge(
     const Domain& exit_state_at_source) const {
   Domain entry_state_at_dest;
   auto it = edge->invoke_iterator();
-  if (it == FatMethod::iterator()) {
+  if (it == IRList::iterator()) {
     entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
   } else {
     auto insn = it->insn;
@@ -217,7 +217,7 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
     }
     // The branching instruction that checks whether the constant domain is
     // correct for the given param
-    FatMethod::iterator check_insn_it;
+    IRList::iterator check_insn_it;
     const auto& cst = scd.constant_domain().get_constant();
     if (cst) {
       // If we have an exact constant, create a const instruction that loads

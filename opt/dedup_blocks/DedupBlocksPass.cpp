@@ -177,7 +177,7 @@ class DedupBlocksImpl {
           // for every block we reroute here. When there's no debug info,
           // the jvm will report the error on the closing brace of the function.
           // It's not perfect but it's better than incorrect information.
-          code->remove_debug_line_info(canon);
+          canon->remove_debug_line_info();
         } else {
           transform::replace_block(code, block, canon);
           ++m_num_blocks_removed;
@@ -191,7 +191,7 @@ class DedupBlocksImpl {
       return false;
     }
 
-    if (is_catch(block)) {
+    if (block->is_catch()) {
       // TODO. Should be possible. Skip now for simplicity
       return false;
     }

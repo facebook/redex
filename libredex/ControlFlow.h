@@ -23,8 +23,8 @@
  *
  * Right now there are two types of CFGs. Editable and non-editable:
  * A non editable CFG's blocks have begin and end pointers into the big linear
- * FatMethod in IRCode.
- * An editable CFG's blocks each own a small FatMethod (with MethodItemEntries
+ * IRList in IRCode.
+ * An editable CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
  * TODO: Add useful CFG editing methods
@@ -33,6 +33,8 @@
  */
 
 enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
+
+class Block;
 
 // Forward declare friend function of Block to handle cyclic dependency
 namespace transform {
@@ -76,14 +78,21 @@ class Block {
   const std::vector<std::shared_ptr<cfg::Edge>>& succs() const {
     return m_succs;
   }
-  FatMethod::iterator begin();
-  FatMethod::iterator end();
-  FatMethod::reverse_iterator rbegin() {
-    return FatMethod::reverse_iterator(end());
+  IRList::iterator begin();
+  IRList::iterator end();
+  IRList::reverse_iterator rbegin() {
+    return IRList::reverse_iterator(end());
   }
-  FatMethod::reverse_iterator rend() {
-    return FatMethod::reverse_iterator(begin());
+  IRList::reverse_iterator rend() {
+    return IRList::reverse_iterator(begin());
   }
+
+  bool is_catch() {
+    return begin()->type == MFLOW_CATCH;
+  }
+
+  // remove all debug source code line numbers from this block
+  void remove_debug_line_info();
 
  private:
   friend class ControlFlowGraph;
@@ -91,22 +100,22 @@ class Block {
 
   // return an iterator to the goto in this block (if there is one)
   // otherwise, return m_entries.end()
-  FatMethod::iterator get_goto();
+  IRList::iterator get_goto();
 
   // returns a vector of all MFLOW_TARGETs in this block
-  std::vector<FatMethod::iterator> get_targets();
+  std::vector<IRList::iterator> get_targets();
 
   size_t m_id;
 
   // MethodItemEntries get moved from IRCode into here (if m_editable)
   // otherwise, this is empty.
-  FatMethod m_entries;
+  IRList m_entries;
 
   // TODO delete these
-  // These refer into the IRCode fatmethod
+  // These refer into the IRCode IRList
   // These are only used in non-editable mode.
-  FatMethod::iterator m_begin;
-  FatMethod::iterator m_end;
+  IRList::iterator m_begin;
+  IRList::iterator m_end;
 
   std::vector<std::shared_ptr<cfg::Edge>> m_preds;
   std::vector<std::shared_ptr<cfg::Edge>> m_succs;
@@ -121,11 +130,6 @@ class Block {
   // the graph that this block belongs to
   const ControlFlowGraph* m_parent = nullptr;
 };
-
-inline bool is_catch(Block* b) {
-  auto it = b->begin();
-  return it->type == MFLOW_CATCH;
-}
 
 struct DominatorInfo {
   Block* dom;
@@ -142,14 +146,14 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(FatMethod* fm,
+  ControlFlowGraph(IRList* ir,
                    bool editable = false);
   ~ControlFlowGraph();
 
   /*
    * convert from the graph representation to a list of MethodItemEntries
    */
-  FatMethod* linearize();
+  IRList* linearize();
 
   std::vector<Block*> blocks() const;
 
@@ -173,7 +177,7 @@ class ControlFlowGraph {
    */
   std::ostream& write_dot_format(std::ostream&) const;
 
-  Block* find_block_that_ends_here(const FatMethod::iterator& loc) const;
+  Block* find_block_that_ends_here(const IRList::iterator& loc) const;
 
   // Find a common dominator block that is closest to both block.
   Block* idom_intersect(
@@ -196,13 +200,13 @@ class ControlFlowGraph {
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
   using Boundaries =
       std::unordered_map<Block*,
-                         std::pair<FatMethod::iterator, FatMethod::iterator>>;
+                         std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<size_t, Block*>;
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
   // elsewhere
-  void find_block_boundaries(FatMethod* fm,
+  void find_block_boundaries(IRList* ir,
                              BranchToTargets& branch_to_targets,
                              TryEnds& try_ends,
                              TryCatches& try_catches,
@@ -222,10 +226,10 @@ class ControlFlowGraph {
   // elsewhere
   void remove_unreachable_succ_edges();
 
-  // Move MethodItemEntries from fm into their blocks
+  // Move MethodItemEntries from ir into their blocks
   // For use by the constructor. You probably don't want to call this from
   // elsewhere
-  void fill_blocks(FatMethod* fm, Boundaries& boundaries);
+  void fill_blocks(IRList* ir, Boundaries& boundaries);
 
   // add an explicit goto to the implicit fallthroughs so that we can
   // re-arrange blocks safely.
