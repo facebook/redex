@@ -161,3 +161,23 @@ inline InstructionSet instruction_set(const std::string& isa) {
   }
   return InstructionSet::kMax;
 }
+
+class DexFileListing {
+ public:
+  struct DexFile {
+    DexFile() = default;
+    DexFile(const std::string& location_,
+            uint32_t location_checksum_,
+            uint32_t file_offset_)
+        : location(location_),
+          location_checksum(location_checksum_),
+          file_offset(file_offset_) {}
+
+    std::string location;
+    uint32_t location_checksum;
+    uint32_t file_offset;
+  };
+
+  virtual std::vector<uint32_t> dex_file_offsets() const = 0;
+  virtual ~DexFileListing() = default;
+};

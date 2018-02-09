@@ -10,6 +10,7 @@
 // Code for parsing and building OAT files for multiple android versions. See
 // OatFile::build and OatFile::parse, below.
 
+#include "dex.h"
 #include "dump-oat.h"
 #include "elf-writer.h"
 #include "memory-accounter.h"
@@ -432,75 +433,6 @@ class KeyValueStore {
   std::vector<KeyValue> kv_pairs_;
 };
 
-struct PACKED DexClassDef {
-  uint16_t class_idx;
-  uint16_t pad1;
-  uint32_t access_flags;
-  uint16_t superclass_idx;
-  uint16_t pad2;
-  uint32_t interfaces_off;
-  uint32_t source_file_idx;
-  uint32_t annotations_off;
-  uint32_t class_data_off;
-  uint32_t static_values_off;
-};
-
-struct PACKED VdexFileHeader {
-  uint8_t magic_[4];
-  uint8_t version_[4];
-  uint32_t number_of_dex_files_;
-  uint32_t dex_size_;
-  uint32_t verifier_deps_size_;
-  uint32_t quickening_info_size_;
-};
-
-// Header for dex files. Note that this currently consumes the entire
-// contents of the dex file (in addition to the header proper) for the
-// purposes of memory-accounting.
-struct PACKED DexFileHeader {
-  uint32_t magic;
-  uint32_t version;
-  uint32_t checksum;
-  uint8_t signature[20];
-  uint32_t file_size;
-  uint32_t header_size;
-  uint32_t endian_tag;
-  uint32_t link_size;
-
-  uint32_t link_off;
-  uint32_t map_off;
-  uint32_t string_ids_size;
-  uint32_t string_ids_off;
-  uint32_t type_ids_size;
-  uint32_t type_ids_off;
-  uint32_t proto_ids_size;
-  uint32_t proto_ids_off;
-  uint32_t field_ids_size;
-  uint32_t field_ids_off;
-  uint32_t method_ids_size;
-  uint32_t method_ids_off;
-  uint32_t class_defs_size;
-  uint32_t class_defs_off;
-  uint32_t data_size;
-  uint32_t data_off;
-
-  static DexFileHeader parse(ConstBuffer buf) {
-    DexFileHeader header;
-    memcpy(&header, buf.ptr, sizeof(DexFileHeader));
-
-    // Mark the whole file consumed.
-    cur_ma()->markRangeConsumed(buf.ptr, header.file_size);
-
-    return header;
-  }
-};
-
-struct PACKED MethodId {
-  uint16_t class_idx; // index into type_ids_ array for defining class
-  uint16_t proto_idx; // index into proto_ids_ array for method prototype
-  uint32_t name_idx; // index into string_ids_ array for method name
-};
-
 // DexIdBufs handles looking up class names in dex files within in-memory oat
 // files.
 class DexIdBufs {
@@ -717,26 +649,6 @@ class OatClasses {
 
  protected:
   OatClasses() = default;
-};
-
-class DexFileListing {
- public:
-  struct DexFile {
-    DexFile() = default;
-    DexFile(const std::string& location_,
-            uint32_t location_checksum_,
-            uint32_t file_offset_)
-        : location(location_),
-          location_checksum(location_checksum_),
-          file_offset(file_offset_) {}
-
-    std::string location;
-    uint32_t location_checksum;
-    uint32_t file_offset;
-  };
-
-  virtual std::vector<uint32_t> dex_file_offsets() const = 0;
-  virtual ~DexFileListing() = default;
 };
 
 // Dex File listing for OAT versions 079, 088.
@@ -1425,187 +1337,6 @@ void OatClasses_079::write(
     CHECK(table_offset == cksum_fh.bytes_written());
   }
 }
-
-class SamsungLookupTablesNil {
- public:
-  template <typename DexFileListingType>
-  static void write(const std::vector<DexInput>&,
-                    const DexFileListingType&,
-                    FileHandle&) {}
-};
-
-// Code to generate the lookup tables used on Samsung 5.0 phones.
-//
-// This is very similar to the LookupTables class, however, almost all the
-// details are slightly different (e.g., same hash function, but samsung starts
-// the hash at 1, instead of 0). As such there's not any value in trying to
-// factor any common code out here, it would just result in a huge mess.
-class SamsungLookupTables {
- public:
-  MOVABLE(SamsungLookupTables);
-
-  struct LookupTableEntry {
-    uint32_t hash;
-    uint32_t str_offset;
-    uint32_t type_index;
-  };
-
-  struct LookupTable {
-    LookupTable(LookupTable&&) = default;
-    LookupTable& operator=(LookupTable&&) = default;
-
-    std::unique_ptr<LookupTableEntry[]> data;
-    uint32_t size;
-
-    size_t byte_size() const { return size * sizeof(LookupTableEntry); }
-  };
-
-  static bool supportedSize(uint32_t num_class_defs) {
-    return num_class_defs != 0u &&
-           num_class_defs <= std::numeric_limits<uint16_t>::max();
-  }
-
-  static uint32_t numEntries(uint32_t num_classes) {
-    return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
-  }
-
-  static uint32_t rawSize(uint32_t num_classes) {
-    return numEntries(num_classes) * sizeof(LookupTableEntry);
-  }
-
-  static void write(
-      const std::vector<DexInput>& dex_input_vec,
-      const std::vector<DexFileListing_064::DexFile_064>& dex_files,
-      FileHandle& cksum_fh) {
-    foreach_pair(
-        dex_input_vec,
-        dex_files,
-        [&](const DexInput& dex_input,
-            const DexFileListing_064::DexFile_064& dex_file) {
-          CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
-
-          auto table = build_lookup_table(dex_input.filename);
-
-          auto buf =
-              ConstBuffer{reinterpret_cast<const char*>(table.data.get()),
-                          table.byte_size()};
-          write_buf(cksum_fh, buf);
-        });
-  }
-
- private:
-  static void insert(LookupTableEntry* table,
-                     uint32_t lookup_table_size,
-                     uint32_t hash,
-                     uint32_t string_offset,
-                     uint16_t value) {
-    const auto mask = lookup_table_size - 1;
-    const auto start_bucket = hash & mask;
-    auto bucket = start_bucket;
-
-    do {
-      auto& entry = table[bucket];
-      if (entry.str_offset == 0) {
-        entry.hash = hash;
-        entry.str_offset = string_offset;
-        entry.type_index = value;
-        return;
-      }
-
-      bucket = (bucket + 1) & mask;
-    } while (bucket != start_bucket);
-
-    // since the size of the table is chosen to be larger than the number of
-    // items to insert, this should never happen.
-    fprintf(stderr, "Error: ran out of hash table space");
-  }
-
-  static uint32_t hash_str(const std::string& str) {
-    uint32_t hash = 1;
-    const char* chars = str.c_str();
-    while (*chars != '\0') {
-      hash = hash * 31 + *chars;
-      chars++;
-    }
-    return hash;
-  }
-
-  static LookupTable build_lookup_table(const std::string& filename) {
-
-    auto dex_fh = FileHandle(fopen(filename.c_str(), "r"));
-
-    DexFileHeader header = {};
-    CHECK(dex_fh.fread(&header, sizeof(DexFileHeader), 1) == 1);
-
-    const auto num_type_ids = header.type_ids_size;
-
-    const auto lookup_table_size = numEntries(num_type_ids);
-
-    std::unique_ptr<LookupTableEntry[]> table_buf(
-        new LookupTableEntry[lookup_table_size]);
-
-    memset(table_buf.get(), 0, lookup_table_size * sizeof(LookupTableEntry));
-
-    // Read type ids array.
-    std::unique_ptr<uint32_t[]> typeid_buf(new uint32_t[num_type_ids]);
-    CHECK(dex_fh.seek_set(header.type_ids_off));
-    CHECK(dex_fh.fread(typeid_buf.get(), sizeof(uint32_t), num_type_ids) ==
-          num_type_ids);
-
-    // Read the string ids array.
-    const auto num_string_ids = header.string_ids_size;
-    std::unique_ptr<uint32_t[]> stringid_buf(new uint32_t[num_string_ids]);
-    CHECK(dex_fh.seek_set(header.string_ids_off));
-    CHECK(dex_fh.fread(stringid_buf.get(), sizeof(uint32_t), num_string_ids) ==
-          num_string_ids);
-
-    constexpr int kTypeNameBufSize = 256;
-
-    char type_name_buf[kTypeNameBufSize] = {};
-
-    struct Retry {
-      uint32_t string_offset;
-      uint16_t data;
-      uint32_t hash;
-    };
-
-    std::vector<Retry> retry_indices;
-
-    for (unsigned int i = 0; i < num_type_ids; i++) {
-      const auto string_id = typeid_buf[i];
-      CHECK(string_id < num_string_ids);
-
-      const auto string_offset = stringid_buf[string_id];
-
-      dex_fh.seek_set(string_offset);
-      auto read_size =
-          dex_fh.fread(type_name_buf, sizeof(char), kTypeNameBufSize);
-      CHECK(read_size > 0);
-
-      auto ptr = type_name_buf;
-      const auto str_size = read_uleb128(&ptr) + 1;
-      const auto str_start = ptr - type_name_buf;
-
-      std::string type_name;
-
-      if (str_start + str_size >= kTypeNameBufSize) {
-        std::unique_ptr<char[]> large_class_name_buf(new char[str_size]);
-        dex_fh.seek_set(string_offset + str_start);
-        CHECK(dex_fh.fread(large_class_name_buf.get(),
-                           sizeof(char),
-                           str_size) == str_size);
-        type_name = std::string(large_class_name_buf.get(), str_size);
-      } else {
-        type_name = std::string(ptr, str_size);
-      }
-
-      const auto hash = hash_str(type_name);
-      insert(table_buf.get(), lookup_table_size, hash, string_offset, i);
-    }
-
-    return LookupTable{std::move(table_buf), lookup_table_size};
-  }
-};
 
 // Type lookup tables for all dex files in the oat file.
 // - The beginning offset of the lookup-table for the dex is specified in
@@ -2403,6 +2134,187 @@ class OatFile_Bad : public OatFile {
   OatHeader_Common header_;
 };
 
+// OEM specific
+class SamsungLookupTablesNil {
+ public:
+  template <typename DexFileListingType>
+  static void write(const std::vector<DexInput>&,
+                    const DexFileListingType&,
+                    FileHandle&) {}
+};
+
+// Code to generate the lookup tables used on Samsung 5.0 phones.
+//
+// This is very similar to the LookupTables class, however, almost all the
+// details are slightly different (e.g., same hash function, but samsung starts
+// the hash at 1, instead of 0). As such there's not any value in trying to
+// factor any common code out here, it would just result in a huge mess.
+class SamsungLookupTables {
+ public:
+  MOVABLE(SamsungLookupTables);
+
+  struct LookupTableEntry {
+    uint32_t hash;
+    uint32_t str_offset;
+    uint32_t type_index;
+  };
+
+  struct LookupTable {
+    LookupTable(LookupTable&&) = default;
+    LookupTable& operator=(LookupTable&&) = default;
+
+    std::unique_ptr<LookupTableEntry[]> data;
+    uint32_t size;
+
+    size_t byte_size() const { return size * sizeof(LookupTableEntry); }
+  };
+
+  static bool supportedSize(uint32_t num_class_defs) {
+    return num_class_defs != 0u &&
+           num_class_defs <= std::numeric_limits<uint16_t>::max();
+  }
+
+  static uint32_t numEntries(uint32_t num_classes) {
+    return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
+  }
+
+  static uint32_t rawSize(uint32_t num_classes) {
+    return numEntries(num_classes) * sizeof(LookupTableEntry);
+  }
+
+  static void write(
+      const std::vector<DexInput>& dex_input_vec,
+      const std::vector<DexFileListing_064::DexFile_064>& dex_files,
+      FileHandle& cksum_fh) {
+    foreach_pair(
+        dex_input_vec,
+        dex_files,
+        [&](const DexInput& dex_input,
+            const DexFileListing_064::DexFile_064& dex_file) {
+          CHECK(dex_file.lookup_table_offset == cksum_fh.bytes_written());
+
+          auto table = build_lookup_table(dex_input.filename);
+
+          auto buf =
+              ConstBuffer{reinterpret_cast<const char*>(table.data.get()),
+                          table.byte_size()};
+          write_buf(cksum_fh, buf);
+        });
+  }
+
+ private:
+  static void insert(LookupTableEntry* table,
+                     uint32_t lookup_table_size,
+                     uint32_t hash,
+                     uint32_t string_offset,
+                     uint16_t value) {
+    const auto mask = lookup_table_size - 1;
+    const auto start_bucket = hash & mask;
+    auto bucket = start_bucket;
+
+    do {
+      auto& entry = table[bucket];
+      if (entry.str_offset == 0) {
+        entry.hash = hash;
+        entry.str_offset = string_offset;
+        entry.type_index = value;
+        return;
+      }
+
+      bucket = (bucket + 1) & mask;
+    } while (bucket != start_bucket);
+
+    // since the size of the table is chosen to be larger than the number of
+    // items to insert, this should never happen.
+    fprintf(stderr, "Error: ran out of hash table space");
+  }
+
+  static uint32_t hash_str(const std::string& str) {
+    uint32_t hash = 1;
+    const char* chars = str.c_str();
+    while (*chars != '\0') {
+      hash = hash * 31 + *chars;
+      chars++;
+    }
+    return hash;
+  }
+
+  static LookupTable build_lookup_table(const std::string& filename) {
+
+    auto dex_fh = FileHandle(fopen(filename.c_str(), "r"));
+
+    DexFileHeader header = {};
+    CHECK(dex_fh.fread(&header, sizeof(DexFileHeader), 1) == 1);
+
+    const auto num_type_ids = header.type_ids_size;
+
+    const auto lookup_table_size = numEntries(num_type_ids);
+
+    std::unique_ptr<LookupTableEntry[]> table_buf(
+        new LookupTableEntry[lookup_table_size]);
+
+    memset(table_buf.get(), 0, lookup_table_size * sizeof(LookupTableEntry));
+
+    // Read type ids array.
+    std::unique_ptr<uint32_t[]> typeid_buf(new uint32_t[num_type_ids]);
+    CHECK(dex_fh.seek_set(header.type_ids_off));
+    CHECK(dex_fh.fread(typeid_buf.get(), sizeof(uint32_t), num_type_ids) ==
+          num_type_ids);
+
+    // Read the string ids array.
+    const auto num_string_ids = header.string_ids_size;
+    std::unique_ptr<uint32_t[]> stringid_buf(new uint32_t[num_string_ids]);
+    CHECK(dex_fh.seek_set(header.string_ids_off));
+    CHECK(dex_fh.fread(stringid_buf.get(), sizeof(uint32_t), num_string_ids) ==
+          num_string_ids);
+
+    constexpr int kTypeNameBufSize = 256;
+
+    char type_name_buf[kTypeNameBufSize] = {};
+
+    struct Retry {
+      uint32_t string_offset;
+      uint16_t data;
+      uint32_t hash;
+    };
+
+    std::vector<Retry> retry_indices;
+
+    for (unsigned int i = 0; i < num_type_ids; i++) {
+      const auto string_id = typeid_buf[i];
+      CHECK(string_id < num_string_ids);
+
+      const auto string_offset = stringid_buf[string_id];
+
+      dex_fh.seek_set(string_offset);
+      auto read_size =
+          dex_fh.fread(type_name_buf, sizeof(char), kTypeNameBufSize);
+      CHECK(read_size > 0);
+
+      auto ptr = type_name_buf;
+      const auto str_size = read_uleb128(&ptr) + 1;
+      const auto str_start = ptr - type_name_buf;
+
+      std::string type_name;
+
+      if (str_start + str_size >= kTypeNameBufSize) {
+        std::unique_ptr<char[]> large_class_name_buf(new char[str_size]);
+        dex_fh.seek_set(string_offset + str_start);
+        CHECK(dex_fh.fread(large_class_name_buf.get(),
+                           sizeof(char),
+                           str_size) == str_size);
+        type_name = std::string(large_class_name_buf.get(), str_size);
+      } else {
+        type_name = std::string(ptr, str_size);
+      }
+
+      const auto hash = hash_str(type_name);
+      insert(table_buf.get(), lookup_table_size, hash, string_offset, i);
+    }
+
+    return LookupTable{std::move(table_buf), lookup_table_size};
+  }
+};
 } // namespace
 
 OatFile::~OatFile() = default;
