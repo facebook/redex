@@ -9,6 +9,7 @@
 
 #include "WorkQueue.h"
 
+#include <thread>
 #include <chrono>
 #include <random>
 
@@ -20,7 +21,7 @@ template <typename T>
 double calculate_speedup(std::vector<int>& wait_times, int num_threads) {
   auto wq = workqueue_mapreduce<int, int>(
       [](int a) {
-        boost::this_thread::sleep_for(T(a));
+        std::this_thread::sleep_for(T(a));
         return a;
       },
       [](int a, int b) { return a + b; },
@@ -33,7 +34,7 @@ double calculate_speedup(std::vector<int>& wait_times, int num_threads) {
   auto single_start = std::chrono::high_resolution_clock::now();
   auto sum = 0;
   for (auto& item : wait_times) {
-    boost::this_thread::sleep_for(T(item));
+    std::this_thread::sleep_for(T(item));
     sum += item;
   }
   auto single_end = std::chrono::high_resolution_clock::now();
@@ -58,7 +59,7 @@ void profileBusyLoop() {
     times.push_back(20);
   }
   double speedup = calculate_speedup<std::chrono::milliseconds>(
-      times, boost::thread::hardware_concurrency());
+      times, std::thread::hardware_concurrency());
   printf("speedup busy loop: %f\n", speedup);
 }
 
