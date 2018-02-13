@@ -261,7 +261,7 @@ void mark_methods(const DexType* type,
         TRACE(VIRT, 6, "FINAL %s\n", SHOW(first_scope.methods[0].first));
         first_scope.methods[0].second |= FINAL;
       } else {
-        for (auto& meth = ++scopes[0].methods.begin();
+        for (auto meth = first_scope.methods.begin() + 1;
              meth != first_scope.methods.end();
              meth++) {
           TRACE(VIRT, 6, "OVERRIDE %s\n", SHOW((*meth).first));
@@ -271,7 +271,7 @@ void mark_methods(const DexType* type,
       // all others must be interfaces but we have a definition
       // in base so they must all be override
       if (scopes.size() > 1) {
-        for (auto& scope = ++scopes.begin(); scope != scopes.end(); scope++) {
+        for (auto scope = scopes.begin() + 1; scope != scopes.end(); scope++) {
           always_assert((*scope).methods.size() > 0);
           TRACE(VIRT, 6, "OVERRIDE %s\n", SHOW((*scope).methods[0].first));
           (*scope).methods[0].second |= OVERRIDE;
