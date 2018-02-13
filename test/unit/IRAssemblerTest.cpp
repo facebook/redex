@@ -41,6 +41,13 @@ TEST(IRAssembler, disassembleCode) {
   delete g_redex;
 }
 
+TEST(IRAssembler, empty) {
+  auto code = assembler::ircode_from_string(R"((
+    (return-void)
+  ))");
+  EXPECT_EQ(code->get_registers_size(), 0);
+}
+
 TEST(IRAssembler, assembleMethod) {
   g_redex = new RedexContext();
 

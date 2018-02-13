@@ -10,6 +10,7 @@
 #include "IRAssembler.h"
 
 #include <boost/functional/hash.hpp>
+#include <boost/optional/optional.hpp>
 #include <sstream>
 #include <string>
 
@@ -304,13 +305,15 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
-static uint16_t largest_reg_operand(const IRInstruction* insn) {
-  uint16_t max_reg{0};
+static boost::optional<uint16_t> largest_reg_operand(const IRInstruction* insn) {
+  boost::optional<uint16_t> max_reg;
   if (insn->dests_size()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    max_reg = std::max(max_reg, insn->src(i));
+    // boost::none is the smallest element of the ordering.
+    // It's smaller than any uint16_t.
+    max_reg = std::max(max_reg, boost::optional<uint16_t>(insn->src(i)));
   }
   return max_reg;
 }
@@ -322,7 +325,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;
-  uint16_t max_reg;
+  boost::optional<uint16_t> max_reg;
 
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
@@ -351,7 +354,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   }
   handle_labels(code.get(), label_defs, label_refs);
 
-  code->set_registers_size(max_reg + 1);
+  code->set_registers_size(max_reg ? *max_reg + 1 : 0);
 
   return code;
 }
