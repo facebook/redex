@@ -83,6 +83,10 @@ AnnoKill::AnnoKill(Scope& scope,
   for (auto it : class_hierarchy_keep_annos) {
     auto* type = DexType::get_type(it.first.c_str());
     auto* type_cls = type ? type_class(type) : nullptr;
+    if (type_cls == nullptr) {
+      continue;
+    }
+
     TypeSet type_refs;
     get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
     for (auto& anno : it.second) {
