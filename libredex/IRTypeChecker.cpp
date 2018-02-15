@@ -283,10 +283,10 @@ class TypeInference final
     }
     case OPCODE_MOVE_WIDE: {
       assume_wide_scalar(current_state, insn->src(0));
-      set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
-      set_type(current_state,
-               insn->dest() + 1,
-               current_state->get(insn->src(0) + 1));
+      TypeDomain td1 = current_state->get(insn->src(0));
+      TypeDomain td2 = current_state->get(insn->src(0) + 1);
+      set_type(current_state, insn->dest(), td1);
+      set_type(current_state, insn->dest() + 1, td2);
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO:
