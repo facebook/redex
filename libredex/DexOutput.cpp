@@ -790,7 +790,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     }
   }
   for (DexMethod* meth : lmeth) {
-    if (meth->get_access() & (DEX_ACCESS_ABSTRACT | DEX_ACCESS_NATIVE)) {
+    if (meth->get_access() & (ACC_ABSTRACT | ACC_NATIVE)) {
       // There is no code item for ABSTRACT or NATIVE methods.
       continue;
     }

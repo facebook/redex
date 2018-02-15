@@ -132,7 +132,7 @@ class Allocator {
                   SpillPlan*,
                   SplitPlan*);
 
-  std::unordered_map<reg_t, FatMethod::iterator> find_param_splits(
+  std::unordered_map<reg_t, IRList::iterator> find_param_splits(
       const std::unordered_set<reg_t>&, IRCode*);
 
   void split_params(const interference::Graph&,

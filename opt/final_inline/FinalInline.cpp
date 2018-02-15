@@ -250,7 +250,7 @@ class FinalInlineImpl {
           if (!code) {
             return 0;
           }
-          std::vector<FatMethod::iterator> rewrites;
+          std::vector<IRList::iterator> rewrites;
           auto ii = InstructionIterable(code);
           for (auto it = ii.begin(); it != ii.end(); ++it) {
             auto* insn = it->insn;
@@ -566,7 +566,7 @@ class FinalInlineImpl {
         continue;
       }
       auto sget_op = it->insn;
-      FatMethod::iterator sget_op_iterator = it.unwrap();
+      IRList::iterator sget_op_iterator = it.unwrap();
       if (!check_sget(sget_op)) {
         continue;
       }

@@ -1228,7 +1228,7 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 Result check_structure(const IRCode* code) {
   bool has_seen_non_load_param_opcode{false};
   for (auto it = code->begin(); it != code->end(); ++it) {
-    // XXX we are using FatMethod::iterator instead of InstructionIterator here
+    // XXX we are using IRList::iterator instead of InstructionIterator here
     // because the latter does not support reverse iteration
     if (it->type != MFLOW_OPCODE) {
       continue;

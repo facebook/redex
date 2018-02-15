@@ -11,7 +11,7 @@
 
 #include "IRAssembler.h"
 
-TEST(IRAssembler, disassemble) {
+TEST(IRAssembler, disassembleCode) {
   g_redex = new RedexContext();
 
   auto code = assembler::ircode_from_string(R"(
@@ -25,6 +25,8 @@ TEST(IRAssembler, disassemble) {
      (return-void)
     )
 )");
+  EXPECT_EQ(code->get_registers_size(), 2);
+
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s,
             "((const v0 0) "
@@ -35,6 +37,42 @@ TEST(IRAssembler, disassemble) {
             "(move-result-pseudo-object v0) "
             "(return-void))");
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  delete g_redex;
+}
+
+TEST(IRAssembler, empty) {
+  auto code = assembler::ircode_from_string(R"((
+    (return-void)
+  ))");
+  EXPECT_EQ(code->get_registers_size(), 0);
+}
+
+TEST(IRAssembler, assembleMethod) {
+  g_redex = new RedexContext();
+
+  auto method = assembler::method_from_string(R"(
+    (method (private) "LFoo;.bar:(I)V"
+     (
+      (return-void)
+     )
+    )
+)");
+  EXPECT_EQ(method->get_access(), ACC_PRIVATE);
+  EXPECT_STREQ(method->get_name()->c_str(), "bar");
+  EXPECT_STREQ(method->get_class()->get_name()->c_str(), "LFoo;");
+  EXPECT_EQ(assembler::to_string(method->get_code()), "((return-void))");
+
+  auto static_method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(I)V"
+     (
+      (return-void)
+     )
+    )
+)");
+  EXPECT_EQ(static_method->get_access(), ACC_PUBLIC | ACC_STATIC);
+  EXPECT_STREQ(static_method->get_name()->c_str(), "baz");
+  EXPECT_STREQ(static_method->get_class()->get_name()->c_str(), "LFoo;");
 
   delete g_redex;
 }

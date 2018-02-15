@@ -11,6 +11,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "Inliner.h"

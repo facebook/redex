@@ -9,15 +9,9 @@
 
 #pragma once
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-
-enum DexAccessBits {
-  DEX_ACCESS_ABSTRACT      = 0x0400,
-  DEX_ACCESS_INTERFACE     = 0x0200,
-  DEX_ACCESS_NATIVE        = 0x0100,
-};
+#include <stdlib.h>
 
 #define ACCESSFLAGS                         \
   AF(PUBLIC,       public,           0x1)   \
@@ -54,6 +48,11 @@ inline DexAccessFlags operator&(const DexAccessFlags a,
 inline DexAccessFlags operator|(const DexAccessFlags a,
                                 const DexAccessFlags b) {
   return (DexAccessFlags)((uint32_t)a | (uint32_t)b);
+}
+
+inline DexAccessFlags& operator|=(DexAccessFlags& a, const DexAccessFlags b) {
+  a = a | b;
+  return a;
 }
 
 inline DexAccessFlags operator~(const DexAccessFlags a) {

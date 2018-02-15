@@ -36,7 +36,7 @@ DexProto* make_static_sig(DexMethod* meth) {
 
 } // namespace
 
-MethodBlock::MethodBlock(FatMethod::iterator iterator, MethodCreator* creator)
+MethodBlock::MethodBlock(IRList::iterator iterator, MethodCreator* creator)
     : mc(creator), curr(iterator) {}
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
@@ -530,45 +530,50 @@ void MethodBlock::push_instruction(IRInstruction* insn) {
   curr = mc->push_instruction(curr, insn);
 }
 
-FatMethod::iterator MethodCreator::push_instruction(FatMethod::iterator curr,
-                                                    IRInstruction* insn) {
-  return meth_code->insert(++curr, insn);
+IRList::iterator MethodCreator::push_instruction(IRList::iterator curr,
+                                                 IRInstruction* insn) {
+  if (curr == meth_code->end()) {
+    meth_code->push_back(insn);
+    return std::prev(meth_code->end());
+  } else {
+    return meth_code->insert_after(curr, insn);
+  }
 }
 
 MethodBlock* MethodBlock::make_if_block(IRInstruction* insn) {
-  FatMethod::iterator false_block;
+  IRList::iterator false_block;
   curr = mc->make_if_block(curr, insn, &false_block);
   return new MethodBlock(false_block, mc);
 }
 
-FatMethod::iterator MethodCreator::make_if_block(
-    FatMethod::iterator curr,
+IRList::iterator MethodCreator::make_if_block(
+    IRList::iterator curr,
     IRInstruction* insn,
-    FatMethod::iterator* false_block) {
+    IRList::iterator* false_block) {
   return meth_code->make_if_block(++curr, insn, false_block);
 }
 
 MethodBlock* MethodBlock::make_if_else_block(IRInstruction* insn,
                                              MethodBlock** true_block) {
-  FatMethod::iterator if_it;
-  FatMethod::iterator else_it;
+  IRList::iterator if_it;
+  IRList::iterator else_it;
   curr = mc->make_if_else_block(curr, insn, &if_it, &else_it);
   *true_block = new MethodBlock(else_it, mc);
   return new MethodBlock(if_it, mc);
 }
 
-FatMethod::iterator MethodCreator::make_if_else_block(
-    FatMethod::iterator curr,
+IRList::iterator MethodCreator::make_if_else_block(
+    IRList::iterator curr,
     IRInstruction* insn,
-    FatMethod::iterator* false_block,
-    FatMethod::iterator* true_block) {
+    IRList::iterator* false_block,
+    IRList::iterator* true_block) {
   return meth_code->make_if_else_block(++curr, insn, false_block, true_block);
 }
 
 MethodBlock* MethodBlock::make_switch_block(
     IRInstruction* insn, std::map<SwitchIndices, MethodBlock*>& cases) {
-  FatMethod::iterator default_it;
-  std::map<SwitchIndices, FatMethod::iterator> mt_cases;
+  IRList::iterator default_it;
+  std::map<SwitchIndices, IRList::iterator> mt_cases;
   for (auto cases_it : cases) {
     mt_cases[cases_it.first] = curr;
   }
@@ -579,11 +584,11 @@ MethodBlock* MethodBlock::make_switch_block(
   return new MethodBlock(default_it, mc);
 }
 
-FatMethod::iterator MethodCreator::make_switch_block(
-    FatMethod::iterator curr,
+IRList::iterator MethodCreator::make_switch_block(
+    IRList::iterator curr,
     IRInstruction* insn,
-    FatMethod::iterator* default_block,
-    std::map<SwitchIndices, FatMethod::iterator>& cases) {
+    IRList::iterator* default_block,
+    std::map<SwitchIndices, IRList::iterator>& cases) {
   return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 

@@ -98,6 +98,7 @@ libredex_la_SOURCES = \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
+	libredex/IRList.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
@@ -149,8 +150,8 @@ libredex_la_LIBADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_IOSTREAMS_LIB) \
-	-lpthread \
-	-lboost_thread
+	$(BOOST_THREAD_LIB) \
+	-lpthread
 
 #
 # redex-all: the main executable
@@ -166,11 +167,12 @@ redex_all_SOURCES = \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
-	opt/constant_propagation/ConstantPropagation.cpp \
 	opt/constant_propagation/ConstantEnvironment.cpp \
+	opt/constant_propagation/ConstantPropagation.cpp \
+	opt/constant_propagation/ConstantPropagationAnalysis.cpp \
+	opt/constant_propagation/ConstantPropagationTransform.cpp \
 	opt/constant_propagation/InterproceduralConstantPropagation.cpp \
 	opt/constant_propagation/SignDomain.cpp \
-	opt/constant_propagation/LocalConstProp.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
@@ -235,8 +237,8 @@ redex_all_LDADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
-	-lpthread \
-	-lboost_thread
+	$(BOOST_THREAD_LIB) \
+	-lpthread
 
 redex_all_LDFLAGS = \
 	-rdynamic # function names in stack traces
@@ -253,8 +255,8 @@ redexdump_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
-	-lpthread \
-	-lboost_thread
+	$(BOOST_THREAD_LIB) \
+	-lpthread
 
 #
 # redex: Python driver script

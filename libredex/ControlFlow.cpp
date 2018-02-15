@@ -19,9 +19,9 @@ using namespace cfg;
 
 namespace {
 
-bool end_of_block(const FatMethod* fm, FatMethod::iterator it, bool in_try) {
+bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
   auto next = std::next(it);
-  if (next == fm->end()) {
+  if (next == ir->end()) {
     return true;
   }
   if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||
@@ -55,7 +55,7 @@ bool ends_with_may_throw(Block* p) {
 
 } // namespace
 
-FatMethod::iterator Block::begin() {
+IRList::iterator Block::begin() {
   if (m_parent->editable()) {
     return m_entries.begin();
   } else {
@@ -63,7 +63,7 @@ FatMethod::iterator Block::begin() {
   }
 }
 
-FatMethod::iterator Block::end() {
+IRList::iterator Block::end() {
   if (m_parent->editable()) {
     return m_entries.end();
   } else {
@@ -71,9 +71,19 @@ FatMethod::iterator Block::end() {
   }
 }
 
-ControlFlowGraph::ControlFlowGraph(FatMethod* fm, bool editable)
+void Block::remove_debug_line_info() {
+  for (MethodItemEntry& mie : *this) {
+    if (mie.type == MFLOW_POSITION) {
+      mie.pos.release();
+      mie.type = MFLOW_FALLTHROUGH;
+    }
+  }
+}
+
+
+ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
     : m_editable(editable) {
-  always_assert_log(fm->size() > 0, "FatMethod contains no instructions");
+  always_assert_log(ir->size() > 0, "IRList contains no instructions");
 
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
@@ -82,10 +92,10 @@ ControlFlowGraph::ControlFlowGraph(FatMethod* fm, bool editable)
   Boundaries boundaries; // block boundaries (for editable == true)
 
   find_block_boundaries(
-      fm, branch_to_targets, try_ends, try_catches, boundaries);
+      ir, branch_to_targets, try_ends, try_catches, boundaries);
 
   if (m_editable) {
-    fill_blocks(fm, boundaries);
+    fill_blocks(ir, boundaries);
   }
 
   connect_blocks(branch_to_targets);
@@ -104,7 +114,7 @@ ControlFlowGraph::ControlFlowGraph(FatMethod* fm, bool editable)
   TRACE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
 }
 
-void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
+void ControlFlowGraph::find_block_boundaries(IRList* ir,
                                              BranchToTargets& branch_to_targets,
                                              TryEnds& try_ends,
                                              TryCatches& try_catches,
@@ -112,19 +122,19 @@ void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
   // Find the block boundaries
   auto* block = create_block();
   if (m_editable) {
-    boundaries[block].first = fm->begin();
+    boundaries[block].first = ir->begin();
   } else {
-    block->m_begin = fm->begin();
+    block->m_begin = ir->begin();
   }
 
   set_entry_block(block);
   // The first block can be a branch target.
-  auto begin = fm->begin();
+  auto begin = ir->begin();
   if (begin->type == MFLOW_TARGET) {
     branch_to_targets[begin->target->src].push_back(block);
   }
   MethodItemEntry* active_try = nullptr;
-  for (auto it = fm->begin(); it != fm->end(); ++it) {
+  for (auto it = ir->begin(); it != ir->end(); ++it) {
     if (it->type == MFLOW_TRY) {
       // Assumption: MFLOW_TRYs are only at the beginning of blocks
       always_assert(!m_editable || it == boundaries[block].first);
@@ -136,7 +146,7 @@ void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
       }
       block->m_catch_start = active_try;
     }
-    if (!end_of_block(fm, it, active_try != nullptr)) {
+    if (!end_of_block(ir, it, active_try != nullptr)) {
       continue;
     }
 
@@ -148,7 +158,7 @@ void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
       block->m_end = next;
     }
 
-    if (next == fm->end()) {
+    if (next == ir->end()) {
       break;
     }
 
@@ -167,7 +177,7 @@ void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
       // is a significant performance win for our analyses.
       do {
         branch_to_targets[next->target->src].push_back(block);
-      } while (++next != fm->end() && next->type == MFLOW_TARGET);
+      } while (++next != ir->end() && next->type == MFLOW_TARGET);
       // for the next iteration of the for loop, we want `it` to point to the
       // last of the series of MFLOW_TARGET mies. Since `next` is currently
       // pointing to the mie *after* that element, and since `it` will be
@@ -181,7 +191,7 @@ void ControlFlowGraph::find_block_boundaries(FatMethod* fm,
       // same basic block.
       do {
         try_catches[next->centry] = block;
-      } while (++next != fm->end() && next->type == MFLOW_CATCH);
+      } while (++next != ir->end() && next->type == MFLOW_CATCH);
       it = std::prev(next, 2);
     }
   }
@@ -281,19 +291,19 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
   TRACE(CFG, 5, "  build: unreachables removed\n");
 }
 
-// Move the `MethodItemEntry`s from `fm` into the blocks, based on the
+// Move the `MethodItemEntry`s from `ir` into the blocks, based on the
 // information in `boundaries`.
 //
-// The CFG takes ownership of the `MethodItemEntry`s and `fm` is left empty.
-void ControlFlowGraph::fill_blocks(FatMethod* fm, Boundaries& boundaries) {
+// The CFG takes ownership of the `MethodItemEntry`s and `ir` is left empty.
+void ControlFlowGraph::fill_blocks(IRList* ir, Boundaries& boundaries) {
   always_assert(m_editable);
   // fill the blocks between their boundaries
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
-    b->m_entries.splice(b->m_entries.end(),
-                        *fm,
-                        boundaries.at(b).first,
-                        boundaries.at(b).second);
+    b->m_entries.splice_selection(b->m_entries.end(),
+                                  *ir,
+                                  boundaries.at(b).first,
+                                  boundaries.at(b).second);
   }
   TRACE(CFG, 5, "  build: splicing finished\n");
 }
@@ -350,7 +360,7 @@ void ControlFlowGraph::clean_dangling_targets() {
       if (it->type == MFLOW_TARGET &&
           branches.find(it->target->src) == branches.end()) {
         // Found a dangling label, delete it
-        it = b->m_entries.erase_and_dispose(it, FatMethodDisposer());
+        it = b->m_entries.erase_and_dispose(it);
       } else {
         ++it;
       }
@@ -375,7 +385,7 @@ std::vector<Block*> ControlFlowGraph::order() {
   return blocks(); // this is just id order (same as input order)
 }
 
-FatMethod::iterator Block::get_goto() {
+IRList::iterator Block::get_goto() {
   for (auto it = m_entries.begin(); it != m_entries.end(); it++) {
     if (it->type == MFLOW_OPCODE && it->insn->opcode() == OPCODE_GOTO) {
       return it;
@@ -384,8 +394,8 @@ FatMethod::iterator Block::get_goto() {
   return m_entries.end();
 }
 
-std::vector<FatMethod::iterator> Block::get_targets() {
-  std::vector<FatMethod::iterator> result;
+std::vector<IRList::iterator> Block::get_targets() {
+  std::vector<IRList::iterator> result;
   for (auto it = m_entries.begin(); it != m_entries.end(); it++) {
     if (it->type == MFLOW_TARGET) {
       result.emplace_back(it);
@@ -404,14 +414,14 @@ void ControlFlowGraph::remove_fallthrough_gotos(
       continue;
     }
 
-    FatMethod::iterator prev_goto = prev->get_goto();
+    IRList::iterator prev_goto = prev->get_goto();
     if (prev_goto != prev->m_entries.end()) {
-      std::vector<FatMethod::iterator> targets = b->get_targets();
-      for (const FatMethod::iterator& target : targets) {
+      std::vector<IRList::iterator> targets = b->get_targets();
+      for (const IRList::iterator& target : targets) {
         if (target->target->src == &*prev_goto) {
           // found a fallthrough goto. Remove the goto and the target
-          prev->m_entries.erase_and_dispose(prev_goto, FatMethodDisposer());
-          b->m_entries.erase_and_dispose(target, FatMethodDisposer());
+          prev->m_entries.erase_and_dispose(prev_goto);
+          b->m_entries.erase_and_dispose(target);
         }
       }
     }
@@ -439,13 +449,12 @@ void ControlFlowGraph::remove_try_markers() {
           }
           // leave everything else
           return false;
-        },
-        FatMethodDisposer());
+        });
   }
 }
 
-FatMethod* ControlFlowGraph::linearize() {
-  FatMethod* result = new FatMethod;
+IRList* ControlFlowGraph::linearize() {
+  IRList* result = new IRList;
 
   TRACE(CFG, 5, "before linearize:\n");
   for (const auto& entry : m_blocks) {
@@ -480,7 +489,7 @@ FatMethod* ControlFlowGraph::linearize() {
   }
 
   for (Block* b : ordering) {
-    result->splice(result->end(), b->m_entries);
+    result->splice_all(result->end(), b->m_entries);
   }
 
   return result;
@@ -658,7 +667,7 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
 }
 
 Block* ControlFlowGraph::find_block_that_ends_here(
-    const FatMethod::iterator& loc) const {
+    const IRList::iterator& loc) const {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
     if (b->end() == loc) {

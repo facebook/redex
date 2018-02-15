@@ -219,7 +219,7 @@ void MultiMethodInliner::inline_callees(
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
-  std::vector<std::pair<DexMethod*, FatMethod::iterator>> inlinables;
+  std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
   InstructionIterable ii(caller->get_code());
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
@@ -648,58 +648,6 @@ void select_inlinable(
   }
 }
 
-void change_visibility(DexMethod* callee) {
-  auto code = callee->get_code();
-  always_assert(code != nullptr);
-
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-
-    if (insn->has_field()) {
-      auto cls = type_class(insn->get_field()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto field =
-          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-              ? FieldSearch::Static : FieldSearch::Instance);
-      if (field != nullptr && field->is_concrete()) {
-        set_public(field);
-        set_public(type_class(field->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_field(field);
-      }
-    } else if (insn->has_method()) {
-      auto cls = type_class(insn->get_method()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-      if (method != nullptr && method->is_concrete()) {
-        set_public(method);
-        set_public(type_class(method->get_class()));
-        // FIXME no point in rewriting opcodes in the callee
-        insn->set_method(method);
-      }
-    } else if (insn->has_type()) {
-      auto type = insn->get_type();
-      auto cls = type_class(type);
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-    }
-  }
-
-  std::vector<DexType*> types;
-  callee->get_code()->gather_catch_types(types);
-  for (auto type : types) {
-    auto cls = type_class(type);
-    if (cls != nullptr && !cls->is_external()) {
-      set_public(cls);
-    }
-  }
-}
-
 namespace {
 
 using RegMap = transform::RegMap;
@@ -715,7 +663,7 @@ using RegMap = transform::RegMap;
 std::unique_ptr<RegMap> gen_callee_reg_map(
     IRCode* caller_code,
     const IRCode* callee_code,
-    FatMethod::iterator invoke_it) {
+    IRList::iterator invoke_it) {
   auto callee_reg_start = caller_code->get_registers_size();
   auto insn = invoke_it->insn;
   auto reg_map = std::make_unique<RegMap>();
@@ -787,7 +735,7 @@ IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
  */
 void remap_callee_for_tail_call(const IRCode* caller_code,
                                 IRCode* callee_code,
-                                FatMethod::iterator invoke_it) {
+                                IRList::iterator invoke_it) {
   RegMap reg_map;
   auto insn = invoke_it->insn;
   auto callee_reg_start = caller_code->get_registers_size();
@@ -842,7 +790,7 @@ void cleanup_callee_debug(IRCode* callee_code) {
 } // namespace
 
 /*
- * For splicing a callee's FatMethod into a caller.
+ * For splicing a callee's IRList into a caller.
  */
 class MethodSplicer {
   IRCode* m_mtcaller;
@@ -913,9 +861,9 @@ class MethodSplicer {
     not_reached();
   }
 
-  void operator()(FatMethod::iterator insert_pos,
-                  FatMethod::iterator fcallee_start,
-                  FatMethod::iterator fcallee_end) {
+  void operator()(IRList::iterator insert_pos,
+                  IRList::iterator fcallee_start,
+                  IRList::iterator fcallee_end) {
     for (auto it = fcallee_start; it != fcallee_end; ++it) {
       if (should_skip_debug(&*it)) {
         continue;
@@ -1003,7 +951,7 @@ namespace inliner {
 
 void inline_method(IRCode* caller_code,
                    IRCode* callee_code,
-                   FatMethod::iterator pos) {
+                   IRList::iterator pos) {
   TRACE(INL, 5, "caller code:\n%s\n", SHOW(caller_code));
   TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee_code));
 
@@ -1020,7 +968,7 @@ void inline_method(IRCode* caller_code,
   // find the last position entry before the invoke.
   // we need to decrement the reverse iterator because it gets constructed
   // as pointing to the element preceding pos
-  auto position_it = --FatMethod::reverse_iterator(pos);
+  auto position_it = --IRList::reverse_iterator(pos);
   while (++position_it != caller_code->rend()
       && position_it->type != MFLOW_POSITION);
   std::unique_ptr<DexPosition> pos_nullptr;
@@ -1100,7 +1048,7 @@ void inline_method(IRCode* caller_code,
 
 void inline_tail_call(DexMethod* caller,
                       DexMethod* callee,
-                      FatMethod::iterator pos) {
+                      IRList::iterator pos) {
   TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
   auto* caller_code = caller->get_code();
   auto* callee_code = callee->get_code();

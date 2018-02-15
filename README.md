@@ -26,7 +26,7 @@ brew install autoconf automake libtool python3
 brew install boost jsoncpp
 ```
 
-### Ubuntu 14.04 LTS (64-bit)
+### Ubuntu (64-bit)
 ```
 sudo apt-get install \
     g++ \
@@ -34,7 +34,6 @@ sudo apt-get install \
     autoconf \
     autoconf-archive \
     libtool \
-    libboost-all-dev \
     liblz4-dev \
     liblzma-dev \
     make \
@@ -43,6 +42,17 @@ sudo apt-get install \
     libjemalloc-dev \
     libiberty-dev \
     libjsoncpp-dev
+```
+
+Redex requires boost version >= 1.58. The versions in the Ubuntu 14.04 and
+14.10 repositories are too old. This script will install boost for you instead:
+```
+sudo ./get_boost.sh
+```
+
+If you're on ubuntu 16.04 or newer, the version in the repository is fine:
+```
+sudo apt-get install libboost-all-dev
 ```
 
 ### Experimental: Windows 10 (64-bit)

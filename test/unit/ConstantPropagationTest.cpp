@@ -12,12 +12,14 @@
 #include "ConstantPropagation.h"
 #include "IRAssembler.h"
 
+namespace cp = constant_propagation;
+
 static void do_const_prop(IRCode* code, const ConstPropConfig& config) {
   code->build_cfg();
-  IntraProcConstantPropagation rcp(code->cfg(), config);
+  cp::intraprocedural::FixpointIterator rcp(code->cfg(), config);
   rcp.run(ConstantEnvironment());
-  rcp.simplify();
-  rcp.apply_changes(code);
+  cp::Transform tf(config);
+  tf.apply(rcp, code);
 }
 
 TEST(ConstantPropagation, IfToGoto) {
@@ -34,7 +36,6 @@ TEST(ConstantPropagation, IfToGoto) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -71,7 +72,6 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -113,7 +113,6 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -153,7 +152,6 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -193,7 +191,6 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -230,7 +227,6 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -266,7 +262,6 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -303,7 +298,6 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -337,7 +331,6 @@ TEST(ConstantPropagation, FoldArithmeticAddLit) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   config.fold_arithmetic = true;
   do_const_prop(code.get(), config);
 
@@ -391,7 +384,6 @@ TEST(ConstantPropagation, AnalyzeCmp) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   do_const_prop(code.get(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -493,11 +485,10 @@ TEST(ConstantPropagation, WhiteBox1) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  IntraProcConstantPropagation rcp(cfg, config);
+  cp::intraprocedural::FixpointIterator rcp(cfg, config);
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
@@ -526,11 +517,10 @@ TEST(ConstantPropagation, WhiteBox2) {
 )");
 
   ConstPropConfig config;
-  config.propagate_conditions = true;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  IntraProcConstantPropagation rcp(cfg, config);
+  cp::intraprocedural::FixpointIterator rcp(cfg, config);
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());

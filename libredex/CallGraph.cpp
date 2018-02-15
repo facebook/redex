@@ -14,7 +14,7 @@
 
 namespace call_graph {
 
-Edge::Edge(DexMethod* caller, DexMethod* callee, FatMethod::iterator invoke_it)
+Edge::Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it)
     : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
 
 Graph::Graph(const Scope& scope, bool include_virtuals) {
@@ -51,7 +51,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
     auto method = pair.first;
     if (is_definitely_virtual(method) || root(method)) {
       auto edge = std::make_shared<Edge>(
-          nullptr, const_cast<DexMethod*>(method), FatMethod::iterator());
+          nullptr, const_cast<DexMethod*>(method), IRList::iterator());
       m_entry.m_successors.emplace_back(edge);
       pair.second.m_predecessors.emplace_back(edge);
     }
@@ -69,7 +69,7 @@ Node& Graph::make_node(DexMethod* m) {
 
 void Graph::add_edge(DexMethod* caller,
                      DexMethod* callee,
-                     FatMethod::iterator invoke_it) {
+                     IRList::iterator invoke_it) {
   auto edge = std::make_shared<Edge>(caller, callee, invoke_it);
   make_node(caller).m_successors.emplace_back(edge);
   make_node(callee).m_predecessors.emplace_back(edge);

@@ -749,7 +749,7 @@ void process_keep(
 
   // We only parallelize if keep_rule needs to be applied to all classes.
   auto wq = workqueue_foreach<KeepSpec*>(
-      [&keep_processor, &process_single_keep, &classes](KeepSpec* keep_rule) {
+      [&process_single_keep, &classes](KeepSpec* keep_rule) {
         RegexMap regex_map;
         ClassMatcher class_match(*keep_rule);
 

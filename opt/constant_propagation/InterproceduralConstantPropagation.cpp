@@ -9,15 +9,14 @@
 
 #include "InterproceduralConstantPropagation.h"
 
-#include <mutex>
-
 #include "ConstantEnvironment.h"
-#include "ConstantPropagation.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
 #include "Timer.h"
 #include "Walkers.h"
 
-using namespace interprocedural_constant_propagation;
-using namespace interprocedural_constant_propagation_impl;
+using namespace constant_propagation;
+using namespace constant_propagation::interprocedural;
 
 namespace {
 
@@ -34,9 +33,85 @@ static ConstantEnvironment env_with_params(const IRCode* code,
   return env;
 }
 
+/*
+ * Initialize field_env with the encoded values of primitive fields. If no
+ * encoded value is present, initialize them with a zero value (which is
+ * the same thing that the runtime does).
+ */
+void set_fields_with_encoded_values(const Scope& scope,
+                                    ConstantStaticFieldEnvironment* field_env) {
+  for (const auto* cls : scope) {
+    for (auto* sfield : cls->get_sfields()) {
+      auto type = sfield->get_type();
+      if (!is_primitive(type)) {
+        continue;
+      }
+      auto value = sfield->get_static_value();
+      if (value == nullptr) {
+        field_env->set(sfield, SignedConstantDomain(0));
+      } else {
+        always_assert(value->is_evtype_primitive());
+        field_env->set(sfield, SignedConstantDomain(value->value()));
+      }
+    }
+  }
+}
+
+/*
+ * Replace all sgets from constant fields with const opcodes, and delete all
+ * sputs to those fields.
+ */
+void simplify_constant_fields(const Scope& scope,
+                              const ConstantStaticFieldEnvironment& field_env) {
+  return walk::parallel::methods(scope, [&](DexMethod* method) {
+    IRCode* code = method->get_code();
+    std::unordered_map<const IRInstruction*, IRInstruction*> replacements;
+    std::vector<IRList::iterator> deletes;
+    if (code == nullptr) {
+      return;
+    }
+    for (auto& mie : InstructionIterable(code)) {
+      auto* insn = mie.insn;
+      auto op = insn->opcode();
+      if (!insn->has_field()) {
+        continue;
+      }
+      auto* field = resolve_field(insn->get_field());
+      if (!field_env.get(field).constant_domain().is_value()) {
+        continue;
+      }
+      TRACE(ICONSTP, 3, "%s has value %s\n", SHOW(field),
+            field_env.get(field).constant_domain().str().c_str());
+      if (is_sget(op)) {
+        IRInstruction* replacement{nullptr};
+        if (op == OPCODE_SGET_WIDE) {
+          replacement = new IRInstruction(OPCODE_CONST_WIDE);
+        } else {
+          replacement = new IRInstruction(OPCODE_CONST);
+        }
+        replacement->set_literal(
+            *field_env.get(field).constant_domain().get_constant());
+        replacement->set_dest(std::next(code->iterator_to(mie))->insn->dest());
+        replacements.emplace(insn, replacement);
+      } else if (is_sput(op)) {
+        TRACE(ICONSTP, 3, "Found deletable sput in %s\n", SHOW(method));
+        deletes.push_back(code->iterator_to(mie));
+      }
+    }
+    for (auto& pair : replacements) {
+      code->replace_opcode(const_cast<IRInstruction*>(pair.first), pair.second);
+    }
+    for (auto it : deletes) {
+      code->remove_opcode(it);
+    }
+  });
+}
+
 } // namespace
 
-namespace interprocedural_constant_propagation_impl {
+namespace constant_propagation {
+
+namespace interprocedural {
 
 void FixpointIterator::analyze_node(DexMethod* const& method,
                                     Domain* current_state) const {
@@ -49,7 +124,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
     return;
   }
   auto& cfg = code->cfg();
-  IntraProcConstantPropagation intra_cp(cfg, m_config);
+  intraprocedural::FixpointIterator intra_cp(cfg, m_config, m_field_env);
   intra_cp.run(env_with_params(code, current_state->get(INPUT_ARGS)));
 
   for (auto* block : cfg.blocks()) {
@@ -73,7 +148,7 @@ Domain FixpointIterator::analyze_edge(
     const Domain& exit_state_at_source) const {
   Domain entry_state_at_dest;
   auto it = edge->invoke_iterator();
-  if (it == FatMethod::iterator()) {
+  if (it == IRList::iterator()) {
     entry_state_at_dest.set(INPUT_ARGS, ConstantEnvironment::top());
   } else {
     auto insn = it->insn;
@@ -142,7 +217,7 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
     }
     // The branching instruction that checks whether the constant domain is
     // correct for the given param
-    FatMethod::iterator check_insn_it;
+    IRList::iterator check_insn_it;
     const auto& cst = scd.constant_domain().get_constant();
     if (cst) {
       // If we have an exact constant, create a const instruction that loads
@@ -180,7 +255,9 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
   }
 }
 
-} // interprocedural_constant_propagation_impl
+} // namespace interprocedural
+
+} // namespace constant_propagation
 
 namespace {
 
@@ -193,16 +270,35 @@ class Propagator {
         m_config(config),
         m_dynamic_check_fail_handler(dynamic_check_fail_handler) {}
 
-  std::unique_ptr<FixpointIterator> analyze(size_t max_iterations) {
+  /*
+   * We start off by assuming no knowledge of any field values, i.e. we just
+   * interprocedurally propagate constants from const opcodes. Next, we look
+   * at every sput instruction. If they all write the same value to a given
+   * field, then we record in the field environment that the field is constant.
+   * If any such fields were found, we repeat the propagation step.
+   */
+  std::unique_ptr<FixpointIterator> analyze() {
     call_graph::Graph cg(m_scope, m_config.include_virtuals);
     // Rebuild all CFGs here -- this should be more efficient than doing them
     // within FixpointIterator::analyze_node(), since that can get called
     // multiple times for a given method
-    walk::parallel::code(m_scope, [](DexMethod*, IRCode& code) {
-      code.build_cfg();
-    });
+    walk::parallel::code(m_scope,
+                         [](DexMethod*, IRCode& code) { code.build_cfg(); });
     auto fp_iter = std::make_unique<FixpointIterator>(cg, m_config);
     fp_iter->run({{INPUT_ARGS, ArgumentDomain()}});
+
+    ConstantStaticFieldEnvironment field_env;
+    set_fields_with_encoded_values(m_scope, &field_env);
+    for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
+      join_all_field_values(*fp_iter, &field_env);
+      if (field_env.equals(fp_iter->get_field_environment())) {
+        break;
+      }
+      fp_iter->set_field_environment(field_env);
+      fp_iter->run({{INPUT_ARGS, ArgumentDomain()}});
+    }
+
+    m_stats.constant_fields = field_env.is_value() ? field_env.size() : 0;
     return fp_iter;
   }
 
@@ -211,36 +307,92 @@ class Propagator {
    * information about constant method arguments that analyze() obtained.
    */
   void optimize(const FixpointIterator& fp_iter) {
-    std::mutex stats_mutex;
-    walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
+    using Data = std::nullptr_t;
+    m_stats.transform_stats =
+        walk::parallel::reduce_methods<Data, Transform::Stats>(
+            m_scope,
+            [&](Data&, DexMethod* method) {
+              if (method->get_code() == nullptr) {
+                return Transform::Stats();
+              }
+              auto& code = *method->get_code();
+              auto args = fp_iter.get_entry_state_at(method);
+              // If the callgraph isn't complete, reachable methods may appear
+              // unreachable
+              if (args.is_bottom()) {
+                args.set_to_top();
+              } else if (!args.is_top()) {
+                TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method),
+                      args.str().c_str());
+              }
+
+              intraprocedural::FixpointIterator intra_cp(
+                  code.cfg(), m_config, fp_iter.get_field_environment());
+              auto env = env_with_params(&code, args.get(INPUT_ARGS));
+              intra_cp.run(env);
+              Transform tf(m_config);
+              auto stats = tf.apply(intra_cp, &code);
+
+              if (m_config.dynamic_input_checks) {
+                insert_runtime_input_checks(
+                    env, m_dynamic_check_fail_handler, method);
+              }
+
+              return stats;
+            },
+            [](Transform::Stats a, Transform::Stats b) { // reducer
+              return a + b;
+            },
+            [&](unsigned int) { // data initializer
+              return nullptr;
+            });
+    simplify_constant_fields(m_scope, fp_iter.get_field_environment());
+  }
+
+  /*
+   * For each static field, join all the values that may have been written to
+   * it at any point in the program.
+   *
+   * XXX the only reason this method is part of Propagator is because of the
+   * need to share ConstPropConfig... we should look at factoring it out
+   */
+  void join_all_field_values(const FixpointIterator& fp_iter,
+                             ConstantStaticFieldEnvironment* field_env) {
+    walk::methods(m_scope, [&](DexMethod* method) {
+      IRCode* code = method->get_code();
+      if (code == nullptr) {
+        return;
+      }
+      auto& cfg = code->cfg();
       auto args = fp_iter.get_entry_state_at(method);
       // If the callgraph isn't complete, reachable methods may appear
       // unreachable
       if (args.is_bottom()) {
         args.set_to_top();
-      } else if (!args.is_top()) {
-        TRACE(ICONSTP, 3, "Have args for %s: %s\n",
-              SHOW(method), args.str().c_str());
       }
-      IntraProcConstantPropagation intra_cp(code.cfg(), m_config);
-      auto env = env_with_params(&code, args.get(INPUT_ARGS));
-      intra_cp.run(env);
-      intra_cp.simplify();
-      intra_cp.apply_changes(&code);
-      if (m_config.dynamic_input_checks) {
-        insert_runtime_input_checks(env, m_dynamic_check_fail_handler, method);
-      }
-      {
-        std::lock_guard<std::mutex> lock{stats_mutex};
-        m_stats.branches_removed += intra_cp.branches_removed();
-        m_stats.materialized_consts += intra_cp.materialized_consts();
+      intraprocedural::FixpointIterator intra_cp(code->cfg(), m_config);
+      intra_cp.run(env_with_params(code, args.get(nullptr)));
+      for (Block* b : cfg.blocks()) {
+        auto state = intra_cp.get_entry_state_at(b);
+        for (auto& mie : InstructionIterable(b)) {
+          auto* insn = mie.insn;
+          auto op = insn->opcode();
+          if (is_sput(op)) {
+            auto value = state.get(insn->src(0));
+            auto field = resolve_field(insn->get_field());
+            if (field != nullptr) {
+              field_env->update(field, [&value](auto current_value) {
+                return current_value.join(value);
+              });
+            }
+          }
+          intra_cp.analyze_instruction(insn, &state);
+        }
       }
     });
   }
 
-  const Stats& get_stats() const {
-    return m_stats;
-  }
+  const Stats& get_stats() const { return m_stats; }
 
  private:
   Stats m_stats;
@@ -253,7 +405,7 @@ class Propagator {
 
 Stats InterproceduralConstantPropagationPass::run(Scope& scope) {
   Propagator propagator(scope, m_config, m_dynamic_check_fail_handler);
-  auto fp_iter = propagator.analyze(/* max_iterations */ 1);
+  auto fp_iter = propagator.analyze();
   propagator.optimize(*fp_iter);
   return propagator.get_stats();
 }
@@ -273,9 +425,10 @@ void InterproceduralConstantPropagationPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   const auto& stats = run(scope);
+  mgr.incr_metric("branches_removed", stats.transform_stats.branches_removed);
+  mgr.incr_metric("materialized_consts",
+                  stats.transform_stats.materialized_consts);
   mgr.incr_metric("constant_fields", stats.constant_fields);
-  mgr.incr_metric("branches_removed", stats.branches_removed);
-  mgr.incr_metric("materialized_consts", stats.materialized_consts);
 }
 
 static InterproceduralConstantPropagationPass s_pass;

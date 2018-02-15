@@ -25,7 +25,7 @@ namespace regalloc {
 /*
  * Find the first instruction in a block (if any) that uses a given register.
  */
-static FatMethod::iterator find_first_use_in_block(reg_t use,
+static IRList::iterator find_first_use_in_block(reg_t use,
                                                    const Block* block) {
   auto ii = InstructionIterable(block);
   auto it = ii.begin();
@@ -223,7 +223,7 @@ void fit_range_instruction(
  */
 void fit_params(
     const interference::Graph& ig,
-    const boost::sub_range<FatMethod>& param_insns,
+    const boost::sub_range<IRList>& param_insns,
     reg_t params_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
@@ -829,9 +829,9 @@ void Allocator::find_split(const interference::Graph& ig,
   }
 }
 
-std::unordered_map<reg_t, FatMethod::iterator> Allocator::find_param_splits(
+std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     const std::unordered_set<reg_t>& orig_params, IRCode* code) {
-  std::unordered_map<reg_t, FatMethod::iterator> load_locations;
+  std::unordered_map<reg_t, IRList::iterator> load_locations;
   if (orig_params.size() == 0) {
     return load_locations;
   }

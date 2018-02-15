@@ -22,7 +22,7 @@ static const std::string showd(const T& val) {
   return ss.str();
 }
 
-FatMethod::iterator next_insn(FatMethod::iterator it) {
+IRList::iterator next_insn(IRList::iterator it) {
   auto future = std::next(it);
   while (future->type != MFLOW_OPCODE) {
     future = std::next(future);
@@ -30,7 +30,7 @@ FatMethod::iterator next_insn(FatMethod::iterator it) {
   return future;
 }
 
-FatMethod::iterator next_insn(FatMethod::iterator it, Block* blk) {
+IRList::iterator next_insn(IRList::iterator it, Block* blk) {
   auto future = std::next(it);
   while (future->type != MFLOW_OPCODE && future != blk->end()) {
     future = std::next(future);
@@ -38,7 +38,7 @@ FatMethod::iterator next_insn(FatMethod::iterator it, Block* blk) {
   return future;
 }
 
-FatMethod::iterator prev_insn(FatMethod::iterator it) {
+IRList::iterator prev_insn(IRList::iterator it) {
   auto past = std::prev(it);
   while (past->type != MFLOW_OPCODE) {
     past = std::prev(past);
@@ -57,7 +57,7 @@ bool eq(const PointerDomain& a, const PointerDomain& b) {
 }
 
 void StringIterator::analyze_instruction(const NodeId blk,
-                                         FatMethod::iterator& it,
+                                         IRList::iterator& it,
                                          Environment* env) const {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
@@ -136,7 +136,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
 }
 
 void StringIterator::simplify_instruction(const NodeId block,
-                                          FatMethod::iterator& it,
+                                          IRList::iterator& it,
                                           const Environment* current_state) {
   auto insn = it->insn;
   if (!is_sb_to_string(it)) {
@@ -208,7 +208,7 @@ void StringIterator::simplify_instruction(const NodeId block,
 }
 
 void StringIterator::remove_stringbuilder_instructions_in_block(
-    FatMethod::iterator& it,
+    IRList::iterator& it,
     const Environment* c_env,
     NodeId block,
     string_register_t sb_reg) {
@@ -286,24 +286,24 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
 
 //========== dasm helpers ==========
 
-bool StringIterator::is_const_string(FatMethod::iterator it) const {
+bool StringIterator::is_const_string(IRList::iterator it) const {
   return it->insn->opcode() == OPCODE_CONST_STRING;
 }
 
-bool StringIterator::is_sb_new_instance(FatMethod::iterator it) const {
+bool StringIterator::is_sb_new_instance(IRList::iterator it) const {
   auto insn = it->insn;
   return insn->opcode() == OPCODE_NEW_INSTANCE &&
          insn->get_type() == m_builder_type;
 }
 
-bool StringIterator::is_sb_empty_init(FatMethod::iterator it) const {
+bool StringIterator::is_sb_empty_init(IRList::iterator it) const {
   auto insn = it->insn;
   return insn->opcode() == OPCODE_INVOKE_DIRECT &&
          insn->get_method() ==
              DexMethod::make_method(STRINGBUILDER_DEF, "<init>", "V", {});
 }
 
-bool StringIterator::is_sb_string_init(FatMethod::iterator it) const {
+bool StringIterator::is_sb_string_init(IRList::iterator it) const {
   auto insn = it->insn;
   return insn->opcode() == OPCODE_INVOKE_DIRECT &&
          insn->get_method() ==
@@ -311,18 +311,18 @@ bool StringIterator::is_sb_string_init(FatMethod::iterator it) const {
                  STRINGBUILDER_DEF, "<init>", "V", {STRING_DEF});
 }
 
-bool StringIterator::is_sb_append_string(FatMethod::iterator it) const {
+bool StringIterator::is_sb_append_string(IRList::iterator it) const {
   auto insn = it->insn;
   return insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
          insn->get_method() == m_append_method;
 }
 
-bool StringIterator::is_sb_to_string(FatMethod::iterator it) const {
+bool StringIterator::is_sb_to_string(IRList::iterator it) const {
   return it->insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
          it->insn->get_method() == m_to_string_method;
 }
 
-void StringIterator::insert_sb_init(FatMethod::iterator& it, uint16_t vreg) {
+void StringIterator::insert_sb_init(IRList::iterator& it, uint16_t vreg) {
   using namespace dex_asm;
   m_code->insert_before(it,
                         dasm(OPCODE_NEW_INSTANCE,
@@ -336,7 +336,7 @@ void StringIterator::insert_sb_init(FatMethod::iterator& it, uint16_t vreg) {
   m_instructions_added += 2;
 }
 
-void StringIterator::insert_sb_append(FatMethod::iterator& it,
+void StringIterator::insert_sb_append(IRList::iterator& it,
                                       uint16_t sb_vreg,
                                       uint16_t str_vreg) {
   using namespace dex_asm;
@@ -347,7 +347,7 @@ void StringIterator::insert_sb_append(FatMethod::iterator& it,
   ++m_instructions_added;
 }
 
-void StringIterator::insert_const_string(FatMethod::iterator& it,
+void StringIterator::insert_const_string(IRList::iterator& it,
                                          uint16_t dest,
                                          std::string s) {
   using namespace dex_asm;
@@ -357,7 +357,7 @@ void StringIterator::insert_const_string(FatMethod::iterator& it,
   ++m_strings_added;
 }
 
-void StringIterator::insert_sb_to_string(FatMethod::iterator& it,
+void StringIterator::insert_sb_to_string(IRList::iterator& it,
                                          uint16_t sb_vreg,
                                          uint16_t dest_vreg) {
   using namespace dex_asm;

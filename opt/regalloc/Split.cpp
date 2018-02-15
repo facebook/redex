@@ -243,7 +243,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const LivenessDomain& live_out,
                         IRCode* code,
                         std::unordered_map<reg_t, reg_t>* load_store_reg,
-                        FatMethod::iterator it) {
+                        IRList::iterator it) {
   size_t split_move = 0;
   if (insn->dests_size()) {
     auto dest = insn->dest();
@@ -291,7 +291,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           Block* block,
                           IRCode* code,
                           std::unordered_map<reg_t, reg_t>* load_store_reg,
-                          FatMethod::reverse_iterator& it,
+                          IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
   for (size_t i = 0; i < insn->srcs_size(); ++i) {

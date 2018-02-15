@@ -41,8 +41,8 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block);
 
 // if pos is inside a try block, return the corresponding catch
 // if not, return null
-MethodItemEntry* find_active_catch(IRCode* code, FatMethod::iterator pos);
+MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos);
 
-FatMethod::iterator find_last_instruction(Block* block);
+IRList::iterator find_last_instruction(Block* block);
 
 } // namespace transform

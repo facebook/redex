@@ -164,7 +164,7 @@ class WtoComponent final {
  *   In Formal Methods in Programming and Their Applications, pp 128-141.
  * State-of-the-art fixpoint iteration algorithms use weak topological orderings
  * as the underlying structure for high performance. Although we will primarily
- * use WTOs on the control-flow graph of a FatMethod, WTOs can come handy when
+ * use WTOs on the control-flow graph of an IRList, WTOs can come handy when
  * manipulating structures like call graphs or dependency graphs, hence the
  * parametric class definition. This also makes the design of unit tests much
  * easier.

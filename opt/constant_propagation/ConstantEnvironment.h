@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <limits>
+
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
@@ -93,5 +95,12 @@ inline bool operator!=(const SignedConstantDomain& x,
   return !(x == y);
 }
 
+using reg_t = uint32_t;
+
+constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
+
 using ConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<uint16_t, SignedConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, SignedConstantDomain>;
+
+using ConstantStaticFieldEnvironment =
+    PatriciaTreeMapAbstractEnvironment<DexField*, SignedConstantDomain>;

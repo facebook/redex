@@ -33,7 +33,7 @@ bool is_throw_block(const DexMethod* meth, Block* block) {
       // only have catch successors
       if (block->succs().size() > 0) {
         for (const auto& succ : block->succs()) {
-          if (!is_catch(succ->target())) {
+          if (!succ->target()->is_catch()) {
             always_assert_log(false,
                 "throw block with successors in %s",
                 SHOW(meth));

@@ -342,7 +342,7 @@ struct MethodBlock {
                          std::map<SwitchIndices, MethodBlock*>& cases);
 
  private:
-  MethodBlock(FatMethod::iterator iterator, MethodCreator* creator);
+  MethodBlock(IRList::iterator iterator, MethodCreator* creator);
 
   //
   // Helpers
@@ -356,9 +356,9 @@ struct MethodBlock {
 
  private:
   MethodCreator* mc;
-  // A MethodBlock is simply an iterator over a FatMethod used to emit
+  // A MethodBlock is simply an iterator over an IRList used to emit
   // instructions
-  FatMethod::iterator curr;
+  IRList::iterator curr;
 
   friend struct MethodCreator;
   friend std::string show(const MethodBlock*);
@@ -453,19 +453,19 @@ struct MethodCreator {
     return locals.back();
   }
 
-  FatMethod::iterator push_instruction(FatMethod::iterator curr, IRInstruction* insn);
-  FatMethod::iterator make_if_block(FatMethod::iterator curr,
+  IRList::iterator push_instruction(IRList::iterator curr, IRInstruction* insn);
+  IRList::iterator make_if_block(IRList::iterator curr,
                                     IRInstruction* insn,
-                                    FatMethod::iterator* false_block);
-  FatMethod::iterator make_if_else_block(FatMethod::iterator curr,
+                                    IRList::iterator* false_block);
+  IRList::iterator make_if_else_block(IRList::iterator curr,
                                          IRInstruction* insn,
-                                         FatMethod::iterator* false_block,
-                                         FatMethod::iterator* true_block);
-  FatMethod::iterator make_switch_block(
-      FatMethod::iterator curr,
+                                         IRList::iterator* false_block,
+                                         IRList::iterator* true_block);
+  IRList::iterator make_switch_block(
+      IRList::iterator curr,
       IRInstruction* opcode,
-      FatMethod::iterator* default_block,
-      std::map<SwitchIndices, FatMethod::iterator>& cases);
+      IRList::iterator* default_block,
+      std::map<SwitchIndices, IRList::iterator>& cases);
 
  private:
   DexMethod* method;

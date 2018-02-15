@@ -38,7 +38,7 @@ namespace inliner {
  */
 void inline_tail_call(DexMethod* caller,
                       DexMethod* callee,
-                      FatMethod::iterator pos);
+                      IRList::iterator pos);
 
 /*
  * Inline `callee` into `caller` at `pos`.
@@ -46,7 +46,7 @@ void inline_tail_call(DexMethod* caller,
  */
 void inline_method(IRCode* caller,
                    IRCode* callee,
-                   FatMethod::iterator pos);
+                   IRList::iterator pos);
 
 } // namespace inliner
 
@@ -279,10 +279,3 @@ void select_inlinable(
     MethodRefCache& resolved_refs,
     std::unordered_set<DexMethod*>* inlinable,
     bool multiple_callee = false);
-
-/**
- * Change the visibility of members accessed in a callee.
- * We make everything public but we could be more precise and only
- * relax visibility as needed.
- */
-void change_visibility(DexMethod* callee);

@@ -14,13 +14,13 @@
 
 struct FieldDependency {
   DexMethod* clinit;
-  FatMethod::iterator sget;
-  FatMethod::iterator sput;
+  IRList::iterator sget;
+  IRList::iterator sput;
   DexField* field;
 
   FieldDependency(DexMethod* clinit,
-                  FatMethod::iterator sget,
-                  FatMethod::iterator sput,
+                  IRList::iterator sget,
+                  IRList::iterator sput,
                   DexField* field)
       : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };
