@@ -365,4 +365,8 @@ inline bool is_sput(DexOpcode op) {
   return op >= DOPCODE_SPUT && op <= DOPCODE_SPUT_SHORT;
 }
 
+inline bool is_sget(DexOpcode op) {
+  return op >= DOPCODE_SGET && op <= DOPCODE_SGET_SHORT;
+}
+
 } // namespace dex_opcode
