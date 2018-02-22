@@ -417,7 +417,11 @@ void init_permanently_reachable_classes(
 
   for (auto const& annostr : annotations) {
     DexType* anno = DexType::get_type(annostr.c_str());
-    if (anno) annotation_types.insert(anno);
+    if (anno) {
+      annotation_types.insert(anno);
+    } else {
+      fprintf(stderr, "WARNING: keep annotation %s not found\n", annostr.c_str());
+    }
   }
 
   keep_annotated_classes(scope, annotation_types);
