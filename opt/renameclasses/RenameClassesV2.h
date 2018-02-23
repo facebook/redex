@@ -42,7 +42,7 @@ class RenameClassesPassV2 : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("rename_annotations", false, m_rename_annotations);
     pc.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
-    pc.get("force_layout_rename_packages", {}, m_force_layout_rename_packages);
+    pc.get("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
     pc.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
     pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
     std::vector<std::string> dont_rename_specific;
@@ -94,7 +94,7 @@ class RenameClassesPassV2 : public Pass {
   // Config and rules
   bool m_rename_annotations;
   std::vector<std::string> m_force_rename_hierarchies;
-  std::vector<std::string> m_force_layout_rename_packages;
+  std::vector<std::string> m_allow_layout_rename_packages;
   std::vector<std::string> m_dont_rename_hierarchies;
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
