@@ -366,7 +366,7 @@ void init_permanently_reachable_classes(
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
-  bool legacy_xml_reachability;
+  bool compute_xml_reachability;
   bool legacy_reflection_reachability;
 
   pc.get("apk_dir", "", apk_dir);
@@ -374,7 +374,7 @@ void init_permanently_reachable_classes(
   pc.get("keep_annotations", {}, annotations);
   pc.get("keep_class_members", {}, class_members);
   pc.get("keep_methods", {}, methods);
-  pc.get("legacy_xml_reachability", true, legacy_xml_reachability);
+  pc.get("compute_xml_reachability", true, compute_xml_reachability);
   pc.get("legacy_reflection_reachability", true, legacy_reflection_reachability);
 
   if (legacy_reflection_reachability) {
@@ -426,7 +426,7 @@ void init_permanently_reachable_classes(
   keep_methods(scope, methods);
 
   if (apk_dir.size()) {
-    if (legacy_xml_reachability) {
+    if (compute_xml_reachability) {
       // Classes present in manifest
       std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
       for (std::string classname : get_manifest_classes(manifest)) {
