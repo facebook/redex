@@ -65,7 +65,7 @@ void blacklist(DexType* type, DexString *name, bool declared) {
     auto yield = [&](T t) {
       if (t->get_name() != name) return;
       TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-      t->rstate.ref_by_string(true);
+      t->rstate.ref_by_string();
       if (!declared) {
         // TOOD: handle not declared case, go up inheritance tree
       }
@@ -195,48 +195,45 @@ void mark_only_reachable_directly(DexMember* m) {
 /**
  * Indicates that a class is being used via reflection.
  *
- * If from_code is true, it's used from the dex files, otherwise it is
- * used by an XML file or from native code.
- *
  * Examples:
  *
- *   Bar.java: (from_code = true, directly created via reflection)
+ *   Bar.java:
  *     Object x = Class.forName("com.facebook.Foo").newInstance();
  *
- *   MyGreatLayout.xml: (from_code = false, created when view is inflated)
+ *   MyGreatLayout.xml:
  *     <com.facebook.MyTerrificView />
  */
-void mark_reachable_by_classname(DexClass* dclass, bool from_code) {
+void mark_reachable_by_classname(DexClass* dclass) {
   if (dclass == nullptr) return;
-  dclass->rstate.ref_by_string(from_code);
+  dclass->rstate.ref_by_string();
   // When we mark a class as reachable, we also mark all fields and methods as
   // reachable.  Eventually we will be smarter about this, which will allow us
   // to remove unused methods and fields.
   for (DexMethod* dmethod : dclass->get_dmethods()) {
-    dmethod->rstate.ref_by_string(from_code);
+    dmethod->rstate.ref_by_string();
   }
   for (DexMethod* vmethod : dclass->get_vmethods()) {
-    vmethod->rstate.ref_by_string(from_code);
+    vmethod->rstate.ref_by_string();
   }
   for (DexField* sfield : dclass->get_sfields()) {
-    sfield->rstate.ref_by_string(from_code);
+    sfield->rstate.ref_by_string();
   }
   for (DexField* ifield : dclass->get_ifields()) {
-    ifield->rstate.ref_by_string(from_code);
+    ifield->rstate.ref_by_string();
   }
 }
 
-void mark_reachable_by_classname(DexType* dtype, bool from_code) {
-  mark_reachable_by_classname(type_class_internal(dtype), from_code);
+void mark_reachable_by_classname(DexType* dtype) {
+  mark_reachable_by_classname(type_class_internal(dtype));
 }
 
-void mark_reachable_by_classname(std::string& classname, bool from_code) {
+void mark_reachable_by_classname(std::string& classname) {
   DexString* dstring =
       DexString::get_string(classname.c_str(), (uint32_t)classname.size());
   DexType* dtype = DexType::get_type(dstring);
   if (dtype == nullptr) return;
   DexClass* dclass = type_class_internal(dtype);
-  mark_reachable_by_classname(dclass, from_code);
+  mark_reachable_by_classname(dclass);
 }
 
 template <typename DexMember>
@@ -316,12 +313,12 @@ void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
   for (auto const& cls : scope) {
     for (auto& m : cls->get_dmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
-        m->rstate.ref_by_string(false);
+        m->rstate.ref_by_string();
       }
     }
     for (auto& m : cls->get_vmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
-        m->rstate.ref_by_string(false);
+        m->rstate.ref_by_string();
       }
     }
   }
@@ -406,7 +403,7 @@ void init_permanently_reachable_classes(
                   "Found Class.forName of: %s, marking %s reachable\n",
                   const_string->get_string()->c_str(),
                   classname.c_str());
-            mark_reachable_by_classname(classname, true);
+            mark_reachable_by_classname(classname);
           }
         });
   }
@@ -434,13 +431,13 @@ void init_permanently_reachable_classes(
       std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
       for (std::string classname : get_manifest_classes(manifest)) {
         TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
-        mark_reachable_by_classname(classname, false);
+        mark_reachable_by_classname(classname);
       }
 
       // Classes present in XML layouts
       for (std::string classname : get_layout_classes(apk_dir)) {
         TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
-        mark_reachable_by_classname(classname, false);
+        mark_reachable_by_classname(classname);
       }
     }
 
@@ -449,7 +446,7 @@ void init_permanently_reachable_classes(
       auto type = DexType::get_type(classname.c_str());
       if (type == nullptr) continue;
       TRACE(PGR, 3, "native_lib: %s\n", classname.c_str());
-      mark_reachable_by_classname(type, false);
+      mark_reachable_by_classname(type);
     }
   }
 
@@ -475,7 +472,7 @@ void init_permanently_reachable_classes(
        * conservative sense here.
        */
       TRACE(PGR, 3, "reflected_package: %s\n", SHOW(clazz));
-      mark_reachable_by_classname(clazz, false);
+      mark_reachable_by_classname(clazz);
     }
   }
 }
@@ -496,7 +493,7 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
                    TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
-                   mark_reachable_by_classname(meth->get_class(), true);
+                   mark_reachable_by_classname(meth->get_class());
                  }
                });
 }
@@ -521,7 +518,6 @@ std::string ReferencedState::str() const {
   std::stringstream s;
   s << m_bytype;
   s << m_bystring;
-  s << m_computed;
   s << m_keep;
   s << allowshrinking();
   s << allowobfuscation();

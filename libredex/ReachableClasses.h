@@ -76,10 +76,3 @@ template<class DexMember>
 inline bool root(DexMember* member) {
   return keep(member) && !allowshrinking(member);
 }
-
-// do_not_touch means this class or member should never be deleted nor should it
-// be renamed.
-template <class DexMember>
-inline bool do_not_touch(DexMember* member) {
-  return keep(member) && !allowshrinking(member) && !allowobfuscation(member);
-}
