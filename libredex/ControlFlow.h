@@ -60,6 +60,10 @@ class Edge final {
   EdgeType type() const { return m_type; }
 };
 
+using BlockId = size_t;
+
+class InstructionIterator;
+
 } // namespace cfg
 
 // TODO: Put the rest of this header under the cfg namespace too
@@ -68,10 +72,10 @@ class Edge final {
 // and branches (throws, gotos, switches, etc) are only at the end of a block.
 class Block {
  public:
-  explicit Block(const ControlFlowGraph* parent, size_t id)
+  explicit Block(const ControlFlowGraph* parent, cfg::BlockId id)
       : m_id(id), m_parent(parent) {}
 
-  size_t id() const { return m_id; }
+  cfg::BlockId id() const { return m_id; }
   const std::vector<std::shared_ptr<cfg::Edge>>& preds() const {
     return m_preds;
   }
@@ -80,22 +84,17 @@ class Block {
   }
   IRList::iterator begin();
   IRList::iterator end();
-  IRList::reverse_iterator rbegin() {
-    return IRList::reverse_iterator(end());
-  }
-  IRList::reverse_iterator rend() {
-    return IRList::reverse_iterator(begin());
-  }
+  IRList::reverse_iterator rbegin() { return IRList::reverse_iterator(end()); }
+  IRList::reverse_iterator rend() { return IRList::reverse_iterator(begin()); }
 
-  bool is_catch() {
-    return begin()->type == MFLOW_CATCH;
-  }
+  bool is_catch() { return begin()->type == MFLOW_CATCH; }
 
   // remove all debug source code line numbers from this block
   void remove_debug_line_info();
 
  private:
   friend class ControlFlowGraph;
+  friend class cfg::InstructionIterator;
   friend void transform::replace_block(IRCode*, Block*, Block*);
 
   // return an iterator to the goto in this block (if there is one)
@@ -105,7 +104,7 @@ class Block {
   // returns a vector of all MFLOW_TARGETs in this block
   std::vector<IRList::iterator> get_targets();
 
-  size_t m_id;
+  cfg::BlockId m_id;
 
   // MethodItemEntries get moved from IRCode into here (if m_editable)
   // otherwise, this is empty.
@@ -146,8 +145,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir,
-                   bool editable = false);
+  ControlFlowGraph(IRList* ir, bool editable = false);
   ~ControlFlowGraph();
 
   /*
@@ -193,15 +191,17 @@ class ControlFlowGraph {
   // Do writes to this CFG propagate back to IR and Dex code?
   bool editable() const { return m_editable; }
 
+  size_t num_blocks() const { return m_blocks.size(); }
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
   using Boundaries =
-      std::unordered_map<Block*,
-                         std::pair<IRList::iterator, IRList::iterator>>;
-  using Blocks = std::map<size_t, Block*>;
+      std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
+  using Blocks = std::map<cfg::BlockId, Block*>;
+  friend class cfg::InstructionIterator;
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
@@ -286,6 +286,101 @@ class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
   }
   static NodeId source(const Graph&, const EdgeId& e) { return e->src(); }
   static NodeId target(const Graph&, const EdgeId& e) { return e->target(); }
+};
+
+class InstructionIterator {
+  ControlFlowGraph& m_cfg;
+  ControlFlowGraph::Blocks::iterator m_block;
+
+  // Depends on C++14 Null Forward Iterators
+  // Assuming the default constructed InstructionIterator compares equal
+  // to other default constructed InstructionIterator
+  //
+  // boost.org/doc/libs/1_58_0/doc/html/container/Cpp11_conformance.html
+  ir_list::InstructionIterator m_it;
+
+  // go to beginning of next block, skipping empty blocks
+  void to_next_block() {
+    while (m_block != m_cfg.m_blocks.end() &&
+           m_it == ir_list::InstructionIterable(m_block->second).end()) {
+      ++m_block;
+      if (m_block != m_cfg.m_blocks.end()) {
+        m_it = ir_list::InstructionIterable(m_block->second).begin();
+      } else {
+        m_it = ir_list::InstructionIterator();
+      }
+    }
+  }
+
+ public:
+  InstructionIterator() = delete;
+  explicit InstructionIterator(ControlFlowGraph& cfg, bool is_begin) : m_cfg(cfg) {
+    always_assert(m_cfg.editable());
+    if (is_begin) {
+      m_block = m_cfg.m_blocks.begin();
+      m_it = ir_list::InstructionIterable(m_block->second).begin();
+    } else {
+      m_block = m_cfg.m_blocks.end();
+    }
+  }
+
+  InstructionIterator& operator++() {
+    assert_not_end();
+    ++m_it;
+    to_next_block();
+    return *this;
+  }
+
+  InstructionIterator operator++(int) {
+    auto result = *this;
+    ++(*this);
+    return result;
+  }
+
+  MethodItemEntry& operator*() {
+    assert_not_end();
+    return *m_it;
+  }
+
+  MethodItemEntry* operator->() {
+    return &(this->operator*());
+  }
+
+  bool operator==(const InstructionIterator& other) {
+    return this->m_block == other.m_block && this->m_it == other.m_it;
+  }
+
+  bool operator!=(const InstructionIterator& other) { return !(*this == other); }
+
+  void assert_not_end() const {
+    always_assert(m_block != m_cfg.m_blocks.end());
+    always_assert(m_it != ir_list::InstructionIterable(m_block->second).end());
+  }
+
+  IRList::iterator unwrap() const { return m_it.unwrap(); }
+
+  using difference_type = long;
+  using value_type = MethodItemEntry&;
+  using pointer = MethodItemEntry*;
+  using reference = MethodItemEntry&;
+  using iterator_category = std::forward_iterator_tag;
+};
+
+// Iterate through all IRInstructions in the CFG.
+// Instructions in the same block are processed in order.
+// Blocks are iterated in an undefined order
+class InstructionIterable {
+  ControlFlowGraph& m_cfg;
+
+ public:
+  InstructionIterable() = delete;
+  explicit InstructionIterable(ControlFlowGraph& cfg) : m_cfg(cfg) {}
+
+  InstructionIterator begin() { return InstructionIterator(m_cfg, true); }
+
+  InstructionIterator end() { return InstructionIterator(m_cfg, false); }
+
+  bool empty() { return begin() == end(); }
 };
 
 } // namespace cfg

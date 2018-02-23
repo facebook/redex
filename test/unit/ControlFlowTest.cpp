@@ -11,6 +11,8 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "IRAssembler.h"
+#include "IRCode.h"
 
 std::ostream& operator<<(std::ostream& os, const Block* b) {
   return os << b->id();
@@ -274,4 +276,81 @@ TEST(ControlFlow, findImmediateDominator) {
     EXPECT_EQ(idom[b4].dom, b3);
     EXPECT_EQ(idom[b5].dom, b1);
   }
+}
+
+TEST(ControlFlow, iterate1) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  code->build_cfg(true);
+  for (Block* b : code->cfg().blocks()) {
+    EXPECT_NE(nullptr, b);
+  }
+  for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
+    EXPECT_EQ(OPCODE_RETURN_VOID, mie.insn->opcode());
+  }
+}
+
+TEST(ControlFlow, iterate2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     ; implicit goto :loop
+
+     :loop
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop)
+
+     :if-true-label
+     (return-void)
+    )
+)");
+  code->build_cfg(true);
+  for (Block* b : code->cfg().blocks()) {
+    EXPECT_NE(nullptr, b);
+  }
+
+  // iterate within a block in the correct order
+  // but visit the blocks in any order
+  std::unordered_map<IRInstruction*, size_t> times_encountered;
+  auto iterable = cfg::InstructionIterable(code->cfg());
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    auto insn = it->insn;
+    auto op = insn->opcode();
+    if (op == IOPCODE_LOAD_PARAM) {
+      EXPECT_EQ(OPCODE_GOTO, std::next(it)->insn->opcode());
+    }
+    if (op == OPCODE_CONST) {
+      EXPECT_EQ(OPCODE_IF_GEZ, std::next(it)->insn->opcode());
+      EXPECT_EQ(OPCODE_GOTO, std::next(it, 2)->insn->opcode());
+    }
+    times_encountered[insn] += 1;
+  }
+  EXPECT_EQ(6, times_encountered.size());
+  for (const auto& entry : times_encountered) {
+    EXPECT_EQ(1, entry.second);
+  }
+  TRACE(CFG, 1, SHOW(code->cfg()));
+}
+
+TEST(ControlFlow, end) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  for (int i = 0; i < 100; i++) {
+    auto a = new cfg::InstructionIterable(cfg);
+    EXPECT_TRUE(a->end() == cfg::InstructionIterable(cfg).end());
+    delete a;
+  }
+
+  IRList::iterator a;
+  IRList::iterator b;
+  EXPECT_TRUE(a == b);
 }

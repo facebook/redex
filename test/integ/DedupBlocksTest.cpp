@@ -14,15 +14,16 @@
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Transform.h"
 
 #include "DedupBlocksPass.h"
 
-int count_someFunc_calls(IRCode* code) {
+int count_someFunc_calls(ControlFlowGraph& cfg) {
   int num_some_func_calls = 0;
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));
     if (mie.insn->has_method()) {
       DexMethodRef* called = mie.insn->get_method();
@@ -56,7 +57,8 @@ TEST(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_before = true;
         IRCode* code = m->get_code();
-        EXPECT_EQ(count_someFunc_calls(code), 3);
+        code->build_cfg(true);
+        EXPECT_EQ(count_someFunc_calls(code->cfg()), 3);
       }
     }
   }
@@ -81,7 +83,8 @@ TEST(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_after = true;
         IRCode* code = m->get_code();
-        EXPECT_EQ(count_someFunc_calls(code), 1);
+        code->build_cfg(true);
+        EXPECT_EQ(count_someFunc_calls(code->cfg()), 1);
       }
     }
   }
