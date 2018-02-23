@@ -20,6 +20,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -329,20 +330,23 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
   return result;
 }
 
-std::unordered_set<std::string> extract_classes_from_layout(const std::string& layout_contents) {
+void extract_classes_from_layout(
+    const std::string& layout_contents,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>& out_classes,
+    std::unordered_multimap<std::string, std::string>& out_attributes) {
 
   android::ResXMLTree parser;
   parser.setTo(layout_contents.data(), layout_contents.size());
-
-  std::unordered_set<std::string> result;
 
   android::String16 name("name");
   android::String16 klazz("class");
 
   if (parser.getError() != android::NO_ERROR) {
-    return result;
+    return;
   }
 
+  std::unordered_map<int, std::string> namespace_prefix_map;
   android::ResXMLParser::event_code_t type;
   do {
     type = parser.next();
@@ -361,12 +365,37 @@ std::unordered_set<std::string> extract_classes_from_layout(const std::string& l
       bool is_classname = converted.find('.') != std::string::npos;
       if (is_classname) {
         std::replace(converted.begin(), converted.end(), '.', '/');
-        result.insert(converted);
+        out_classes.insert(converted);
       }
+      if (!attributes_to_read.empty()) {
+        for (size_t i = 0; i < parser.getAttributeCount(); i++) {
+          auto ns_id = parser.getAttributeNamespaceID(i);
+          auto name = parser.getAttributeName8(i, &len);
+          std::string fully_qualified;
+          if (ns_id >= 0) {
+            fully_qualified = namespace_prefix_map[ns_id] + ":" + std::string(name);
+          } else {
+            fully_qualified = std::string(name);
+          }
+          if (attributes_to_read.count(fully_qualified) != 0) {
+            auto val = parser.getAttributeStringValue(i, &len);
+            if (val != nullptr) {
+              android::String16 s16(val, len);
+              out_attributes.emplace(fully_qualified, convert_from_string16(s16));
+            }
+          }
+        }
+      }
+    } else if (type == android::ResXMLParser::START_NAMESPACE) {
+      auto id = parser.getNamespaceUriID();
+      size_t len;
+      auto prefix = parser.getNamespacePrefix(&len);;
+      namespace_prefix_map.emplace(
+        id,
+        convert_from_string16(android::String16(prefix, len)));
     }
   } while (type != android::ResXMLParser::BAD_DOCUMENT &&
            type != android::ResXMLParser::END_DOCUMENT);
-  return result;
 }
 
 /*
@@ -721,15 +750,45 @@ std::vector<std::string> find_layout_files(const std::string& apk_directory) {
   return layout_files;
 }
 
-std::unordered_set<std::string> get_layout_classes(const std::string& apk_directory) {
-  std::vector<std::string> tmp = find_layout_files(apk_directory);
-  std::unordered_set<std::string> all_classes;
-  for (auto layout_file : tmp) {
-    std::string contents = read_entire_file(layout_file);
-    std::unordered_set<std::string> classes_from_layout = extract_classes_from_layout(contents);
-    all_classes.insert(classes_from_layout.begin(), classes_from_layout.end());
+void collect_layout_classes_and_attributes_for_file(
+    const std::string& file_path,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>& out_classes,
+    std::unordered_multimap<std::string, std::string>& out_attributes) {
+  std::string contents = read_entire_file(file_path);
+  extract_classes_from_layout(
+    contents,
+    attributes_to_read,
+    out_classes,
+    out_attributes);
+}
+
+void collect_layout_classes_and_attributes(
+    const std::string& apk_directory,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>& out_classes,
+    std::unordered_multimap<std::string, std::string>& out_attributes) {
+  std::vector<std::string> files = find_layout_files(apk_directory);
+  for (auto layout_file : files) {
+    collect_layout_classes_and_attributes_for_file(
+      layout_file,
+      attributes_to_read,
+      out_classes,
+      out_attributes);
   }
-  return all_classes;
+}
+
+std::unordered_set<std::string> get_layout_classes(const std::string& apk_directory) {
+  std::unordered_set<std::string> out_classes;
+  // No attributes to read, empty set
+  std::unordered_set<std::string> attributes_to_read;
+  std::unordered_multimap<std::string, std::string> unused;
+  collect_layout_classes_and_attributes(
+    apk_directory,
+    attributes_to_read,
+    out_classes,
+    unused);
+  return out_classes;
 }
 
 /**
