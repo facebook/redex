@@ -934,18 +934,3 @@ bool IRCode::try_sync(DexCode* code) {
             });
   return true;
 }
-
-IRInstruction* primary_instruction_of_move_result_pseudo(
-    IRList::iterator it) {
-  --it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                it->insn->has_move_result_pseudo());
-  return it->insn;
-}
-
-IRInstruction* move_result_pseudo_of(IRList::iterator it) {
-  ++it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                opcode::is_move_result_pseudo(it->insn->opcode()));
-  return it->insn;
-}

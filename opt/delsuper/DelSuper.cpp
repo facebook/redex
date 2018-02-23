@@ -107,7 +107,7 @@ private:
     assert(insn->opcode() == OPCODE_INVOKE_SUPER);
     size_t src_idx{0};
     for (auto& mie :
-         InstructionIterable(meth->get_code()->get_param_instructions())) {
+         ir_list::InstructionIterable(meth->get_code()->get_param_instructions())) {
       auto load_param = mie.insn;
       if (load_param->dest() != insn->src(src_idx++)) {
         return false;
@@ -157,7 +157,7 @@ private:
     // TODO: rewrite the following code to not require a random-access
     // container of instructions
     std::vector<IRInstruction*> insns;
-    for (auto& mie : InstructionIterable(meth->get_code())) {
+    for (auto& mie : ir_list::InstructionIterable(meth->get_code())) {
       if (opcode::is_load_param(mie.insn->opcode())) {
         continue;
       }

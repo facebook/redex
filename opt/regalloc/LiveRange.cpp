@@ -118,7 +118,7 @@ class ReachingDefsFixpointIterator final
 
   void analyze_node(const NodeId& block,
                     DefsEnvironment* current_state) const override {
-    for (const auto& mie : InstructionIterable(block)) {
+    for (const auto& mie : ir_list::InstructionIterable(block)) {
       analyze_instruction(mie.insn, current_state);
     }
   }
@@ -145,7 +145,7 @@ UDChains calculate_ud_chains(IRCode* code) {
   UDChains chains;
   for (Block* block : cfg.blocks()) {
     DefsEnvironment defs_in = fixpoint_iter.get_entry_state_at(block);
-    for (const auto& mie : InstructionIterable(block)) {
+    for (const auto& mie : ir_list::InstructionIterable(block)) {
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
@@ -178,21 +178,21 @@ void renumber_registers(IRCode* code) {
   Rank rank;
   Parent parent;
   DefSets def_sets((RankPMap(rank)), (ParentPMap(parent)));
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     if (mie.insn->dests_size()) {
       def_sets.make_set(mie.insn);
     }
   }
   unify_defs(chains, &def_sets);
   SymRegMapper sym_reg_mapper;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       auto sym_reg = sym_reg_mapper.make(def_sets.find_set(insn));
       insn->set_dest(sym_reg);
     }
   }
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto& defs = chains.at(Use {insn, insn->src(i)});

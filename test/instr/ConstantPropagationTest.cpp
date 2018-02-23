@@ -16,7 +16,7 @@
 
 int count_ifs(IRCode* code) {
   size_t num_ifs = 0;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     if (is_conditional_branch(mie.insn->opcode())) {
       num_ifs++;
     }
@@ -26,7 +26,7 @@ int count_ifs(IRCode* code) {
 
 int count_ops(IRCode* code, IROpcode op) {
   size_t result = 0;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     if (mie.insn->opcode() == op) {
       result++;
     }

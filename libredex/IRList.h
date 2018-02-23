@@ -339,6 +339,8 @@ class IRList {
 
 std::string show(const IRList*);
 
+namespace ir_list {
+
 class InstructionIterator {
   IRList::iterator m_it;
   IRList::iterator m_end;
@@ -424,3 +426,5 @@ class InstructionIterable {
 IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);
 
 IRInstruction* move_result_pseudo_of(IRList::iterator it);
+
+} // namespace ir_list

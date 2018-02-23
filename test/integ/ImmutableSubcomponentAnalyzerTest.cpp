@@ -86,7 +86,7 @@ TEST(ImmutableSubcomponentAnalyzerTest, accessPaths) {
         if (method->get_name()->str() == "test") {
           ImmutableSubcomponentAnalyzer analyzer(method, is_immutable_getter);
           size_t check_occurrence = 0;
-          for (auto& mie : InstructionIterable(method->get_code())) {
+          for (auto& mie : ir_list::InstructionIterable(method->get_code())) {
             IRInstruction* insn = mie.insn;
             if (insn->opcode() == OPCODE_INVOKE_STATIC &&
                 insn->get_method()->get_name()->str() == "check") {

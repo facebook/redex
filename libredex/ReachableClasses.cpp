@@ -116,7 +116,7 @@ void analyze_reflection(const Scope& scope) {
 
   walk::parallel::code(scope, [&refls](DexMethod* method, IRCode& code) {
       std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
-      for (auto& mie : InstructionIterable(code)) {
+      for (auto& mie : ir_list::InstructionIterable(code)) {
         IRInstruction* insn = mie.insn;
         if (!is_invoke(insn->opcode())) {
           continue;

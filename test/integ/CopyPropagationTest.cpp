@@ -23,7 +23,7 @@
 
 int count_sgets(IRCode* code) {
   int sgets = 0;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     TRACE(RME, 1, "%s\n", SHOW(mie.insn));
     if (is_sget(mie.insn->opcode())) {
       sgets++;

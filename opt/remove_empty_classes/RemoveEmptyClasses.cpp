@@ -77,7 +77,7 @@ void process_code(std::unordered_set<const DexType*>* class_references,
                   IRCode& code) {
   process_proto(class_references, meth);
   // Types referenced in code.
-  for (auto const& mie : InstructionIterable(meth->get_code())) {
+  for (auto const& mie : ir_list::InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_type()) {
       auto typ = array_base_type(opcode->get_type());

@@ -79,7 +79,7 @@ void remap_registers(IRCode* code, const RegMap& reg_map) {
 
 static size_t remove_block(IRCode* code, Block* b) {
   size_t insns_removed{0};
-  for (auto& mei : InstructionIterable(b)) {
+  for (auto& mei : ir_list::InstructionIterable(b)) {
     code->remove_opcode(mei.insn);
     ++insns_removed;
   }

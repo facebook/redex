@@ -297,7 +297,7 @@ bool passes_args_through(IRInstruction* insn,
 ) {
   size_t src_idx{0};
   size_t param_count{0};
-  for (auto& mie : InstructionIterable(code.get_param_instructions())) {
+  for (auto& mie : ir_list::InstructionIterable(code.get_param_instructions())) {
     auto load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {
@@ -390,7 +390,7 @@ void load_root_dexen(
 size_t sum_param_sizes(const IRCode* code) {
   size_t size {0};
   auto param_ops = code->get_param_instructions();
-  for (auto& mie : InstructionIterable(&param_ops)) {
+  for (auto& mie : ir_list::InstructionIterable(&param_ops)) {
     size += mie.insn->dest_is_wide() ? 2 : 1;
   }
   return size;
@@ -428,7 +428,7 @@ void change_visibility(DexMethod* method) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
 
     if (insn->has_field()) {
@@ -484,7 +484,7 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   auto code = method->get_code();
   always_assert(code);
 
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
       auto meth = resolve_method(insn->get_method(), MethodSearch::Direct);

@@ -30,7 +30,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
     return method->is_virtual() && non_virtual.count(method) == 0;
   };
   walk::code(scope, [&](DexMethod* caller, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
+    for (auto& mie : ir_list::InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
         auto callee = resolver(insn->get_method(), opcode_to_search(insn));

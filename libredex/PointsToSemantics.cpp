@@ -851,7 +851,7 @@ class AnchorPropagation final
     // We then initialize the parameters of the method.
     bool first_param = true;
     for (const MethodItemEntry& mie :
-         InstructionIterable(m_code->get_param_instructions())) {
+         ir_list::InstructionIterable(m_code->get_param_instructions())) {
       IRInstruction* insn = mie.insn;
       if (first_param && !m_is_static_method) {
         always_assert_log(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT,
@@ -948,7 +948,7 @@ class PointsToActionGenerator final {
     // actions.
     for (Block* block : cfg.blocks()) {
       AnchorEnvironment state = m_analysis->get_entry_state_at(block);
-      for (const MethodItemEntry& mie : InstructionIterable(*block)) {
+      for (const MethodItemEntry& mie : ir_list::InstructionIterable(*block)) {
         IRInstruction* insn = mie.insn;
         generate_action(insn, state);
         m_analysis->analyze_instruction(insn, &state);

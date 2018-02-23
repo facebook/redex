@@ -242,7 +242,7 @@ class walk {
                               MethodFilterFn filter,
                               InsnWalkerFn walker) {
     iterate_code(cls, filter, [&walker](DexMethod* m, IRCode& code) {
-      for (const MethodItemEntry& mie : InstructionIterable(code)) {
+      for (const MethodItemEntry& mie : ir_list::InstructionIterable(code)) {
         walker(m, mie.insn);
       }
     });
@@ -286,7 +286,7 @@ class walk {
     iterate_code(
         cls, all_methods, [&predicate, &walker](DexMethod* m, IRCode& ir_code) {
           std::vector<IRInstruction*> insns;
-          for (auto& mie : InstructionIterable(ir_code)) {
+          for (auto& mie : ir_list::InstructionIterable(ir_code)) {
             insns.emplace_back(mie.insn);
           }
 
@@ -311,7 +311,7 @@ class walk {
           ir_code.build_cfg();
           for (Block* block : ir_code.cfg().blocks()) {
             std::vector<IRInstruction*> insns;
-            for (const MethodItemEntry& mie : InstructionIterable(block)) {
+            for (const MethodItemEntry& mie : ir_list::InstructionIterable(block)) {
               insns.emplace_back(mie.insn);
             }
             m::find_matches(insns, predicate, method_matches);

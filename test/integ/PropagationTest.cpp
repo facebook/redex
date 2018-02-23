@@ -95,7 +95,7 @@ TEST(PropagationTest1, localDCE1) {
       TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
         TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
-        for (auto& mie : InstructionIterable(dm->get_code())) {
+        for (auto& mie : ir_list::InstructionIterable(dm->get_code())) {
           auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.
           ASSERT_NE(instruction->opcode(), OPCODE_INVOKE_VIRTUAL);

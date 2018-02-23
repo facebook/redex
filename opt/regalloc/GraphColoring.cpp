@@ -27,7 +27,7 @@ namespace regalloc {
  */
 static IRList::iterator find_first_use_in_block(reg_t use,
                                                    const Block* block) {
-  auto ii = InstructionIterable(block);
+  auto ii = ir_list::InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
     auto* insn = it->insn;
@@ -92,7 +92,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
  */
 RangeSet init_range_set(IRCode* code) {
   RangeSet range_set;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     const auto* insn = mie.insn;
     auto op = insn->opcode();
     bool is_range{false};
@@ -229,7 +229,7 @@ void fit_params(
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
   auto vreg = params_base;
-  for (const auto& mie : InstructionIterable(param_insns)) {
+  for (const auto& mie : ir_list::InstructionIterable(param_insns)) {
     auto* insn = mie.insn;
     auto dest = insn->dest();
     const auto& node = ig.get_node(dest);
@@ -353,7 +353,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     aliases.make_set(i);
   }
 
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto end = ii.end();
   auto old_coalesce_count = m_stats.moves_coalesced;
   for (auto it = ii.begin(); it != end; ++it) {
@@ -364,7 +364,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     }
     reg_t dest;
     if (insn->has_move_result_pseudo()) {
-      dest = move_result_pseudo_of(it.unwrap())->dest();
+      dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
     } else {
       dest = insn->dest();
     }
@@ -602,7 +602,7 @@ void Allocator::choose_range_promotions(const IRCode* code,
                                         const interference::Graph& ig,
                                         const SpillPlan& spill_plan,
                                         RangeSet* range_set) {
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : ir_list::InstructionIterable(code)) {
     const auto* insn = mie.insn;
     if (should_convert_to_range(ig, spill_plan, insn)) {
       range_set->emplace(insn);
@@ -656,7 +656,7 @@ void Allocator::select_params(const IRCode* code,
   std::vector<reg_t> param_regs;
   auto param_insns = code->get_param_instructions();
   size_t params_size{0};
-  for (auto& mie : InstructionIterable(param_insns)) {
+  for (auto& mie : ir_list::InstructionIterable(param_insns)) {
     auto dest = mie.insn->dest();
     const auto& node = ig.get_node(dest);
     params_size += node.width();
@@ -839,7 +839,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
   // symreg.
   auto pend = code->get_param_instructions().end();
   std::unordered_set<reg_t> params = orig_params;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto* insn = it->insn;
@@ -917,7 +917,7 @@ void Allocator::split_params(
   }
 
   // Remap the operands of the load-param opcodes
-  auto param_insns = InstructionIterable(code->get_param_instructions());
+  auto param_insns = ir_list::InstructionIterable(code->get_param_instructions());
   std::unordered_map<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
     auto insn = mie.insn;
@@ -961,7 +961,7 @@ void Allocator::spill(const interference::Graph& ig,
                       std::unordered_set<reg_t>* new_temps) {
   // TODO: account for "close" defs and uses. See [Briggs92], section 8.7
 
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto* insn = it->insn;

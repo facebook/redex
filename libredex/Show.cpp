@@ -1075,7 +1075,7 @@ std::string show(const IRCode* mt) {
   return show(mt->m_ir_list);
 }
 
-std::string show(const InstructionIterable& it) {
+std::string show(const ir_list::InstructionIterable& it) {
   std::stringstream ss;
   for (auto& mei : it) {
     ss << show(mei.insn) << "\n";

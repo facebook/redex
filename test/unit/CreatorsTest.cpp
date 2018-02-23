@@ -38,7 +38,7 @@ TEST(CreatorsTest, Alloc) {
   auto loc = mc.make_local(DexType::make_type("I"));
   mc.get_main_block()->load_const(loc, 123);
   auto method = mc.create();
-  auto it = InstructionIterable(method->get_code()).begin();
+  auto it = ir_list::InstructionIterable(method->get_code()).begin();
 
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {1_v}));
   ++it;
@@ -82,7 +82,7 @@ TEST(MakeSwitch, MultiIndices) {
   auto method = mc.create();
   printf(" code: \n%s\n", SHOW(method->get_code()));
 
-  auto it = InstructionIterable(method->get_code()).begin();
+  auto it = ir_list::InstructionIterable(method->get_code()).begin();
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {1_v}));
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM, {2_v}));
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM_WIDE, {3_v}));

@@ -40,7 +40,7 @@ constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 DexMethodRef* match_pattern(DexMethod* bridge) {
   auto code = bridge->get_code();
   if (!code) return nullptr;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end && opcode::is_load_param(it->insn->opcode())) {
@@ -256,7 +256,7 @@ class BridgeRemover {
   }
 
   void exclude_referenced_bridgee(DexMethod* code_method, IRCode& code) {
-    for (auto& mie : InstructionIterable(&code)) {
+    for (auto& mie : ir_list::InstructionIterable(&code)) {
       auto inst = mie.insn;
       if (!is_invoke(inst->opcode())) continue;
       auto method = inst->get_method();

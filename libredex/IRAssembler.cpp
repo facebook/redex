@@ -231,7 +231,7 @@ std::unique_ptr<DexPosition> position_from_s_expr(const s_expr& e) {
 void handle_labels(IRCode* code,
                    const LabelDefs& label_defs,
                    const LabelRefs label_refs) {
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {
       auto target_mie = label_defs.at(label_refs.at(insn));

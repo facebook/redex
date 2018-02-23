@@ -64,7 +64,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       return call_counter;
     }
 
-    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+    for (const MethodItemEntry& mie : ir_list::InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) {
         continue;
@@ -125,10 +125,10 @@ bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
-  auto const this_insn = InstructionIterable(code).begin()->insn;
+  auto const this_insn = ir_list::InstructionIterable(code).begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto const this_reg = this_insn->dest();
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {

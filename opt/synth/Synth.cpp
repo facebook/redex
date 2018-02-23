@@ -73,7 +73,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end && opcode::is_load_param(it->insn->opcode())) {
@@ -83,7 +83,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   if (!is_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
-  uint16_t iget_dest = move_result_pseudo_of(it.unwrap())->dest();
+  uint16_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
@@ -114,7 +114,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
 
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end && opcode::is_load_param(it->insn->opcode())) {
@@ -124,7 +124,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   if (!is_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
-  uint16_t sget_dest = move_result_pseudo_of(it.unwrap())->dest();
+  uint16_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
@@ -155,7 +155,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
 DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end && opcode::is_load_param(it->insn->opcode())) {
@@ -220,7 +220,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
 DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   auto code = m->get_code();
   if (code == nullptr) return nullptr;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
   while (it != end && opcode::is_load_param(it->insn->opcode())) {
@@ -562,7 +562,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   std::vector<std::pair<IRInstruction*, DexMethod*>> ctor_calls;
 
   TRACE(SYNT, 4, "Replacing wrappers in %s\n", SHOW(caller_method));
-  auto ii = InstructionIterable(caller_method->get_code());
+  auto ii = ir_list::InstructionIterable(caller_method->get_code());
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -836,7 +836,7 @@ void do_transform(const ClassHierarchy& ch,
   }
   // check that invokes to promoted static method is correct
   walk::parallel::code(classes, [&](DexMethod* meth, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
+    for (auto& mie : ir_list::InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto opcode = insn->opcode();
       if (opcode != OPCODE_INVOKE_DIRECT) {

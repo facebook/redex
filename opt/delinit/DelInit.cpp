@@ -137,7 +137,7 @@ void find_referenced_classes(const Scope& scope) {
     [](DexMethod*) { return true; },
     [&](DexMethod* meth, IRCode& code) {
       for (const auto& mie :
-           InstructionIterable(meth->get_code())) {
+           ir_list::InstructionIterable(meth->get_code())) {
         auto opcode = mie.insn;
         // Matches any stringref that name-aliases a type.
         if (opcode->has_string()) {

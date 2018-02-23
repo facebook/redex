@@ -139,7 +139,8 @@ size_t dest_bit_width(IRList::iterator it) {
   auto insn = it->insn;
   auto op = insn->opcode();
   if (opcode::is_move_result_pseudo(op)) {
-    auto primary_op = primary_instruction_of_move_result_pseudo(it)->opcode();
+    auto primary_op =
+        ir_list::primary_instruction_of_move_result_pseudo(it)->opcode();
     if (primary_op == OPCODE_CHECK_CAST) {
       return 4;
     } else {
@@ -262,7 +263,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     GraphBuilder::update_node_constraints(it.unwrap(), range_set, &graph);
   }

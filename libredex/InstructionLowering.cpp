@@ -141,7 +141,7 @@ using namespace impl;
  */
 static void check_load_params(DexMethod* method) {
   auto* code = method->get_code();
-  auto param_ops = InstructionIterable(code->get_param_instructions());
+  auto param_ops = ir_list::InstructionIterable(code->get_param_instructions());
   if (param_ops.empty()) {
     return;
   }
@@ -175,7 +175,7 @@ static void check_load_params(DexMethod* method) {
   }
   always_assert(args_it == args_list.end());
   // check that the params are at the end of the frame
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       always_assert_log(insn->dest() < next_ins,
@@ -236,7 +236,7 @@ static size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) 
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
-  auto move = move_result_pseudo_of(it);
+  auto move = ir_list::move_result_pseudo_of(it);
   if (move->dest() != insn->src(0)) {
     // convert check-cast v1; move-result-pseudo v0 into
     //
@@ -307,7 +307,7 @@ static void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_)
   if (insn->dests_size()) {
     dex_insn->set_dest(insn->dest());
   } else if (insn->has_move_result_pseudo()) {
-    dex_insn->set_dest(move_result_pseudo_of(it)->dest());
+    dex_insn->set_dest(ir_list::move_result_pseudo_of(it)->dest());
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     dex_insn->set_src(i, insn->src(i));

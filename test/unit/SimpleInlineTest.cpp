@@ -55,7 +55,7 @@ TEST(SimpleInlineTest, insertMoves) {
 
   inliner::inline_method(caller->get_code(), callee->get_code(), invoke_it);
 
-  auto it = InstructionIterable(caller_code).begin();
+  auto it = ir_list::InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {1_v, 1_L}));
   ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {2_v, 0_L}));

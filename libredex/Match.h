@@ -410,7 +410,7 @@ template <typename ...T>
       if (code) {
         const size_t N = std::tuple_size<std::tuple<T...> >::value;
         std::vector<IRInstruction*> insns;
-        for (auto& mie : InstructionIterable(code)) {
+        for (auto& mie : ir_list::InstructionIterable(code)) {
           insns.push_back(mie.insn);
         }
         // No way to match if we have less insns than N

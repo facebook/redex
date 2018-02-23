@@ -221,7 +221,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   }
 
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   auto it = ii.begin();
   if (it->insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
     return false;
@@ -252,7 +252,7 @@ std::vector<DexMethod*> get_non_trivial_init_methods(IRCode* code,
   always_assert(type != nullptr);
 
   std::vector<DexMethod*> methods;
-  for (auto const& mie : InstructionIterable(code)) {
+  for (auto const& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -279,7 +279,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
     return insns;
   }
 
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -439,7 +439,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   std::unordered_set<IRInstruction*> update_list;
 
   for (auto& block : blocks) {
-    auto ii = InstructionIterable(block);
+    auto ii = ir_list::InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       IROpcode opcode = insn->opcode();
@@ -631,7 +631,7 @@ bool params_change_regs(DexMethod* method) {
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
-  const auto& param_insns = InstructionIterable(code->get_param_instructions());
+  const auto& param_insns = ir_list::InstructionIterable(code->get_param_instructions());
   always_assert(!is_static(method));
   // Skip the `this` param
   auto param_it = std::next(param_insns.begin());
@@ -761,7 +761,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
 
   std::vector<IRList::iterator> to_delete;
   std::unordered_map<IRInstruction*, IRInstruction*> to_replace;
-  auto ii = InstructionIterable(*new_code);
+  auto ii = ir_list::InstructionIterable(*new_code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     IRInstruction* insn = it->insn;
 
@@ -818,7 +818,7 @@ DexMethod* get_fields_constr(DexMethod* method, DexClass* cls) {
 std::vector<IRList::iterator> get_invokes_for_method(IRCode* code,
                                                         DexMethod* method) {
   std::vector<IRList::iterator> fms;
-  auto ii = InstructionIterable(code);
+  auto ii = ir_list::InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     if (is_invoke(insn->opcode())) {
@@ -1114,7 +1114,7 @@ std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
   always_assert(type != nullptr);
 
   std::vector<DexMethod*> methods;
-  for (auto const& mie : InstructionIterable(code)) {
+  for (auto const& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));

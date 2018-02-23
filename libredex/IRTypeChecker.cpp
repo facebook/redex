@@ -183,7 +183,7 @@ class TypeInference final
     bool first_param = true;
     // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
     // beginning of the entry block of the CFG.
-    for (auto& mie : InstructionIterable(m_cfg.entry_block())) {
+    for (auto& mie : ir_list::InstructionIterable(m_cfg.entry_block())) {
       IRInstruction* insn = mie.insn;
       switch (insn->opcode()) {
       case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -234,7 +234,7 @@ class TypeInference final
 
   void analyze_node(const NodeId& node,
                     TypeEnvironment* current_state) const override {
-    for (auto& mie : InstructionIterable(node)) {
+    for (auto& mie : ir_list::InstructionIterable(node)) {
       analyze_instruction(mie.insn, current_state);
     }
   }
@@ -867,7 +867,7 @@ class TypeInference final
 
   void print(std::ostream& output) const {
     for (Block* block : m_cfg.blocks()) {
-      for (auto& mie : InstructionIterable(block)) {
+      for (auto& mie : ir_list::InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         auto it = m_type_envs.find(insn);
         always_assert(it != m_type_envs.end());
@@ -883,7 +883,7 @@ class TypeInference final
     m_type_envs.reserve(m_cfg.blocks().size() * 16);
     for (Block* block : m_cfg.blocks()) {
       TypeEnvironment current_state = get_entry_state_at(block);
-      for (auto& mie : InstructionIterable(block)) {
+      for (auto& mie : ir_list::InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         m_type_envs.emplace(insn, current_state);
         analyze_instruction(insn, &current_state);
@@ -1323,7 +1323,7 @@ void IRTypeChecker::run() {
   // Finally, we use the inferred types to type-check each instruction in the
   // method. We stop at the first type error encountered.
   auto& type_envs = m_type_inference->m_type_envs;
-  for (const MethodItemEntry& mie : InstructionIterable(code)) {
+  for (const MethodItemEntry& mie : ir_list::InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
     try {
       auto it = type_envs.find(insn);

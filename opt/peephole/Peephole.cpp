@@ -1467,7 +1467,7 @@ class PeepholeOptimizer {
         // reset all matching states on visiting every basic block.
         matcher.reset();
 
-        for (auto& mei : InstructionIterable(block)) {
+        for (auto& mei : ir_list::InstructionIterable(block)) {
           if (!matcher.try_match(mei.insn)) {
             continue;
           }

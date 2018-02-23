@@ -68,7 +68,7 @@ void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int me
   static int next_field_ref = 0;
   static int next_method_ref = 0;
 
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_string()) {
       if (string_ids.count(insn->get_string())) {

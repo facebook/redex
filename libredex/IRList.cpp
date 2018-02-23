@@ -338,7 +338,7 @@ void IRList::remove_switch_case(IRInstruction* insn) {
   TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(this));
   // Check if we are inside switch method.
   const MethodItemEntry* switch_mei {nullptr};
-  for (const auto& mei : InstructionIterable(m_list)) {
+  for (const auto& mei : ir_list::InstructionIterable(m_list)) {
     auto op = mei.insn->opcode();
     if (opcode::is_load_param(op)) {
       continue;
@@ -586,6 +586,8 @@ IRList::iterator IRList::make_switch_block(
   return main_block;
 }
 
+namespace ir_list {
+
 bool InstructionIterable::structural_equals(const InstructionIterable& other) {
   auto it1 = this->begin();
   auto it2 = other.begin();
@@ -601,3 +603,20 @@ bool InstructionIterable::structural_equals(const InstructionIterable& other) {
 
   return it1 == this->end() && it2 == other.end();
 }
+
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    IRList::iterator it) {
+  --it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                it->insn->has_move_result_pseudo());
+  return it->insn;
+}
+
+IRInstruction* move_result_pseudo_of(IRList::iterator it) {
+  ++it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                opcode::is_move_result_pseudo(it->insn->opcode()));
+  return it->insn;
+}
+
+} // namespace ir_list

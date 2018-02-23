@@ -22,7 +22,7 @@
 
 int count_someFunc_calls(IRCode* code) {
   int num_some_func_calls = 0;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : ir_list::InstructionIterable(code)) {
     TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));
     if (mie.insn->has_method()) {
       DexMethodRef* called = mie.insn->get_method();

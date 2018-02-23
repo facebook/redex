@@ -102,7 +102,7 @@ TEST(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
         const auto* code = method->get_code();
-        for (auto& mie : InstructionIterable(code)) {
+        for (auto& mie : ir_list::InstructionIterable(code)) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;
           if (is_invoke(insn->opcode())) {
@@ -135,7 +135,7 @@ TEST(SynthTest1, synthetic) {
       for (const auto& method : cls->get_dmethods()) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
           TRACE(DCE, 2, "dmethod: %s\n",  SHOW(method->get_code()));
-          for (auto& mie : InstructionIterable(method->get_code())) {
+          for (auto& mie : ir_list::InstructionIterable(method->get_code())) {
             auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
             ASSERT_NE(instruction->opcode(), OPCODE_CONST);
