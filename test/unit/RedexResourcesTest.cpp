@@ -17,17 +17,6 @@
 #include "RedexResources.h"
 #include "androidfw/ResourceTypes.h"
 
-std::set<std::string> values_to_set(
-  const std::unordered_multimap<std::string, std::string>& map,
-  const std::string& key) {
-  std::set<std::string> result;
-  auto range = map.equal_range(key);
-  for (auto it = range.first; it != range.second; ++it) {
-    result.emplace(it->second);
-  }
-  return result;
-}
-
 TEST(RedexResources, ReadXmlTagsAndAttributes) {
   std::unordered_set<std::string> attributes_to_find;
   attributes_to_find.emplace("android:onClick");
@@ -48,14 +37,14 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
   EXPECT_EQ(classes.count("Lcom/example/test/CustomTextView;"), 1);
   EXPECT_EQ(classes.count("Lcom/example/test/CustomButton;"), 1);
 
-  auto vals = values_to_set(attribute_values, "android:onClick");
+  auto vals = multimap_values_to_set(attribute_values, "android:onClick");
   EXPECT_EQ(vals.size(), 2);
   EXPECT_EQ(vals.count("fooClick"), 1);
   EXPECT_EQ(vals.count("barClick"), 1);
 
-  auto text_vals = values_to_set(attribute_values, "android:text");
+  auto text_vals = multimap_values_to_set(attribute_values, "android:text");
   EXPECT_EQ(text_vals.size(), 4);
 
-  auto no_ns_vals = values_to_set(attribute_values, "onClick");
+  auto no_ns_vals = multimap_values_to_set(attribute_values, "onClick");
   EXPECT_EQ(no_ns_vals.size(), 0);
 }

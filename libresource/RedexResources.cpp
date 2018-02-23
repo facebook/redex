@@ -791,6 +791,17 @@ std::unordered_set<std::string> get_layout_classes(const std::string& apk_direct
   return out_classes;
 }
 
+std::set<std::string> multimap_values_to_set(
+  const std::unordered_multimap<std::string, std::string>& map,
+  const std::string& key) {
+  std::set<std::string> result;
+  auto range = map.equal_range(key);
+  for (auto it = range.first; it != range.second; ++it) {
+    result.emplace(it->second);
+  }
+  return result;
+}
+
 /**
  * Return a list of all the .so files in /lib
  */

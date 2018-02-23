@@ -16,6 +16,7 @@ class ReferencedState {
  private:
   bool m_bytype{false};
   bool m_bystring{false};
+  bool m_byresources{false};
 
   // ProGuard keep settings
   //
@@ -53,6 +54,7 @@ class ReferencedState {
     if (this != &other) {
       this->m_bytype = other.m_bytype;
       this->m_bystring = other.m_bystring;
+      this->m_byresources = other.m_byresources;
 
       this->m_keep = other.m_keep;
       this->m_assumenosideeffects = other.m_assumenosideeffects;
@@ -73,14 +75,16 @@ class ReferencedState {
 
   std::string str() const;
 
-  bool can_delete() const { return !m_bytype && (!m_keep || allowshrinking()); }
+  bool can_delete() const {
+    return !m_bytype && !m_byresources && (!m_keep || allowshrinking());
+  }
   bool can_rename() const {
     return !m_keep_name && !m_bystring && (!m_keep || allowobfuscation()) &&
            !allowshrinking();
   }
 
   // ProGuard keep options
-  bool keep() const { return m_keep; }
+  bool keep() const { return m_keep || m_byresources; }
 
   // ProGaurd keep option modifiers
   bool allowshrinking() const {
@@ -103,6 +107,17 @@ class ReferencedState {
     m_bytype = m_bystring = true;
   }
   bool is_referenced_by_string() const { return m_bystring; }
+
+  // A class referenced by resource XML can take the following forms in .xml
+  // files under the res/ directory:
+  // <com.facebook.FooView />
+  // <fragmnet android:name="com.facebook.BarFragment" />
+  //
+  // This differs from "by_string" reference since it is possible to rename
+  // these string references, and potentially eliminate dead resource .xml files
+  void set_referenced_by_resource_xml() { m_byresources = true; }
+  void unset_referenced_by_resource_xml() { m_byresources = false; }
+  bool is_referenced_by_resource_xml() const { return m_byresources; }
 
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }

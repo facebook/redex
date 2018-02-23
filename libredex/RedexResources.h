@@ -16,6 +16,8 @@
 
 #include "androidfw/ResourceTypes.h"
 
+const char* const ONCLICK_ATTRIBUTE = "android:onClick";
+
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename, const std::string& contents);
 void* map_file(
@@ -69,6 +71,12 @@ void collect_layout_classes_and_attributes_for_file(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes);
+
+// Convenience method for copying values in a multimap to a set, for a
+// particular key.
+std::set<std::string> multimap_values_to_set(
+  const std::unordered_multimap<std::string, std::string>& map,
+  const std::string& key);
 
 // Given the bytes of a binary XML file, replace the entries (if any) in the
 // ResStringPool. Writes result to the given Vector output param.
