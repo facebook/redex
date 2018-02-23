@@ -631,7 +631,8 @@ bool params_change_regs(DexMethod* method) {
   auto blocks = postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
-  const auto& param_insns = ir_list::InstructionIterable(code->get_param_instructions());
+  const auto& param_insns =
+      ir_list::ConstInstructionIterable(code->get_param_instructions());
   always_assert(!is_static(method));
   // Skip the `this` param
   auto param_it = std::next(param_insns.begin());

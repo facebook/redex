@@ -281,7 +281,8 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   // pseudo-instructions.
   auto init = isa_impl::AbstractAccessPathEnvironment::top();
   size_t parameter = 0;
-  for (auto& mie : ir_list::InstructionIterable(code->get_param_instructions())) {
+  for (const auto& mie :
+       ir_list::ConstInstructionIterable(code->get_param_instructions())) {
     switch (mie.insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       init.set(mie.insn->dest(),

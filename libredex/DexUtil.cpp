@@ -297,7 +297,8 @@ bool passes_args_through(IRInstruction* insn,
 ) {
   size_t src_idx{0};
   size_t param_count{0};
-  for (auto& mie : ir_list::InstructionIterable(code.get_param_instructions())) {
+  for (const auto& mie :
+       ir_list::ConstInstructionIterable(code.get_param_instructions())) {
     auto load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {
@@ -484,7 +485,7 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   auto code = method->get_code();
   always_assert(code);
 
-  for (const auto& mie : ir_list::InstructionIterable(code)) {
+  for (const auto& mie : ir_list::ConstInstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
       auto meth = resolve_method(insn->get_method(), MethodSearch::Direct);

@@ -851,7 +851,7 @@ class AnchorPropagation final
     // We then initialize the parameters of the method.
     bool first_param = true;
     for (const MethodItemEntry& mie :
-         ir_list::InstructionIterable(m_code->get_param_instructions())) {
+         ir_list::ConstInstructionIterable(m_code->get_param_instructions())) {
       IRInstruction* insn = mie.insn;
       if (first_param && !m_is_static_method) {
         always_assert_log(insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT,

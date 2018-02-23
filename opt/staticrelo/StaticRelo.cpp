@@ -363,7 +363,7 @@ DexClass* select_relocation_target(
 bool can_make_references_public(const DexMethod* from_meth) {
   auto const& code = from_meth->get_code();
   if (!code) return false;
-  for (auto const& mie : ir_list::InstructionIterable(code)) {
+  for (auto const& mie : ir_list::ConstInstructionIterable(code)) {
     auto inst = mie.insn;
     if (inst->has_type()) {
       auto tref = inst->get_type();
@@ -398,7 +398,7 @@ bool can_make_references_public(const DexMethod* from_meth) {
 void make_references_public(const DexMethod* from_meth) {
   auto const& code = from_meth->get_code();
   if (!code) return;
-  for (auto const& mie : ir_list::InstructionIterable(code)) {
+  for (auto const& mie : ir_list::ConstInstructionIterable(code)) {
     auto inst = mie.insn;
     if (inst->has_type()) {
       auto tref = inst->get_type();

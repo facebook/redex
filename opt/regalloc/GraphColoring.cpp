@@ -26,7 +26,7 @@ namespace regalloc {
  * Find the first instruction in a block (if any) that uses a given register.
  */
 static IRList::iterator find_first_use_in_block(reg_t use,
-                                                   const Block* block) {
+                                                Block* block) {
   auto ii = ir_list::InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
@@ -92,7 +92,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
  */
 RangeSet init_range_set(IRCode* code) {
   RangeSet range_set;
-  for (const auto& mie : ir_list::InstructionIterable(code)) {
+  for (const auto& mie : ir_list::ConstInstructionIterable(code)) {
     const auto* insn = mie.insn;
     auto op = insn->opcode();
     bool is_range{false};
@@ -229,7 +229,7 @@ void fit_params(
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
   auto vreg = params_base;
-  for (const auto& mie : ir_list::InstructionIterable(param_insns)) {
+  for (const auto& mie : ir_list::ConstInstructionIterable(param_insns)) {
     auto* insn = mie.insn;
     auto dest = insn->dest();
     const auto& node = ig.get_node(dest);
@@ -602,7 +602,7 @@ void Allocator::choose_range_promotions(const IRCode* code,
                                         const interference::Graph& ig,
                                         const SpillPlan& spill_plan,
                                         RangeSet* range_set) {
-  for (const auto& mie : ir_list::InstructionIterable(code)) {
+  for (const auto& mie : ir_list::ConstInstructionIterable(code)) {
     const auto* insn = mie.insn;
     if (should_convert_to_range(ig, spill_plan, insn)) {
       range_set->emplace(insn);
@@ -917,7 +917,8 @@ void Allocator::split_params(
   }
 
   // Remap the operands of the load-param opcodes
-  auto param_insns = ir_list::InstructionIterable(code->get_param_instructions());
+  auto params = code->get_param_instructions();
+  auto param_insns = ir_list::InstructionIterable(params);
   std::unordered_map<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
     auto insn = mie.insn;

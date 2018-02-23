@@ -11,6 +11,7 @@
 
 #include <boost/intrusive/list.hpp>
 #include <boost/range/sub_range.hpp>
+#include <type_traits>
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
@@ -341,9 +342,17 @@ std::string show(const IRList*);
 
 namespace ir_list {
 
-class InstructionIterator {
-  IRList::iterator m_it;
-  IRList::iterator m_end;
+template <bool is_const>
+class InstructionIteratorImpl {
+  using Iterator = typename std::
+      conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  using Mie = typename std::
+      conditional<is_const, const MethodItemEntry, MethodItemEntry>::type;
+
+ private:
+
+  Iterator m_it;
+  Iterator m_end;
   /*
    * If m_it doesn't point to an MIE of type MFLOW_OPCODE, increment it until
    * it does. Otherwise do nothing.
@@ -355,72 +364,127 @@ class InstructionIterator {
   }
 
  public:
-  InstructionIterator() {}
-  InstructionIterator(IRList::iterator it, IRList::iterator end)
-      : m_it(it), m_end(end) {}
-  InstructionIterator& operator++() {
+  using difference_type = long;
+  using value_type = Mie&;
+  using pointer = Mie*;
+  using reference = Mie&;
+  using iterator_category = std::forward_iterator_tag;
+
+  InstructionIteratorImpl() {}
+  InstructionIteratorImpl(Iterator it, Iterator end)
+      : m_it(it), m_end(end) {
+    to_next_instruction();
+  }
+
+  InstructionIteratorImpl& operator++() {
     ++m_it;
     to_next_instruction();
     return *this;
   }
-  InstructionIterator operator++(int) {
+
+  InstructionIteratorImpl operator++(int) {
     auto rv = *this;
     ++(*this);
     return rv;
   }
-  MethodItemEntry& operator*() { return *m_it; }
-  MethodItemEntry* operator->() { return &*m_it; }
-  bool operator==(const InstructionIterator& ii) const {
+
+  reference operator*() const { return *m_it; }
+
+  pointer operator->() const { return &*m_it; }
+
+  bool operator==(const InstructionIteratorImpl& ii) const {
     return m_it == ii.m_it;
   }
-  bool operator!=(const InstructionIterator& ii) const {
-    return m_it != ii.m_it;
+
+  bool operator!=(const InstructionIteratorImpl& ii) const {
+    return !(m_it == ii.m_it);
   }
-  IRList::iterator unwrap() const { return m_it; }
-  void reset(IRList::iterator it) {
+
+  Iterator unwrap() const { return m_it; }
+
+  void reset(Iterator it) {
     m_it = it;
     to_next_instruction();
   }
-
-  using difference_type = long;
-  using value_type = MethodItemEntry&;
-  using pointer = MethodItemEntry*;
-  using reference = MethodItemEntry&;
-  using iterator_category = std::forward_iterator_tag;
 };
 
-class InstructionIterable {
-  IRList::iterator m_begin;
-  IRList::iterator m_end;
+template <bool is_const>
+class InstructionIterableImpl {
+ protected:
+  using Iterator = typename std::
+      conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  Iterator m_begin;
+  Iterator m_end;
+
+  // Only callable by ConstInstructionIterable. If this were public, we may try
+  // to bind const iterators to non-const members
+  template <class T>
+  InstructionIterableImpl(
+      const T& mentry_list,
+      // we add this unused parameter so we don't accidentally resolve to this
+      // constructor when we meant to call the non-const version
+      bool /* unused */)
+      : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {}
 
  public:
-  // TODO: make this const-correct
-  template <typename T>
-  explicit InstructionIterable(const T& mentry_list)
-      : InstructionIterable(const_cast<T&>(mentry_list)) {}
-  template <typename T>
-  explicit InstructionIterable(T& mentry_list)
-      : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {
-    while (m_begin != m_end) {
-      if (m_begin->type == MFLOW_OPCODE) {
-        break;
-      }
-      ++m_begin;
-    }
-  }
-  template <typename T>
-  explicit InstructionIterable(T* mentry_list)
-      : InstructionIterable(*mentry_list) {}
+  template <class T>
+  explicit InstructionIterableImpl(
+      T& mentry_list)
+      : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {}
 
-  InstructionIterator begin() const {
-    return InstructionIterator(m_begin, m_end);
+  template <typename T>
+  explicit InstructionIterableImpl(T* mentry_list)
+      : InstructionIterableImpl(*mentry_list) {}
+
+  InstructionIteratorImpl<is_const> begin() const {
+    return InstructionIteratorImpl<is_const>(m_begin, m_end);
   }
 
-  InstructionIterator end() const { return InstructionIterator(m_end, m_end); }
+  InstructionIteratorImpl<is_const> end() const {
+    return InstructionIteratorImpl<is_const>(m_end, m_end);
+  }
 
   bool empty() const { return begin() == end(); }
 
-  bool structural_equals(const InstructionIterable& other);
+  bool structural_equals(const InstructionIterableImpl& other) {
+    auto it1 = this->begin();
+    auto it2 = other.begin();
+
+    for (; it1 != this->end() && it2 != other.end(); ++it1, ++it2) {
+      auto& mie1 = *it1;
+      auto& mie2 = *it2;
+
+      if (*mie1.insn != *mie2.insn) {
+        return false;
+      }
+    }
+
+    return it1 == this->end() && it2 == other.end();
+  }
+};
+
+using InstructionIterator = InstructionIteratorImpl<false>;
+using ConstInstructionIterator = InstructionIteratorImpl<true>;
+
+using InstructionIterable = InstructionIterableImpl<false>;
+class ConstInstructionIterable : public InstructionIterableImpl<true> {
+ public:
+  // We extend the Impl so we can add the const versions of the constructors.
+  // We can't have the const constructors on the non-const iterables
+  template <class T>
+  explicit ConstInstructionIterable(
+      const T& mentry_list)
+      : InstructionIterableImpl<true>(mentry_list, false) {}
+
+  template <class T>
+  explicit ConstInstructionIterable(
+      const T* mentry_list)
+      : ConstInstructionIterable(*mentry_list) {}
+
+  template <class T>
+  explicit ConstInstructionIterable(
+      T* const mentry_list)
+      : ConstInstructionIterable(*mentry_list) {}
 };
 
 IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);

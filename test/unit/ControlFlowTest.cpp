@@ -288,7 +288,7 @@ TEST(ControlFlow, iterate1) {
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
-  for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
+  for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
     EXPECT_EQ(OPCODE_RETURN_VOID, mie.insn->opcode());
   }
 }

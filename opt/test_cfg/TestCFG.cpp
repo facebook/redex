@@ -17,7 +17,7 @@
 
 std::vector<int64_t> get_lits(IRCode* code) {
   std::vector<int64_t> result;
-  for (const auto& mie : ir_list::InstructionIterable(code)) {
+  for (const auto& mie : ir_list::ConstInstructionIterable(code)) {
     if (mie.insn->has_literal()) {
       result.push_back(mie.insn->get_literal());
     }

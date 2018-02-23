@@ -183,7 +183,7 @@ class TypeInference final
     bool first_param = true;
     // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
     // beginning of the entry block of the CFG.
-    for (auto& mie : ir_list::InstructionIterable(m_cfg.entry_block())) {
+    for (const auto& mie : ir_list::ConstInstructionIterable(m_cfg.entry_block())) {
       IRInstruction* insn = mie.insn;
       switch (insn->opcode()) {
       case IOPCODE_LOAD_PARAM_OBJECT: {

@@ -27,7 +27,8 @@ static ConstantEnvironment env_with_params(const IRCode* code,
                                            const ArgumentDomain& args) {
   size_t idx{0};
   ConstantEnvironment env;
-  for (auto& mie : ir_list::InstructionIterable(code->get_param_instructions())) {
+  for (const auto& mie :
+       ir_list::ConstInstructionIterable(code->get_param_instructions())) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
   return env;

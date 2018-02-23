@@ -44,7 +44,10 @@ struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
 namespace ir_list {
-  class InstructionIterable;
+  template <bool is_const>
+  class InstructionIterableImpl;
+
+  using InstructionIterable = InstructionIterableImpl<false>;
 }
 using SwitchIndices = std::set<int>;
 

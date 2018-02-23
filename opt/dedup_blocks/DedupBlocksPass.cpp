@@ -262,7 +262,7 @@ class DedupBlocksImpl {
   }
 
   static bool calls_constructor(Block* block) {
-    for (const auto& mie : ir_list::InstructionIterable(block)) {
+    for (const auto& mie : ir_list::ConstInstructionIterable(block)) {
       if (is_invoke(mie.insn->opcode())) {
         auto meth =
             resolve_method(mie.insn->get_method(), opcode_to_search(mie.insn));

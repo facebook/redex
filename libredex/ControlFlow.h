@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <utility>
 
 #include "FixpointIterators.h"
@@ -62,9 +63,12 @@ class Edge final {
 
 using BlockId = size_t;
 
-class InstructionIterator;
+template <bool is_const>
+class InstructionIteratorImpl;
 
 } // namespace cfg
+
+class ControlFlowGraph;
 
 // TODO: Put the rest of this header under the cfg namespace too
 
@@ -84,6 +88,8 @@ class Block {
   }
   IRList::iterator begin();
   IRList::iterator end();
+  IRList::const_iterator begin() const;
+  IRList::const_iterator end() const;
   IRList::reverse_iterator rbegin() { return IRList::reverse_iterator(end()); }
   IRList::reverse_iterator rend() { return IRList::reverse_iterator(begin()); }
 
@@ -94,7 +100,8 @@ class Block {
 
  private:
   friend class ControlFlowGraph;
-  friend class cfg::InstructionIterator;
+  friend class cfg::InstructionIteratorImpl<false>;
+  friend class cfg::InstructionIteratorImpl<true>;
   friend void transform::replace_block(IRCode*, Block*, Block*);
 
   // return an iterator to the goto in this block (if there is one)
@@ -201,7 +208,8 @@ class ControlFlowGraph {
   using Boundaries =
       std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<cfg::BlockId, Block*>;
-  friend class cfg::InstructionIterator;
+  friend class cfg::InstructionIteratorImpl<false>;
+  friend class cfg::InstructionIteratorImpl<true>;
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
@@ -288,100 +296,130 @@ class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
   static NodeId target(const Graph&, const EdgeId& e) { return e->target(); }
 };
 
-class InstructionIterator {
-  ControlFlowGraph& m_cfg;
-  ControlFlowGraph::Blocks::iterator m_block;
+template <bool is_const>
+class InstructionIteratorImpl {
+  using Cfg = typename std::
+      conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
+  using Mie = typename std::
+      conditional<is_const, const MethodItemEntry, MethodItemEntry>::type;
+  using Iterator = typename std::
+      conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+
+  Cfg& m_cfg;
+  ControlFlowGraph::Blocks::const_iterator m_block;
 
   // Depends on C++14 Null Forward Iterators
   // Assuming the default constructed InstructionIterator compares equal
   // to other default constructed InstructionIterator
   //
   // boost.org/doc/libs/1_58_0/doc/html/container/Cpp11_conformance.html
-  ir_list::InstructionIterator m_it;
+  ir_list::InstructionIteratorImpl<is_const> m_it;
 
   // go to beginning of next block, skipping empty blocks
   void to_next_block() {
-    while (m_block != m_cfg.m_blocks.end() &&
-           m_it == ir_list::InstructionIterable(m_block->second).end()) {
+    while (
+        m_block != m_cfg.m_blocks.end() &&
+        m_it ==
+            ir_list::InstructionIterableImpl<is_const>(m_block->second).end()) {
       ++m_block;
       if (m_block != m_cfg.m_blocks.end()) {
-        m_it = ir_list::InstructionIterable(m_block->second).begin();
+        m_it =
+            ir_list::InstructionIterableImpl<is_const>(m_block->second).begin();
       } else {
-        m_it = ir_list::InstructionIterator();
+        m_it = ir_list::InstructionIteratorImpl<is_const>();
       }
     }
   }
 
  public:
-  InstructionIterator() = delete;
-  explicit InstructionIterator(ControlFlowGraph& cfg, bool is_begin) : m_cfg(cfg) {
+  using reference = Mie&;
+  using difference_type = long;
+  using value_type = Mie&;
+  using pointer = Mie*;
+  using iterator_category = std::forward_iterator_tag;
+
+  InstructionIteratorImpl() = delete;
+  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin)
+      : m_cfg(cfg) {
     always_assert(m_cfg.editable());
     if (is_begin) {
       m_block = m_cfg.m_blocks.begin();
-      m_it = ir_list::InstructionIterable(m_block->second).begin();
+      m_it =
+          ir_list::InstructionIterableImpl<is_const>(m_block->second).begin();
     } else {
       m_block = m_cfg.m_blocks.end();
     }
   }
 
-  InstructionIterator& operator++() {
+  InstructionIteratorImpl<is_const>& operator++() {
     assert_not_end();
     ++m_it;
     to_next_block();
     return *this;
   }
 
-  InstructionIterator operator++(int) {
+  InstructionIteratorImpl<is_const> operator++(int) {
     auto result = *this;
     ++(*this);
     return result;
   }
 
-  MethodItemEntry& operator*() {
+  reference operator*() const {
     assert_not_end();
     return *m_it;
   }
 
-  MethodItemEntry* operator->() {
-    return &(this->operator*());
-  }
+  pointer operator->() const { return &(this->operator*()); }
 
-  bool operator==(const InstructionIterator& other) {
+  bool operator==(const InstructionIteratorImpl& other) const {
     return this->m_block == other.m_block && this->m_it == other.m_it;
   }
 
-  bool operator!=(const InstructionIterator& other) { return !(*this == other); }
+  bool operator!=(const InstructionIteratorImpl& other) const {
+    return !(*this == other);
+  }
 
   void assert_not_end() const {
     always_assert(m_block != m_cfg.m_blocks.end());
-    always_assert(m_it != ir_list::InstructionIterable(m_block->second).end());
+    always_assert(
+        m_it !=
+        ir_list::InstructionIterableImpl<is_const>(m_block->second).end());
   }
 
-  IRList::iterator unwrap() const { return m_it.unwrap(); }
-
-  using difference_type = long;
-  using value_type = MethodItemEntry&;
-  using pointer = MethodItemEntry*;
-  using reference = MethodItemEntry&;
-  using iterator_category = std::forward_iterator_tag;
+  Iterator unwrap() const {
+    return m_it.unwrap();
+  }
 };
 
 // Iterate through all IRInstructions in the CFG.
 // Instructions in the same block are processed in order.
 // Blocks are iterated in an undefined order
-class InstructionIterable {
-  ControlFlowGraph& m_cfg;
+template <bool is_const>
+class InstructionIterableImpl {
+  using Cfg = typename std::conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
+  using Iterator = typename std::conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  Cfg& m_cfg;
 
  public:
-  InstructionIterable() = delete;
-  explicit InstructionIterable(ControlFlowGraph& cfg) : m_cfg(cfg) {}
+  InstructionIterableImpl() = delete;
+  explicit InstructionIterableImpl(Cfg& cfg) : m_cfg(cfg) {}
 
-  InstructionIterator begin() { return InstructionIterator(m_cfg, true); }
+  InstructionIteratorImpl<is_const> begin() {
+    return InstructionIteratorImpl<is_const>(m_cfg, true);
+  }
 
-  InstructionIterator end() { return InstructionIterator(m_cfg, false); }
+  InstructionIteratorImpl<is_const> end() {
+    return InstructionIteratorImpl<is_const>(m_cfg, false);
+  }
 
   bool empty() { return begin() == end(); }
 };
+
+using InstructionIterator = InstructionIteratorImpl<false>;
+using ConstInstructionIterator = InstructionIteratorImpl<true>;
+
+using InstructionIterable = InstructionIterableImpl<false>;
+using ConstInstructionIterable = InstructionIterableImpl<true>;
 
 } // namespace cfg
 

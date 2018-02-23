@@ -16,7 +16,7 @@ bool default_constructor(const DexMethod* meth) {
           is_constructor(meth) &&
           has_no_args(meth) &&
           has_code(meth)) {
-    auto ii = ir_list::InstructionIterable(meth->get_code());
+    auto ii = ir_list::ConstInstructionIterable(meth->get_code());
     auto it = ii.begin();
     auto end = ii.end();
     auto op = it->insn->opcode();

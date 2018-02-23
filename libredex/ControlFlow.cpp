@@ -71,6 +71,22 @@ IRList::iterator Block::end() {
   }
 }
 
+IRList::const_iterator Block::begin() const {
+  if (m_parent->editable()) {
+    return m_entries.begin();
+  } else {
+    return m_begin;
+  }
+}
+
+IRList::const_iterator Block::end() const {
+  if (m_parent->editable()) {
+    return m_entries.end();
+  } else {
+    return m_end;
+  }
+}
+
 void Block::remove_debug_line_info() {
   for (MethodItemEntry& mie : *this) {
     if (mie.type == MFLOW_POSITION) {

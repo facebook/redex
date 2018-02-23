@@ -141,7 +141,8 @@ using namespace impl;
  */
 static void check_load_params(DexMethod* method) {
   auto* code = method->get_code();
-  auto param_ops = ir_list::InstructionIterable(code->get_param_instructions());
+  auto params = code->get_param_instructions();
+  auto param_ops = ir_list::InstructionIterable(params);
   if (param_ops.empty()) {
     return;
   }
