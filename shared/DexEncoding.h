@@ -12,6 +12,9 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <stdint.h>
+#include <string>
+
 /*
  * LEB128 is a DEX data type.  It was borrowed by DEX from the DWARF3
  * specification.  Dex uses a subset of it, which it uses for encoding of

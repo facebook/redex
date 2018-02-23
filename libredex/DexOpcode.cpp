@@ -10,6 +10,7 @@
 #include "DexOpcode.h"
 
 #include "Debug.h"
+#include "Show.h"
 
 namespace dex_opcode {
 
