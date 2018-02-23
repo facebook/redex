@@ -10,7 +10,7 @@
 #pragma once
 
 #include "dump-oat.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 #include <native/museum/5.0.0/elf.h>
 

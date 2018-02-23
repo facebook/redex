@@ -8,6 +8,9 @@
  */
 
 #include "Formatters.h"
+
+#include "DexEncoding.h"
+
 #include <ios>
 #include <sstream>
 #include <iomanip>

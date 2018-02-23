@@ -10,14 +10,14 @@
 #pragma once
 
 #include "memory-accounter.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 #include <cstring>
 #include <vector>
 
-#define PACKED __attribute__((packed))
+#define PACK __attribute__((packed))
 
-struct PACKED DexClassDef {
+struct PACK DexClassDef {
   uint16_t class_idx;
   uint16_t pad1;
   uint32_t access_flags;
@@ -30,7 +30,7 @@ struct PACKED DexClassDef {
   uint32_t static_values_off;
 };
 
-struct PACKED VdexFileHeader {
+struct PACK VdexFileHeader {
   uint8_t magic_[4];
   uint8_t version_[4];
   uint32_t number_of_dex_files_;
@@ -42,7 +42,7 @@ struct PACKED VdexFileHeader {
 // Header for dex files. Note that this currently consumes the entire
 // contents of the dex file (in addition to the header proper) for the
 // purposes of memory-accounting.
-struct PACKED DexFileHeader {
+struct PACK DexFileHeader {
   uint32_t magic;
   uint32_t version;
   uint32_t checksum;
@@ -80,7 +80,7 @@ struct PACKED DexFileHeader {
   }
 };
 
-struct PACKED MethodId {
+struct PACK MethodId {
   uint16_t class_idx; // index into type_ids_ array for defining class
   uint16_t proto_idx; // index into proto_ids_ array for method prototype
   uint32_t name_idx; // index into string_ids_ array for method name

@@ -62,6 +62,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/opt/virtual_scope \
+	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
 	-I$(top_srcdir)/util \
@@ -83,6 +84,7 @@ libredex_la_SOURCES = \
 	libredex/DexAnnotation.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
+	libredex/DexEncoding.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
@@ -143,6 +145,7 @@ libredex_la_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
+	shared/DexDefs.cpp \
 	util/Sha1.cpp
 
 libredex_la_LIBADD = \

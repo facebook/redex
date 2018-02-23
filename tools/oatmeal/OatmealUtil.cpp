@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "util.h"
+#include "OatmealUtil.h"
 #include <cerrno>
 #include <cstring>
 #include <sys/stat.h>

@@ -9,7 +9,7 @@
 
 #include "dump-oat.h"
 #include "memory-accounter.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 #include <getopt.h>
 

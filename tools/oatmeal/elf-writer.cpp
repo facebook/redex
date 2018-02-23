@@ -8,7 +8,7 @@
  */
 
 #include "elf-writer.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 const std::string& ElfStringTable::at(int orig_idx) const {
   auto idx = orig_idx;

@@ -8,6 +8,7 @@
  */
 
 #include "DexDebugInstruction.h"
+#include "DexEncoding.h"
 #include "Formatters.h"
 #include "PrintUtil.h"
 #include "RedexDump.h"

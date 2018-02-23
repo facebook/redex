@@ -24,6 +24,7 @@
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
+#include "DexEncoding.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "RedexContext.h"
