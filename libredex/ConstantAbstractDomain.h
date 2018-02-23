@@ -17,6 +17,7 @@
 
 #include "AbstractDomain.h"
 #include "Debug.h"
+#include "Show.h"
 
 /*
  * This abstract domain combinator constructs the lattice of constants of a

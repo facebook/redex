@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <string>
 
+#include "Show.h"
+
 enum DexOpcode : uint16_t;
 
 namespace opcode {

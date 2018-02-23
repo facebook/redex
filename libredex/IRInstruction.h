@@ -10,6 +10,7 @@
 #pragma once
 
 #include "DexInstruction.h"
+#include "Show.h"
 
 /*
  * Our IR is very similar to the Dalvik instruction set, but with a few tweaks

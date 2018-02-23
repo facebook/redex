@@ -11,7 +11,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "IRInstruction.h"
+#include "Show.h"
 
 namespace regalloc {
 

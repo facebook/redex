@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include "Debug.h"
+#include <sstream>
+#include <stdexcept>
 
 /*
  * LEB128 is a DEX data type.  It was borrowed by DEX from the DWARF3
@@ -159,7 +160,7 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   uint8_t v2 = *s++;
   if ((v2 & 0xc0) != 0x80) {
     /* Invalid string. */
-    always_assert_log(false, "Invalid 2nd byte on mutf8 string");
+    throw std::invalid_argument("Invalid 2nd byte on mutf8 string");
   }
   /* Two byte code point */
   if ((v & 0xe0) == 0xc0) {
@@ -170,12 +171,12 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
     uint8_t v3 = *s++;
     if ((v2 & 0xc0) != 0x80) {
       /* Invalid string. */
-      always_assert_log(false, "Invalid 3rd byte on mutf8 string");
+      throw std::invalid_argument("Invalid 3rd byte on mutf8 string");
     }
     return (v & 0x1f) << 12 | (v2 & 0x3f) << 6 | (v3 & 0x3f);
   }
   /* Invalid string. */
-  always_assert_log(false, "Invalid size encoding mutf8 string");
+  throw std::invalid_argument("Invalid size encoding mutf8 string");
 }
 
 inline uint32_t length_of_utf8_string(const char* s) {
@@ -206,7 +207,9 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
   char buf[4];
   int idx = 0;
   if (size == 1) {
-    assert(ival <= 0x7F);
+    if (ival > 0x7F) {
+      throw std::invalid_argument("Invalid utf8_char for encoding to mutf8 string");
+    }
     if (ival == 0x00) { // \u0000 in 2 bytes
       buf[idx++] = 0xC0;
       buf[idx++] = 0x80;
@@ -226,7 +229,9 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
     buf[idx++] = byte2;
     buf[idx++] = byte3;
   } else {
-    always_assert_log(false, "Unexpected char size: %u", size);
+    std::ostringstream exception_message;
+    exception_message << "Unexpected char size: " << size;
+    throw std::invalid_argument(exception_message.str());
   }
 
   buf[idx] = 0x00;

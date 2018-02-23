@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <string>
 
+#include "Show.h"
+
 /*
  * Dex opcode formats as defined by the spec; the _d and _s variants indicate
  * whether the first register parameter is a destination or source register.
