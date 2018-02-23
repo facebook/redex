@@ -37,7 +37,7 @@ struct IRInstructionList {
   }
 
   explicit IRInstructionList(IRCode* mt) {
-    for (auto& mie : ir_list::InstructionIterable(mt)) {
+    for (auto& mie : InstructionIterable(mt)) {
       instructions.emplace_back(mie.insn); // moves insn into unique_ptr
     }
   }

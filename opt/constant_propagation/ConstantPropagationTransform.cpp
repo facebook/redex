@@ -124,7 +124,7 @@ Transform::Stats Transform::apply(
     if (env.is_bottom()) {
       continue;
     }
-    for (auto& mie : ir_list::InstructionIterable(block)) {
+    for (auto& mie : InstructionIterable(block)) {
       intra_cp.analyze_instruction(mie.insn, &env);
       simplify_instruction(mie.insn, env);
     }

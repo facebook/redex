@@ -106,7 +106,7 @@ private:
     const IRInstruction* insn) {
     assert(insn->opcode() == OPCODE_INVOKE_SUPER);
     size_t src_idx{0};
-    for (const auto& mie : ir_list::ConstInstructionIterable(
+    for (const auto& mie : InstructionIterable(
              meth->get_code()->get_param_instructions())) {
       auto load_param = mie.insn;
       if (load_param->dest() != insn->src(src_idx++)) {
@@ -158,7 +158,7 @@ private:
     // container of instructions
     std::vector<IRInstruction*> insns;
     for (const auto& mie :
-         ir_list::ConstInstructionIterable(meth->get_code())) {
+         InstructionIterable(meth->get_code())) {
       if (opcode::is_load_param(mie.insn->opcode())) {
         continue;
       }

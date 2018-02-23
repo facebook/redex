@@ -103,7 +103,7 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
   auto code = meth->get_code();
   code->set_registers_size(code->get_registers_size() + 1);
   IRInstruction* last = nullptr;
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     IRInstruction* invoke = nullptr;
     auto op = insn->opcode();
@@ -181,7 +181,7 @@ void update_impl_refereces(Scope& scope, Unterface& unterface) {
         return !find_impl(meth->get_class(), unterface);
       },
       [&](DexMethod* meth, IRCode& code) {
-        for (auto& mie : ir_list::InstructionIterable(&code)) {
+        for (auto& mie : InstructionIterable(&code)) {
           auto insn = mie.insn;
           auto op = insn->opcode();
           switch (op) {
@@ -314,7 +314,7 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
 
   // collect all field access that use the outer field
   std::vector<IRInstruction*> field_ops;
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_iget(insn->opcode())) {
       if (insn->get_field() == outer) {

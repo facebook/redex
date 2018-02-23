@@ -28,7 +28,7 @@ static ConstantEnvironment env_with_params(const IRCode* code,
   size_t idx{0};
   ConstantEnvironment env;
   for (const auto& mie :
-       ir_list::ConstInstructionIterable(code->get_param_instructions())) {
+       InstructionIterable(code->get_param_instructions())) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
   return env;
@@ -71,7 +71,7 @@ void simplify_constant_fields(const Scope& scope,
     if (code == nullptr) {
       return;
     }
-    for (auto& mie : ir_list::InstructionIterable(code)) {
+    for (auto& mie : InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
       if (!insn->has_field()) {
@@ -130,7 +130,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
 
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp.get_entry_state_at(block);
-    for (auto& mie : ir_list::InstructionIterable(block)) {
+    for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       if (is_invoke(insn->opcode())) {
         ArgumentDomain out_args;
@@ -197,12 +197,12 @@ void insert_runtime_input_checks(const ConstantEnvironment& env,
   auto* code = method->get_code();
   auto param_insns = code->get_param_instructions();
   auto insert_it = param_insns.end();
-  auto insn_it = ir_list::InstructionIterable(code).begin();
+  auto insn_it = InstructionIterable(code).begin();
   if (!is_static(method)) {
     // Skip the load-param instruction for the `this` argument
     ++insn_it;
   }
-  // We do not want to iterate over ir_list::InstructionIterable(param_insns) here
+  // We do not want to iterate over InstructionIterable(param_insns) here
   // because we are inserting MIEs that will move the end iterator of
   // param_insns
   for (uint32_t i = 0; i < arg_types.size(); ++i, ++insn_it) {
@@ -375,7 +375,7 @@ class Propagator {
       intra_cp.run(env_with_params(code, args.get(nullptr)));
       for (Block* b : cfg.blocks()) {
         auto state = intra_cp.get_entry_state_at(b);
-        for (auto& mie : ir_list::InstructionIterable(b)) {
+        for (auto& mie : InstructionIterable(b)) {
           auto* insn = mie.insn;
           auto op = insn->opcode();
           if (is_sput(op)) {

@@ -246,7 +246,7 @@ class Analyzer final
     m_environments.reserve(m_cfg.blocks().size() * 16);
     for (Block* block : m_cfg.blocks()) {
       AbstractAccessPathEnvironment current_state = get_entry_state_at(block);
-      for (auto& mie : ir_list::InstructionIterable(block)) {
+      for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         m_environments.emplace(insn, current_state);
         analyze_instruction(insn, &current_state);
@@ -282,7 +282,7 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   auto init = isa_impl::AbstractAccessPathEnvironment::top();
   size_t parameter = 0;
   for (const auto& mie :
-       ir_list::ConstInstructionIterable(code->get_param_instructions())) {
+       InstructionIterable(code->get_param_instructions())) {
     switch (mie.insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       init.set(mie.insn->dest(),

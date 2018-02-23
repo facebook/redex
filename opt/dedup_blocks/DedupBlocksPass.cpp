@@ -52,8 +52,8 @@ struct BlockAsKey {
   // Structural equality of opcodes except branch targets are ignored
   // because they are unknown until we sync back to DexInstructions.
   bool same_code(const BlockAsKey& other) const {
-    return ir_list::InstructionIterable(block).structural_equals(
-        ir_list::InstructionIterable(other.block));
+    return InstructionIterable(block).structural_equals(
+        InstructionIterable(other.block));
   }
 
   // The blocks must also have the exact same successors
@@ -91,7 +91,7 @@ struct BlockAsKey {
 struct BlockHasher {
   hash_t operator()(const BlockAsKey& key) const {
     hash_t result = 0;
-    for (auto& mie : ir_list::InstructionIterable(key.block)) {
+    for (auto& mie : InstructionIterable(key.block)) {
       result ^= mie.insn->hash();
     }
     return result;
@@ -262,7 +262,7 @@ class DedupBlocksImpl {
   }
 
   static bool calls_constructor(Block* block) {
-    for (const auto& mie : ir_list::ConstInstructionIterable(block)) {
+    for (const auto& mie : InstructionIterable(block)) {
       if (is_invoke(mie.insn->opcode())) {
         auto meth =
             resolve_method(mie.insn->get_method(), opcode_to_search(mie.insn));
@@ -336,13 +336,13 @@ class DedupBlocksImpl {
   }
 
   static bool has_opcodes(Block* block) {
-    const auto& it = ir_list::InstructionIterable(block);
+    const auto& it = InstructionIterable(block);
     return it.begin() != it.end();
   }
 
   static size_t num_opcodes(Block* block) {
     size_t result = 0;
-    const auto& iterable = ir_list::InstructionIterable(block);
+    const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       result++;
     }

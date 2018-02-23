@@ -423,6 +423,15 @@ using ConstInstructionIterable = InstructionIterableImpl<true>;
 
 } // namespace cfg
 
+inline cfg::InstructionIterable InstructionIterable(ControlFlowGraph& cfg) {
+  return cfg::InstructionIterable(cfg);
+}
+
+inline cfg::ConstInstructionIterable InstructionIterable(
+    const ControlFlowGraph& cfg) {
+  return cfg::ConstInstructionIterable(cfg);
+}
+
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
 
 /*

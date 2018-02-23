@@ -23,7 +23,7 @@
 
 int count_sgets(ControlFlowGraph& cfg) {
   int sgets = 0;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     TRACE(RME, 1, "%s\n", SHOW(mie.insn));
     if (is_sget(mie.insn->opcode())) {
       sgets++;

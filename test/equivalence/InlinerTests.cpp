@@ -65,7 +65,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
 
   void transform_method(DexMethod* m) override {
     IRList::iterator invoke_it;
-    auto ii = ir_list::InstructionIterable(m->get_code());
+    auto ii = InstructionIterable(m->get_code());
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       auto insn = it->insn;
@@ -136,7 +136,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
   void transform_method(DexMethod* m) override {
     IRList::iterator invoke_it;
-    auto ii = ir_list::InstructionIterable(m->get_code());
+    auto ii = InstructionIterable(m->get_code());
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       auto insn = it->insn;

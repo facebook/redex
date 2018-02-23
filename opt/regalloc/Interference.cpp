@@ -263,7 +263,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
-  auto ii = ir_list::InstructionIterable(code);
+  auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     GraphBuilder::update_node_constraints(it.unwrap(), range_set, &graph);
   }

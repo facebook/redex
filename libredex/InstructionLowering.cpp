@@ -142,7 +142,7 @@ using namespace impl;
 static void check_load_params(DexMethod* method) {
   auto* code = method->get_code();
   auto params = code->get_param_instructions();
-  auto param_ops = ir_list::InstructionIterable(params);
+  auto param_ops = InstructionIterable(params);
   if (param_ops.empty()) {
     return;
   }
@@ -176,7 +176,7 @@ static void check_load_params(DexMethod* method) {
   }
   always_assert(args_it == args_list.end());
   // check that the params are at the end of the frame
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       always_assert_log(insn->dest() < next_ins,

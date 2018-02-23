@@ -203,7 +203,7 @@ class FinalInlineImpl {
     always_assert_log(
         is_static(clinit) && is_constructor(clinit),
         "static constructor doesn't have the proper access bits set\n");
-    for (auto& mie : ir_list::InstructionIterable(clinit->get_code())) {
+    for (auto& mie : InstructionIterable(clinit->get_code())) {
       auto opcode = mie.insn;
       if (opcode->has_field() && is_sput(opcode->opcode())) {
         auto field = resolve_field(opcode->get_field(), FieldSearch::Static);
@@ -251,7 +251,7 @@ class FinalInlineImpl {
             return 0;
           }
           std::vector<IRList::iterator> rewrites;
-          auto ii = ir_list::InstructionIterable(code);
+          auto ii = InstructionIterable(code);
           for (auto it = ii.begin(); it != ii.end(); ++it) {
             auto* insn = it->insn;
             if (!is_sget(insn->opcode())) {
@@ -337,7 +337,7 @@ class FinalInlineImpl {
    */
   bool try_replace_clinit(DexClass* clazz, DexMethod* clinit) {
     std::vector<std::pair<IRInstruction*, IRInstruction*>> const_sputs;
-    auto ii = ir_list::InstructionIterable(clinit->get_code());
+    auto ii = InstructionIterable(clinit->get_code());
     auto end = ii.end();
     // Verify the entire opcodes in this clinit are (const, sput)* pairs
     // followed by return-void.
@@ -558,7 +558,7 @@ class FinalInlineImpl {
       DexMethod* clinit,
       std::unordered_map<DexField*, std::vector<FieldDependency>>& deps) {
     auto code = clinit->get_code();
-    auto ii = ir_list::InstructionIterable(code);
+    auto ii = InstructionIterable(code);
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       // Check for sget from static final

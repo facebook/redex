@@ -43,7 +43,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(!(method->get_access() & ACC_STATIC));
 
   auto code = method->get_code();
-  auto ii = ir_list::InstructionIterable(code);
+  auto ii = InstructionIterable(code);
   auto this_insn = ii.begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto regs_size = code->get_registers_size();
@@ -196,7 +196,7 @@ std::vector<DexType*> RemoveBuildersPass::created_builders(DexMethod* m) {
   if (!code) {
     return builders;
   }
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       DexType* cls = insn->get_type();

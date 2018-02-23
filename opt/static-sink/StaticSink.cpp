@@ -249,7 +249,7 @@ bool illegal_access(DexMethod* method) {
       return true;
     }
   }
-  for (auto const& mie : ir_list::InstructionIterable(code)) {
+  for (auto const& mie : InstructionIterable(code)) {
     auto op = mie.insn;
     if (op->opcode() == OPCODE_INVOKE_SUPER) {
       return true;

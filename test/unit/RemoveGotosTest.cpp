@@ -79,7 +79,7 @@ TEST_F(RemoveGotosTest, simplifySinglePath) {
   m_method->get_code()->build_cfg();
   EXPECT_EQ(1, m_method->get_code()->cfg().blocks().size());
 
-  auto ins = ir_list::InstructionIterable(m_method->get_code());
+  auto ins = InstructionIterable(m_method->get_code());
   auto iter = ins.begin();
   for (auto i = 0; i < 4; ++i) {
     EXPECT_EQ(iter->insn->opcode(), OPCODE_ADD_INT);
@@ -199,7 +199,7 @@ TEST_F(RemoveGotosTest, preserveSimplifiedMethod) {
 
   RemoveGotosPass().run(m_method);
 
-  auto ins = ir_list::InstructionIterable(m_method->get_code());
+  auto ins = InstructionIterable(m_method->get_code());
   auto iter = ins.begin();
   for (auto i = 0; i < 3; ++i) {
     EXPECT_EQ(iter->insn->opcode(), OPCODE_ADD_INT);

@@ -97,7 +97,7 @@ class AliasFixpointIterator final
                     AliasedRegisters& aliases,
                     std::unordered_set<IRInstruction*>* deletes) const {
 
-    const auto& iterable = ir_list::InstructionIterable(block);
+    const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); ++it) {
       auto insn = it->insn;
       auto op = insn->opcode();
@@ -421,7 +421,7 @@ Stats CopyPropagation::run(IRCode* code) {
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (opcode::has_range_form(insn->opcode())) {
       insn->denormalize_registers();

@@ -288,7 +288,7 @@ TEST(ControlFlow, iterate1) {
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
-  for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
+  for (const auto& mie : InstructionIterable(code->cfg())) {
     EXPECT_EQ(OPCODE_RETURN_VOID, mie.insn->opcode());
   }
 }
@@ -316,7 +316,7 @@ TEST(ControlFlow, iterate2) {
   // iterate within a block in the correct order
   // but visit the blocks in any order
   std::unordered_map<IRInstruction*, size_t> times_encountered;
-  auto iterable = cfg::InstructionIterable(code->cfg());
+  auto iterable = InstructionIterable(code->cfg());
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -346,7 +346,7 @@ TEST(ControlFlow, end) {
   auto& cfg = code->cfg();
   for (int i = 0; i < 100; i++) {
     auto a = new cfg::InstructionIterable(cfg);
-    EXPECT_TRUE(a->end() == cfg::InstructionIterable(cfg).end());
+    EXPECT_TRUE(a->end() == InstructionIterable(cfg).end());
     delete a;
   }
 

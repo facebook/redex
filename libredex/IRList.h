@@ -480,11 +480,6 @@ class ConstInstructionIterable : public InstructionIterableImpl<true> {
   explicit ConstInstructionIterable(
       const T* mentry_list)
       : ConstInstructionIterable(*mentry_list) {}
-
-  template <class T>
-  explicit ConstInstructionIterable(
-      T* const mentry_list)
-      : ConstInstructionIterable(*mentry_list) {}
 };
 
 IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);
@@ -492,3 +487,23 @@ IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);
 IRInstruction* move_result_pseudo_of(IRList::iterator it);
 
 } // namespace ir_list
+
+template <class T>
+inline ir_list::InstructionIterable InstructionIterable(T& t) {
+  return ir_list::InstructionIterable(t);
+}
+
+template <class T>
+inline ir_list::InstructionIterable InstructionIterable(T* t) {
+  return ir_list::InstructionIterable(*t);
+}
+
+template <class T>
+inline ir_list::ConstInstructionIterable InstructionIterable(const T& t) {
+  return ir_list::ConstInstructionIterable(t);
+}
+
+template <class T>
+inline ir_list::ConstInstructionIterable InstructionIterable(const T* t) {
+  return ir_list::ConstInstructionIterable(*t);
+}

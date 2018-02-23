@@ -23,7 +23,7 @@
 
 int count_someFunc_calls(ControlFlowGraph& cfg) {
   int num_some_func_calls = 0;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));
     if (mie.insn->has_method()) {
       DexMethodRef* called = mie.insn->get_method();

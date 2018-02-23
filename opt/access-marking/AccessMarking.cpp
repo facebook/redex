@@ -105,7 +105,7 @@ std::unordered_set<DexMethod*> find_private_methods(
 void fix_call_sites_private(const std::vector<DexClass*>& scope,
                             const std::unordered_set<DexMethod*>& privates) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    for (const MethodItemEntry& mie : ir_list::InstructionIterable(code)) {
+    for (const MethodItemEntry& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) continue;
       auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));

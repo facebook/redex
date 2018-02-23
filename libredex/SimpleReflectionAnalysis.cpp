@@ -285,7 +285,7 @@ class Analyzer final
     m_environments.reserve(cfg.blocks().size() * 16);
     for (Block* block : cfg.blocks()) {
       AbstractObjectEnvironment current_state = get_entry_state_at(block);
-      for (auto& mie : ir_list::InstructionIterable(block)) {
+      for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         m_environments.emplace(insn, current_state);
         analyze_instruction(insn, &current_state);

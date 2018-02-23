@@ -87,7 +87,7 @@ TEST(SimpleReflectionAnalysisTest, nominalCases) {
       for (const auto& method : cls->get_dmethods()) {
         if (method->get_name()->str() == "main") {
           SimpleReflectionAnalysis analysis(method);
-          for (auto& mie : ir_list::InstructionIterable(method->get_code())) {
+          for (auto& mie : InstructionIterable(method->get_code())) {
             IRInstruction* insn = mie.insn;
             if (insn->opcode() == OPCODE_INVOKE_STATIC &&
                 insn->get_method()->get_name()->str() == "check") {

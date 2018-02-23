@@ -128,7 +128,7 @@ TEST(StringSimplification, testConstString) {
   EXPECT_TRUE(std::any_of(arr.begin(), arr.end(), [](auto x) {
     return "ONE TWO THREE" == x->str();
   }));
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_VIRTUAL);
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_DIRECT);
     EXPECT_NE(mie.insn->opcode(), OPCODE_NEW_INSTANCE);
@@ -183,7 +183,7 @@ TEST(StringSimplification, testMultipleConstantBuilders) {
   EXPECT_TRUE(std::any_of(arr.begin(), arr.end(), [](auto x) {
     return "TWOONETHREE" == x->str();
   }));
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_VIRTUAL);
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_DIRECT);
     EXPECT_NE(mie.insn->opcode(), OPCODE_NEW_INSTANCE);
@@ -236,7 +236,7 @@ TEST(StringSimplification, testInterleavedInstructions) {
   EXPECT_TRUE(std::any_of(arr.begin(), arr.end(), [](auto x) {
     return "THREETWOONE" == x->str();
   }));
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_VIRTUAL);
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_DIRECT);
     EXPECT_NE(mie.insn->opcode(), OPCODE_NEW_INSTANCE);
@@ -365,7 +365,7 @@ TEST(StringSimplification, passStringBuilderInMethod) {
   code->set_registers_size(9001);
   runner.run(new StringSimplificationPass());
   EXPECT_EQ(10, code->count_opcodes());
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     if ((mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          mie.insn->opcode() == OPCODE_INVOKE_DIRECT) &&
         mie.insn->get_method()->get_class() ==
@@ -421,7 +421,7 @@ TEST(StringSimplification, oneKnownOneUnkownBuilder) {
   EXPECT_TRUE(std::any_of(
       arr.begin(), arr.end(), [](auto x) { return "foobar" == x->str(); }));
   auto count = 0;
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     if (mie.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
         mie.insn->opcode() == OPCODE_INVOKE_DIRECT) {
       ASSERT_EQ(5, mie.insn->src(0));
@@ -524,7 +524,7 @@ TEST(StringSimplification, registerAliasingTest) {
   EXPECT_TRUE(std::any_of(arr.begin(), arr.end(), [](auto x) {
     return "TESTTESTTESTTEST" == x->str();
   }));
-  for (auto& mie : ir_list::InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(code)) {
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_DIRECT);
     EXPECT_NE(mie.insn->opcode(), OPCODE_INVOKE_VIRTUAL);
   }

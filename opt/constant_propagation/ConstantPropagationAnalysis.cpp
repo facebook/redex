@@ -229,7 +229,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 void FixpointIterator::analyze_node(const NodeId& block,
                                     ConstantEnvironment* state_at_entry) const {
   TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
-  for (auto& mie : ir_list::InstructionIterable(block)) {
+  for (auto& mie : InstructionIterable(block)) {
     analyze_instruction(mie.insn, state_at_entry);
   }
 }

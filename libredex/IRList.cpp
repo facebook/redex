@@ -338,7 +338,7 @@ void IRList::remove_switch_case(IRInstruction* insn) {
   TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(this));
   // Check if we are inside switch method.
   const MethodItemEntry* switch_mei {nullptr};
-  for (const auto& mei : ir_list::ConstInstructionIterable(m_list)) {
+  for (const auto& mei : InstructionIterable(m_list)) {
     auto op = mei.insn->opcode();
     if (opcode::is_load_param(op)) {
       continue;

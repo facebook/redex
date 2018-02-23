@@ -17,7 +17,7 @@
 
 int count_ifs(ControlFlowGraph& cfg) {
   size_t num_ifs = 0;
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (is_conditional_branch(mie.insn->opcode())) {
       num_ifs++;
     }
@@ -27,7 +27,7 @@ int count_ifs(ControlFlowGraph& cfg) {
 
 int count_ops(ControlFlowGraph& cfg, IROpcode op) {
   size_t result = 0;
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->opcode() == op) {
       result++;
     }

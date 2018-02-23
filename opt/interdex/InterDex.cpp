@@ -400,7 +400,7 @@ std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
       },
       [&](DexMethod* meth, const IRCode& code) {
         auto base_cls = type_class(meth->get_class());
-        for (auto& mie : ir_list::InstructionIterable(meth->get_code())) {
+        for (auto& mie : InstructionIterable(meth->get_code())) {
           auto inst = mie.insn;
           DexClass* called_cls = nullptr;
           if (inst->has_method()) {

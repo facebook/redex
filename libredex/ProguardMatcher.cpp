@@ -367,7 +367,7 @@ bool method_level_match(RegexMap& regex_map,
 void keep_clinits(DexClass* cls) {
   for (auto method : cls->get_dmethods()) {
     if (is_clinit(method) && method->get_code()) {
-      auto ii = ir_list::InstructionIterable(method->get_code());
+      auto ii = InstructionIterable(method->get_code());
       auto it = ii.begin();
       while (opcode::is_load_param(it->insn->opcode())) {
         ++it;
