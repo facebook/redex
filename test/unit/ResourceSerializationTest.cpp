@@ -180,8 +180,8 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
     if (type == android::ResXMLParser::START_TAG) {
       EXPECT_LT(tag_count, 5);
       size_t len;
-      android::String16 tag(parser.getElementName(&len));
-      auto actual_chars = android::String8(tag).string();
+      android::String8 tag(parser.getElementName(&len));
+      auto actual_chars = tag.string();
       auto expected_chars = expected_xml_tags[tag_count].c_str();
       EXPECT_STREQ(actual_chars, expected_chars);
       tag_count++;
