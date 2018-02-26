@@ -931,14 +931,22 @@ int replace_in_xml_string_pool(
   // Make an empty pool.
   auto new_pool_header = android::ResStringPool_header {
     {
+      // Chunk type
       htods(android::RES_STRING_POOL_TYPE),
+      // Header size
       htods(pool_header_size),
+      // Total size (no items yet, equal to the header size)
       htodl(pool_header_size)
     },
+    // String count
     0,
+    // Style count
     0,
-    htodl(android::ResStringPool_header::UTF8_FLAG),
+    // Flags (valid combinations of UTF8_FLAG, SORTED_FLAG)
+    pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG) : (uint32_t) 0,
+    // Offset from header to string data
     0,
+    // Offset from header to style data
     0
   };
   android::ResStringPool new_pool(
@@ -977,9 +985,6 @@ int replace_in_xml_string_pool(
   out_data->appendVector(serialized_pool);
   out_data->appendVector(serialized_nodes);
 
-  LOG_FATAL_IF(
-    num_replaced == 0 && out_data->size() != len,
-    "No strings replaced, but length mismatch!");
   *out_num_renamed = num_replaced;
   return android::OK;
 }
@@ -1002,7 +1007,7 @@ int rename_classes_in_layout(
     &serialized,
     out_num_renamed);
 
-  if (status != android::OK) {
+  if (out_num_renamed == 0 || status != android::OK) {
     unmap_and_close(file_desc, fp, len);
     return status;
   }
