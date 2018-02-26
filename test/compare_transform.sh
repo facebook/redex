@@ -27,7 +27,7 @@ DEXDUMP=
 if [[ "$INPUT" =~ dex$ ]]; then
     DEXDUMP="dexdump -d"
 elif [[ "$INPUT" =~ apk$ ]]; then
-    FBANDROID="$(dirname ${BASH_SOURCE[0]})/../../.."
+    FBANDROID="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../../.."
     DEXDUMP="$(realpath "$FBANDROID/scripts/ordering/extractdexdump")"
 else
     DEXDUMP=cat
