@@ -42,7 +42,7 @@ enum class MethodSearch {
 /**
  * Helper to map an opcode to a MethodSearch rule.
  */
-inline MethodSearch opcode_to_search(IRInstruction* insn) {
+inline MethodSearch opcode_to_search(const IRInstruction* insn) {
   auto opcode = insn->opcode();
   always_assert(is_invoke(opcode));
   switch (opcode) {

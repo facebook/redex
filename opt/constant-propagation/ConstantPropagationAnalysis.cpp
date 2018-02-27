@@ -131,6 +131,16 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env) const {
   TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
   auto op = insn->opcode();
+  auto default_case = [&]() {
+    if (insn->dests_size()) {
+      TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
+      env->set(insn->dest(), SignedConstantDomain::top());
+    } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      TRACE(CONSTP, 5, "Clearing result register\n");
+      env->set(RESULT_REGISTER, SignedConstantDomain::top());
+    }
+  };
+
   switch (op) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_WIDE:
@@ -189,8 +199,31 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
   case OPCODE_SGET_SHORT: {
+    if (m_wps == nullptr) {
+      default_case();
+      break;
+    }
     auto field = resolve_field(insn->get_field());
-    env->set(RESULT_REGISTER, m_field_env.get(field));
+    if (field == nullptr) {
+      default_case();
+      break;
+    }
+    env->set(RESULT_REGISTER, m_wps->get_field_value(field));
+    break;
+  }
+
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC: {
+    if (m_wps == nullptr) {
+      default_case();
+      break;
+    }
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (method == nullptr) {
+      default_case();
+      break;
+    }
+    env->set(RESULT_REGISTER, m_wps->get_return_value(method));
     break;
   }
 
@@ -198,20 +231,21 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   case OPCODE_ADD_INT_LIT8: {
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
-    if (m_config.fold_arithmetic) {
-      int32_t lit = insn->get_literal();
-      auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
-        if (addition_out_of_bounds(lit, v)) {
-          return boost::none;
-        }
-        return v + lit;
-      };
-      TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
-            lit);
-      analyze_non_branch(insn, env, add_in_bounds);
+    if (!m_config.fold_arithmetic) {
+      default_case();
       break;
     }
-    // fallthrough
+    int32_t lit = insn->get_literal();
+    auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
+      if (addition_out_of_bounds(lit, v)) {
+        return boost::none;
+      }
+      return v + lit;
+    };
+    TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
+          lit);
+    analyze_non_branch(insn, env, add_in_bounds);
+    break;
   }
 
   default: {

@@ -215,6 +215,10 @@ bool is_integer(const DexType* type) {
   }
 }
 
+bool is_boolean(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'Z';
+}
+
 bool is_long(const DexType* type) {
   return type->get_name()->c_str()[0] == 'J';
 }

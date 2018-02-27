@@ -163,6 +163,8 @@ bool is_object(const DexType* type);
  */
 bool is_integer(const DexType* type);
 
+bool is_boolean(const DexType* type);
+
 bool is_long(const DexType* type);
 
 bool is_float(const DexType* type);

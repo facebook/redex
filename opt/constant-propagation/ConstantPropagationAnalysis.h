@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include "ConstPropConfig.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 
 namespace constant_propagation {
@@ -21,18 +21,21 @@ class FixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
                                        ConstantEnvironment> {
  public:
-  /**
-   * The fixpoint iterator takes an optional field_env argument that it will use
-   * to determine the constant values (if any) of static fields encountered in
-   * sget-* instructions.
+  struct Config {
+    bool fold_arithmetic{false};
+  };
+
+  /*
+   * The fixpoint iterator takes an optional WholeProgramState argument that
+   * it will use to determine the static field values and method return values.
    */
-  explicit FixpointIterator(ControlFlowGraph& cfg,
-                            const ConstPropConfig& config,
-                            ConstantStaticFieldEnvironment field_env =
-                                ConstantStaticFieldEnvironment())
-      : MonotonicFixpointIterator(cfg),
-        m_config(config),
-        m_field_env(field_env) {}
+  explicit FixpointIterator(const ControlFlowGraph& cfg,
+                            const Config config,
+                            const WholeProgramState* wps = nullptr)
+      : MonotonicFixpointIterator(cfg), m_config(config), m_wps(wps) {}
+
+  explicit FixpointIterator(const ControlFlowGraph& cfg)
+      : FixpointIterator(cfg, Config()) {}
 
   ConstantEnvironment analyze_edge(
       const std::shared_ptr<cfg::Edge>&,
@@ -45,8 +48,8 @@ class FixpointIterator final
                     ConstantEnvironment* state_at_entry) const override;
 
  private:
-  const ConstPropConfig m_config;
-  ConstantStaticFieldEnvironment m_field_env;
+  const Config m_config;
+  const WholeProgramState* m_wps;
 };
 
 } // namespace intraprocedural

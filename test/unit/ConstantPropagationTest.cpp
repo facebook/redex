@@ -7,19 +7,25 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ConstantPropagation.h"
+
 #include <gtest/gtest.h>
 
 #include "ConstantPropagation.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "IRAssembler.h"
 
 namespace cp = constant_propagation;
 
-static void do_const_prop(IRCode* code, const ConstPropConfig& config) {
+static void do_const_prop(IRCode* code) {
   code->build_cfg();
-  cp::intraprocedural::FixpointIterator rcp(code->cfg(), config);
+  cp::intraprocedural::FixpointIterator::Config analysis_config;
+  analysis_config.fold_arithmetic = true;
+  cp::intraprocedural::FixpointIterator rcp(code->cfg(), analysis_config);
   rcp.run(ConstantEnvironment());
-  cp::Transform tf(config);
-  tf.apply(rcp, code);
+  cp::Transform::Config transform_config;
+  cp::Transform tf(transform_config);
+  tf.apply(rcp, cp::WholeProgramState(), code);
 }
 
 TEST(ConstantPropagation, IfToGoto) {
@@ -35,8 +41,7 @@ TEST(ConstantPropagation, IfToGoto) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -71,8 +76,7 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -112,8 +116,7 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -151,8 +154,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -190,8 +192,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -226,8 +227,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -261,8 +261,7 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -297,8 +296,7 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -330,9 +328,7 @@ TEST(ConstantPropagation, FoldArithmeticAddLit) {
     )
 )");
 
-  ConstPropConfig config;
-  config.fold_arithmetic = true;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -383,8 +379,7 @@ TEST(ConstantPropagation, AnalyzeCmp) {
     )
 )");
 
-  ConstPropConfig config;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -484,11 +479,10 @@ TEST(ConstantPropagation, WhiteBox1) {
     )
 )");
 
-  ConstPropConfig config;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator rcp(cfg, config);
+  cp::intraprocedural::FixpointIterator rcp(cfg);
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
@@ -516,11 +510,10 @@ TEST(ConstantPropagation, WhiteBox2) {
     )
 )");
 
-  ConstPropConfig config;
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator rcp(cfg, config);
+  cp::intraprocedural::FixpointIterator rcp(cfg);
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());

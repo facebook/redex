@@ -9,13 +9,18 @@
 
 #pragma once
 
-#include "ConstPropConfig.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "Pass.h"
 
 class ConstantPropagationPass : public Pass {
  public:
+  struct Config {
+    constant_propagation::intraprocedural::FixpointIterator::Config
+        intraprocedural_analysis;
+    constant_propagation::Transform::Config transform;
+  };
+
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
   virtual void configure_pass(const PassConfig& pc) override;
@@ -24,5 +29,5 @@ class ConstantPropagationPass : public Pass {
                         PassManager& mgr) override;
 
  private:
-  ConstPropConfig m_config;
+  Config m_config;
 };

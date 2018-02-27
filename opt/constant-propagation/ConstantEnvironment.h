@@ -14,6 +14,7 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FixpointIterators.h"
+#include "HashedAbstractPartition.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "SignDomain.h"
@@ -102,5 +103,8 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 using ConstantEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, SignedConstantDomain>;
 
-using ConstantStaticFieldEnvironment =
-    PatriciaTreeMapAbstractEnvironment<DexField*, SignedConstantDomain>;
+using ConstantStaticFieldPartition =
+    HashedAbstractPartition<const DexField*, SignedConstantDomain>;
+
+using ConstantMethodPartition =
+    HashedAbstractPartition<const DexMethod*, SignedConstantDomain>;
