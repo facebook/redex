@@ -333,6 +333,26 @@ match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
 match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
   invoke_static();
 
+/** invoke-virtual flavors */
+template <typename P>
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
+  invoke_virtual(const match_t<IRInstruction, P>& p) {
+  return {
+    [](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
+      auto opcode = insn->opcode();
+      if (opcode == OPCODE_INVOKE_VIRTUAL) {
+        return p.matches(insn);
+      } else {
+        return false;
+      }
+    },
+    p
+  };
+}
+
+match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
+  invoke_virtual();
+
 /** invoke of any kind */
 template <typename P>
 match_t<IRInstruction, std::tuple<match_t<IRInstruction, P> > >
