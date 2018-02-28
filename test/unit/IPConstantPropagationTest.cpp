@@ -25,6 +25,19 @@ bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
   return a.equals(b);
 }
 
+bool operator==(const ArgumentDomain& a, const ArgumentDomain& b) {
+  return a.equals(b);
+}
+
+// For some reason, gtest won't print your value with the `<<` operator if it
+// is defined on a superclass. So we explicitly define and call the superclass
+// implementation here.
+std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
+  return o << static_cast<ReducedProductAbstractDomain<SignedConstantDomain,
+                                                       sign_domain::Domain,
+                                                       ConstantDomain>>(scd);
+}
+
 TEST(InterproceduralConstantPropagation, constantArgument) {
   g_redex = new RedexContext();
 
@@ -314,7 +327,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
     )
   )");
 
-  ConstantEnvironment env{{0, SignedConstantDomain(5)}};
+  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(5)}};
+  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -351,8 +365,9 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
     )
   )");
 
-  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
-                          {1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(Interval::GEZ)},
+                                      {1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -393,8 +408,9 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
     )
   )");
 
-  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
-                          {1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(Interval::GEZ)},
+                                      {1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -431,7 +447,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
     )
   )");
 
-  ConstantEnvironment env{{1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantRegisterEnvironment reg_env{{1, SignedConstantDomain(Interval::LTZ)}};
+  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -595,7 +612,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturns) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(InterproceduralConstantPropagation, nonConstantValueField) {
+TEST(InterproceduralConstantPropagation, nonConstantField) {
   g_redex = new RedexContext();
 
   auto cls_ty = DexType::make_type("LFoo;");
@@ -657,7 +674,7 @@ TEST(InterproceduralConstantPropagation, nonConstantValueField) {
   delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, constantValueField) {
+TEST(InterproceduralConstantPropagation, constantField) {
   g_redex = new RedexContext();
 
   auto cls_ty = DexType::make_type("LFoo;");
@@ -716,6 +733,169 @@ TEST(InterproceduralConstantPropagation, constantValueField) {
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
             assembler::to_s_expr(expected_code2.get()));
+
+  delete g_redex;
+}
+
+TEST(InterproceduralConstantPropagation, constantFieldAfterClinit) {
+  g_redex = new RedexContext();
+
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto field_qux = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field_qux->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                           new DexEncodedValueBit(DEVT_INT, 1));
+  creator.add_field(field_qux);
+
+  auto field_corge =
+      static_cast<DexField*>(DexField::make_field("LFoo;.corge:I"));
+  field_corge->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  creator.add_field(field_corge);
+
+  auto clinit = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.<clinit>:()V"
+     (
+      (sget "LFoo;.qux:I")     ; Foo.qux is the constant 0 outside this clinit,
+      (move-result-pseudo v0)  ; but we should check that we don't overwrite
+      (sput v0 "LFoo;.corge:I") ; its initial encoded value while transforming
+                               ; the clinit. I.e. this sget should be converted
+                               ; to "const v0 1", not "const v0 0".
+
+      (const v0 0) ; this differs from the original encoded value of Foo.qux,
+                   ; but will be the only field value visible to other methods
+      (sput v0 "LFoo;.qux:I")
+      (return-void)
+     )
+    )
+  )");
+  clinit->rstate.set_keep(); // Make this an entry point
+  creator.add_method(clinit);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:()V"
+     (
+      (sget "LFoo;.qux:I")
+      (move-result-pseudo v0) ; this is always zero due to <clinit>
+      (if-nez v0 :label)
+      (const v0 1)
+      :label
+      (return-void)
+     )
+    )
+  )");
+  m->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
+  auto& wps = fp_iter->get_whole_program_state();
+  EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
+  EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
+
+  InterproceduralConstantPropagationPass(config).run(scope);
+
+  auto expected_clinit_code = assembler::ircode_from_string(R"(
+     (
+      (const v0 1)
+      (const v0 0)
+      (return-void)
+     )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(clinit->get_code()),
+            assembler::to_s_expr(expected_clinit_code.get()));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (const v0 1)
+     (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
+}
+
+TEST(InterproceduralConstantPropagation, nonConstantFieldDueToInvokeInClinit) {
+  g_redex = new RedexContext();
+
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto field_qux = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field_qux->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 0));
+  creator.add_field(field_qux);
+
+  auto clinit = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.<clinit>:()V"
+     (
+      (invoke-static () "LFoo;.initQux:()V")
+      (return-void)
+     )
+    )
+  )");
+  clinit->rstate.set_keep(); // Make this an entry point
+  creator.add_method(clinit);
+
+  auto init_qux = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.initQux:()V"
+     (
+      (const v0 1) ; this differs from the original encoded value of Foo.qux
+      (sput v0 "LFoo;.qux:I")
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(init_qux);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:()V"
+     (
+      (sget "LFoo;.qux:I")
+      (move-result-pseudo v0)
+      (if-nez v0 :label)
+      (const v0 1)
+      :label
+      (return-void)
+     )
+    )
+  )");
+  m->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m);
+
+  // We expect Foo.baz() to be unchanged since Foo.qux is not a constant
+  auto expected = assembler::to_s_expr(m->get_code());
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
+  auto& wps = fp_iter->get_whole_program_state();
+  EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain::top());
+
+  InterproceduralConstantPropagationPass(config).run(scope);
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
 
   delete g_redex;
 }

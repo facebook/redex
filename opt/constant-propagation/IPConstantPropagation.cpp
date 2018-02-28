@@ -38,8 +38,10 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // Rebuild all CFGs here -- this should be more efficient than doing them
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
-  walk::parallel::code(scope,
-                       [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+    code.cfg().calculate_exit_block();
+  });
   auto fp_iter =
       std::make_unique<FixpointIterator>(cg, m_config.intraprocedural_analysis);
   // Run the bootstrap. All field value and method return values are

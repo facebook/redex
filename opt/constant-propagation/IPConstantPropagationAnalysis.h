@@ -19,11 +19,19 @@ namespace constant_propagation {
 namespace interprocedural {
 
 /*
- * Describes the constant-valued arguments (if any) for a given method or
- * callsite. The n'th argument will be represented by a binding of n to a
- * ConstantDomain instance.
+ * ArgumentDomain describes the constant-valued arguments (if any) for a given
+ * method or callsite. The n'th argument will be represented by a binding of n
+ * to a ConstantDomain instance.
+ *
+ * Note that while this is structurally identical to the
+ * ConstantRegisterEnvironment, they should be treated as semantically
+ * distinct types: Here, the environment variables denote param index, whereas
+ * in a ConstantRegisterEnvironment, they denote registers.
  */
-using ArgumentDomain = ConstantEnvironment;
+using param_index_t = uint16_t;
+
+using ArgumentDomain =
+    PatriciaTreeMapAbstractEnvironment<param_index_t, SignedConstantDomain>;
 
 /*
  * This map is an abstraction of the execution paths starting from the entry
@@ -74,5 +82,10 @@ class FixpointIterator
 };
 
 } // namespace interprocedural
+
+/*
+ * For each static field in :cls, bind its encoded value in :env.
+ */
+void set_encoded_values(const DexClass* cls, ConstantEnvironment* env);
 
 } // namespace constant_propagation

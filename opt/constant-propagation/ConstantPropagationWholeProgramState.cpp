@@ -12,6 +12,67 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "Walkers.h"
 
+using namespace constant_propagation;
+
+namespace {
+
+/*
+ * Walk all the static fields in :cls, copying their bindings in :field_env over
+ * to :field_partition.
+ */
+void set_fields_in_partition(const DexClass* cls,
+                             const ConstantFieldEnvironment& field_env,
+                             ConstantStaticFieldPartition* field_partition) {
+  // Note that we *must* iterate over the list of fields in the class and not
+  // the bindings in field_env here. This ensures that fields whose values are
+  // unknown (and therefore implicitly represented by Top in the field_env)
+  // get correctly bound to Top in field_partition (which defaults its
+  // bindings to Bottom).
+  for (auto& field : cls->get_sfields()) {
+    auto value = field_env.get(field);
+    if (!value.is_top()) {
+      TRACE(ICONSTP, 2, "%s has value %s after <clinit>\n", SHOW(field),
+            value.constant_domain().str().c_str());
+      always_assert(field->get_class() == cls->get_type());
+    } else {
+      TRACE(ICONSTP, 2, "%s has unknown value after <clinit>\n", SHOW(field));
+    }
+    field_partition->set(field, value);
+  }
+}
+
+/*
+ * Record in :field_partition the values of the static fields after the class
+ * initializers have finished executing.
+ *
+ * XXX this assumes that there are no cycles in the class initialization graph!
+ */
+void analyze_clinits(const Scope& scope,
+                     const interprocedural::FixpointIterator& fp_iter,
+                     ConstantStaticFieldPartition* field_partition) {
+  for (DexClass* cls : scope) {
+    auto& dmethods = cls->get_dmethods();
+    auto clinit_it = std::find_if(dmethods.begin(), dmethods.end(), is_clinit);
+    if (clinit_it == dmethods.end()) {
+      // If there is no class initializer, then the initial field values are
+      // simply the DexEncodedValues.
+      ConstantEnvironment env;
+      set_encoded_values(cls, &env);
+      set_fields_in_partition(cls, env.get_field_environment(),
+                              field_partition);
+      continue;
+    }
+    auto* clinit = *clinit_it;
+    IRCode* code = clinit->get_code();
+    auto& cfg = code->cfg();
+    auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
+    auto env = intra_cp->get_exit_state_at(cfg.exit_block());
+    set_fields_in_partition(cls, env.get_field_environment(), field_partition);
+  }
+}
+
+} // namespace
+
 namespace constant_propagation {
 
 WholeProgramState::WholeProgramState(
@@ -26,33 +87,8 @@ WholeProgramState::WholeProgramState(
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
     m_known_methods.emplace(method);
   });
-  set_fields_with_encoded_values(scope);
+  analyze_clinits(scope, fp_iter, &m_field_partition);
   collect(scope, fp_iter);
-}
-
-/*
- * Initialize m_field_partition with the encoded values in the dex. If no
- * encoded value is present, initialize them with a zero value (which is the
- * same thing that the runtime does).
- */
-void WholeProgramState::set_fields_with_encoded_values(const Scope& scope) {
-  for (const auto* cls : scope) {
-    for (auto* sfield : cls->get_sfields()) {
-      auto value = sfield->get_static_value();
-      if (value == nullptr) {
-        m_field_partition.set(sfield, SignedConstantDomain(0));
-      } else if (is_primitive(sfield->get_type())) {
-        m_field_partition.set(sfield, SignedConstantDomain(value->value()));
-      } else {
-        // XXX this is probably overly conservative. A field that isn't
-        // primitive may still have an explicitly-encoded zero value. However,
-        // note that we can't simply use DexEncodedValue::value() to check
-        // for a zero value -- for non-primitive encoded values, that method
-        // always returns zero! We need to fix that API...
-        m_field_partition.set(sfield, SignedConstantDomain::top());
-      }
-    }
-  }
 }
 
 /*
@@ -73,7 +109,8 @@ void WholeProgramState::collect(
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
         intra_cp->analyze_instruction(insn, &env);
-        collect_field_values(insn, env);
+        collect_field_values(insn, env,
+                             is_clinit(method) ? method->get_class() : nullptr);
         collect_return_values(insn, env, method);
       }
     }
@@ -83,15 +120,24 @@ void WholeProgramState::collect(
 /*
  * For each static field, do a join over all the values that may have been
  * written to it at any point in the program.
+ *
+ * If we are encountering a field write of some value to Foo.someField in the
+ * body of Foo.<clinit>, don't do anything -- that value will only be visible
+ * to other methods if it remains unchanged up until the end of the <clinit>.
+ * In that case, analyze_clinits() will record it.
  */
 void WholeProgramState::collect_field_values(const IRInstruction* insn,
-                                             const ConstantEnvironment& env) {
+                                             const ConstantEnvironment& env,
+                                             const DexType* clinit_cls) {
   if (!is_sput(insn->opcode())) {
     return;
   }
-  auto value = env.get(insn->src(0));
   auto field = resolve_field(insn->get_field());
   if (field != nullptr && m_known_fields.count(field)) {
+    if (field->get_class() == clinit_cls) {
+      return;
+    }
+    auto value = env.get(insn->src(0));
     m_field_partition.update(field, [&value](auto* current_value) {
       current_value->join_with(value);
     });

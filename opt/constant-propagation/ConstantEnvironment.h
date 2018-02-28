@@ -100,8 +100,72 @@ using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
-using ConstantEnvironment =
+using ConstantRegisterEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, SignedConstantDomain>;
+
+using ConstantFieldEnvironment =
+    PatriciaTreeMapAbstractEnvironment<DexField*, SignedConstantDomain>;
+
+class ConstantEnvironment
+    : public ReducedProductAbstractDomain<ConstantEnvironment,
+                                          ConstantRegisterEnvironment,
+                                          ConstantFieldEnvironment> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via the
+  // `using` declaration above), but some compilers fail to catch this. So we
+  // insert a redundant '= default'.
+  ConstantEnvironment() = default;
+
+  static void reduce_product(
+      std::tuple<ConstantRegisterEnvironment, ConstantFieldEnvironment>&) {}
+
+  const ConstantRegisterEnvironment& get_register_environment() const {
+    return ReducedProductAbstractDomain::get<0>();
+  }
+
+  const ConstantFieldEnvironment& get_field_environment() const {
+    return ReducedProductAbstractDomain::get<1>();
+  }
+
+  SignedConstantDomain get(reg_t reg) const {
+    return get_register_environment().get(reg);
+  }
+
+  SignedConstantDomain get(DexField* field) const {
+    return get_field_environment().get(field);
+  }
+
+  ConstantEnvironment& set(reg_t reg, const SignedConstantDomain& value) {
+    apply<0>([&](ConstantRegisterEnvironment* env) { env->set(reg, value); });
+    return *this;
+  }
+
+  ConstantEnvironment& set(DexField* field, const SignedConstantDomain& value) {
+    apply<1>([&](ConstantFieldEnvironment* env) { env->set(field, value); });
+    return *this;
+  }
+
+  ConstantEnvironment& clear_field_environment() {
+    apply<1>([](ConstantFieldEnvironment* env) { env->set_to_top(); });
+    return *this;
+  }
+
+  bool is_value() const {
+    return get_register_environment().is_value() ||
+           get_field_environment().is_value();
+  }
+
+  static ConstantEnvironment top() { return ConstantEnvironment(); }
+
+  static ConstantEnvironment bottom() {
+    ConstantEnvironment env;
+    env.set_to_bottom();
+    return env;
+  }
+};
 
 using ConstantStaticFieldPartition =
     HashedAbstractPartition<const DexField*, SignedConstantDomain>;

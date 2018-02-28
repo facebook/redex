@@ -87,7 +87,8 @@ class WholeProgramState {
                const interprocedural::FixpointIterator& fp_iter);
 
   void collect_field_values(const IRInstruction* insn,
-                            const ConstantEnvironment& env);
+                            const ConstantEnvironment& env,
+                            const DexType* clinit_cls);
 
   void collect_return_values(const IRInstruction* insn,
                              const ConstantEnvironment& env,

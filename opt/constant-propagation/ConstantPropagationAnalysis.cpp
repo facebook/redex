@@ -199,16 +199,38 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
   case OPCODE_SGET_SHORT: {
-    if (m_wps == nullptr) {
-      default_case();
-      break;
-    }
     auto field = resolve_field(insn->get_field());
     if (field == nullptr) {
       default_case();
       break;
     }
+    if (field->get_class() == m_config.class_under_init) {
+      env->set(RESULT_REGISTER, env->get(field));
+      break;
+    }
+    if (m_wps == nullptr) {
+      default_case();
+      break;
+    }
     env->set(RESULT_REGISTER, m_wps->get_field_value(field));
+    break;
+  }
+
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT: {
+    auto field = resolve_field(insn->get_field());
+    if (field == nullptr) {
+      default_case();
+      break;
+    }
+    if (field->get_class() == m_config.class_under_init) {
+      env->set(field, env->get(insn->src(0)));
+    }
     break;
   }
 
@@ -249,14 +271,18 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   }
 
   default: {
-    if (insn->dests_size()) {
-      TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
-      env->set(insn->dest(), SignedConstantDomain::top());
-    } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
-      TRACE(CONSTP, 5, "Clearing result register\n");
-      env->set(RESULT_REGISTER, SignedConstantDomain::top());
-    }
+    default_case();
+    break;
   }
+  }
+
+  // If the class initializer invokes a static method on its own class, that
+  // static method can modify the class' static fields. We would have to
+  // inspect the static method to find out. Here we take the conservative
+  // approach of marking all static fields as unknown after the invoke.
+  if (op == OPCODE_INVOKE_STATIC &&
+      m_config.class_under_init == insn->get_method()->get_class()) {
+    env->clear_field_environment();
   }
 }
 

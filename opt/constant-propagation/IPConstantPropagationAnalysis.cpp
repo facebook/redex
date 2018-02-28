@@ -37,12 +37,10 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
     return;
   }
   auto& cfg = code->cfg();
-  intraprocedural::FixpointIterator intra_cp(cfg, m_config, m_wps.get());
-  intra_cp.run(
-      env_with_params(code, current_state->get(CURRENT_PARTITION_LABEL)));
+  auto intra_cp = get_intraprocedural_analysis(method);
 
   for (auto* block : cfg.blocks()) {
-    auto state = intra_cp.get_entry_state_at(block);
+    auto state = intra_cp->get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
@@ -53,7 +51,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
         }
         current_state->set(insn, out_args);
       }
-      intra_cp.analyze_instruction(insn, &state);
+      intra_cp->analyze_instruction(insn, &state);
     }
   }
 }
@@ -64,8 +62,7 @@ Domain FixpointIterator::analyze_edge(
   Domain entry_state_at_dest;
   auto it = edge->invoke_iterator();
   if (it == IRList::iterator()) {
-    entry_state_at_dest.set(CURRENT_PARTITION_LABEL,
-                            ConstantEnvironment::top());
+    entry_state_at_dest.set(CURRENT_PARTITION_LABEL, ArgumentDomain::top());
   } else {
     auto insn = it->insn;
     entry_state_at_dest.set(CURRENT_PARTITION_LABEL,
@@ -89,14 +86,32 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
         ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), args.str().c_str());
   }
 
-  auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-      code.cfg(), m_config, &this->get_whole_program_state());
+  intraprocedural::FixpointIterator::Config config = m_config;
   auto env = env_with_params(&code, args.get(CURRENT_PARTITION_LABEL));
+  if (is_clinit(method)) {
+    config.class_under_init = method->get_class();
+    set_encoded_values(type_class(config.class_under_init), &env);
+  }
+  auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
+      code.cfg(), config, &this->get_whole_program_state());
   intra_cp->run(env);
 
   return intra_cp;
 }
 
 } // namespace interprocedural
+
+void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
+  for (auto* sfield : cls->get_sfields()) {
+    auto value = sfield->get_static_value();
+    if (value == nullptr) {
+      env->set(sfield, SignedConstantDomain(0));
+    } else if (is_primitive(sfield->get_type())) {
+      env->set(sfield, SignedConstantDomain(value->value()));
+    } else {
+      env->set(sfield, SignedConstantDomain::top());
+    }
+  }
+}
 
 } // namespace constant_propagation

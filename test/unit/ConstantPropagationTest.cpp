@@ -486,7 +486,9 @@ TEST(ConstantPropagation, WhiteBox1) {
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
-  EXPECT_EQ(exit_state.get(0), SignedConstantDomain::top());
+  // Specifying `0u` here to avoid any ambiguity as to whether it is the null
+  // pointer
+  EXPECT_EQ(exit_state.get(0u), SignedConstantDomain::top());
   EXPECT_EQ(exit_state.get(1), SignedConstantDomain(0));
   // v2 can contain either the value 0 or 1
   EXPECT_EQ(exit_state.get(2),
@@ -517,7 +519,7 @@ TEST(ConstantPropagation, WhiteBox2) {
   rcp.run(ConstantEnvironment());
 
   auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
-  EXPECT_EQ(exit_state.get(0),
+  EXPECT_EQ(exit_state.get(0u),
             SignedConstantDomain(sign_domain::Interval::GEZ));
   EXPECT_EQ(exit_state.get(1), SignedConstantDomain(0));
 }

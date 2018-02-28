@@ -173,7 +173,7 @@ redex_all_SOURCES = \
 	opt/constant-propagation/ConstantEnvironment.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
 	opt/constant-propagation/ConstantPropagationAnalysis.cpp \
-	opt/constant-propagation/ConstantPropagationRuntimeAssertTransform.cpp \
+	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/ConstantPropagationTransform.cpp \
 	opt/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
