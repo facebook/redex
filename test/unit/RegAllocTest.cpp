@@ -572,7 +572,6 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
      (return-void)
     )
 )");
-  code->set_registers_size(2);
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
@@ -596,7 +595,21 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   allocator.select_ranges(
       code.get(), ig, range_set, &reg_transform, &spill_plan);
 
-  EXPECT_EQ(spill_plan.range_spills.at(invoke), std::unordered_set<reg_t>{0});
+  EXPECT_EQ(spill_plan.range_spills.at(invoke), std::vector<size_t>{1});
+
+  std::unordered_set<reg_t> new_temps;
+  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (move v1 v0)
+     (invoke-static (v0 v1) "Lfoo;.baz:(II)V")
+     (return-void)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 /*

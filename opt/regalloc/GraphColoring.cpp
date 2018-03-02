@@ -214,7 +214,7 @@ void fit_range_instruction(
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
     if (vreg > node.max_vreg() || needs_remap(reg_map, src, vreg)) {
-      spills->range_spills[insn].emplace(src);
+      spills->range_spills[insn].emplace_back(i);
     } else {
       always_assert(vreg_file.is_free(vreg, node.width()));
       reg_map.emplace(src, vreg);
@@ -267,9 +267,10 @@ std::string show(const SpillPlan& spill_plan) {
   }
   ss << "Range spills:\n";
   for (auto pair : spill_plan.range_spills) {
-    ss << show(pair.first) << ": ";
-    for (auto reg : pair.second) {
-      ss << reg << " ";
+    auto* insn = pair.first;
+    ss << show(insn) << ": ";
+    for (auto idx : pair.second) {
+      ss << insn->src(idx) << " ";
     }
     ss << "\n";
   }
@@ -965,14 +966,11 @@ void Allocator::spill(const interference::Graph& ig,
       auto to_spill_it = spill_plan.range_spills.find(insn);
       if (to_spill_it != spill_plan.range_spills.end()) {
         auto& to_spill = to_spill_it->second;
-        for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          auto src = insn->src(i);
-          if (to_spill.find(src) == to_spill.end()) {
-            continue;
-          }
+        for (auto idx : to_spill) {
+          auto src = insn->src(idx);
           auto& node = ig.get_node(src);
           auto temp = code->allocate_temp();
-          insn->set_src(i, temp);
+          insn->set_src(idx, temp);
           new_temps->emplace(temp);
           auto mov = gen_move(node.type(), temp, src);
           ++m_stats.range_spill_moves;
