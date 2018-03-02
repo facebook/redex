@@ -131,6 +131,14 @@ void mark_adjacent(const interference::Graph& ig,
 constexpr int INVALID_SCORE = std::numeric_limits<int>::max();
 
 /*
+ * If :reg is mapped to something other than :vreg, then we'll need to insert a
+ * move instruction to remap :reg.
+ */
+bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
+  return reg_map.find(reg) != reg_map.end() && reg_map.at(reg) != vreg;
+}
+
+/*
  * Count the number of vregs we would need to spill if we allocated a
  * contiguous range of vregs starting at :range_base.
  */
@@ -146,13 +154,12 @@ int score_range_fit(
     auto reg = range_regs.at(i);
     const auto& node = ig.get_node(reg);
     const auto& vreg_file = vreg_files.at(reg);
-    auto it = reg_map.find(reg);
     // XXX We could be more precise here by checking the LivenessDomain for the
     // given range instruction instead of just using the graph
     if (!vreg_file.is_free(vreg, node.width())) {
       return INVALID_SCORE;
     }
-    if ((it != reg_map.end() && it->second != vreg) || vreg > node.max_vreg()) {
+    if (vreg > node.max_vreg() || needs_remap(reg_map, reg, vreg)) {
       ++score;
     }
     vreg += node.width();
@@ -206,7 +213,7 @@ void fit_range_instruction(
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
-    if (vreg > node.max_vreg() || reg_map.find(src) != reg_map.end()) {
+    if (vreg > node.max_vreg() || needs_remap(reg_map, src, vreg)) {
       spills->range_spills[insn].emplace(src);
     } else {
       always_assert(vreg_file.is_free(vreg, node.width()));
@@ -237,7 +244,7 @@ void fit_params(
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
-    if (vreg > node.max_vreg() || reg_map.find(dest) != reg_map.end()) {
+    if (vreg > node.max_vreg() || needs_remap(reg_map, dest, vreg)) {
       spills->param_spills.emplace(dest);
     } else {
       always_assert(vreg_file.is_free(vreg, node.width()));

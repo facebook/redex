@@ -599,6 +599,45 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   EXPECT_EQ(spill_plan.range_spills.at(invoke), std::unordered_set<reg_t>{0});
 }
 
+/*
+ * If two ranges use the same symregs in the same order, we should try and map
+ * them to the same vregs.
+ */
+TEST_F(RegAllocTest, AlignRanges) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (const v1 1)
+     (invoke-static (v0 v1) "Lfoo;.baz:(II)V")
+     (invoke-static (v0 v1) "Lfoo;.baz:(II)V")
+     (return-void)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+
+  RangeSet range_set;
+  for (auto& mie : InstructionIterable(code.get())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
+      range_set.emplace(mie.insn);
+    }
+  }
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, code.get(), code->get_registers_size(), range_set);
+  graph_coloring::SpillPlan spill_plan;
+  graph_coloring::RegisterTransform reg_transform;
+  graph_coloring::Allocator allocator;
+  allocator.select_ranges(
+      code.get(), ig, range_set, &reg_transform, &spill_plan);
+
+  EXPECT_EQ(reg_transform.map, (transform::RegMap{{0, 0}, {1, 1}}));
+  EXPECT_EQ(reg_transform.size, 2);
+  EXPECT_TRUE(spill_plan.range_spills.empty());
+}
+
 TEST_F(RegAllocTest, Spill) {
   auto code = assembler::ircode_from_string(R"(
     (
