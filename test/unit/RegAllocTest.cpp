@@ -694,6 +694,50 @@ TEST_F(RegAllocTest, Spill) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (neg-int v1 v0) ; neg-int's operands are limited to 4 bits
+     (invoke-static (v0) "Lfoo;.baz:(I)V") ; this can always be converted to
+                                           ; an invoke-range, so it should not
+                                           ; get spilled
+     (return-void)
+    )
+)");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+
+  RangeSet range_set;
+  interference::Graph ig = interference::build_graph(
+      fixpoint_iter, code.get(), code->get_registers_size(), range_set);
+
+  SplitPlan split_plan;
+  graph_coloring::SpillPlan spill_plan;
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
+    {0, 16},
+    {1, 0},
+  };
+  std::unordered_set<reg_t> new_temps;
+  graph_coloring::Allocator allocator;
+  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (move v2 v0)
+     (neg-int v1 v2)
+     (invoke-static (v0) "Lfoo;.baz:(I)V")
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST_F(RegAllocTest, ContainmentGraph) {
   auto code = assembler::ircode_from_string(R"(
     (

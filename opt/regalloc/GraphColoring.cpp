@@ -685,19 +685,6 @@ void Allocator::select_params(const IRCode* code,
       ig, param_insns, params_base, vreg_files, reg_transform, spill_plan);
 }
 
-reg_t max_value_for_src(const interference::Graph& ig,
-                        const IRInstruction* insn,
-                        size_t src_index) {
-  auto& node = ig.get_node(insn->src(src_index));
-  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
-  if (is_invoke(insn->opcode()) && node.width() == 2) {
-    // We need to reserve one vreg for denormalization. See the
-    // comments in GraphBuilder::update_node_constraints() for details.
-    --max_value;
-  }
-  return max_value;
-}
-
 // Find out if there exist a
 //    invoke-xxx/fill-new-array v
 //    move-result u
@@ -1002,7 +989,7 @@ void Allocator::spill(const interference::Graph& ig,
         }
         auto& node = ig.get_node(src);
         auto sp_it = spill_plan.global_spills.find(src);
-        auto max_value = max_value_for_src(ig, insn, i);
+        auto max_value = max_value_for_src(insn, i, node.width() == 2);
         if (sp_it != spill_plan.global_spills.end() &&
             sp_it->second > max_value) {
           auto temp = code->allocate_temp();
