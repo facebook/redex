@@ -904,8 +904,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
 void Allocator::split_params(
     const interference::Graph& ig,
     const std::unordered_set<reg_t>& param_spills,
-    IRCode* code,
-    std::unordered_set<reg_t>* new_temps) {
+    IRCode* code) {
   auto load_locations = find_param_splits(param_spills, code);
   if (load_locations.size() == 0) {
     return;
@@ -921,7 +920,6 @@ void Allocator::split_params(
     if (load_locations.find(dest) != load_locations.end()) {
       auto temp = code->allocate_temp();
       insn->set_dest(temp);
-      new_temps->emplace(temp);
       param_to_temp[dest] = temp;
     }
   }
@@ -953,8 +951,7 @@ void Allocator::split_params(
 void Allocator::spill(const interference::Graph& ig,
                       const SpillPlan& spill_plan,
                       const RangeSet& range_set,
-                      IRCode* code,
-                      std::unordered_set<reg_t>* new_temps) {
+                      IRCode* code) {
   // TODO: account for "close" defs and uses. See [Briggs92], section 8.7
 
   auto ii = InstructionIterable(code);
@@ -971,22 +968,23 @@ void Allocator::spill(const interference::Graph& ig,
           auto& node = ig.get_node(src);
           auto temp = code->allocate_temp();
           insn->set_src(idx, temp);
-          new_temps->emplace(temp);
           auto mov = gen_move(node.type(), temp, src);
           ++m_stats.range_spill_moves;
           code->insert_before(it.unwrap(), mov);
         }
       }
     } else {
-      // Spill non-param, non-range symregs
+      // Spill non-param, non-range symregs.
+      // We do not need to worry about handling any new symregs introduced in
+      // range/param splitting -- they will never appear in the global_spills
+      // map.
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
-        // We've already spilled this when handling range / param nodes above
-        if (new_temps->find(src) != new_temps->end()) {
+        auto sp_it = spill_plan.global_spills.find(src);
+        if (sp_it == spill_plan.global_spills.end()) {
           continue;
         }
         auto& node = ig.get_node(src);
-        auto sp_it = spill_plan.global_spills.find(src);
         auto max_value = max_value_for_src(insn, i, node.width() == 2);
         if (sp_it != spill_plan.global_spills.end() &&
             sp_it->second > max_value) {
@@ -1096,9 +1094,8 @@ void Allocator::allocate(IRCode* code) {
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      std::unordered_set<reg_t> new_temps;
-      split_params(ig, spill_plan.param_spills, code, &new_temps);
-      spill(ig, spill_plan, range_set, code, &new_temps);
+      split_params(ig, spill_plan.param_spills, code);
+      spill(ig, spill_plan, range_set, code);
 
       if (split_plan.split_around.size() > 0) {
         TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));

@@ -597,8 +597,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
 
   EXPECT_EQ(spill_plan.range_spills.at(invoke), std::vector<size_t>{1});
 
-  std::unordered_set<reg_t> new_temps;
-  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  allocator.spill(ig, spill_plan, range_set, code.get());
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -681,9 +680,8 @@ TEST_F(RegAllocTest, Spill) {
     {1, 16},
     {2, 256},
   };
-  std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  allocator.spill(ig, spill_plan, range_set, code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -734,9 +732,8 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
     {0, 16},
     {1, 0},
   };
-  std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  allocator.spill(ig, spill_plan, range_set, code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -873,8 +870,7 @@ TEST_F(RegAllocTest, Split) {
       std::unordered_map<reg_t, std::unordered_set<reg_t>>{
           {1, std::unordered_set<reg_t>{0}}};
   graph_coloring::Allocator allocator;
-  std::unordered_set<reg_t> new_temps;
-  allocator.spill(ig, spill_plan, range_set, code.get(), &new_temps);
+  allocator.spill(ig, spill_plan, range_set, code.get());
   split(fixpoint_iter, split_plan, split_costs, ig, code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -919,9 +915,8 @@ TEST_F(RegAllocTest, ParamFirstUse) {
 
   graph_coloring::SpillPlan spill_plan;
   spill_plan.param_spills = std::unordered_set<reg_t>{0, 1};
-  std::unordered_set<reg_t> new_temps;
   graph_coloring::Allocator allocator;
-  allocator.split_params(ig, spill_plan.param_spills, code.get(), &new_temps);
+  allocator.split_params(ig, spill_plan.param_spills, code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (

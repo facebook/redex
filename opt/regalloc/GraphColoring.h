@@ -146,14 +146,12 @@ class Allocator {
 
   void split_params(const interference::Graph&,
                     const std::unordered_set<reg_t>& param_regs,
-                    IRCode*,
-                    std::unordered_set<reg_t>* new_temps);
+                    IRCode*);
 
   void spill(const interference::Graph&,
              const SpillPlan&,
              const RangeSet&,
-             IRCode*,
-             std::unordered_set<reg_t>*);
+             IRCode*);
 
   void allocate(IRCode*);
 
