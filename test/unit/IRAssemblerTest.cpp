@@ -10,10 +10,11 @@
 #include <gtest/gtest.h>
 
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
-TEST(IRAssembler, disassembleCode) {
-  g_redex = new RedexContext();
+struct IRAssemblerTest : public RedexTest {};
 
+TEST_F(IRAssemblerTest, disassembleCode) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -37,20 +38,16 @@ TEST(IRAssembler, disassembleCode) {
             "(move-result-pseudo-object v0) "
             "(return-void))");
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
-
-  delete g_redex;
 }
 
-TEST(IRAssembler, empty) {
+TEST_F(IRAssemblerTest, empty) {
   auto code = assembler::ircode_from_string(R"((
     (return-void)
   ))");
   EXPECT_EQ(code->get_registers_size(), 0);
 }
 
-TEST(IRAssembler, assembleMethod) {
-  g_redex = new RedexContext();
-
+TEST_F(IRAssemblerTest, assembleMethod) {
   auto method = assembler::method_from_string(R"(
     (method (private) "LFoo;.bar:(I)V"
      (
@@ -73,6 +70,4 @@ TEST(IRAssembler, assembleMethod) {
   EXPECT_EQ(static_method->get_access(), ACC_PUBLIC | ACC_STATIC);
   EXPECT_STREQ(static_method->get_name()->c_str(), "baz");
   EXPECT_STREQ(static_method->get_class()->get_name()->c_str(), "LFoo;");
-
-  delete g_redex;
 }

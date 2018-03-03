@@ -16,10 +16,13 @@
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRAssembler.h"
+#include "RedexTest.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;
 using namespace constant_propagation::interprocedural;
+
+struct InterproceduralConstantPropagationTest : public RedexTest {};
 
 bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
   return a.equals(b);
@@ -38,9 +41,7 @@ std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
                                                        ConstantDomain>>(scd);
 }
 
-TEST(InterproceduralConstantPropagation, constantArgument) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   // Let bar() be the only method calling baz(I)V, passing it a constant
   // argument. baz() should be optimized for that constant argument.
 
@@ -93,13 +94,9 @@ TEST(InterproceduralConstantPropagation, constantArgument) {
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
             assembler::to_s_expr(expected_code2.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, nonConstantArgument) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   // Let there be two methods calling baz(I)V, passing it different arguments.
   // baz() cannot be optimized for a constant argument here.
 
@@ -155,13 +152,9 @@ TEST(InterproceduralConstantPropagation, nonConstantArgument) {
   auto expected = assembler::to_s_expr(m3->get_code());
   InterproceduralConstantPropagationPass().run(scope);
   EXPECT_EQ(assembler::to_s_expr(m3->get_code()), expected);
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   // Let baz(I)V always be called with arguments > 0. baz() should be
   // optimized for that scenario.
 
@@ -232,9 +225,7 @@ TEST(InterproceduralConstantPropagation, argumentsGreaterThanZero) {
 // We had a bug where an invoke instruction inside an unreachable block of code
 // would cause the whole IPCP domain to be set to bottom. This test checks that
 // we handle it correctly.
-TEST(InterproceduralConstantPropagation, unreachableInvoke) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
@@ -287,15 +278,12 @@ TEST(InterproceduralConstantPropagation, unreachableInvoke) {
   EXPECT_EQ(fp_iter.get_entry_state_at(m2).get(CURRENT_PARTITION_LABEL),
             ArgumentDomain({{0, SignedConstantDomain(0)}}));
   EXPECT_TRUE(fp_iter.get_entry_state_at(m3).is_bottom());
-
-  delete g_redex;
 }
 
-struct RuntimeAssertTest : public testing::Test {
+struct RuntimeAssertTest : public RedexTest {
   DexMethodRef* m_fail_handler;
 
   RuntimeAssertTest() {
-    g_redex = new RedexContext();
     m_config.max_heap_analysis_iterations = 1;
     m_config.create_runtime_asserts = true;
     m_config.runtime_assert.param_assert_fail_handler = DexMethod::make_method(
@@ -311,8 +299,6 @@ struct RuntimeAssertTest : public testing::Test {
             "ConstantPropagationAssertHandler;.returnValueError:(Ljava/lang/"
             "String;)V");
   }
-
-  ~RuntimeAssertTest() { delete g_redex; }
 
   InterproceduralConstantPropagationPass::Config m_config;
 };
@@ -612,9 +598,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturns) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(InterproceduralConstantPropagation, nonConstantField) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -670,13 +654,9 @@ TEST(InterproceduralConstantPropagation, nonConstantField) {
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
             assembler::to_s_expr(expected_code2.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, constantField) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, constantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -733,13 +713,9 @@ TEST(InterproceduralConstantPropagation, constantField) {
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
             assembler::to_s_expr(expected_code2.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, constantFieldAfterClinit) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -825,13 +801,9 @@ TEST(InterproceduralConstantPropagation, constantFieldAfterClinit) {
 
   EXPECT_EQ(assembler::to_s_expr(m->get_code()),
             assembler::to_s_expr(expected_code.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, nonConstantFieldDueToInvokeInClinit) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToInvokeInClinit) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -896,13 +868,9 @@ TEST(InterproceduralConstantPropagation, nonConstantFieldDueToInvokeInClinit) {
 
   InterproceduralConstantPropagationPass(config).run(scope);
   EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, constantReturnValue) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -951,13 +919,9 @@ TEST(InterproceduralConstantPropagation, constantReturnValue) {
 
   EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
             assembler::to_s_expr(expected_code.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, neverReturns) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -1023,13 +987,9 @@ TEST(InterproceduralConstantPropagation, neverReturns) {
 
   EXPECT_EQ(assembler::to_s_expr(method->get_code()),
             assembler::to_s_expr(expected_code.get()));
-
-  delete g_redex;
 }
 
-TEST(InterproceduralConstantPropagation, whiteBoxReturnValues) {
-  g_redex = new RedexContext();
-
+TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -1077,6 +1037,4 @@ TEST(InterproceduralConstantPropagation, whiteBoxReturnValues) {
   EXPECT_EQ(wps.get_return_value(never_returns),
             SignedConstantDomain::bottom());
   EXPECT_EQ(wps.get_return_value(returns_constant), SignedConstantDomain(1));
-
-  delete g_redex;
 }

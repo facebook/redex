@@ -21,6 +21,7 @@
 #include "LiveRange.h"
 #include "Liveness.h"
 #include "OpcodeList.h"
+#include "RedexTest.h"
 #include "RegAlloc.h"
 #include "RegisterType.h"
 #include "Show.h"
@@ -30,16 +31,12 @@
 
 using namespace regalloc;
 
+struct RegAllocTest : public RedexTest {};
+
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
 }
-
-struct RegAllocTest : testing::Test {
-  RegAllocTest() { g_redex = new RedexContext(); }
-
-  ~RegAllocTest() { delete g_redex; }
-};
 
 /*
  * Check that we pick the most pessimistic move instruction (of the right type)

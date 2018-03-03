@@ -13,6 +13,9 @@
 #include "DexUtil.h"
 #include "Inliner.h"
 #include "IRCode.h"
+#include "RedexTest.h"
+
+struct SimpleInlineTest : public RedexTest {};
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
@@ -22,9 +25,7 @@ std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
  * Test that we correctly insert move instructions that map caller args to
  * callee params.
  */
-TEST(SimpleInlineTest, insertMoves) {
-  g_redex = new RedexContext();
-
+TEST_F(SimpleInlineTest, insertMoves) {
   using namespace dex_asm;
   auto callee = static_cast<DexMethod*>(DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
@@ -69,5 +70,4 @@ TEST(SimpleInlineTest, insertMoves) {
   EXPECT_EQ(*it->insn, *dasm(OPCODE_RETURN_VOID));
 
   EXPECT_EQ(caller_code->get_registers_size(), 5);
-  delete g_redex;
 }
