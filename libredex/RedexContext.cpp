@@ -159,6 +159,11 @@ DexFieldRef* RedexContext::get_field(const DexType* container,
   }
 }
 
+void RedexContext::erase_field(DexFieldRef* field) {
+  std::lock_guard<std::mutex> lock(s_field_lock);
+  s_field_map.erase(field->m_spec);
+}
+
 void RedexContext::mutate_field(
     DexFieldRef* field, const DexFieldSpec& ref, bool rename_on_collision) {
   std::lock_guard<std::mutex> lock(s_field_lock);
