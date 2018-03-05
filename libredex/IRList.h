@@ -184,6 +184,7 @@ class IRList {
   using iterator = IntrusiveList::iterator;
   using const_iterator = IntrusiveList::const_iterator;
   using reverse_iterator = IntrusiveList::reverse_iterator;
+  using difference_type = IntrusiveList::difference_type;
 
   IRList::iterator main_block();
   IRList::iterator make_if_block(IRList::iterator cur,
@@ -224,7 +225,7 @@ class IRList {
    */
   boost::sub_range<IRList> get_param_instructions();
 
-  bool structural_equals(const IRList& other);
+  bool structural_equals(const IRList& other) const;
 
   /* Passes memory ownership of "mie" to callee. */
   void push_back(MethodItemEntry& mie) { m_list.push_back(mie); }
@@ -335,6 +336,13 @@ class IRList {
   IRList::iterator iterator_to(MethodItemEntry& mie) {
     return m_list.iterator_to(mie);
   }
+
+  IRList::const_iterator iterator_to(const MethodItemEntry& mie) const {
+    return m_list.iterator_to(mie);
+  }
+
+  IRList::difference_type index_of(const MethodItemEntry& mie) const;
+
   friend std::string show(const IRCode*);
 };
 

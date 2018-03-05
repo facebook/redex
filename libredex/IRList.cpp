@@ -10,6 +10,7 @@
 #include "IRList.h"
 
 #include <vector>
+#include <iterator>
 
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -435,11 +436,18 @@ void IRList::remove_branch_targets(IRInstruction *branch_inst) {
   }
 }
 
-bool IRList::structural_equals(const IRList& other) {
+IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
+  return std::distance(iterator_to(mie), begin());
+}
+
+bool IRList::structural_equals(const IRList& other) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
   for (; it1 != m_list.end() && it2 != other.end(); it1++, it2++) {
+    always_assert(it1->type != MFLOW_DEX_OPCODE);
+    always_assert(it2->type != MFLOW_DEX_OPCODE);
+
     if (it1->type != it2->type) {
       return false;
     }
@@ -449,16 +457,58 @@ bool IRList::structural_equals(const IRList& other) {
         return false;
       }
     } else if (it1->type == MFLOW_TARGET) {
-      auto branch_target1 = static_cast<BranchTarget*>(it1->target);
-      auto branch_target2 = static_cast<BranchTarget*>(it2->target);
+      auto target1 = it1->target;
+      auto target2 = it2->target;
 
-      if (branch_target1->index != branch_target2->index) {
+      if (target1->type != target2->type) {
+        return false;
+      }
+
+      if (target1->type == BRANCH_MULTI &&
+          target1->index != target2->index) {
+        return false;
+      }
+
+      // Do these targets point back to the same branch instruction?
+      if (this->index_of(*target1->src) != other.index_of(*target2->src)) {
+        return false;
+      }
+
+    } else if (it1->type == MFLOW_TRY) {
+      auto try1 = it1->tentry;
+      auto try2 = it2->tentry;
+
+      if (try1->type != try2->type) {
+        return false;
+      }
+
+      // Do these `try`s correspond to the same catch block?
+      if (this->index_of(*try1->catch_start) !=
+          other.index_of(*try2->catch_start)) {
+        return false;
+      }
+    } else if (it1->type == MFLOW_CATCH) {
+      auto catch1 = it1->centry;
+      auto catch2 = it2->centry;
+
+      if (catch1->catch_type != catch2->catch_type) {
+        return false;
+      }
+
+      if ((catch1->next == nullptr && catch2->next != nullptr) ||
+          (catch1->next != nullptr && catch2->next == nullptr)) {
+        return false;
+      }
+
+      // Do these `catch`es have the same catch after them?
+      if (catch1->next != nullptr &&
+          this->index_of(*catch1->next) != other.index_of(*catch2->next)) {
         return false;
       }
     }
   }
 
-  return it1 == m_list.end() && it2 == other.end();
+  return it1 == this->end() && it2 == other.end();
 }
 
 boost::sub_range<IRList> IRList::get_param_instructions() {
