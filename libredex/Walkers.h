@@ -43,6 +43,8 @@ class walk {
   using CodeWalkerFn = const std::function<void(DexMethod*, IRCode&)>&;
   using InsnWalkerFn = const std::function<void(DexMethod*, IRInstruction*)>&;
   using AnnotationWalkerFn = const std::function<void(DexAnnotation*)>&;
+  using MatchingInBlockWalkerFn = const std::function<void(
+      DexMethod*, Block*, const std::vector<IRInstruction*>&)>&;
 
   /**
    * Call walker on all classes in `classes`
@@ -188,12 +190,10 @@ class walk {
    */
   template <class Classes,
             typename Predicate,
-            size_t N = std::tuple_size<Predicate>::value,
-            typename Walker = void(DexMethod*,
-                                   const std::vector<IRInstruction*>&)>
+            size_t N = std::tuple_size<Predicate>::value>
   static void matching_opcodes_in_block(const Classes& classes,
                                         const Predicate& predicate,
-                                        const Walker& walker) {
+                                        MatchingInBlockWalkerFn walker) {
     for (const auto& cls : classes) {
       iterate_matching_block(cls, predicate, walker);
     }
@@ -299,27 +299,28 @@ class walk {
   }
 
   template <typename Predicate,
-            size_t N = std::tuple_size<Predicate>::value,
-            typename Walker = void(DexMethod*,
-                                   const std::vector<IRInstruction*>&)>
+            size_t N = std::tuple_size<Predicate>::value>
   static void iterate_matching_block(DexClass* cls,
                                      const Predicate& predicate,
-                                     const Walker& walker) {
+                                     MatchingInBlockWalkerFn walker) {
     iterate_code(
         cls, all_methods, [&predicate, &walker](DexMethod* m, IRCode& ir_code) {
-          std::vector<std::vector<IRInstruction*>> method_matches;
+          std::vector<std::pair<Block*, std::vector<IRInstruction*>>> block_matches;
           ir_code.build_cfg();
           for (Block* block : ir_code.cfg().blocks()) {
+            std::vector<std::vector<IRInstruction*>> method_matches;
             std::vector<IRInstruction*> insns;
             for (const auto& mie : InstructionIterable(block)) {
               insns.emplace_back(mie.insn);
             }
             m::find_matches(insns, predicate, method_matches);
+            for (auto& matched_insns : method_matches) {
+              block_matches.emplace_back(block, std::move(matched_insns));
+            }
           }
 
-          for (const std::vector<IRInstruction*>& matching_insns :
-               method_matches) {
-            walker(m, matching_insns);
+          for (const auto& match : block_matches) {
+            walker(m, match.first, match.second);
           }
         });
   }
@@ -513,13 +514,11 @@ class walk {
      */
     template <class Classes,
               typename Predicate,
-              size_t N = std::tuple_size<Predicate>::value,
-              typename Walker = void(DexMethod*,
-                                     const std::vector<IRInstruction*>&)>
+              size_t N = std::tuple_size<Predicate>::value>
     static void matching_opcodes_in_block(
         const Classes& classes,
         const Predicate& predicate,
-        const Walker& walker,
+        MatchingInBlockWalkerFn walker,
         size_t num_threads = default_num_threads()) {
       auto wq = workqueue_foreach<DexClass*>(
           [&predicate, &walker](DexClass* cls) {
