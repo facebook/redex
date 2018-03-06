@@ -209,6 +209,7 @@ redex_all_SOURCES = \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
+	opt/remove-unread-fields/RemoveUnreadFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
 	opt/renameclasses/RenameClasses.cpp \

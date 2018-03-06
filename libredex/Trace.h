@@ -70,6 +70,7 @@
   TM(RME)                \
   TM(RMGOTO)             \
   TM(RMU)                \
+  TM(RMUF)               \
   TM(RM_INTF)            \
   TM(SHORTEN)            \
   TM(SINK)               \
