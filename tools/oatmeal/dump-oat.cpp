@@ -3011,9 +3011,8 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
     // Advance past the VDEX header plus the DEX file checksum inside the .vdex
     // file.
     dex_file_record.dex_file_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
+    OatDexFileRecord::write(oat_fh, dex_file_record);
   }
-
-  OatDexFileRecord::write(oat_fh, dex_file_record);
 
   ////////// Update header with final checksum.
   CHECK(oat_fh.seek_begin());
