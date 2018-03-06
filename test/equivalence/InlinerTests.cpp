@@ -125,9 +125,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     mt->push_back(invoke);
     mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}));
     // fallthrough to main block
-    auto target = new BranchTarget();
-    target->type = BRANCH_SIMPLE;
-    target->src = branch;
+    auto target = new BranchTarget(branch);
     mt->push_back(target);
     mt->push_back(dasm(OPCODE_SUB_INT, {1_v, 1_v, 2_v}));
     mt->push_back(dasm(OPCODE_RETURN, {1_v}));

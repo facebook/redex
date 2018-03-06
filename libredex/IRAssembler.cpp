@@ -235,9 +235,7 @@ void handle_labels(IRCode* code,
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {
       auto target_mie = label_defs.at(label_refs.at(insn));
-      auto target = new BranchTarget();
-      target->type = BRANCH_SIMPLE;
-      target->src = &mie;
+      auto target = new BranchTarget(&mie);
       // Since one label can be the target of multiple branches, but one
       // MFLOW_TARGET can only point to one branching opcode, we may need to
       // create additional MFLOW_TARGET items here.

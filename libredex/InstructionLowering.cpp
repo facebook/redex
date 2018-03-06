@@ -265,9 +265,7 @@ static void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator it)
   const auto* insn = it->insn;
   auto* dex_insn = new DexInstruction(DOPCODE_FILL_ARRAY_DATA);
   dex_insn->set_src(0, insn->src(0));
-  auto* bt = new BranchTarget();
-  bt->type = BRANCH_SIMPLE;
-  bt->src = &*it;
+  auto* bt = new BranchTarget(&*it);
   code->push_back(bt);
   code->push_back(insn->get_data());
   it->replace_ir_with_dex(dex_insn);

@@ -967,7 +967,7 @@ std::string show(const MethodItemEntry& mei) {
     return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET: MULTI " << mei.target->index << " ";
+      ss << "TARGET: MULTI " << mei.target->case_key << " ";
     } else {
       ss << "TARGET: SIMPLE ";
     }

@@ -284,14 +284,10 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
   using namespace dex_asm;
-  auto target1 = new BranchTarget();
-  auto target2 = new BranchTarget();
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {9_v}));
-  target1->type = BRANCH_SIMPLE;
-  target1->src = if_mie;
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  target2->type = BRANCH_SIMPLE;
-  target2->src = goto_mie;
+  auto target1 = new BranchTarget(if_mie);
+  auto target2 = new BranchTarget(goto_mie);
   IRCode* code = m_method->get_code();
   code->push_back(*if_mie); // branch to target1
   code->push_back(dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}));

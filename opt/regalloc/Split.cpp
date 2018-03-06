@@ -401,7 +401,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
       auto pred_branch = block_load_info.target_branch.at(pair.first).second;
       BranchTarget* bt = new BranchTarget();
       bt->type = succ_target->target->type;
-      bt->index = succ_target->target->index;
+      bt->case_key = succ_target->target->case_key;
       bt->src = pred_branch;
       MethodItemEntry* mentry = new MethodItemEntry(bt);
       auto pos_it = code->end();
@@ -425,9 +425,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
       }
       auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
       code->insert_before(pos_it, *goto_entry);
-      BranchTarget* bt = new BranchTarget();
-      bt->type = BRANCH_SIMPLE;
-      bt->src = goto_entry;
+      BranchTarget* bt = new BranchTarget(goto_entry);
       MethodItemEntry* mentry = new MethodItemEntry(bt);
       code->insert_before(pos_it, *mentry);
     }

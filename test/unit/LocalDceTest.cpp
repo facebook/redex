@@ -47,9 +47,7 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   auto catch_start = new MethodItemEntry(exception_type);
 
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = goto_mie;
+  auto target = new BranchTarget(goto_mie);
 
   code->push_back(target);
   // this TRY_START is in a block that is live
@@ -84,9 +82,7 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   auto catch_start = new MethodItemEntry(exception_type);
 
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = goto_mie;
+  auto target = new BranchTarget(goto_mie);
 
   code->push_back(target);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));

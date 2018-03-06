@@ -58,9 +58,7 @@ struct DedupBlocksTest : testing::Test {
       insn = dasm(op, {0_v});
     }
     auto source = new MethodItemEntry(insn);
-    auto target = new BranchTarget();
-    target->type = BRANCH_SIMPLE;
-    target->src = source;
+    auto target = new BranchTarget(source);
     return {source, new MethodItemEntry(target)};
   }
 

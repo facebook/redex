@@ -65,11 +65,15 @@ enum BranchTargetType {
 struct BranchTarget {
   BranchTargetType type;
   MethodItemEntry* src;
-  int32_t index;
+
+  // The key that a value must match to take this case in a switch statement.
+  int32_t case_key;
+
   BranchTarget() = default;
   BranchTarget(MethodItemEntry* src) : type(BRANCH_SIMPLE), src(src) {}
-  BranchTarget(MethodItemEntry* src, int32_t index)
-      : type(BRANCH_MULTI), src(src), index(index) {}
+
+  BranchTarget(MethodItemEntry* src, int32_t case_key)
+      : type(BRANCH_MULTI), src(src), case_key(case_key) {}
 };
 
 /*

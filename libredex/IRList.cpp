@@ -224,9 +224,7 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
       "No match found while replacing '%s' with '%s'",
       SHOW(from),
       SHOW(to));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = &*miter;
+  auto target = new BranchTarget(&*miter);
   m_list.insert(miter, *(new MethodItemEntry(target)));
 }
 
@@ -324,8 +322,8 @@ void IRList::remove_opcode(IRInstruction* insn) {
 
 /*
  * Param `insn` should be part of a switch...case statement. Find the case
- * block it is contained within and remove it. Then decrement the index of
- * all the other case blocks that are larger than the index of the removed
+ * block it is contained within and remove it. Then decrement the case_key of
+ * all the other case blocks that are larger than the case_key of the removed
  * block so that the case numbers don't have any gaps and the switch can
  * still be encoded as a packed-switch opcode.
  *
@@ -386,8 +384,8 @@ void IRList::remove_switch_case(IRInstruction* insn) {
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_TARGET) {
       BranchTarget* bt = mie.target;
-      if (bt->src == switch_mei && bt->index > target_mei->target->index) {
-        bt->index -= 1;
+      if (bt->src == switch_mei && bt->case_key > target_mei->target->case_key) {
+        bt->case_key -= 1;
       }
     }
   }
@@ -465,7 +463,7 @@ bool IRList::structural_equals(const IRList& other) const {
       }
 
       if (target1->type == BRANCH_MULTI &&
-          target1->index != target2->index) {
+          target1->case_key != target2->case_key) {
         return false;
       }
 
@@ -566,9 +564,7 @@ IRList::iterator IRList::make_if_block(
     IRList::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
-  auto bt = new BranchTarget();
-  bt->src = if_entry;
-  bt->type = BRANCH_SIMPLE;
+  auto bt = new BranchTarget(if_entry);
   auto bentry = new MethodItemEntry(bt);
   return m_list.insert(m_list.end(), *bentry);
 }
@@ -587,16 +583,12 @@ IRList::iterator IRList::make_if_else_block(
   auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
   // main block
-  auto main_bt = new BranchTarget();
-  main_bt->src = goto_entry;
-  main_bt->type = BRANCH_SIMPLE;
+  auto main_bt = new BranchTarget(goto_entry);
   auto mb_entry = new MethodItemEntry(main_bt);
   auto main_block = m_list.insert(goto_it, *mb_entry);
 
   // else block
-  auto else_bt = new BranchTarget();
-  else_bt->src = if_entry;
-  else_bt->type = BRANCH_SIMPLE;
+  auto else_bt = new BranchTarget(if_entry);
   auto eb_entry = new MethodItemEntry(else_bt);
   *true_block = m_list.insert(goto_it, *eb_entry);
 
@@ -615,9 +607,7 @@ IRList::iterator IRList::make_switch_block(
     auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
     auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
-    auto main_bt = new BranchTarget();
-    main_bt->src = goto_entry;
-    main_bt->type = BRANCH_SIMPLE;
+    auto main_bt = new BranchTarget(goto_entry);
     auto mb_entry = new MethodItemEntry(main_bt);
     main_block = m_list.insert(++main_block, *mb_entry);
 
@@ -625,10 +615,7 @@ IRList::iterator IRList::make_switch_block(
     // Keep updating the iterator of the case block to point right before the
     // GOTO going back to the end of the switch.
     for (auto idx : case_it->first) {
-      auto case_bt = new BranchTarget();
-      case_bt->src = switch_entry;
-      case_bt->index = idx;
-      case_bt->type = BRANCH_MULTI;
+      auto case_bt = new BranchTarget(switch_entry, idx);
       auto eb_entry = new MethodItemEntry(case_bt);
       case_it->second = m_list.insert(goto_it, *eb_entry);
     }
