@@ -913,6 +913,9 @@ void RenameClassesPassV2::rename_classes_in_layouts(
   size_t num_layout_renamed = 0;
   auto xml_files = get_xml_files(m_apk_dir + "/res");
   for (const auto& path : xml_files) {
+    if (is_raw_resource(path)) {
+      continue;
+    }
     size_t num_renamed;
     ssize_t out_delta;
     TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());

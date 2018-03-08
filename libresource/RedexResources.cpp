@@ -586,8 +586,17 @@ void ensure_file_contents(
   }
 }
 
+bool is_raw_resource(const std::string& filename) {
+  return filename.find("/res/raw/") != std::string::npos
+    || filename.find("/res/raw-") != std::string::npos;
+}
+
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename) {
+  if (is_raw_resource(filename)) {
+    std::unordered_set<uint32_t> empty;
+    return empty;
+  }
   std::string file_contents = read_entire_file(filename);
   ensure_file_contents(file_contents, filename);
   return extract_xml_reference_attributes(file_contents, filename);
@@ -673,6 +682,9 @@ int inline_xml_reference_attributes(
 void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
+  if (is_raw_resource(filename)) {
+    return;
+  }
   std::string file_contents = read_entire_file(filename);
   ensure_file_contents(file_contents, filename);
   bool made_change = false;
