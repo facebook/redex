@@ -81,6 +81,7 @@
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
+  TM(TREF)               \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \
