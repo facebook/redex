@@ -815,6 +815,11 @@ struct OatDexFileRecord {
 
   static OatDexFileRecord build(const DexInput& dex, uint32_t& next_offset);
   static void write(FileHandle& oat_fh, const OatDexFileRecord& record);
+  uint32_t size() const {
+    // 3 ints for dex file location size, checksum, offset into the vdex plus
+    // the actual size of the dex file path.
+    return sizeof(uint32_t) * 3 + location_data.size();
+  }
 };
 
 // Dex File listing for OAT versions 064 and 045.
@@ -2649,6 +2654,7 @@ OatDexFileRecord OatDexFileRecord::build(const DexInput& dex,
   auto dex_location = dex.location;
   OatDexFileRecord record(
       static_cast<uint32_t>(dex_location.size()), dex_location, 0x0, 0x0);
+  next_offset += record.size();
   return record;
 }
 
