@@ -554,7 +554,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturns) {
+TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -589,6 +589,52 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturns) {
       (const-string "neverReturns")
       (move-result-pseudo-object v0)
       (invoke-static (v0) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.returnValueError:(Ljava/lang/String;)V")
+
+      (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
+      (invoke-static () "LFoo;.neverReturns:()I")
+      (move-result v0)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(method);
+
+  auto never_returns = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.neverReturns:()I"
+     (
+       :loop
+       (goto :loop)
+     )
+    )
+  )");
+  creator.add_method(never_returns);
+
+  Scope scope{creator.create()};
+  InterproceduralConstantPropagationPass(m_config).run(scope);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (invoke-static () "LFoo;.neverReturns:()I")
+      (move-result v0)
+
+      (const-string "neverReturns")
+      (move-result-pseudo-object v1)
+      (invoke-static (v1) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.returnValueError:(Ljava/lang/String;)V")
 
       (return-void)
     )

@@ -194,6 +194,9 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   };
   auto scd = wps.get_return_value(callee);
   if (scd.is_bottom()) {
+    if (is_move_result(std::next(it)->insn->opcode())) {
+      ++it;
+    }
     it.reset(insert_assertion(it.unwrap()));
     return it;
   }
