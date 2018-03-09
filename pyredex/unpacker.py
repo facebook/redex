@@ -502,7 +502,7 @@ def extract_dex_from_jar(jarpath, dexpath):
     dest_directory = dirname(dexpath)
     with zipfile.ZipFile(jarpath) as jar:
         contents = jar.namelist()
-        dexfiles = [name for name in contents if name.endswith('dex')]
+        dexfiles = [name for name in contents if name.endswith('.dex')]
         assert len(dexfiles) == 1, 'Expected a single dex file'
         dexname = jar.extract(dexfiles[0], dest_directory)
         os.rename(join(dest_directory, dexname), dexpath)
