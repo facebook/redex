@@ -13,7 +13,7 @@ source.
 
 We use package managers to resolve third-party library dependencies.
 
-### Mac OS X
+### macOS
 
 You will need Xcode with command line tools installed.  To get the command line tools, use:
 ```
@@ -194,7 +194,7 @@ PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
 
 After you run redex, you'll need to re-sign your app.  You can re-sign manually
 using these instructions:
-http://developer.android.com/tools/publishing/app-signing.html#signing-manually.
+https://developer.android.com/tools/publishing/app-signing.html#signing-manually.
 
 You can also tell redex to sign for you.  If you want to sign with the debug
 key, you can simply do:
