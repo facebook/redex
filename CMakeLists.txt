@@ -17,6 +17,7 @@ file(GLOB includes
         "util"
         "liblocator"
         "libresource"
+        "shared"
         )
 
 include_directories(
@@ -31,6 +32,8 @@ file(GLOB_RECURSE redex_srcs
         "opt/*.cpp"
         "opt/*.h"
         "util/Sha1.*"
+        "shared/*.cpp"
+        "shared/*.h"
         "liblocator/*.cpp"
         "liblocator/*.h"
         )
