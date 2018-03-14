@@ -442,9 +442,19 @@ bool IRList::structural_equals(const IRList& other) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
-  for (; it1 != m_list.end() && it2 != other.end(); it1++, it2++) {
+  for (; it1 != m_list.end() && it2 != other.end();) {
     always_assert(it1->type != MFLOW_DEX_OPCODE);
     always_assert(it2->type != MFLOW_DEX_OPCODE);
+    // Skip debug and position
+    if (it1->type == MFLOW_DEBUG || it1->type == MFLOW_POSITION) {
+      ++it1;
+      continue;
+    }
+
+    if (it2->type == MFLOW_DEBUG || it2->type == MFLOW_POSITION) {
+      ++it2;
+      continue;
+    }
 
     if (it1->type != it2->type) {
       return false;
@@ -504,6 +514,8 @@ bool IRList::structural_equals(const IRList& other) const {
         return false;
       }
     }
+    ++it1;
+    ++it2;
   }
 
   return it1 == this->end() && it2 == other.end();
