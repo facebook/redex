@@ -17,6 +17,7 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
@@ -54,6 +55,13 @@ class IRTypeCheckerTest : public ::testing::Test {
   void add_code(const std::vector<IRInstruction*>& insns) {
     IRCode* code = m_method->get_code();
     for (const auto& insn : insns) {
+      code->push_back(insn);
+    }
+  }
+
+  void add_code(const std::unique_ptr<IRCode>& insns) {
+    IRCode* code = m_method->get_code();
+    for (const auto& insn : *insns) {
       code->push_back(insn);
     }
   }
@@ -543,4 +551,25 @@ TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
   EXPECT_EQ(DOUBLE2, checker.get_type(insns[3], 1));
   EXPECT_EQ(DOUBLE1, checker.get_type(insns[4], 1));
   EXPECT_EQ(DOUBLE2, checker.get_type(insns[4], 2));
+}
+
+TEST_F(IRTypeCheckerTest, filledNewArray) {
+  auto insns = assembler::ircode_from_string(R"(
+    (
+      (const-string "S1")
+      (move-result-pseudo-object v1)
+      (const-string "S2")
+      (move-result-pseudo-object v2)
+      (const-string "S3")
+      (move-result-pseudo-object v3)
+      (filled-new-array (v1 v2 v3) "[Ljava/lang/String;")
+      (move-result-object v0)
+      (return v9)
+    )
+  )");
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+  EXPECT_EQ("OK", checker.what());
 }

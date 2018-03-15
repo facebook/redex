@@ -783,10 +783,7 @@ class AnchorPropagation final
     case OPCODE_NEW_ARRAY:
     case OPCODE_AGET_OBJECT:
     case OPCODE_IGET_OBJECT:
-    case OPCODE_SGET_OBJECT: {
-      current_state->set(RESULT_REGISTER, AnchorDomain(insn));
-      break;
-    }
+    case OPCODE_SGET_OBJECT:
     case OPCODE_FILLED_NEW_ARRAY: {
       current_state->set(RESULT_REGISTER, AnchorDomain(insn));
       break;
@@ -1050,19 +1047,23 @@ class PointsToActionGenerator final {
     }
     case OPCODE_NEW_ARRAY:
     case OPCODE_FILLED_NEW_ARRAY: {
-      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
-        const DexType* element_type = get_array_type(insn->get_type());
-        // Although the Dalvik bytecode specification states that a
-        // filled-new-array operation could be used with an array of references,
-        // the Dex compiler seems to never generate that case. The assert is
-        // used here as a safeguard.
-        always_assert_log(!is_object(element_type),
-                          "Unexpected instruction '%s'",
-                          SHOW(insn));
-      }
       m_semantics->add(PointsToAction::load_operation(
           PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
           get_variable_from_anchor(insn)));
+      if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
+        const DexType* element_type = get_array_type(insn->get_type());
+        if (!is_object(element_type)) {
+          break;
+        }
+        auto lhs =
+            boost::optional<PointsToVariable>(get_variable_from_anchor(insn));
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          m_semantics->add(PointsToAction::put_operation(
+              PointsToOperation(PTS_IPUT_SPECIAL, PTS_ARRAY_ELEMENT),
+              get_variable_from_anchor_set(state.get(insn->src(i))),
+              lhs));
+        }
+      }
       break;
     }
     case OPCODE_APUT_OBJECT: {
