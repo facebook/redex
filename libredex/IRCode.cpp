@@ -813,7 +813,8 @@ bool IRCode::try_sync(DexCode* code) {
     auto& targets = multis[multiopcode];
     auto multi_insn = multiopcode->dex_insn;
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
-    always_assert_log(!targets.empty(), "need to have targets");
+    always_assert_log(
+        !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;

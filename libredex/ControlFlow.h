@@ -20,19 +20,19 @@
  * A Control Flow Graph is a directed graph of Basic Blocks.
  *
  * Each `Block` has some number of successors and predecessors. `Block`s are
- * connected to their predecessors and successors by `EdgeType`s that specify
+ * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
  * Right now there are two types of CFGs. Editable and non-editable:
  * A non editable CFG's blocks have begin and end pointers into the big linear
- * IRList in IRCode.
+ * IRList inside IRCode.
  * An editable CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
- * In editable mode, MFLOW_TARGET entries are not present inside the blocks
- * because the edges of the CFG itself are sufficient. It is also easier to
- * maintain the data structure when there is no unnecessary information
- * duplication.
+ * EDITABLE MODE:
+ * It is easier to maintain the data structure when there is no unnecessary
+ * information duplication. Therefore, MFLOW_TARGETs and OPCODE_GOTOs are
+ * deleted and their information is moved to the edges of the CFG.
  *
  * TODO: Add useful CFG editing methods
  * TODO: phase out edits to the IRCode and move them all to the editable CFG
@@ -160,9 +160,9 @@ class Block {
   friend class cfg::InstructionIteratorImpl<true>;
   friend void transform::replace_block(IRCode*, Block*, Block*);
 
-  // return an iterator to the goto in this block (if there is one)
-  // otherwise, return m_entries.end()
-  IRList::iterator get_goto();
+  // return an iterator to the conditional branch (including switch) in this
+  // block. If there is no such instruction, return end()
+  IRList::iterator get_conditional_branch();
 
   cfg::BlockId m_id;
 
@@ -231,6 +231,13 @@ class ControlFlowGraph {
   template <class... Args>
   void add_edge(Args&&... args);
 
+  // remove this edge from the graph entirely
+  void remove_edge(std::shared_ptr<cfg::Edge> edge);
+
+  // Make `e` point to a new target block.
+  // The source block is unchanged.
+  void redirect_edge(std::shared_ptr<cfg::Edge> e, Block* new_target);
+
   /*
    * Print the graph in the DOT graph description language.
    */
@@ -253,6 +260,14 @@ class ControlFlowGraph {
   bool editable() const { return m_editable; }
 
   size_t num_blocks() const { return m_blocks.size(); }
+
+  // transform the CFG to an equivalent but more canonical state
+  // Assumes m_editable is true
+  void simplify();
+
+  // SIGABORT if the internal state of the CFG is invalid
+  // Assumes m_editable is true
+  void sanity_check();
 
  private:
   using BranchToTargets =
@@ -293,14 +308,6 @@ class ControlFlowGraph {
   // elsewhere
   void fill_blocks(IRList* ir, const Boundaries& boundaries);
 
-  // SIGABORT if the internal state of the CFG is invalid
-  // Assumes m_editable is true
-  void sanity_check();
-
-  // transform the CFG to an equivalent but more canonical state
-  // Assumes m_editable is true
-  void simplify();
-
   // remove all TRY START and ENDs because we may reorder the blocks
   // Assumes m_editable is true
   void remove_try_markers();
@@ -308,13 +315,13 @@ class ControlFlowGraph {
   // choose an order of blocks for output
   std::vector<Block*> order();
 
-  // Materialize target instructions corresponding to control-flow edges.
-  // Used while turning back into a linear representation.
-  void insert_targets(const std::vector<Block*>& ordering);
+  // Materialize target instructions and gotos corresponding to control-flow
+  // edges. Used while turning back into a linear representation.
+  void insert_branches_and_targets(const std::vector<Block*>& ordering);
 
-  // For turning back into a linear representation.
-  // Remove GOTOs that will be no-ops under the given ordering
-  void remove_fallthrough_gotos(const std::vector<Block*>& ordering);
+  // Materialize TRY_STARTs and TRY_ENDs
+  // Used while turning back into a linear representation.
+  void insert_try_markers(const std::vector<Block*>& ordering);
 
   void remove_all_edges(Block* pred, Block* succ);
 

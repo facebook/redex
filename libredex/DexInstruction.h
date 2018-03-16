@@ -311,6 +311,10 @@ inline bool is_return_value(IROpcode op) {
   return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
 }
 
+inline bool is_throw(IROpcode op) {
+  return op == OPCODE_THROW;
+}
+
 inline bool is_move_result(IROpcode op) {
   return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
 }

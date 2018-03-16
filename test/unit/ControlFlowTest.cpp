@@ -297,12 +297,11 @@ TEST(ControlFlow, iterate2) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
-     ; implicit goto :loop
 
      :loop
      (const v1 0)
      (if-gez v0 :if-true-label)
-     (goto :loop)
+     (goto :loop) ; this goto is removed
 
      :if-true-label
      (return-void)
@@ -320,16 +319,12 @@ TEST(ControlFlow, iterate2) {
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
-    if (op == IOPCODE_LOAD_PARAM) {
-      EXPECT_EQ(OPCODE_GOTO, std::next(it)->insn->opcode());
-    }
     if (op == OPCODE_CONST) {
       EXPECT_EQ(OPCODE_IF_GEZ, std::next(it)->insn->opcode());
-      EXPECT_EQ(OPCODE_GOTO, std::next(it, 2)->insn->opcode());
     }
     times_encountered[insn] += 1;
   }
-  EXPECT_EQ(6, times_encountered.size());
+  EXPECT_EQ(4, times_encountered.size());
   for (const auto& entry : times_encountered) {
     EXPECT_EQ(1, entry.second);
   }
@@ -375,8 +370,12 @@ TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
   input_code->build_cfg(true);
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
 TEST(ControlFlow, infinite) {
@@ -390,21 +389,22 @@ TEST(ControlFlow, infinite) {
   auto expected_code = assembler::ircode_from_string(str);
 
   input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  TRACE(CFG, 1, "input:\n%s\n", SHOW(input_code));
-  TRACE(CFG, 1, "expected:\n%s\n", SHOW(expected_code));
-
-  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST(ControlFlow, unreachable) {
+TEST(ControlFlow, infinite2) {
   auto str = R"(
     (
       :lbl
-      (return-void)
-
+      (const v0 0)
       (goto :lbl)
     )
   )";
@@ -412,11 +412,66 @@ TEST(ControlFlow, unreachable) {
   auto expected_code = assembler::ircode_from_string(str);
 
   input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  TRACE(CFG, 1, "input:\n%s\n", SHOW(input_code));
-  TRACE(CFG, 1, "expected:\n%s\n", SHOW(expected_code));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
 
-  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
-            assembler::to_s_expr(expected_code.get()));
+TEST(ControlFlow, unreachable) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      :lbl
+      (return-void)
+
+      (goto :lbl)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      ; cfg simplification removes the empty block
+      (return-void)
+    )
+  )");
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, unreachable2) {
+  auto str = R"(
+    (
+      :lbl
+      (return-void)
+
+      (const v0 0)
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }

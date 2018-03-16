@@ -116,7 +116,8 @@ void Transform::eliminate_dead_branch(
   if (!is_conditional_branch(insn->opcode())) {
     return;
   }
-  always_assert(block->succs().size() == 2);
+  always_assert_log(block->succs().size() == 2, "actually %d\n%s",
+                    block->succs().size(), SHOW(InstructionIterable(*block)));
   for (auto& edge : block->succs()) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable

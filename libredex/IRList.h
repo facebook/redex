@@ -299,7 +299,7 @@ class IRList {
 
   // transfer all of `other` into `this` starting at `pos`
   // memory ownership is also transferred
-  void splice_all(IRList::const_iterator pos, IRList& other) {
+  void splice(IRList::const_iterator pos, IRList& other) {
     m_list.splice(pos, other.m_list);
   }
 
