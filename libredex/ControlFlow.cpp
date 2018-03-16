@@ -88,6 +88,13 @@ IRList::const_iterator Block::end() const {
   }
 }
 
+void Block::remove_opcode(const IRList::iterator& it) {
+  always_assert(m_parent->editable());
+  always_assert(it->type == MFLOW_OPCODE);
+  always_assert(!is_branch(it->insn->opcode()));
+  m_entries.remove_opcode(it);
+}
+
 void Block::remove_debug_line_info() {
   for (MethodItemEntry& mie : *this) {
     if (mie.type == MFLOW_POSITION) {
@@ -668,21 +675,69 @@ void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
 }
 
 void ControlFlowGraph::remove_edge(std::shared_ptr<cfg::Edge> edge) {
-  auto& sources = edge->src()->m_succs;
-  auto& targets = edge->target()->m_preds;
+  remove_edge_if(
+      edge->src(), edge->target(),
+      [edge](const std::shared_ptr<cfg::Edge> e) { return edge == e; });
+}
+
+void ControlFlowGraph::remove_edge_if(
+    Block* source,
+    Block* target,
+    const EdgePredicate& predicate) {
+  auto& sources = source->m_succs;
+  auto& targets = target->m_preds;
 
   sources.erase(std::remove_if(sources.begin(),
                                sources.end(),
-                               [edge](const std::shared_ptr<Edge>& e) {
-                                 return e == edge;
-                               }),
+                               predicate),
                 sources.end());
   targets.erase(std::remove_if(targets.begin(),
                                targets.end(),
-                               [edge](const std::shared_ptr<Edge>& e) {
-                                 return e == edge;
+                               predicate),
+                targets.end());
+}
+
+void ControlFlowGraph::remove_pred_edge_if(Block* block,
+                                           const EdgePredicate& predicate) {
+  auto& targets = block->m_preds;
+
+  std::unordered_set<Block*> source_blocks;
+  targets.erase(std::remove_if(targets.begin(),
+                               targets.end(),
+                               [&source_blocks, &predicate](
+                                   const std::shared_ptr<cfg::Edge> e) {
+                                 source_blocks.insert(e->target());
+                                 return predicate(e);
                                }),
                 targets.end());
+
+  for (Block* source_block : source_blocks) {
+    auto& sources = source_block->m_succs;
+    sources.erase(std::remove_if(sources.begin(), sources.end(), predicate),
+                  sources.end());
+  }
+}
+
+void ControlFlowGraph::remove_succ_edge_if(Block* block,
+                                           const EdgePredicate& predicate) {
+
+  auto& sources = block->m_succs;
+
+  std::unordered_set<Block*> target_blocks;
+  sources.erase(std::remove_if(sources.begin(),
+                               sources.end(),
+                               [&target_blocks, &predicate](
+                                   const std::shared_ptr<cfg::Edge> e) {
+                                 target_blocks.insert(e->target());
+                                 return predicate(e);
+                               }),
+                sources.end());
+
+  for (Block* target_block : target_blocks) {
+    auto& targets = target_block->m_preds;
+    targets.erase(std::remove_if(targets.begin(), targets.end(), predicate),
+                  targets.end());
+  }
 }
 
 // Move this edge out of the vectors between its old blocks
@@ -695,6 +750,29 @@ void ControlFlowGraph::redirect_edge(std::shared_ptr<cfg::Edge> edge,
   edge->target()->m_preds.push_back(edge);
 }
 
+void ControlFlowGraph::remove_opcode(const cfg::InstructionIterator& it) {
+  always_assert(m_editable);
+
+  MethodItemEntry& mie = *it;
+  auto insn = mie.insn;
+  auto op = insn->opcode();
+  Block* block = it.block();
+
+  if (is_conditional_branch(op) || is_switch(op)) {
+    // Remove all outgoing EDGE_BRANCHes
+    // leaving behind only an EDGE_GOTO (and maybe an EDGE_THROW?)
+    remove_succ_edge_if(block, [](std::shared_ptr<cfg::Edge> e) {
+      return e->type() == EDGE_BRANCH;
+    });
+    block->m_entries.erase_and_dispose(it.unwrap());
+  } else if (is_goto(op)) {
+    always_assert_log(false, "There are no GOTO instructions in the CFG");
+  } else {
+    block->remove_opcode(it.unwrap());
+  }
+
+  sanity_check();
+}
 
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   o << "digraph {\n";

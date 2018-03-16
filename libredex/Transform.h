@@ -35,6 +35,7 @@ void visit(Block* b, std::unordered_set<Block*>& visited);
  */
 size_t remove_unreachable_blocks(IRCode* code);
 
+// TODO: move to CFG
 // remove old_block
 // if new_block is not null, reroute old_targets predecessors to new_target
 void replace_block(IRCode* code, Block* old_block, Block* new_block);

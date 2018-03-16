@@ -38,8 +38,10 @@
  * TODO: phase out edits to the IRCode and move them all to the editable CFG
  * TODO: remove non-editable CFG option
  *
+ * TODO?: remove unreachable blocks in simplify?
  * TODO?: remove items instead of replacing with MFLOW_FALLTHROUGH?
  * TODO?: make MethodItemEntry's fields private?
+ * TODO?: Should we remove MFLOW_CATCH entries?
  */
 
 enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
@@ -136,6 +138,8 @@ class Block {
   IRList::reverse_iterator rend() { return IRList::reverse_iterator(begin()); }
 
   bool is_catch() { return begin()->type == MFLOW_CATCH; }
+
+  void remove_opcode(const IRList::iterator& it);
 
   // remove all debug source code line numbers from this block
   void remove_debug_line_info();
@@ -234,9 +238,25 @@ class ControlFlowGraph {
   // remove this edge from the graph entirely
   void remove_edge(std::shared_ptr<cfg::Edge> edge);
 
+  using EdgePredicate = std::function<bool(const std::shared_ptr<cfg::Edge> e)>;
+
+  void remove_edge_if(Block* source,
+                      Block* target,
+                      const EdgePredicate& predicate);
+
+  void remove_succ_edge_if(Block* block, const EdgePredicate& predicate);
+
+  void remove_pred_edge_if(Block* block, const EdgePredicate& predicate);
+
   // Make `e` point to a new target block.
   // The source block is unchanged.
   void redirect_edge(std::shared_ptr<cfg::Edge> e, Block* new_target);
+
+  // remove the IRInstruction that `it` points to.
+  //
+  // If `it` points to a branch instruction, remove the corresponding outgoing
+  // edges.
+  void remove_opcode(const cfg::InstructionIterator& it);
 
   /*
    * Print the graph in the DOT graph description language.
