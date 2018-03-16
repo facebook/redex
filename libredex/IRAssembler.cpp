@@ -42,7 +42,8 @@ std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
 #undef OP
 
 using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
-using LabelRefs = std::unordered_map<const IRInstruction*, std::string>;
+using LabelRefs =
+    std::unordered_map<const IRInstruction*, std::vector<std::string>>;
 
 uint16_t reg_from_str(const std::string& reg_str) {
   always_assert(reg_str.at(0) == 'v');
@@ -55,9 +56,7 @@ std::string reg_to_str(uint16_t reg) {
   return "v" + std::to_string(reg);
 }
 
-s_expr to_s_expr(const IRInstruction* insn,
-                 const std::unordered_map<const IRInstruction*, std::string>&
-                     insn_to_label) {
+s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
   auto opcode_str = opcode_to_string_table.at(op);
   std::vector<s_expr> s_exprs{s_expr(opcode_str)};
@@ -97,9 +96,21 @@ s_expr to_s_expr(const IRInstruction* insn,
     s_exprs.emplace_back(insn->get_type()->get_name()->str());
     break;
   }
+
   if (is_branch(op)) {
-    always_assert_log(!is_switch(op), "Not yet supported");
-    s_exprs.emplace_back(insn_to_label.at(insn));
+    const auto& label_strs = label_refs.at(insn);
+    if (is_switch(op)) {
+      // (switch v0 (:a :b :c))
+      std::vector<s_expr> label_exprs;
+      for (const auto& label_str : label_strs) {
+        label_exprs.emplace_back(label_str);
+      }
+      s_exprs.emplace_back(label_exprs);
+    } else {
+      // (if-eqz v0 :a)
+      always_assert(label_strs.size() == 1);
+      s_exprs.emplace_back(label_strs[0]);
+    }
   }
   return s_expr(s_exprs);
 }
@@ -191,12 +202,21 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
     break;
   }
   }
+
   if (is_branch(op)) {
-    always_assert_log(!is_switch(op), "Not yet supported");
     std::string label_str;
-    s_patn({s_patn(&label_str)}, tail)
-        .must_match(tail, "Expecting label for " + opcode_str);
-    label_refs->emplace(insn.get(), label_str);
+    if (is_switch(op)) {
+      s_expr list;
+      s_patn({s_patn(list)}, tail)
+          .must_match(tail, "Expecting list of labels for " + opcode_str);
+      while (s_patn({s_patn(&label_str)}, list).match_with(list)) {
+        (*label_refs)[insn.get()].push_back(label_str);
+      }
+    } else {
+      s_patn({s_patn(&label_str)}, tail)
+          .must_match(tail, "Expecting label for " + opcode_str);
+      (*label_refs)[insn.get()].push_back(label_str);
+    }
   }
 
   always_assert_log(tail.is_nil(),
@@ -234,19 +254,33 @@ void handle_labels(IRCode* code,
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {
-      auto target_mie = label_defs.at(label_refs.at(insn));
-      auto target = new BranchTarget(&mie);
-      // Since one label can be the target of multiple branches, but one
-      // MFLOW_TARGET can only point to one branching opcode, we may need to
-      // create additional MFLOW_TARGET items here.
-      if (target_mie->type == MFLOW_FALLTHROUGH) {
-        target_mie->type = MFLOW_TARGET;
-        target_mie->target = target;
-      } else {
+      for (const std::string& label : label_refs.at(insn)) {
+        auto target_mie = label_defs.at(label);
+        // Since one label can be the target of multiple branches, but one
+        // MFLOW_TARGET can only point to one branching opcode, we may need to
+        // create additional MFLOW_TARGET items here.
         always_assert(target_mie->type == MFLOW_TARGET);
-        auto new_target_mie = new MethodItemEntry(target);
-        code->insert_before(code->iterator_to(*target_mie), *new_target_mie);
+        BranchTarget* target = target_mie->target;
+        if (target->src == nullptr) {
+          target->src = &mie;
+        } else {
+          // First target already filled. Create another
+          BranchTarget* new_target =
+              (target->type == BRANCH_SIMPLE)
+                  ? new BranchTarget(&mie)
+                  : new BranchTarget(&mie, target->case_key);
+          auto new_target_mie = new MethodItemEntry(new_target);
+          code->insert_before(code->iterator_to(*target_mie), *new_target_mie);
+        }
       }
+    }
+  }
+
+  // Clean up any unreferenced labels
+  for (auto& mie : *code) {
+    if (mie.type == MFLOW_TARGET && mie.target->src == nullptr) {
+      delete mie.target;
+      mie.type = MFLOW_FALLTHROUGH;
     }
   }
 }
@@ -257,7 +291,7 @@ namespace assembler {
 
 s_expr to_s_expr(const IRCode* code) {
   std::vector<s_expr> exprs;
-  std::unordered_map<const IRInstruction*, std::string> insn_to_label;
+  LabelRefs label_refs;
   size_t label_ctr{0};
   auto generate_label_name = [&]() {
     return ":L" + std::to_string(label_ctr++);
@@ -267,8 +301,8 @@ s_expr to_s_expr(const IRCode* code) {
     switch (it->type) {
       case MFLOW_TARGET: {
         auto bt = it->target;
-        always_assert_log(bt->type == BRANCH_SIMPLE, "Not yet implemented");
-        insn_to_label.emplace(bt->src->insn, generate_label_name());
+        always_assert_log(bt->src != nullptr, "%s", SHOW(code));
+        label_refs[bt->src->insn].push_back(generate_label_name());
         break;
       }
       case MFLOW_CATCH:
@@ -278,11 +312,13 @@ s_expr to_s_expr(const IRCode* code) {
         break;
     }
   }
+
   // Now emit the exprs
+  std::unordered_map<IRInstruction*, size_t> unused_label_index;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
       case MFLOW_OPCODE:
-        exprs.emplace_back(::to_s_expr(it->insn, insn_to_label));
+        exprs.emplace_back(::to_s_expr(it->insn, label_refs));
         break;
       case MFLOW_TRY:
       case MFLOW_CATCH:
@@ -291,9 +327,29 @@ s_expr to_s_expr(const IRCode* code) {
       case MFLOW_POSITION:
         exprs.emplace_back(::to_s_expr(it->pos.get()));
         break;
-      case MFLOW_TARGET:
-        exprs.emplace_back(insn_to_label.at(it->target->src->insn));
+      case MFLOW_TARGET: {
+        auto branch_target = it->target;
+        auto insn = branch_target->src->insn;
+        const auto& label_strs = label_refs.at(insn);
+
+        if (branch_target->type == BRANCH_MULTI) {
+          // Claim one of the labels.
+          // Doesn't matter which one as long as no other s_expr re-uses it.
+          auto& index = unused_label_index[insn];
+          auto label_str = label_strs[index];
+          ++index;
+
+          std::initializer_list<s_expr> label{
+              s_expr(label_str), s_expr(std::to_string(branch_target->case_key))};
+          exprs.emplace_back(label);
+        } else {
+          always_assert(branch_target->type == BRANCH_SIMPLE);
+          always_assert_log(label_strs.size() == 1, "actually %d\n%s", label_strs.size(), SHOW(code));
+          std::initializer_list<s_expr> label{s_expr(label_strs[0])};
+          exprs.emplace_back(label);
+        }
         break;
+      }
       case MFLOW_FALLTHROUGH:
         break;
       case MFLOW_DEX_OPCODE:
@@ -327,21 +383,29 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
 
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
-    if (s_patn(&keyword).match_with(insns_expr[i])) {
-      always_assert_log(keyword[0] == ':', "Labels must start with ':'");
-      auto label = keyword;
-      always_assert_log(
-          label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
-      // We insert a MFLOW_FALLTHROUGH that may become a MFLOW_TARGET if
-      // something points to it
-      auto maybe_target = new MethodItemEntry();
-      label_defs.emplace(label, maybe_target);
-      code->push_back(*maybe_target);
-    } else {
-      s_expr tail;
-      always_assert(s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i]));
+    s_expr tail;
+    if (s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i])) {
       if (keyword == ".pos") {
         code->push_back(position_from_s_expr(tail));
+      } else if (keyword[0] == ':') {
+        const auto& label = keyword;
+        always_assert_log(
+            label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
+
+        // We insert a MFLOW_TARGET with an empty source mie that may be filled
+        // in later if something points to it
+        std::string case_key_str;
+        BranchTarget* bt = nullptr;
+        if (s_patn({s_patn(&case_key_str)}).match_with(tail)) {
+          // A switch target like (:label 0)
+          bt = new BranchTarget(nullptr, std::stoi(case_key_str));
+        } else {
+          // An if target like (:label)
+          bt = new BranchTarget(nullptr);
+        }
+        auto maybe_target = new MethodItemEntry(bt);
+        label_defs.emplace(label, maybe_target);
+        code->push_back(*maybe_target);
       } else {
         auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
         always_assert(insn != nullptr);

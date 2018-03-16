@@ -18,7 +18,7 @@ TEST_F(IRAssemblerTest, disassembleCode) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
-     :foo-label
+     (:foo-label)
      (if-eqz v0 :foo-label)
      (invoke-virtual (v0 v1) "LFoo;.bar:(II)V")
      (sget-object "LFoo;.qux:LBar;")
@@ -28,10 +28,11 @@ TEST_F(IRAssemblerTest, disassembleCode) {
 )");
   EXPECT_EQ(code->get_registers_size(), 2);
 
+  std::cout << show(code) << std::endl;
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s,
             "((const v0 0) "
-            ":L0 "
+            "(:L0) "
             "(if-eqz v0 :L0) "
             "(invoke-virtual (v0 v1) \"LFoo;.bar:(II)V\") "
             "(sget-object \"LFoo;.qux:LBar;\") "
@@ -70,4 +71,34 @@ TEST_F(IRAssemblerTest, assembleMethod) {
   EXPECT_EQ(static_method->get_access(), ACC_PUBLIC | ACC_STATIC);
   EXPECT_STREQ(static_method->get_name()->c_str(), "baz");
   EXPECT_STREQ(static_method->get_class()->get_name()->c_str(), "LFoo;");
+}
+
+TEST_F(IRAssemblerTest, use_switch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v0 (:a :b :c))
+      (return-void)
+
+      (:a 0)
+      (const v0 0)
+
+      (:b 1)
+      (const v1 1)
+
+      (:c 2)
+      (const v2 2)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s,
+            "((sparse-switch v0 (:L0 :L1 :L2)) "
+            "(return-void) "
+            "(:L0 0) "
+            "(const v0 0) "
+            "(:L1 1) "
+            "(const v1 1) "
+            "(:L2 2) "
+            "(const v2 2))");
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }

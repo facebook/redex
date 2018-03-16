@@ -298,12 +298,12 @@ TEST(ControlFlow, iterate2) {
     (
      (load-param v0)
 
-     :loop
+     (:loop)
      (const v1 0)
      (if-gez v0 :if-true-label)
      (goto :loop) ; this goto is removed
 
-     :if-true-label
+     (:if-true-label)
      (return-void)
     )
 )");
@@ -381,7 +381,7 @@ TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
 TEST(ControlFlow, infinite) {
   auto str = R"(
     (
-      :lbl
+      (:lbl)
       (goto :lbl)
     )
   )";
@@ -403,7 +403,7 @@ TEST(ControlFlow, infinite) {
 TEST(ControlFlow, infinite2) {
   auto str = R"(
     (
-      :lbl
+      (:lbl)
       (const v0 0)
       (goto :lbl)
     )
@@ -426,7 +426,7 @@ TEST(ControlFlow, infinite2) {
 TEST(ControlFlow, unreachable) {
   auto input_code = assembler::ircode_from_string(R"(
     (
-      :lbl
+      (:lbl)
       (return-void)
 
       (goto :lbl)
@@ -454,7 +454,7 @@ TEST(ControlFlow, unreachable) {
 TEST(ControlFlow, unreachable2) {
   auto str = R"(
     (
-      :lbl
+      (:lbl)
       (return-void)
 
       (const v0 0)

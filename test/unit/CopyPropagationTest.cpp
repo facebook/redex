@@ -225,12 +225,12 @@ TEST(CopyPropagationTest, loopNoChange) {
       (const v0 0)
       (const v1 10)
 
-      :loop
+      (:loop)
       (if-eq v0 v1 :end)
       (add-int/lit8 v0 v0 1)
       (goto :loop)
 
-      :end
+      (:end)
       (return-void)
     )
   )");
@@ -244,12 +244,12 @@ TEST(CopyPropagationTest, loopNoChange) {
       (const v0 0)
       (const v1 10)
 
-      :loop
+      (:loop)
       (if-eq v0 v1 :end)
       (add-int/lit8 v0 v0 1)
       (goto :loop)
 
-      :end
+      (:end)
       (return-void)
     )
   )");
@@ -266,10 +266,10 @@ TEST(CopyPropagationTest, branchNoChange) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v3 v2)
 
-      :end
+      (:end)
       (move v1 v3)
       (return-void)
     )
@@ -286,10 +286,10 @@ TEST(CopyPropagationTest, branchNoChange) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v3 v2)
 
-      :end
+      (:end)
       (move v1 v3)
       (return-void)
     )
@@ -307,10 +307,10 @@ TEST(CopyPropagationTest, intersect1) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v1 v2)
 
-      :end
+      (:end)
       (move v1 v2)
       (return-void)
     )
@@ -327,10 +327,10 @@ TEST(CopyPropagationTest, intersect1) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v1 v2)
 
-      :end
+      (:end)
       (return-void)
     )
   )");
@@ -348,10 +348,10 @@ TEST(CopyPropagationTest, intersect2) {
       (move v3 v1)
       (goto :end)
 
-      :true
+      (:true)
       (move v4 v1)
 
-      :end
+      (:end)
       (move v3 v4)
       (return-void)
     )
@@ -484,10 +484,10 @@ TEST(CopyPropagationTest, whichRep) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v2 v1)
 
-      :end
+      (:end)
       (move v3 v1)
     )
   )";
@@ -512,10 +512,10 @@ TEST(CopyPropagationTest, whichRep2) {
       (move v2 v1)
       (goto :end)
 
-      :true
+      (:true)
       (move v1 v2)
 
-      :end
+      (:end)
       (move v3 v1)
     )
   )";
@@ -538,10 +538,10 @@ TEST(CopyPropagationTest, whichRepPreserve) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v1 v2)
 
-      :end
+      (:end)
       (move v3 v1)
     )
   )");
@@ -558,10 +558,10 @@ TEST(CopyPropagationTest, whichRepPreserve) {
       (move v1 v2)
       (goto :end)
 
-      :true
+      (:true)
       (move v1 v2)
 
-      :end
+      (:end)
       (move v3 v2)
     )
   )");

@@ -70,7 +70,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
       (load-param v1)
       (if-eqz v1 :label)
       (const v0 0)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -87,7 +87,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
      (load-param v1)
      (goto :label)
      (const v0 0)
-     :label
+     (:label)
      (return-void)
     )
   )");
@@ -138,7 +138,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
       (load-param v1)
       (if-eqz v1 :label)
       (const v0 0)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -196,7 +196,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
       (load-param v1)
       (if-gtz v1 :label)
       (const v0 0)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -213,7 +213,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
      (load-param v1)
      (goto :label)
      (const v0 0)
-     :label
+     (:label)
      (return-void)
     )
   )");
@@ -237,7 +237,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
       (const v0 0)
       (goto :skip)
       (invoke-static (v0) "LFoo;.qux:(I)V") ; this is unreachable
-      :skip
+      (:skip)
       (invoke-static (v0) "LFoo;.baz:(I)V") ; this is reachable
       (return-void)
      )
@@ -329,7 +329,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
       (if-eq v0 v1 :assertion-true)
       (const v2 0)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.paramValueError:(I)V")
-      :assertion-true
+      (:assertion-true)
       (return-void)
     )
   )");
@@ -368,11 +368,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
       (if-gez v0 :assertion-true-1)
       (const v2 0)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.paramValueError:(I)V")
-      :assertion-true-1
+      (:assertion-true-1)
       (if-ltz v1 :assertion-true-2)
       (const v3 1)
       (invoke-static (v3) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.paramValueError:(I)V")
-      :assertion-true-2
+      (:assertion-true-2)
       (return-void)
     )
   )");
@@ -411,7 +411,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
       (if-ltz v1 :assertion-true-1)
       (const v2 1)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.paramValueError:(I)V")
-      :assertion-true-1
+      (:assertion-true-1)
       (return-void)
     )
   )");
@@ -449,7 +449,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
       (if-ltz v1 :assertion-true-1)
       (const v2 0)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.paramValueError:(I)V")
-      :assertion-true-1
+      (:assertion-true-1)
       (return-void)
     )
   )");
@@ -496,7 +496,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
       (move-result-pseudo-object v2)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.fieldValueError:(Ljava/lang/String;)V")
 
-      :ok
+      (:ok)
       (return-void)
     )
   )");
@@ -545,7 +545,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
       (move-result-pseudo-object v2)
       (invoke-static (v2) "Lcom/facebook/redex/ConstantPropagationAssertHandler;.returnValueError:(Ljava/lang/String;)V")
 
-      :ok
+      (:ok)
       (return-void)
     )
   )");
@@ -572,7 +572,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
   auto never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
-       :loop
+       (:loop)
        (goto :loop)
      )
     )
@@ -617,7 +617,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
   auto never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()I"
      (
-       :loop
+       (:loop)
        (goto :loop)
      )
     )
@@ -673,7 +673,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
       (move-result-pseudo v0)
       (if-nez v0 :label)
       (const v0 0)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -693,7 +693,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
      (const v0 1)
      (goto :label)
      (const v0 0)
-     :label
+     (:label)
      (return-void)
     )
   )");
@@ -731,7 +731,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
       (move-result-pseudo v0)
       (if-nez v0 :label)
       (const v0 0)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -752,7 +752,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
      (move-result-pseudo v0)
      (if-nez v0 :label)
      (const v0 0)
-     :label
+     (:label)
      (return-void)
     )
   )");
@@ -802,7 +802,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
       (move-result-pseudo v0) ; this is always zero due to <clinit>
       (if-nez v0 :label)
       (const v0 1)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -888,7 +888,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToInvokeInClin
       (move-result-pseudo v0)
       (if-nez v0 :label)
       (const v0 1)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -928,7 +928,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
       (move-result v0)
       (if-eqz v0 :label)
       (const v0 1)
-      :label
+      (:label)
       (return-void)
      )
     )
@@ -958,7 +958,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
      (move-result v0)
      (goto :label)
      (const v0 1)
-     :label
+     (:label)
      (return-void)
     )
   )");
@@ -981,13 +981,13 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
       (invoke-static () "LFoo;.neverReturns:()V")
       (const v1 0) ; this never executes
 
-      :if-true-1
+      (:if-true-1)
       (const v1 1) ; this is the only instruction assigning to v1
 
       (const v2 1)
       (if-eq v1 v2 :if-true-2) ; this should always be true
       (const v3 2)
-      :if-true-2
+      (:if-true-2)
       (return-void)
      )
     )
@@ -998,7 +998,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   auto never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
-       :loop
+       (:loop)
        (goto :loop)
      )
     )
@@ -1020,13 +1020,13 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
      (invoke-static () "LFoo;.neverReturns:()V")
      (const v1 0)
 
-     :if-true-1
+     (:if-true-1)
      (const v1 1)
 
      (const v2 1)
      (goto :if-true-2)
      (const v3 2)
-     :if-true-2
+     (:if-true-2)
      (return-void)
     )
   )");
@@ -1052,7 +1052,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   auto never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
      (
-       :loop
+       (:loop)
        (goto :loop)
      )
     )

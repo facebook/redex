@@ -21,7 +21,7 @@
  * (method (public static) "LFoo;.bar()V"
  *  (
  *   (const v0 0)
- *   :L0
+ *   (:L0)
  *   (sget-object "LFoo.bar:I")
  *   (move-result-pseudo-object v1)
  *   ; note that since invoke-* instructions can take a variable number of
