@@ -336,7 +336,12 @@ TEST(ControlFlow, iterate2) {
   TRACE(CFG, 1, SHOW(code->cfg()));
 }
 
-TEST(ControlFlow, end) {
+// C++14 Null Forward Iterators
+// Make sure the default constructed InstructionIterator compares equal
+// to other default constructed InstructionIterator
+//
+// boost.org/doc/libs/1_58_0/doc/html/container/Cpp11_conformance.html
+TEST(ControlFlow, nullForwardIterators) {
   auto code = assembler::ircode_from_string(R"(
     (
       (return-void)
@@ -353,4 +358,65 @@ TEST(ControlFlow, end) {
   IRList::iterator a;
   IRList::iterator b;
   EXPECT_TRUE(a == b);
+}
+
+TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
+  auto str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (move v3 v0)
+      (return v3)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, infinite) {
+  auto str = R"(
+    (
+      :lbl
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  input_code->clear_cfg();
+
+  TRACE(CFG, 1, "input:\n%s\n", SHOW(input_code));
+  TRACE(CFG, 1, "expected:\n%s\n", SHOW(expected_code));
+
+  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, unreachable) {
+  auto str = R"(
+    (
+      :lbl
+      (return-void)
+
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  input_code->clear_cfg();
+
+  TRACE(CFG, 1, "input:\n%s\n", SHOW(input_code));
+  TRACE(CFG, 1, "expected:\n%s\n", SHOW(expected_code));
+
+  EXPECT_EQ(assembler::to_s_expr(input_code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }

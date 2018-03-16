@@ -205,6 +205,7 @@ class IRList {
       std::map<SwitchIndices, IRList::iterator>& cases);
 
   size_t size() const { return m_list.size(); }
+  bool empty() const { return m_list.empty(); }
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);

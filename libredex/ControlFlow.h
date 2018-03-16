@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <boost/optional/optional.hpp>
 #include <type_traits>
 #include <utility>
 
@@ -28,14 +29,23 @@
  * An editable CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
+ * In editable mode, MFLOW_TARGET entries are not present inside the blocks
+ * because the edges of the CFG itself are sufficient. It is also easier to
+ * maintain the data structure when there is no unnecessary information
+ * duplication.
+ *
  * TODO: Add useful CFG editing methods
  * TODO: phase out edits to the IRCode and move them all to the editable CFG
  * TODO: remove non-editable CFG option
+ *
+ * TODO?: remove items instead of replacing with MFLOW_FALLTHROUGH?
+ * TODO?: make MethodItemEntry's fields private?
  */
 
 enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
 
 class Block;
+class ControlFlowGraph;
 
 // Forward declare friend function of Block to handle cyclic dependency
 namespace transform {
@@ -45,13 +55,29 @@ void replace_block(IRCode*, Block*, Block*);
 namespace cfg {
 
 class Edge final {
+ public:
+  using CaseKey = int32_t;
+
+ private:
   Block* m_src;
   Block* m_target;
   EdgeType m_type;
 
+  // If this branch is a non-default case of a switch statement, this is the
+  // index of the corresponding case block.
+  boost::optional<CaseKey> m_case_key;
+
+  friend class ::ControlFlowGraph;
+
  public:
   Edge(Block* src, Block* target, EdgeType type)
       : m_src(src), m_target(target), m_type(type) {}
+  Edge(Block* src, Block* target, CaseKey case_key)
+      : m_src(src),
+        m_target(target),
+        m_type(EDGE_BRANCH),
+        m_case_key(case_key) {}
+
   bool operator==(const Edge& that) const {
     return m_src == that.m_src && m_target == that.m_target &&
            m_type == that.m_type;
@@ -65,10 +91,15 @@ using BlockId = size_t;
 
 template <bool is_const>
 class InstructionIteratorImpl;
+using InstructionIterator = InstructionIteratorImpl</* is_const */ false>;
+using ConstInstructionIterator = InstructionIteratorImpl</* is_const */ true>;
+
+template <bool is_const>
+class InstructionIterableImpl;
+using InstructionIterable = InstructionIterableImpl</* is_const */ false>;
+using ConstInstructionIterable = InstructionIterableImpl</* is_const */ true>;
 
 } // namespace cfg
-
-class ControlFlowGraph;
 
 // TODO: Put the rest of this header under the cfg namespace too
 
@@ -86,6 +117,17 @@ class Block {
   const std::vector<std::shared_ptr<cfg::Edge>>& succs() const {
     return m_succs;
   }
+
+  // return true if `b` is a predecessor of this.
+  // optionally supply a specific type of predecessor. The default,
+  // EDGE_TYPE_SIZE, means any type
+  bool has_pred(Block* b, EdgeType t = EDGE_TYPE_SIZE) const;
+
+  // return true if `b` is a successor of this.
+  // optionally supply a specific type of successor. The default,
+  // EDGE_TYPE_SIZE, means any type
+  bool has_succ(Block* b, EdgeType t = EDGE_TYPE_SIZE) const;
+
   IRList::iterator begin();
   IRList::iterator end();
   IRList::const_iterator begin() const;
@@ -98,6 +140,20 @@ class Block {
   // remove all debug source code line numbers from this block
   void remove_debug_line_info();
 
+  opcode::Branchingness branchingness() {
+    always_assert_log(
+        !empty(), "block %d is empty\n%s\n", id(), SHOW(*m_parent));
+    const auto& last = rbegin();
+    return last->branchingness();
+  }
+
+  bool empty() const { return m_entries.empty(); }
+
+  // Remove the first target in this block that corresponds to `branch`.
+  // Returns a not-none CaseKey for multi targets, boost::none otherwise.
+  boost::optional<cfg::Edge::CaseKey> remove_first_matching_target(
+      MethodItemEntry* branch);
+
  private:
   friend class ControlFlowGraph;
   friend class cfg::InstructionIteratorImpl<false>;
@@ -107,9 +163,6 @@ class Block {
   // return an iterator to the goto in this block (if there is one)
   // otherwise, return m_entries.end()
   IRList::iterator get_goto();
-
-  // returns a vector of all MFLOW_TARGETs in this block
-  std::vector<IRList::iterator> get_targets();
 
   cfg::BlockId m_id;
 
@@ -175,7 +228,8 @@ class ControlFlowGraph {
    */
   void calculate_exit_block();
 
-  void add_edge(Block* pred, Block* succ, EdgeType type);
+  template <class... Args>
+  void add_edge(Args&&... args);
 
   /*
    * Print the graph in the DOT graph description language.
@@ -237,30 +291,30 @@ class ControlFlowGraph {
   // Move MethodItemEntries from ir into their blocks
   // For use by the constructor. You probably don't want to call this from
   // elsewhere
-  void fill_blocks(IRList* ir, Boundaries& boundaries);
-
-  // add an explicit goto to the implicit fallthroughs so that we can
-  // re-arrange blocks safely.
-  // For use by the constructor. You probably don't want to call this from
-  // elsewhere
-  void add_fallthrough_gotos();
+  void fill_blocks(IRList* ir, const Boundaries& boundaries);
 
   // SIGABORT if the internal state of the CFG is invalid
+  // Assumes m_editable is true
   void sanity_check();
+
+  // transform the CFG to an equivalent but more canonical state
+  // Assumes m_editable is true
+  void simplify();
 
   // remove all TRY START and ENDs because we may reorder the blocks
   // Assumes m_editable is true
   void remove_try_markers();
 
-  // Targets point to branches. If a branch is deleted then we need to clean up
-  // the targets that pointed to that branch
-  // TODO: This isn't in use yet. Either use it or delete it.
-  void clean_dangling_targets();
-
   // choose an order of blocks for output
   std::vector<Block*> order();
 
-  void remove_fallthrough_gotos(const std::vector<Block*> ordering);
+  // Materialize target instructions corresponding to control-flow edges.
+  // Used while turning back into a linear representation.
+  void insert_targets(const std::vector<Block*>& ordering);
+
+  // For turning back into a linear representation.
+  // Remove GOTOs that will be no-ops under the given ordering
+  void remove_fallthrough_gotos(const std::vector<Block*>& ordering);
 
   void remove_all_edges(Block* pred, Block* succ);
 
@@ -389,6 +443,11 @@ class InstructionIteratorImpl {
   Iterator unwrap() const {
     return m_it.unwrap();
   }
+
+  Block* block() const {
+    assert_not_end();
+    return m_block->second;
+  }
 };
 
 // Iterate through all IRInstructions in the CFG.
@@ -414,12 +473,6 @@ class InstructionIterableImpl {
 
   bool empty() { return begin() == end(); }
 };
-
-using InstructionIterator = InstructionIteratorImpl<false>;
-using ConstInstructionIterator = InstructionIteratorImpl<true>;
-
-using InstructionIterable = InstructionIterableImpl<false>;
-using ConstInstructionIterable = InstructionIterableImpl<true>;
 
 } // namespace cfg
 

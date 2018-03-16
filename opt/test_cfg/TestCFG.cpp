@@ -33,7 +33,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* unused */,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  walk::parallel::code(scope, [](DexMethod* m, IRCode& code) {
+  walk::code(scope, [](DexMethod* m, IRCode& code) {
     const auto& before_lits = get_lits(&code);
 
     // build and linearize the CFG

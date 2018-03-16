@@ -54,6 +54,7 @@ TEST(DedupBlocksTest, useSwitch) {
       IRCode* code = m->get_code();
       code->build_cfg(true);
       EXPECT_EQ(2, count_sgets(code->cfg()));
+      code->clear_cfg();
     }
   }
 
@@ -83,6 +84,7 @@ TEST(DedupBlocksTest, useSwitch) {
       } else {
         EXPECT_EQ(2, count_sgets(code->cfg()));
       }
+      code->clear_cfg();
     }
   }
 }

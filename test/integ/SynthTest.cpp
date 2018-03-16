@@ -117,6 +117,7 @@ TEST(SynthTest1, synthetic) {
                          invocation.c_str());
           }
         }
+        code->clear_cfg();
       }
     }
 
