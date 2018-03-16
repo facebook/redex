@@ -114,6 +114,8 @@ class ConstantAbstractDomain final
   using AbstractValueKind =
       typename acd_impl::ConstantAbstractValue<Constant>::Kind;
 
+  using ConstantType = Constant;
+
   ConstantAbstractDomain() { this->set_to_top(); }
 
   explicit ConstantAbstractDomain(const Constant& cst) {

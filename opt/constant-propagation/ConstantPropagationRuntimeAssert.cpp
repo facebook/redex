@@ -233,7 +233,8 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
  */
 void RuntimeAssertTransform::insert_param_asserts(
     const ConstantEnvironment& env, DexMethod* method) {
-  if (!env.is_value()) {
+  auto args = env.get_primitive_environment();
+  if (!args.is_value()) {
     return;
   }
   auto& code = *method->get_code();
@@ -255,7 +256,7 @@ void RuntimeAssertTransform::insert_param_asserts(
       continue;
     }
     auto reg = insn_it->insn->dest();
-    auto scd = env.get(reg);
+    auto scd = args.get(reg);
     if (scd.is_top()) {
       continue;
     }

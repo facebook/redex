@@ -298,6 +298,10 @@ inline bool is_sfield_op(IROpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
 }
 
+inline bool is_aget(IROpcode op) {
+  return op >= OPCODE_AGET && op <= OPCODE_AGET_SHORT;
+}
+
 inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }

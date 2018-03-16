@@ -313,8 +313,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
     )
   )");
 
-  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(5)}};
-  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
+  ConstantEnvironment env{{0, SignedConstantDomain(5)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -351,9 +350,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
     )
   )");
 
-  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(Interval::GEZ)},
-                                      {1, SignedConstantDomain(Interval::LTZ)}};
-  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
+  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
+                          {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -394,9 +392,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
     )
   )");
 
-  ConstantRegisterEnvironment reg_env{{0, SignedConstantDomain(Interval::GEZ)},
-                                      {1, SignedConstantDomain(Interval::LTZ)}};
-  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
+  ConstantEnvironment env{{0, SignedConstantDomain(Interval::GEZ)},
+                          {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -433,8 +430,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
     )
   )");
 
-  ConstantRegisterEnvironment reg_env{{1, SignedConstantDomain(Interval::LTZ)}};
-  ConstantEnvironment env{std::make_tuple(reg_env, ConstantFieldEnvironment())};
+  ConstantEnvironment env{{1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
@@ -849,14 +845,15 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToInvokeInClinit) {
+TEST_F(InterproceduralConstantPropagationTest,
+       nonConstantFieldDueToInvokeInClinit) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
   auto field_qux = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
   field_qux->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                       new DexEncodedValueBit(DEVT_INT, 0));
+                           new DexEncodedValueBit(DEVT_INT, 0));
   creator.add_field(field_qux);
 
   auto clinit = assembler::method_from_string(R"(

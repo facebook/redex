@@ -23,6 +23,7 @@ class FixpointIterator final
  public:
   struct Config {
     bool fold_arithmetic{false};
+    bool analyze_arrays{false};
     // If we are analyzing a class initializer, this is expected to point to
     // the DexType of the class. It indicates that the analysis can treat the
     // static fields of this class as non-escaping.

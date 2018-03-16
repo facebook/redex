@@ -22,7 +22,7 @@ namespace constant_propagation {
 void Transform::replace_with_const(const ConstantEnvironment& env,
                                    IRList::iterator it) {
   auto* insn = it->insn;
-  auto cst = env.get(insn->dest()).constant_domain().get_constant();
+  auto cst = env.get_primitive(insn->dest()).constant_domain().get_constant();
   if (!cst) {
     return;
   }
@@ -55,7 +55,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
-    if (is_sget(primary_insn->opcode())) {
+    auto op = primary_insn->opcode();
+    if (is_sget(op) || is_aget(op)) {
       replace_with_const(env, it);
     }
     break;

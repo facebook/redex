@@ -209,18 +209,6 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
         m_product);
   }
 
-  void join_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.join_with(other); },
-                 /* smash_bottom */ false);
-  }
-
-  void widen_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.widen_with(other); },
-                 /* smash_bottom */ false);
-  }
-
   // We leave the Meet and Narrowing methods virtual, because one might want
   // to refine the result of these operations by applying reduce(). The default
   // implementation doesn't call reduce() as it might be too costly to perform
@@ -237,6 +225,24 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     combine_with(other_domain,
                  [](auto&& self, auto&& other) { self.narrow_with(other); },
                  /* smash_bottom */ true);
+  }
+
+  // reduce() should only refine (lower) a given component of a product based on
+  // the information in the other components. As such, it only makes sense to
+  // call reduce() after meet/narrow -- operations which can refine the
+  // components of a product. However, we may still need to canonicalize our
+  // product after a join/widen, so these methods are virtual as well.
+
+  virtual void join_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.join_with(other); },
+                 /* smash_bottom */ false);
+  }
+
+  virtual void widen_with(const Derived& other_domain) override {
+    combine_with(other_domain,
+                 [](auto&& self, auto&& other) { self.widen_with(other); },
+                 /* smash_bottom */ false);
   }
 
   std::string str() const;

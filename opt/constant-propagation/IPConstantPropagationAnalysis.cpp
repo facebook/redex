@@ -21,7 +21,7 @@ static ConstantEnvironment env_with_params(const IRCode* code,
   size_t idx{0};
   ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
-    env.set(mie.insn->dest(), args.get(idx++));
+    env.set_primitive(mie.insn->dest(), args.get(idx++));
   }
   return env;
 }
@@ -47,7 +47,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
       if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_STATIC) {
         ArgumentDomain out_args;
         for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          out_args.set(i, state.get(insn->src(i)));
+          out_args.set(i, state.get_primitive(insn->src(i)));
         }
         current_state->set(insn, out_args);
       }
@@ -92,6 +92,7 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
     config.class_under_init = method->get_class();
     set_encoded_values(type_class(config.class_under_init), &env);
   }
+  TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(), config, &this->get_whole_program_state());
   intra_cp->run(env);
@@ -105,11 +106,11 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
   for (auto* sfield : cls->get_sfields()) {
     auto value = sfield->get_static_value();
     if (value == nullptr) {
-      env->set(sfield, SignedConstantDomain(0));
+      env->set_primitive(sfield, SignedConstantDomain(0));
     } else if (is_primitive(sfield->get_type())) {
-      env->set(sfield, SignedConstantDomain(value->value()));
+      env->set_primitive(sfield, SignedConstantDomain(value->value()));
     } else {
-      env->set(sfield, SignedConstantDomain::top());
+      env->set_primitive(sfield, SignedConstantDomain::top());
     }
   }
 }

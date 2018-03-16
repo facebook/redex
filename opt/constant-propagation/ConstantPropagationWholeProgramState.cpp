@@ -21,7 +21,7 @@ namespace {
  * to :field_partition.
  */
 void set_fields_in_partition(const DexClass* cls,
-                             const ConstantFieldEnvironment& field_env,
+                             const FieldConstantEnvironment& field_env,
                              ConstantStaticFieldPartition* field_partition) {
   // Note that we *must* iterate over the list of fields in the class and not
   // the bindings in field_env here. This ensures that fields whose values are
@@ -137,7 +137,7 @@ void WholeProgramState::collect_field_values(const IRInstruction* insn,
     if (field->get_class() == clinit_cls) {
       return;
     }
-    auto value = env.get(insn->src(0));
+    auto value = env.get_primitive(insn->src(0));
     m_field_partition.update(field, [&value](auto* current_value) {
       current_value->join_with(value);
     });
@@ -166,7 +166,7 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
         method, [](auto* current_value) { current_value->set_to_top(); });
     return;
   }
-  auto value = env.get(insn->src(0));
+  auto value = env.get_primitive(insn->src(0));
   m_method_partition.update(method, [&value](auto* current_value) {
     current_value->join_with(value);
   });
