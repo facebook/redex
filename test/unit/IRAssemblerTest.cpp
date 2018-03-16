@@ -102,3 +102,112 @@ TEST_F(IRAssemblerTest, use_switch) {
             "(const v2 2))");
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
+
+TEST_F(IRAssemblerTest, use_switch_and_branch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v0 (:a :b :c))
+      (:default)
+      (return-void)
+
+      (:a 0)
+      (const v0 0)
+      (if-eqz v0 :lbl)
+      (goto :default)
+
+      (:b 1)
+      (const v1 1)
+      (goto :default)
+
+      (:c 2)
+      (const v2 2)
+      (goto :default)
+
+      (const v3 3)
+      (goto :default)
+
+      (:lbl)
+      (const v4 4)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s,
+      "((sparse-switch v0 (:L1 :L2 :L3)) "
+      "(:L0) "
+      "(return-void) "
+
+      "(:L1 0) "
+      "(const v0 0) "
+      "(if-eqz v0 :L4) "
+      "(goto :L0) "
+
+      "(:L2 1) "
+      "(const v1 1) "
+      "(goto :L0) "
+
+      "(:L3 2) "
+      "(const v2 2) "
+      "(goto :L0) "
+
+      "(const v3 3) "
+      "(goto :L0) "
+
+      "(:L4) "
+      "(const v4 4))");
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, diabolical_double_switch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v1 (:a :b))
+      (sparse-switch v0 (:a :b))
+
+      (:a 0)
+      (const v0 0)
+
+      (:b 1)
+      (const v1 1)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s,
+            "((sparse-switch v1 (:L0 :L1)) "
+            "(sparse-switch v0 (:L0 :L1)) "
+
+            "(:L0 0) "
+            "(const v0 0) "
+
+            "(:L1 1) "
+            "(const v1 1))");
+
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, diabolical_bad_order_switch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v0 (:b :a))
+
+      (:a 0)
+      (const v0 0)
+
+      (:b 1)
+      (const v1 1)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s,
+            "((sparse-switch v0 (:L0 :L1)) "
+
+            "(:L0 0) "
+            "(const v0 0) "
+
+            "(:L1 1) "
+            "(const v1 1))");
+
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}

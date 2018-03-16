@@ -285,6 +285,19 @@ void handle_labels(IRCode* code,
   }
 }
 
+// Can we merge this target into the same label as the previous target?
+bool can_merge(IRList::const_iterator prev, IRList::const_iterator it) {
+  always_assert(it->type == MFLOW_TARGET);
+  return prev->type == MFLOW_TARGET &&
+         // can't merge if/goto targets with switch targets
+         it->target->type == prev->target->type &&
+         // if/goto targets only need to be adjacent in the instruction stream
+         // to be merged into a single label
+         (it->target->type == BRANCH_SIMPLE ||
+          // switch targets also need matching case keys
+          it->target->case_key == prev->target->case_key);
+}
+
 } // namespace
 
 namespace assembler {
@@ -292,16 +305,32 @@ namespace assembler {
 s_expr to_s_expr(const IRCode* code) {
   std::vector<s_expr> exprs;
   LabelRefs label_refs;
+
   size_t label_ctr{0};
   auto generate_label_name = [&]() {
     return ":L" + std::to_string(label_ctr++);
   };
+
   // Gather jump targets and give them string names
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
       case MFLOW_TARGET: {
         auto bt = it->target;
         always_assert_log(bt->src != nullptr, "%s", SHOW(code));
+
+        // Don't generate redundant labels. If we would duplicate the previous
+        // label, steal its name instead of generating another
+        if (it != code->begin()) {
+          auto prev = std::prev(it);
+          if (can_merge(prev, it)) {
+            auto& label_strs = label_refs.at(prev->target->src->insn);
+            if (label_strs.size() > 0) {
+              const auto& label_name = label_strs.back();
+              label_refs[bt->src->insn].push_back(label_name);
+              break;
+            }
+          }
+        }
         label_refs[bt->src->insn].push_back(generate_label_name());
         break;
       }
@@ -339,14 +368,29 @@ s_expr to_s_expr(const IRCode* code) {
           auto label_str = label_strs[index];
           ++index;
 
-          std::initializer_list<s_expr> label{
-              s_expr(label_str), s_expr(std::to_string(branch_target->case_key))};
-          exprs.emplace_back(label);
+          const s_expr& label =
+              s_expr({s_expr(label_str),
+                      s_expr(std::to_string(branch_target->case_key))});
+
+          // Don't duplicate labels even if some crazy person has two switches
+          // that share targets :O
+          if (exprs.empty() || exprs.back() != label) {
+            exprs.emplace_back(label);
+          }
         } else {
           always_assert(branch_target->type == BRANCH_SIMPLE);
-          always_assert_log(label_strs.size() == 1, "actually %d\n%s", label_strs.size(), SHOW(code));
-          std::initializer_list<s_expr> label{s_expr(label_strs[0])};
-          exprs.emplace_back(label);
+          always_assert_log(
+              label_strs.size() == 1,
+              "Expecting 1 label string, actually have %d. code:\n%s",
+              label_strs.size(),
+              SHOW(code));
+          const s_expr& label = s_expr({s_expr(label_strs[0])});
+
+          // Two gotos to the same destination will produce two MFLOW_TARGETs
+          // but we only need one label in the s expression syntax.
+          if (exprs.empty() || exprs.back() != label) {
+            exprs.push_back(label);
+          }
         }
         break;
       }
@@ -356,6 +400,7 @@ s_expr to_s_expr(const IRCode* code) {
         not_reached();
     }
   }
+
   return s_expr(exprs);
 }
 
