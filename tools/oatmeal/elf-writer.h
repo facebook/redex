@@ -12,7 +12,7 @@
 #include "dump-oat.h"
 #include "OatmealUtil.h"
 
-#include <native/museum/5.0.0/elf.h>
+#include <museum/5.0.0/bionic/libc/linux/elf.h>
 
 #include <string>
 #include <vector>
@@ -23,8 +23,8 @@ class ElfStringTable {
   ElfStringTable() = default;
   UNCOPYABLE(ElfStringTable);
 
-  Elf32_Word get_string(const std::string& str) {
-    Elf32_Word ret = 0;
+  Elf32_Sword get_string(const std::string& str) {
+    Elf32_Sword ret = 0;
     for (const auto& s : strings_) {
       if (s == str) {
         return ret;

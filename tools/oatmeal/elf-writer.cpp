@@ -43,7 +43,7 @@ void ElfWriter::build(InstructionSet isa,
   elf_header_.e_ident[4] = ELFCLASS32;
   elf_header_.e_ident[5] = ELFDATA2LSB;
   elf_header_.e_ident[6] = EV_CURRENT;
-  elf_header_.e_ident[7] = ELFOSABI_GNU;
+  elf_header_.e_ident[7] = ELFOSABI_LINUX;
   elf_header_.e_ident[8] = 0;
 
   elf_header_.e_type = ET_DYN;
@@ -448,17 +448,16 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
   auto add_symbol = [&](Elf32_Word str_idx,
                         Elf32_Word val,
                         Elf32_Word size,
-                        int binding,
-                        int type,
+                        unsigned char binding,
+                        unsigned char type,
                         int section_idx) {
     Elf32_Sym sym = {str_idx,
                      val,
                      size,
-                     0, // set after initialization.
+                     // this is opposite of ELF_ST_BIND and ELF_ST_TYPE
+                     static_cast<unsigned char>((binding << 4) | (type & 0xf)),
                      0, // must be zero
                      static_cast<Elf32_Half>(section_idx)};
-    sym.setBinding(binding);
-    sym.setType(type);
 
     dynsyms_.push_back(sym);
   };
@@ -627,10 +626,10 @@ void ElfWriter::write_dynamic(FileHandle& fh) {
 
   // Calculate addresses of .dynsym, .hash and .dynamic.
 
-  const auto hash_addr = section_headers_.at(hash_idx_).sh_addr;
-  const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;
-  const auto dynstr_size = section_headers_.at(dynstr_idx_).sh_size;
-  const auto dynsym_addr = section_headers_.at(dynsym_idx_).sh_addr;
+  const Elf32_Sword hash_addr = section_headers_.at(hash_idx_).sh_addr;
+  const Elf32_Sword dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;
+  const Elf32_Sword dynstr_size = section_headers_.at(dynstr_idx_).sh_size;
+  const Elf32_Sword dynsym_addr = section_headers_.at(dynsym_idx_).sh_addr;
 
   std::vector<Elf32_Dyn> dyns = {
       {DT_HASH, {hash_addr}},
