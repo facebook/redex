@@ -47,6 +47,7 @@
   TM(INLINIT)            \
   TM(INLRES)             \
   TM(INTF)               \
+  TM(LITHO_BLD)          \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
