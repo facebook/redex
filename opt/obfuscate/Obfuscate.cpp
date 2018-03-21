@@ -95,8 +95,8 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
   std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
   std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
   walk::opcodes(scope,
-    [](DexMethod*) { return true; },
     [&](DexMethod*, IRInstruction* instr) {
+      auto op = instr->opcode();
       if (instr->has_field()) {
         DexFieldRef* field_ref = instr->get_field();
         if (field_ref->is_def()) return;
@@ -106,7 +106,14 @@ void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
           TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
           instr->set_field(field_def);
         }
-      } else if (instr->has_method()) {
+      } else if (instr->has_method() &&
+                 (is_invoke_direct(op) || is_invoke_static(op))) {
+        // We only check invoke-direct and invoke-static because the method def
+        // we've renamed is a `dmethod`, not a `vmethod`.
+        //
+        // If we attempted to resolve invoke-virtual refs here, we would
+        // conflate this virtual ref with a direct def that happens to have the
+        // same name but isn't actually inherited.
         DexMethodRef* method_ref = instr->get_method();
         if (method_ref->is_def()) return;
         DexMethod* method_def =
