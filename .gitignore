@@ -30,3 +30,10 @@
 /redexdump
 /stamp-h1
 /test-driver
+
+
+redex-src-strings-map.txt
+pyredex/__pycache__/__init__.cpython-36.pyc
+pyredex/__pycache__/logger.cpython-36.pyc
+pyredex/__pycache__/unpacker.cpython-36.pyc
+pyredex/__pycache__/utils.cpython-36.pyc
