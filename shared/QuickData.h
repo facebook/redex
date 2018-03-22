@@ -13,6 +13,7 @@
 #include <iostream>
 #include <map>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 struct QuickData {
@@ -51,18 +52,17 @@ struct QuickData {
         dex_to_idx_to_offset[line] = std::move(dex_map);
         classes = line;
       } else {
-        dex_to_idx_to_offset[classes][std::stoul(line.substr(0, found))] =
-            std::stoul(line.substr(found + 1));
-      }
-    }
-    for (auto dex_to_map = dex_to_idx_to_offset.begin();
-         dex_to_map != dex_to_idx_to_offset.end();
-         ++dex_to_map) {
-      printf("%s\n", dex_to_map->first.c_str());
-      for (auto idx_to_offset = dex_to_map->second.begin();
-           idx_to_offset != dex_to_map->second.end();
-           ++idx_to_offset) {
-        printf("%d:%d\n", idx_to_offset->first, idx_to_offset->second);
+        uint32_t field_id;
+        std::istringstream field_id_convert(line.substr(0, found));
+        if (!(field_id_convert >> field_id)) {
+          throw std::invalid_argument("Can't convert input fid");
+        }
+        uint32_t offset;
+        std::istringstream offset_convert(line.substr(found + 1));
+        if (!(offset_convert >> offset)) {
+          throw std::invalid_argument("Can't convert input offset");
+        }
+        dex_to_idx_to_offset[classes][field_id] = offset;
       }
     }
   }
