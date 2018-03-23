@@ -578,6 +578,9 @@ DexClassesVector run_interdex(InterDexPass* pass,
   // cold-start set.  Otherwise, we calculate it on the basis of the
   // whole list.
   bool end_markers_present = false;
+
+  // NOTE: If primary dex is treated as a normal dex, we are going to modify
+  //       it too, based on cold start classes.
   for (auto& entry : interdexorder) {
     auto it = det.clookup.find(entry);
     if (it == det.clookup.end()) {
