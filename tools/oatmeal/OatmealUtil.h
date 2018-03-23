@@ -173,9 +173,51 @@ class FileHandle {
   FILE* fh_;
 };
 
+void write_buf(FileHandle& fh, ConstBuffer buf);
+
+struct WritableBuffer {
+  FileHandle& fh;
+  char* begin;
+  size_t current;
+  size_t max_size;
+
+  WritableBuffer(FileHandle& fh_, char* begin_, size_t max_size_)
+      : fh(fh_), begin(begin_), max_size(max_size_) {
+    current = 0;
+  }
+
+  ~WritableBuffer() {
+    if (current > 0) {
+      write_buf(fh, ConstBuffer{begin, current});
+    }
+  }
+
+  void operator<<(char* to_write) {
+    if (current == max_size) {
+      write_buf(fh, ConstBuffer{begin, current});
+      current = 0;
+    }
+    begin[current] = *to_write;
+    current++;
+  }
+
+  void operator<<(const char* to_write) {
+    operator<<(const_cast<char *>(to_write));
+  }
+
+  void operator<<(const uint16_t* to_write) {
+    const char* char_write = reinterpret_cast<const char*>(to_write);
+    operator<<(char_write);
+    operator<<(char_write + 1);
+  }
+
+  void operator<<(const uint16_t to_write) {
+    operator<<(&to_write);
+  }
+};
+
 void write_word(FileHandle& fh, uint32_t value);
 
-void write_buf(FileHandle& fh, ConstBuffer buf);
 void write_padding(FileHandle& fh, char byte, size_t num);
 
 template <typename T>
