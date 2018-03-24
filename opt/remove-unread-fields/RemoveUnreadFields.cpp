@@ -44,7 +44,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
       return;
     }
     // XXX(jezng): why is can_rename not a subset of can_delete?
-    if (!can_delete(field) || !can_rename(field)) {
+    if (field->is_external() || !can_delete(field) || !can_rename(field)) {
       return;
     }
     if (is_sget(op) || is_iget(op)) {
