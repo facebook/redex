@@ -161,9 +161,14 @@ class ConstantArrayDomain final
   // is necessary to make it clear that the calls in array_length() and
   // array_values() below are referring to the superclass' implementation.
   using SuperType::get;
-  ArrayLengthDomain array_length() const { return this->template get<0>(); }
 
-  ArrayValuesDomain array_values() const { return this->template get<1>(); }
+  const ArrayLengthDomain& array_length() const {
+    return this->template get<0>();
+  }
+
+  const ArrayValuesDomain& array_values() const {
+    return this->template get<1>();
+  }
 
   ConstantArrayDomain<Domain>& mutate_array_length(
       std::function<void(ArrayLengthDomain*)> f) {

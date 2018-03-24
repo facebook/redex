@@ -481,6 +481,13 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
     for (uint32_t i = 0; i < arr.length(); ++i) {
       EXPECT_EQ(arr.get(i), SignedConstantDomain(0));
     }
+    // Check that iterating over the bindings works too
+    size_t count = 0;
+    for (auto& pair : arr.bindings()) {
+      EXPECT_EQ(pair.second, SignedConstantDomain(0));
+      ++count;
+    }
+    EXPECT_EQ(count, 10);
   }
 
   {
