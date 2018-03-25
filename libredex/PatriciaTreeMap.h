@@ -39,15 +39,17 @@ using CombiningFunction = std::function<T(const T&, const T&)>;
 
 template <typename IntegerType, typename Value>
 inline const typename Value::type* find_value(
-    IntegerType key, std::shared_ptr<PatriciaTree<IntegerType, Value>> tree);
+    IntegerType key,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
 
 template <typename IntegerType, typename Value>
-inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
-                std::shared_ptr<PatriciaTree<IntegerType, Value>> tree2);
+inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree1,
+                const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree2);
 
 template <typename IntegerType, typename Value>
-inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
-                   std::shared_ptr<PatriciaTree<IntegerType, Value>> tree2);
+inline bool equals(
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree1,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree2);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
@@ -60,19 +62,19 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     const CombiningFunction<typename Value::type>& combine,
     IntegerType key,
     const typename Value::type& value,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree);
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
     const CombiningFunction<typename Value::type>& combine,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> t);
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t);
 
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> t);
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t);
 
 template <typename T>
 T snd(const T&, const T& second) {
@@ -346,8 +348,8 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType, Value> {
   PatriciaTreeBranch(
       IntegerType prefix,
       IntegerType branching_bit,
-      std::shared_ptr<PatriciaTree<IntegerType, Value>> left_tree,
-      std::shared_ptr<PatriciaTree<IntegerType, Value>> right_tree)
+      const std::shared_ptr<PatriciaTree<IntegerType, Value>>& left_tree,
+      const std::shared_ptr<PatriciaTree<IntegerType, Value>>& right_tree)
       : m_prefix(prefix),
         m_stacking_bit(branching_bit),
         m_left_tree(left_tree),
@@ -359,11 +361,11 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType, Value> {
 
   IntegerType branching_bit() const { return m_stacking_bit; }
 
-  std::shared_ptr<PatriciaTree<IntegerType, Value>> left_tree() const {
+  const std::shared_ptr<PatriciaTree<IntegerType, Value>>& left_tree() const {
     return m_left_tree;
   }
 
-  std::shared_ptr<PatriciaTree<IntegerType, Value>> right_tree() const {
+  const std::shared_ptr<PatriciaTree<IntegerType, Value>>& right_tree() const {
     return m_right_tree;
   }
 
@@ -398,9 +400,9 @@ class PatriciaTreeLeaf final : public PatriciaTree<IntegerType, Value> {
 template <typename IntegerType, typename Value>
 std::shared_ptr<PatriciaTreeBranch<IntegerType, Value>> join(
     IntegerType prefix0,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree0,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree0,
     IntegerType prefix1,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1) {
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree1) {
   IntegerType m = get_branching_bit(prefix0, prefix1);
   if (is_zero_bit(prefix0, m)) {
     return std::make_shared<PatriciaTreeBranch<IntegerType, Value>>(
@@ -417,8 +419,8 @@ template <typename IntegerType, typename Value>
 std::shared_ptr<PatriciaTree<IntegerType, Value>> make_branch(
     IntegerType prefix,
     IntegerType branching_bit,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> left_tree,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> right_tree) {
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& left_tree,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& right_tree) {
   if (left_tree == nullptr) {
     return right_tree;
   }
@@ -433,19 +435,20 @@ std::shared_ptr<PatriciaTree<IntegerType, Value>> make_branch(
 // not present in :tree.
 template <typename IntegerType, typename Value>
 inline const typename Value::type* find_value(
-    IntegerType key, std::shared_ptr<PatriciaTree<IntegerType, Value>> tree) {
+    IntegerType key,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree) {
   if (tree == nullptr) {
     return nullptr;
   }
   if (tree->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
     if (key == leaf->key()) {
       return &leaf->value();
     }
     return nullptr;
   }
-  auto branch =
+  const auto& branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
   if (is_zero_bit(key, branch->branching_bit())) {
     return find_value(key, branch->left_tree());
@@ -455,8 +458,8 @@ inline const typename Value::type* find_value(
 }
 
 template <typename IntegerType, typename Value>
-inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-                std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
+inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+                const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
     // This conditions allows the leq to run in sublinear time when comparing
     // Patricia trees that share some structure.
@@ -472,14 +475,14 @@ inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     if (t->is_branch()) {
       return false;
     }
-    auto s_leaf =
+    const auto& s_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    auto t_leaf =
+    const auto& t_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     return Value::leq(s_leaf->value(), t_leaf->value());
   }
   if (t->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     auto* s_value = find_value(leaf->key(), s);
     if (s_value == nullptr) {
@@ -487,21 +490,20 @@ inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
     }
     return Value::leq(*s_value, leaf->value());
   }
-  auto s_branch =
+  const auto& s_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
-  auto t_branch =
+  const auto& t_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
   IntegerType m = s_branch->branching_bit();
   IntegerType n = t_branch->branching_bit();
   IntegerType p = s_branch->prefix();
   IntegerType q = t_branch->prefix();
-  auto s0 = s_branch->left_tree();
-  auto s1 = s_branch->right_tree();
-  auto t0 = t_branch->left_tree();
-  auto t1 = t_branch->right_tree();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
-    return leq(s_branch->left_tree(), t_branch->left_tree()) &&
-           leq(s_branch->right_tree(), t_branch->right_tree());
+    return leq(s0, t0) && leq(s1, t1);
   }
   if (m < n && match_prefix(q, p, m)) {
     return leq(is_zero_bit(q, m) ? s0 : s1, t);
@@ -514,8 +516,9 @@ inline bool leq(std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
 // A Patricia tree is a canonical representation of the set of keys it contains.
 // Hence, set equality is equivalent to structural equality of Patricia trees.
 template <typename IntegerType, typename Value>
-inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
-                   std::shared_ptr<PatriciaTree<IntegerType, Value>> tree2) {
+inline bool equals(
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree1,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree2) {
   if (tree1 == tree2) {
     // This conditions allows the equality test to run in sublinear time when
     // comparing Patricia trees that share some structure.
@@ -531,9 +534,9 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
     if (tree2->is_branch()) {
       return false;
     }
-    auto leaf1 =
+    const auto& leaf1 =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree1);
-    auto leaf2 =
+    const auto& leaf2 =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree2);
     return leaf1->key() == leaf2->key() &&
            Value::equals(leaf1->value(), leaf2->value());
@@ -541,9 +544,9 @@ inline bool equals(std::shared_ptr<PatriciaTree<IntegerType, Value>> tree1,
   if (tree2->is_leaf()) {
     return false;
   }
-  auto branch1 =
+  const auto& branch1 =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree1);
-  auto branch2 =
+  const auto& branch2 =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree2);
   return branch1->prefix() == branch2->prefix() &&
          branch1->branching_bit() == branch2->branching_bit() &&
@@ -559,12 +562,12 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     IntegerType key,
     const typename Value::type& value,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> tree) {
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree) {
   if (tree == nullptr) {
     return combine_new_leaf<IntegerType, Value>(combine, key, value);
   }
   if (tree->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
     if (key == leaf->key()) {
       return combine_leaf(combine, value, leaf);
@@ -575,7 +578,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     }
     return join<IntegerType, Value>(key, new_leaf, leaf->key(), leaf);
   }
-  auto branch =
+  const auto& branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
   if (match_prefix(key, branch->prefix(), branch->branching_bit())) {
     if (is_zero_bit(key, branch->branching_bit())) {
@@ -610,8 +613,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
     // This conditional is what allows the union operation to complete in
     // sublinear time when the operands share some structure.
@@ -624,27 +627,27 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
     return s;
   }
   if (s->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
     return update(combine, leaf->key(), leaf->value(), t);
   }
   if (t->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     return update(combine, leaf->key(), leaf->value(), s);
   }
-  auto s_branch =
+  const auto& s_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
-  auto t_branch =
+  const auto& t_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
   IntegerType m = s_branch->branching_bit();
   IntegerType n = t_branch->branching_bit();
   IntegerType p = s_branch->prefix();
   IntegerType q = t_branch->prefix();
-  auto s0 = s_branch->left_tree();
-  auto s1 = s_branch->right_tree();
-  auto t0 = t_branch->left_tree();
-  auto t1 = t_branch->right_tree();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
     // The two trees have the same prefix. We just merge the subtrees.
     auto new_left = merge(combine, s0, t0);
@@ -703,7 +706,7 @@ template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     const typename Value::type& value,
-    std::shared_ptr<PatriciaTreeLeaf<IntegerType, Value>> leaf) {
+    const std::shared_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
   auto combined_value = combine(leaf->value(), value);
   if (combined_value.is_top()) {
     return nullptr;
@@ -729,8 +732,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> s,
-    std::shared_ptr<PatriciaTree<IntegerType, Value>> t) {
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
     // This conditional is what allows the intersection operation to complete in
     // sublinear time when the operands share some structure.
@@ -740,7 +743,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     return nullptr;
   }
   if (s->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
     auto* value = find_value(leaf->key(), t);
     if (value == nullptr) {
@@ -749,7 +752,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     return combine_leaf(combine, *value, leaf);
   }
   if (t->is_leaf()) {
-    auto leaf =
+    const auto& leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     auto* value = find_value(leaf->key(), s);
     if (value == nullptr) {
@@ -757,18 +760,18 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     }
     return combine_leaf(combine, *value, leaf);
   }
-  auto s_branch =
+  const auto& s_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
-  auto t_branch =
+  const auto& t_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
   IntegerType m = s_branch->branching_bit();
   IntegerType n = t_branch->branching_bit();
   IntegerType p = s_branch->prefix();
   IntegerType q = t_branch->prefix();
-  auto s0 = s_branch->left_tree();
-  auto s1 = s_branch->right_tree();
-  auto t0 = t_branch->left_tree();
-  auto t1 = t_branch->right_tree();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
     // The two trees have the same prefix. We merge the intersection of the
     // corresponding subtrees.
