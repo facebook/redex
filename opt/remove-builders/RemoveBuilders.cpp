@@ -27,10 +27,10 @@ constexpr const char* METRIC_METHODS_REMOVED = "methods_removed";
 constexpr const char* METRIC_METHODS_CLEARED = "methods_cleared";
 
 struct builder_counters {
-  size_t classes_removed{0};
-  size_t fields_removed{0};
-  size_t methods_removed{0};
-  size_t methods_cleared{0};
+  size_t classes_removed;
+  size_t fields_removed;
+  size_t methods_removed;
+  size_t methods_cleared;
 };
 
 builder_counters b_counter;
@@ -236,6 +236,9 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  // Initialize couters.
+  b_counter = {0, 0, 0, 0};
+
   auto obj_type = get_object_type();
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
@@ -332,6 +335,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   BuilderTransform b_transform(pc, scope, stores, false);
 
   // Inline non init methods.
+  std::unordered_set<DexClass*> removed_builders;
   walk::methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
 
@@ -365,6 +369,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
           method->set_code(method_copy->release_code());
         } else {
           b_counter.methods_cleared++;
+          removed_builders.emplace(builder_cls);
         }
 
         DexMethod::erase_method(method_copy);
@@ -374,7 +379,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
   // No need to remove the builders here, since `RemoveUnreachable` will
   // take care of it.
-  gather_removal_builder_stats(trivial_builders, kept_builders);
+  gather_removal_builder_stats(removed_builders, kept_builders);
 
   mgr.set_metric("total_builders", m_builders.size());
   mgr.set_metric("stack_only_builders", stack_only_builders.size());

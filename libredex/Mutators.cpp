@@ -18,7 +18,8 @@ void drop_this(DexMethod* method) {
   auto nregs = code->get_registers_size();
   assert_log(nregs >= 1, "Too few regs: %s\n", SHOW(method));
   code->set_registers_size(nregs - 1);
-  auto ii = InstructionIterable(code->get_param_instructions());
+  auto params = code->get_param_instructions();
+  auto ii = InstructionIterable(params);
   auto const this_reg = ii.begin()->insn->dest();
   code->remove_opcode(ii.begin().unwrap());
   for (auto& mie : InstructionIterable(code)) {

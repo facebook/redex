@@ -11,15 +11,16 @@
 
 #include "DexAsm.h"
 #include "IRCode.h"
+#include "RedexTest.h"
+
+struct IRCodeTest : public RedexTest {};
 
 std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
   return os << show(&to_show);
 }
 
-TEST(IRCode, LoadParamInstructionsDirect) {
+TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
   using namespace dex_asm;
-
-  g_redex = new RedexContext();
 
   auto method = static_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
@@ -29,14 +30,10 @@ TEST(IRCode, LoadParamInstructionsDirect) {
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM, {3_v}));
   ++it;
   EXPECT_EQ(it, code->end());
-
-  delete g_redex;
 }
 
-TEST(IRCode, LoadParamInstructionsVirtual) {
+TEST_F(IRCodeTest, LoadParamInstructionsVirtual) {
   using namespace dex_asm;
-
-  g_redex = new RedexContext();
 
   auto method = static_cast<DexMethod*>(
       DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
@@ -48,6 +45,4 @@ TEST(IRCode, LoadParamInstructionsVirtual) {
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM, {4_v}));
   ++it;
   EXPECT_EQ(it, code->end());
-
-  delete g_redex;
 }

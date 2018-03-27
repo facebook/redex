@@ -43,7 +43,12 @@ struct DexDebugEntry;
 struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
-class InstructionIterable;
+namespace ir_list {
+  template <bool is_const>
+  class InstructionIterableImpl;
+
+  using InstructionIterable = InstructionIterableImpl<false>;
+}
 using SwitchIndices = std::set<int>;
 
 std::string show(const DexString*);
@@ -67,7 +72,7 @@ std::string show(const MethodItemEntry&);
 std::string show(const ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
-std::string show(const InstructionIterable&);
+std::string show(const ir_list::InstructionIterable&);
 std::string show(const SwitchIndices& si);
 
 // Variants of show that use deobfuscated names

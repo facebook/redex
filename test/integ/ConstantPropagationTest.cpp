@@ -138,24 +138,24 @@ TEST(ConstantPropagationTest, constantPropagation) {
       for (const auto& dm : cls->get_dmethods()) {
         TRACE(CONSTP, 1, "dmethod: %s\n",  dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "if_false") == 0) {
-          const InstructionIterable& it = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s\n", SHOW(it));
-          for (auto& mie : it) {
+          const auto& insns = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
+          for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_true") == 0) {
-          const InstructionIterable& it = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s\n", SHOW(it));
-          for (auto& mie : it) {
+          const auto& insns = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
+          for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
-          const InstructionIterable& it = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s\n", SHOW(it));
+          const auto& insns = InstructionIterable(dm->get_code());
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
           bool has_if = false;
-          for (auto& mie : it) {
+          for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
             if (is_conditional_branch(op)) {
               has_if = true;

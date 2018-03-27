@@ -24,6 +24,7 @@
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
+#include "DexEncoding.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "RedexContext.h"
@@ -279,6 +280,10 @@ class DexFieldRef {
 
    void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
      g_redex->mutate_field(this, ref, rename_on_collision);
+   }
+
+   static void erase_field(DexFieldRef* f) {
+     return g_redex->erase_field(f);
    }
 };
 
@@ -756,6 +761,10 @@ class DexMethodRef {
    void change(const DexMethodSpec& ref, bool rename_on_collision = false) {
      g_redex->mutate_method(this, ref, rename_on_collision);
    }
+
+   static void erase_method(DexMethodRef* m) {
+     return g_redex->erase_method(m);
+   }
 };
 
 class DexMethod : public DexMethodRef {
@@ -839,10 +848,6 @@ class DexMethod : public DexMethodRef {
                                   DexString* name,
                                   DexProto* proto) {
     return g_redex->get_method(type, name, proto);
-  }
-
-  static void erase_method(DexMethodRef* m) {
-    return g_redex->erase_method(m);
   }
 
  public:

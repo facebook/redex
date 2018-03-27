@@ -33,9 +33,7 @@ struct RemoveGotosTest : testing::Test {
     using namespace dex_asm;
 
     auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-    auto target = new BranchTarget();
-    target->type = BRANCH_SIMPLE;
-    target->src = goto_mie;
+    auto target = new BranchTarget(goto_mie);
     return {goto_mie, target};
   }
 
@@ -170,10 +168,8 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
   clear_method_code();
 
   auto code = m_method->get_code();
-  auto target = new BranchTarget();
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 1_v}));
-  target->type = BRANCH_SIMPLE;
-  target->src = if_mie;
+  auto target = new BranchTarget(if_mie);
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
   code->push_back(*if_mie);
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));

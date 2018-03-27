@@ -13,6 +13,8 @@
 #include <string>
 
 #include "DexDefs.h"
+#include "DexEncoding.h"
+#include "Debug.h"
 
 class DexType;
 class DexTypeList;

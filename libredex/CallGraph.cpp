@@ -44,7 +44,7 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
     }
   });
 
-  // Add edges from the single "ghost" entry node to all the 'real' entry
+  // Add edges from the single "ghost" entry node to all the "real" entry
   // nodes in the graph. We consider a node to be a potential entry point if
   // it is virtual or if it is marked by a Proguard keep rule.
   for (auto& pair : m_nodes) {

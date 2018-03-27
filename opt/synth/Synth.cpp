@@ -83,7 +83,7 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   if (!is_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
-  uint16_t iget_dest = move_result_pseudo_of(it.unwrap())->dest();
+  uint16_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
@@ -124,7 +124,7 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   if (!is_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
-  uint16_t sget_dest = move_result_pseudo_of(it.unwrap())->dest();
+  uint16_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;

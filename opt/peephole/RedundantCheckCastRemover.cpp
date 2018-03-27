@@ -32,7 +32,7 @@ void RedundantCheckCastRemover::run() {
   walk::parallel::matching_opcodes_in_block(
       m_scope,
       match,
-      [](DexMethod* method, const std::vector<IRInstruction*>& insns) {
+      [](DexMethod* method, Block*, const std::vector<IRInstruction*>& insns) {
         if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
           IRInstruction* check_cast = insns[2];
           method->get_code()->remove_opcode(check_cast);

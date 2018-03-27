@@ -215,6 +215,10 @@ bool is_integer(const DexType* type) {
   }
 }
 
+bool is_boolean(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'Z';
+}
+
 bool is_long(const DexType* type) {
   return type->get_name()->c_str()[0] == 'J';
 }
@@ -297,7 +301,8 @@ bool passes_args_through(IRInstruction* insn,
 ) {
   size_t src_idx{0};
   size_t param_count{0};
-  for (auto& mie : InstructionIterable(code.get_param_instructions())) {
+  for (const auto& mie :
+       InstructionIterable(code.get_param_instructions())) {
     auto load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {

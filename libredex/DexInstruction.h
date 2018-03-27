@@ -298,6 +298,10 @@ inline bool is_sfield_op(IROpcode op) {
   return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
 }
 
+inline bool is_aget(IROpcode op) {
+  return op >= OPCODE_AGET && op <= OPCODE_AGET_SHORT;
+}
+
 inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }
@@ -309,6 +313,10 @@ inline bool is_return(IROpcode op) {
 inline bool is_return_value(IROpcode op) {
   // OPCODE_RETURN_VOID is deliberately excluded because void isn't a "value".
   return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
+}
+
+inline bool is_throw(IROpcode op) {
+  return op == OPCODE_THROW;
 }
 
 inline bool is_move_result(IROpcode op) {
@@ -378,6 +386,10 @@ inline bool is_conditional_branch(IROpcode op) {
   default:
     return false;
   }
+}
+
+inline bool is_goto(IROpcode op) {
+  return op == OPCODE_GOTO;
 }
 
 inline bool is_switch(IROpcode op) {

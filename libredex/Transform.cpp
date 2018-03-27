@@ -143,7 +143,7 @@ IRList::iterator find_last_instruction(Block* block) {
   return block->end();
 }
 
-
+// TODO: move to CFG
 // delete old_block and reroute its predecessors to new_block
 //
 // if new_block is null, just delete old_block and don't reroute

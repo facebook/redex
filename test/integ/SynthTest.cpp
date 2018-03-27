@@ -17,10 +17,12 @@
 
 #include <json/json.h>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 
@@ -101,8 +103,9 @@ TEST(SynthTest1, synthetic) {
     // Make sure there are no references to the synthetic method.
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
-        const auto* code = method->get_code();
-        for (auto& mie : InstructionIterable(code)) {
+        auto* code = method->get_code();
+        code->build_cfg(true);
+        for (auto& mie : InstructionIterable(code->cfg())) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;
           if (is_invoke(insn->opcode())) {
@@ -114,6 +117,7 @@ TEST(SynthTest1, synthetic) {
                          invocation.c_str());
           }
         }
+        code->clear_cfg();
       }
     }
 

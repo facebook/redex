@@ -88,10 +88,7 @@ static MethodItemEntry* get_target(
 static void insert_branch_target(IRList* ir,
                                  MethodItemEntry* target,
                                  MethodItemEntry* src) {
-  BranchTarget* bt = new BranchTarget();
-  bt->type = BRANCH_SIMPLE;
-  bt->src = src;
-
+  BranchTarget* bt = new BranchTarget(src);
   ir->insert_before(ir->iterator_to(*target), *(new MethodItemEntry(bt)));
 }
 
@@ -149,29 +146,25 @@ bool encode_offset(IRList* ir,
   return true;
 }
 
-static bool multi_target_compare_index(const BranchTarget* a,
-                                       const BranchTarget* b) {
-  return (a->index < b->index);
+static bool multi_target_compare_case_key(const BranchTarget* a,
+                                          const BranchTarget* b) {
+  return (a->case_key < b->case_key);
 }
 
 static bool multi_contains_gaps(const std::vector<BranchTarget*>& targets) {
-  int32_t key = targets.front()->index;
+  int32_t key = targets.front()->case_key;
   for (auto target : targets) {
-    if (target->index != key) return true;
+    if (target->case_key != key) return true;
     key++;
   }
   return false;
 }
 
 static void insert_multi_branch_target(IRList* ir,
-                                       int32_t index,
+                                       int32_t case_key,
                                        MethodItemEntry* target,
                                        MethodItemEntry* src) {
-  BranchTarget* bt = new BranchTarget();
-  bt->type = BRANCH_MULTI;
-  bt->src = src;
-  bt->index = index;
-
+  BranchTarget* bt = new BranchTarget(src, case_key);
   ir->insert_before(ir->iterator_to(*target), *(new MethodItemEntry(bt)));
 }
 
@@ -191,20 +184,20 @@ static void shard_multi_target(IRList* ir,
   auto ftype = fopcode->opcode();
   uint32_t base = bm.by<Entry>().at(src);
   if (ftype == FOPCODE_PACKED_SWITCH) {
-    int32_t index = read_int32(data);
+    int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
       auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, index, target, src);
-      index++;
+      insert_multi_branch_target(ir, case_key, target, src);
+      case_key++;
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries;  // entries are 32b
     for (int i = 0; i < entries; i++) {
-      int32_t index = read_int32(data);
+      int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
       auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, index, target, src);
+      insert_multi_branch_target(ir, case_key, target, src);
     }
   } else {
     always_assert_log(false, "Bad fopcode 0x%04x in shard_multi_target", ftype);
@@ -503,7 +496,7 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
     case MFLOW_TARGET:
       copy_mie->target = new BranchTarget();
       copy_mie->target->type = mie.target->type;
-      copy_mie->target->index = mie.target->index;
+      copy_mie->target->case_key = mie.target->case_key;
       copy_mie->target->src = old_mentry_to_new[mie.target->src];
       break;
     case MFLOW_OPCODE:
@@ -819,8 +812,9 @@ bool IRCode::try_sync(DexCode* code) {
   for (auto multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
     auto multi_insn = multiopcode->dex_insn;
-    std::sort(targets.begin(), targets.end(), multi_target_compare_index);
-    always_assert_log(!targets.empty(), "need to have targets");
+    std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
+    always_assert_log(
+        !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
     if (multi_contains_gaps(targets)) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;
@@ -831,7 +825,7 @@ bool IRCode::try_sync(DexCode* code) {
       uint32_t* sptargets =
           (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
       for (BranchTarget* target : targets) {
-        *spkeys++ = target->index;
+        *spkeys++ = target->case_key;
         *sptargets++ = multi_targets[target] - entry_to_addr.at(multiopcode);
       }
       // Emit align nop
@@ -856,7 +850,7 @@ bool IRCode::try_sync(DexCode* code) {
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
       packed_payload[1] = targets.size();
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
-      *psdata++ = targets.front()->index;
+      *psdata++ = targets.front()->case_key;
       for (BranchTarget* target : targets) {
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
       }
@@ -933,19 +927,4 @@ bool IRCode::try_sync(DexCode* code) {
               return a->m_start_addr < b->m_start_addr;
             });
   return true;
-}
-
-IRInstruction* primary_instruction_of_move_result_pseudo(
-    IRList::iterator it) {
-  --it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                it->insn->has_move_result_pseudo());
-  return it->insn;
-}
-
-IRInstruction* move_result_pseudo_of(IRList::iterator it) {
-  ++it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                opcode::is_move_result_pseudo(it->insn->opcode()));
-  return it->insn;
 }

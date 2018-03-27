@@ -11,6 +11,8 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "IRAssembler.h"
+#include "IRCode.h"
 
 std::ostream& operator<<(std::ostream& os, const Block* b) {
   return os << b->id();
@@ -274,4 +276,454 @@ TEST(ControlFlow, findImmediateDominator) {
     EXPECT_EQ(idom[b4].dom, b3);
     EXPECT_EQ(idom[b5].dom, b1);
   }
+}
+
+TEST(ControlFlow, iterate1) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  code->build_cfg(true);
+  for (Block* b : code->cfg().blocks()) {
+    EXPECT_NE(nullptr, b);
+  }
+  for (const auto& mie : InstructionIterable(code->cfg())) {
+    EXPECT_EQ(OPCODE_RETURN_VOID, mie.insn->opcode());
+  }
+}
+
+TEST(ControlFlow, iterate2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop) ; this goto is removed
+
+     (:if-true-label)
+     (return-void)
+    )
+)");
+  code->build_cfg(true);
+  for (Block* b : code->cfg().blocks()) {
+    EXPECT_NE(nullptr, b);
+  }
+
+  // iterate within a block in the correct order
+  // but visit the blocks in any order
+  std::unordered_map<IRInstruction*, size_t> times_encountered;
+  auto iterable = InstructionIterable(code->cfg());
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    auto insn = it->insn;
+    auto op = insn->opcode();
+    if (op == OPCODE_CONST) {
+      EXPECT_EQ(OPCODE_IF_GEZ, std::next(it)->insn->opcode());
+    }
+    times_encountered[insn] += 1;
+  }
+  EXPECT_EQ(4, times_encountered.size());
+  for (const auto& entry : times_encountered) {
+    EXPECT_EQ(1, entry.second);
+  }
+  TRACE(CFG, 1, SHOW(code->cfg()));
+}
+
+// C++14 Null Forward Iterators
+// Make sure the default constructed InstructionIterator compares equal
+// to other default constructed InstructionIterator
+//
+// boost.org/doc/libs/1_58_0/doc/html/container/Cpp11_conformance.html
+TEST(ControlFlow, nullForwardIterators) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  for (int i = 0; i < 100; i++) {
+    auto a = new cfg::InstructionIterable(cfg);
+    EXPECT_TRUE(a->end() == InstructionIterable(cfg).end());
+    delete a;
+  }
+
+  IRList::iterator a;
+  IRList::iterator b;
+  EXPECT_TRUE(a == b);
+}
+
+TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
+  auto str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (move v3 v0)
+      (return v3)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, infinite) {
+  auto str = R"(
+    (
+      (:lbl)
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, infinite2) {
+  auto str = R"(
+    (
+      (:lbl)
+      (const v0 0)
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, unreachable) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:lbl)
+      (return-void)
+
+      (goto :lbl)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      ; cfg simplification removes the empty block
+      (return-void)
+    )
+  )");
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, unreachable2) {
+  auto str = R"(
+    (
+      (:lbl)
+      (return-void)
+
+      (const v0 0)
+      (goto :lbl)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str);
+  auto expected_code = assembler::ircode_from_string(str);
+
+  input_code->build_cfg(true);
+  TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
+  input_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
+}
+
+TEST(ControlFlow, remove_non_branch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const-wide v2 1)
+      (move v1 v2)
+      (return-void)
+    )
+  )");
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+
+  auto iterable = cfg::InstructionIterable(cfg);
+  std::vector<cfg::InstructionIterator> to_delete;
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST_WIDE) {
+      to_delete.push_back(it);
+    }
+  }
+
+  for (auto& it : to_delete) {
+    cfg.remove_opcode(it);
+  }
+
+  code->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (move v1 v2)
+      (return-void)
+    )
+  )");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
+  auto iterable = cfg::InstructionIterable(cfg);
+  std::vector<cfg::InstructionIterator> to_delete;
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (predicate(it->insn->opcode())) {
+      to_delete.push_back(it);
+    }
+  }
+
+  for (auto& it : to_delete) {
+    cfg.remove_opcode(it);
+  }
+}
+
+TEST(ControlFlow, remove_non_branch_with_loop) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     ; implicit goto (:loop)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop)
+
+     (:if-true-label)
+     (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_CONST; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     ; implicit goto :loop
+
+     (:loop)
+     (if-gez v0 :if-true-label)
+     (goto :loop)
+
+     (:if-true-label)
+     (return-void)
+    )
+  )");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, remove_branch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :lbl)
+      (const v1 1)
+
+      (:lbl)
+      (return-void)
+    )
+  )");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_EQZ; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (return-void)
+    )
+  )");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, remove_branch_with_loop) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :loop)
+
+     (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_GEZ; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (const v1 0)
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, remove_all_but_return) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :loop)
+
+     (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op != OPCODE_RETURN_VOID; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, remove_switch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v0 (:a :b))
+
+      (:exit)
+      (return-void)
+
+      (:a 0)
+      (const v0 0)
+      (goto :exit)
+
+      (:b 1)
+      (const v1 1)
+      (goto :exit)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:exit)
+      (return-void)
+
+      (const v0 0)
+      (goto :exit)
+
+      (const v1 1)
+      (goto :exit)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ControlFlow, remove_switch2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sparse-switch v0 (:a :b))
+      (goto :exit)
+
+      (:a 0)
+      (const v0 0)
+      (goto :exit)
+
+      (:b 1)
+      (const v1 1)
+      (goto :exit)
+
+      (:exit)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (goto :exit)
+
+      (const v0 0)
+      (goto :exit)
+
+      (const v1 1)
+
+      (:exit)
+      (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }

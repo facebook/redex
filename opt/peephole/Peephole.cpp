@@ -17,6 +17,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
@@ -466,6 +467,20 @@ struct Matcher {
     case OPCODE_IGET_SHORT:
     case OPCODE_IGET_WIDE:
     case OPCODE_IGET_OBJECT:
+    case OPCODE_SPUT:
+    case OPCODE_SPUT_BYTE:
+    case OPCODE_SPUT_CHAR:
+    case OPCODE_SPUT_BOOLEAN:
+    case OPCODE_SPUT_SHORT:
+    case OPCODE_SPUT_WIDE:
+    case OPCODE_SPUT_OBJECT:
+    case OPCODE_SGET:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_SHORT:
+    case OPCODE_SGET_WIDE:
+    case OPCODE_SGET_OBJECT:
       assert(replace.kind == DexPattern::Kind::field);
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
@@ -1186,37 +1201,23 @@ DexPattern put_x_op(IROpcode op_code,
                     Register src,
                     Register obj_register,
                     Field field) {
-  static const auto* kPutOpcodes =
-      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
-          {OPCODE_IPUT,
-           OPCODE_IPUT_WIDE,
-           OPCODE_IPUT_OBJECT,
-           OPCODE_IPUT_SHORT,
-           OPCODE_IPUT_CHAR,
-           OPCODE_IPUT_BYTE,
-           OPCODE_IPUT_BOOLEAN});
-  if (kPutOpcodes->find(op_code) == kPutOpcodes->end()) {
-    always_assert_log(false, "Not supported IROpcode");
+  if (is_iput(op_code)) {
+    return {{op_code}, {src, obj_register}, {}, field};
   }
-
-  return {{op_code}, {src, obj_register}, {}, field};
+  if (is_sput(op_code)) {
+    return {{op_code}, {src}, {}, field};
+  }
+  always_assert_log(false, "Not supported IROpcode");
 }
 
 DexPattern get_x_op(IROpcode op_code, Register src, Field field) {
-  static const auto* kGetOpcodes =
-      new std::unordered_set<IROpcode, Matcher::EnumClassHash>(
-          {OPCODE_IGET,
-           OPCODE_IGET_WIDE,
-           OPCODE_IGET_OBJECT,
-           OPCODE_IGET_SHORT,
-           OPCODE_IGET_CHAR,
-           OPCODE_IGET_BYTE,
-           OPCODE_IGET_BOOLEAN});
-  if (kGetOpcodes->find(op_code) == kGetOpcodes->end()) {
-    always_assert_log(false, "Not supported IROpcode");
+  if (is_iget(op_code)) {
+    return {{op_code}, {src}, {}, field};
   }
-
-  return {{op_code}, {src}, {}, field};
+  if (is_sget(op_code)) {
+    return {{op_code}, {}, {}, field};
+  }
+  always_assert_log(false, "Not supported IROpcode");
 }
 
 std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
@@ -1267,6 +1268,41 @@ const std::vector<Pattern>& get_putget_patterns() {
         put_get_x_patterns(
             OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN, move_result_pseudo),
         put_x_patterns(OPCODE_IPUT_BOOLEAN),
+        second_get_non_volatile},
+
+       {"Replace_StaticPutGet",
+        put_get_x_patterns(OPCODE_SPUT, OPCODE_SGET, move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetWide",
+        put_get_x_patterns(
+            OPCODE_SPUT_WIDE, OPCODE_SGET_WIDE, move_result_pseudo_wide),
+        put_x_patterns(OPCODE_SPUT_WIDE),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetObject",
+        put_get_x_patterns(
+            OPCODE_SPUT_OBJECT, OPCODE_SGET_OBJECT, move_result_pseudo_object),
+        put_x_patterns(OPCODE_SPUT_OBJECT),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetShort",
+        put_get_x_patterns(
+            OPCODE_SPUT_SHORT, OPCODE_SGET_SHORT, move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_SHORT),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetChar",
+        put_get_x_patterns(
+            OPCODE_SPUT_CHAR, OPCODE_SGET_CHAR, move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_CHAR),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetByte",
+        put_get_x_patterns(
+            OPCODE_SPUT_BYTE, OPCODE_SGET_BYTE, move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_BYTE),
+        second_get_non_volatile},
+       {"Replace_StaticPutGetBoolean",
+        put_get_x_patterns(
+            OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN, move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_BOOLEAN),
         second_get_non_volatile}});
   return *kPutGetPatterns;
 }

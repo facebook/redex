@@ -44,6 +44,8 @@ DexOpcode select_move_opcode(const IRInstruction* insn);
 
 DexOpcode select_const_opcode(const IRInstruction* insn);
 
+DexOpcode select_binop_lit_opcode(const IRInstruction* insn);
+
 bool try_2addr_conversion(MethodItemEntry*);
 
 } // namespace impl

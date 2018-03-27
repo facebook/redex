@@ -10,13 +10,14 @@
 #include <gtest/gtest.h>
 #include <string>
 
+#include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
 #include "VerifyUtil.h"
 
-int count_ifs(IRCode* code) {
+int count_ifs(ControlFlowGraph& cfg) {
   size_t num_ifs = 0;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (is_conditional_branch(mie.insn->opcode())) {
       num_ifs++;
     }
@@ -24,9 +25,9 @@ int count_ifs(IRCode* code) {
   return num_ifs;
 }
 
-int count_ops(IRCode* code, IROpcode op) {
+int count_ops(ControlFlowGraph& cfg, IROpcode op) {
   size_t result = 0;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->opcode() == op) {
       result++;
     }
@@ -43,7 +44,8 @@ TEST_F(PreVerify, ConstantPropagation) {
       continue;
     }
     IRCode* code = new IRCode(meth);
-    EXPECT_NE(code, nullptr);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(true);
     bool has_if = false;
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s\n", SHOW(meth));
@@ -51,12 +53,12 @@ TEST_F(PreVerify, ConstantPropagation) {
     }
 
     if (meth->get_name()->str().find("overflow") == std::string::npos) {
-      EXPECT_EQ(1, count_ifs(code));
+      EXPECT_EQ(1, count_ifs(code->cfg()));
     }
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      size_t num_add_lits = count_ops(code, OPCODE_ADD_INT_LIT8);
-      EXPECT_EQ(1, count_ops(code, OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
+    code->clear_cfg();
   }
 }
 
@@ -70,19 +72,21 @@ TEST_F(PostVerify, ConstantPropagation) {
     }
     IRCode* code = new IRCode(meth);
     EXPECT_NE(code, nullptr);
+    code->build_cfg(true);
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s\n", SHOW(meth));
       TRACE(CONSTP, 1, "%s\n", SHOW(code));
     }
 
-    EXPECT_EQ(0, count_ifs(code));
+    EXPECT_EQ(0, count_ifs(code->cfg()));
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code, OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
 
     if (meth->get_name()->str().find("overflow") != std::string::npos) {
       // make sure we don't fold overflow at compile time
-      EXPECT_EQ(1, count_ops(code, OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
+    code->clear_cfg();
   }
 }

@@ -108,6 +108,80 @@ DexOpcode select_const_opcode(const IRInstruction* insn) {
   }
 }
 
+DexOpcode select_binop_lit_opcode(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  auto literal = insn->get_literal();
+  if (signed_int_fits<8>(literal)) { // lit8 -> literal is 8 bits
+    switch (op) {
+    case OPCODE_ADD_INT_LIT8:
+    case OPCODE_ADD_INT_LIT16:
+      return DOPCODE_ADD_INT_LIT8;
+    case OPCODE_RSUB_INT_LIT8:
+    case OPCODE_RSUB_INT:
+      return DOPCODE_RSUB_INT_LIT8;
+    case OPCODE_MUL_INT_LIT8:
+    case OPCODE_MUL_INT_LIT16:
+      return DOPCODE_MUL_INT_LIT8;
+    case OPCODE_DIV_INT_LIT8:
+    case OPCODE_DIV_INT_LIT16:
+      return DOPCODE_DIV_INT_LIT8;
+    case OPCODE_REM_INT_LIT8:
+    case OPCODE_REM_INT_LIT16:
+      return DOPCODE_REM_INT_LIT8;
+    case OPCODE_AND_INT_LIT8:
+    case OPCODE_AND_INT_LIT16:
+      return DOPCODE_AND_INT_LIT8;
+    case OPCODE_OR_INT_LIT8:
+    case OPCODE_OR_INT_LIT16:
+      return DOPCODE_OR_INT_LIT8;
+    case OPCODE_XOR_INT_LIT8:
+    case OPCODE_XOR_INT_LIT16:
+      return DOPCODE_XOR_INT_LIT8;
+    case OPCODE_SHL_INT_LIT8:
+      return DOPCODE_SHL_INT_LIT8;
+    case OPCODE_SHR_INT_LIT8:
+      return DOPCODE_SHR_INT_LIT8;
+    case OPCODE_USHR_INT_LIT8:
+      return DOPCODE_USHR_INT_LIT8;
+    default:
+      not_reached();
+    }
+  } else if (signed_int_fits<16>(literal)) { // lit16 -> literal is 16 bits
+    switch (op) {
+    case OPCODE_ADD_INT_LIT8:
+    case OPCODE_ADD_INT_LIT16:
+      return DOPCODE_ADD_INT_LIT16;
+    case OPCODE_RSUB_INT_LIT8:
+    case OPCODE_RSUB_INT:
+      return DOPCODE_RSUB_INT;
+    case OPCODE_MUL_INT_LIT8:
+    case OPCODE_MUL_INT_LIT16:
+      return DOPCODE_MUL_INT_LIT16;
+    case OPCODE_DIV_INT_LIT8:
+    case OPCODE_DIV_INT_LIT16:
+      return DOPCODE_DIV_INT_LIT16;
+    case OPCODE_REM_INT_LIT8:
+    case OPCODE_REM_INT_LIT16:
+      return DOPCODE_REM_INT_LIT16;
+    case OPCODE_AND_INT_LIT8:
+    case OPCODE_AND_INT_LIT16:
+      return DOPCODE_AND_INT_LIT16;
+    case OPCODE_OR_INT_LIT8:
+    case OPCODE_OR_INT_LIT16:
+      return DOPCODE_OR_INT_LIT16;
+    case OPCODE_XOR_INT_LIT8:
+    case OPCODE_XOR_INT_LIT16:
+      return DOPCODE_XOR_INT_LIT16;
+    default:
+      not_reached();
+    }
+  } else {
+    // literal > 16 not yet supported
+    always_assert_log(
+        false, "binop_lit doesn't support literals greater than 16 bits");
+  }
+}
+
 bool try_2addr_conversion(MethodItemEntry* mie) {
   auto* insn = mie->dex_insn;
   auto op = insn->opcode();
@@ -141,7 +215,8 @@ using namespace impl;
  */
 static void check_load_params(DexMethod* method) {
   auto* code = method->get_code();
-  auto param_ops = InstructionIterable(code->get_param_instructions());
+  auto params = code->get_param_instructions();
+  auto param_ops = InstructionIterable(params);
   if (param_ops.empty()) {
     return;
   }
@@ -232,11 +307,13 @@ static void remove_move_result_pseudo(IRList::iterator it) {
  * Returns the number of DexInstructions added during lowering (not including
  * the check-cast).
  */
-static size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
+static size_t lower_check_cast(DexMethod*,
+                               IRCode* code,
+                               IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
-  auto move = move_result_pseudo_of(it);
+  auto move = ir_list::move_result_pseudo_of(it);
   if (move->dest() != insn->src(0)) {
     // convert check-cast v1; move-result-pseudo v0 into
     //
@@ -260,30 +337,35 @@ static size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) 
   return extra_instructions;
 }
 
-static void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator it) {
+static void lower_fill_array_data(DexMethod*,
+                                  IRCode* code,
+                                  IRList::iterator it) {
   const auto* insn = it->insn;
   auto* dex_insn = new DexInstruction(DOPCODE_FILL_ARRAY_DATA);
   dex_insn->set_src(0, insn->src(0));
-  auto* bt = new BranchTarget();
-  bt->type = BRANCH_SIMPLE;
-  bt->src = &*it;
+  auto* bt = new BranchTarget(&*it);
   code->push_back(bt);
   code->push_back(insn->get_data());
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_to_range_instruction(DexMethod* method, IRCode* code, IRList::iterator* it_) {
-  using boost::algorithm::join;
+static void lower_to_range_instruction(DexMethod* method,
+                                       IRCode* code,
+                                       IRList::iterator* it_) {
   using boost::adaptors::transformed;
+  using boost::algorithm::join;
   auto& it = *it_;
   const auto* insn = it->insn;
   always_assert_log(
-    has_contiguous_srcs(insn),
-    "Instruction %s has non-contiguous srcs (%s) in method %s.\nContext:\n%s\n",
-    SHOW(insn),
-    join(insn->srcs() | transformed((std::string(*)(int))std::to_string), ", ").c_str(),
-    SHOW(method),
-    SHOW_CONTEXT(code, insn));
+      has_contiguous_srcs(insn),
+      "Instruction %s has non-contiguous srcs (%s) in method "
+      "%s.\nContext:\n%s\n",
+      SHOW(insn),
+      join(insn->srcs() | transformed((std::string(*)(int))std::to_string),
+           ", ")
+          .c_str(),
+      SHOW(method),
+      SHOW_CONTEXT(code, insn));
   auto* dex_insn = create_dex_instruction(insn);
   dex_insn->set_opcode(opcode::range_version(insn->opcode()));
   dex_insn->set_range_base(insn->src(0));
@@ -291,7 +373,9 @@ static void lower_to_range_instruction(DexMethod* method, IRCode* code, IRList::
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
+static void lower_simple_instruction(DexMethod*,
+                                     IRCode*,
+                                     IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   auto op = insn->opcode();
@@ -301,13 +385,15 @@ static void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_)
     dex_insn = new DexInstruction(select_move_opcode(insn));
   } else if (op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE) {
     dex_insn = new DexInstruction(select_const_opcode(insn));
+  } else if (op >= OPCODE_ADD_INT_LIT16 && op <= OPCODE_USHR_INT_LIT8) {
+    dex_insn = new DexInstruction(select_binop_lit_opcode(insn));
   } else {
     dex_insn = create_dex_instruction(insn);
   }
   if (insn->dests_size()) {
     dex_insn->set_dest(insn->dest());
   } else if (insn->has_move_result_pseudo()) {
-    dex_insn->set_dest(move_result_pseudo_of(it)->dest());
+    dex_insn->set_dest(ir_list::move_result_pseudo_of(it)->dest());
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     dex_insn->set_src(i, insn->src(i));
@@ -350,7 +436,6 @@ Stats lower(DexMethod* method) {
     } else {
       lower_simple_instruction(method, code, &it);
     }
-    // TODO: /lit8 and /lit16 instructions
   }
   for (auto it = code->begin(); it != code->end(); ++it) {
     always_assert(it->type != MFLOW_OPCODE);

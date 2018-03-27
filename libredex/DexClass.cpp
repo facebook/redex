@@ -566,10 +566,10 @@ void DexClass::remove_method(const DexMethod* m) {
 
 void DexMethod::become_virtual() {
   assert(!m_virtual);
-  m_virtual = true;
   auto cls = type_class(m_spec.cls);
   assert(!cls->is_external());
   cls->remove_method(this);
+  m_virtual = true;
   auto& vmethods = cls->get_vmethods();
   insert_sorted(vmethods, this, compare_dexmethods);
 }

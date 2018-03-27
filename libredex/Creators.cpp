@@ -509,7 +509,8 @@ MethodBlock* MethodBlock::switch_op(
 }
 
 void MethodCreator::load_locals(DexMethod* meth) {
-  auto ii = InstructionIterable(meth->get_code()->get_param_instructions());
+  auto ii = InstructionIterable(
+      meth->get_code()->get_param_instructions());
   auto it = ii.begin();
   if (!is_static(meth)) {
     make_local_at(meth->get_class(), it->insn->dest());

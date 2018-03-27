@@ -26,7 +26,7 @@ namespace regalloc {
  * Find the first instruction in a block (if any) that uses a given register.
  */
 static IRList::iterator find_first_use_in_block(reg_t use,
-                                                   const Block* block) {
+                                                Block* block) {
   auto ii = InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
@@ -131,6 +131,14 @@ void mark_adjacent(const interference::Graph& ig,
 constexpr int INVALID_SCORE = std::numeric_limits<int>::max();
 
 /*
+ * If :reg is mapped to something other than :vreg, then we'll need to insert a
+ * move instruction to remap :reg.
+ */
+bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
+  return reg_map.find(reg) != reg_map.end() && reg_map.at(reg) != vreg;
+}
+
+/*
  * Count the number of vregs we would need to spill if we allocated a
  * contiguous range of vregs starting at :range_base.
  */
@@ -146,13 +154,12 @@ int score_range_fit(
     auto reg = range_regs.at(i);
     const auto& node = ig.get_node(reg);
     const auto& vreg_file = vreg_files.at(reg);
-    auto it = reg_map.find(reg);
     // XXX We could be more precise here by checking the LivenessDomain for the
     // given range instruction instead of just using the graph
     if (!vreg_file.is_free(vreg, node.width())) {
       return INVALID_SCORE;
     }
-    if ((it != reg_map.end() && it->second != vreg) || vreg > node.max_vreg()) {
+    if (vreg > node.max_vreg() || needs_remap(reg_map, reg, vreg)) {
       ++score;
     }
     vreg += node.width();
@@ -206,8 +213,8 @@ void fit_range_instruction(
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
-    if (vreg > node.max_vreg() || reg_map.find(src) != reg_map.end()) {
-      spills->range_spills[insn].emplace(src);
+    if (vreg > node.max_vreg() || needs_remap(reg_map, src, vreg)) {
+      spills->range_spills[insn].emplace_back(i);
     } else {
       always_assert(vreg_file.is_free(vreg, node.width()));
       reg_map.emplace(src, vreg);
@@ -237,7 +244,7 @@ void fit_params(
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
-    if (vreg > node.max_vreg() || reg_map.find(dest) != reg_map.end()) {
+    if (vreg > node.max_vreg() || needs_remap(reg_map, dest, vreg)) {
       spills->param_spills.emplace(dest);
     } else {
       always_assert(vreg_file.is_free(vreg, node.width()));
@@ -260,9 +267,10 @@ std::string show(const SpillPlan& spill_plan) {
   }
   ss << "Range spills:\n";
   for (auto pair : spill_plan.range_spills) {
-    ss << show(pair.first) << ": ";
-    for (auto reg : pair.second) {
-      ss << reg << " ";
+    auto* insn = pair.first;
+    ss << show(insn) << ": ";
+    for (auto idx : pair.second) {
+      ss << insn->src(idx) << " ";
     }
     ss << "\n";
   }
@@ -364,7 +372,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     }
     reg_t dest;
     if (insn->has_move_result_pseudo()) {
-      dest = move_result_pseudo_of(it.unwrap())->dest();
+      dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
     } else {
       dest = insn->dest();
     }
@@ -678,19 +686,6 @@ void Allocator::select_params(const IRCode* code,
       ig, param_insns, params_base, vreg_files, reg_transform, spill_plan);
 }
 
-reg_t max_value_for_src(const interference::Graph& ig,
-                        const IRInstruction* insn,
-                        size_t src_index) {
-  auto& node = ig.get_node(insn->src(src_index));
-  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
-  if (is_invoke(insn->opcode()) && node.width() == 2) {
-    // We need to reserve one vreg for denormalization. See the
-    // comments in GraphBuilder::update_node_constraints() for details.
-    --max_value;
-  }
-  return max_value;
-}
-
 // Find out if there exist a
 //    invoke-xxx/fill-new-array v
 //    move-result u
@@ -909,15 +904,15 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
 void Allocator::split_params(
     const interference::Graph& ig,
     const std::unordered_set<reg_t>& param_spills,
-    IRCode* code,
-    std::unordered_set<reg_t>* new_temps) {
+    IRCode* code) {
   auto load_locations = find_param_splits(param_spills, code);
   if (load_locations.size() == 0) {
     return;
   }
 
   // Remap the operands of the load-param opcodes
-  auto param_insns = InstructionIterable(code->get_param_instructions());
+  auto params = code->get_param_instructions();
+  auto param_insns = InstructionIterable(params);
   std::unordered_map<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
     auto insn = mie.insn;
@@ -925,7 +920,6 @@ void Allocator::split_params(
     if (load_locations.find(dest) != load_locations.end()) {
       auto temp = code->allocate_temp();
       insn->set_dest(temp);
-      new_temps->emplace(temp);
       param_to_temp[dest] = temp;
     }
   }
@@ -957,8 +951,7 @@ void Allocator::split_params(
 void Allocator::spill(const interference::Graph& ig,
                       const SpillPlan& spill_plan,
                       const RangeSet& range_set,
-                      IRCode* code,
-                      std::unordered_set<reg_t>* new_temps) {
+                      IRCode* code) {
   // TODO: account for "close" defs and uses. See [Briggs92], section 8.7
 
   auto ii = InstructionIterable(code);
@@ -970,31 +963,29 @@ void Allocator::spill(const interference::Graph& ig,
       auto to_spill_it = spill_plan.range_spills.find(insn);
       if (to_spill_it != spill_plan.range_spills.end()) {
         auto& to_spill = to_spill_it->second;
-        for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          auto src = insn->src(i);
-          if (to_spill.find(src) == to_spill.end()) {
-            continue;
-          }
+        for (auto idx : to_spill) {
+          auto src = insn->src(idx);
           auto& node = ig.get_node(src);
           auto temp = code->allocate_temp();
-          insn->set_src(i, temp);
-          new_temps->emplace(temp);
+          insn->set_src(idx, temp);
           auto mov = gen_move(node.type(), temp, src);
           ++m_stats.range_spill_moves;
           code->insert_before(it.unwrap(), mov);
         }
       }
     } else {
-      // Spill non-param, non-range symregs
+      // Spill non-param, non-range symregs.
+      // We do not need to worry about handling any new symregs introduced in
+      // range/param splitting -- they will never appear in the global_spills
+      // map.
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
-        // We've already spilled this when handling range / param nodes above
-        if (new_temps->find(src) != new_temps->end()) {
+        auto sp_it = spill_plan.global_spills.find(src);
+        if (sp_it == spill_plan.global_spills.end()) {
           continue;
         }
         auto& node = ig.get_node(src);
-        auto sp_it = spill_plan.global_spills.find(src);
-        auto max_value = max_value_for_src(ig, insn, i);
+        auto max_value = max_value_for_src(insn, i, node.width() == 2);
         if (sp_it != spill_plan.global_spills.end() &&
             sp_it->second > max_value) {
           auto temp = code->allocate_temp();
@@ -1103,9 +1094,8 @@ void Allocator::allocate(IRCode* code) {
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      std::unordered_set<reg_t> new_temps;
-      split_params(ig, spill_plan.param_spills, code, &new_temps);
-      spill(ig, spill_plan, range_set, code, &new_temps);
+      split_params(ig, spill_plan.param_spills, code);
+      spill(ig, spill_plan, range_set, code);
 
       if (split_plan.split_around.size() > 0) {
         TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));

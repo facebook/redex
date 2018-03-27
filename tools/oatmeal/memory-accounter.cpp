@@ -8,7 +8,7 @@
  */
 
 #include "memory-accounter.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 #include <algorithm>
 #include <cstring>

@@ -47,6 +47,8 @@ class PatriciaTreeMapAbstractEnvironment final
  public:
   using Value = ptmae_impl::MapValue<Variable, Domain>;
 
+  using MapType = PatriciaTreeMap<Variable, typename Value::ValueInterface>;
+
   using AbstractValueKind = typename AbstractValue<Value>::Kind;
 
   /*
@@ -77,8 +79,7 @@ class PatriciaTreeMapAbstractEnvironment final
     return this->get_value()->m_map.size();
   }
 
-  const PatriciaTreeMap<Variable, typename Value::ValueInterface>& bindings()
-      const {
+  const MapType& bindings() const {
     assert(this->kind() == AbstractValueKind::Value);
     return this->get_value()->m_map;
   }

@@ -20,6 +20,8 @@
 #include "IRInstruction.h"
 #include "IRList.h"
 
+class ControlFlowGraph;
+
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
 // belong there... I'm going to move them out soon
 class IRCode {
@@ -131,6 +133,8 @@ class IRCode {
 
   /* Return the control flow graph of this method as a vector of blocks. */
   ControlFlowGraph& cfg() { return *m_cfg; }
+
+  const ControlFlowGraph& cfg() const { return *m_cfg; }
 
   // Build a Control Flow Graph
   //  * A non editable CFG's blocks have begin and end pointers into the big

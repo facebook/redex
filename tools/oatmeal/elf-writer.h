@@ -10,7 +10,7 @@
 #pragma once
 
 #include "dump-oat.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 #include <museum/5.0.0/bionic/libc/linux/elf.h>
 

@@ -17,6 +17,7 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
@@ -54,6 +55,13 @@ class IRTypeCheckerTest : public ::testing::Test {
   void add_code(const std::vector<IRInstruction*>& insns) {
     IRCode* code = m_method->get_code();
     for (const auto& insn : insns) {
+      code->push_back(insn);
+    }
+  }
+
+  void add_code(const std::unique_ptr<IRCode>& insns) {
+    IRCode* code = m_method->get_code();
+    for (const auto& insn : *insns) {
       code->push_back(insn);
     }
   }
@@ -284,20 +292,16 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
   using namespace dex_asm;
-  auto target1 = new BranchTarget();
-  auto target2 = new BranchTarget();
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {9_v}));
-  target1->type = BRANCH_SIMPLE;
-  target1->src = if_mie;
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
-  target2->type = BRANCH_SIMPLE;
-  target2->src = goto_mie;
+  auto target1 = new BranchTarget(if_mie);
+  auto target2 = new BranchTarget(goto_mie);
   IRCode* code = m_method->get_code();
   code->push_back(*if_mie); // branch to target1
   code->push_back(dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}));
   code->push_back(dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {0_v}));
   code->push_back(
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+		  dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   code->push_back(*goto_mie); // branch to target2
   code->push_back(target1);
   code->push_back(dasm(OPCODE_MOVE, {0_v, 12_v}));
@@ -523,4 +527,49 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
       "Type error in method testMethod at instruction 'ADD_INT v5, v5, "
       "v0' for register v0: expected type INT, but found REFERENCE instead",
       regular_checker.what());
+}
+
+TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_MOVE_WIDE, {1_v, 7_v}),
+      dasm(OPCODE_MOVE_WIDE, {0_v, 1_v}),
+      dasm(OPCODE_MOVE_WIDE, {0_v, 10_v}),
+      dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
+      dasm(OPCODE_RETURN, {9_v}),
+  };
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+  EXPECT_EQ("OK", checker.what());
+  EXPECT_EQ(LONG1, checker.get_type(insns[1], 1));
+  EXPECT_EQ(LONG2, checker.get_type(insns[1], 2));
+  EXPECT_EQ(LONG1, checker.get_type(insns[2], 0));
+  EXPECT_EQ(LONG2, checker.get_type(insns[2], 1));
+  EXPECT_EQ(DOUBLE1, checker.get_type(insns[3], 0));
+  EXPECT_EQ(DOUBLE2, checker.get_type(insns[3], 1));
+  EXPECT_EQ(DOUBLE1, checker.get_type(insns[4], 1));
+  EXPECT_EQ(DOUBLE2, checker.get_type(insns[4], 2));
+}
+
+TEST_F(IRTypeCheckerTest, filledNewArray) {
+  auto insns = assembler::ircode_from_string(R"(
+    (
+      (const-string "S1")
+      (move-result-pseudo-object v1)
+      (const-string "S2")
+      (move-result-pseudo-object v2)
+      (const-string "S3")
+      (move-result-pseudo-object v3)
+      (filled-new-array (v1 v2 v3) "[Ljava/lang/String;")
+      (move-result-object v0)
+      (return v9)
+    )
+  )");
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+  EXPECT_EQ("OK", checker.what());
 }

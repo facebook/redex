@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include "util.h"
+#include "OatmealUtil.h"
+#include "DexDefs.h"
 
 #include <memory>
 #include <string>

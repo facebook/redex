@@ -109,22 +109,8 @@ using std::placeholders::_1;
 using TypeLattice = BitVectorLattice<IRType, 16, std::hash<int>>;
 
 TypeLattice type_lattice(
-    {BOTTOM,
-     ZERO,
-     CONST,
-     CONST1,
-     CONST2,
-     REFERENCE,
-     INT,
-     FLOAT,
-     LONG1,
-     LONG2,
-     DOUBLE1,
-     DOUBLE2,
-     SCALAR,
-     SCALAR1,
-     SCALAR2,
-     TOP},
+    {BOTTOM, ZERO, CONST, CONST1, CONST2, REFERENCE, INT, FLOAT, LONG1, LONG2,
+     DOUBLE1, DOUBLE2, SCALAR, SCALAR1, SCALAR2, TOP},
     {{BOTTOM, ZERO},    {BOTTOM, CONST1},   {BOTTOM, CONST2},
      {ZERO, REFERENCE}, {ZERO, CONST},      {CONST, INT},
      {CONST, FLOAT},    {CONST1, LONG1},    {CONST1, DOUBLE1},
@@ -183,7 +169,7 @@ class TypeInference final
     bool first_param = true;
     // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
     // beginning of the entry block of the CFG.
-    for (auto& mie : InstructionIterable(m_cfg.entry_block())) {
+    for (const auto& mie : InstructionIterable(m_cfg.entry_block())) {
       IRInstruction* insn = mie.insn;
       switch (insn->opcode()) {
       case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -283,10 +269,10 @@ class TypeInference final
     }
     case OPCODE_MOVE_WIDE: {
       assume_wide_scalar(current_state, insn->src(0));
-      set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
-      set_type(current_state,
-               insn->dest() + 1,
-               current_state->get(insn->src(0) + 1));
+      TypeDomain td1 = current_state->get(insn->src(0));
+      TypeDomain td2 = current_state->get(insn->src(0) + 1);
+      set_type(current_state, insn->dest(), td1);
+      set_type(current_state, insn->dest() + 1, td2);
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO:
@@ -376,18 +362,17 @@ class TypeInference final
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY: {
-      const DexType* type = get_array_type(insn->get_type());
+      const DexType* element_type = get_array_type(insn->get_type());
       // We assume that structural constraints on the bytecode are satisfied,
       // i.e., the type is indeed an array type.
-      always_assert(type != nullptr);
-      // Although the Dalvik bytecode specification states that a
-      // filled-new-array operation could be used with an array of references,
-      // the Dex compiler seems to never generate that case. The assert is used
-      // here as a safeguard.
-      always_assert_log(
-          !is_object(type), "Unexpected instruction '%s'.\n", SHOW(insn));
+      always_assert(element_type != nullptr);
+      bool is_array_of_references = is_object(element_type);
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        assume_scalar(current_state, insn->src(i));
+        if (is_array_of_references) {
+          assume_reference(current_state, insn->src(i));
+        } else {
+          assume_scalar(current_state, insn->src(i));
+        }
       }
       set_reference(current_state, RESULT_REGISTER);
       break;
@@ -1191,9 +1176,7 @@ class Result final {
  public:
   static Result Ok() { return Result(); }
 
-  static Result make_error(const std::string& s) {
-    return Result(s);
-  }
+  static Result make_error(const std::string& s) { return Result(s); }
 
   const std::string& error_message() const {
     always_assert(!is_ok);

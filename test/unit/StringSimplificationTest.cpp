@@ -271,9 +271,7 @@ TEST(StringSimplification, testBranching) {
   code->push_back(insn);
 
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {6_v}));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = if_mie;
+  auto target = new BranchTarget(if_mie);
   code->push_back(*if_mie);
   code->push_back(make_append_instruction(4, 11));
   code->push_back(make_to_string(4));
@@ -317,9 +315,7 @@ TEST(StringSimplification, testBeginningOfBlockToString) {
   code->push_back(make_append_instruction(4, 13));
   code->push_back(make_append_instruction(4, 11));
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = goto_mie;
+  auto target = new BranchTarget(goto_mie);
   code->push_back(*goto_mie);
   code->push_back(make_noise_instructions(54, 54, 54));
   code->push_back(target);
@@ -450,7 +446,7 @@ TEST(StringSimplification, modificationOfBaseVariable) {
   code->push_back(make_constructor(3));
   code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
-  auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);  
+  auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
   insn->set_arg_word_count(1);
   insn->set_src(0, 6);
   insn->set_method(DexMethod::make_method(

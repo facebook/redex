@@ -265,7 +265,7 @@ class FinalInlineImpl {
           }
           for (auto it : rewrites) {
             auto* insn = it->insn;
-            auto dest = move_result_pseudo_of(it)->dest();
+            auto dest = ir_list::move_result_pseudo_of(it)->dest();
             auto field = resolve_field(insn->get_field(), FieldSearch::Static);
             auto value = field->get_static_value();
             auto opcode = value->is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST;
@@ -443,8 +443,8 @@ class FinalInlineImpl {
   // register.  Yes, this means we're N^2 in theory, but hopefully in
   // practice we don't approach that.
   bool reg_reused(uint16_t reg,
-                  const InstructionIterator& it,
-                  const InstructionIterator& end) {
+                  const ir_list::InstructionIterator& it,
+                  const ir_list::InstructionIterator& end) {
     for (auto jt = std::next(it, 2); jt != end; ++jt) {
       auto insn = jt->insn;
 
@@ -576,7 +576,7 @@ class FinalInlineImpl {
         continue;
       }
 
-      auto sget_move_result = move_result_pseudo_of(it.unwrap());
+      auto sget_move_result = ir_list::move_result_pseudo_of(it.unwrap());
       // skip the move-result-pseudo
       ++it;
 

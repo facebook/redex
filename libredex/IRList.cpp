@@ -10,6 +10,7 @@
 #include "IRList.h"
 
 #include <vector>
+#include <iterator>
 
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -223,9 +224,7 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
       "No match found while replacing '%s' with '%s'",
       SHOW(from),
       SHOW(to));
-  auto target = new BranchTarget();
-  target->type = BRANCH_SIMPLE;
-  target->src = &*miter;
+  auto target = new BranchTarget(&*miter);
   m_list.insert(miter, *(new MethodItemEntry(target)));
 }
 
@@ -323,8 +322,8 @@ void IRList::remove_opcode(IRInstruction* insn) {
 
 /*
  * Param `insn` should be part of a switch...case statement. Find the case
- * block it is contained within and remove it. Then decrement the index of
- * all the other case blocks that are larger than the index of the removed
+ * block it is contained within and remove it. Then decrement the case_key of
+ * all the other case blocks that are larger than the case_key of the removed
  * block so that the case numbers don't have any gaps and the switch can
  * still be encoded as a packed-switch opcode.
  *
@@ -385,8 +384,8 @@ void IRList::remove_switch_case(IRInstruction* insn) {
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_TARGET) {
       BranchTarget* bt = mie.target;
-      if (bt->src == switch_mei && bt->index > target_mei->target->index) {
-        bt->index -= 1;
+      if (bt->src == switch_mei && bt->case_key > target_mei->target->case_key) {
+        bt->case_key -= 1;
       }
     }
   }
@@ -435,11 +434,17 @@ void IRList::remove_branch_targets(IRInstruction *branch_inst) {
   }
 }
 
-bool IRList::structural_equals(const IRList& other) {
+IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
+  return std::distance(iterator_to(mie), begin());
+}
+
+bool IRList::structural_equals(const IRList& other) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
   for (; it1 != m_list.end() && it2 != other.end();) {
+    always_assert(it1->type != MFLOW_DEX_OPCODE);
+    always_assert(it2->type != MFLOW_DEX_OPCODE);
     // Skip debug and position
     if (it1->type == MFLOW_DEBUG || it1->type == MFLOW_POSITION) {
       ++it1;
@@ -460,10 +465,52 @@ bool IRList::structural_equals(const IRList& other) {
         return false;
       }
     } else if (it1->type == MFLOW_TARGET) {
-      auto branch_target1 = static_cast<BranchTarget*>(it1->target);
-      auto branch_target2 = static_cast<BranchTarget*>(it2->target);
+      auto target1 = it1->target;
+      auto target2 = it2->target;
 
-      if (branch_target1->index != branch_target2->index) {
+      if (target1->type != target2->type) {
+        return false;
+      }
+
+      if (target1->type == BRANCH_MULTI &&
+          target1->case_key != target2->case_key) {
+        return false;
+      }
+
+      // Do these targets point back to the same branch instruction?
+      if (this->index_of(*target1->src) != other.index_of(*target2->src)) {
+        return false;
+      }
+
+    } else if (it1->type == MFLOW_TRY) {
+      auto try1 = it1->tentry;
+      auto try2 = it2->tentry;
+
+      if (try1->type != try2->type) {
+        return false;
+      }
+
+      // Do these `try`s correspond to the same catch block?
+      if (this->index_of(*try1->catch_start) !=
+          other.index_of(*try2->catch_start)) {
+        return false;
+      }
+    } else if (it1->type == MFLOW_CATCH) {
+      auto catch1 = it1->centry;
+      auto catch2 = it2->centry;
+
+      if (catch1->catch_type != catch2->catch_type) {
+        return false;
+      }
+
+      if ((catch1->next == nullptr && catch2->next != nullptr) ||
+          (catch1->next != nullptr && catch2->next == nullptr)) {
+        return false;
+      }
+
+      // Do these `catch`es have the same catch after them?
+      if (catch1->next != nullptr &&
+          this->index_of(*catch1->next) != other.index_of(*catch2->next)) {
         return false;
       }
     }
@@ -471,7 +518,7 @@ bool IRList::structural_equals(const IRList& other) {
     ++it2;
   }
 
-  return it1 == m_list.end() && it2 == other.end();
+  return it1 == this->end() && it2 == other.end();
 }
 
 boost::sub_range<IRList> IRList::get_param_instructions() {
@@ -529,9 +576,7 @@ IRList::iterator IRList::make_if_block(
     IRList::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
-  auto bt = new BranchTarget();
-  bt->src = if_entry;
-  bt->type = BRANCH_SIMPLE;
+  auto bt = new BranchTarget(if_entry);
   auto bentry = new MethodItemEntry(bt);
   return m_list.insert(m_list.end(), *bentry);
 }
@@ -550,16 +595,12 @@ IRList::iterator IRList::make_if_else_block(
   auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
   // main block
-  auto main_bt = new BranchTarget();
-  main_bt->src = goto_entry;
-  main_bt->type = BRANCH_SIMPLE;
+  auto main_bt = new BranchTarget(goto_entry);
   auto mb_entry = new MethodItemEntry(main_bt);
   auto main_block = m_list.insert(goto_it, *mb_entry);
 
   // else block
-  auto else_bt = new BranchTarget();
-  else_bt->src = if_entry;
-  else_bt->type = BRANCH_SIMPLE;
+  auto else_bt = new BranchTarget(if_entry);
   auto eb_entry = new MethodItemEntry(else_bt);
   *true_block = m_list.insert(goto_it, *eb_entry);
 
@@ -578,9 +619,7 @@ IRList::iterator IRList::make_switch_block(
     auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
     auto goto_it = m_list.insert(m_list.end(), *goto_entry);
 
-    auto main_bt = new BranchTarget();
-    main_bt->src = goto_entry;
-    main_bt->type = BRANCH_SIMPLE;
+    auto main_bt = new BranchTarget(goto_entry);
     auto mb_entry = new MethodItemEntry(main_bt);
     main_block = m_list.insert(++main_block, *mb_entry);
 
@@ -588,10 +627,7 @@ IRList::iterator IRList::make_switch_block(
     // Keep updating the iterator of the case block to point right before the
     // GOTO going back to the end of the switch.
     for (auto idx : case_it->first) {
-      auto case_bt = new BranchTarget();
-      case_bt->src = switch_entry;
-      case_bt->index = idx;
-      case_bt->type = BRANCH_MULTI;
+      auto case_bt = new BranchTarget(switch_entry, idx);
       auto eb_entry = new MethodItemEntry(case_bt);
       case_it->second = m_list.insert(goto_it, *eb_entry);
     }
@@ -599,18 +635,21 @@ IRList::iterator IRList::make_switch_block(
   return main_block;
 }
 
-bool InstructionIterable::structural_equals(const InstructionIterable& other) {
-  auto it1 = this->begin();
-  auto it2 = other.begin();
+namespace ir_list {
 
-  for (; it1 != this->end() && it2 != other.end(); it1++, it2++) {
-    auto& mie1 = *it1;
-    auto& mie2 = *it2;
-
-    if (*mie1.insn != *mie2.insn) {
-      return false;
-    }
-  }
-
-  return it1 == this->end() && it2 == other.end();
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    IRList::iterator it) {
+  --it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                it->insn->has_move_result_pseudo());
+  return it->insn;
 }
+
+IRInstruction* move_result_pseudo_of(IRList::iterator it) {
+  ++it;
+  always_assert(it->type == MFLOW_OPCODE &&
+                opcode::is_move_result_pseudo(it->insn->opcode()));
+  return it->insn;
+}
+
+} // namespace ir_list

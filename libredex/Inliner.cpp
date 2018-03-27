@@ -220,7 +220,7 @@ void MultiMethodInliner::inline_callees(
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
-  InstructionIterable ii(caller->get_code());
+  auto ii = InstructionIterable(caller->get_code());
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
@@ -365,7 +365,7 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
 bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
                                                const DexMethod* callee) {
   int ret_count = 0;
-  for (auto& mie : InstructionIterable(callee->get_code())) {
+  for (const auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (create_vmethod(insn)) return true;
     if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
@@ -523,7 +523,7 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
 
 bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
   size_t store_idx = xstores.get_store_idx(callee->get_class());
-  for (auto& mie : InstructionIterable(callee->get_code())) {
+  for (const auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
     if (insn->has_type()) {
       if (xstores.illegal_ref(store_idx, insn->get_type())) {
@@ -674,7 +674,8 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   }
 
   // generate and insert the move instructions
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
+  auto param_insns =
+      InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
@@ -740,7 +741,8 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
   auto insn = invoke_it->insn;
   auto callee_reg_start = caller_code->get_registers_size();
 
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
+  auto param_insns =
+      InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {

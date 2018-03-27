@@ -36,9 +36,18 @@ struct SpillPlan {
   // Spills for param-related symbolic registers
   std::unordered_set<reg_t> param_spills;
 
-  // Spills for range-instruction-related symbolic registers
-  std::unordered_map<const IRInstruction*, std::unordered_set<reg_t>>
-      range_spills;
+  // Spills for range-instruction-related symbolic registers. The map's values
+  // indicate the src indices that need to be spilled. We want to use the
+  // indices rather than the src registers themselves because we don't want to
+  // insert unnecessary spills when a register is used multiple times in a
+  // given instruction. E.g. given
+  //
+  //   invoke-static (v0 v0 v1 v1 v2 v3) ...
+  //
+  // We may want to spill just the first occurrence of v0 or v1. If we used a
+  // set of registers here (which we did previously), we would not be able to
+  // represent that.
+  std::unordered_map<const IRInstruction*, std::vector<size_t>> range_spills;
 
   bool empty() const {
     return global_spills.empty() && param_spills.empty() &&
@@ -137,14 +146,12 @@ class Allocator {
 
   void split_params(const interference::Graph&,
                     const std::unordered_set<reg_t>& param_regs,
-                    IRCode*,
-                    std::unordered_set<reg_t>* new_temps);
+                    IRCode*);
 
   void spill(const interference::Graph&,
              const SpillPlan&,
              const RangeSet&,
-             IRCode*,
-             std::unordered_set<reg_t>*);
+             IRCode*);
 
   void allocate(IRCode*);
 

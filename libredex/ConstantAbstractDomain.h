@@ -17,6 +17,7 @@
 
 #include "AbstractDomain.h"
 #include "Debug.h"
+#include "Show.h"
 
 /*
  * This abstract domain combinator constructs the lattice of constants of a
@@ -112,6 +113,8 @@ class ConstantAbstractDomain final
  public:
   using AbstractValueKind =
       typename acd_impl::ConstantAbstractValue<Constant>::Kind;
+
+  using ConstantType = Constant;
 
   ConstantAbstractDomain() { this->set_to_top(); }
 

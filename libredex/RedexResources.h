@@ -11,9 +11,12 @@
 
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "androidfw/ResourceTypes.h"
+
+const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename, const std::string& contents);
@@ -45,12 +48,39 @@ std::unordered_set<std::string> get_xml_files(
     const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
+// Checks if the file is in a res/raw folder. Such a file won't be considered
+// for resource remapping, class name extraction, etc. These files don't follow
+// binary XML format, and thus are out of scope for many optimizations.
+bool is_raw_resource(const std::string& filename);
 int inline_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, android::Res_value>& id_to_inline_value);
 void remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
+
+// Iterates through all layouts in the given directory. Adds all class names to
+// the output set, and allows for any specified attribute values to be returned
+// as well. Attribute names should specify their namespace, if any (so
+// android:onClick instead of just onClick)
+void collect_layout_classes_and_attributes(
+    const std::string& apk_directory,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>& out_classes,
+    std::unordered_multimap<std::string, std::string>& out_attributes);
+
+// Same as above, for single file.
+void collect_layout_classes_and_attributes_for_file(
+    const std::string& file_path,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>& out_classes,
+    std::unordered_multimap<std::string, std::string>& out_attributes);
+
+// Convenience method for copying values in a multimap to a set, for a
+// particular key.
+std::set<std::string> multimap_values_to_set(
+  const std::unordered_multimap<std::string, std::string>& map,
+  const std::string& key);
 
 // Given the bytes of a binary XML file, replace the entries (if any) in the
 // ResStringPool. Writes result to the given Vector output param.

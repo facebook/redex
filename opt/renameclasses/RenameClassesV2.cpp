@@ -170,38 +170,27 @@ ssize_t find_matching_package(
   return -1;
 }
 
+bool referenced_by_layouts(const DexClass* clazz) {
+  return clazz->rstate.is_referenced_by_resource_xml();
+}
+
+// Returns true if this class is a layout, and allowed for renaming via config.
+bool is_allowed_layout_class(
+  const DexClass* clazz,
+  const std::vector<std::string>& allow_layout_rename_packages) {
+  always_assert(referenced_by_layouts(clazz));
+  auto idx = find_matching_package(
+    clazz->get_name()->str(),
+    allow_layout_rename_packages);
+  return idx != -1;
+}
+
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_resources(
   PassManager& mgr,
   std::unordered_map<const DexType*, std::string>& force_rename_classes) {
   std::unordered_set<std::string> dont_rename_resources;
   if (m_apk_dir.size()) {
-    // Classes present in manifest
-    std::string manifest = m_apk_dir + std::string("/AndroidManifest.xml");
-    for (std::string classname : get_manifest_classes(manifest)) {
-      TRACE(RENAME, 4, "manifest: %s\n", classname.c_str());
-      dont_rename_resources.insert(classname);
-    }
-
-    // Classes present in XML layouts
-    for (const auto& classname : get_layout_classes(m_apk_dir)) {
-      const auto matching_pkg = find_matching_package(
-        classname,
-        m_force_layout_rename_packages);
-      if (matching_pkg < 0) {
-        TRACE(RENAME, 4, "xml_layout: %s\n", classname.c_str());
-        dont_rename_resources.insert(classname);
-      } else {
-        const auto dex_type = DexType::get_type(classname.c_str());
-        if (dex_type != nullptr) {
-          TRACE(RENAME, 4, "xml_layout: forcing class %s\n", classname.c_str());
-          force_rename_classes.emplace(
-            dex_type,
-            m_force_layout_rename_packages[matching_pkg]);
-        }
-      }
-    }
-
     // Classnames present in native libraries (lib/*/*.so)
     for (std::string classname : get_native_classes(m_apk_dir)) {
       auto type = DexType::get_type(classname.c_str());
@@ -586,8 +575,12 @@ void RenameClassesPassV2::eval_classes(
     const char* clsname = clazz->get_name()->c_str();
     std::string strname = std::string(clsname);
 
-    // Don't rename anything mentioned in resources
-    if (dont_rename_resources.count(clsname)) {
+    // Don't rename anything mentioned in resources. Two variants of checks here
+    // to cover both configuration options (either we're relying on aapt to
+    // compute resource reachability, or we're doing it ourselves).
+    if (dont_rename_resources.count(clsname) ||
+          (referenced_by_layouts(clazz)
+            && !is_allowed_layout_class(clazz, m_allow_layout_rename_packages))) {
       m_dont_rename_reasons[clazz] =
           { DontRenameReasonCode::Resources, norule };
       continue;
@@ -900,9 +893,7 @@ void RenameClassesPassV2::rename_classes(
     }
   });
 
-  if (!m_force_layout_rename_packages.empty()) {
-    rename_classes_in_layouts(aliases, mgr);
-  }
+  rename_classes_in_layouts(aliases, mgr);
 
   sanity_check(scope, aliases);
 }
@@ -922,6 +913,9 @@ void RenameClassesPassV2::rename_classes_in_layouts(
   size_t num_layout_renamed = 0;
   auto xml_files = get_xml_files(m_apk_dir + "/res");
   for (const auto& path : xml_files) {
+    if (is_raw_resource(path)) {
+      continue;
+    }
     size_t num_renamed;
     ssize_t out_delta;
     TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());

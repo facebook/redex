@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include "DexClass.h"
 #include "Pass.h"
+#include "IRCode.h"
 
 class StripDebugInfoPass : public Pass {
  public:

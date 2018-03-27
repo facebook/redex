@@ -23,6 +23,30 @@
  */
 
 namespace {
+
+/*
+ * Remove unmarked fields from :fields and erase their definitions from
+ * g_redex.
+ */
+void sweep_fields_if_unmarked(
+    std::vector<DexField*>& fields,
+    const std::unordered_set<const DexFieldRef*>& marked) {
+  auto p = [&](DexField* f) {
+    if (marked.count(f) == 0) {
+      TRACE(RMU, 2, "Removing %s\n", SHOW(f));
+      DexField::erase_field(f);
+      return true;
+    }
+    return false;
+  };
+  fields.erase(std::remove_if(fields.begin(), fields.end(), p), fields.end());
+}
+
+/*
+ * Remove unmarked classes and methods. This should really erase the classes /
+ * methods from g_redex as well, but that will probably result in dangling
+ * pointers (at least for DexMethods). We should fix that at some point...
+ */
 template <class Container, class Marked>
 void sweep_if_unmarked(Container& c, const std::unordered_set<Marked>& marked) {
   auto p = [&](const Marked& m) {
@@ -39,8 +63,8 @@ void sweep(DexStoresVector& stores, ReachableObjects& reachables) {
   for (auto& dex : DexStoreClassesIterator(stores)) {
     sweep_if_unmarked(dex, reachables.marked_classes);
     for (auto const& cls : dex) {
-      sweep_if_unmarked(cls->get_ifields(), reachables.marked_fields);
-      sweep_if_unmarked(cls->get_sfields(), reachables.marked_fields);
+      sweep_fields_if_unmarked(cls->get_ifields(), reachables.marked_fields);
+      sweep_fields_if_unmarked(cls->get_sfields(), reachables.marked_fields);
       sweep_if_unmarked(cls->get_dmethods(), reachables.marked_methods);
       sweep_if_unmarked(cls->get_vmethods(), reachables.marked_methods);
     }

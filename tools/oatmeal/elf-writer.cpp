@@ -8,7 +8,7 @@
  */
 
 #include "elf-writer.h"
-#include "util.h"
+#include "OatmealUtil.h"
 
 const std::string& ElfStringTable::at(int orig_idx) const {
   auto idx = orig_idx;
@@ -448,8 +448,8 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
   auto add_symbol = [&](Elf32_Word str_idx,
                         Elf32_Word val,
                         Elf32_Word size,
-                        int binding,
-                        int type,
+                        unsigned char binding,
+                        unsigned char type,
                         int section_idx) {
     Elf32_Sym sym = {str_idx,
                      val,

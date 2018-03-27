@@ -119,7 +119,8 @@ class AliasFixpointIterator final
               // WARNING: This assumes that the primary instruction of a
               // move-result-pseudo has no side effects.
               deletes->insert(
-                  primary_instruction_of_move_result_pseudo(it.unwrap()));
+                  ir_list::primary_instruction_of_move_result_pseudo(
+                      it.unwrap()));
             } else {
               deletes->insert(insn);
             }
@@ -246,8 +247,8 @@ class AliasFixpointIterator final
   // ALL destinations must be returned by this method (unlike get_src_value) if
   // we miss a destination register, we'll fail to clobber it and think we know
   // that a register holds a stale value.
-  RegisterPair get_dest_reg(InstructionIterator it,
-                            InstructionIterator end) const {
+  RegisterPair get_dest_reg(ir_list::InstructionIterator it,
+                            ir_list::InstructionIterator end) const {
     IRInstruction* insn = it->insn;
     RegisterPair dest;
 

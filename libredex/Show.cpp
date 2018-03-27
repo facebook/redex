@@ -967,7 +967,7 @@ std::string show(const MethodItemEntry& mei) {
     return ss.str();
   case MFLOW_TARGET:
     if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET: MULTI " << mei.target->index << " ";
+      ss << "TARGET: MULTI " << mei.target->case_key << " ";
     } else {
       ss << "TARGET: SIMPLE ";
     }
@@ -1003,22 +1003,24 @@ std::string show(const ControlFlowGraph& cfg) {
   const auto& blocks = cfg.blocks();
   std::stringstream ss;
   ss << "CFG:\n";
-  for (auto& b : blocks) {
-    ss << "B" << b->id() << " succs:";
-    for (auto& s : b->succs()) {
-      ss << " B" << s->target()->id();
-    }
-    ss << " preds:";
+  for (const auto& b : blocks) {
+    ss << " Block B" << b->id() << ":\n";
+
+    ss << "   preds:";
     for (auto& p : b->preds()) {
       ss << " B" << p->src()->id();
     }
     ss << "\n";
-  }
-  for (auto const& b : blocks) {
-    ss << "  Block B" << b->id() << ":\n";
+
     for (auto const& mei : *b) {
-      ss << "    " << show(mei) << "\n";
+      ss << "   " << show(mei) << "\n";
     }
+
+    ss << "   succs:";
+    for (auto& s : b->succs()) {
+      ss << " B" << s->target()->id();
+    }
+    ss << "\n";
   }
   return ss.str();
 }
@@ -1075,7 +1077,7 @@ std::string show(const IRCode* mt) {
   return show(mt->m_ir_list);
 }
 
-std::string show(const InstructionIterable& it) {
+std::string show(const ir_list::InstructionIterable& it) {
   std::stringstream ss;
   for (auto& mei : it) {
     ss << show(mei.insn) << "\n";

@@ -23,9 +23,7 @@ class PassManager;
 
 class PassConfig {
  public:
-  explicit PassConfig(const Json::Value& cfg)
-    : m_config(cfg)
-  {}
+  explicit PassConfig(const Json::Value& cfg) : m_config(cfg) {}
 
   void get(const char* name, int64_t dflt, int64_t& param) const {
     param = m_config.get(name, (Json::Int64)dflt).asInt();

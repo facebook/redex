@@ -125,10 +125,11 @@ bool uses_this(const DexMethod* method) {
   auto const* code = method->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
-  auto const this_insn = InstructionIterable(code).begin()->insn;
+  auto iterable = InstructionIterable(code);
+  auto const this_insn = iterable.begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto const this_reg = this_insn->dest();
-  for (auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : iterable) {
     auto insn = mie.insn;
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {

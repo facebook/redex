@@ -147,8 +147,8 @@ TEST(IRInstruction, NormalizeInvoke) {
  * this makes easy to test.
  */
 IRInstruction* select_instruction(IRInstruction* insn) {
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {}));
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto code = method->get_code();
@@ -161,8 +161,8 @@ TEST(IRInstruction, TwoAddr) {
   using namespace dex_asm;
   g_redex = new RedexContext();
 
-  auto* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {}));
+  auto* method =
+      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
 
   auto do_test = [&](IRInstruction* insn, DexInstruction* expected) {
@@ -219,8 +219,8 @@ TEST(IRInstruction, SelectCheckCast) {
   using namespace dex_asm;
   g_redex = new RedexContext();
 
-  DexMethod* method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {}));
+  DexMethod* method =
+      static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
   method->make_concrete(ACC_STATIC, 0);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto code = method->get_code();
@@ -255,9 +255,8 @@ TEST(IRInstruction, SelectMove) {
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {0_v, 0_v})));
   EXPECT_EQ(DOPCODE_MOVE_OBJECT_FROM16,
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {255_v, 65535_v})));
-  EXPECT_EQ(
-      DOPCODE_MOVE_OBJECT_16,
-      select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {65535_v, 65535_v})));
+  EXPECT_EQ(DOPCODE_MOVE_OBJECT_16,
+            select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {65535_v, 65535_v})));
 
   delete g_redex;
 }
@@ -306,6 +305,65 @@ TEST(IRInstruction, SelectConst) {
   wide_insn->set_literal(0xffff000000000001);
   EXPECT_EQ(DOPCODE_CONST_WIDE, select_const_opcode(wide_insn));
 
+  delete g_redex;
+}
+
+TEST(IRInstruction, SelectBinopLit) {
+  using namespace dex_asm;
+  using namespace instruction_lowering::impl;
+  g_redex = new RedexContext();
+
+  const IROpcode ops[] = {
+      OPCODE_ADD_INT_LIT16, OPCODE_RSUB_INT,      OPCODE_MUL_INT_LIT16,
+      OPCODE_DIV_INT_LIT16, OPCODE_REM_INT_LIT16, OPCODE_AND_INT_LIT16,
+      OPCODE_OR_INT_LIT16,  OPCODE_XOR_INT_LIT16, OPCODE_ADD_INT_LIT8,
+      OPCODE_RSUB_INT_LIT8, OPCODE_MUL_INT_LIT8,  OPCODE_DIV_INT_LIT8,
+      OPCODE_REM_INT_LIT8,  OPCODE_AND_INT_LIT8,  OPCODE_OR_INT_LIT8,
+      OPCODE_XOR_INT_LIT8,  OPCODE_SHL_INT_LIT8,  OPCODE_SHR_INT_LIT8,
+      OPCODE_USHR_INT_LIT8};
+
+  const DexOpcode expected_fit8[] = {
+      DOPCODE_ADD_INT_LIT8,  DOPCODE_RSUB_INT_LIT8, DOPCODE_MUL_INT_LIT8,
+      DOPCODE_DIV_INT_LIT8,  DOPCODE_REM_INT_LIT8,  DOPCODE_AND_INT_LIT8,
+      DOPCODE_OR_INT_LIT8,   DOPCODE_XOR_INT_LIT8,  DOPCODE_ADD_INT_LIT8,
+      DOPCODE_RSUB_INT_LIT8, DOPCODE_MUL_INT_LIT8,  DOPCODE_DIV_INT_LIT8,
+      DOPCODE_REM_INT_LIT8,  DOPCODE_AND_INT_LIT8,  DOPCODE_OR_INT_LIT8,
+      DOPCODE_XOR_INT_LIT8,  DOPCODE_SHL_INT_LIT8,  DOPCODE_SHR_INT_LIT8,
+      DOPCODE_USHR_INT_LIT8};
+
+  const DexOpcode expected_fit16[] = {
+      DOPCODE_ADD_INT_LIT16, DOPCODE_RSUB_INT,      DOPCODE_MUL_INT_LIT16,
+      DOPCODE_DIV_INT_LIT16, DOPCODE_REM_INT_LIT16, DOPCODE_AND_INT_LIT16,
+      DOPCODE_OR_INT_LIT16,  DOPCODE_XOR_INT_LIT16, DOPCODE_ADD_INT_LIT16,
+      DOPCODE_RSUB_INT,      DOPCODE_MUL_INT_LIT16, DOPCODE_DIV_INT_LIT16,
+      DOPCODE_REM_INT_LIT16, DOPCODE_AND_INT_LIT16, DOPCODE_OR_INT_LIT16,
+      DOPCODE_XOR_INT_LIT16};
+
+  size_t count_inst = sizeof(ops) / sizeof(ops[0]);
+  for (int i = 0; i < count_inst; i++) {
+    // literal set to default size (0)
+    auto insn = new IRInstruction(ops[i]);
+    EXPECT_EQ(expected_fit8[i], select_binop_lit_opcode(insn))
+        << "at " << show(ops[i]);
+
+    // literal within 8 bits
+    insn->set_literal(0x7f);
+    EXPECT_EQ(expected_fit8[i], select_binop_lit_opcode(insn))
+        << "at " << show(ops[i]);
+
+    // literal within 16 bits
+    insn->set_literal(0x7fff);
+    if (ops[i] != OPCODE_SHL_INT_LIT8 && ops[i] != OPCODE_SHR_INT_LIT8 &&
+        ops[i] != OPCODE_USHR_INT_LIT8) {
+      EXPECT_EQ(expected_fit16[i], select_binop_lit_opcode(insn))
+          << "at " << show(ops[i]);
+    }
+
+    // literal > 16 bits
+    insn->set_literal(0xffffff);
+    EXPECT_THROW(select_binop_lit_opcode(insn), std::runtime_error)
+        << "at " << show(ops[i]);
+  }
   delete g_redex;
 }
 

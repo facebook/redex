@@ -12,6 +12,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "FiniteAbstractDomain.h"
+#include "IRInstruction.h"
 
 namespace regalloc {
 

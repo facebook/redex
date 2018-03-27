@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "Show.h"
+#include <stdexcept>
 
 constexpr bool debug =
 #ifdef NDEBUG

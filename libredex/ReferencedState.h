@@ -16,12 +16,7 @@ class ReferencedState {
  private:
   bool m_bytype{false};
   bool m_bystring{false};
-  // m_computed is a "clear-only" flag; If one of the reflects is non-computed,
-  // all subsequents should be non-computed. Reflect marking which is computed
-  // from code means that it can/should be recomputed periodically when doing
-  // optimizations. For instance, deleting a method with a reflection target
-  // will then allow that reflection target to be re-evaluated.
-  bool m_computed{true};
+  bool m_byresources{false};
 
   // ProGuard keep settings
   //
@@ -59,20 +54,20 @@ class ReferencedState {
     if (this != &other) {
       this->m_bytype = other.m_bytype;
       this->m_bystring = other.m_bystring;
-      this->m_computed = other.m_computed;
-      
+      this->m_byresources = other.m_byresources;
+
       this->m_keep = other.m_keep;
       this->m_assumenosideeffects = other.m_assumenosideeffects;
       this->m_blanket_keepnames = other.m_blanket_keepnames;
       this->m_whyareyoukeeping = other.m_whyareyoukeeping;
-      
+
       this->m_set_allowshrinking = other.m_set_allowshrinking;
       this->m_unset_allowshrinking = other.m_unset_allowshrinking;
       this->m_set_allowobfuscation = other.m_set_allowobfuscation;
       this->m_unset_allowobfuscation = other.m_unset_allowobfuscation;
-      
+
       this->m_keep_name = other.m_keep_name;
-      
+
       this->m_keep_count = other.m_keep_count.load();
     }
     return *this;
@@ -80,14 +75,16 @@ class ReferencedState {
 
   std::string str() const;
 
-  bool can_delete() const { return !m_bytype && (!m_keep || allowshrinking()); }
+  bool can_delete() const {
+    return !m_bytype && !m_byresources && (!m_keep || allowshrinking());
+  }
   bool can_rename() const {
     return !m_keep_name && !m_bystring && (!m_keep || allowobfuscation()) &&
            !allowshrinking();
   }
 
   // ProGuard keep options
-  bool keep() const { return m_keep; }
+  bool keep() const { return m_keep || m_byresources; }
 
   // ProGaurd keep option modifiers
   bool allowshrinking() const {
@@ -104,27 +101,26 @@ class ReferencedState {
 
   bool report_whyareyoukeeping() const { return m_whyareyoukeeping; }
 
-  // For example, a classname in a layout, e.g. <com.facebook.MyCustomView />
-  // is a ref_by_string with from_code = false
-  //
+  // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  // is a ref_by_string with from_code = true
-  void ref_by_string(bool from_code) {
+  void ref_by_string() {
     m_bytype = m_bystring = true;
-    m_computed = m_computed && from_code;
   }
   bool is_referenced_by_string() const { return m_bystring; }
 
+  // A class referenced by resource XML can take the following forms in .xml
+  // files under the res/ directory:
+  // <com.facebook.FooView />
+  // <fragmnet android:name="com.facebook.BarFragment" />
+  //
+  // This differs from "by_string" reference since it is possible to rename
+  // these string references, and potentially eliminate dead resource .xml files
+  void set_referenced_by_resource_xml() { m_byresources = true; }
+  void unset_referenced_by_resource_xml() { m_byresources = false; }
+  bool is_referenced_by_resource_xml() const { return m_byresources; }
+
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
-  bool is_referenced_by_type() const { return m_bytype; }
-
-  // Called before recompute
-  void clear_if_compute() {
-    if (m_computed) {
-      m_bytype = m_bystring = false;
-    }
-  }
 
   // ProGuard keep information.
   void set_keep() { m_keep = true; }

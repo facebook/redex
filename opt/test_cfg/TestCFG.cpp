@@ -33,15 +33,20 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* unused */,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  walk::parallel::code(scope, [](DexMethod* m, IRCode& code) {
+  DexMethod* example = nullptr; //static_cast<DexMethod*>(DexMethod::get_method());
+  //always_assert(example != nullptr && example->is_def());
+  walk::code(scope, [example](DexMethod* m, IRCode& code) {
+    if (example != nullptr && m != example) {
+      return;
+    }
+
     const auto& before_lits = get_lits(&code);
 
     // build and linearize the CFG
+    TRACE(CFG, 5, "IRCode before:\n%s", SHOW(&code));
     code.build_cfg(/* editable */ true);
-    TRACE(CFG, 5, "  cfg build done\n");
     code.clear_cfg();
-    TRACE(CFG, 5, "  cfg linearize done\n");
-    TRACE(CFG, 5, "fm after:\n%s", SHOW(&code));
+    TRACE(CFG, 5, "IRCode after:\n%s", SHOW(&code));
 
     // Run the IR type checker
     IRTypeChecker checker(m);

@@ -21,9 +21,9 @@
 
 #include "CopyPropagationPass.h"
 
-int count_sgets(IRCode* code) {
+int count_sgets(ControlFlowGraph& cfg) {
   int sgets = 0;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     TRACE(RME, 1, "%s\n", SHOW(mie.insn));
     if (is_sget(mie.insn->opcode())) {
       sgets++;
@@ -52,7 +52,9 @@ TEST(DedupBlocksTest, useSwitch) {
     for (const auto& m : cls->get_vmethods()) {
       TRACE(RME, 1, "\nmethod %s:\n", SHOW(m));
       IRCode* code = m->get_code();
-      EXPECT_EQ(2, count_sgets(code));
+      code->build_cfg(true);
+      EXPECT_EQ(2, count_sgets(code->cfg()));
+      code->clear_cfg();
     }
   }
 
@@ -76,11 +78,13 @@ TEST(DedupBlocksTest, useSwitch) {
     for (const auto& m : cls->get_vmethods()) {
       TRACE(RME, 1, "\nmethod %s:\n", SHOW(m));
       IRCode* code = m->get_code();
+      code->build_cfg(true);
       if (strcmp(m->get_name()->c_str(), "remove") == 0) {
-        EXPECT_EQ(1, count_sgets(code));
+        EXPECT_EQ(1, count_sgets(code->cfg()));
       } else {
-        EXPECT_EQ(2, count_sgets(code));
+        EXPECT_EQ(2, count_sgets(code->cfg()));
       }
+      code->clear_cfg();
     }
   }
 }

@@ -164,4 +164,8 @@ public class PointsToSemantics {
     classes[12] = A[][][].class;
     return classes;
   }
+
+  static String[] filledNewArrayTest(String s1, String s2, String s3) {
+    return null;
+  }
 }

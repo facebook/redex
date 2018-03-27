@@ -47,6 +47,7 @@
   TM(INLINIT)            \
   TM(INLRES)             \
   TM(INTF)               \
+  TM(LITHO_BLD)          \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
@@ -70,6 +71,8 @@
   TM(RME)                \
   TM(RMGOTO)             \
   TM(RMU)                \
+  TM(RMUF)               \
+  TM(RM_INTF)            \
   TM(SHORTEN)            \
   TM(SINK)               \
   TM(SINL)               \
@@ -79,6 +82,7 @@
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
+  TM(TREF)               \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \

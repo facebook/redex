@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_set>
 
+#include "ClassHierarchy.h"
 #include "Walkers.h"
 #include "DexClass.h"
 #include "Match.h"
@@ -65,7 +66,7 @@ void blacklist(DexType* type, DexString *name, bool declared) {
     auto yield = [&](T t) {
       if (t->get_name() != name) return;
       TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-      t->rstate.ref_by_string(true);
+      t->rstate.ref_by_string();
       if (!declared) {
         // TOOD: handle not declared case, go up inheritance tree
       }
@@ -195,48 +196,162 @@ void mark_only_reachable_directly(DexMember* m) {
 /**
  * Indicates that a class is being used via reflection.
  *
- * If from_code is true, it's used from the dex files, otherwise it is
- * used by an XML file or from native code.
- *
  * Examples:
  *
- *   Bar.java: (from_code = true, directly created via reflection)
+ *   Bar.java:
  *     Object x = Class.forName("com.facebook.Foo").newInstance();
  *
- *   MyGreatLayout.xml: (from_code = false, created when view is inflated)
+ *   MyGreatLayout.xml:
  *     <com.facebook.MyTerrificView />
  */
-void mark_reachable_by_classname(DexClass* dclass, bool from_code) {
+void mark_reachable_by_classname(DexClass* dclass) {
   if (dclass == nullptr) return;
-  dclass->rstate.ref_by_string(from_code);
+  dclass->rstate.ref_by_string();
   // When we mark a class as reachable, we also mark all fields and methods as
   // reachable.  Eventually we will be smarter about this, which will allow us
   // to remove unused methods and fields.
   for (DexMethod* dmethod : dclass->get_dmethods()) {
-    dmethod->rstate.ref_by_string(from_code);
+    dmethod->rstate.ref_by_string();
   }
   for (DexMethod* vmethod : dclass->get_vmethods()) {
-    vmethod->rstate.ref_by_string(from_code);
+    vmethod->rstate.ref_by_string();
   }
   for (DexField* sfield : dclass->get_sfields()) {
-    sfield->rstate.ref_by_string(from_code);
+    sfield->rstate.ref_by_string();
   }
   for (DexField* ifield : dclass->get_ifields()) {
-    ifield->rstate.ref_by_string(from_code);
+    ifield->rstate.ref_by_string();
   }
 }
 
-void mark_reachable_by_classname(DexType* dtype, bool from_code) {
-  mark_reachable_by_classname(type_class_internal(dtype), from_code);
+void mark_reachable_by_classname(DexType* dtype) {
+  mark_reachable_by_classname(type_class_internal(dtype));
 }
 
-void mark_reachable_by_classname(std::string& classname, bool from_code) {
+void mark_reachable_by_classname(std::string& classname) {
   DexString* dstring =
       DexString::get_string(classname.c_str(), (uint32_t)classname.size());
   DexType* dtype = DexType::get_type(dstring);
   if (dtype == nullptr) return;
   DexClass* dclass = type_class_internal(dtype);
-  mark_reachable_by_classname(dclass, from_code);
+  mark_reachable_by_classname(dclass);
+}
+
+void mark_reachable_by_xml(const std::string& classname, bool is_manifest) {
+  auto dtype = DexType::get_type(classname.c_str());
+  if (dtype == nullptr) {
+    return;
+  }
+  auto dclass = type_class(dtype);
+  if (dclass == nullptr) {
+    return;
+  }
+  if (is_manifest) {
+    // Mark these as permanantly reachable. We don't ever try to prune classes
+    // from the manifest.
+    dclass->rstate.set_keep();
+    // Prevent renaming.
+    dclass->rstate.increment_keep_count();
+    for (DexMethod* dmethod : dclass->get_ctors()) {
+      dmethod->rstate.set_keep();
+    }
+  } else {
+    // Setting "referenced_by_resource_xml" essentially behaves like keep,
+    // though breaking it out to its own flag will let us clear/recompute this.
+    dclass->rstate.set_referenced_by_resource_xml();
+    // Mark the constructors as used, which should be the expected use case from
+    // layout inflation.
+    for (DexMethod* dmethod : dclass->get_ctors()) {
+      dmethod->rstate.set_referenced_by_resource_xml();
+    }
+  }
+}
+
+// Possible methods for an android:onClick accept 1 argument that is a View.
+// Source:
+// https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r15/core/java/android/view/View.java#5331
+// Returns true if it matches that criteria, and it's in the set of known
+// attribute values.
+bool matches_onclick_method(
+  const DexMethod* dmethod,
+  const std::set<std::string>& names_to_keep) {
+  auto prototype = dmethod->get_proto();
+  auto args_list = prototype->get_args();
+  if (args_list->size() == 1) {
+    auto first_type = args_list->get_type_list()[0];
+    if (strcmp(first_type->c_str(), "Landroid/view/View;") == 0) {
+      std::string method_name = dmethod->c_str();
+      return names_to_keep.count(method_name) > 0;
+    }
+  }
+  return false;
+}
+
+// Simulates aapt's generated keep statements for any View which has an
+// android:onClick="foo" attribute.
+// Example (from aapt):
+// -keepclassmembers class * { *** foo(...); }
+//
+// This version however is much more specific, since keeping every method "foo"
+// is overkill. We only need to keep methods "foo" defined on a subclass of
+// android.content.Context that accept 1 argument (an android.view.View).
+void mark_onclick_attributes_reachable(
+  const Scope& scope,
+  const std::set<std::string>& onclick_attribute_values) {
+  if (onclick_attribute_values.size() == 0) {
+    return;
+  }
+  auto type_context = DexType::get_type("Landroid/content/Context;");
+  always_assert(type_context != nullptr);
+
+  auto class_hierarchy = build_type_hierarchy(scope);
+  TypeSet children;
+  get_all_children(class_hierarchy, type_context, children);
+
+  for (const auto &t : children) {
+    auto dclass = type_class(t);
+    if (dclass->is_external()) {
+      continue;
+    }
+    // Methods are invoked via reflection. Only public methods are relevant.
+    for (const auto &m : dclass->get_vmethods()) {
+      if (matches_onclick_method(m, onclick_attribute_values)) {
+        TRACE(
+          PGR,
+          2,
+          "Keeping vmethod %s due to onClick attribute in XML.\n",
+          SHOW(m));
+        m->rstate.set_referenced_by_resource_xml();
+      }
+    }
+  }
+}
+
+// 1) Marks classes (Fragments, Views) found in XML layouts as reachable along
+// with their constructors.
+// 2) Marks candidate methods that could be called via android:onClick
+// attributes.
+void analyze_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir) {
+  std::unordered_set<std::string> layout_classes;
+  std::unordered_set<std::string> attrs_to_read;
+  // Method names used by reflection
+  attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
+  std::unordered_multimap<std::string, std::string> attribute_values;
+  collect_layout_classes_and_attributes(
+    apk_dir,
+    attrs_to_read,
+    layout_classes,
+    attribute_values);
+  for (std::string classname : layout_classes) {
+    TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
+    mark_reachable_by_xml(classname, false);
+  }
+  auto attr_values = multimap_values_to_set(
+    attribute_values,
+    ONCLICK_ATTRIBUTE);
+  mark_onclick_attributes_reachable(scope, attr_values);
 }
 
 template <typename DexMember>
@@ -316,12 +431,12 @@ void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
   for (auto const& cls : scope) {
     for (auto& m : cls->get_dmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
-        m->rstate.ref_by_string(false);
+        m->rstate.ref_by_string();
       }
     }
     for (auto& m : cls->get_vmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
-        m->rstate.ref_by_string(false);
+        m->rstate.ref_by_string();
       }
     }
   }
@@ -369,7 +484,7 @@ void init_permanently_reachable_classes(
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
-  bool legacy_xml_reachability;
+  bool compute_xml_reachability;
   bool legacy_reflection_reachability;
 
   pc.get("apk_dir", "", apk_dir);
@@ -377,7 +492,7 @@ void init_permanently_reachable_classes(
   pc.get("keep_annotations", {}, annotations);
   pc.get("keep_class_members", {}, class_members);
   pc.get("keep_methods", {}, methods);
-  pc.get("legacy_xml_reachability", true, legacy_xml_reachability);
+  pc.get("compute_xml_reachability", true, compute_xml_reachability);
   pc.get("legacy_reflection_reachability", true, legacy_reflection_reachability);
 
   if (legacy_reflection_reachability) {
@@ -406,7 +521,7 @@ void init_permanently_reachable_classes(
                   "Found Class.forName of: %s, marking %s reachable\n",
                   const_string->get_string()->c_str(),
                   classname.c_str());
-            mark_reachable_by_classname(classname, true);
+            mark_reachable_by_classname(classname);
           }
         });
   }
@@ -417,7 +532,11 @@ void init_permanently_reachable_classes(
 
   for (auto const& annostr : annotations) {
     DexType* anno = DexType::get_type(annostr.c_str());
-    if (anno) annotation_types.insert(anno);
+    if (anno) {
+      annotation_types.insert(anno);
+    } else {
+      fprintf(stderr, "WARNING: keep annotation %s not found\n", annostr.c_str());
+    }
   }
 
   keep_annotated_classes(scope, annotation_types);
@@ -425,19 +544,16 @@ void init_permanently_reachable_classes(
   keep_methods(scope, methods);
 
   if (apk_dir.size()) {
-    if (legacy_xml_reachability) {
+    if (compute_xml_reachability) {
       // Classes present in manifest
       std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
       for (std::string classname : get_manifest_classes(manifest)) {
         TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
-        mark_reachable_by_classname(classname, false);
+        mark_reachable_by_xml(classname, true);
       }
 
       // Classes present in XML layouts
-      for (std::string classname : get_layout_classes(apk_dir)) {
-        TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
-        mark_reachable_by_classname(classname, false);
-      }
+      analyze_reachable_from_xml_layouts(scope, apk_dir);
     }
 
     // Classnames present in native libraries (lib/*/*.so)
@@ -445,7 +561,7 @@ void init_permanently_reachable_classes(
       auto type = DexType::get_type(classname.c_str());
       if (type == nullptr) continue;
       TRACE(PGR, 3, "native_lib: %s\n", classname.c_str());
-      mark_reachable_by_classname(type, false);
+      mark_reachable_by_classname(type);
     }
   }
 
@@ -471,7 +587,7 @@ void init_permanently_reachable_classes(
        * conservative sense here.
        */
       TRACE(PGR, 3, "reflected_package: %s\n", SHOW(clazz));
-      mark_reachable_by_classname(clazz, false);
+      mark_reachable_by_classname(clazz);
     }
   }
 }
@@ -492,7 +608,7 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
                    TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
-                   mark_reachable_by_classname(meth->get_class(), true);
+                   mark_reachable_by_classname(meth->get_class());
                  }
                });
 }
@@ -517,7 +633,7 @@ std::string ReferencedState::str() const {
   std::stringstream s;
   s << m_bytype;
   s << m_bystring;
-  s << m_computed;
+  s << m_byresources;
   s << m_keep;
   s << allowshrinking();
   s << allowobfuscation();

@@ -20,6 +20,7 @@
 #include "DexLoader.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "JarLoader.h"
 #include "RedexContext.h"
 
@@ -268,7 +269,40 @@ std::set<std::string> method_semantics = {
     " ARRAY_ELEM(V1) = V17\n"
     " RETURN V1\n"
     "}\n",
+    "Lcom/facebook/redextest/PointsToSemantics;#filledNewArrayTest: "
+    "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)[Ljava/lang/"
+    "String; {\n"
+    " V0 = PARAM 0\n"
+    " V1 = PARAM 1\n"
+    " V2 = PARAM 2\n"
+    " V3 = NEW [Ljava/lang/String;\n"
+    " ARRAY_ELEM(V3) = V0\n"
+    " ARRAY_ELEM(V3) = V1\n"
+    " ARRAY_ELEM(V3) = V2\n"
+    " RETURN V3\n"
+    "}\n",
 };
+
+void patch_filled_new_array_test(Scope& scope) {
+  for (DexClass* dex_class : scope) {
+    for (DexMethod* dmethod : dex_class->get_dmethods()) {
+      if (dmethod->get_name()->str() == "filledNewArrayTest") {
+        auto c = assembler::ircode_from_string(R"(
+          (
+            (load-param-object v0)
+            (load-param-object v1)
+            (load-param-object v2)
+            (filled-new-array (v0 v1 v2) "[Ljava/lang/String;")
+            (move-result-object v0)
+            (return-object v0)
+          )
+        )");
+        dmethod->set_code(std::move(c));
+        return;
+      }
+    }
+  }
+}
 
 TEST(PointsToSemanticsTest, semanticActionGeneration) {
   g_redex = new RedexContext();
@@ -295,6 +329,12 @@ TEST(PointsToSemanticsTest, semanticActionGeneration) {
 
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
+
+  // The generation of filled-new-array instructions depends on the Dex compiler
+  // used and seems hard to predict. We patch the method body in order to get
+  // the code we want.
+  patch_filled_new_array_test(scope);
+
   PointsToSemantics pt_semantics(scope);
 
   std::set<std::string> pt_output;
