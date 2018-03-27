@@ -317,7 +317,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg());
+  intraprocedural::FixpointIterator intra_cp(
+      code->cfg(),
+      [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -355,7 +359,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg());
+  intraprocedural::FixpointIterator intra_cp(
+      code->cfg(),
+      [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -397,7 +405,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg());
+  intraprocedural::FixpointIterator intra_cp(
+      code->cfg(),
+      [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -434,7 +446,11 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg());
+  intraprocedural::FixpointIterator intra_cp(
+      code->cfg(),
+      [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 

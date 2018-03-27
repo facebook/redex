@@ -126,43 +126,120 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 
 namespace constant_propagation {
 
-namespace intraprocedural {
-
-void FixpointIterator::analyze_instruction(const IRInstruction* insn,
-                                           ConstantEnvironment* env) const {
-  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
-  auto op = insn->opcode();
-  auto default_case = [&]() {
-    if (insn->dests_size()) {
-      TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
-      env->set_register_to_top(insn->dest());
-    } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
-      TRACE(CONSTP, 5, "Clearing result register\n");
-      env->set_register_to_top(RESULT_REGISTER);
-    }
-  };
-
-  switch (op) {
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_WIDE:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-    // We assume that the initial environment passed to run() has parameter
-    // bindings already added, so do nothing here
-    break;
-
-  case OPCODE_CONST:
-  case OPCODE_CONST_WIDE: {
-    TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
-          insn->dest(), insn->get_literal());
-    env->set_primitive(insn->dest(), SignedConstantDomain(insn->get_literal()));
-    break;
+bool LocalArraySubAnalyzer::analyze_new_array(const IRInstruction* insn,
+                                              ConstantEnvironment* env) {
+  auto length = env->get_primitive(insn->src(0));
+  auto length_value_opt = length.constant_domain().get_constant();
+  if (!length_value_opt) {
+    return false;
   }
-  case OPCODE_MOVE:
-  case OPCODE_MOVE_WIDE: {
-    analyze_non_branch(insn, env);
-    break;
+  env->set_array(RESULT_REGISTER, insn,
+                 ConstantPrimitiveArrayDomain(*length_value_opt));
+  return true;
+}
+
+bool LocalArraySubAnalyzer::analyze_aget(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  if (insn->opcode() == OPCODE_AGET_OBJECT) {
+    return false;
   }
-  case OPCODE_MOVE_OBJECT: {
+  boost::optional<int64_t> idx_opt =
+      env->get_primitive(insn->src(1)).constant_domain().get_constant();
+  if (!idx_opt) {
+    return false;
+  }
+  auto arr = env->get_array(insn->src(0));
+  env->set_primitive(RESULT_REGISTER, arr.get(*idx_opt));
+  return true;
+}
+
+bool LocalArraySubAnalyzer::analyze_aput(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  if (insn->opcode() == OPCODE_APUT_OBJECT) {
+    mark_array_unknown(insn->src(0), env);
+    return false;
+  }
+  boost::optional<int64_t> idx_opt =
+      env->get_primitive(insn->src(2)).constant_domain().get_constant();
+  if (!idx_opt) {
+    return false;
+  }
+  auto val = env->get_primitive(insn->src(0));
+  env->set_array_binding(insn->src(1), *idx_opt, val);
+  return true;
+}
+
+bool LocalArraySubAnalyzer::analyze_sput(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  if (insn->opcode() == OPCODE_SPUT_OBJECT) {
+    mark_array_unknown(insn->src(0), env);
+  }
+  return false;
+}
+
+bool LocalArraySubAnalyzer::analyze_iput(const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  if (insn->opcode() == OPCODE_IPUT_OBJECT) {
+    mark_array_unknown(insn->src(0), env);
+  }
+  return false;
+}
+
+bool LocalArraySubAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
+                                                    ConstantEnvironment* env) {
+  // We currently don't analyze fill-array-data properly; we simply
+  // mark the array it modifies as unknown.
+  mark_array_unknown(insn->src(0), env);
+  return false;
+}
+
+bool LocalArraySubAnalyzer::analyze_invoke(const IRInstruction* insn,
+                                           ConstantEnvironment* env) {
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    mark_array_unknown(insn->src(i), env);
+  }
+  return false;
+}
+
+// Without interprocedural escape analysis, we need to treat an object as
+// being in an unknown state after it is written to a field or passed to
+// another method.
+void LocalArraySubAnalyzer::mark_array_unknown(reg_t reg,
+                                               ConstantEnvironment* env) {
+  auto ptr_opt = env->get_array_pointer(reg).get_constant();
+  if (ptr_opt) {
+    env->mutate_array_heap([&](ConstantArrayHeap* heap) {
+      heap->set(*ptr_opt, ConstantPrimitiveArrayDomain::top());
+    });
+  }
+}
+
+bool ConstantPrimitiveSubAnalyzer::analyze_default(const IRInstruction* insn,
+                                                   ConstantEnvironment* env) {
+  if (opcode::is_load_param(insn->opcode())) {
+    return true;
+  }
+  if (insn->dests_size()) {
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
+    env->set_register_to_top(insn->dest());
+  } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+    TRACE(CONSTP, 5, "Clearing result register\n");
+    env->set_register_to_top(RESULT_REGISTER);
+  }
+  return true;
+}
+
+bool ConstantPrimitiveSubAnalyzer::analyze_const(const IRInstruction* insn,
+                                                 ConstantEnvironment* env) {
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
+        insn->dest(), insn->get_literal());
+  env->set_primitive(insn->dest(), SignedConstantDomain(insn->get_literal()));
+  return true;
+}
+
+bool ConstantPrimitiveSubAnalyzer::analyze_move(const IRInstruction* insn,
+                                                ConstantEnvironment* env) {
+  if (insn->opcode() == OPCODE_MOVE_OBJECT) {
     // XXX gross! `const v0 0` can be either a primitive zero value or a null
     // object pointer, but we always store it as a primitive. This means that
     // we need to check both the primitive and the array environments when
@@ -175,18 +252,17 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set_array_pointer(insn->dest(),
                              env->get_array_pointer(insn->src(0)));
     }
-    break;
+  } else {
+    analyze_non_branch(insn, env);
   }
+  return true;
+}
 
-  case OPCODE_MOVE_RESULT:
-  case OPCODE_MOVE_RESULT_WIDE:
-  case OPCODE_MOVE_RESULT_OBJECT:
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-    env->set_primitive(insn->dest(), env->get_primitive(RESULT_REGISTER));
-    break;
-
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
+bool ConstantPrimitiveSubAnalyzer::analyze_move_result(
+    const IRInstruction* insn, ConstantEnvironment* env) {
+  auto op = insn->opcode();
+  if (op == OPCODE_MOVE_RESULT_OBJECT ||
+      op == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
     // See comment in MOVE_RESULT_OBJECT
     if (!env->get_primitive(RESULT_REGISTER).is_top()) {
       env->set_primitive(insn->dest(), env->get_primitive(RESULT_REGISTER));
@@ -194,9 +270,16 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
       env->set_array_pointer(insn->dest(),
                              env->get_array_pointer(RESULT_REGISTER));
     }
-    break;
+  } else {
+    env->set_primitive(insn->dest(), env->get_primitive(RESULT_REGISTER));
   }
+  return true;
+}
 
+bool ConstantPrimitiveSubAnalyzer::analyze_cmp(const IRInstruction* insn,
+                                               ConstantEnvironment* env) {
+  auto op = insn->opcode();
+  switch (op) {
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT: {
     analyze_compare<float, int32_t>(insn, env);
@@ -213,72 +296,20 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
     analyze_compare<int64_t, int64_t>(insn, env);
     break;
   }
-
-  case OPCODE_SGET:
-  case OPCODE_SGET_WIDE:
-  case OPCODE_SGET_OBJECT:
-  case OPCODE_SGET_BOOLEAN:
-  case OPCODE_SGET_BYTE:
-  case OPCODE_SGET_CHAR:
-  case OPCODE_SGET_SHORT: {
-    auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
-      default_case();
-      break;
-    }
-    if (field->get_class() == m_config.class_under_init) {
-      env->set_primitive(RESULT_REGISTER, env->get_primitive(field));
-      break;
-    }
-    if (m_wps == nullptr) {
-      default_case();
-      break;
-    }
-    env->set_primitive(RESULT_REGISTER, m_wps->get_field_value(field));
+  default: {
+    always_assert_log(false, "Unexpected opcode: %s\n", SHOW(op));
     break;
   }
-
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT: {
-    auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
-      default_case();
-      break;
-    }
-    if (field->get_class() == m_config.class_under_init) {
-      env->set_primitive(field, env->get_primitive(insn->src(0)));
-    }
-    break;
   }
+  return true;
+}
 
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC: {
-    if (m_wps == nullptr) {
-      default_case();
-      break;
-    }
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method == nullptr) {
-      default_case();
-      break;
-    }
-    env->set_primitive(RESULT_REGISTER, m_wps->get_return_value(method));
-    break;
-  }
-
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8: {
+bool ConstantPrimitiveSubAnalyzer::analyze_binop_lit(const IRInstruction* insn,
+                                                     ConstantEnvironment* env) {
+  auto op = insn->opcode();
+  if (op == OPCODE_ADD_INT_LIT8 || op == OPCODE_ADD_INT_LIT16) {
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
-    if (!m_config.fold_arithmetic) {
-      default_case();
-      break;
-    }
     int32_t lit = insn->get_literal();
     auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
       if (addition_out_of_bounds(lit, v)) {
@@ -289,100 +320,91 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
     TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
           lit);
     analyze_non_branch(insn, env, add_in_bounds);
-    break;
+    return true;
   }
+  return analyze_default(insn, env);
+}
 
-  // TODO: filled-new-array can be handled similarly
-  case OPCODE_NEW_ARRAY: {
-    if (!m_config.analyze_arrays) {
-      default_case();
-      break;
-    }
-    auto length = env->get_primitive(insn->src(0));
-    auto length_value_opt = length.constant_domain().get_constant();
-    if (!length_value_opt) {
-      default_case();
-      break;
-    }
-    env->set_array(RESULT_REGISTER, insn,
-                   ConstantPrimitiveArrayDomain(*length_value_opt));
-    break;
+bool ClinitFieldSubAnalyzer::analyze_sget(const DexType* class_under_init,
+                                          const IRInstruction* insn,
+                                          ConstantEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
   }
+  if (field->get_class() == class_under_init) {
+    env->set_primitive(RESULT_REGISTER, env->get_primitive(field));
+    return true;
+  }
+  return false;
+}
 
-  case OPCODE_AGET: {
-    if (!m_config.analyze_arrays) {
-      default_case();
-      break;
-    }
-    boost::optional<int64_t> idx_opt =
-        env->get_primitive(insn->src(1)).constant_domain().get_constant();
-    if (!idx_opt) {
-      default_case();
-      break;
-    }
-    auto arr = env->get_array(insn->src(0));
-    env->set_primitive(RESULT_REGISTER, arr.get(*idx_opt));
-    break;
+bool ClinitFieldSubAnalyzer::analyze_sput(const DexType* class_under_init,
+                                          const IRInstruction* insn,
+                                          ConstantEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
   }
+  if (field->get_class() == class_under_init) {
+    env->set_primitive(field, env->get_primitive(insn->src(0)));
+    return true;
+  }
+  return false;
+}
 
-  case OPCODE_APUT: {
-    if (!m_config.analyze_arrays) {
-      default_case();
-      break;
-    }
-    boost::optional<int64_t> idx_opt =
-        env->get_primitive(insn->src(2)).constant_domain().get_constant();
-    if (!idx_opt) {
-      default_case();
-      break;
-    }
-    auto val = env->get_primitive(insn->src(0));
-    env->set_array_binding(insn->src(1), *idx_opt, val);
-    break;
-  }
-
-  default: {
-    default_case();
-    break;
-  }
-  }
-
+bool ClinitFieldSubAnalyzer::analyze_invoke(const DexType* class_under_init,
+                                            const IRInstruction* insn,
+                                            ConstantEnvironment* env) {
   // If the class initializer invokes a static method on its own class, that
   // static method can modify the class' static fields. We would have to
   // inspect the static method to find out. Here we take the conservative
   // approach of marking all static fields as unknown after the invoke.
-  if (op == OPCODE_INVOKE_STATIC &&
-      m_config.class_under_init == insn->get_method()->get_class()) {
+  if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+      class_under_init == insn->get_method()->get_class()) {
     env->clear_field_environment();
   }
+  return false;
+}
 
-  if (m_config.analyze_arrays) {
-    // Without interprocedural escape analysis, we need to treat an object as
-    // being in an unknown state after it is written to a field or passed to
-    // another method.
-    // We also currently don't analyze fill-array-data properly; we simply
-    // mark the array it modifies as unknown.
-
-    auto mark_array_unknown = [&](reg_t reg) {
-      auto ptr_opt = env->get_array_pointer(reg).get_constant();
-      if (ptr_opt) {
-        env->mutate_array_heap([&](ConstantArrayHeap* heap) {
-          heap->set(*ptr_opt, ConstantPrimitiveArrayDomain::top());
-        });
-      }
-    };
-
-    if (op == OPCODE_SPUT_OBJECT || op == OPCODE_IPUT_OBJECT ||
-        op == OPCODE_APUT_OBJECT || op == OPCODE_FILL_ARRAY_DATA) {
-      mark_array_unknown(insn->src(0));
-    }
-
-    if (is_invoke(op)) {
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        mark_array_unknown(insn->src(i));
-      }
-    }
+bool WholeProgramAwareSubAnalyzer::analyze_sget(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (whole_program_state == nullptr) {
+    return false;
   }
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  env->set_primitive(RESULT_REGISTER,
+                     whole_program_state->get_field_value(field));
+  return true;
+}
+
+bool WholeProgramAwareSubAnalyzer::analyze_invoke(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (whole_program_state == nullptr) {
+    return false;
+  }
+  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
+    return false;
+  }
+  env->set_primitive(RESULT_REGISTER,
+                     whole_program_state->get_return_value(method));
+  return true;
+}
+
+namespace intraprocedural {
+
+void FixpointIterator::analyze_instruction(const IRInstruction* insn,
+                                           ConstantEnvironment* env) const {
+  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
+  m_insn_analyzer(insn, env);
 }
 
 void FixpointIterator::analyze_node(const NodeId& block,

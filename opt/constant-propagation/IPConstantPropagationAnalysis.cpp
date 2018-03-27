@@ -13,6 +13,11 @@ namespace constant_propagation {
 
 namespace interprocedural {
 
+using InstructionAnalyzer =
+    InstructionSubAnalyzerCombiner<ClinitFieldSubAnalyzer,
+                                   WholeProgramAwareSubAnalyzer,
+                                   ConstantPrimitiveSubAnalyzer>;
+
 /*
  * Return an environment populated with parameter values.
  */
@@ -93,8 +98,12 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
     set_encoded_values(type_class(config.class_under_init), &env);
   }
   TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
+
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-      code.cfg(), config, &this->get_whole_program_state());
+      code.cfg(),
+      [analyzer = InstructionAnalyzer(
+           config.class_under_init, &this->get_whole_program_state(), nullptr)](
+          auto* insn, auto* env) { analyzer.run(insn, env); });
   intra_cp->run(env);
 
   return intra_cp;

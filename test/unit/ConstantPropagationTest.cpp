@@ -22,14 +22,19 @@ using Config = cp::intraprocedural::FixpointIterator::Config;
 
 struct ConstantPropagationTest : public RedexTest {};
 
-static void do_const_prop(IRCode* code, Config analysis_config = Config()) {
+static void do_const_prop(
+    IRCode* code,
+    std::function<void(const IRInstruction*, ConstantEnvironment*)>
+        insn_analyzer = std::bind(&cp::ConstantPrimitiveAnalyzer::run,
+                                  cp::ConstantPrimitiveAnalyzer(),
+                                  std::placeholders::_1,
+                                  std::placeholders::_2)) {
   code->build_cfg();
-  analysis_config.fold_arithmetic = true;
-  cp::intraprocedural::FixpointIterator rcp(code->cfg(), analysis_config);
-  rcp.run(ConstantEnvironment());
+  cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
+  intra_cp.run(ConstantEnvironment());
   cp::Transform::Config transform_config;
   cp::Transform tf(transform_config);
-  tf.apply(rcp, cp::WholeProgramState(), code);
+  tf.apply(intra_cp, cp::WholeProgramState(), code);
 }
 
 TEST(ConstantPropagation, IfToGoto) {
@@ -511,6 +516,10 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
   }
 }
 
+using ArrayAnalyzer =
+    InstructionSubAnalyzerCombiner<cp::LocalArraySubAnalyzer,
+                                   cp::ConstantPrimitiveSubAnalyzer>;
+
 TEST_F(ConstantPropagationTest, PrimitiveArray) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -530,9 +539,10 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
     )
 )");
 
-  Config config;
-  config.analyze_arrays = true;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get(),
+                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+                  analyzer.run(insn, env);
+                });
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -575,9 +585,10 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  Config config;
-  config.analyze_arrays = true;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get(),
+                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+                  analyzer.run(insn, env);
+                });
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -621,9 +632,10 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  Config config;
-  config.analyze_arrays = true;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get(),
+                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+                  analyzer.run(insn, env);
+                });
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -649,9 +661,10 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaPut) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  Config config;
-  config.analyze_arrays = true;
-  do_const_prop(code.get(), config);
+  do_const_prop(code.get(),
+                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+                  analyzer.run(insn, env);
+                });
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -668,11 +681,12 @@ TEST_F(ConstantPropagationTest, OutOfBoundsWrite) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  Config config;
-  config.analyze_arrays = true;
-  cp::intraprocedural::FixpointIterator rcp(cfg, config);
-  rcp.run(ConstantEnvironment());
-  EXPECT_TRUE(rcp.get_exit_state_at(cfg.exit_block()).is_bottom());
+  cp::intraprocedural::FixpointIterator intra_cp(
+      cfg, [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
+  intra_cp.run(ConstantEnvironment());
+  EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }
 
 TEST_F(ConstantPropagationTest, OutOfBoundsRead) {
@@ -689,11 +703,12 @@ TEST_F(ConstantPropagationTest, OutOfBoundsRead) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  Config config;
-  config.analyze_arrays = true;
-  cp::intraprocedural::FixpointIterator rcp(cfg, config);
-  rcp.run(ConstantEnvironment());
-  EXPECT_TRUE(rcp.get_exit_state_at(cfg.exit_block()).is_bottom());
+  cp::intraprocedural::FixpointIterator intra_cp(
+      cfg, [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
+  intra_cp.run(ConstantEnvironment());
+  EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }
 
 TEST(ConstantPropagation, WhiteBox1) {
@@ -716,10 +731,13 @@ TEST(ConstantPropagation, WhiteBox1) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator rcp(cfg);
-  rcp.run(ConstantEnvironment());
+  cp::intraprocedural::FixpointIterator intra_cp(
+      cfg, [analyzer = cp::ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
+  intra_cp.run(ConstantEnvironment());
 
-  auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
+  auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
   // Specifying `0u` here to avoid any ambiguity as to whether it is the null
   // pointer
   EXPECT_EQ(exit_state.get_primitive(0u), SignedConstantDomain::top());
@@ -749,10 +767,13 @@ TEST(ConstantPropagation, WhiteBox2) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator rcp(cfg);
-  rcp.run(ConstantEnvironment());
+  cp::intraprocedural::FixpointIterator intra_cp(
+      cfg, [analyzer = cp::ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
+  intra_cp.run(ConstantEnvironment());
 
-  auto exit_state = rcp.get_exit_state_at(cfg.exit_block());
+  auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
   EXPECT_EQ(exit_state.get_primitive(0u),
             SignedConstantDomain(sign_domain::Interval::GEZ));
   EXPECT_EQ(exit_state.get_primitive(1), SignedConstantDomain(0));

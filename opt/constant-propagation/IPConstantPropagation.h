@@ -42,9 +42,6 @@ class PassImpl : public Pass {
     pc.get("replace_moves_with_consts",
            false,
            m_config.transform.replace_moves_with_consts);
-    pc.get("fold_arithmetic",
-           false,
-           m_config.intraprocedural_analysis.fold_arithmetic);
     pc.get("include_virtuals", false, m_config.include_virtuals);
     pc.get("create_runtime_asserts", false, m_config.create_runtime_asserts);
     int64_t max_heap_analysis_iterations;

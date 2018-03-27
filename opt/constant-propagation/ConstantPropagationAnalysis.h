@@ -12,6 +12,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
+#include "InstructionAnalyzer.h"
 
 namespace constant_propagation {
 
@@ -22,8 +23,6 @@ class FixpointIterator final
                                        ConstantEnvironment> {
  public:
   struct Config {
-    bool fold_arithmetic{false};
-    bool analyze_arrays{false};
     // If we are analyzing a class initializer, this is expected to point to
     // the DexType of the class. It indicates that the analysis can treat the
     // static fields of this class as non-escaping.
@@ -34,13 +33,11 @@ class FixpointIterator final
    * The fixpoint iterator takes an optional WholeProgramState argument that
    * it will use to determine the static field values and method return values.
    */
-  explicit FixpointIterator(const ControlFlowGraph& cfg,
-                            const Config config,
-                            const WholeProgramState* wps = nullptr)
-      : MonotonicFixpointIterator(cfg), m_config(config), m_wps(wps) {}
-
-  explicit FixpointIterator(const ControlFlowGraph& cfg)
-      : FixpointIterator(cfg, Config()) {}
+  explicit FixpointIterator(
+      const ControlFlowGraph& cfg,
+      const std::function<void(const IRInstruction*, ConstantEnvironment*)>
+          insn_analyzer)
+      : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}
 
   ConstantEnvironment analyze_edge(
       const std::shared_ptr<cfg::Edge>&,
@@ -53,10 +50,111 @@ class FixpointIterator final
                     ConstantEnvironment* state_at_entry) const override;
 
  private:
-  const Config m_config;
-  const WholeProgramState* m_wps;
+  std::function<void(const IRInstruction*, ConstantEnvironment*)>
+      m_insn_analyzer;
 };
 
 } // namespace intraprocedural
+
+/*
+ * Propagates primitive constants and handles simple arithmetic. Also defines
+ * an analyze_default implementation that simply sets any modified registers
+ * to Top. This sub-analyzer should typically be the last one in any list of
+ * combined sub-analyzers.
+ */
+class ConstantPrimitiveSubAnalyzer final
+    : public InstructionSubAnalyzerBase<ConstantPrimitiveSubAnalyzer,
+                                        ConstantEnvironment> {
+ public:
+  static bool analyze_default(const IRInstruction* insn,
+                              ConstantEnvironment* env);
+
+  static bool analyze_const(const IRInstruction* insn,
+                            ConstantEnvironment* env);
+
+  static bool analyze_move(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_move_result(const IRInstruction* insn,
+                                  ConstantEnvironment* env);
+
+  static bool analyze_cmp(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_binop_lit(const IRInstruction* insn,
+                                ConstantEnvironment* env);
+};
+
+// This is the most common use of constant propagation, so we define this alias
+// for our convenience.
+using ConstantPrimitiveAnalyzer =
+    InstructionSubAnalyzerCombiner<ConstantPrimitiveSubAnalyzer>;
+
+/*
+ * Handle non-escaping arrays.
+ */
+class LocalArraySubAnalyzer final
+    : public InstructionSubAnalyzerBase<LocalArraySubAnalyzer,
+                                        ConstantEnvironment> {
+ public:
+  static bool analyze_new_array(const IRInstruction* insn,
+                                ConstantEnvironment* env);
+
+  static bool analyze_aget(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_aput(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_sput(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_iput(const IRInstruction* insn, ConstantEnvironment* env);
+
+  static bool analyze_fill_array_data(const IRInstruction* insn,
+                                      ConstantEnvironment* env);
+
+  static bool analyze_invoke(const IRInstruction* insn,
+                             ConstantEnvironment* env);
+
+ private:
+  static void mark_array_unknown(reg_t reg, ConstantEnvironment* env);
+};
+
+/*
+ * Handle static fields in <clinit> methods. Since class initializers must (in
+ * most cases) complete running before any other piece of code can modify these
+ * fields, we can treat them as non-escaping while analyzing these methods.
+ */
+class ClinitFieldSubAnalyzer final
+    : public InstructionSubAnalyzerBase<ClinitFieldSubAnalyzer,
+                                        ConstantEnvironment,
+                                        DexType* /* class_under_init */> {
+ public:
+  static bool analyze_sget(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_sput(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_invoke(const DexType* class_under_init,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env);
+};
+
+/*
+ * Incorporate information about the values of static fields and the return
+ * values of other methods in the local analysis of a given method.
+ */
+class WholeProgramAwareSubAnalyzer final
+    : public InstructionSubAnalyzerBase<WholeProgramAwareSubAnalyzer,
+                                        ConstantEnvironment,
+                                        const WholeProgramState*> {
+ public:
+  static bool analyze_sget(const WholeProgramState* whole_program_state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_invoke(const WholeProgramState* whole_program_state,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env);
+};
 
 } // namespace constant_propagation

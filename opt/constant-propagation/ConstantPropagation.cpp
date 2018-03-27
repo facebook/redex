@@ -19,9 +19,6 @@ void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
   pc.get("replace_moves_with_consts",
          false,
          m_config.transform.replace_moves_with_consts);
-  pc.get("fold_arithmetic",
-         false,
-         m_config.intraprocedural_analysis.fold_arithmetic);
 }
 
 void ConstantPropagationPass::run_pass(DexStoresVector& stores,
@@ -44,7 +41,10 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
         TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
         intraprocedural::FixpointIterator fp_iter(
-            cfg, m_config.intraprocedural_analysis);
+            cfg,
+            [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
+              analyzer.run(insn, env);
+            });
         fp_iter.run(ConstantEnvironment());
         constant_propagation::Transform tf(m_config.transform);
         return tf.apply(fp_iter, WholeProgramState(), &code);
