@@ -1019,7 +1019,7 @@ int rename_classes_in_layout(
     &serialized,
     out_num_renamed);
 
-  if (out_num_renamed == 0 || status != android::OK) {
+  if (*out_num_renamed == 0 || status != android::OK) {
     unmap_and_close(file_desc, fp, len);
     return status;
   }
