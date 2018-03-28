@@ -24,7 +24,6 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "InstructionLowering.h"
-#include "InterDex.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "PrintSeeds.h"
@@ -301,7 +300,7 @@ const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
 const std::unordered_map<std::string, int>&
 PassManager::get_interdex_metrics() {
   for (const auto& pass_info : m_pass_info) {
-    if (pass_info.pass->name() == INTERDEX_PASS_NAME) {
+    if (pass_info.pass->name() == "InterDexPass") {
       return pass_info.metrics;
     }
   }
