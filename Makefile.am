@@ -62,6 +62,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/opt/virtual_scope \
+	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
@@ -170,15 +171,12 @@ redex_all_SOURCES = \
 	opt/annokill/AnnoKill.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
-	opt/constant-propagation/ConstantEnvironment.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
-	opt/constant-propagation/ConstantPropagationAnalysis.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/ConstantPropagationTransform.cpp \
 	opt/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/constant-propagation/IPConstantPropagationAnalysis.cpp \
-	opt/constant-propagation/SignDomain.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
@@ -236,6 +234,9 @@ redex_all_SOURCES = \
 	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
+	service/constant-propagation/ConstantEnvironment.cpp \
+	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/SignDomain.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

@@ -172,4 +172,36 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
   });
 }
 
+bool WholeProgramAwareSubAnalyzer::analyze_sget(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (whole_program_state == nullptr) {
+    return false;
+  }
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  env->set_primitive(RESULT_REGISTER,
+                     whole_program_state->get_field_value(field));
+  return true;
+}
+
+bool WholeProgramAwareSubAnalyzer::analyze_invoke(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (whole_program_state == nullptr) {
+    return false;
+  }
+  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
+    return false;
+  }
+  env->set_primitive(RESULT_REGISTER,
+                     whole_program_state->get_return_value(method));
+  return true;
+}
+
 } // namespace constant_propagation

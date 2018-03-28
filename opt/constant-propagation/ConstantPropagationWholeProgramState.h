@@ -12,6 +12,7 @@
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
 #include "HashedAbstractPartition.h"
+#include "InstructionAnalyzer.h"
 
 namespace constant_propagation {
 
@@ -119,6 +120,24 @@ class WholeProgramState {
   // Environment to Bottom.
   ConstantStaticFieldPartition m_field_partition;
   ConstantMethodPartition m_method_partition;
+};
+
+/*
+ * Incorporate information about the values of static fields and the return
+ * values of other methods in the local analysis of a given method.
+ */
+class WholeProgramAwareSubAnalyzer final
+    : public InstructionSubAnalyzerBase<WholeProgramAwareSubAnalyzer,
+                                        ConstantEnvironment,
+                                        const WholeProgramState*> {
+ public:
+  static bool analyze_sget(const WholeProgramState* whole_program_state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_invoke(const WholeProgramState* whole_program_state,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env);
 };
 
 } // namespace constant_propagation

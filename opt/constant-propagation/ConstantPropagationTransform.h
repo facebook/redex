@@ -11,6 +11,7 @@
 
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 
 namespace constant_propagation {

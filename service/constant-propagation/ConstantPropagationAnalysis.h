@@ -10,7 +10,6 @@
 #pragma once
 
 #include "ConstantEnvironment.h"
-#include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
 
@@ -135,24 +134,6 @@ class ClinitFieldSubAnalyzer final
                            ConstantEnvironment* env);
 
   static bool analyze_invoke(const DexType* class_under_init,
-                             const IRInstruction* insn,
-                             ConstantEnvironment* env);
-};
-
-/*
- * Incorporate information about the values of static fields and the return
- * values of other methods in the local analysis of a given method.
- */
-class WholeProgramAwareSubAnalyzer final
-    : public InstructionSubAnalyzerBase<WholeProgramAwareSubAnalyzer,
-                                        ConstantEnvironment,
-                                        const WholeProgramState*> {
- public:
-  static bool analyze_sget(const WholeProgramState* whole_program_state,
-                           const IRInstruction* insn,
-                           ConstantEnvironment* env);
-
-  static bool analyze_invoke(const WholeProgramState* whole_program_state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env);
 };
