@@ -42,6 +42,14 @@ DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
   return it == dmethods.end() ? nullptr : *it;
 }
 
+DexMethod* find_method_named(const DexClass& cls, const char* name) {
+  auto ret = find_dmethod_named(cls, name);
+  if (ret != nullptr) {
+    return ret;
+  }
+  return find_vmethod_named(cls, name);
+}
+
 DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
     const char* target_mname) {
   auto insns = m->get_dex_code()->get_instructions();

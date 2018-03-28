@@ -52,25 +52,10 @@ class C {
 }
 
 public class MethodDevirtualizationTest {
-
-  private static boolean isStatic(Method m) {
-    return (m.getModifiers() & Modifier.STATIC) != 0;
-  }
-
   @Test
   public void testCallingDevirtualizedMethods() {
     assertThat(new C().callADotFoo()).isEqualTo(42);
     assertThat(new C().callBDotFoo()).isEqualTo(42);
     assertThat(new B().bar()).isEqualTo(42);
-  }
-
-  @Test
-  public void testMethodStatic() throws NoSuchMethodException {
-    Method foo = A.class.getDeclaredMethod("foo", A.class);
-    Method bar = B.class.getDeclaredMethod("bar", B.class);
-    Method baz = A.class.getDeclaredMethod("baz");
-    assertThat(isStatic(foo)).isTrue();
-    assertThat(isStatic(bar)).isTrue();
-    assertThat(isStatic(baz)).isTrue();
   }
 }
