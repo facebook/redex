@@ -66,7 +66,7 @@ void blacklist(DexType* type, DexString *name, bool declared) {
     auto yield = [&](T t) {
       if (t->get_name() != name) return;
       TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-      t->rstate.ref_by_string();
+      t->rstate.set_keep();
       if (!declared) {
         // TOOD: handle not declared case, go up inheritance tree
       }
