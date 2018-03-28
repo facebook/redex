@@ -17,7 +17,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
                       IRCode* code,
                       SplitCosts* split_costs) {
   auto& cfg = code->cfg();
-  for (Block* block : cfg.blocks()) {
+  for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
     // LiveOut(block) - LiveIn(succs).
@@ -28,7 +28,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
         if (!live_in.contains(reg)) {
           split_costs->increase_load(reg);
           // Record how many death on edge occured at certain catch block.
-          if (succ->type() == EDGE_THROW) {
+          if (succ->type() == cfg::EDGE_THROW) {
             split_costs->add_catch_block(reg, succ->target());
           } else {
             // Record death on edge to non-catch block;
@@ -100,8 +100,8 @@ IRInstruction* gen_store_for_split(
   }
 }
 
-void store_info_for_branch(const std::pair<Block*, Block*>& block_edge,
-                           Block* s,
+void store_info_for_branch(const std::pair<cfg::Block*, cfg::Block*>& block_edge,
+                           cfg::Block* s,
                            IRInstruction* mov,
                            MethodItemEntry* pred_branch,
                            BlockLoadInfo* block_load_info) {
@@ -141,7 +141,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const LivenessDomain& live_out,
                        const LivenessFixpointIterator& fixpoint_iter,
                        const Graph& ig,
-                       Block* block,
+                       cfg::Block* block,
                        std::unordered_map<reg_t, reg_t>* load_store_reg,
                        IRCode* code,
                        BlockLoadInfo* block_load_info) {
@@ -171,7 +171,7 @@ size_t split_for_block(const SplitPlan& split_plan,
         bool can_insert_directly =
             split_costs.death_at_other(reg).at(succ->target()) ==
             succ->target()->preds().size();
-        if ((succ->type() == EDGE_GOTO || succ->type() == EDGE_BRANCH) &&
+        if ((succ->type() == cfg::EDGE_GOTO || succ->type() == cfg::EDGE_BRANCH) &&
             can_insert_directly) {
           // Use other_loaded_regs to make sure we don't load a register
           // several times in the same place.
@@ -194,13 +194,13 @@ size_t split_for_block(const SplitPlan& split_plan,
           continue;
         }
 
-        auto block_edge = std::pair<Block*, Block*>(block, succ->target());
+        auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
         auto lastmei = block->rbegin();
         // Because in find_split we limited the try-catch edge to only deal
         // with catch block where reg died on all the exception edge toward it.
         // So even if there is a EDGE_GOTO we don't need to worry about should
         // we insert a block to load reg or not.
-        if (succ->type() == EDGE_THROW) {
+        if (succ->type() == cfg::EDGE_THROW) {
           // Try Catch blocks.
           // Use try_loaded_regs to make sure we don't load a register several
           // times in the same place.
@@ -212,7 +212,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                                                                      TRYCATCH);
             block_load_info->try_loaded_regs[succ->target()].emplace(l);
           }
-        } else if (succ->type() == EDGE_GOTO) {
+        } else if (succ->type() == cfg::EDGE_GOTO) {
           if (lastmei->type != MFLOW_OPCODE ||
               lastmei->insn->opcode() != OPCODE_GOTO) {
             // Fall throughs, don't need to change target.
@@ -288,7 +288,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const Graph& ig,
                           const IRInstruction* insn,
                           const LivenessDomain& live_out,
-                          Block* block,
+                          cfg::Block* block,
                           IRCode* code,
                           std::unordered_map<reg_t, reg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
@@ -320,15 +320,15 @@ size_t split_for_last_use(const SplitPlan& split_plan,
           for (auto& succ : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
-            auto block_edge = std::pair<Block*, Block*>(block, succ->target());
-            if (succ->type() == EDGE_BRANCH) {
+            auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
+            if (succ->type() == cfg::EDGE_BRANCH) {
               // Branches, need to change target.
               store_info_for_branch(block_edge,
                                     succ->target(),
                                     mov,
                                     &*(--(it.base())),
                                     block_load_info);
-            } else if (succ->type() == EDGE_GOTO) {
+            } else if (succ->type() == cfg::EDGE_GOTO) {
               // Fall throughs, don't need to change target.
               block_load_info->mode_and_insn[block_edge].add_insn_mode(
                   mov, FALLTHROUGH);
@@ -448,7 +448,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
   size_t split_move = 0;
   auto& cfg = code->cfg();
 
-  for (Block* block : cfg.blocks()) {
+  for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Split for death of reg on edge from block to its succs blocks.
     split_move += split_for_block(split_plan,

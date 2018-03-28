@@ -33,7 +33,7 @@ class FixpointIterator final
    * it will use to determine the static field values and method return values.
    */
   explicit FixpointIterator(
-      const ControlFlowGraph& cfg,
+      const cfg::ControlFlowGraph& cfg,
       const std::function<void(const IRInstruction*, ConstantEnvironment*)>
           insn_analyzer)
       : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}

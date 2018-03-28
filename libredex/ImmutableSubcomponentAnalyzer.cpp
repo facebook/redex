@@ -155,9 +155,9 @@ class Analyzer final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
                                        AbstractAccessPathEnvironment> {
  public:
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  Analyzer(const ControlFlowGraph& cfg,
+  Analyzer(const cfg::ControlFlowGraph& cfg,
            std::function<bool(DexMethodRef*)> is_immutable_getter)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_cfg(cfg),
@@ -244,7 +244,7 @@ class Analyzer final
     // We reserve enough space for the map in order to avoid repeated rehashing
     // during the computation.
     m_environments.reserve(m_cfg.blocks().size() * 16);
-    for (Block* block : m_cfg.blocks()) {
+    for (cfg::Block* block : m_cfg.blocks()) {
       AbstractAccessPathEnvironment current_state = get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
@@ -255,7 +255,7 @@ class Analyzer final
   }
 
  private:
-  const ControlFlowGraph& m_cfg;
+  const cfg::ControlFlowGraph& m_cfg;
   std::function<bool(DexMethodRef*)> m_is_immutable_getter;
   std::unordered_map<IRInstruction*, AbstractAccessPathEnvironment>
       m_environments;
@@ -273,7 +273,7 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
     return;
   }
   code->build_cfg();
-  ControlFlowGraph& cfg = code->cfg();
+  cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer = std::make_unique<isa_impl::Analyzer>(cfg, is_immutable_getter);
 

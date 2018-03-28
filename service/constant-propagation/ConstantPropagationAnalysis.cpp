@@ -488,7 +488,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
   auto insn = last_insn_it->insn;
   auto op = insn->opcode();
   if (is_conditional_branch(op)) {
-    analyze_if(insn, &env, edge->type() == EDGE_BRANCH);
+    analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
   }
   return env;
 }

@@ -23,9 +23,9 @@ class LivenessFixpointIterator final
           BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
           LivenessDomain> {
  public:
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  LivenessFixpointIterator(const ControlFlowGraph& cfg)
+  LivenessFixpointIterator(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
 
   void analyze_node(const NodeId& block,

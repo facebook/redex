@@ -557,7 +557,7 @@ IRCode::IRCode(const IRCode& code) {
 
 void IRCode::build_cfg(bool editable) {
   clear_cfg();
-  m_cfg = std::make_unique<ControlFlowGraph>(m_ir_list, editable);
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, editable);
 }
 
 void IRCode::clear_cfg() {

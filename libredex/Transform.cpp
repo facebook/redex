@@ -77,7 +77,7 @@ void remap_registers(IRCode* code, const RegMap& reg_map) {
   }
 }
 
-static size_t remove_block(IRCode* code, Block* b) {
+static size_t remove_block(IRCode* code, cfg::Block* b) {
   size_t insns_removed{0};
   for (auto& mei : InstructionIterable(b)) {
     code->remove_opcode(mei.insn);
@@ -86,11 +86,11 @@ static size_t remove_block(IRCode* code, Block* b) {
   return insns_removed;
 }
 
-void visit(Block* start, std::unordered_set<Block*>& visited) {
-  std::stack<Block*> to_visit;
+void visit(cfg::Block* start, std::unordered_set<cfg::Block*>& visited) {
+  std::stack<cfg::Block*> to_visit;
   to_visit.push(start);
   while (!to_visit.empty()) {
-    Block* b = to_visit.top();
+    cfg::Block* b = to_visit.top();
     to_visit.pop();
 
     if (visited.find(b) != visited.end()) {
@@ -110,7 +110,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
   size_t insns_removed{0};
 
   // remove unreachable blocks
-  std::unordered_set<Block*> visited;
+  std::unordered_set<cfg::Block*> visited;
   visit(blocks.at(0), visited);
   for (size_t i = 1; i < blocks.size(); ++i) {
     auto& b = blocks.at(i);
@@ -134,7 +134,7 @@ MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
              : nullptr;
 }
 
-IRList::iterator find_last_instruction(Block* block) {
+IRList::iterator find_last_instruction(cfg::Block* block) {
   for (auto it = block->rbegin(); it != block->rend(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       return std::prev(it.base());
@@ -147,8 +147,8 @@ IRList::iterator find_last_instruction(Block* block) {
 // delete old_block and reroute its predecessors to new_block
 //
 // if new_block is null, just delete old_block and don't reroute
-void replace_block(IRCode* code, Block* old_block, Block* new_block) {
-  const ControlFlowGraph& cfg = code->cfg();
+void replace_block(IRCode* code, cfg::Block* old_block, cfg::Block* new_block) {
+  const cfg::ControlFlowGraph& cfg = code->cfg();
   std::vector<MethodItemEntry*> will_move;
   if (new_block != nullptr) {
     // make a copy of the targets we're going to move
@@ -180,7 +180,7 @@ void replace_block(IRCode* code, Block* old_block, Block* new_block) {
     for (auto mie : will_move) {
       // insert the branch target at the beginning of new_block
       // and make sure `m_begin` and `m_end`s point to the right places
-      Block* before = cfg.find_block_that_ends_here(new_block->begin());
+      cfg::Block* before = cfg.find_block_that_ends_here(new_block->begin());
       new_block->m_begin = code->insert_before(new_block->begin(), *mie);
       if (before != nullptr) {
         before->m_end = new_block->m_begin;

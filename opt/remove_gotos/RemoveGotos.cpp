@@ -34,11 +34,11 @@ class RemoveGotos {
     return mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_GOTO;
   }
 
-  static bool has_goto(Block* block_ptr) {
+  static bool has_goto(cfg::Block* block_ptr) {
     return is_goto(*std::prev(block_ptr->end()));
   }
 
-  static IRList::iterator find_goto(Block* block_ptr) {
+  static IRList::iterator find_goto(cfg::Block* block_ptr) {
     auto iter = std::find_if(block_ptr->begin(),
                              block_ptr->end(),
                              [](MethodItemEntry& mei) { return is_goto(mei); });
@@ -53,14 +53,14 @@ class RemoveGotos {
    * - C does not fallthrough to the next block implicitly. (e.g copying C into
    * B does not cause any inconsistencies in the CFG)
    */
-  static Block* find_mergeable_block(IRCode* code) {
+  static cfg::Block* find_mergeable_block(IRCode* code) {
     code->build_cfg();
-    for (Block* current_block : code->cfg().blocks()) {
+    for (cfg::Block* current_block : code->cfg().blocks()) {
       if (current_block->succs().size() != 1 || !has_goto(current_block)) {
         continue;
       }
 
-      Block* next_block = current_block->succs()[0]->target();
+      cfg::Block* next_block = current_block->succs()[0]->target();
       if (next_block != current_block && next_block->preds().size() == 1 &&
           (next_block->succs().empty() || has_goto(next_block))) {
         return current_block;
@@ -80,7 +80,7 @@ class RemoveGotos {
     TRACE(RMGOTO, 4, "Method: %s\n", SHOW(method->get_name()));
     TRACE(RMGOTO, 4, "Initial opcode count: %d\n", code->count_opcodes());
 
-    Block* current_block = find_mergeable_block(code);
+    cfg::Block* current_block = find_mergeable_block(code);
     while (current_block != nullptr) {
       TRACE(RMGOTO,
             5,
@@ -88,7 +88,7 @@ class RemoveGotos {
             current_block->id());
       num_goto_removed++;
 
-      Block* next_block = current_block->succs()[0]->target();
+      cfg::Block* next_block = current_block->succs()[0]->target();
 
       std::vector<MethodItemEntry*> next_block_mies;
       auto next_iter = next_block->begin();

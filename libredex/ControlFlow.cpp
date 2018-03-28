@@ -16,8 +16,6 @@
 #include "DexUtil.h"
 #include "Transform.h"
 
-using namespace cfg;
-
 namespace {
 
 bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
@@ -43,7 +41,7 @@ bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
   return false;
 }
 
-bool ends_with_may_throw(Block* p) {
+bool ends_with_may_throw(cfg::Block* p) {
   for (auto last = p->rbegin(); last != p->rend(); ++last) {
     if (last->type != MFLOW_OPCODE) {
       continue;
@@ -55,6 +53,8 @@ bool ends_with_may_throw(Block* p) {
 }
 
 } // namespace
+
+namespace cfg {
 
 IRList::iterator Block::begin() {
   if (m_parent->editable()) {
@@ -137,7 +137,7 @@ IRList::iterator Block::get_conditional_branch() {
 // entries to the CFG edges. The two edges are identical, save the case key, so
 // it doesn't matter which target is taken. We arbitrarily choose to process the
 // targets in forward order.
-boost::optional<cfg::Edge::CaseKey> Block::remove_first_matching_target(
+boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
     MethodItemEntry* branch) {
   for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
     auto& mie = *it;
@@ -433,7 +433,7 @@ void ControlFlowGraph::simplify() {
 
       // redirect from my predecessors to my successor (skipping this block)
       // Can't move edges around while we iterate through the edge list
-      std::vector<std::shared_ptr<cfg::Edge>> need_redirect(b->m_preds.begin(),
+      std::vector<std::shared_ptr<Edge>> need_redirect(b->m_preds.begin(),
                                                             b->m_preds.end());
       for (auto pred_edge : need_redirect) {
         redirect_edge(pred_edge, succ);
@@ -674,10 +674,10 @@ void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
                    s->preds().end());
 }
 
-void ControlFlowGraph::remove_edge(std::shared_ptr<cfg::Edge> edge) {
+void ControlFlowGraph::remove_edge(std::shared_ptr<Edge> edge) {
   remove_edge_if(
       edge->src(), edge->target(),
-      [edge](const std::shared_ptr<cfg::Edge> e) { return edge == e; });
+      [edge](const std::shared_ptr<Edge> e) { return edge == e; });
 }
 
 void ControlFlowGraph::remove_edge_if(
@@ -705,7 +705,7 @@ void ControlFlowGraph::remove_pred_edge_if(Block* block,
   targets.erase(std::remove_if(targets.begin(),
                                targets.end(),
                                [&source_blocks, &predicate](
-                                   const std::shared_ptr<cfg::Edge> e) {
+                                   const std::shared_ptr<Edge> e) {
                                  source_blocks.insert(e->target());
                                  return predicate(e);
                                }),
@@ -727,7 +727,7 @@ void ControlFlowGraph::remove_succ_edge_if(Block* block,
   sources.erase(std::remove_if(sources.begin(),
                                sources.end(),
                                [&target_blocks, &predicate](
-                                   const std::shared_ptr<cfg::Edge> e) {
+                                   const std::shared_ptr<Edge> e) {
                                  target_blocks.insert(e->target());
                                  return predicate(e);
                                }),
@@ -742,7 +742,7 @@ void ControlFlowGraph::remove_succ_edge_if(Block* block,
 
 // Move this edge out of the vectors between its old blocks
 // and into the vectors between the new blocks
-void ControlFlowGraph::redirect_edge(std::shared_ptr<cfg::Edge> edge,
+void ControlFlowGraph::redirect_edge(std::shared_ptr<Edge> edge,
                                      Block* new_target) {
   remove_edge(edge);
   edge->m_target = new_target;
@@ -750,7 +750,7 @@ void ControlFlowGraph::redirect_edge(std::shared_ptr<cfg::Edge> edge,
   edge->target()->m_preds.push_back(edge);
 }
 
-void ControlFlowGraph::remove_opcode(const cfg::InstructionIterator& it) {
+void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
   always_assert(m_editable);
 
   MethodItemEntry& mie = *it;
@@ -761,7 +761,7 @@ void ControlFlowGraph::remove_opcode(const cfg::InstructionIterator& it) {
   if (is_conditional_branch(op) || is_switch(op)) {
     // Remove all outgoing EDGE_BRANCHes
     // leaving behind only an EDGE_GOTO (and maybe an EDGE_THROW?)
-    remove_succ_edge_if(block, [](std::shared_ptr<cfg::Edge> e) {
+    remove_succ_edge_if(block, [](std::shared_ptr<Edge> e) {
       return e->type() == EDGE_BRANCH;
     });
     block->m_entries.erase_and_dispose(it.unwrap());
@@ -980,3 +980,5 @@ void ControlFlowGraph::remove_succ_edges(Block* b) {
     this->remove_all_edges(p.first, p.second);
   }
 }
+
+} // namespace cfg

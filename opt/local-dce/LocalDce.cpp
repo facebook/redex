@@ -165,7 +165,7 @@ void LocalDce::dce(DexMethod* method) {
   auto code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
-  auto blocks = postorder_sort(cfg.blocks());
+  auto blocks = cfg::postorder_sort(cfg.blocks());
   auto regs = method->get_code()->get_registers_size();
   std::vector<boost::dynamic_bitset<>> liveness(
       cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));

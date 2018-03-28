@@ -999,7 +999,7 @@ std::string show(const IRList* ir) {
   return ret;
 }
 
-std::string show(const ControlFlowGraph& cfg) {
+std::string show(const cfg::ControlFlowGraph& cfg) {
   const auto& blocks = cfg.blocks();
   std::stringstream ss;
   ss << "CFG:\n";

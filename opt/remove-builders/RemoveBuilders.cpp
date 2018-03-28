@@ -49,7 +49,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   auto regs_size = code->get_registers_size();
   auto this_cls = method->get_class();
   code->build_cfg();
-  auto blocks = postorder_sort(code->cfg().blocks());
+  auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
       [&](IRList::iterator it, TaintedRegs* tregs) {
@@ -217,7 +217,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 
   auto code = method->get_code();
   code->build_cfg();
-  auto blocks = postorder_sort(code->cfg().blocks());
+  auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);

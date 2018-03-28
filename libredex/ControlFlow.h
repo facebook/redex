@@ -44,17 +44,20 @@
  * TODO?: Should we remove MFLOW_CATCH entries?
  */
 
+// Forward declarations
+namespace cfg {
+class Block;
+}
+namespace transform {
+void replace_block(IRCode*, cfg::Block*, cfg::Block*);
+}
+
+namespace cfg {
+
 enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
 
 class Block;
 class ControlFlowGraph;
-
-// Forward declare friend function of Block to handle cyclic dependency
-namespace transform {
-void replace_block(IRCode*, Block*, Block*);
-}
-
-namespace cfg {
 
 class Edge final {
  public:
@@ -69,7 +72,7 @@ class Edge final {
   // index of the corresponding case block.
   boost::optional<CaseKey> m_case_key;
 
-  friend class ::ControlFlowGraph;
+  friend class ControlFlowGraph;
 
  public:
   Edge(Block* src, Block* target, EdgeType type)
@@ -101,22 +104,18 @@ class InstructionIterableImpl;
 using InstructionIterable = InstructionIterableImpl</* is_const */ false>;
 using ConstInstructionIterable = InstructionIterableImpl</* is_const */ true>;
 
-} // namespace cfg
-
-// TODO: Put the rest of this header under the cfg namespace too
-
 // A piece of "straight-line" code. Targets are only at the beginning of a block
 // and branches (throws, gotos, switches, etc) are only at the end of a block.
 class Block {
  public:
-  explicit Block(const ControlFlowGraph* parent, cfg::BlockId id)
+  explicit Block(const ControlFlowGraph* parent, BlockId id)
       : m_id(id), m_parent(parent) {}
 
-  cfg::BlockId id() const { return m_id; }
-  const std::vector<std::shared_ptr<cfg::Edge>>& preds() const {
+  BlockId id() const { return m_id; }
+  const std::vector<std::shared_ptr<Edge>>& preds() const {
     return m_preds;
   }
-  const std::vector<std::shared_ptr<cfg::Edge>>& succs() const {
+  const std::vector<std::shared_ptr<Edge>>& succs() const {
     return m_succs;
   }
 
@@ -155,20 +154,20 @@ class Block {
 
   // Remove the first target in this block that corresponds to `branch`.
   // Returns a not-none CaseKey for multi targets, boost::none otherwise.
-  boost::optional<cfg::Edge::CaseKey> remove_first_matching_target(
+  boost::optional<Edge::CaseKey> remove_first_matching_target(
       MethodItemEntry* branch);
 
  private:
   friend class ControlFlowGraph;
-  friend class cfg::InstructionIteratorImpl<false>;
-  friend class cfg::InstructionIteratorImpl<true>;
+  friend class InstructionIteratorImpl<false>;
+  friend class InstructionIteratorImpl<true>;
   friend void transform::replace_block(IRCode*, Block*, Block*);
 
   // return an iterator to the conditional branch (including switch) in this
   // block. If there is no such instruction, return end()
   IRList::iterator get_conditional_branch();
 
-  cfg::BlockId m_id;
+  BlockId m_id;
 
   // MethodItemEntries get moved from IRCode into here (if m_editable)
   // otherwise, this is empty.
@@ -180,8 +179,8 @@ class Block {
   IRList::iterator m_begin;
   IRList::iterator m_end;
 
-  std::vector<std::shared_ptr<cfg::Edge>> m_preds;
-  std::vector<std::shared_ptr<cfg::Edge>> m_succs;
+  std::vector<std::shared_ptr<Edge>> m_preds;
+  std::vector<std::shared_ptr<Edge>> m_succs;
 
   // This is the successor taken in the
   // non-exception, if false, or switch default situations
@@ -236,9 +235,9 @@ class ControlFlowGraph {
   void add_edge(Args&&... args);
 
   // remove this edge from the graph entirely
-  void remove_edge(std::shared_ptr<cfg::Edge> edge);
+  void remove_edge(std::shared_ptr<Edge> edge);
 
-  using EdgePredicate = std::function<bool(const std::shared_ptr<cfg::Edge> e)>;
+  using EdgePredicate = std::function<bool(const std::shared_ptr<Edge> e)>;
 
   void remove_edge_if(Block* source,
                       Block* target,
@@ -250,13 +249,13 @@ class ControlFlowGraph {
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
-  void redirect_edge(std::shared_ptr<cfg::Edge> e, Block* new_target);
+  void redirect_edge(std::shared_ptr<Edge> e, Block* new_target);
 
   // remove the IRInstruction that `it` points to.
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
-  void remove_opcode(const cfg::InstructionIterator& it);
+  void remove_opcode(const InstructionIterator& it);
 
   /*
    * Print the graph in the DOT graph description language.
@@ -296,9 +295,9 @@ class ControlFlowGraph {
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
   using Boundaries =
       std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
-  using Blocks = std::map<cfg::BlockId, Block*>;
-  friend class cfg::InstructionIteratorImpl<false>;
-  friend class cfg::InstructionIteratorImpl<true>;
+  using Blocks = std::map<BlockId, Block*>;
+  friend class InstructionIteratorImpl<false>;
+  friend class InstructionIteratorImpl<true>;
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
@@ -351,8 +350,6 @@ class ControlFlowGraph {
   bool m_editable;
 };
 
-namespace cfg {
-
 // A static-method-only API for use with the monotonic fixpoint iterator.
 class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
   ~GraphInterface() = delete;
@@ -360,7 +357,7 @@ class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
  public:
   using Graph = ControlFlowGraph;
   using NodeId = Block*;
-  using EdgeId = std::shared_ptr<cfg::Edge>;
+  using EdgeId = std::shared_ptr<Edge>;
   static NodeId entry(const Graph& graph) {
     return const_cast<NodeId>(graph.entry_block());
   }
@@ -501,17 +498,6 @@ class InstructionIterableImpl {
   bool empty() { return begin() == end(); }
 };
 
-} // namespace cfg
-
-inline cfg::InstructionIterable InstructionIterable(ControlFlowGraph& cfg) {
-  return cfg::InstructionIterable(cfg);
-}
-
-inline cfg::ConstInstructionIterable InstructionIterable(
-    const ControlFlowGraph& cfg) {
-  return cfg::ConstInstructionIterable(cfg);
-}
-
 std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
 
 /*
@@ -519,3 +505,14 @@ std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
  * standard depth-first search with a side table of already-visited nodes.
  */
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
+
+} // namespace cfg
+
+inline cfg::InstructionIterable InstructionIterable(cfg::ControlFlowGraph& cfg) {
+  return cfg::InstructionIterable(cfg);
+}
+
+inline cfg::ConstInstructionIterable InstructionIterable(
+    const cfg::ControlFlowGraph& cfg) {
+  return cfg::ConstInstructionIterable(cfg);
+}

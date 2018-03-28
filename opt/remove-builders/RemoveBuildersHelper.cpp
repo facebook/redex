@@ -72,7 +72,7 @@ void fields_mapping(IRList::iterator it,
  * - OVERWRITTEN: register no longer holds the value.
  */
 std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
-    const std::vector<Block*>& blocks, DexClass* builder) {
+    const std::vector<cfg::Block*>& blocks, DexClass* builder) {
 
   std::function<void(IRList::iterator, FieldsRegs*)> trans = [&](
       IRList::iterator it, FieldsRegs* fregs) {
@@ -314,7 +314,7 @@ void remove_super_class_calls(DexMethod* method, DexType* parent_type) {
  * Gathers all `MOVE` instructions that operate on a builder.
  */
 std::vector<IRInstruction*> gather_move_builders_insn(
-    IRCode* code, const std::vector<Block*>& blocks, DexType* builder) {
+    IRCode* code, const std::vector<cfg::Block*>& blocks, DexType* builder) {
   std::vector<IRInstruction*> insns;
 
   uint16_t regs_size = code->get_registers_size();
@@ -418,7 +418,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   }
 
   code->build_cfg();
-  auto blocks = postorder_sort(code->cfg().blocks());
+  auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
 
   auto fields_in = fields_setters(blocks, builder);
@@ -628,7 +628,7 @@ bool params_change_regs(DexMethod* method) {
 
   auto code = method->get_code();
   code->build_cfg();
-  auto blocks = postorder_sort(code->cfg().blocks());
+  auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
   const auto& param_insns =
@@ -1067,7 +1067,7 @@ bool tainted_reg_escapes(
  */
 std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
 get_tainted_regs(uint16_t regs_size,
-                 const std::vector<Block*>& blocks,
+                 const std::vector<cfg::Block*>& blocks,
                  DexType* type) {
 
   std::function<void(IRList::iterator, TaintedRegs*)> trans =

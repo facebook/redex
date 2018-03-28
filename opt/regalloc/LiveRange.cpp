@@ -111,9 +111,9 @@ class DefsEnvironment final
 class ReachingDefsFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, DefsEnvironment> {
  public:
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  explicit ReachingDefsFixpointIterator(const ControlFlowGraph& cfg)
+  explicit ReachingDefsFixpointIterator(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
 
   void analyze_node(const NodeId& block,
@@ -143,7 +143,7 @@ UDChains calculate_ud_chains(IRCode* code) {
   ReachingDefsFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(DefsEnvironment());
   UDChains chains;
-  for (Block* block : cfg.blocks()) {
+  for (cfg::Block* block : cfg.blocks()) {
     DefsEnvironment defs_in = fixpoint_iter.get_entry_state_at(block);
     for (const auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;

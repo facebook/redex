@@ -145,9 +145,9 @@ class TypeCheckingException final : public std::runtime_error {
 class TypeInference final
     : public MonotonicFixpointIterator<cfg::GraphInterface, TypeEnvironment> {
  public:
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  TypeInference(const ControlFlowGraph& cfg,
+  TypeInference(const cfg::ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
@@ -851,7 +851,7 @@ class TypeInference final
   }
 
   void print(std::ostream& output) const {
-    for (Block* block : m_cfg.blocks()) {
+    for (cfg::Block* block : m_cfg.blocks()) {
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         auto it = m_type_envs.find(insn);
@@ -866,7 +866,7 @@ class TypeInference final
     // We reserve enough space for the map in order to avoid repeated rehashing
     // during the computation.
     m_type_envs.reserve(m_cfg.blocks().size() * 16);
-    for (Block* block : m_cfg.blocks()) {
+    for (cfg::Block* block : m_cfg.blocks()) {
       TypeEnvironment current_state = get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
@@ -1159,7 +1159,7 @@ class TypeInference final
     return out;
   }
 
-  const ControlFlowGraph& m_cfg;
+  const cfg::ControlFlowGraph& m_cfg;
   bool m_enable_polymorphic_constants;
   bool m_verify_moves;
   bool m_inference;
@@ -1298,7 +1298,7 @@ void IRTypeChecker::run() {
 
   // We then infer types for all the registers used in the method.
   code->build_cfg();
-  const ControlFlowGraph& cfg = code->cfg();
+  const cfg::ControlFlowGraph& cfg = code->cfg();
   m_type_inference = std::make_unique<irtc_impl::TypeInference>(
       cfg, m_enable_polymorphic_constants, m_verify_moves);
   m_type_inference->run(m_dex_method);

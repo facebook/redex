@@ -14,6 +14,8 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 
+namespace cfg {
+
 std::ostream& operator<<(std::ostream& os, const Block* b) {
   return os << b->id();
 }
@@ -21,6 +23,10 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
 std::ostream& operator<<(std::ostream& os, const ControlFlowGraph& cfg) {
   return cfg.write_dot_format(os);
 }
+
+}
+
+using namespace cfg;
 
 TEST(ControlFlow, findExitBlocks) {
   {
@@ -288,7 +294,7 @@ TEST(ControlFlow, iterate1) {
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
-  for (const auto& mie : InstructionIterable(code->cfg())) {
+  for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
     EXPECT_EQ(OPCODE_RETURN_VOID, mie.insn->opcode());
   }
 }
@@ -315,7 +321,7 @@ TEST(ControlFlow, iterate2) {
   // iterate within a block in the correct order
   // but visit the blocks in any order
   std::unordered_map<IRInstruction*, size_t> times_encountered;
-  auto iterable = InstructionIterable(code->cfg());
+  auto iterable = cfg::InstructionIterable(code->cfg());
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -346,7 +352,7 @@ TEST(ControlFlow, nullForwardIterators) {
   auto& cfg = code->cfg();
   for (int i = 0; i < 100; i++) {
     auto a = new cfg::InstructionIterable(cfg);
-    EXPECT_TRUE(a->end() == InstructionIterable(cfg).end());
+    EXPECT_TRUE(a->end() == cfg::InstructionIterable(cfg).end());
     delete a;
   }
 

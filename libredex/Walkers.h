@@ -44,7 +44,7 @@ class walk {
   using InsnWalkerFn = const std::function<void(DexMethod*, IRInstruction*)>&;
   using AnnotationWalkerFn = const std::function<void(DexAnnotation*)>&;
   using MatchingInBlockWalkerFn = const std::function<void(
-      DexMethod*, Block*, const std::vector<IRInstruction*>&)>&;
+      DexMethod*, cfg::Block*, const std::vector<IRInstruction*>&)>&;
 
   /**
    * Call walker on all classes in `classes`
@@ -305,9 +305,9 @@ class walk {
                                      MatchingInBlockWalkerFn walker) {
     iterate_code(
         cls, all_methods, [&predicate, &walker](DexMethod* m, IRCode& ir_code) {
-          std::vector<std::pair<Block*, std::vector<IRInstruction*>>> block_matches;
+          std::vector<std::pair<cfg::Block*, std::vector<IRInstruction*>>> block_matches;
           ir_code.build_cfg();
-          for (Block* block : ir_code.cfg().blocks()) {
+          for (cfg::Block* block : ir_code.cfg().blocks()) {
             std::vector<std::vector<IRInstruction*>> method_matches;
             std::vector<IRInstruction*> insns;
             for (const auto& mie : InstructionIterable(block)) {

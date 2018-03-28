@@ -20,7 +20,9 @@
 #include "IRInstruction.h"
 #include "IRList.h"
 
+namespace cfg {
 class ControlFlowGraph;
+}
 
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
 // belong there... I'm going to move them out soon
@@ -34,7 +36,7 @@ class IRCode {
   bool try_sync(DexCode*);
 
   IRList* m_ir_list;
-  std::unique_ptr<ControlFlowGraph> m_cfg;
+  std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
   uint16_t m_registers_size{0};
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
@@ -132,9 +134,9 @@ class IRCode {
   }
 
   /* Return the control flow graph of this method as a vector of blocks. */
-  ControlFlowGraph& cfg() { return *m_cfg; }
+  cfg::ControlFlowGraph& cfg() { return *m_cfg; }
 
-  const ControlFlowGraph& cfg() const { return *m_cfg; }
+  const cfg::ControlFlowGraph& cfg() const { return *m_cfg; }
 
   // Build a Control Flow Graph
   //  * A non editable CFG's blocks have begin and end pointers into the big

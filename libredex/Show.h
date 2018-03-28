@@ -37,7 +37,11 @@ class DexAnnotationDirectory;
 class DexDebugInstruction;
 class IRInstruction;
 class IRCode;
+
+namespace cfg {
 class ControlFlowGraph;
+}
+
 struct MethodItemEntry;
 struct DexDebugEntry;
 struct DexPosition;
@@ -69,7 +73,7 @@ std::string show(const DexDebugInstruction*);
 std::string show(const IRInstruction*);
 std::string show(const IRCode*);
 std::string show(const MethodItemEntry&);
-std::string show(const ControlFlowGraph&);
+std::string show(const cfg::ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);
 std::string show(const ir_list::InstructionIterable&);

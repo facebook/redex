@@ -108,7 +108,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
 void Transform::eliminate_dead_branch(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
-    Block* block) {
+    cfg::Block* block) {
   auto insn_it = transform::find_last_instruction(block);
   if (insn_it == block->end()) {
     return;
@@ -123,7 +123,7 @@ void Transform::eliminate_dead_branch(
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
-      auto is_fallthrough = edge->type() == EDGE_GOTO;
+      auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
       TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s\n",
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;

@@ -40,9 +40,9 @@ using hash_t = std::size_t;
 
 struct BlockAsKey {
   IRCode* code;
-  Block* block;
+  cfg::Block* block;
 
-  BlockAsKey(IRCode* c, Block* b) : code(c), block(b) {}
+  BlockAsKey(IRCode* c, cfg::Block* b) : code(c), block(b) {}
 
   bool operator==(const BlockAsKey& other) const {
     return same_successors(other) && same_try_regions(other) &&
@@ -123,7 +123,7 @@ class DedupBlocksImpl {
 
  private:
   using duplicates_t =
-      std::unordered_map<BlockAsKey, std::unordered_set<Block*>, BlockHasher>;
+      std::unordered_map<BlockAsKey, std::unordered_set<cfg::Block*>, BlockHasher>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
   const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
   const std::vector<DexClass*>& m_scope;
@@ -142,7 +142,7 @@ class DedupBlocksImpl {
     const auto& blocks = code->cfg().blocks();
     duplicates_t duplicates;
 
-    for (Block* block : blocks) {
+    for (cfg::Block* block : blocks) {
       if (should_remove(code->cfg(), block)) {
         duplicates[BlockAsKey{code, block}].insert(block);
         ++m_num_eligible_blocks;
@@ -158,12 +158,12 @@ class DedupBlocksImpl {
   void deduplicate(const duplicates_t& dups, DexMethod* method) {
     const auto& code = method->get_code();
     for (const auto& entry : dups) {
-      std::unordered_set<Block*> blocks = entry.second;
+      std::unordered_set<cfg::Block*> blocks = entry.second;
 
       // canon is block with lowest id.
-      Block* canon = nullptr;
+      cfg::Block* canon = nullptr;
       size_t canon_id = std::numeric_limits<size_t>::max();
-      for (Block* block : blocks) {
+      for (cfg::Block* block : blocks) {
         size_t id = block->id();
         if (id <= canon_id) {
           canon_id = id;
@@ -171,7 +171,7 @@ class DedupBlocksImpl {
         }
       }
 
-      for (Block* block : blocks) {
+      for (cfg::Block* block : blocks) {
         if (block->id() == canon_id) {
           // We remove the debug line information because it will be incorrect
           // for every block we reroute here. When there's no debug info,
@@ -186,7 +186,7 @@ class DedupBlocksImpl {
     }
   }
 
-  static bool should_remove(const ControlFlowGraph& cfg, Block* block) {
+  static bool should_remove(const cfg::ControlFlowGraph& cfg, cfg::Block* block) {
     if (!has_opcodes(block)) {
       return false;
     }
@@ -261,7 +261,7 @@ class DedupBlocksImpl {
     return true;
   }
 
-  static bool calls_constructor(Block* block) {
+  static bool calls_constructor(cfg::Block* block) {
     for (const auto& mie : InstructionIterable(block)) {
       if (is_invoke(mie.insn->opcode())) {
         auto meth =
@@ -280,7 +280,7 @@ class DedupBlocksImpl {
     always_assert_log(has_opcodes(edge->src()), "need opcodes");
     const auto& last_of_block = last_opcode(edge->src());
 
-    return edge->type() == EDGE_GOTO &&
+    return edge->type() == cfg::EDGE_GOTO &&
            last_of_block->insn->opcode() != OPCODE_GOTO;
   }
 
@@ -289,9 +289,9 @@ class DedupBlocksImpl {
     if (traceEnabled(RME, 2)) {
       std::lock_guard<std::mutex> guard{lock};
       for (const auto& entry : duplicates) {
-        std::unordered_set<Block*> blocks = entry.second;
+        std::unordered_set<cfg::Block*> blocks = entry.second;
         // all blocks have the same number of opcodes
-        Block* block = *blocks.begin();
+        cfg::Block* block = *blocks.begin();
         m_dup_sizes[num_opcodes(block)] += blocks.size();
       }
     }
@@ -326,7 +326,7 @@ class DedupBlocksImpl {
     }
   }
 
-  static boost::optional<MethodItemEntry&> last_opcode(Block* block) {
+  static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {
     for (auto it = block->rbegin(); it != block->rend(); it++) {
       if (it->type == MFLOW_OPCODE) {
         return *it;
@@ -335,12 +335,12 @@ class DedupBlocksImpl {
     return boost::none;
   }
 
-  static bool has_opcodes(Block* block) {
+  static bool has_opcodes(cfg::Block* block) {
     const auto& it = InstructionIterable(block);
     return it.begin() != it.end();
   }
 
-  static size_t num_opcodes(Block* block) {
+  static size_t num_opcodes(cfg::Block* block) {
     size_t result = 0;
     const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
@@ -353,7 +353,7 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {\n");
     for (const auto& entry : dups) {
       TRACE(DEDUP_BLOCKS, 4, "  hash = %lu\n", BlockHasher{}(entry.first));
-      for (Block* b : entry.second) {
+      for (cfg::Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %d\n", b->id());
         for (const MethodItemEntry& mie : *b) {
           TRACE(DEDUP_BLOCKS, 4, "      %s\n", SHOW(mie));

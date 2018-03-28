@@ -22,7 +22,7 @@ constexpr const char* STRINGBUILDER_DEF = "Ljava/lang/StringBuilder;";
 
 class StringIterator : public MonotonicFixpointIterator<cfg::GraphInterface,
                                                         StringProdEnvironment> {
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
   using Environment = StringProdEnvironment;
 
  public:

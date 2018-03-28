@@ -43,9 +43,9 @@ class IRFixpointIterator final
  public:
   // In the IR a CFG node is a basic block, i.e., a Block structure. A node id
   // is simply a pointer to a Block.
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  explicit IRFixpointIterator(const ControlFlowGraph& cfg)
+  explicit IRFixpointIterator(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()), m_cfg(cfg) {}
 
   void analyze_node(const NodeId& block,
@@ -99,7 +99,7 @@ class IRFixpointIterator final
     return ss.str();
   }
 
-  const ControlFlowGraph& m_cfg;
+  const cfg::ControlFlowGraph& m_cfg;
 };
 
 TEST(MonotonicFixpointTest, livenessAnalysis) {
@@ -124,7 +124,7 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
         if (std::strcmp(method->get_name()->c_str(), "function_1") == 0) {
           auto code = method->get_code();
           code->build_cfg();
-          ControlFlowGraph& cfg = code->cfg();
+          cfg::ControlFlowGraph& cfg = code->cfg();
           cfg.calculate_exit_block();
           std::cout << "CFG of function_1:" << std::endl
                     << SHOW(cfg) << std::endl;
@@ -132,7 +132,7 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
           IRFixpointIterator fixpoint_iterator(cfg);
           fixpoint_iterator.run(LivenessDomain());
 
-          for (Block* block : cfg.blocks()) {
+          for (cfg::Block* block : cfg.blocks()) {
             LivenessDomain live_in =
                 fixpoint_iterator.get_live_in_vars_at(block);
             LivenessDomain live_out =

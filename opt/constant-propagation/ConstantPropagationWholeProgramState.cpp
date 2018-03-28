@@ -104,7 +104,7 @@ void WholeProgramState::collect(
     }
     auto& cfg = code->cfg();
     auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
-    for (Block* b : cfg.blocks()) {
+    for (cfg::Block* b : cfg.blocks()) {
       auto env = intra_cp->get_entry_state_at(b);
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
