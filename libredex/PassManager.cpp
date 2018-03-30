@@ -9,6 +9,7 @@
 
 #include "PassManager.h"
 
+#include <boost/filesystem.hpp>
 #include <cstdio>
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
@@ -17,6 +18,7 @@
 #endif
 #include <unordered_set>
 
+#include "ApkManager.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -34,6 +36,16 @@
 #include "Timer.h"
 #include "Walkers.h"
 
+namespace {
+
+std::string get_apk_dir(const Json::Value& config) {
+  auto apkdir = config["apk_dir"].asString();
+  apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
+  return apkdir;
+}
+
+}
+
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
   return pg_config;
@@ -50,6 +62,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          bool verify_none_mode)
     : m_config(config),
+      m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(pg_config),

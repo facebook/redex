@@ -76,6 +76,7 @@ noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
+	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \

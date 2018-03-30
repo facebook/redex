@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "ApkManager.h"
 #include "Pass.h"
 #include "ProguardConfiguration.h"
 
@@ -63,6 +64,8 @@ class PassManager {
 
   const PassInfo* get_current_pass_info() const { return m_current_pass_info; }
 
+  ApkManager& apk_manager() { return m_apk_mgr; }
+
   void record_running_regalloc() {
     m_regalloc_has_run = true;
   }
@@ -81,6 +84,7 @@ class PassManager {
                                bool verify_moves);
 
   Json::Value m_config;
+  ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
 
