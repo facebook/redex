@@ -55,8 +55,22 @@ const char* safe_types_on_refs[] = {
     "Ljava/nio/ByteBuffer;"
 };
 
-constexpr int MAX_INSTRUCTION_SIZE = 1 << 16;
-constexpr int INSTRUCTION_BUFFER = 1 << 12;
+/*
+ * This is the maximum size of method that Dex bytecode can encode.
+ * The table of instructions is indexed by a 32 bit unsigned integer.
+ */
+constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = 1L << 32;
+
+/*
+ * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
+ * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
+ *
+ * The verifier rounds up to the next power of two, and doesn't support any
+ * size greater than 16. See
+ * http://androidxref.com/5.0.0_r2/xref/art/compiler/dex/verified_method.cc#107
+ */
+constexpr uint32_t SOFT_MAX_INSTRUCTION_SIZE = 1 << 16;
+constexpr uint32_t INSTRUCTION_BUFFER = 1 << 12;
 
 /**
  * Use this cache once the optimization is invoked to make sure
@@ -311,9 +325,28 @@ bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
   return false;
 }
 
+bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
+                                              const DexMethod* callee,
+                                              uint64_t max) {
+  // INSTRUCTION_BUFFER is added because the final method size is often larger
+  // than our estimate -- during the sync phase, we may have to pick larger
+  // branch opcodes to encode large jumps.
+  auto callee_size = callee->get_code()->sum_opcode_sizes();
+  if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
+    info.caller_too_large++;
+    return true;
+  }
+  return false;
+}
+
 bool MultiMethodInliner::caller_too_large(DexType* caller_type,
-                                          size_t estimated_insn_size,
+                                          size_t estimated_caller_size,
                                           const DexMethod* callee) {
+  if (is_estimate_over_max(estimated_caller_size, callee,
+                           HARD_MAX_INSTRUCTION_SIZE)) {
+    return false;
+  }
+
   if (!m_config.enforce_method_size_limit) {
     return false;
   }
@@ -322,15 +355,11 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
     return false;
   }
 
-  // INSTRUCTION_BUFFER is added because the final method size is often larger
-  // than our estimate -- during the sync phase, we may have to pick larger
-  // branch opcodes to encode large jumps.
-  auto insns_size = callee->get_code()->sum_opcode_sizes();
-  if (estimated_insn_size + insns_size >
-      MAX_INSTRUCTION_SIZE - INSTRUCTION_BUFFER) {
-    info.caller_too_large++;
-    return true;
+  if (is_estimate_over_max(estimated_caller_size, callee,
+                           SOFT_MAX_INSTRUCTION_SIZE)) {
+    return false;
   }
+
   return false;
 }
 

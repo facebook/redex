@@ -187,6 +187,10 @@ class MultiMethodInliner {
    */
   bool cross_store_reference(const DexMethod* context);
 
+  bool is_estimate_over_max(uint64_t estimated_insn_size,
+                            const DexMethod* callee,
+                            uint64_t max);
+
   /**
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
    * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
@@ -196,7 +200,7 @@ class MultiMethodInliner {
    * registers.
    */
   bool caller_too_large(DexType* caller_type,
-                        size_t estimated_insn_size,
+                        size_t estimated_caller_size,
                         const DexMethod* callee);
 
   /**
