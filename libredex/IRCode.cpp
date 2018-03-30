@@ -94,13 +94,29 @@ static void insert_branch_target(IRList* ir,
 
 // Returns true if the offset could be encoded without modifying ir.
 bool encode_offset(IRList* ir,
-                   MethodItemEntry* branch_op_mie,
+                   MethodItemEntry* target_mie,
                    int32_t offset) {
+  auto branch_op_mie = target_mie->target->src;
+  auto insn = branch_op_mie->dex_insn;
+  // A branch to the very next instruction does nothing. Replace with
+  // fallthrough. The offset is measured in 16 bit code units, not
+  // MethodItemEntries
+  if (offset == static_cast<int32_t>(insn->size())) {
+    branch_op_mie->type = MFLOW_FALLTHROUGH;
+    delete target_mie->target;
+    target_mie->type = MFLOW_FALLTHROUGH;
+    return false;
+  } else if (offset == 0) {
+    auto nop = new DexInstruction(DOPCODE_NOP);
+    ir->insert_before(ir->iterator_to(*branch_op_mie), nop);
+    offset = -static_cast<int32_t>(nop->size());
+    return false;
+  }
+
   auto bop = branch_op_mie->dex_insn->opcode();
   if (dex_opcode::is_goto(bop)) {
     auto goto_op = goto_for_offset(offset);
     if (goto_op != bop) {
-      auto insn = branch_op_mie->dex_insn;
       branch_op_mie->dex_insn = new DexInstruction(goto_op);
       delete insn;
       return false;
@@ -119,7 +135,6 @@ bool encode_offset(IRList* ir,
     //   label:
     //   nop
     if (bytecount(offset) > 2) {
-      auto insn = branch_op_mie->dex_insn;
       branch_op_mie->dex_insn = new DexInstruction(DOPCODE_GOTO_32);
 
       auto inverted = dex_opcode::invert_conditional_branch(bop);
@@ -142,6 +157,7 @@ bool encode_offset(IRList* ir,
                       "Unexpected opcode %s",
                       SHOW(*branch_op_mie));
   }
+  always_assert(offset != 0);
   branch_op_mie->dex_insn->set_offset(offset);
   return true;
 }
@@ -762,14 +778,7 @@ bool IRCode::try_sync(DexCode* code) {
                           "%s refers to nonexistent branch instruction",
                           SHOW(*mentry));
         int32_t branch_offset = entry_to_addr.at(mentry) - branch_addr->second;
-        if (branch_offset == 1) {
-          needs_resync = true;
-          branch_op_mie->type = MFLOW_FALLTHROUGH;
-          mentry->type = MFLOW_FALLTHROUGH;
-        } else {
-          needs_resync |=
-              !encode_offset(m_ir_list, branch_op_mie, branch_offset);
-        }
+        needs_resync |= !encode_offset(m_ir_list, mentry, branch_offset);
       }
     }
   }

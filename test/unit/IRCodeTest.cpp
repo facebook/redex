@@ -10,6 +10,8 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
+#include "InstructionLowering.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 
@@ -45,4 +47,80 @@ TEST_F(IRCodeTest, LoadParamInstructionsVirtual) {
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM, {4_v}));
   ++it;
   EXPECT_EQ(it, code->end());
+}
+
+TEST_F(IRCodeTest, infinite_loop) {
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LBaz;.bar:()V"
+      (
+        (:lbl)
+        (goto :lbl)
+      )
+    )
+  )");
+
+  auto code = method->get_code();
+  std::cout << show(code) << std::endl;
+
+  instruction_lowering::lower(method);
+  auto dex_code = code->sync(method);
+
+  const auto& insns = dex_code->get_instructions();
+  EXPECT_EQ(2, insns.size());
+  auto it = insns.begin();
+  EXPECT_EQ(DOPCODE_NOP, (*it)->opcode());
+  ++it;
+  EXPECT_EQ(DOPCODE_GOTO, (*it)->opcode());
+}
+
+TEST_F(IRCodeTest, useless_goto) {
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LBaz;.bar:()V"
+      (
+        (const v0 0)
+        (goto :lbl)
+        (:lbl)
+        (const v1 1)
+      )
+    )
+  )");
+
+  auto code = method->get_code();
+  std::cout << show(code) << std::endl;
+
+  instruction_lowering::lower(method);
+  auto dex_code = code->sync(method);
+
+  const auto& insns = dex_code->get_instructions();
+  EXPECT_EQ(2, insns.size());
+  auto it = insns.begin();
+  EXPECT_EQ(DOPCODE_CONST_4, (*it)->opcode());
+  ++it;
+  EXPECT_EQ(DOPCODE_CONST_4, (*it)->opcode());
+}
+
+TEST_F(IRCodeTest, useless_if) {
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LBaz;.bar:()V"
+      (
+        (const v0 0)
+        (if-gtz v0 :lbl)
+        (:lbl)
+        (const v1 1)
+      )
+    )
+  )");
+
+  auto code = method->get_code();
+  std::cout << show(code) << std::endl;
+
+  instruction_lowering::lower(method);
+  auto dex_code = code->sync(method);
+
+  const auto& insns = dex_code->get_instructions();
+  EXPECT_EQ(2, insns.size());
+  auto it = insns.begin();
+  EXPECT_EQ(DOPCODE_CONST_4, (*it)->opcode());
+  ++it;
+  EXPECT_EQ(DOPCODE_CONST_4, (*it)->opcode());
 }
