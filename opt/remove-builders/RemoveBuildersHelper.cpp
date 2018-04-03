@@ -46,7 +46,8 @@ void fields_mapping(IRList::iterator it,
     const int current_dest = insn->dest();
 
     for (const auto& pair : fregs->field_to_reg) {
-      if (pair.second == current_dest) {
+      if (pair.second == current_dest ||
+          (insn->dest_is_wide() && pair.second == current_dest + 1)) {
         fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
       }
     }
