@@ -344,7 +344,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
                                           const DexMethod* callee) {
   if (is_estimate_over_max(estimated_caller_size, callee,
                            HARD_MAX_INSTRUCTION_SIZE)) {
-    return false;
+    return true;
   }
 
   if (!m_config.enforce_method_size_limit) {
@@ -357,7 +357,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 
   if (is_estimate_over_max(estimated_caller_size, callee,
                            SOFT_MAX_INSTRUCTION_SIZE)) {
-    return false;
+    return true;
   }
 
   return false;
