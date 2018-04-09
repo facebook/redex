@@ -656,7 +656,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
+TEST_F(InterproceduralConstantPropagationTest, constantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -714,7 +714,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
             assembler::to_s_expr(expected_code2.get()));
 }
 
-TEST_F(InterproceduralConstantPropagationTest, constantField) {
+TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
@@ -754,23 +754,65 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   Scope scope{creator.create()};
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
 
+  auto expected = assembler::to_s_expr(m2->get_code());
+
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
 
-  auto expected_code2 = assembler::ircode_from_string(R"(
-    (
-     (sget "LFoo;.qux:I")
-     (move-result-pseudo v0)
-     (if-nez v0 :label)
-     (const v0 0)
-     (:label)
-     (return-void)
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()), expected);
+}
+
+TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
+  creator.add_field(field);
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
+      (const v0 1)
+      (sput v0 "LFoo;.qux:I")
+      (return-void)
+     )
     )
   )");
+  m1->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m1);
 
-  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
-            assembler::to_s_expr(expected_code2.get()));
+  auto m2 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:()V"
+     (
+      (sget "LFoo;.qux:I")
+      (move-result-pseudo v0)
+      (if-nez v0 :label)
+      (const v0 0)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  m2->rstate.set_keep(); // Make this an entry point
+  creator.add_method(m2);
+
+  // Mark Foo.qux as a -keep field -- meaning we cannot determine if its value
+  // is truly constant just by looking at Dex bytecode
+  static_cast<DexField*>(DexField::get_field("LFoo;.qux:I"))->rstate.set_keep();
+  auto expected = assembler::to_s_expr(m2->get_code());
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(scope);
+
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()), expected);
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {

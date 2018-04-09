@@ -78,9 +78,11 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
   walk::fields(scope, [&](DexField* field) {
-    // Currently, we only consider static methods in our analysis. All other
-    // fields values will be represented by Top.
-    if (is_static(field)) {
+    // Currently, we only consider static fields in our analysis. We also
+    // exclude those marked by keep rules: keep-marked fields may be written to
+    // by non-Dex bytecode.
+    // All fields not in m_known_fields will be bound to Top.
+    if (is_static(field) && !root(field)) {
       m_known_fields.emplace(field);
     }
   });
