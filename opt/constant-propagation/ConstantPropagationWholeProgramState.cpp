@@ -195,6 +195,10 @@ bool WholeProgramAwareSubAnalyzer::analyze_invoke(
   if (whole_program_state == nullptr) {
     return false;
   }
+  auto op = insn->opcode();
+  if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC) {
+    return false;
+  }
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;
