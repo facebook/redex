@@ -8,9 +8,9 @@
 
 namespace {
 
-bool check_directory(std::string& apkdir) {
-  if (!boost::filesystem::is_directory(apkdir.c_str())) {
-    std::cerr << "error: apkdir is not a writable directory: " << apkdir
+void check_directory(std::string& dir) {
+  if (!boost::filesystem::is_directory(dir.c_str())) {
+    std::cerr << "error: not a writable directory: " << dir
               << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -22,11 +22,8 @@ FILE* ApkManager::new_asset_file(const char* filename) {
   check_directory(m_apk_dir);
   std::ostringstream path;
   path << m_apk_dir << "/assets/";
-  if (!boost::filesystem::is_directory(path.str().c_str())) {
-    std::cerr << "error: assets dir is not a writable directory: " << path.str()
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
+  std::string assets_dir = path.str();
+  check_directory(assets_dir);
   path << filename;
 
   FILE* fd = fopen(path.str().c_str(), "w");
