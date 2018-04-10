@@ -192,7 +192,7 @@ class WeakTopologicalOrdering final {
       std::function<std::vector<NodeId>(const NodeId&)> successors)
       : m_successors(successors), m_free_position(0), m_num(0) {
     int32_t partition = -1;
-    visit(root, &partition, 0);
+    visit(root, &partition);
   }
 
   iterator begin() const {
@@ -209,7 +209,7 @@ class WeakTopologicalOrdering final {
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
   NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
-  uint32_t visit(const NodeId& vertex, int32_t* partition, size_t depth) {
+  uint32_t visit(const NodeId& vertex, int32_t* partition) {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);
     bool loop = false;
@@ -217,7 +217,7 @@ class WeakTopologicalOrdering final {
       uint32_t succ_dfn = get_dfn(succ);
       uint32_t min;
       if (succ_dfn == 0) {
-        min = visit(succ, partition, depth + 1);
+        min = visit(succ, partition);
       } else {
         min = succ_dfn;
       };
@@ -239,7 +239,7 @@ class WeakTopologicalOrdering final {
           element = m_stack.top();
           m_stack.pop();
         }
-        push_component(vertex, *partition, depth);
+        push_component(vertex, *partition);
       }
       auto kind = loop ? WtoComponent<NodeId>::Kind::Scc
                        : WtoComponent<NodeId>::Kind::Vertex;
@@ -249,10 +249,10 @@ class WeakTopologicalOrdering final {
     return head;
   }
 
-  void push_component(const NodeId& vertex, int32_t partition, size_t depth) {
+  void push_component(const NodeId& vertex, int32_t partition) {
     for (const NodeId& succ : m_successors(vertex)) {
       if (get_dfn(succ) == 0) {
-        visit(succ, &partition, depth + 1);
+        visit(succ, &partition);
       }
     }
   }
