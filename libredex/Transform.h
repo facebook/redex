@@ -44,6 +44,4 @@ void replace_block(IRCode* code, cfg::Block* old_block, cfg::Block* new_block);
 // if not, return null
 MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos);
 
-IRList::iterator find_last_instruction(cfg::Block* block);
-
 } // namespace transform

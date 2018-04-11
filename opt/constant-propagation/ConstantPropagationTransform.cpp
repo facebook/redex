@@ -109,7 +109,7 @@ void Transform::eliminate_dead_branch(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
     cfg::Block* block) {
-  auto insn_it = transform::find_last_instruction(block);
+  auto insn_it = block->get_last_insn();
   if (insn_it == block->end()) {
     return;
   }

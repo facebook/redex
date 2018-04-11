@@ -640,8 +640,9 @@ namespace ir_list {
 IRInstruction* primary_instruction_of_move_result_pseudo(
     IRList::iterator it) {
   --it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                it->insn->has_move_result_pseudo());
+  always_assert_log(it->type == MFLOW_OPCODE &&
+                        it->insn->has_move_result_pseudo(),
+                    "%s does not have a move result pseudo", SHOW(*it));
   return it->insn;
 }
 

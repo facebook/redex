@@ -1008,7 +1008,7 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
 
     ss << "   preds:";
     for (auto& p : b->preds()) {
-      ss << " B" << p->src()->id();
+      ss << " (" << *p << " B" << p->src()->id() << ")";
     }
     ss << "\n";
 
@@ -1018,7 +1018,7 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
 
     ss << "   succs:";
     for (auto& s : b->succs()) {
-      ss << " B" << s->target()->id();
+      ss << " (" << *s << " B" << s->target()->id() << ")";
     }
     ss << "\n";
   }

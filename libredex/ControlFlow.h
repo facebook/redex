@@ -90,7 +90,10 @@ class Edge final {
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
+  boost::optional<CaseKey> case_key() const { return m_case_key; }
 };
+
+std::ostream& operator<<(std::ostream& os, const Edge& e);
 
 using BlockId = size_t;
 
@@ -117,6 +120,10 @@ class Block {
   }
   const std::vector<std::shared_ptr<Edge>>& succs() const {
     return m_succs;
+  }
+
+  bool operator<(const Block& other) const {
+    return this->id() < other.id();
   }
 
   // return true if `b` is a predecessor of this.
@@ -152,6 +159,10 @@ class Block {
 
   bool empty() const { return m_entries.empty(); }
 
+  IRList::iterator get_last_insn();
+
+  IRList::iterator get_first_insn();
+
   // Remove the first target in this block that corresponds to `branch`.
   // Returns a not-none CaseKey for multi targets, boost::none otherwise.
   boost::optional<Edge::CaseKey> remove_first_matching_target(
@@ -181,10 +192,6 @@ class Block {
 
   std::vector<std::shared_ptr<Edge>> m_preds;
   std::vector<std::shared_ptr<Edge>> m_succs;
-
-  // This is the successor taken in the
-  // non-exception, if false, or switch default situations
-  Block* m_default_successor = nullptr;
 
   // nullptr if not in try region
   MethodItemEntry* m_catch_start = nullptr;
@@ -237,7 +244,7 @@ class ControlFlowGraph {
   // remove this edge from the graph entirely
   void remove_edge(std::shared_ptr<Edge> edge);
 
-  using EdgePredicate = std::function<bool(const std::shared_ptr<Edge> e)>;
+  using EdgePredicate = std::function<bool(const std::shared_ptr<Edge>& e)>;
 
   void remove_edge_if(Block* source,
                       Block* target,
@@ -247,9 +254,19 @@ class ControlFlowGraph {
 
   void remove_pred_edge_if(Block* block, const EdgePredicate& predicate);
 
+  void remove_succ_edges(Block* b);
+  void remove_pred_edges(Block* b);
+
   // Make `e` point to a new target block.
   // The source block is unchanged.
   void redirect_edge(std::shared_ptr<Edge> e, Block* new_target);
+
+  // return the first edge for which predicate returns true
+  // or nullptr if no such edge exists
+  std::shared_ptr<cfg::Edge> get_pred_edge_if(Block* block,
+                                              const EdgePredicate& predicate);
+  std::shared_ptr<cfg::Edge> get_succ_edge_if(Block* block,
+                                              const EdgePredicate& predicate);
 
   // remove the IRInstruction that `it` points to.
   //
@@ -273,8 +290,6 @@ class ControlFlowGraph {
   // Finding immediate dominator for each blocks in ControlFlowGraph.
   std::unordered_map<Block*, DominatorInfo> immediate_dominators() const;
 
-  void remove_succ_edges(Block* b);
-
   // Do writes to this CFG propagate back to IR and Dex code?
   bool editable() const { return m_editable; }
 
@@ -285,7 +300,6 @@ class ControlFlowGraph {
   void simplify();
 
   // SIGABORT if the internal state of the CFG is invalid
-  // Assumes m_editable is true
   void sanity_check();
 
  private:

@@ -514,8 +514,8 @@ TEST(ControlFlow, remove_non_branch) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
@@ -566,8 +566,8 @@ TEST(ControlFlow, remove_non_branch_with_loop) {
      (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST(ControlFlow, remove_branch) {
@@ -594,8 +594,8 @@ TEST(ControlFlow, remove_branch) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST(ControlFlow, remove_branch_with_loop) {
@@ -623,8 +623,8 @@ TEST(ControlFlow, remove_branch_with_loop) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST(ControlFlow, remove_all_but_return) {
@@ -650,8 +650,8 @@ TEST(ControlFlow, remove_all_but_return) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST(ControlFlow, remove_switch) {
@@ -689,8 +689,8 @@ TEST(ControlFlow, remove_switch) {
       (goto :exit)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST(ControlFlow, remove_switch2) {
@@ -730,6 +730,55 @@ TEST(ControlFlow, remove_switch2) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
+}
+
+TEST(ControlFlow, remove_pred_edge_if) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (:a 0)
+      (const v0 1)
+      (goto :end)
+
+      (sparse-switch v0 (:a :b))
+
+      (:b 1)
+      (const v0 2)
+      (goto :end)
+
+      (const v0 3)
+
+      (:end)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  cfg.remove_pred_edge_if(cfg.entry_block(),
+                          [](const std::shared_ptr<cfg::Edge> e) {
+                            return e->type() == EDGE_BRANCH;
+                          });
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (goto :end)
+
+      (sparse-switch v0 (:b))
+
+      (:b 1)
+      (const v0 2)
+      (goto :end)
+
+      (const v0 3)
+
+      (:end)
+      (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }

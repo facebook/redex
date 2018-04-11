@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 
 #include <boost/numeric/conversion/cast.hpp>
+#include <iterator>
 #include <stack>
 #include <utility>
 
@@ -132,6 +133,29 @@ IRList::iterator Block::get_conditional_branch() {
   return end();
 }
 
+IRList::iterator Block::get_last_insn() {
+  for (auto it = rbegin(); it != rend(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      // Reverse iterators have a member base() which returns a corresponding
+      // forward iterator. Beware that this isn't an iterator that refers to the
+      // same object - it actually refers to the next object in the sequence.
+      // This is so that rbegin() corresponds with end() and rend() corresponds
+      // with begin(). Copied from https://stackoverflow.com/a/2037917
+      return std::prev(it.base());
+    }
+  }
+  return end();
+}
+
+IRList::iterator Block::get_first_insn() {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      return it;
+    }
+  }
+  return end();
+}
+
 // We remove the first matching target because multiple switch cases can point
 // to the same block. We use this function to move information from the target
 // entries to the CFG edges. The two edges are identical, save the case key, so
@@ -160,6 +184,29 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
   not_reached();
 }
 
+std::ostream& operator<<(std::ostream& os, const Edge& e) {
+  switch (e.type()) {
+  case EDGE_GOTO: {
+    os << "goto";
+    break;
+  }
+  case EDGE_BRANCH: {
+    os << "branch";
+    auto key = e.case_key();
+    if (key) {
+      os << " " << *key;
+    }
+    break;
+  }
+  case EDGE_THROW: {
+    os << "throw";
+    break;
+  }
+  default: { break; }
+  }
+  return os;
+}
+
 ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
     : m_editable(editable) {
   always_assert_log(ir->size() > 0, "IRList contains no instructions");
@@ -186,12 +233,12 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
   if (m_editable) {
     TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
     simplify();
-    sanity_check();
     TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
   } else {
     remove_unreachable_succ_edges();
   }
 
+  sanity_check();
   TRACE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
 }
 
@@ -328,7 +375,6 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
             "setting default successor %d -> %d\n",
             b->id(),
             next_b->id());
-      b->m_default_successor = next_b;
       add_edge(b, next_b, EDGE_GOTO);
     }
   }
@@ -423,8 +469,8 @@ void ControlFlowGraph::simplify() {
       const auto& succ_edge = succs[0];
       Block* succ = succ_edge->target();
 
-      if (b == succ) {
-        // `b` follows itself. An infinite loop. Don't attempt to delete it.
+      if (b == succ || // `b` follows itself: an infinite loop
+          b == entry_block()) { // can't redirect nonexistent predecessors
         ++it;
         continue;
       }
@@ -434,7 +480,7 @@ void ControlFlowGraph::simplify() {
       // redirect from my predecessors to my successor (skipping this block)
       // Can't move edges around while we iterate through the edge list
       std::vector<std::shared_ptr<Edge>> need_redirect(b->m_preds.begin(),
-                                                            b->m_preds.end());
+                                                       b->m_preds.end());
       for (auto pred_edge : need_redirect) {
         redirect_edge(pred_edge, succ);
       }
@@ -453,46 +499,62 @@ void ControlFlowGraph::simplify() {
 //  * OPCODE_GOTOs are gone
 //  * Correct number of outgoing edges
 void ControlFlowGraph::sanity_check() {
-  always_assert(m_editable);
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    for (const auto& mie : *b) {
-      always_assert_log(mie.type != MFLOW_TARGET,
-                        "failed to remove all targets. block %d in\n%s",
-                        b->id(), SHOW(*this));
-      if (mie.type == MFLOW_OPCODE) {
-        always_assert_log(!is_goto(mie.insn->opcode()),
-                          "failed to remove all gotos. block %d in\n%s",
+  if (m_editable) {
+    for (const auto& entry : m_blocks) {
+      Block* b = entry.second;
+      for (const auto& mie : *b) {
+        always_assert_log(mie.type != MFLOW_TARGET,
+                          "failed to remove all targets. block %d in\n%s",
                           b->id(), SHOW(*this));
-      }
-    }
-
-    auto last_it = transform::find_last_instruction(b);
-    if (last_it != b->end()) {
-      auto& last_mie = *last_it;
-      if (last_mie.type == MFLOW_OPCODE) {
-        size_t num_succs = b->succs().size();
-        auto op = last_mie.insn->opcode();
-        if (is_conditional_branch(op) || is_switch(op)) {
-          always_assert_log(num_succs > 1, "block %d, %s", b->id(), SHOW(*this));
-        } else if (is_return(op)) {
-          always_assert_log(num_succs == 0, "block %d, %s", b->id(), SHOW(*this));
-        } else if (is_throw(op)) {
-          // A throw could end the method or go to a catch handler.
-          // We don't have any useful assertions to make here.
-        } else {
-          always_assert_log(num_succs > 0, "block %d, %s", b->id(), SHOW(*this));
+        if (mie.type == MFLOW_OPCODE) {
+          always_assert_log(!is_goto(mie.insn->opcode()),
+                            "failed to remove all gotos. block %d in\n%s",
+                            b->id(), SHOW(*this));
         }
       }
+
+      auto last_it = b->get_last_insn();
+      if (last_it != b->end()) {
+        auto& last_mie = *last_it;
+        if (last_mie.type == MFLOW_OPCODE) {
+          size_t num_succs = b->succs().size();
+          auto op = last_mie.insn->opcode();
+          if (is_conditional_branch(op) || is_switch(op)) {
+            always_assert_log(num_succs > 1, "block %d, %s", b->id(), SHOW(*this));
+          } else if (is_return(op)) {
+            always_assert_log(num_succs == 0, "block %d, %s", b->id(), SHOW(*this));
+          } else if (is_throw(op)) {
+            // A throw could end the method or go to a catch handler.
+            // We don't have any useful assertions to make here.
+          } else {
+            always_assert_log(num_succs > 0, "block %d, %s", b->id(), SHOW(*this));
+          }
+        }
+      }
+    }
+  }
+
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    // make sure the edge list in both blocks agree
+    for (const auto e : b->succs()) {
+      const auto& reverse_edges = e->target()->preds();
+      always_assert_log(std::find(reverse_edges.begin(), reverse_edges.end(),
+                                  e) != reverse_edges.end(),
+                        "block %d -> %d, %s", b->id(), e->target()->id(),
+                        SHOW(*this));
+    }
+    for (const auto e : b->preds()) {
+      const auto& forward_edges = e->src()->succs();
+      always_assert_log(std::find(forward_edges.begin(), forward_edges.end(),
+                                  e) != forward_edges.end(),
+                        "block %d -> %d, %s", e->src()->id(), b->id(),
+                        SHOW(*this));
     }
   }
 }
 
 std::vector<Block*> ControlFlowGraph::order() {
-  // FIXME: this doesn't guarantee default successors are placed immediately
-  // after. This only works because we don't actually make changes to the CFG
-  // yet.
-  //
   // TODO output in a better order
   // The order should maximize PC locality, hot blocks should be fallthroughs
   // and cold blocks (like exception handlers) should be jumps.
@@ -506,7 +568,39 @@ std::vector<Block*> ControlFlowGraph::order() {
   //       that they may jump to.
   //   (C) It recurses into a SCC before considering successors of the SCC
   //   (D) It places default successors immediately after
-  return blocks(); // this is just id order (same as input order)
+
+  std::vector<Block*> ordering;
+  std::set<BlockId> finished_blocks;
+
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    if (finished_blocks.count(b->id()) != 0) {
+      continue;
+    }
+
+    ordering.push_back(b);
+    finished_blocks.insert(b->id());
+
+    // If the GOTO edge leads to a block with a move-result(-pseudo), then that
+    // block must be placed immediately after this one because we can't insert
+    // anything between an instruction and its move-result(-pseudo).
+    auto goto_edge = get_succ_edge_if(
+        b, [](const std::shared_ptr<Edge>& e) { return e->type() == EDGE_GOTO; });
+    if (goto_edge != nullptr) {
+      auto goto_block = goto_edge->target();
+      auto first_it = goto_block->get_first_insn();
+      if (first_it != goto_block->end()) {
+        auto first_op = first_it->insn->opcode();
+        if ((is_move_result(first_op) ||
+             opcode::is_move_result_pseudo(first_op)) &&
+            finished_blocks.count(goto_block->id()) == 0) {
+          ordering.push_back(goto_block);
+          finished_blocks.insert(goto_block->id());
+        }
+      }
+    }
+  }
+  return ordering;
 }
 
 // Add an MFLOW_TARGET at the end of each edge.
@@ -575,6 +669,8 @@ IRList* ControlFlowGraph::linearize() {
   IRList* result = new IRList;
 
   TRACE(CFG, 5, "before linearize:\n%s", SHOW(*this));
+  simplify();
+  sanity_check();
 
   const std::vector<Block*>& ordering = order();
   insert_branches_and_targets(ordering);
@@ -677,67 +773,115 @@ void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
 void ControlFlowGraph::remove_edge(std::shared_ptr<Edge> edge) {
   remove_edge_if(
       edge->src(), edge->target(),
-      [edge](const std::shared_ptr<Edge> e) { return edge == e; });
+      [edge](const std::shared_ptr<Edge>& e) { return edge == e; });
 }
 
 void ControlFlowGraph::remove_edge_if(
     Block* source,
     Block* target,
     const EdgePredicate& predicate) {
-  auto& sources = source->m_succs;
-  auto& targets = target->m_preds;
 
-  sources.erase(std::remove_if(sources.begin(),
-                               sources.end(),
-                               predicate),
-                sources.end());
-  targets.erase(std::remove_if(targets.begin(),
-                               targets.end(),
-                               predicate),
-                targets.end());
+  auto& forward_edges = source->m_succs;
+  std::unordered_set<std::shared_ptr<Edge>> to_remove;
+  forward_edges.erase(
+      std::remove_if(forward_edges.begin(),
+                     forward_edges.end(),
+                     [&target, &predicate, &to_remove](const std::shared_ptr<Edge>& e) {
+                       if (e->target() == target && predicate(e)) {
+                         to_remove.insert(e);
+                         return true;
+                       }
+                       return false;
+                     }),
+      forward_edges.end());
+
+  auto& reverse_edges = target->m_preds;
+  reverse_edges.erase(
+      std::remove_if(reverse_edges.begin(),
+                     reverse_edges.end(),
+                     [&to_remove](const std::shared_ptr<Edge>& e) {
+                       return to_remove.count(e) > 0;
+                     }),
+      reverse_edges.end());
 }
 
 void ControlFlowGraph::remove_pred_edge_if(Block* block,
                                            const EdgePredicate& predicate) {
-  auto& targets = block->m_preds;
+  auto& reverse_edges = block->m_preds;
 
-  std::unordered_set<Block*> source_blocks;
-  targets.erase(std::remove_if(targets.begin(),
-                               targets.end(),
-                               [&source_blocks, &predicate](
-                                   const std::shared_ptr<Edge> e) {
-                                 source_blocks.insert(e->target());
-                                 return predicate(e);
-                               }),
-                targets.end());
+  std::vector<Block*> source_blocks;
+  std::unordered_set<std::shared_ptr<Edge>> to_remove;
+  reverse_edges.erase(std::remove_if(reverse_edges.begin(),
+                             reverse_edges.end(),
+                             [&source_blocks, &to_remove,
+                              &predicate](const std::shared_ptr<Edge>& e) {
+                               if (predicate(e)) {
+                                 source_blocks.push_back(e->src());
+                                 to_remove.insert(e);
+                                 return true;
+                               }
+                               return false;
+                             }),
+              reverse_edges.end());
 
   for (Block* source_block : source_blocks) {
-    auto& sources = source_block->m_succs;
-    sources.erase(std::remove_if(sources.begin(), sources.end(), predicate),
-                  sources.end());
+    auto& forward_edges = source_block->m_succs;
+    forward_edges.erase(std::remove_if(forward_edges.begin(), forward_edges.end(),
+                                 [&to_remove](const std::shared_ptr<Edge>& e) {
+                                   return to_remove.count(e) > 0;
+                                 }),
+                  forward_edges.end());
   }
 }
 
 void ControlFlowGraph::remove_succ_edge_if(Block* block,
                                            const EdgePredicate& predicate) {
 
-  auto& sources = block->m_succs;
+  auto& forward_edges = block->m_succs;
 
-  std::unordered_set<Block*> target_blocks;
-  sources.erase(std::remove_if(sources.begin(),
-                               sources.end(),
-                               [&target_blocks, &predicate](
-                                   const std::shared_ptr<Edge> e) {
-                                 target_blocks.insert(e->target());
-                                 return predicate(e);
-                               }),
-                sources.end());
+  std::vector<Block*> target_blocks;
+  std::unordered_set<std::shared_ptr<Edge>> to_remove;
+  forward_edges.erase(std::remove_if(forward_edges.begin(),
+                             forward_edges.end(),
+                             [&target_blocks, &to_remove,
+                              &predicate](const std::shared_ptr<Edge>& e) {
+                               if (predicate(e)) {
+                                 target_blocks.push_back(e->target());
+                                 to_remove.insert(e);
+                                 return true;
+                               }
+                               return false;
+                             }),
+              forward_edges.end());
 
   for (Block* target_block : target_blocks) {
-    auto& targets = target_block->m_preds;
-    targets.erase(std::remove_if(targets.begin(), targets.end(), predicate),
-                  targets.end());
+    auto& reverse_edges = target_block->m_preds;
+    reverse_edges.erase(std::remove_if(reverse_edges.begin(), reverse_edges.end(),
+                                 [&to_remove](const std::shared_ptr<Edge>& e) {
+                                   return to_remove.count(e) > 0;
+                                 }),
+                  reverse_edges.end());
   }
+}
+
+std::shared_ptr<Edge> ControlFlowGraph::get_pred_edge_if(
+    Block* block, const EdgePredicate& predicate) {
+  for (auto e : block->preds()) {
+    if (predicate(e)) {
+      return e;
+    }
+  }
+  return nullptr;
+}
+
+std::shared_ptr<Edge> ControlFlowGraph::get_succ_edge_if(
+    Block* block, const EdgePredicate& predicate) {
+  for (auto e : block->succs()) {
+    if (predicate(e)) {
+      return e;
+    }
+  }
+  return nullptr;
 }
 
 // Move this edge out of the vectors between its old blocks
@@ -972,13 +1116,11 @@ ControlFlowGraph::immediate_dominators() const {
 }
 
 void ControlFlowGraph::remove_succ_edges(Block* b) {
-  std::vector<std::pair<Block*, Block*>> remove_edges;
-  for (auto& s : b->succs()) {
-    remove_edges.emplace_back(b, s->target());
-  }
-  for (auto& p : remove_edges) {
-    this->remove_all_edges(p.first, p.second);
-  }
+  remove_succ_edge_if(b, [](const std::shared_ptr<Edge>&) { return true; });
+}
+
+void ControlFlowGraph::remove_pred_edges(Block* b) {
+  remove_pred_edge_if(b, [](const std::shared_ptr<Edge>&) { return true; });
 }
 
 } // namespace cfg

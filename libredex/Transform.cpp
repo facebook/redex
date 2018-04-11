@@ -134,15 +134,6 @@ MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
              : nullptr;
 }
 
-IRList::iterator find_last_instruction(cfg::Block* block) {
-  for (auto it = block->rbegin(); it != block->rend(); ++it) {
-    if (it->type == MFLOW_OPCODE) {
-      return std::prev(it.base());
-    }
-  }
-  return block->end();
-}
-
 // TODO: move to CFG
 // delete old_block and reroute its predecessors to new_block
 //

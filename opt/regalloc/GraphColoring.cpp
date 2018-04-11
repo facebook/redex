@@ -874,7 +874,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       TRACE(REG, 5, "Inserting param load of v%u in B%u\n", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
-      auto insn_it = transform::find_last_instruction(idom);
+      auto insn_it = idom->get_last_insn();
       if (insn_it != idom->end() && !is_branch(insn_it->insn->opcode()) &&
           !opcode::may_throw(insn_it->insn->opcode())) {
         ++insn_it;

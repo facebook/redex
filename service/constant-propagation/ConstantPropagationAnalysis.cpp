@@ -480,7 +480,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
     const std::shared_ptr<cfg::Edge>& edge,
     const ConstantEnvironment& exit_state_at_source) const {
   auto env = exit_state_at_source;
-  auto last_insn_it = transform::find_last_instruction(edge->src());
+  auto last_insn_it = edge->src()->get_last_insn();
   if (last_insn_it == edge->src()->end()) {
     return env;
   }
