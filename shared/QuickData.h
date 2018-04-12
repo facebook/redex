@@ -9,10 +9,14 @@
 
 #pragma once
 
+#include "Util.h"
+
 #include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
+
+class MappedFile;
 
 /**
  * [Header]
@@ -38,17 +42,20 @@
  * [DexIdentifier] [D]
  */
 class QuickData {
+  UNCOPYABLE(QuickData);
+
  public:
   // Read Mode
-  QuickData(FILE* fd);
+  QuickData(const char* location);
 
   // Write Mode
-  QuickData() {}
+  QuickData() = default;
 
   void add_field_offset(const std::string& dex,
                         const uint32_t field_idx,
                         const uint16_t offset);
-  uint16_t get_field_offset(const std::string& dex, const uint32_t field_idx);
+  uint16_t get_field_offset(const std::string& dex,
+                            const uint32_t field_idx) const;
 
   void serialize(std::shared_ptr<FILE*> fd);
 
@@ -57,8 +64,15 @@ class QuickData {
   std::unordered_map<std::string, std::unordered_map<uint32_t, uint16_t>>
       dex_to_field_idx_to_offset;
 
+  struct Header {
+    uint32_t dexes_num;
+    uint32_t dex_identifiers_offset;
+  };
+
   struct DexInfo {
     uint32_t field_offsets_size;
     uint32_t field_offsets_off;
   };
+
+  void load_data(const char* location);
 };

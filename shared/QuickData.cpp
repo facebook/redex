@@ -9,6 +9,12 @@
 
 #include "QuickData.h"
 #include "file-utils.h"
+#include "mmap.h"
+
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <cstring>
 
 namespace {
 
@@ -61,7 +67,12 @@ void QuickData::add_field_offset(const std::string& dex,
 }
 
 uint16_t QuickData::get_field_offset(const std::string& dex,
-                                     const uint32_t field_idx) {
+                                     const uint32_t field_idx) const {
+  if (dex_to_field_idx_to_offset.count(dex) > 0 &&
+      dex_to_field_idx_to_offset.at(dex).count(field_idx) > 0) {
+    return dex_to_field_idx_to_offset.at(dex).at(field_idx);
+  }
+
   return 0;
 }
 
@@ -89,6 +100,7 @@ void QuickData::serialize(std::shared_ptr<FILE*> fd) {
   CHECK(data_fh.bytes_written() ==
         size_of_header() + size_of_dex_info(num_dexes));
 
+  uint32_t current_total_fields = 0;
   for (const auto& pair : dex_to_field_offset_size) {
     auto& field_offset_map = dex_to_field_idx_to_offset[pair.first];
     for (uint32_t field_idx = 0; field_idx < pair.second; ++field_idx) {
@@ -98,9 +110,11 @@ void QuickData::serialize(std::shared_ptr<FILE*> fd) {
         write_short(data_fh, 0);
       }
     }
+
+    current_total_fields += pair.second;
     CHECK(data_fh.bytes_written() == size_of_header() +
                                          size_of_dex_info(num_dexes) +
-                                         pair.second * sizeof(uint16_t));
+                                         current_total_fields * sizeof(uint16_t));
   }
 
   CHECK(data_fh.bytes_written() == dex_identifiers_offset);
@@ -115,4 +129,64 @@ void QuickData::serialize(std::shared_ptr<FILE*> fd) {
   fd = nullptr;
 }
 
-QuickData::QuickData(FILE* fd) {}
+QuickData::QuickData(const char* location) { load_data(location); }
+
+void QuickData::load_data(const char* location) {
+  FILE* fd = fopen(location, "r");
+
+  std::string error_msg;
+  struct stat sbuf;
+  std::memset(&sbuf, 0, sizeof(sbuf));
+
+  if (fstat(fileno(fd), &sbuf) == -1) {
+    fprintf(stderr, "DexFile: fstat failed\n");
+    exit(1);
+  }
+  if (S_ISDIR(sbuf.st_mode)) {
+    fprintf(stderr, "Attempt to mmap directory\n");
+    exit(1);
+  }
+  size_t length = sbuf.st_size;
+
+  std::unique_ptr<MappedFile> file;
+  file.reset(MappedFile::mmap_file(
+      length, PROT_READ, MAP_PRIVATE, fileno(fd), location, &error_msg));
+  if (file.get() == nullptr) {
+    CHECK(!error_msg.empty());
+    fprintf(stderr, "Error attempting to mmap %s\n", error_msg.c_str());
+    exit(1);
+  }
+
+  const Header* header = reinterpret_cast<Header*>(file->begin());
+
+  // printf("Header: %u, %u\n", header->dexes_num,
+  // header->dex_identifiers_offset);
+
+  const uint8_t* current_dex_identifier =
+      file->begin() + header->dex_identifiers_offset;
+  const uint8_t* current_dex_info = file->begin() + size_of_header();
+
+  for (size_t dex_idx = 0; dex_idx < header->dexes_num; ++dex_idx) {
+    uint32_t identifier_size = *current_dex_identifier;
+    std::string dex_identifier(reinterpret_cast<const char*>(
+                                   current_dex_identifier + sizeof(uint32_t)),
+                               identifier_size);
+
+    const DexInfo* dex_info =
+        reinterpret_cast<const DexInfo*>(current_dex_info);
+
+    // printf("Dex: %s\n", dex_identifier.c_str());
+    const uint16_t* current_field_offsets = reinterpret_cast<const uint16_t*>(
+        file->begin() + dex_info->field_offsets_off);
+
+    for (uint32_t field_idx = 0; field_idx < dex_info->field_offsets_size;
+         ++field_idx) {
+      add_field_offset(
+          dex_identifier, field_idx, *(current_field_offsets + field_idx));
+      // printf("%u -> %u\n", field_idx, *(current_field_offsets + field_idx));
+    }
+
+    current_dex_identifier += sizeof(uint32_t) + identifier_size;
+    current_dex_info += sizeof(DexInfo);
+  }
+}
