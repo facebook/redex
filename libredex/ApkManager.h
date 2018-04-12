@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 class ApkManager {
  public:
@@ -12,14 +13,17 @@ class ApkManager {
    }
 
    virtual ~ApkManager() {
-     for (auto fd : m_files) {
-       fclose(fd);
+     for (auto& fd : m_files) {
+       if (*fd != nullptr) {
+         fclose(*fd);
+         fd = nullptr;
+       }
      }
    }
 
-   FILE* new_asset_file(const char* filename);
+   std::shared_ptr<FILE*> new_asset_file(const char* filename);
 
  private:
-   std::vector<FILE*> m_files;
+   std::vector<std::shared_ptr<FILE*>> m_files;
    std::string m_apk_dir;
 };

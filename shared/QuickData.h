@@ -9,61 +9,56 @@
 
 #pragma once
 
-#include <fstream>
-#include <iostream>
 #include <map>
-#include <sstream>
-#include <stdexcept>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
-struct QuickData {
-  std::map<std::string, std::map<uint32_t, uint32_t>> dex_to_idx_to_offset;
+/**
+ * [Header]
+ *  uint32_t number of dexes (D)
+ *  uint32_t dex_identifiers_offset
+ * [DexInfo] [0]
+ *  uint32_t size of FieldOffsets table for this dex
+ *  uint32_t start offset of FieldOffsets table for this dex
+ * ...
+ * [DexInfo] [D]
+ * [FieldOffsets] [0]
+ *  uint16_t[0]
+ *  ...
+ *  uint16_t[F_0]
+ * ...
+ * [FieldOffsets] [D]
+ *  uint16_t[0]
+ *  ...
+ *  uint16_t[F_D]
+ * [DexIdentifier] [0]
+ *  uint32_t length of location (L)
+ *  char[L] non zero terminated string with Canary class name for that dex
+ * [DexIdentifier] [D]
+ */
+class QuickData {
+ public:
+  // Read Mode
+  QuickData(FILE* fd);
 
-  void add_idx_offset(const std::string& classes,
-                      const uint32_t idx,
-                      const uint32_t offset) {
-    if (dex_to_idx_to_offset.count(classes) == 0) {
-      std::map<uint32_t, uint32_t> dex_map;
-      dex_to_idx_to_offset[classes] = std::move(dex_map);
-    }
-    dex_to_idx_to_offset[classes][idx] = offset;
-  }
+  // Write Mode
+  QuickData() {}
 
-  void serialize(FILE* fd) {
-    for (auto dex_to_map = dex_to_idx_to_offset.begin();
-         dex_to_map != dex_to_idx_to_offset.end();
-         ++dex_to_map) {
-      fprintf(fd, "%s\n", dex_to_map->first.c_str());
-      for (auto idx_to_offset = dex_to_map->second.begin();
-           idx_to_offset != dex_to_map->second.end();
-           ++idx_to_offset) {
-        fprintf(fd, "%d:%d\n", idx_to_offset->first, idx_to_offset->second);
-      }
-    }
-  }
+  void add_field_offset(const std::string& dex,
+                        const uint32_t field_idx,
+                        const uint16_t offset);
+  uint16_t get_field_offset(const std::string& dex, const uint32_t field_idx);
 
-  void deserialize(std::ifstream& istream) {
-    std::string line;
-    std::string classes;
-    while (std::getline(istream, line)) {
-      size_t found = line.find(":");
-      if (found == std::string::npos) {
-        std::map<uint32_t, uint32_t> dex_map;
-        dex_to_idx_to_offset[line] = std::move(dex_map);
-        classes = line;
-      } else {
-        uint32_t field_id;
-        std::istringstream field_id_convert(line.substr(0, found));
-        if (!(field_id_convert >> field_id)) {
-          throw std::invalid_argument("Can't convert input fid");
-        }
-        uint32_t offset;
-        std::istringstream offset_convert(line.substr(found + 1));
-        if (!(offset_convert >> offset)) {
-          throw std::invalid_argument("Can't convert input offset");
-        }
-        dex_to_idx_to_offset[classes][field_id] = offset;
-      }
-    }
-  }
+  void serialize(std::shared_ptr<FILE*> fd);
+
+ private:
+  std::map<std::string, uint32_t> dex_to_field_offset_size;
+  std::unordered_map<std::string, std::unordered_map<uint32_t, uint16_t>>
+      dex_to_field_idx_to_offset;
+
+  struct DexInfo {
+    uint32_t field_offsets_size;
+    uint32_t field_offsets_off;
+  };
 };

@@ -13,6 +13,24 @@
 #include <memory>
 #include <utility>
 
+#define CHECK(cond, ...)                                                     \
+  do {                                                                       \
+    auto cond_eval = (cond);                                                 \
+    if (!cond_eval) {                                                        \
+      fprintf(stderr, "%s:%d CHECK(%s) failed.", __FILE__, __LINE__, #cond); \
+      fprintf(stderr, " " __VA_ARGS__);                                      \
+      fprintf(stderr, "\n");                                                 \
+    }                                                                        \
+  } while (0)
+
+#define UNCOPYABLE(klass)       \
+  klass(const klass&) = delete; \
+  klass& operator=(const klass&) = delete;
+
+#define MOVABLE(klass)      \
+  klass(klass&&) = default; \
+  klass& operator=(klass&&) = default;
+
 #ifdef __GNUC__
 #define UNUSED __attribute__((unused))
 #else

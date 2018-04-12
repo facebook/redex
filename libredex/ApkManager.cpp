@@ -5,6 +5,7 @@
 #include <boost/filesystem.hpp>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 namespace {
 
@@ -18,7 +19,7 @@ void check_directory(std::string& dir) {
 
 }
 
-FILE* ApkManager::new_asset_file(const char* filename) {
+std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename) {
   check_directory(m_apk_dir);
   std::ostringstream path;
   path << m_apk_dir << "/assets/";
@@ -28,9 +29,9 @@ FILE* ApkManager::new_asset_file(const char* filename) {
 
   FILE* fd = fopen(path.str().c_str(), "w");
   if (fd != nullptr) {
-    m_files.emplace_back(fd);
+    m_files.emplace_back(std::make_shared<FILE*>(fd));
+    return m_files.back();
   } else {
-    perror("Error creating new asset file");
+    throw new std::runtime_error("Error creating new asset file");
   }
-  return fd;
 }
