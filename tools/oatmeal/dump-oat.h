@@ -111,7 +111,8 @@ class OatFile {
                       const std::string& arch,
                       bool write_elf,
                       const std::string& art_image_location,
-                      bool samsung_mode);
+                      bool samsung_mode,
+                      const std::string& quick_data_location);
 };
 
 enum class InstructionSet {

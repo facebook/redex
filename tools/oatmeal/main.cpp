@@ -55,6 +55,8 @@ struct Arguments {
 
   std::string art_image_location;
 
+  std::string quick_data_location;
+
   bool test_is_oatmeal = false;
 
   // generate samsung compatible oat file.
@@ -97,6 +99,7 @@ Arguments parse_args(int argc, char* argv[]) {
       {"test-is-oatmeal", no_argument, nullptr, 1},
       {"samsung-oatformat", no_argument, nullptr, 2},
       {"one-oat-per-dex", no_argument, nullptr, 3},
+      {"quickening-map", required_argument, nullptr, 'q'},
       {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -177,6 +180,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 3:
       ret.one_oat_per_dex = true;
+      break;
+
+    case 'q':
+      ret.quick_data_location = expand(optarg);
       break;
 
     case ':':
@@ -307,7 +314,8 @@ int build(const Arguments& args) {
                  args.arch,
                  args.write_elf,
                  args.art_image_location,
-                 args.samsung_mode);
+                 args.samsung_mode,
+                 args.quick_data_location);
 
   return 0;
 }

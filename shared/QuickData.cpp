@@ -11,10 +11,12 @@
 #include "file-utils.h"
 #include "mmap.h"
 
+#include <cstring>
+#include <sstream>
+#include <stdexcept>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <cstring>
 
 namespace {
 
@@ -139,12 +141,10 @@ void QuickData::load_data(const char* location) {
   std::memset(&sbuf, 0, sizeof(sbuf));
 
   if (fstat(fileno(fd), &sbuf) == -1) {
-    fprintf(stderr, "DexFile: fstat failed\n");
-    exit(1);
+    throw std::runtime_error("QuickData: fstat failed");
   }
   if (S_ISDIR(sbuf.st_mode)) {
-    fprintf(stderr, "Attempt to mmap directory\n");
-    exit(1);
+    throw std::runtime_error("QuickData: Attempt to mmap a directory");
   }
   size_t length = sbuf.st_size;
 
@@ -153,8 +153,9 @@ void QuickData::load_data(const char* location) {
       length, PROT_READ, MAP_PRIVATE, fileno(fd), location, &error_msg));
   if (file.get() == nullptr) {
     CHECK(!error_msg.empty());
-    fprintf(stderr, "Error attempting to mmap %s\n", error_msg.c_str());
-    exit(1);
+    std::ostringstream error_str;
+    error_str << "QuickData: Error attempting to mmap " << error_msg.c_str();
+    throw std::runtime_error(error_str.str());
   }
 
   const Header* header = reinterpret_cast<Header*>(file->begin());
