@@ -185,7 +185,8 @@ void RedexContext::mutate_field(
     }
   }
   always_assert_log(s_field_map.find(r) == s_field_map.end(),
-                    "Another field with the same signature already exists");
+                    "Another field with the same signature already exists %s",
+                    SHOW(s_field_map[r]));
   s_field_map.emplace(r, field);
 }
 

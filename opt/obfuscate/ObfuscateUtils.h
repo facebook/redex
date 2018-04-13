@@ -334,6 +334,10 @@ public:
       std::string new_name(this->next_name());
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
+      TRACE(OBFUSCATE, 3,
+            "\tTrying method name %s for %s\n",
+            wrap->get_name(),
+            SHOW(wrap->get()));
     } while (DexMethod::get_method(
         wrap->get()->get_class(),
         DexString::make_string(wrap->get_name()),
@@ -346,6 +350,37 @@ public:
           wrap->get_name(),
           this->ids_to_avoid.size());
     // Keep spinning on a name until you find one that isn't used at all
+  }
+};
+
+class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
+ public:
+  FieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
+      std::unordered_set<std::string>& used_ids) :
+    SimpleNameGenerator<DexField*>(ids_to_avoid, used_ids) { }
+
+  void find_new_name(DexFieldWrapper* wrap) override {
+    if (wrap->is_modified()) return;
+    do {
+      std::string new_name(this->next_name());
+      wrap->set_name(new_name);
+      this->used_ids.insert(new_name);
+      TRACE(OBFUSCATE, 2,
+            "\tTrying field name %s for %s\n",
+            wrap->get_name(),
+            SHOW(wrap->get()));
+    } while (DexField::get_field(
+        wrap->get()->get_class(),
+        DexString::make_string(wrap->get_name()),
+        wrap->get()->get_type()) != nullptr);
+    // Keep spinning on a name until you find one that isn't used at all
+    TRACE(OBFUSCATE,
+          2,
+          "\tIntending to rename elem %s (%s) (renamable %s) to %s\n",
+          SHOW(wrap->get()),
+          SHOW(wrap->get()->get_name()),
+          should_rename_elem(wrap->get()) ? "true" : "false",
+          wrap->get_name());
   }
 };
 

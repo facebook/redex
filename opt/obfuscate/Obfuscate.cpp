@@ -158,7 +158,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
         contains_renamable_elem(cls->get_dmethods(), method_name_manager);
     if (operate_on_ifields || operate_on_sfields) {
       FieldObfuscationState f_ob_state;
-      SimpleNameGenerator<DexField*> simple_name_generator(
+      FieldNameGenerator field_name_generator(
           f_ob_state.ids_to_avoid, f_ob_state.used_ids);
       StaticFieldNameGenerator static_name_generator(
           f_ob_state.ids_to_avoid, f_ob_state.used_ids);
@@ -173,7 +173,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
         obfuscate_elems(
             FieldRenamingContext(cls->get_ifields(),
                 f_ob_state.ids_to_avoid,
-                simple_name_generator, false),
+                field_name_generator, false),
             field_name_manager);
       }
       if (operate_on_sfields) {
@@ -192,7 +192,7 @@ void obfuscate(Scope& scope, RenameStats& stats) {
         obfuscate_elems(
             FieldRenamingContext(cls->get_ifields(),
             f_ob_state.ids_to_avoid,
-            simple_name_generator, true),
+            field_name_generator, true),
         field_name_manager);
       }
       if (operate_on_sfields) {
