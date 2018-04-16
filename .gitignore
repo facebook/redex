@@ -30,3 +30,5 @@
 /redexdump
 /stamp-h1
 /test-driver
+/.vs/
+/build-cmake/
