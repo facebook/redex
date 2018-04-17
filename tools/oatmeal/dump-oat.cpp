@@ -2702,8 +2702,17 @@ void write_dex_files(const std::vector<DexInput>& dex_input,
                dex_files,
                [&](const DexInput& input, const DexFileListingType& dex_file) {
                  CHECK(dex_file.file_offset == cksum_fh.bytes_written());
-                 auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
-                 stream_file(dex_fh, cksum_fh);
+
+                 if (quick_data != nullptr) {
+                   START_TRACE()
+                   quicken_dex(input.filename.c_str(), quick_data, cksum_fh);
+                   END_TRACE("quicken_dex")
+                 } else {
+                   START_TRACE()
+                   auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
+                   stream_file(dex_fh, cksum_fh);
+                   END_TRACE("stream_dex")
+                 }
                });
 }
 
@@ -2766,7 +2775,7 @@ std::unique_ptr<ImageInfo_064> read_image_info_064(
 
 std::unique_ptr<QuickData> read_quick_data(
     const std::string& quick_data_location) {
-  return std::unique_ptr<QuickData>(nullptr);
+  return std::make_unique<QuickData>(quick_data_location.c_str());
 }
 
 template <typename DexFileListingType,

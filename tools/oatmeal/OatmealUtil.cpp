@@ -48,3 +48,10 @@ void write_padding(FileHandle& fh, char byte, size_t num) {
     CHECK(fh.fwrite(&byte, sizeof(char), 1) == sizeof(char));
   }
 }
+
+std::string read_string(const uint8_t* dstr) {
+  // int utfsize = read_uleb128(&dstr);
+  read_uleb128(&dstr);
+  std::string rt((const char*)dstr);
+  return rt;
+}
