@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include "OatmealUtil.h"
 #include "memory-accounter.h"
+#include "OatmealUtil.h"
 
 #include <cstring>
 #include <vector>
@@ -85,9 +85,3 @@ struct PACK MethodId {
   uint16_t proto_idx; // index into proto_ids_ array for method prototype
   uint32_t name_idx; // index into string_ids_ array for method name
 };
-
-class QuickData;
-
-void quicken_dex(const char* location,
-                 const QuickData* quick_data,
-                 FileHandle& out);

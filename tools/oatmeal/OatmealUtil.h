@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include "DexEncoding.h"
-#include "DexOpcodeDefs.h"
 #include "file-utils.h"
 
 #include <cstdio>
@@ -18,33 +16,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-//#define DEBUG_LOG
-//#define PERF_LOG
-
-#ifdef PERF_LOG
-#include <chrono>
-
-#define START_TRACE() \
-  auto trace_start = std::chrono::high_resolution_clock::now();
-
-#define END_TRACE(TAG)                                        \
-  using namespace std::chrono;                                \
-  auto trace_end = std::chrono::high_resolution_clock::now(); \
-  printf("TRACE[%s]: %llu ms\n",                              \
-         TAG,                                                 \
-         duration_cast<microseconds>(trace_end - trace_start).count());
-
-#else
-#define START_TRACE() \
-  do {                \
-  } while (0);
-
-#define END_TRACE(TAG) \
-  do {                 \
-  } while (0);
-
-#endif
 
 template <typename T1, typename T2, typename L>
 static void foreach_pair(const T1& t1, const T2& t2, const L& fn) {
@@ -130,9 +101,7 @@ struct WritableBuffer {
 
   ~WritableBuffer() {
     if (current > 0) {
-      START_TRACE()
       write_buf(fh, ConstBuffer{begin, current});
-      END_TRACE("buffer write")
     }
   }
 
@@ -158,13 +127,6 @@ struct WritableBuffer {
   void operator<<(const uint16_t to_write) {
     operator<<(&to_write);
   }
-
-  void print(size_t size) {
-    size_t start = (current >= size) ? current - size : 0;
-    for (size_t i = start; i < current; ++i) {
-      printf("%02x%s", begin[i], (i == size - 1) ? "\r\n" : " ");
-    }
-  }
 };
 
 void write_padding(FileHandle& fh, char byte, size_t num);
@@ -186,9 +148,26 @@ void stream_file(FileHandle& in, FileHandle& out);
 
 size_t get_filesize(FileHandle& fh);
 
-std::string read_string(const uint8_t* dstr);
-
 inline uint32_t read_uleb128(char** _ptr) {
-  return read_uleb128(
-      reinterpret_cast<const uint8_t**>(const_cast<const char**>(_ptr)));
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(*_ptr);
+  uint32_t result = *(ptr++);
+
+  if (result > 0x7f) {
+    int cur = *(ptr++);
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur > 0x7f) {
+      cur = *(ptr++);
+      result |= (cur & 0x7f) << 14;
+      if (cur > 0x7f) {
+        cur = *(ptr++);
+        result |= (cur & 0x7f) << 21;
+        if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= cur << 28;
+        }
+      }
+    }
+  }
+  *_ptr = reinterpret_cast<char*>(ptr);
+  return result;
 }
