@@ -123,7 +123,7 @@ def run_pass(
             dir_name = dirname(dir_name)
         executable_path = join(dir_name, 'redex-all')
     if not isfile(executable_path) or not os.access(executable_path, os.X_OK):
-        sys.exit('redex-all is not found or is not executable')
+        sys.exit('redex-all is not found or is not executable: ' + executable_path)
     log('Running redex binary at ' + executable_path)
 
     args = [executable_path] + [
