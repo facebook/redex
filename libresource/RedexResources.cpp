@@ -330,6 +330,21 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
   return result;
 }
 
+std::string read_attribute_name_at_idx(
+    const android::ResXMLTree& parser,
+    size_t idx) {
+  size_t len;
+  auto name_chars = parser.getAttributeName8(idx, &len);
+  if (name_chars != nullptr) {
+    return std::string(name_chars);
+  } else {
+    auto wide_chars = parser.getAttributeName(idx, &len);
+    android::String16 s16(wide_chars, len);
+    auto converted = convert_from_string16(s16);
+    return converted;
+  }
+}
+
 void extract_classes_from_layout(
     const std::string& layout_contents,
     const std::unordered_set<std::string>& attributes_to_read,
@@ -370,12 +385,12 @@ void extract_classes_from_layout(
       if (!attributes_to_read.empty()) {
         for (size_t i = 0; i < parser.getAttributeCount(); i++) {
           auto ns_id = parser.getAttributeNamespaceID(i);
-          auto name = parser.getAttributeName8(i, &len);
+          std::string name = read_attribute_name_at_idx(parser, i);
           std::string fully_qualified;
           if (ns_id >= 0) {
-            fully_qualified = namespace_prefix_map[ns_id] + ":" + std::string(name);
+            fully_qualified = namespace_prefix_map[ns_id] + ":" + name;
           } else {
-            fully_qualified = std::string(name);
+            fully_qualified = name;
           }
           if (attributes_to_read.count(fully_qualified) != 0) {
             auto val = parser.getAttributeStringValue(i, &len);
