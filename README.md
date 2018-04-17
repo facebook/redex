@@ -71,6 +71,7 @@ Install necessary libraries with `x64-windows-static`:
 .\vcpkg install boost --triplet x64-windows-static
 .\vcpkg install zlib --triplet x64-windows-static
 .\vcpkg install jsoncpp --triplet x64-windows-static
+.\vcpkg install mman --triplet x64-windows-static
 ```
 
 ## Download, Build and Install
