@@ -577,19 +577,21 @@ void IRCode::build_cfg(bool editable) {
 }
 
 void IRCode::clear_cfg() {
-  if (m_cfg && m_cfg->editable()) {
+  if (!m_cfg) {
+    return;
+  }
+
+  if (m_cfg->editable()) {
     m_ir_list = m_cfg->linearize();
   }
 
   m_cfg.reset();
-  std::vector<IRList::iterator> fallthroughs;
-  for (auto it = m_ir_list->begin(); it != m_ir_list->end(); ++it) {
+  for (auto it = m_ir_list->begin(); it != m_ir_list->end();) {
     if (it->type == MFLOW_FALLTHROUGH) {
-      fallthroughs.emplace_back(it);
+      it = m_ir_list->erase_and_dispose(it);
+    } else {
+      ++it;
     }
-  }
-  for (auto it : fallthroughs) {
-    m_ir_list->erase_and_dispose(it);
   }
 }
 
