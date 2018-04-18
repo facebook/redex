@@ -17,19 +17,11 @@
 #include "Resolver.h"
 
 /*
- * Call graph representation that implements the standard graph interface API
- * for use with fixpoint iteration algorithms.
+ * Call graph representation that implements the standard graph interface
+ * API for use with fixpoint iteration algorithms.
  *
- * Currently, we only add edges in the graph when we know the exact callee an
- * invoke instruction refers to.  That means only invoke-static and
- * invoke-direct calls, as well as invoke-virtual calls that refer
- * unambiguously to a single method. This keeps the graph smallish and easier
- * to analyze.
  *
- * TODO: Once we have points-to information, we should expand the callgraph to
- * include invoke-virtuals that refer to sets of methods.
  */
-
 namespace call_graph {
 
 class Edge {
@@ -49,7 +41,8 @@ using Edges = std::vector<std::shared_ptr<Edge>>;
 
 class Node {
  public:
-  /* implicit */ Node(DexMethod* m) : m_method(m) {}
+  /* implicit */
+  Node(DexMethod* m) : m_method(m) {}
   DexMethod* method() const { return m_method; }
   bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
@@ -61,11 +54,24 @@ class Node {
   Edges m_successors;
 
   friend class Graph;
+  friend class CompleteGraph;
 };
 
+/*
+ * Currently, we only add edges in the graph when we know the exact callee
+ * an invoke instruction refers to.  That means only invoke-static and
+ * invoke-direct calls, as well as invoke-virtual calls that refer
+ * unambiguously to a single method. This keeps the graph smallish and
+ * easier to analyze.
+ *
+ * TODO: Once we have points-to information, we should expand the callgraph
+ * to include invoke-virtuals that refer to sets of methods.
+ */
 class Graph {
  public:
   static Graph make(const Scope&, bool include_virtuals = false);
+
+  virtual ~Graph(){};
 
   const Node& entry() const { return m_entry; }
 
@@ -85,7 +91,6 @@ class Graph {
 
  protected:
   // Factor out the logic to populate the graph and select the roots
-  // Called by the constructor
   void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
   void compute_roots(Cache&);
 
@@ -93,7 +98,6 @@ class Graph {
   bool is_definitely_virtual(const DexMethod*,
                              const std::unordered_set<const DexMethod*>&) const;
 
- private:
   Graph() {}
 
   Node& make_node(DexMethod*);
@@ -104,6 +108,23 @@ class Graph {
 
   Node m_entry = Node(nullptr);
   std::unordered_map<DexMethod*, Node> m_nodes;
+};
+
+/*
+ * We add all the edges from callers to callees, even if the callee is
+ * unresolved
+ *
+ * TODO: Once the Points-to analysis is available, use it
+ */
+class CompleteGraph : public Graph {
+ public:
+  static CompleteGraph make(const Scope&, bool include_virtuals = false);
+
+ protected:
+  explicit CompleteGraph() : Graph() {}
+
+  void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
+  void compute_roots(Cache&);
 };
 
 class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {

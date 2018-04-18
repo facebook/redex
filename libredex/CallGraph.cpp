@@ -99,4 +99,59 @@ void Graph::add_edge(DexMethod* caller,
   make_node(callee).m_predecessors.emplace_back(edge);
 }
 
+CompleteGraph CompleteGraph::make(const Scope& scope, bool include_virtuals) {
+  CompleteGraph cg;
+
+  // initialize the caches
+  Cache cache(scope, include_virtuals);
+
+  // build the Graph in two steps:
+  // 1. the edges
+  cg.populate_graph(scope, include_virtuals, cache);
+  // 2. the roots
+  cg.compute_roots(cache);
+
+  return cg;
+}
+
+// Add all the edges from callers to callee.
+// If the callee can be resolved, use it.
+// Otherwise, use the unresolved method.
+void CompleteGraph::populate_graph(const Scope& scope,
+                                   bool include_virtuals,
+                                   Cache& cache) {
+  walk::code(scope, [&](DexMethod* caller, IRCode& code) {
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        const auto callee = resolve_method(
+            insn->get_method(), opcode_to_search(insn), cache.m_resolved_refs);
+        if (callee != nullptr) {
+          add_edge(caller, callee, code.iterator_to(mie));
+        } else {
+          // add the edge to the unresolved method
+          DexMethod* callee_unresolved =
+              static_cast<DexMethod*>(insn->get_method());
+          add_edge(caller, callee_unresolved, code.iterator_to(mie));
+        }
+      }
+    }
+  });
+}
+
+void CompleteGraph::compute_roots(Cache& cache) {
+  for (auto& pair : m_nodes) {
+    auto method = pair.first;
+    // TODO: change it to use dominators and SCC instead
+    auto preds = make_node(method).m_predecessors.size();
+    if (preds == 0 || is_definitely_virtual(method, cache.m_non_virtual) ||
+        root(method)) {
+      auto edge = std::make_shared<Edge>(
+          nullptr, const_cast<DexMethod*>(method), IRList::iterator());
+      m_entry.m_successors.emplace_back(edge);
+      pair.second.m_predecessors.emplace_back(edge);
+    }
+  }
+}
+
 } // namespace call_graph
