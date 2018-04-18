@@ -281,13 +281,32 @@ enum OpcodeFormat : uint8_t {
   OP(XOR_INT_LIT8, 0xdf, f22b, "xor-int/lit8")                     \
   OP(SHL_INT_LIT8, 0xe0, f22b, "shl-int/lit8")                     \
   OP(SHR_INT_LIT8, 0xe1, f22b, "shr-int/lit8")                     \
-  OP(USHR_INT_LIT8, 0xe2, f22b, "ushr-int/lit8")
+  OP(USHR_INT_LIT8, 0xe2, f22b, "ushr-int/lit8")                   \
+
+#define QDOPS                                                       \
+  OP(IGET_QUICK, 0xe3, f22c_d, "iget-quick")                       \
+  OP(IGET_WIDE_QUICK, 0xe4, f22c_d, "iget-wide-quick")             \
+  OP(IGET_OBJECT_QUICK, 0xe5, f22c_d, "iget-object-quick")         \
+  OP(IPUT_QUICK, 0xe6, f22c_s, "iput-quick")                       \
+  OP(IPUT_WIDE_QUICK, 0xe7, f22c_s, "iput-wide-quick")             \
+  OP(IPUT_OBJECT_QUICK, 0xe8, f22c_s, "iput-object-quick")         \
+  OP(INVOKE_VIRTUAL_QUICK, 0xe9, f35c, "invoke-virtual-quick")     \
+  OP(INVOKE_VIRTUAL_RANGE_QUICK, 0xea, f3rc, "invoke-virtual/range-quick") \
+  OP(IPUT_BOOLEAN_QUICK, 0xeb, f22c_s, "iput-boolean-quick")       \
+  OP(IPUT_BYTE_QUICK, 0xec, f22c_s, "iput-byte-quick")             \
+  OP(IPUT_CHAR_QUICK, 0xed, f22c_s, "iput-char-quick")             \
+  OP(IPUT_SHORT_QUICK, 0xee, f22c_s, "iput-short-quick")           \
+  OP(IGET_BOOLEAN_QUICK, 0xef, f22c_d, "iget-boolean-quick")       \
+  OP(IGET_BYTE_QUICK, 0xf0, f22c_d, "iget-byte-quick")             \
+  OP(IGET_CHAR_QUICK, 0xf1, f22c_d, "iget-char-quick")             \
+  OP(IGET_SHORT_QUICK, 0xf2, f22c_d, "iget-short-quick")           \
 
 enum DexOpcode : uint16_t {
 #define OP(op, code, ...) DOPCODE_##op = code,
   DOPS
+  QDOPS
 #undef OP
-      FOPCODE_PACKED_SWITCH = 0x0100,
+  FOPCODE_PACKED_SWITCH = 0x0100,
   FOPCODE_SPARSE_SWITCH = 0x0200,
   FOPCODE_FILLED_ARRAY = 0x0300,
 };
@@ -527,3 +546,5 @@ enum DexOpcode : uint16_t {
   case DOPCODE_FILLED_NEW_ARRAY_RANGE:
 
 std::string print(DexOpcode opcode);
+
+DexOpcode quicken(DexOpcode opcode);

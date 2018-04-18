@@ -146,26 +146,31 @@ void make_instruction(const uint16_t** insns_ptr,
 #endif
       break;
       // return new DexInstruction(insns - 5, 4);
+  }
+
+  SWITCH_FORMAT_REGULAR_FIELD_REF {
+    uint16_t fidx = *insns++;
+
+    uint16_t quick_fopcode = fopcode;
+    uint16_t quick_arg = fidx;
+    uint16_t quick_data_off = quick_data->get_field_offset(*dex, fidx);
+    if (quick_data_off > 0) {
+      quick_fopcode = (fopcode & 0xff00) | (quicken(opcode) & 0x00ff);
+      quick_arg = quick_data_off;
+      #ifdef DEBUG_LOG
+      printf("QUICKEN: [%s] %s :: %02x->%02x :: %02x->%02x\n",
+        (*dex).c_str(),
+        print(opcode).c_str(),
+        fopcode,
+        quick_fopcode,
+        fidx,
+        quick_arg);
+      #endif
+    } else {
+      #ifdef DEBUG_LOG
+      printf("No quick mapping for: [%s]:%u\n", (*dex).c_str(), fidx);
+      #endif
     }
-
-    SWITCH_FORMAT_REGULAR_FIELD_REF {
-      uint16_t fidx = *insns++;
-
-      uint16_t quick_fopcode = fopcode;
-      uint16_t quick_arg = fidx;
-      if (quick_data->get_field_offset(*dex, fidx) > 0) {
-#ifdef DEBUG_LOG
-        printf("QUICKEN: [%s] %s %02x->%02x\n",
-               (*dex).c_str(),
-               print(opcode).c_str(),
-               fidx,
-               quick_arg);
-#endif
-      } else {
-#ifdef DEBUG_LOG
-        printf("No quick mapping for: [%s]:%u\n", (*dex).c_str(), fidx);
-#endif
-      }
 
       WRITE16_TO_BUFFER(out_buffer, quick_fopcode, file_ptr)
       WRITE16_TO_BUFFER(out_buffer, quick_arg, file_ptr)
