@@ -12,9 +12,9 @@
 #include <unordered_map>
 
 #include "DexClass.h"
+#include "FixpointIterators.h"
 #include "IRCode.h"
 #include "Resolver.h"
-#include "FixpointIterators.h"
 
 /*
  * Call graph representation that implements the standard graph interface API
@@ -49,7 +49,7 @@ using Edges = std::vector<std::shared_ptr<Edge>>;
 
 class Node {
  public:
-  /* implicit */ Node(DexMethod* m): m_method(m) {}
+  /* implicit */ Node(DexMethod* m) : m_method(m) {}
   DexMethod* method() const { return m_method; }
   bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
@@ -65,7 +65,7 @@ class Node {
 
 class Graph {
  public:
-  explicit Graph(const Scope&, bool include_virtuals = false);
+  static Graph make(const Scope&, bool include_virtuals = false);
 
   const Node& entry() const { return m_entry; }
 
@@ -76,7 +76,26 @@ class Graph {
     return m_nodes.at(const_cast<DexMethod*>(m));
   }
 
+  struct Cache {
+    Cache(const Scope&, bool /* include_virtuals */);
+
+    MethodRefCache m_resolved_refs;
+    std::unordered_set<const DexMethod*> m_non_virtual;
+  };
+
+ protected:
+  // Factor out the logic to populate the graph and select the roots
+  // Called by the constructor
+  void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
+  void compute_roots(Cache&);
+
+  // helper functions
+  bool is_definitely_virtual(const DexMethod*,
+                             const std::unordered_set<const DexMethod*>&) const;
+
  private:
+  Graph() {}
+
   Node& make_node(DexMethod*);
 
   void add_edge(DexMethod* caller,

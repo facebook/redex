@@ -17,24 +17,46 @@ namespace call_graph {
 Edge::Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it)
     : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
 
-Graph::Graph(const Scope& scope, bool include_virtuals) {
-  MethodRefCache resolved_refs;
-  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolved_refs);
-  };
+Graph::Cache::Cache(const Scope& scope, bool include_virtuals) {
   auto non_virtual_vec =
       include_virtuals ? devirtualize(scope) : std::vector<DexMethod*>();
-  auto non_virtual = std::unordered_set<const DexMethod*>(
-      non_virtual_vec.begin(), non_virtual_vec.end());
-  auto is_definitely_virtual = [&](const DexMethod* method) {
-    return method->is_virtual() && non_virtual.count(method) == 0;
-  };
+  m_non_virtual = std::unordered_set<const DexMethod*>(non_virtual_vec.begin(),
+                                                       non_virtual_vec.end());
+}
+
+Graph Graph::make(const Scope& scope, bool include_virtuals) {
+  Graph cg;
+
+  // initialize the caches
+  Cache cache(scope, include_virtuals);
+
+  // build the Graph in two steps:
+  // 1. the edges
+  cg.populate_graph(scope, include_virtuals, cache);
+  // 2. the roots
+  cg.compute_roots(cache);
+
+  return cg;
+}
+
+bool Graph::is_definitely_virtual(
+    const DexMethod* method,
+    const std::unordered_set<const DexMethod*>& non_virtual) const {
+  return method != nullptr && method->is_virtual() &&
+         non_virtual.count(method) == 0;
+}
+
+void Graph::populate_graph(const Scope& scope,
+                           bool include_virtuals,
+                           Cache& cache) {
   walk::code(scope, [&](DexMethod* caller, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
-        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-        if (callee == nullptr || is_definitely_virtual(callee)) {
+        auto callee = resolve_method(
+            insn->get_method(), opcode_to_search(insn), cache.m_resolved_refs);
+        if (callee == nullptr ||
+            is_definitely_virtual(callee, cache.m_non_virtual)) {
           continue;
         }
         if (callee->is_concrete()) {
@@ -43,13 +65,15 @@ Graph::Graph(const Scope& scope, bool include_virtuals) {
       }
     }
   });
+}
 
-  // Add edges from the single "ghost" entry node to all the "real" entry
-  // nodes in the graph. We consider a node to be a potential entry point if
-  // it is virtual or if it is marked by a Proguard keep rule.
+// Add edges from the single "ghost" entry node to all the "real" entry
+// nodes in the graph. We consider a node to be a potential entry point if
+// it is virtual or if it is marked by a Proguard keep rule.
+void Graph::compute_roots(Cache& cache) {
   for (auto& pair : m_nodes) {
     auto method = pair.first;
-    if (is_definitely_virtual(method) || root(method)) {
+    if (is_definitely_virtual(method, cache.m_non_virtual) || root(method)) {
       auto edge = std::make_shared<Edge>(
           nullptr, const_cast<DexMethod*>(method), IRList::iterator());
       m_entry.m_successors.emplace_back(edge);

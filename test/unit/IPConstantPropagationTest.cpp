@@ -269,7 +269,8 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   auto cls = creator.create();
   scope.push_back(cls);
 
-  call_graph::Graph cg(scope, /* include_virtuals */ false);
+  call_graph::Graph cg =
+      call_graph::Graph::make(scope, /* include_virtuals */ false);
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
   FixpointIterator fp_iter(cg);
   fp_iter.run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
