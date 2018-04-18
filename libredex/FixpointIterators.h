@@ -127,15 +127,19 @@ class MonotonicFixpointIterator {
                      NodeId>::value,
         "No implementation of entry()");
     static_assert(
-        std::is_same<decltype(GraphInterface::predecessors(
-                         std::declval<Graph>(), std::declval<NodeId>())),
-                     std::vector<EdgeId>>::value,
-        "No implementation of predecessors()");
+        !std::is_same<typename std::iterator_traits<typename decltype(
+                          GraphInterface::predecessors(
+                              std::declval<Graph>(),
+                              std::declval<NodeId>()))::iterator>::value_type,
+                      void>::value,
+        "No implementation of predecessors() that returns an iterable type");
     static_assert(
-        std::is_same<decltype(GraphInterface::successors(
-                         std::declval<Graph>(), std::declval<NodeId>())),
-                     std::vector<EdgeId>>::value,
-        "No implementation of successors()");
+        !std::is_same<typename std::iterator_traits<typename decltype(
+                          GraphInterface::successors(
+                              std::declval<Graph>(),
+                              std::declval<NodeId>()))::iterator>::value_type,
+                      void>::value,
+        "No implementation of successors() that returns an iterable type");
     static_assert(
         std::is_same<decltype(GraphInterface::source(std::declval<Graph>(),
                                                      std::declval<EdgeId>())),
@@ -157,8 +161,7 @@ class MonotonicFixpointIterator {
       : m_graph(graph),
         m_wto(GraphInterface::entry(graph),
               [=, &graph](const NodeId& x) {
-                std::vector<EdgeId> succ_edges =
-                    GraphInterface::successors(graph, x);
+                const auto& succ_edges = GraphInterface::successors(graph, x);
                 std::vector<NodeId> succ_nodes;
                 std::transform(succ_edges.begin(),
                                succ_edges.end(),

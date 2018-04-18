@@ -37,7 +37,7 @@ class Edge {
   IRList::iterator m_invoke_it;
 };
 
-using Edges = std::vector<std::shared_ptr<Edge>>;
+using Edges = std::set<std::shared_ptr<Edge>>;
 
 class Node {
  public:
@@ -137,10 +137,10 @@ class GraphInterface {
   static const NodeId entry(const Graph& graph) {
     return graph.entry().method();
   }
-  static std::vector<EdgeId> predecessors(const Graph& graph, const NodeId& m) {
+  static std::set<EdgeId> predecessors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callers();
   }
-  static std::vector<EdgeId> successors(const Graph& graph, const NodeId& m) {
+  static std::set<EdgeId> successors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callees();
   }
   static const NodeId source(const Graph& graph, const EdgeId& e) {

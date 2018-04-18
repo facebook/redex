@@ -76,8 +76,8 @@ void Graph::compute_roots(Cache& cache) {
     if (is_definitely_virtual(method, cache.m_non_virtual) || root(method)) {
       auto edge = std::make_shared<Edge>(
           nullptr, const_cast<DexMethod*>(method), IRList::iterator());
-      m_entry.m_successors.emplace_back(edge);
-      pair.second.m_predecessors.emplace_back(edge);
+      m_entry.m_successors.emplace(edge);
+      pair.second.m_predecessors.emplace(edge);
     }
   }
 }
@@ -95,8 +95,8 @@ void Graph::add_edge(DexMethod* caller,
                      DexMethod* callee,
                      IRList::iterator invoke_it) {
   auto edge = std::make_shared<Edge>(caller, callee, invoke_it);
-  make_node(caller).m_successors.emplace_back(edge);
-  make_node(callee).m_predecessors.emplace_back(edge);
+  make_node(caller).m_successors.emplace(edge);
+  make_node(callee).m_predecessors.emplace(edge);
 }
 
 CompleteGraph CompleteGraph::make(const Scope& scope, bool include_virtuals) {
@@ -148,8 +148,8 @@ void CompleteGraph::compute_roots(Cache& cache) {
         root(method)) {
       auto edge = std::make_shared<Edge>(
           nullptr, const_cast<DexMethod*>(method), IRList::iterator());
-      m_entry.m_successors.emplace_back(edge);
-      pair.second.m_predecessors.emplace_back(edge);
+      m_entry.m_successors.emplace(edge);
+      pair.second.m_predecessors.emplace(edge);
     }
   }
 }
