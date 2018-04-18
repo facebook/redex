@@ -45,11 +45,12 @@ class MapValue;
  *  {"v0" -> {android.app.Fragment, java.lang.Object}, "v1" -> {...}, ...}
  *
  * This type of domain is commonly used for nonrelational (also called
- * attribute-independent) analyses that do track relationships among program
- * variables. Please note that by definition of an abstract environment, if the
- * value _|_ appears in a variable binding, then no valid execution state can
- * ever be represented by this abstract environment. Hence, assigning _|_ to a
- * variable is equivalent to setting the entire environment to _|_.
+ * attribute-independent) analyses that do not track relationships among
+ * program variables. Please note that by definition of an abstract
+ * environment, if the value _|_ appears in a variable binding, then no valid
+ * execution state can ever be represented by this abstract environment. Hence,
+ * assigning _|_ to a variable is equivalent to setting the entire environment
+ * to _|_.
  *
  * This implementation of abstract environments is based on hashtables and is
  * well suited for intraprocedural analysis. It is not intended to handle very
