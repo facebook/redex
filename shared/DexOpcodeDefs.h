@@ -283,7 +283,8 @@ enum OpcodeFormat : uint8_t {
   OP(SHR_INT_LIT8, 0xe1, f22b, "shr-int/lit8")                     \
   OP(USHR_INT_LIT8, 0xe2, f22b, "ushr-int/lit8")                   \
 
-#define QDOPS                                                       \
+#define QDOPS                                                      \
+  OP(RETURN_VOID_NO_BARRIER, 0x73, f10x, "return-void-no-barrier") \
   OP(IGET_QUICK, 0xe3, f22c_d, "iget-quick")                       \
   OP(IGET_WIDE_QUICK, 0xe4, f22c_d, "iget-wide-quick")             \
   OP(IGET_OBJECT_QUICK, 0xe5, f22c_d, "iget-object-quick")         \
@@ -382,6 +383,9 @@ enum DexOpcode : uint16_t {
   case DOPCODE_DIV_DOUBLE_2ADDR:   \
   case DOPCODE_REM_DOUBLE_2ADDR:   \
   case DOPCODE_ARRAY_LENGTH:
+
+#define SWITCH_FORMAT_RETURN_VOID_NO_BARRIER  \
+case DOPCODE_RETURN_VOID_NO_BARRIER:          \
 
 #define SWITCH_FORMAT_20           \
   case DOPCODE_MOVE_FROM16:        \
@@ -518,6 +522,22 @@ enum DexOpcode : uint16_t {
   case DOPCODE_SPUT_CHAR:               \
   case DOPCODE_SPUT_SHORT:
 
+#define SWITCH_FORMAT_QUICK_FIELD_REF   \
+case DOPCODE_IGET_QUICK:                \
+case DOPCODE_IGET_WIDE_QUICK:           \
+case DOPCODE_IGET_OBJECT_QUICK:         \
+case DOPCODE_IPUT_QUICK:                \
+case DOPCODE_IPUT_WIDE_QUICK:           \
+case DOPCODE_IPUT_OBJECT_QUICK:         \
+case DOPCODE_IPUT_BOOLEAN_QUICK:        \
+case DOPCODE_IPUT_BYTE_QUICK:           \
+case DOPCODE_IPUT_CHAR_QUICK:           \
+case DOPCODE_IPUT_SHORT_QUICK:          \
+case DOPCODE_IGET_BOOLEAN_QUICK:        \
+case DOPCODE_IGET_BYTE_QUICK:           \
+case DOPCODE_IGET_CHAR_QUICK:           \
+case DOPCODE_IGET_SHORT_QUICK:          \
+
 #define SWITCH_FORMAT_REGULAR_METHOD_REF \
   case DOPCODE_INVOKE_VIRTUAL:           \
   case DOPCODE_INVOKE_SUPER:             \
@@ -530,7 +550,12 @@ enum DexOpcode : uint16_t {
   case DOPCODE_INVOKE_STATIC_RANGE:      \
   case DOPCODE_INVOKE_INTERFACE_RANGE:
 
-#define SWITCH_FORMAT_CONST_STRING case DOPCODE_CONST_STRING:
+#define SWITCH_FORMAT_QUICK_METHOD_REF   \
+case DOPCODE_INVOKE_VIRTUAL_QUICK:       \
+case DOPCODE_INVOKE_VIRTUAL_RANGE_QUICK: \
+
+#define SWITCH_FORMAT_CONST_STRING       \
+case DOPCODE_CONST_STRING:               \
 
 #define SWITCH_FORMAT_CONST_STRING_JUMBO case DOPCODE_CONST_STRING_JUMBO:
 

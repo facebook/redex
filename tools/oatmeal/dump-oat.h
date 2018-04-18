@@ -17,7 +17,6 @@
 #include <vector>
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
-constexpr uint32_t kVdexMagicNum = 0x78656476;
 
 enum class OatVersion : uint32_t {
   UNKNOWN = 0,

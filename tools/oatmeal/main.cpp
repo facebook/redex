@@ -10,6 +10,7 @@
 #include "dump-oat.h"
 #include "memory-accounter.h"
 #include "OatmealUtil.h"
+#include "vdex.h"
 
 #include <getopt.h>
 
@@ -46,6 +47,7 @@ struct Arguments {
   std::string oat_version;
 
   bool dump_classes = false;
+  bool dump_code = false;
   bool dump_tables = false;
   bool dump_memory_usage = false;
 
@@ -91,6 +93,7 @@ Arguments parse_args(int argc, char* argv[]) {
       {"oat", required_argument, nullptr, 'o'},
       {"oat-version", required_argument, nullptr, 'v'},
       {"dump-classes", no_argument, nullptr, 'c'},
+      {"dump-code", no_argument, nullptr, 'w'},
       {"dump-tables", no_argument, nullptr, 't'},
       {"dump-memory-usage", no_argument, nullptr, 'm'},
       {"print-unverified-classes", no_argument, nullptr, 'p'},
@@ -152,6 +155,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 'c':
       ret.dump_classes = true;
+      break;
+
+    case 'w':
+      ret.dump_code = true;
       break;
 
     case 't':
@@ -260,6 +267,12 @@ int dump(const Arguments& args) {
   ConstBuffer oatfile_buffer{oat_file_contents.get(), oat_file_size};
   auto ma_scope = MemoryAccounter::NewScope(oatfile_buffer);
 
+  CHECK(oatfile_buffer.len > 4);
+  if (*(reinterpret_cast<const uint32_t*>(oatfile_buffer.ptr)) == kVdexMagicNum) {
+    auto vdexfile = VdexFile::parse(oatfile_buffer);
+    vdexfile->print();
+    return 0;
+  }
   auto oatfile =
       OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
 

@@ -22,6 +22,8 @@
 //#define DEBUG_LOG
 //#define PERF_LOG
 
+#define PACK __attribute__((packed))
+
 #ifdef PERF_LOG
 #include <chrono>
 
@@ -183,6 +185,8 @@ void write_vec(FileHandle& fh, const std::vector<T>& obj) {
 
 void write_str_and_null(FileHandle& fh, const std::string& str);
 void stream_file(FileHandle& in, FileHandle& out);
+
+bool is_vdex_file(ConstBuffer buf);
 
 size_t get_filesize(FileHandle& fh);
 

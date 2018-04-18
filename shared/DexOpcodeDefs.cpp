@@ -32,6 +32,8 @@ std::string print(DexOpcode opcode) {
 
 DexOpcode quicken(DexOpcode opcode) {
   switch (opcode) {
+  case DOPCODE_RETURN_VOID:
+    return DOPCODE_RETURN_VOID_NO_BARRIER;
   case DOPCODE_IGET:
     return DOPCODE_IGET_QUICK;
   case DOPCODE_IGET_WIDE:

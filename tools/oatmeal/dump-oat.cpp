@@ -17,6 +17,7 @@
 #include "dex.h"
 #include "elf-writer.h"
 #include "memory-accounter.h"
+#include "vdex.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -170,14 +171,16 @@ struct PACK OatHeader_Common {
   }
 
   void print() {
-    char magic_str[5] = {};
-    char version_str[5] = {};
-    memcpy(magic_str, &magic, 3); // magic has a newline character at idx 4.
-    memcpy(version_str, &version, 4);
-
-    printf("  magic:   0x%08x '%s'\n", magic, magic_str);
-    printf("  version: 0x%08x '%s'\n", version, version_str);
-    printf("  checksum: 0x%08x\n", adler32_checksum);
+    //char magic_str[5] = {};
+    //char version_str[5] = {};
+    //memcpy(magic_str, &magic, 3); // magic has a newline character at idx 4.
+    //memcpy(version_str, &version, 4);
+    printf("OatHeader_Common: {magic: 0x%08x, \
+      version: 0x%08x, \
+      checksum: 0x%08x}\n",
+      magic,
+      version,
+      adler32_checksum);
   }
 };
 
@@ -308,43 +311,47 @@ struct PACK OatHeader {
   }
 
   void print() {
-    common.print();
-    printf(
-        "  isa: %s\n"
-        "  isa features bitmap: 0x%08x\n"
-        "  dex_file_count: 0x%08x\n"
-        "  executable_offset: 0x%08x\n"
-        "  interpreter_to_interpreter_bridge_offset: 0x%08x\n"
-        "  interpreter_to_compiled_code_bridge_offset: 0x%08x\n"
-        "  jni_dlsym_lookup_offset: 0x%08x\n",
-        instruction_set_str(instruction_set),
-        instruction_set_features_bitmap,
-        dex_file_count,
-        executable_offset,
-        interpreter_to_interpreter_bridge_offset,
-        interpreter_to_compiled_code_bridge_offset,
-        jni_dlsym_lookup_offset);
+    printf("OatHeader: {magic: 0x%08x, \
+      version: 0x%08x, \
+      checksum: 0x%08x, \
+      isa: %s, \
+      isa_features_bitmap: 0x%08x, \
+      dex_file_count: 0x%08x, \
+      executable_offset: 0x%08x, \
+      interpreter_to_interpreter_bridge_offset: 0x%08x, \
+      interpreter_to_compiled_code_bridge_offset: 0x%08x, \
+      jni_dlsym_lookup_offset: 0x%08x",
+      common.magic,
+      common.version,
+      common.adler32_checksum,
+      instruction_set_str(instruction_set),
+      instruction_set_features_bitmap,
+      dex_file_count,
+      executable_offset,
+      interpreter_to_interpreter_bridge_offset,
+      interpreter_to_compiled_code_bridge_offset,
+      jni_dlsym_lookup_offset);
 
     if (common.version == static_cast<uint32_t>(OatVersion::V_045) ||
         common.version == static_cast<uint32_t>(OatVersion::V_039)) {
       printf(
-          "  portable_imt_conflict_trampoline_offset: 0x%08x\n"
-          "  portable_resolution_trampoline_offset: 0x%08x\n"
-          "  portable_to_interpreter_bridge_offset: 0x%08x\n",
+          "portable_imt_conflict_trampoline_offset: 0x%08x, \
+          portable_resolution_trampoline_offset: 0x%08x, \
+          portable_to_interpreter_bridge_offset: 0x%08x",
           portable_imt_conflict_trampoline_offset,
           portable_resolution_trampoline_offset,
           portable_to_interpreter_bridge_offset);
     }
 
     printf(
-        "  quick_generic_jni_trampoline_offset: 0x%08x\n"
-        "  quick_imt_conflict_trampoline_offset: 0x%08x\n"
-        "  quick_resolution_trampoline_offset: 0x%08x\n"
-        "  quick_to_interpreter_bridge_offset: 0x%08x\n"
-        "  image_patch_delta: 0x%08x\n"
-        "  image_file_location_oat_checksum: 0x%08x\n"
-        "  image_file_location_oat_data_begin: 0x%08x\n"
-        "  key_value_store_size: 0x%08x\n",
+        "quick_generic_jni_trampoline_offset: 0x%08x, \
+        quick_imt_conflict_trampoline_offset: 0x%08x, \
+        quick_resolution_trampoline_offset: 0x%08x, \
+        quick_to_interpreter_bridge_offset: 0x%08x, \
+        image_patch_delta: 0x%08x, \
+        image_file_location_oat_checksum: 0x%08x, \
+        image_file_location_oat_data_begin: 0x%08x, \
+        key_value_store_size: 0x%08x}\n",
         quick_generic_jni_trampoline_offset,
         quick_imt_conflict_trampoline_offset,
         quick_resolution_trampoline_offset,
@@ -392,7 +399,7 @@ class KeyValueStore {
 
   void print() const {
     for (const auto& e : kv_pairs_) {
-      printf("  %s: %s\n", e.first.c_str(), e.second.c_str());
+      printf("KeyValueStore: {%s: %s}\n", e.first.c_str(), e.second.c_str());
     }
   }
 
@@ -738,14 +745,20 @@ class DexFileListing_079 : public DexFileListing {
   }
 
   void print() {
+    size_t i = 0;
     for (const auto& e : dex_files_) {
-      printf("  {\n");
-      printf("    location: %s\n", e.location.c_str());
-      printf("    location_checksum: 0x%08x\n", e.location_checksum);
-      printf("    file_offset: 0x%08x\n", e.file_offset);
-      printf("    classes_offset: 0x%08x\n", e.classes_offset);
-      printf("    lookup_table_offset: 0x%08x\n", e.lookup_table_offset);
-      printf("  }\n");
+      printf("OatDexFile[%zu]: {location: %s, \
+        location_checksum: 0x%08x, \
+        file_offset: 0x%08x, \
+        classes_offset: 0x%08x, \
+        lookup_table_offset: 0x%08x}\n",
+        i,
+        e.location.c_str(),
+        e.location_checksum,
+        e.file_offset,
+        e.classes_offset,
+        e.lookup_table_offset);
+      i++;
     }
   }
 
@@ -1144,17 +1157,29 @@ class DexFiles {
   // in DexFileListing are relative to the beginning of the OAT file.
   DexFiles(const DexFileListing& dex_file_listing, ConstBuffer buf) {
     for (const auto& file_offset : dex_file_listing.dex_file_offsets()) {
-      auto dex_file_buf = buf.slice(file_offset);
-      headers_.push_back(DexFileHeader::parse(dex_file_buf));
+      auto dex_header_buf = buf.slice(file_offset);
+      auto dh = DexFileHeader::parse(dex_header_buf);
+      headers_.push_back(std::move(dh));
+
+      auto dex_buf = buf.slice(file_offset, file_offset + dh.file_size);
+      dexes_.push_back(dex_buf);
     }
   }
 
   void print() {
     for (const auto& e : headers_) {
-      printf("  { DexFile\n");
-      printf("    file_size: 0x%08x\n", e.file_size);
-      printf("    num_classes: 0x%08x\n", e.class_defs_size);
-      printf("  }\n");
+      printf("DexFile: { \
+      file_size: 0x%08x(%u), \
+      num_classes: 0x%08x(%u)}\n",
+      e.file_size,
+      e.file_size,
+      e.class_defs_size,
+      e.class_defs_size);
+    }
+    size_t index = 0;
+    for (const auto& e : dexes_) {
+      print_dex_opcodes(reinterpret_cast<const uint8_t*>(e.ptr), headers_[index].file_size);
+      index++;
     }
   }
 
@@ -1162,6 +1187,7 @@ class DexFiles {
 
  private:
   std::vector<DexFileHeader> headers_;
+  std::vector<ConstBuffer> dexes_;
 };
 
 class OatClasses_079 : public OatClasses {
@@ -1609,19 +1635,21 @@ class LookupTables {
 
   void print() {
     for (const auto& e : tables_) {
-      printf("  { Type lookup table %s\n", e.dex_file.c_str());
-      printf("    num_entries: %u\n", e.num_entries);
+      printf("Type_lookup_table[%s]: { \
+        num_entries: %u, \
+        entries: [",
+        e.dex_file.c_str(),
+        e.num_entries);
       for (unsigned int i = 0; i < e.num_entries; i++) {
         const auto& entry = e.entries[i];
         if (entry.str_offset != 0) {
-          printf("    {\n");
-          printf("    str: %s\n",
-                 oat_buf_.slice(e.dex_file_offset + entry.str_offset).ptr);
-          printf("    str offset: 0x%08x\n", entry.str_offset);
-          printf("    }\n");
+          printf("{str: %s, \
+            str offset: 0x%08x}",
+            oat_buf_.slice(e.dex_file_offset + entry.str_offset).ptr,
+            entry.str_offset);
         }
       }
-      printf("  }\n");
+      printf("]}\n");
     }
   }
 
@@ -1952,12 +1980,11 @@ class OatFile_079 : public OatFile {
   static std::unique_ptr<OatFile> parse(bool dex_files_only,
                                         ConstBuffer buf,
                                         size_t oat_offset) {
-
     auto header = OatHeader::parse(buf);
     auto key_value_store = KeyValueStore(
         buf.slice(header.size()).truncate(header.key_value_store_size));
-
     auto rest = buf.slice(header.size() + header.key_value_store_size);
+
     DexFileListing_079 dfl(header.dex_file_count, rest);
 
     DexFiles dex_files(dfl, buf);
@@ -2693,6 +2720,22 @@ void OatDexFileRecord::write(FileHandle& oat_fh,
   write_word(oat_fh, record.dex_file_offset);
 }
 
+void write_dex_file(const DexInput& input,
+                    const QuickData* quick_data,
+                    FileHandle& cksum_fh) {
+  if (quick_data != nullptr) {
+    START_TRACE()
+    quicken_dex(input.filename.c_str(), quick_data, cksum_fh);
+    END_TRACE("quicken_dex")
+  } else {
+    START_TRACE()
+    auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
+    stream_file(dex_fh, cksum_fh);
+    END_TRACE("stream_dex")
+  }
+}
+
+
 template <typename DexFileListingType>
 void write_dex_files(const std::vector<DexInput>& dex_input,
                      const std::vector<DexFileListingType>& dex_files,
@@ -2702,17 +2745,7 @@ void write_dex_files(const std::vector<DexInput>& dex_input,
                dex_files,
                [&](const DexInput& input, const DexFileListingType& dex_file) {
                  CHECK(dex_file.file_offset == cksum_fh.bytes_written());
-
-                 if (quick_data != nullptr) {
-                   START_TRACE()
-                   quicken_dex(input.filename.c_str(), quick_data, cksum_fh);
-                   END_TRACE("quicken_dex")
-                 } else {
-                   START_TRACE()
-                   auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
-                   stream_file(dex_fh, cksum_fh);
-                   END_TRACE("stream_dex")
-                 }
+                 write_dex_file(input, quick_data, cksum_fh);
                });
 }
 
@@ -3032,8 +3065,7 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
 
   write_vdex_header(
       vdex_fh, vdexVersion(oat_version), 1, dex_file_size, 0, 0, dex_checksum);
-
-  stream_file(dex_fh, vdex_fh);
+  write_dex_file(dex_input, quick_data, vdex_fh);
 
   OatClasses_124::write(dex_files, oat_fh);
 
