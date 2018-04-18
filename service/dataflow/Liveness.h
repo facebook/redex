@@ -13,9 +13,6 @@
 #include "FixpointIterators.h"
 #include "SparseSetAbstractDomain.h"
 
-namespace regalloc {
-
-using namespace std::placeholders;
 using LivenessDomain = SparseSetAbstractDomain;
 
 class LivenessFixpointIterator final
@@ -61,5 +58,3 @@ class LivenessFixpointIterator final
     return get_entry_state_at(block);
   }
 };
-
-} // namespace regalloc
