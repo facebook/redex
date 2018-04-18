@@ -47,6 +47,9 @@
 #define TYPE_ENCODED_ARRAY_ITEM      (0x2005)
 #define TYPE_ANNOTATIONS_DIR_ITEM    (0x2006)
 
+#define type_id_item uint32_t
+#define string_id_item uint32_t
+
 /*
  * This header exists at the beginning of a non-optimized dex.  The checking
  * we do on this has to do with making sure we're working on a non-opt

@@ -292,4 +292,238 @@ enum DexOpcode : uint16_t {
   FOPCODE_FILLED_ARRAY = 0x0300,
 };
 
+#define SWITCH_FORMAT_10           \
+  case DOPCODE_MOVE:               \
+  case DOPCODE_MOVE_WIDE:          \
+  case DOPCODE_MOVE_OBJECT:        \
+  case DOPCODE_MOVE_RESULT:        \
+  case DOPCODE_MOVE_RESULT_WIDE:   \
+  case DOPCODE_MOVE_RESULT_OBJECT: \
+  case DOPCODE_MOVE_EXCEPTION:     \
+  case DOPCODE_RETURN_VOID:        \
+  case DOPCODE_RETURN:             \
+  case DOPCODE_RETURN_WIDE:        \
+  case DOPCODE_RETURN_OBJECT:      \
+  case DOPCODE_CONST_4:            \
+  case DOPCODE_MONITOR_ENTER:      \
+  case DOPCODE_MONITOR_EXIT:       \
+  case DOPCODE_THROW:              \
+  case DOPCODE_GOTO:               \
+  case DOPCODE_NEG_INT:            \
+  case DOPCODE_NOT_INT:            \
+  case DOPCODE_NEG_LONG:           \
+  case DOPCODE_NOT_LONG:           \
+  case DOPCODE_NEG_FLOAT:          \
+  case DOPCODE_NEG_DOUBLE:         \
+  case DOPCODE_INT_TO_LONG:        \
+  case DOPCODE_INT_TO_FLOAT:       \
+  case DOPCODE_INT_TO_DOUBLE:      \
+  case DOPCODE_LONG_TO_INT:        \
+  case DOPCODE_LONG_TO_FLOAT:      \
+  case DOPCODE_LONG_TO_DOUBLE:     \
+  case DOPCODE_FLOAT_TO_INT:       \
+  case DOPCODE_FLOAT_TO_LONG:      \
+  case DOPCODE_FLOAT_TO_DOUBLE:    \
+  case DOPCODE_DOUBLE_TO_INT:      \
+  case DOPCODE_DOUBLE_TO_LONG:     \
+  case DOPCODE_DOUBLE_TO_FLOAT:    \
+  case DOPCODE_INT_TO_BYTE:        \
+  case DOPCODE_INT_TO_CHAR:        \
+  case DOPCODE_INT_TO_SHORT:       \
+  case DOPCODE_ADD_INT_2ADDR:      \
+  case DOPCODE_SUB_INT_2ADDR:      \
+  case DOPCODE_MUL_INT_2ADDR:      \
+  case DOPCODE_DIV_INT_2ADDR:      \
+  case DOPCODE_REM_INT_2ADDR:      \
+  case DOPCODE_AND_INT_2ADDR:      \
+  case DOPCODE_OR_INT_2ADDR:       \
+  case DOPCODE_XOR_INT_2ADDR:      \
+  case DOPCODE_SHL_INT_2ADDR:      \
+  case DOPCODE_SHR_INT_2ADDR:      \
+  case DOPCODE_USHR_INT_2ADDR:     \
+  case DOPCODE_ADD_LONG_2ADDR:     \
+  case DOPCODE_SUB_LONG_2ADDR:     \
+  case DOPCODE_MUL_LONG_2ADDR:     \
+  case DOPCODE_DIV_LONG_2ADDR:     \
+  case DOPCODE_REM_LONG_2ADDR:     \
+  case DOPCODE_AND_LONG_2ADDR:     \
+  case DOPCODE_OR_LONG_2ADDR:      \
+  case DOPCODE_XOR_LONG_2ADDR:     \
+  case DOPCODE_SHL_LONG_2ADDR:     \
+  case DOPCODE_SHR_LONG_2ADDR:     \
+  case DOPCODE_USHR_LONG_2ADDR:    \
+  case DOPCODE_ADD_FLOAT_2ADDR:    \
+  case DOPCODE_SUB_FLOAT_2ADDR:    \
+  case DOPCODE_MUL_FLOAT_2ADDR:    \
+  case DOPCODE_DIV_FLOAT_2ADDR:    \
+  case DOPCODE_REM_FLOAT_2ADDR:    \
+  case DOPCODE_ADD_DOUBLE_2ADDR:   \
+  case DOPCODE_SUB_DOUBLE_2ADDR:   \
+  case DOPCODE_MUL_DOUBLE_2ADDR:   \
+  case DOPCODE_DIV_DOUBLE_2ADDR:   \
+  case DOPCODE_REM_DOUBLE_2ADDR:   \
+  case DOPCODE_ARRAY_LENGTH:
+
+#define SWITCH_FORMAT_20           \
+  case DOPCODE_MOVE_FROM16:        \
+  case DOPCODE_MOVE_WIDE_FROM16:   \
+  case DOPCODE_MOVE_OBJECT_FROM16: \
+  case DOPCODE_CONST_16:           \
+  case DOPCODE_CONST_HIGH16:       \
+  case DOPCODE_CONST_WIDE_16:      \
+  case DOPCODE_CONST_WIDE_HIGH16:  \
+  case DOPCODE_GOTO_16:            \
+  case DOPCODE_CMPL_FLOAT:         \
+  case DOPCODE_CMPG_FLOAT:         \
+  case DOPCODE_CMPL_DOUBLE:        \
+  case DOPCODE_CMPG_DOUBLE:        \
+  case DOPCODE_CMP_LONG:           \
+  case DOPCODE_IF_EQ:              \
+  case DOPCODE_IF_NE:              \
+  case DOPCODE_IF_LT:              \
+  case DOPCODE_IF_GE:              \
+  case DOPCODE_IF_GT:              \
+  case DOPCODE_IF_LE:              \
+  case DOPCODE_IF_EQZ:             \
+  case DOPCODE_IF_NEZ:             \
+  case DOPCODE_IF_LTZ:             \
+  case DOPCODE_IF_GEZ:             \
+  case DOPCODE_IF_GTZ:             \
+  case DOPCODE_IF_LEZ:             \
+  case DOPCODE_AGET:               \
+  case DOPCODE_AGET_WIDE:          \
+  case DOPCODE_AGET_OBJECT:        \
+  case DOPCODE_AGET_BOOLEAN:       \
+  case DOPCODE_AGET_BYTE:          \
+  case DOPCODE_AGET_CHAR:          \
+  case DOPCODE_AGET_SHORT:         \
+  case DOPCODE_APUT:               \
+  case DOPCODE_APUT_WIDE:          \
+  case DOPCODE_APUT_OBJECT:        \
+  case DOPCODE_APUT_BOOLEAN:       \
+  case DOPCODE_APUT_BYTE:          \
+  case DOPCODE_APUT_CHAR:          \
+  case DOPCODE_APUT_SHORT:         \
+  case DOPCODE_ADD_INT:            \
+  case DOPCODE_SUB_INT:            \
+  case DOPCODE_MUL_INT:            \
+  case DOPCODE_DIV_INT:            \
+  case DOPCODE_REM_INT:            \
+  case DOPCODE_AND_INT:            \
+  case DOPCODE_OR_INT:             \
+  case DOPCODE_XOR_INT:            \
+  case DOPCODE_SHL_INT:            \
+  case DOPCODE_SHR_INT:            \
+  case DOPCODE_USHR_INT:           \
+  case DOPCODE_ADD_LONG:           \
+  case DOPCODE_SUB_LONG:           \
+  case DOPCODE_MUL_LONG:           \
+  case DOPCODE_DIV_LONG:           \
+  case DOPCODE_REM_LONG:           \
+  case DOPCODE_AND_LONG:           \
+  case DOPCODE_OR_LONG:            \
+  case DOPCODE_XOR_LONG:           \
+  case DOPCODE_SHL_LONG:           \
+  case DOPCODE_SHR_LONG:           \
+  case DOPCODE_USHR_LONG:          \
+  case DOPCODE_ADD_FLOAT:          \
+  case DOPCODE_SUB_FLOAT:          \
+  case DOPCODE_MUL_FLOAT:          \
+  case DOPCODE_DIV_FLOAT:          \
+  case DOPCODE_REM_FLOAT:          \
+  case DOPCODE_ADD_DOUBLE:         \
+  case DOPCODE_SUB_DOUBLE:         \
+  case DOPCODE_MUL_DOUBLE:         \
+  case DOPCODE_DIV_DOUBLE:         \
+  case DOPCODE_REM_DOUBLE:         \
+  case DOPCODE_ADD_INT_LIT16:      \
+  case DOPCODE_RSUB_INT:           \
+  case DOPCODE_MUL_INT_LIT16:      \
+  case DOPCODE_DIV_INT_LIT16:      \
+  case DOPCODE_REM_INT_LIT16:      \
+  case DOPCODE_AND_INT_LIT16:      \
+  case DOPCODE_OR_INT_LIT16:       \
+  case DOPCODE_XOR_INT_LIT16:      \
+  case DOPCODE_ADD_INT_LIT8:       \
+  case DOPCODE_RSUB_INT_LIT8:      \
+  case DOPCODE_MUL_INT_LIT8:       \
+  case DOPCODE_DIV_INT_LIT8:       \
+  case DOPCODE_REM_INT_LIT8:       \
+  case DOPCODE_AND_INT_LIT8:       \
+  case DOPCODE_OR_INT_LIT8:        \
+  case DOPCODE_XOR_INT_LIT8:       \
+  case DOPCODE_SHL_INT_LIT8:       \
+  case DOPCODE_SHR_INT_LIT8:       \
+  case DOPCODE_USHR_INT_LIT8:
+
+#define SWITCH_FORMAT_30        \
+  case DOPCODE_MOVE_16:         \
+  case DOPCODE_MOVE_WIDE_16:    \
+  case DOPCODE_MOVE_OBJECT_16:  \
+  case DOPCODE_CONST:           \
+  case DOPCODE_CONST_WIDE_32:   \
+  case DOPCODE_FILL_ARRAY_DATA: \
+  case DOPCODE_GOTO_32:         \
+  case DOPCODE_PACKED_SWITCH:   \
+  case DOPCODE_SPARSE_SWITCH:
+
+#define SWITCH_FORMAT_50 case DOPCODE_CONST_WIDE:
+
+#define SWITCH_FORMAT_REGULAR_FIELD_REF \
+  case DOPCODE_IGET:                    \
+  case DOPCODE_IGET_WIDE:               \
+  case DOPCODE_IGET_OBJECT:             \
+  case DOPCODE_IGET_BOOLEAN:            \
+  case DOPCODE_IGET_BYTE:               \
+  case DOPCODE_IGET_CHAR:               \
+  case DOPCODE_IGET_SHORT:              \
+  case DOPCODE_IPUT:                    \
+  case DOPCODE_IPUT_WIDE:               \
+  case DOPCODE_IPUT_OBJECT:             \
+  case DOPCODE_IPUT_BOOLEAN:            \
+  case DOPCODE_IPUT_BYTE:               \
+  case DOPCODE_IPUT_CHAR:               \
+  case DOPCODE_IPUT_SHORT:              \
+  case DOPCODE_SGET:                    \
+  case DOPCODE_SGET_WIDE:               \
+  case DOPCODE_SGET_OBJECT:             \
+  case DOPCODE_SGET_BOOLEAN:            \
+  case DOPCODE_SGET_BYTE:               \
+  case DOPCODE_SGET_CHAR:               \
+  case DOPCODE_SGET_SHORT:              \
+  case DOPCODE_SPUT:                    \
+  case DOPCODE_SPUT_WIDE:               \
+  case DOPCODE_SPUT_OBJECT:             \
+  case DOPCODE_SPUT_BOOLEAN:            \
+  case DOPCODE_SPUT_BYTE:               \
+  case DOPCODE_SPUT_CHAR:               \
+  case DOPCODE_SPUT_SHORT:
+
+#define SWITCH_FORMAT_REGULAR_METHOD_REF \
+  case DOPCODE_INVOKE_VIRTUAL:           \
+  case DOPCODE_INVOKE_SUPER:             \
+  case DOPCODE_INVOKE_DIRECT:            \
+  case DOPCODE_INVOKE_STATIC:            \
+  case DOPCODE_INVOKE_INTERFACE:         \
+  case DOPCODE_INVOKE_VIRTUAL_RANGE:     \
+  case DOPCODE_INVOKE_SUPER_RANGE:       \
+  case DOPCODE_INVOKE_DIRECT_RANGE:      \
+  case DOPCODE_INVOKE_STATIC_RANGE:      \
+  case DOPCODE_INVOKE_INTERFACE_RANGE:
+
+#define SWITCH_FORMAT_CONST_STRING case DOPCODE_CONST_STRING:
+
+#define SWITCH_FORMAT_CONST_STRING_JUMBO case DOPCODE_CONST_STRING_JUMBO:
+
+#define SWITCH_FORMAT_TYPE_REF \
+  case DOPCODE_CONST_CLASS:    \
+  case DOPCODE_CHECK_CAST:     \
+  case DOPCODE_INSTANCE_OF:    \
+  case DOPCODE_NEW_INSTANCE:   \
+  case DOPCODE_NEW_ARRAY:
+
+#define SWITCH_FORMAT_FILL_ARRAY \
+  case DOPCODE_FILLED_NEW_ARRAY: \
+  case DOPCODE_FILLED_NEW_ARRAY_RANGE:
+
 std::string print(DexOpcode opcode);

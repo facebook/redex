@@ -18,14 +18,14 @@
 #include "elf-writer.h"
 #include "memory-accounter.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-
-#include <algorithm>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #define PACK __attribute__((packed))
@@ -1921,7 +1921,7 @@ class OatFile_064 : public OatFile {
                       bool write_elf,
                       const std::string& art_image_location,
                       bool samsung_mode,
-                      const std::string& quick_data_location);
+                      const QuickData* quick_data);
 
  private:
   OatFile_064(OatHeader h,
@@ -2017,7 +2017,7 @@ class OatFile_079 : public OatFile {
                       bool write_elf,
                       const std::string& art_image_location,
                       bool samsung_mode,
-                      const std::string& quick_data_location);
+                      const QuickData* quick_data);
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     std::vector<OatDexFile> ret;
@@ -2199,7 +2199,7 @@ class OatFile_124 : public OatFile {
                       bool write_elf,
                       const std::string& art_image_location,
                       bool samsung_mode,
-                      const std::string& quick_data_location);
+                      const QuickData* quick_data);
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     std::vector<OatDexFile> ret;
@@ -2702,8 +2702,17 @@ void write_dex_files(const std::vector<DexInput>& dex_input,
                dex_files,
                [&](const DexInput& input, const DexFileListingType& dex_file) {
                  CHECK(dex_file.file_offset == cksum_fh.bytes_written());
-                 auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
-                 stream_file(dex_fh, cksum_fh);
+
+                 if (quick_data != nullptr) {
+                   START_TRACE()
+                   quicken_dex(input.filename.c_str(), quick_data, cksum_fh);
+                   END_TRACE("quicken_dex")
+                 } else {
+                   START_TRACE()
+                   auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
+                   stream_file(dex_fh, cksum_fh);
+                   END_TRACE("stream_dex")
+                 }
                });
 }
 
@@ -2766,7 +2775,14 @@ std::unique_ptr<ImageInfo_064> read_image_info_064(
 
 std::unique_ptr<QuickData> read_quick_data(
     const std::string& quick_data_location) {
-  return std::unique_ptr<QuickData>(nullptr);
+  struct stat buffer;
+  if (stat(quick_data_location.c_str(), &buffer) != 0) {
+    fprintf(stderr,
+            "Failed to locate quickening metadata file: %s\n",
+            quick_data_location.c_str());
+    return std::unique_ptr<QuickData>(nullptr);
+  }
+  return std::make_unique<QuickData>(quick_data_location.c_str());
 }
 
 template <typename DexFileListingType,
@@ -2780,7 +2796,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
                               bool write_elf,
                               const std::string& art_image_location,
                               bool samsung_mode,
-                              const std::string& quick_data_location) {
+                              const QuickData* quick_data) {
 
   const std::vector<KeyValueStore::KeyValue> key_value = {
       {"classpath", ""},
@@ -2852,9 +2868,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     SamsungLookupTablesType::write(dex_input, dex_files, oat_fh);
   }
 
-  std::unique_ptr<QuickData> quick_metadata =
-      read_quick_data(quick_data_location);
-  write_dex_files(dex_input, dex_files, quick_metadata.get(), oat_fh);
+  write_dex_files(dex_input, dex_files, quick_data, oat_fh);
   OatClassesType::write(dex_files, oat_fh);
 
   LookupTablesType::write(dex_input, dex_files, oat_fh);
@@ -2911,7 +2925,7 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
                                       bool write_elf,
                                       const std::string& art_image_location,
                                       bool samsung_mode,
-                                      const std::string& quick_data_location) {
+                                      const QuickData* quick_data) {
   const std::vector<KeyValueStore::KeyValue> key_value = {
       {"classpath", ""},
       {"compiler-filter", "assume-verified"},
@@ -3071,7 +3085,7 @@ OatFile::Status build_oatfile<DexFileListing_124,
     bool write_elf,
     const std::string& art_image_location,
     bool samsung_mode,
-    const std::string& quick_data_location) {
+    const QuickData* quick_data) {
   // Make sure the output is a directory where we will place ODEX and VDEX files
   CHECK(oat_file_name[oat_file_name.size() - 1] == '/');
   OatFile::Status result = OatFile::Status::BUILD_SUCCESS;
@@ -3093,7 +3107,7 @@ OatFile::Status build_oatfile<DexFileListing_124,
                                                 write_elf,
                                                 art_image_location,
                                                 samsung_mode,
-                                                quick_data_location);
+                                                quick_data);
 
     if (partial_result != OatFile::Status::BUILD_SUCCESS) {
       fprintf(stderr,
@@ -3114,7 +3128,7 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                    bool write_elf,
                                    const std::string& art_image_location,
                                    bool samsung_mode,
-                                   const std::string& quick_data_location) {
+                                   const QuickData* quick_data) {
   return build_oatfile<DexFileListing_064,
                        OatClasses_064,
                        LookupTables_Nil,
@@ -3125,7 +3139,7 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                             write_elf,
                                             art_image_location,
                                             samsung_mode,
-                                            quick_data_location);
+                                            quick_data);
 }
 
 OatFile::Status OatFile_079::build(const std::string& oat_file_name,
@@ -3135,7 +3149,7 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                    bool write_elf,
                                    const std::string& art_image_location,
                                    bool samsung_mode,
-                                   const std::string& quick_data_location) {
+                                   const QuickData* quick_data) {
   return build_oatfile<DexFileListing_079,
                        OatClasses_079,
                        LookupTables,
@@ -3146,7 +3160,7 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                                write_elf,
                                                art_image_location,
                                                samsung_mode,
-                                               quick_data_location);
+                                               quick_data);
 }
 
 OatFile::Status OatFile_124::build(const std::string& oat_file_name,
@@ -3156,7 +3170,7 @@ OatFile::Status OatFile_124::build(const std::string& oat_file_name,
                                    bool write_elf,
                                    const std::string& art_image_location,
                                    bool samsung_mode,
-                                   const std::string& quick_data_location) {
+                                   const QuickData* quick_data) {
   return build_oatfile<DexFileListing_124,
                        OatClasses_124,
                        LookupTables,
@@ -3167,7 +3181,7 @@ OatFile::Status OatFile_124::build(const std::string& oat_file_name,
                                                write_elf,
                                                art_image_location,
                                                samsung_mode,
-                                               quick_data_location);
+                                               quick_data);
 }
 
 OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
@@ -3178,7 +3192,8 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                const std::string& art_image_location,
                                bool samsung_mode,
                                const std::string& quick_data_location) {
-
+  std::unique_ptr<QuickData> quick_metadata =
+      read_quick_data(quick_data_location);
   auto build_fn = [&](const std::string& oat_file_name,
                       const std::vector<DexInput>& dexes) {
     auto version = versionInt(oat_version);
@@ -3193,7 +3208,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 write_elf,
                                 art_image_location,
                                 samsung_mode,
-                                quick_data_location);
+                                quick_metadata.get());
 
     case OatVersion::V_039:
     case OatVersion::V_045:
@@ -3206,7 +3221,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 write_elf,
                                 art_image_location,
                                 samsung_mode,
-                                quick_data_location);
+                                quick_metadata.get());
     case OatVersion::V_124:
     case OatVersion::V_131:
       return OatFile_124::build(oat_file_name,
@@ -3216,7 +3231,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 write_elf,
                                 art_image_location,
                                 samsung_mode,
-                                quick_data_location);
+                                quick_metadata.get());
     default:
       fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
       return Status::BUILD_UNSUPPORTED_VERSION;
