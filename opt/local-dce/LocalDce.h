@@ -46,24 +46,15 @@ class LocalDce {
    *   potentially-excepting instructions can jump to a catch.)
    */
 
-  LocalDce() {
-    /*
-     * Pure methods have no observable side effects, so they can be removed
-     * if their outputs are not used.
-     *
-     * TODO: Derive this list with static analysis rather than hard-coding
-     * it.
-     */
-    m_pure_methods.emplace(DexMethod::make_method(
-        "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
-  }
+  LocalDce(const std::unordered_set<DexMethodRef*>& pure_methods)
+      : m_pure_methods(pure_methods) {}
 
   const Stats& get_stats() const { return m_stats; }
 
   void dce(DexMethod* method);
 
  private:
-  std::unordered_set<DexMethodRef*> m_pure_methods;
+  const std::unordered_set<DexMethodRef*>& m_pure_methods;
   Stats m_stats;
 
   bool is_required(IRInstruction* inst,
@@ -78,4 +69,7 @@ class LocalDcePass : public Pass {
   static void run(DexMethod* method);
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+private:
+  static std::unordered_set<DexMethodRef*> find_pure_methods();
 };

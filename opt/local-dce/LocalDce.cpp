@@ -290,7 +290,7 @@ bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
 }
 
 void LocalDcePass::run(DexMethod* m) {
-  LocalDce().dce(m);
+  LocalDce(find_pure_methods()).dce(m);
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores,
@@ -301,6 +301,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         "LocalDcePass not run because no ProGuard configuration was provided.");
     return;
   }
+  const auto& pure_methods = find_pure_methods();
   auto scope = build_class_scope(stores);
   auto stats = walk::parallel::reduce_methods<std::nullptr_t, LocalDce::Stats>(
       scope,
@@ -309,7 +310,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         if (code == nullptr) {
           return LocalDce::Stats();
         }
-        LocalDce ldce;
+        LocalDce ldce(pure_methods);
         ldce.dce(m);
         return ldce.get_stats();
       },
@@ -322,6 +323,20 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
+}
+
+std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
+  /*
+   * Pure methods have no observable side effects, so they can be removed
+   * if their outputs are not used.
+   *
+   * TODO: Derive this list with static analysis rather than hard-coding
+   * it.
+   */
+  std::unordered_set<DexMethodRef*> pure_methods;
+  pure_methods.emplace(DexMethod::make_method(
+      "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
+  return pure_methods;
 }
 
 static LocalDcePass s_pass;
