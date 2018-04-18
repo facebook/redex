@@ -85,42 +85,6 @@ class MonotonicFixpointIteratorContext final {
   friend class MonotonicFixpointIterator;
 };
 
-template <typename Derived>
-class FixpointIteratorGraphSpec {
-
-  ~FixpointIteratorGraphSpec() {
-    using Graph = typename Derived::Graph;
-    using NodeId = typename Derived::NodeId;
-    using EdgeId = typename Derived::EdgeId;
-
-    // The graph is specified by its root node together with the successors,
-    // predecessors, and edge source/target functions.
-    static_assert(std::is_same<decltype(Derived::entry(std::declval<Graph>())),
-                               NodeId>::value,
-                  "No implementation of entry()");
-    static_assert(
-        std::is_same<decltype(Derived::predecessors(std::declval<Graph>(),
-                                                    std::declval<NodeId>())),
-                     std::vector<EdgeId>>::value,
-        "No implementation of predecessors()");
-    static_assert(
-        std::is_same<decltype(Derived::successors(std::declval<Graph>(),
-                                                  std::declval<NodeId>())),
-                     std::vector<EdgeId>>::value,
-        "No implementation of successors()");
-    static_assert(
-        std::is_same<decltype(Derived::source(std::declval<Graph>(),
-                                              std::declval<EdgeId>())),
-                     NodeId>::value,
-        "No implementation of source()");
-    static_assert(
-        std::is_same<decltype(Derived::target(std::declval<Graph>(),
-                                              std::declval<EdgeId>())),
-                     NodeId>::value,
-        "No implementation of target()");
-  }
-};
-
 /*
  * This is the implementation of a monotonically increasing chaotic fixpoint
  * iteration sequence with widening over a control-flow graph using the
@@ -150,10 +114,38 @@ class MonotonicFixpointIterator {
   virtual ~MonotonicFixpointIterator() {
     static_assert(std::is_base_of<AbstractDomain<Domain>, Domain>::value,
                   "Domain does not inherit from AbstractDomain");
+
+    // Check that GraphInterface has the necessary methods.
+    // We specify it here instead of putting the static asserts in the dtor of
+    // a CRTP-style base class because the destructor may not be instantiated
+    // when we don't create any instances of the GraphInterface class.
+    //
+    // The graph is specified by its root node together with the successors,
+    // predecessors, and edge source/target functions.
     static_assert(
-        std::is_base_of<FixpointIteratorGraphSpec<GraphInterface>,
-                        GraphInterface>::value,
-        "GraphInterface does not inherit from FixpointIteratorGraphSpec");
+        std::is_same<decltype(GraphInterface::entry(std::declval<Graph>())),
+                     NodeId>::value,
+        "No implementation of entry()");
+    static_assert(
+        std::is_same<decltype(GraphInterface::predecessors(
+                         std::declval<Graph>(), std::declval<NodeId>())),
+                     std::vector<EdgeId>>::value,
+        "No implementation of predecessors()");
+    static_assert(
+        std::is_same<decltype(GraphInterface::successors(
+                         std::declval<Graph>(), std::declval<NodeId>())),
+                     std::vector<EdgeId>>::value,
+        "No implementation of successors()");
+    static_assert(
+        std::is_same<decltype(GraphInterface::source(std::declval<Graph>(),
+                                                     std::declval<EdgeId>())),
+                     NodeId>::value,
+        "No implementation of source()");
+    static_assert(
+        std::is_same<decltype(GraphInterface::target(std::declval<Graph>(),
+                                                     std::declval<EdgeId>())),
+                     NodeId>::value,
+        "No implementation of target()");
   }
 
   /*
@@ -363,26 +355,17 @@ class MonotonicFixpointIterator {
 };
 
 template <typename GraphInterface>
-class BackwardsFixpointIterationAdaptor
-    : public FixpointIteratorGraphSpec<
-          BackwardsFixpointIterationAdaptor<GraphInterface>> {
+class BackwardsFixpointIterationAdaptor {
  public:
   using Graph = typename GraphInterface::Graph;
   using NodeId = typename GraphInterface::NodeId;
   using EdgeId = typename GraphInterface::EdgeId;
 
-  ~BackwardsFixpointIterationAdaptor() {
+  static NodeId entry(const Graph& graph) {
     static_assert(
         std::is_same<decltype(GraphInterface::exit(std::declval<Graph>())),
                      NodeId>::value,
         "No implementation of exit()");
-    static_assert(
-        std::is_base_of<FixpointIteratorGraphSpec<GraphInterface>,
-                        GraphInterface>::value,
-        "GraphInterface does not inherit from FixpointIteratorGraphSpec");
-  }
-
-  static NodeId entry(const Graph& graph) {
     return GraphInterface::exit(graph);
   }
   static NodeId exit(const Graph& graph) {

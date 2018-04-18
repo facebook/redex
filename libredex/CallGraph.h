@@ -127,13 +127,12 @@ class CompleteGraph : public Graph {
   void compute_roots(Cache&);
 };
 
-class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
+// A static-method-only API for use with the monotonic fixpoint iterator.
+class GraphInterface {
  public:
   using Graph = call_graph::Graph;
   using NodeId = DexMethod*;
   using EdgeId = std::shared_ptr<Edge>;
-
-  ~GraphInterface() = delete;
 
   static const NodeId entry(const Graph& graph) {
     return graph.entry().method();

@@ -121,7 +121,7 @@ class Program final {
   friend class ProgramInterface;
 };
 
-class ProgramInterface : public FixpointIteratorGraphSpec<ProgramInterface> {
+class ProgramInterface {
  public:
   using Graph = Program;
   using NodeId = ControlPoint;
