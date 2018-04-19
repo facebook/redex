@@ -30,8 +30,6 @@ class SparseSetValue final
                                     const SparseSetValue&,
                                     SparseSetValue> {
  public:
-  using Kind = typename AbstractValue<SparseSetValue>::Kind;
-
   // Default constructor to pass sanity check in
   // AbstractValue's destructor.
   SparseSetValue() : m_capacity(0), m_element_num(0) {}
@@ -54,7 +52,7 @@ class SparseSetValue final
     return std::vector<uint16_t>(begin(), end());
   }
 
-  Kind kind() const override { return Kind::Value; }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   // Checking if candidate is a member of the set.
   bool contains(const uint16_t& candidate) const override {
@@ -124,7 +122,7 @@ class SparseSetValue final
     return std::next(m_dense.begin(), m_element_num);
   }
 
-  Kind join_with(const SparseSetValue& other) override {
+  AbstractValueKind join_with(const SparseSetValue& other) override {
     if (other.m_capacity > m_capacity) {
       m_dense.resize(other.m_capacity);
       m_sparse.resize(other.m_capacity);
@@ -133,14 +131,14 @@ class SparseSetValue final
     for (auto e : other) {
       this->add(e);
     }
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
-  Kind widen_with(const SparseSetValue& other) override {
+  AbstractValueKind widen_with(const SparseSetValue& other) override {
     return join_with(other);
   }
 
-  Kind meet_with(const SparseSetValue& other) override {
+  AbstractValueKind meet_with(const SparseSetValue& other) override {
     for (auto it = this->begin(); it != this->end();) {
       if (!other.contains(*it)) {
         // If other doesn't contain this value
@@ -155,10 +153,10 @@ class SparseSetValue final
         ++it;
       }
     }
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
-  Kind narrow_with(const SparseSetValue& other) override {
+  AbstractValueKind narrow_with(const SparseSetValue& other) override {
     return meet_with(other);
   }
 
@@ -186,8 +184,6 @@ class SparseSetAbstractDomain final
                                     SparseSetAbstractDomain> {
  public:
   using Value = ssad_impl::SparseSetValue;
-
-  using AbstractValueKind = typename AbstractValue<Value>::Kind;
 
   SparseSetAbstractDomain()
       : PowersetAbstractDomain<uint16_t,

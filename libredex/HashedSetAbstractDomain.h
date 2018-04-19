@@ -30,8 +30,6 @@ class SetValue final : public PowersetImplementation<
                            const std::unordered_set<Element, Hash, Equal>&,
                            SetValue<Element, Hash, Equal>> {
  public:
-  using Kind = typename AbstractValue<SetValue<Element, Hash, Equal>>::Kind;
-
   SetValue() = default;
 
   SetValue(const Element& e) { m_set.insert(e); }
@@ -52,7 +50,7 @@ class SetValue final : public PowersetImplementation<
 
   void clear() override { m_set.clear(); }
 
-  Kind kind() const override { return Kind::Value; }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool leq(const SetValue& other) const override {
     if (m_set.size() > other.m_set.size()) {
@@ -70,14 +68,14 @@ class SetValue final : public PowersetImplementation<
     return (m_set.size() == other.m_set.size()) && leq(other);
   }
 
-  Kind join_with(const SetValue& other) override {
+  AbstractValueKind join_with(const SetValue& other) override {
     for (const Element& e : other.m_set) {
       m_set.insert(e);
     }
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
-  Kind meet_with(const SetValue& other) override {
+  AbstractValueKind meet_with(const SetValue& other) override {
     for (auto it = m_set.begin(); it != m_set.end();) {
       if (other.m_set.count(*it) == 0) {
         it = m_set.erase(it);
@@ -85,7 +83,7 @@ class SetValue final : public PowersetImplementation<
         ++it;
       }
     }
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
  private:
@@ -111,8 +109,6 @@ class HashedSetAbstractDomain final
           HashedSetAbstractDomain<Element, Hash, Equal>> {
  public:
   using Value = hsad_impl::SetValue<Element, Hash, Equal>;
-
-  using AbstractValueKind = typename Value::Kind;
 
   HashedSetAbstractDomain()
       : PowersetAbstractDomain<Element,

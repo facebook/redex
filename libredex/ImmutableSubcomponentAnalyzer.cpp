@@ -61,7 +61,7 @@ class AbstractAccessPath final : public AbstractValue<AbstractAccessPath> {
 
   void clear() override { m_path.m_getters.clear(); }
 
-  Kind kind() const override { return Kind::Value; }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool leq(const AbstractAccessPath& other) const override {
     return equals(other);
@@ -71,27 +71,27 @@ class AbstractAccessPath final : public AbstractValue<AbstractAccessPath> {
     return m_path == other.m_path;
   }
 
-  Kind join_with(const AbstractAccessPath& other) override {
+  AbstractValueKind join_with(const AbstractAccessPath& other) override {
     if (equals(other)) {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
     clear();
-    return Kind::Top;
+    return AbstractValueKind::Top;
   }
 
-  Kind widen_with(const AbstractAccessPath& other) override {
+  AbstractValueKind widen_with(const AbstractAccessPath& other) override {
     return join_with(other);
   }
 
-  Kind meet_with(const AbstractAccessPath& other) override {
+  AbstractValueKind meet_with(const AbstractAccessPath& other) override {
     if (equals(other)) {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
     clear();
-    return Kind::Bottom;
+    return AbstractValueKind::Bottom;
   }
 
-  Kind narrow_with(const AbstractAccessPath& other) override {
+  AbstractValueKind narrow_with(const AbstractAccessPath& other) override {
     return meet_with(other);
   }
 

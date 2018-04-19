@@ -39,8 +39,6 @@ template <typename T>
 class SimpleValueAbstractDomain
     : public AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
                                        SimpleValueAbstractDomain<T>> {
-  using AbstractValueKind = typename svad_impl::SimpleValue<T>::Kind;
-
  public:
   static SimpleValueAbstractDomain<T> bottom() {
     return SimpleValueAbstractDomain(AbstractValueKind::Bottom);
@@ -82,10 +80,10 @@ template <typename T>
 class SimpleValue final : public AbstractValue<SimpleValue<T>> {
  public:
   friend class SimpleValueAbstractDomain<T>;
-  using Kind = typename AbstractValue<SimpleValue<T>>::Kind;
 
   void clear() override{};
-  Kind kind() const override { return Kind::Value; }
+
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool equals(const SimpleValue<T>& other) const override {
     return m_value == other.m_value;
@@ -93,27 +91,27 @@ class SimpleValue final : public AbstractValue<SimpleValue<T>> {
 
   bool leq(const SimpleValue<T>& other) const override { return equals(other); }
 
-  Kind join_with(const SimpleValue<T>& other) override {
+  AbstractValueKind join_with(const SimpleValue<T>& other) override {
     if (!equals(other)) {
-      return Kind::Top;
+      return AbstractValueKind::Top;
     } else {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
   }
 
-  Kind meet_with(const SimpleValue<T>& other) override {
+  AbstractValueKind meet_with(const SimpleValue<T>& other) override {
     if (!equals(other)) {
-      return Kind::Bottom;
+      return AbstractValueKind::Bottom;
     } else {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
   }
 
-  Kind widen_with(const SimpleValue<T>& other) override {
+  AbstractValueKind widen_with(const SimpleValue<T>& other) override {
     return join_with(other);
   }
 
-  Kind narrow_with(const SimpleValue<T>& other) override {
+  AbstractValueKind narrow_with(const SimpleValue<T>& other) override {
     return meet_with(other);
   }
 

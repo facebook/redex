@@ -170,11 +170,13 @@ class AbstractDomain {
  * elements defined by the AbstractValue interface.
  */
 
+enum class AbstractValueKind { Bottom, Value, Top };
+
 /*
  * This interface represents the structure of the regular elements of an
  * abstract domain (like a constant, an interval, a points-to set, etc.).
  * Performing operations on those regular values may yield Top or Bottom, which
- * is why we define a Kind type to identify such situations.
+ * is why we define an AbstractValueKind type to identify such situations.
  *
  * Sample usage:
  *
@@ -190,8 +192,6 @@ class AbstractDomain {
 template <typename Derived>
 class AbstractValue {
  public:
-  enum class Kind { Bottom, Value, Top };
-
   virtual ~AbstractValue() {
     static_assert(std::is_base_of<AbstractValue<Derived>, Derived>::value,
                   "Derived doesn't inherit from AbstractValue");
@@ -215,7 +215,7 @@ class AbstractValue {
    * still be represented by regular abstract values (for example [0, -1] and
    * [-oo, +oo] in the domain of intervals), hence the need for such a method.
    */
-  virtual Kind kind() const = 0;
+  virtual AbstractValueKind kind() const = 0;
 
   virtual bool leq(const Derived& other) const = 0;
 
@@ -223,17 +223,17 @@ class AbstractValue {
 
   /*
    * These are the regular abstract domain operations that perform side effects.
-   * They return a Kind value to identify situations where the result of the
-   * operation is either Top or Bottom.
+   * They return a AbstractValueKind value to identify situations where the
+   * result of the operation is either Top or Bottom.
    */
 
-  virtual Kind join_with(const Derived& other) = 0;
+  virtual AbstractValueKind join_with(const Derived& other) = 0;
 
-  virtual Kind widen_with(const Derived& other) = 0;
+  virtual AbstractValueKind widen_with(const Derived& other) = 0;
 
-  virtual Kind meet_with(const Derived& other) = 0;
+  virtual AbstractValueKind meet_with(const Derived& other) = 0;
 
-  virtual Kind narrow_with(const Derived& other) = 0;
+  virtual AbstractValueKind narrow_with(const Derived& other) = 0;
 };
 
 /*
@@ -272,8 +272,6 @@ class AbstractValue {
 template <typename Value, typename Derived>
 class AbstractDomainScaffolding : public AbstractDomain<Derived> {
  public:
-  using AbstractValueKind = typename AbstractValue<Value>::Kind;
-
   virtual ~AbstractDomainScaffolding() {
     static_assert(std::is_base_of<AbstractValue<Value>, Value>::value,
                   "Value doesn't inherit from AbstractValue");

@@ -29,8 +29,6 @@
 template <typename Element, typename Snapshot, typename Derived>
 class PowersetImplementation : public AbstractValue<Derived> {
  public:
-  using Kind = typename AbstractValue<Derived>::Kind;
-
   virtual Snapshot elements() const = 0;
 
   virtual size_t size() const = 0;
@@ -44,11 +42,11 @@ class PowersetImplementation : public AbstractValue<Derived> {
   // We only consider finite powerset domains. Hence, we don't need to define a
   // widening or narrowing operator.
 
-  Kind widen_with(const Derived& other) override {
+  AbstractValueKind widen_with(const Derived& other) override {
     return this->join_with(other);
   }
 
-  Kind narrow_with(const Derived& other) override {
+  AbstractValueKind narrow_with(const Derived& other) override {
     return this->meet_with(other);
   }
 };
@@ -71,8 +69,6 @@ template <typename Element,
 class PowersetAbstractDomain
     : public AbstractDomainScaffolding<Powerset, Derived> {
  public:
-  using AbstractValueKind = typename AbstractValue<Powerset>::Kind;
-
   virtual ~PowersetAbstractDomain() {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
@@ -171,9 +167,6 @@ template <typename Element,
 inline std::ostream& operator<<(
     std::ostream& o,
     const PowersetAbstractDomain<Element, Powerset, Snapshot, Derived>& s) {
-  using AbstractValueKind =
-      typename PowersetAbstractDomain<Element, Powerset, Snapshot, Derived>::
-          AbstractValueKind;
   switch (s.kind()) {
   case AbstractValueKind::Bottom: {
     o << "_|_";

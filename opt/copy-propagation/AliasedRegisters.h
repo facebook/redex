@@ -166,19 +166,19 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   void clear() override;
 
-  Kind kind() const override;
+  AbstractValueKind kind() const override;
 
   bool leq(const AliasedRegisters& other) const override;
 
   bool equals(const AliasedRegisters& other) const override;
 
-  Kind join_with(const AliasedRegisters& other) override;
+  AbstractValueKind join_with(const AliasedRegisters& other) override;
 
-  Kind widen_with(const AliasedRegisters& other) override;
+  AbstractValueKind widen_with(const AliasedRegisters& other) override;
 
-  Kind meet_with(const AliasedRegisters& other) override;
+  AbstractValueKind meet_with(const AliasedRegisters& other) override;
 
-  Kind narrow_with(const AliasedRegisters& other) override;
+  AbstractValueKind narrow_with(const AliasedRegisters& other) override;
 
  private:
   // An undirected graph where register values are vertices
@@ -247,7 +247,7 @@ class AliasDomain
       : AbstractDomainScaffolding<AliasedRegisters, AliasDomain>(kind) {}
 
   static AliasDomain bottom() {
-    return AliasDomain(AliasDomain::AbstractValueKind::Bottom);
+    return AliasDomain(AbstractValueKind::Bottom);
   }
 
   static AliasDomain top() { return AliasDomain(AbstractValueKind::Top); }

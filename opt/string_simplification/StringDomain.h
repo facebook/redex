@@ -47,7 +47,7 @@ class StringyValue final : public AbstractValue<StringyValue> {
 
   void clear() override{};
 
-  Kind kind() const override { return Kind::Value; }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool equals(const StringyValue& other) const override {
     return m_suffix == other.m_suffix && m_base_reg == other.m_base_reg;
@@ -55,27 +55,27 @@ class StringyValue final : public AbstractValue<StringyValue> {
 
   bool leq(const StringyValue& other) const override { return equals(other); }
 
-  Kind join_with(const StringyValue& other) override {
+  AbstractValueKind join_with(const StringyValue& other) override {
     if (!equals(other)) {
-      return Kind::Top;
+      return AbstractValueKind::Top;
     } else {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
   }
 
-  Kind meet_with(const StringyValue& other) override {
+  AbstractValueKind meet_with(const StringyValue& other) override {
     if (!equals(other)) {
-      return Kind::Bottom;
+      return AbstractValueKind::Bottom;
     } else {
-      return Kind::Value;
+      return AbstractValueKind::Value;
     }
   }
 
-  Kind widen_with(const StringyValue& other) override {
+  AbstractValueKind widen_with(const StringyValue& other) override {
     return join_with(other);
   }
 
-  Kind narrow_with(const StringyValue& other) override {
+  AbstractValueKind narrow_with(const StringyValue& other) override {
     return meet_with(other);
   }
 

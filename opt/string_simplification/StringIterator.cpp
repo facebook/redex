@@ -112,7 +112,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
         continue;
       }
       auto val = env->eval(insn->src(i));
-      if (val.kind() != StringyValue::Kind::Value ||
+      if (val.kind() != AbstractValueKind::Value ||
           !val.value().is_static_string()) {
         env->put(insn->src(i), StringyDomain::top());
       }

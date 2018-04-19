@@ -49,8 +49,6 @@ class PatriciaTreeMapAbstractEnvironment final
 
   using MapType = PatriciaTreeMap<Variable, typename Value::ValueInterface>;
 
-  using AbstractValueKind = typename AbstractValue<Value>::Kind;
-
   /*
    * The default constructor produces the Top value.
    */
@@ -143,9 +141,6 @@ template <typename Variable, typename Domain>
 inline std::ostream& operator<<(
     std::ostream& o,
     const PatriciaTreeMapAbstractEnvironment<Variable, Domain>& e) {
-  using AbstractValueKind =
-      typename PatriciaTreeMapAbstractEnvironment<Variable,
-                                                  Domain>::AbstractValueKind;
   switch (e.kind()) {
   case AbstractValueKind::Bottom: {
     o << "_|_";
@@ -190,13 +185,12 @@ namespace ptmae_impl {
  * hashtable. The hashtable can never contain bindings with Bottom, as those are
  * filtered out in PatriciaTreeMapAbstractEnvironment (the whole environment is
  * set to Bottom in that case). The Meet and Narrowing operations abort and
- * return Kind::Bottom whenever a binding with Bottom is about to be created.
+ * return AbstractValueKind::Bottom whenever a binding with Bottom is about to
+ * be created.
  */
 template <typename Variable, typename Domain>
 class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
  public:
-  using Kind = typename AbstractValue<MapValue<Variable, Domain>>::Kind;
-
   struct ValueInterface {
     using type = Domain;
 
@@ -217,10 +211,10 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
   void clear() override { m_map.clear(); }
 
-  Kind kind() const override {
+  AbstractValueKind kind() const override {
     // If the map is empty, then all variables are implicitly bound to Top,
     // i.e., the abstract environment itself is Top.
-    return m_map.is_empty() ? Kind::Top : Kind::Value;
+    return m_map.is_empty() ? AbstractValueKind::Top : AbstractValueKind::Value;
   }
 
   bool leq(const MapValue& other) const override {
@@ -231,22 +225,22 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     return m_map.equals(other.m_map);
   }
 
-  Kind join_with(const MapValue& other) override {
+  AbstractValueKind join_with(const MapValue& other) override {
     return join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.join(y); });
   }
 
-  Kind widen_with(const MapValue& other) override {
+  AbstractValueKind widen_with(const MapValue& other) override {
     return join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.join(y); });
   }
 
-  Kind meet_with(const MapValue& other) override {
+  AbstractValueKind meet_with(const MapValue& other) override {
     return meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.meet(y); });
   }
 
-  Kind narrow_with(const MapValue& other) override {
+  AbstractValueKind narrow_with(const MapValue& other) override {
     return meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.meet(y); });
   }
@@ -257,14 +251,14 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     m_map.insert_or_assign(variable, value);
   }
 
-  Kind join_like_operation(
+  AbstractValueKind join_like_operation(
       const MapValue& other,
       std::function<Domain(const Domain&, const Domain&)> operation) {
     m_map.intersection_with(operation, other.m_map);
     return kind();
   }
 
-  Kind meet_like_operation(
+  AbstractValueKind meet_like_operation(
       const MapValue& other,
       std::function<Domain(const Domain&, const Domain&)> operation) {
     try {
@@ -280,7 +274,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
       return kind();
     } catch (const value_is_bottom&) {
       clear();
-      return Kind::Bottom;
+      return AbstractValueKind::Bottom;
     }
   }
 

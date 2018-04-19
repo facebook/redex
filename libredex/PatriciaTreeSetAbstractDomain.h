@@ -31,8 +31,6 @@ class SetValue final
                                     const PatriciaTreeSet<Element>&,
                                     SetValue<Element>> {
  public:
-  using Kind = typename AbstractValue<SetValue<Element>>::Kind;
-
   SetValue() = default;
 
   SetValue(const Element& e) { m_set.insert(e); }
@@ -51,7 +49,7 @@ class SetValue final
 
   void clear() override { m_set.clear(); }
 
-  Kind kind() const override { return Kind::Value; }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool leq(const SetValue& other) const override {
     return m_set.is_subset_of(other.m_set);
@@ -61,14 +59,14 @@ class SetValue final
     return m_set.equals(other.m_set);
   }
 
-  Kind join_with(const SetValue& other) override {
+  AbstractValueKind join_with(const SetValue& other) override {
     m_set.union_with(other.m_set);
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
-  Kind meet_with(const SetValue& other) override {
+  AbstractValueKind meet_with(const SetValue& other) override {
     m_set.intersection_with(other.m_set);
-    return Kind::Value;
+    return AbstractValueKind::Value;
   }
 
  private:
@@ -112,8 +110,6 @@ class PatriciaTreeSetAbstractDomain final
                                     PatriciaTreeSetAbstractDomain<Element>> {
  public:
   using Value = ptsad_impl::SetValue<Element>;
-
-  using AbstractValueKind = typename Value::Kind;
 
   PatriciaTreeSetAbstractDomain()
       : PowersetAbstractDomain<Element,
