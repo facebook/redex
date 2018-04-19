@@ -153,7 +153,7 @@ void extract_js_asset_registrations(
     if (!boost::regex_search (registration, m, location_regex) || m.size() == 0) {
       continue;
     }
-    std::stringstream asset_path;
+    std::ostringstream asset_path;
     asset_path << m[1].str() << '/'; // location
     if (!boost::regex_search (registration, m, name_regex) || m.size() == 0) {
       continue;
@@ -163,7 +163,7 @@ void extract_js_asset_registrations(
     boost::replace_all(full_path, "/", "_");;
     boost::algorithm::to_lower(full_path);
 
-    std::stringstream stripped_asset_path;
+    std::ostringstream stripped_asset_path;
     std::ostream_iterator<char, char> oi(stripped_asset_path);
     boost::regex_replace(oi, full_path.begin(), full_path.end(),
       special_char_regex, "", boost::match_default | boost::format_all);
@@ -476,7 +476,7 @@ std::unordered_set<std::string> extract_classes_from_native_lib(const std::strin
  */
 std::string read_entire_file(const std::string& filename) {
   std::ifstream in(filename, std::ios::in | std::ios::binary);
-  std::stringstream sstr;
+  std::ostringstream sstr;
   sstr << in.rdbuf();
   return sstr.str();
 }

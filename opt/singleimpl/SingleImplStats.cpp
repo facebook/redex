@@ -135,22 +135,22 @@ void breakup_by_package(SingleImpls& single_impls) {
 void class_type_stats(SingleImpls& single_impls) {
   // single impl interface with parent implemented in an anonymous class
   size_t anonymous_count = 0;
-  std::stringstream anonymous;
+  std::ostringstream anonymous;
   // single impl interface with parent implemented in a nested class
   size_t nested_count = 0;
-  std::stringstream nested;
+  std::ostringstream nested;
   // single impl interface with parent implemented in top level class
   size_t top_level_count = 0;
-  std::stringstream top_level;
+  std::ostringstream top_level;
   // single impl interface with no parent implemented in an anonymous class
   size_t anonymous_no_parent_count = 0;
-  std::stringstream anonymous_no_parent;
+  std::ostringstream anonymous_no_parent;
   // single impl interface with no parent implemented in a nested class
   size_t nested_no_parent_count = 0;
-  std::stringstream nested_no_parent;
+  std::ostringstream nested_no_parent;
   // single impl interface with no parent implemented in top level class
   size_t top_level_no_parent_count = 0;
-  std::stringstream top_level_no_parent;
+  std::ostringstream top_level_no_parent;
 
   for (auto const& intf_it : single_impls) {
     auto name = intf_it.second.cls->get_name()->c_str();

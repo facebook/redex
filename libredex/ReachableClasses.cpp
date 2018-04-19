@@ -630,7 +630,7 @@ void init_reachable_classes(
 }
 
 std::string ReferencedState::str() const {
-  std::stringstream s;
+  std::ostringstream s;
   s << m_bytype;
   s << m_bystring;
   s << m_byresources;

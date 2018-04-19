@@ -44,7 +44,7 @@ std::string convert_scalar_type(std::string type) {
 std::string convert_field(const std::string &cls,
     const std::string &type,
     const std::string &name) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << cls << "." << name << ":" << type;
   return ss.str();
 }
@@ -55,7 +55,7 @@ std::string convert_method(
   const std::string &methodname,
   const std::string &args
 ) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << cls << "." << methodname << ":(" << args << ")" << rtype;
   return ss.str();
 }
@@ -336,7 +336,7 @@ std::string proguard_name(const DexClass* cls) {
 std::string proguard_name(const DexMethodRef* method) {
   // Format:
   //  <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << proguard_name(method->get_class()) << "." << method->get_name()->c_str()
       << ":" << "(";
 
@@ -353,7 +353,7 @@ std::string proguard_name(const DexMethodRef* method) {
 }
 
 std::string proguard_name(const DexFieldRef* field) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << proguard_name(field->get_class()) << "." << field->get_name()->c_str()
       << ":" << proguard_name(field->get_type());
   assert(ss.str() == show(field));

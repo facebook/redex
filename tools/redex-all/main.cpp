@@ -106,7 +106,7 @@ Json::Value parse_config(const std::string& config_file) {
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
-  std::stringstream temp_stream(value_string);
+  std::istringstream temp_stream(value_string);
   Json::Value temp_json;
   temp_stream >> temp_json;
   return temp_json;
@@ -157,7 +157,7 @@ Json::Value default_config() {
       "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass",
   };
-  std::stringstream temp_json("{\"redex\":{\"passes\":[]}}");
+  std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
   Json::Value cfg;
   temp_json >> cfg;
   for (auto const& pass : passes) {
@@ -514,7 +514,7 @@ int main(int argc, char* argv[]) {
 
     std::set<std::string> library_jars;
     for (const auto jar_path : args.jar_paths) {
-      std::stringstream jar_stream(jar_path);
+      std::istringstream jar_stream(jar_path);
       std::string dependent_jar_path;
       while (std::getline(jar_stream, dependent_jar_path, ':')) {
         TRACE(MAIN,
@@ -618,7 +618,7 @@ int main(int argc, char* argv[]) {
     for (auto& store : stores) {
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
-        std::stringstream ss;
+        std::ostringstream ss;
         ss << args.out_dir << "/" << store.get_name();
         if (store.get_name().compare("classes") == 0) {
           // primary/secondary dex store, primary has no numeral and secondaries

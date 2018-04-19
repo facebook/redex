@@ -78,7 +78,7 @@ void RealPositionMapper::write_map_v1() {
    * string_length (4 bytes)
    * char[string_length]
    */
-  std::stringstream pos_out;
+  std::ostringstream pos_out;
   std::unordered_map<DexString*, uint32_t> string_ids;
   std::vector<DexString*> string_pool;
 
@@ -142,7 +142,7 @@ void RealPositionMapper::write_map_v2() {
    * string_length (4 bytes)
    * char[string_length]
    */
-  std::stringstream pos_out;
+  std::ostringstream pos_out;
   std::unordered_map<std::string, uint32_t> string_ids;
   std::vector<std::string> string_pool;
 
