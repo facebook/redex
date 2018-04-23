@@ -120,6 +120,8 @@ CompleteGraph CompleteGraph::make(const Scope& scope, bool include_virtuals) {
 void CompleteGraph::populate_graph(const Scope& scope,
                                    bool include_virtuals,
                                    Cache& cache) {
+  TRACE(MORTIROLO, 1, "----- Called subclass\n");
+
   walk::code(scope, [&](DexMethod* caller, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;

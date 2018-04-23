@@ -71,8 +71,6 @@ class Graph {
  public:
   static Graph make(const Scope&, bool include_virtuals = false);
 
-  virtual ~Graph(){};
-
   const Node& entry() const { return m_entry; }
 
   const Node& node(const DexMethod* m) const {
@@ -90,6 +88,8 @@ class Graph {
   };
 
  protected:
+  Graph() {}
+
   // Factor out the logic to populate the graph and select the roots
   void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
   void compute_roots(Cache&);
@@ -97,8 +97,6 @@ class Graph {
   // helper functions
   bool is_definitely_virtual(const DexMethod*,
                              const std::unordered_set<const DexMethod*>&) const;
-
-  Graph() {}
 
   Node& make_node(DexMethod*);
 
