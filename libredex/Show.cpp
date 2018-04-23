@@ -597,11 +597,15 @@ std::string show(const DexString* p) {
   return std::string(p->c_str());
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexType* p) {
   if (!p) return "";
   return show(p->get_name());
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexFieldRef* p) {
   if (!p) return "";
   std::ostringstream ss;
@@ -646,6 +650,8 @@ std::string vshow(const DexProto* p, bool include_ret_type = true) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexTypeList* p) {
   if (!p) return "";
   std::ostringstream ss;
@@ -655,6 +661,8 @@ std::string show(const DexTypeList* p) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexProto* p) {
   if (!p) return "";
   std::ostringstream ss;
@@ -676,6 +684,8 @@ std::string show(const DexCode* code) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexMethodRef* p) {
   if (!p) return "";
   std::ostringstream ss;
@@ -718,6 +728,8 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexClass* p) {
   if (!p) return "";
   return show(p->get_type());

@@ -8,6 +8,7 @@
  */
 
 #include "ProguardObfuscationTest.h"
+#include "Show.h"
 #include "Walkers.h"
 
 ProguardObfuscationTest::ProguardObfuscationTest(
@@ -53,10 +54,10 @@ bool ProguardObfuscationTest::field_found(const std::vector<DexField*>& fields,
                                           const std::string& name) {
   auto it = std::find_if(fields.begin(), fields.end(), [&](DexField* field) {
     auto deobfuscated_name =
-        proguard_map.deobfuscate_field(proguard_name(field));
+        proguard_map.deobfuscate_field(show(field));
     return (name == std::string(field->c_str()) || name == deobfuscated_name ||
-            name == proguard_name(field)) &&
-           deobfuscated_name == proguard_name(field);
+            name == show(field)) &&
+           deobfuscated_name == show(field);
   });
   return it != fields.end();
 }
@@ -65,9 +66,9 @@ int ProguardObfuscationTest::method_is_renamed_helper(
     const std::vector<DexMethod*>& methods, const std::string& name) {
   for (const auto& method : methods) {
     auto deobfuscated_name =
-        proguard_map.deobfuscate_method(proguard_name(method));
+        proguard_map.deobfuscate_method(show(method));
     if (name == std::string(method->c_str()) || name == deobfuscated_name) {
-      return deobfuscated_name != proguard_name(method);
+      return deobfuscated_name != show(method);
     }
   }
   return -1;
@@ -93,7 +94,7 @@ bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
       DexFieldRef* field_ref = instr->get_field();
       if (field_ref->is_def()) return;
 
-      res |= proguard_name(field_ref) == name;
+      res |= show(field_ref) == name;
     });
   return res;
 }

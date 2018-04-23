@@ -60,12 +60,6 @@ class DexString;
 class DexType;
 using Scope = std::vector<DexClass*>;
 
-// Forward decls to break cycle with ProguardMap.h
-std::string proguard_name(const DexType* cls);
-std::string proguard_name(const DexClass* cls);
-std::string proguard_name(const DexMethodRef* method);
-std::string proguard_name(const DexFieldRef* field);
-
 class DexString {
   friend struct RedexContext;
 
@@ -351,6 +345,7 @@ class DexField : public DexFieldRef {
   void set_external() {
     always_assert_log(!m_concrete,
         "Unexpected concrete field %s\n", SHOW(this));
+    m_deobfuscated_name = show(this);
     m_external = true;
   }
 
@@ -370,8 +365,8 @@ class DexField : public DexFieldRef {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
 
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
@@ -873,8 +868,8 @@ class DexMethod : public DexMethodRef {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
 
   /** return just the name of the method */
@@ -907,6 +902,7 @@ class DexMethod : public DexMethodRef {
   void set_external() {
     always_assert_log(!m_concrete,
         "Unexpected concrete method %s\n", SHOW(this));
+    m_deobfuscated_name = show(this);
     m_external = true;
   }
   void set_dex_code(std::unique_ptr<DexCode> code) {
@@ -1059,8 +1055,8 @@ class DexClass {
   void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
   const std::string& get_dex_location() const {
     return m_dex_location;

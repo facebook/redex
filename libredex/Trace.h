@@ -116,10 +116,10 @@ void trace(TraceModule module, int level, const char* fmt, ...);
 
 struct TraceContext {
   explicit TraceContext(const std::string& current_method) {
-    s_current_method = current_method;
+    s_current_method = &current_method;
   }
-  ~TraceContext() { s_current_method.clear(); }
+  ~TraceContext() { s_current_method = nullptr; }
 
-  thread_local static std::string s_current_method;
+  thread_local static const std::string* s_current_method;
   static std::mutex s_trace_mutex;
 };

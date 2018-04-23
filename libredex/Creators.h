@@ -532,6 +532,7 @@ struct ClassCreator {
    * Set the external bit for the DexClass.
    */
   void set_external() {
+    m_cls->m_deobfuscated_name = show(m_cls);
     m_cls->m_external = true;
   }
 

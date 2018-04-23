@@ -91,7 +91,7 @@ DexField* find_field_named(const Container& fields,
           8,
           "====> Comparing against %s [%s] <%s>\n",
           f->c_str(),
-          proguard_name(f).c_str(),
+          SHOW(f),
           deobfuscated_field.c_str());
     bool found =
         (name == std::string(f->c_str()) || (name == deobfuscated_field));

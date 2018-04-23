@@ -1174,7 +1174,7 @@ void write_method_mapping(
         auto deobname = cls->get_deobfuscated_name();
         if (!deobname.empty()) return deobname;
       }
-      return proguard_name(typecls);
+      return show(typecls);
     }();
 
     // Some method refs aren't "concrete" (e.g., referring to a method defined
@@ -1196,7 +1196,7 @@ void write_method_mapping(
             static_cast<DexMethod*>(resolved_method)->get_deobfuscated_name();
         if (!deobfname.empty()) return deobfname;
       }
-      return proguard_name(resolved_method);
+      return show(resolved_method);
     }();
 
     // Format is <cls>.<name>:(<args>)<ret>
@@ -1238,7 +1238,7 @@ void write_class_mapping(
         auto deobname = cls->get_deobfuscated_name();
         if (!deobname.empty()) return deobname;
       }
-      return proguard_name(cls);
+      return show(cls);
     }();
 
     //
@@ -1285,7 +1285,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       auto deobname = cls->get_deobfuscated_name();
       if (!deobname.empty()) return deobname;
     }
-    return proguard_name(cls);
+    return show(cls);
   };
 
   auto deobf_type = [&](DexType* type) {
@@ -1321,7 +1321,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         }
       }
     }
-    return proguard_name(type);
+    return show(type);
   };
 
   auto deobf_meth = [&](DexMethod* method) {
@@ -1366,7 +1366,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       ss << ")";
       return ss.str();
     }
-    return proguard_name(method);
+    return show(method);
   };
 
   auto deobf_field = [&](DexField* field) {
@@ -1377,7 +1377,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       << field->get_simple_deobfuscated_name();
       return ss.str();
     }
-    return proguard_name(field);
+    return show(field);
   };
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
