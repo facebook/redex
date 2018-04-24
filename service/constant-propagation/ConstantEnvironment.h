@@ -92,16 +92,6 @@ class SignedConstantDomain
   int64_t min_element() const;
 };
 
-inline bool operator==(const SignedConstantDomain& x,
-                       const SignedConstantDomain& y) {
-  return x.equals(y);
-}
-
-inline bool operator!=(const SignedConstantDomain& x,
-                       const SignedConstantDomain& y) {
-  return !(x == y);
-}
-
 using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
 
 using reg_t = uint32_t;

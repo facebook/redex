@@ -184,14 +184,6 @@ class HashedAbstractPartition final
     return true;
   }
 
-  bool operator==(const HashedAbstractPartition& other) const {
-    return equals(other);
-  }
-
-  bool operator!=(const HashedAbstractPartition& other) const {
-    return !equals(other);
-  }
-
   void join_with(const HashedAbstractPartition& other) override {
     join_like_operation(other,
                         [](Domain* x, const Domain& y) { x->join_with(y); });

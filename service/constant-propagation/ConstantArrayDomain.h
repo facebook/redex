@@ -150,10 +150,6 @@ class ConstantArrayDomain final
 
   static ConstantArrayDomain top() { return ConstantArrayDomain(); }
 
-  bool operator==(const ConstantArrayDomain<Domain>& other) const {
-    return this->equals(other);
-  }
-
   std::string str() const;
 
  private:

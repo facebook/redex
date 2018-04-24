@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -96,6 +97,18 @@ class AbstractDomain {
    * a.equals(b) is semantically equivalent to a.leq(b) && b.leq(a).
    */
   virtual bool equals(const Derived& other) const = 0;
+
+  /*
+   * Many C++ libraries default to using operator== to check for equality,
+   * so we define it here as an alias of equals().
+   */
+  virtual bool operator==(const Derived& other) const final {
+    return this->equals(other);
+  }
+
+  virtual bool operator!=(const Derived& other) const final {
+    return !this->equals(other);
+  }
 
   /*
    * Elements of an abstract domain are mutable and the basic operations have

@@ -7,12 +7,14 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "ReducedProductAbstractDomain.h"
+
 #include <gtest/gtest.h>
 #include <sstream>
 #include <tuple>
 
+#include "AbstractDomainPropertyTest.h"
 #include "FiniteAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
 
 enum Elements0 { BOT0, TOP0 };
 enum Elements1 { BOT1, A, B, TOP1 };
@@ -87,12 +89,20 @@ class D0xD1xD2 final
   }
 };
 
+INSTANTIATE_TYPED_TEST_CASE_P(ReducedProductAbstractDomain,
+                              AbstractDomainPropertyTest,
+                              D0xD1xD2);
+
+template <>
+std::vector<D0xD1xD2>
+AbstractDomainPropertyTest<D0xD1xD2>::non_extremal_values() {
+  D0xD1xD2 tad(make_tuple(D0(TOP0), D1(A), D2(D)));
+  D0xD1xD2 tbe(make_tuple(D0(TOP0), D1(B), D2(E)));
+  return {tad, tbe};
+}
+
 TEST(ReducedProductAbstractDomainTest, latticeOperations) {
   D0xD1xD2 top = D0xD1xD2::top();
-  EXPECT_TRUE(top.is_top());
-  EXPECT_TRUE(top.equals(D0xD1xD2::top()));
-  EXPECT_FALSE(top.is_bottom());
-  EXPECT_FALSE(top.equals(D0xD1xD2::bottom()));
   {
     std::ostringstream expected, out;
     expected << "(" << TOP0 << ", " << TOP1 << ", " << TOP2 << ")";
@@ -101,10 +111,6 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
   }
 
   D0xD1xD2 bottom = D0xD1xD2::bottom();
-  EXPECT_TRUE(bottom.is_bottom());
-  EXPECT_TRUE(bottom.equals(D0xD1xD2::bottom()));
-  EXPECT_FALSE(bottom.is_top());
-  EXPECT_FALSE(bottom.equals(D0xD1xD2::top()));
   {
     std::ostringstream expected, out;
     expected << "(" << BOT0 << ", " << BOT1 << ", " << BOT2 << ")";
@@ -112,16 +118,9 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
     EXPECT_EQ(expected.str(), out.str());
   }
 
-  EXPECT_TRUE(bottom.leq(top));
-  EXPECT_FALSE(top.leq(bottom));
-
   D0xD1xD2 tad(make_tuple(D0(TOP0), D1(A), D2(D)));
   D0xD1xD2 tbe(make_tuple(D0(TOP0), D1(B), D2(E)));
   D0xD1xD2 join = tad.join(tbe);
-  EXPECT_TRUE(tad.leq(join));
-  EXPECT_TRUE(tbe.leq(join));
-  EXPECT_FALSE(join.leq(tad));
-  EXPECT_FALSE(join.leq(tbe));
   EXPECT_TRUE(join.get<0>().is_top());
   EXPECT_TRUE(join.get<1>().is_top());
   EXPECT_EQ(F, join.get<2>().element());
@@ -135,10 +134,6 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
 
   D0xD1xD2 tte(make_tuple(D0(TOP0), D1(TOP1), D2(E)));
   D0xD1xD2 meet = tad.meet(tte);
-  EXPECT_TRUE(meet.leq(tad));
-  EXPECT_TRUE(meet.leq(tte));
-  EXPECT_FALSE(tad.leq(meet));
-  EXPECT_FALSE(tte.leq(meet));
   EXPECT_TRUE(meet.get<0>().is_top());
   EXPECT_EQ(A, meet.get<1>().element());
   EXPECT_EQ(C, meet.get<2>().element());

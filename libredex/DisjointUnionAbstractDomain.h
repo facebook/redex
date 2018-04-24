@@ -91,16 +91,6 @@ class DisjointUnionAbstractDomain final
   bool equals(const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other)
       const override;
 
-  bool operator==(
-      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) const {
-    return this->equals(other);
-  }
-
-  bool operator!=(
-      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) const {
-    return !this->equals(other);
-  }
-
   void join_with(const DisjointUnionAbstractDomain<FirstDomain, Domains...>&
                      other) override;
 

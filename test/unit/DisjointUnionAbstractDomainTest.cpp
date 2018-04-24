@@ -12,33 +12,41 @@
 #include <gtest/gtest.h>
 #include <string>
 
+#include "AbstractDomainPropertyTest.h"
 #include "ConstantAbstractDomain.h"
 
 using IntDomain = ConstantAbstractDomain<int>;
 using StringDomain = ConstantAbstractDomain<std::string>;
 using IntStringDomain = DisjointUnionAbstractDomain<IntDomain, StringDomain>;
 
+INSTANTIATE_TYPED_TEST_CASE_P(DisjointUnionAbstractDomain,
+                              AbstractDomainPropertyTest,
+                              IntStringDomain);
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::top_values() {
+  return {IntDomain::top(), StringDomain::top()};
+}
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::bottom_values() {
+  return {IntDomain::bottom(), StringDomain::bottom()};
+}
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::non_extremal_values() {
+  return {IntDomain(0), StringDomain("foo")};
+}
+
 TEST(DisjointUnionAbstractDomainTest, basicOperations) {
   IntStringDomain zero = IntDomain(0);
   IntStringDomain str = StringDomain("");
-  EXPECT_EQ(zero.join(zero), zero);
-  EXPECT_EQ(str.meet(str), str);
   EXPECT_TRUE(zero.join(str).is_top());
-  EXPECT_EQ(zero.join(StringDomain::bottom()), zero);
   EXPECT_TRUE(zero.meet(str).is_bottom());
-  EXPECT_EQ(str.meet(IntDomain::top()), str);
-  EXPECT_FALSE(zero.leq(str));
-  EXPECT_FALSE(str.leq(zero));
-  EXPECT_TRUE(zero.leq(StringDomain::top()));
-  EXPECT_FALSE(IntStringDomain(StringDomain::top()).leq(zero));
-  EXPECT_FALSE(zero.leq(StringDomain::bottom()));
-  EXPECT_TRUE(IntStringDomain(StringDomain::bottom()).leq(zero));
+  EXPECT_NLEQ(zero, str);
+  EXPECT_NLEQ(str, zero);
   EXPECT_NE(zero, str);
-
-  // Check that we have the same value for Top / Bottom regardless of which
-  // variant we used to construct it.
-  EXPECT_EQ(IntStringDomain(IntDomain::top()),
-            IntStringDomain(StringDomain::top()));
-  EXPECT_EQ(IntStringDomain(IntDomain::bottom()),
-            IntStringDomain(StringDomain::bottom()));
 }
