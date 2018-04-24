@@ -59,28 +59,6 @@ bool addition_out_of_bounds(int64_t a, int64_t b) {
   return false;
 }
 
-using value_transform_t = std::function<boost::optional<int64_t>(int64_t)>;
-
-void analyze_non_branch(const IRInstruction* insn,
-                        ConstantEnvironment* env,
-                        value_transform_t value_transform =
-                            [](int64_t v) { return v; } // default is identity
-) {
-  auto src = insn->src(0);
-  auto dst = insn->dest();
-
-  auto cst = env->get_primitive(src).constant_domain().get_constant();
-  auto value = cst ? value_transform(*cst) : boost::none;
-  if (!value) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", dst);
-    env->set_primitive(dst, SignedConstantDomain::top());
-    return;
-  }
-  TRACE(CONSTP, 5, "Propagating constant [Value: %X] -> [Reg: %d]\n", src,
-        *value, dst);
-  env->set_primitive(dst, SignedConstantDomain(*value));
-}
-
 // Propagate the result of a compare if the operands are known constants.
 // If we know enough, put -1, 0, or 1 into the destination register.
 //
@@ -116,9 +94,9 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
           "Propagated constant in branch instruction %s, "
           "Operands [%d] [%d] -> Result: [%d]\n",
           SHOW(insn), l_val, r_val, result);
-    env->set_primitive(insn->dest(), SignedConstantDomain(result));
+    env->set(insn->dest(), SignedConstantDomain(result));
   } else {
-    env->set_primitive(insn->dest(), SignedConstantDomain::top());
+    env->set(insn->dest(), SignedConstantDomain::top());
   }
 }
 
@@ -149,7 +127,7 @@ bool LocalArraySubAnalyzer::analyze_aget(const IRInstruction* insn,
     return false;
   }
   auto arr = env->get_array(insn->src(0));
-  env->set_primitive(RESULT_REGISTER, arr.get(*idx_opt));
+  env->set(RESULT_REGISTER, arr.get(*idx_opt));
   return true;
 }
 
@@ -221,10 +199,10 @@ bool ConstantPrimitiveSubAnalyzer::analyze_default(const IRInstruction* insn,
   }
   if (insn->dests_size()) {
     TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
-    env->set_register_to_top(insn->dest());
+    env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
     TRACE(CONSTP, 5, "Clearing result register\n");
-    env->set_register_to_top(RESULT_REGISTER);
+    env->set(RESULT_REGISTER, ConstantValue::top());
   }
   return true;
 }
@@ -233,46 +211,19 @@ bool ConstantPrimitiveSubAnalyzer::analyze_const(const IRInstruction* insn,
                                                  ConstantEnvironment* env) {
   TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
         insn->dest(), insn->get_literal());
-  env->set_primitive(insn->dest(), SignedConstantDomain(insn->get_literal()));
+  env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;
 }
 
 bool ConstantPrimitiveSubAnalyzer::analyze_move(const IRInstruction* insn,
                                                 ConstantEnvironment* env) {
-  if (insn->opcode() == OPCODE_MOVE_OBJECT) {
-    // XXX gross! `const v0 0` can be either a primitive zero value or a null
-    // object pointer, but we always store it as a primitive. This means that
-    // we need to check both the primitive and the array environments when
-    // handling move-object. Also note that we don't want to call both
-    // set_primitive and set_array_pointer, because each one will unbind the
-    // dest register in the other environment.
-    if (!env->get_primitive(insn->src(0)).is_top()) {
-      env->set_primitive(insn->dest(), env->get_primitive(insn->src(0)));
-    } else {
-      env->set_array_pointer(insn->dest(),
-                             env->get_array_pointer(insn->src(0)));
-    }
-  } else {
-    analyze_non_branch(insn, env);
-  }
+  env->set(insn->dest(), env->get(insn->src(0)));
   return true;
 }
 
 bool ConstantPrimitiveSubAnalyzer::analyze_move_result(
     const IRInstruction* insn, ConstantEnvironment* env) {
-  auto op = insn->opcode();
-  if (op == OPCODE_MOVE_RESULT_OBJECT ||
-      op == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-    // See comment in MOVE_RESULT_OBJECT
-    if (!env->get_primitive(RESULT_REGISTER).is_top()) {
-      env->set_primitive(insn->dest(), env->get_primitive(RESULT_REGISTER));
-    } else {
-      env->set_array_pointer(insn->dest(),
-                             env->get_array_pointer(RESULT_REGISTER));
-    }
-  } else {
-    env->set_primitive(insn->dest(), env->get_primitive(RESULT_REGISTER));
-  }
+  env->set(insn->dest(), env->get(RESULT_REGISTER));
   return true;
 }
 
@@ -311,15 +262,16 @@ bool ConstantPrimitiveSubAnalyzer::analyze_binop_lit(const IRInstruction* insn,
     // add-int/lit8 is the most common arithmetic instruction: about .29% of
     // all instructions. All other arithmetic instructions are less than .05%
     int32_t lit = insn->get_literal();
-    auto add_in_bounds = [lit](int64_t v) -> boost::optional<int64_t> {
-      if (addition_out_of_bounds(lit, v)) {
-        return boost::none;
-      }
-      return v + lit;
-    };
     TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
           lit);
-    analyze_non_branch(insn, env, add_in_bounds);
+
+    auto result = SignedConstantDomain::top();
+    auto cst =
+        env->get_primitive(insn->src(0)).constant_domain().get_constant();
+    if (cst && !addition_out_of_bounds(lit, *cst)) {
+      result = SignedConstantDomain(*cst + lit);
+    }
+    env->set(insn->dest(), result);
     return true;
   }
   return analyze_default(insn, env);
@@ -333,7 +285,7 @@ bool ClinitFieldSubAnalyzer::analyze_sget(const DexType* class_under_init,
     return false;
   }
   if (field->get_class() == class_under_init) {
-    env->set_primitive(RESULT_REGISTER, env->get_primitive(field));
+    env->set(RESULT_REGISTER, env->get_primitive(field));
     return true;
   }
   return false;
@@ -347,7 +299,7 @@ bool ClinitFieldSubAnalyzer::analyze_sput(const DexType* class_under_init,
     return false;
   }
   if (field->get_class() == class_under_init) {
-    env->set_primitive(field, env->get_primitive(insn->src(0)));
+    env->set(field, env->get_primitive(insn->src(0)));
     return true;
   }
   return false;
@@ -403,76 +355,82 @@ static void analyze_if(const IRInstruction* insn,
   auto op = !is_true_branch ? opcode::invert_conditional_branch(insn->opcode())
                             : insn->opcode();
 
-  auto scd_left = env->get_primitive(insn->src(0));
-  auto scd_right = insn->srcs_size() > 1 ? env->get_primitive(insn->src(1))
-                                         : SignedConstantDomain(0);
+  auto left = env->get(insn->src(0));
+  auto right =
+      insn->srcs_size() > 1 ? env->get(insn->src(1)) : SignedConstantDomain(0);
 
   switch (op) {
   case OPCODE_IF_EQ: {
-    auto refined_value = scd_left.meet(scd_right);
-    env->set_primitive(insn->src(0), refined_value);
-    env->set_primitive(insn->src(1), refined_value);
+    auto refined_value = left.meet(right);
+    env->set(insn->src(0), refined_value);
+    env->set(insn->src(1), refined_value);
     break;
   }
   case OPCODE_IF_EQZ: {
-    env->set_primitive(insn->src(0), scd_left.meet(SignedConstantDomain(0)));
+    env->set(insn->src(0), left.meet(SignedConstantDomain(0)));
     break;
   }
-  case OPCODE_IF_NE:
-  case OPCODE_IF_NEZ: {
-    auto cd_left = scd_left.constant_domain();
-    auto cd_right = scd_right.constant_domain();
-    if (!(cd_left.is_value() && cd_right.is_value())) {
-      break;
-    }
-    if (*cd_left.get_constant() == *cd_right.get_constant()) {
-      env->set_to_bottom();
-    }
-    break;
-  }
-  case OPCODE_IF_LT:
-    if (scd_left.min_element() >= scd_right.max_element()) {
-      env->set_to_bottom();
-    }
-    break;
   case OPCODE_IF_LTZ:
-    env->set_primitive(
-        insn->src(0),
-        scd_left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
-    break;
-  case OPCODE_IF_GE:
-    if (scd_left.max_element() < scd_right.min_element()) {
-      env->set_to_bottom();
-    }
-    break;
-  case OPCODE_IF_GEZ:
-    env->set_primitive(
-        insn->src(0),
-        scd_left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
-    break;
-  case OPCODE_IF_GT:
-    if (scd_left.max_element() <= scd_right.min_element()) {
-      env->set_to_bottom();
-    }
+    env->set(insn->src(0),
+             left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
     break;
   case OPCODE_IF_GTZ:
-    env->set_primitive(
-        insn->src(0),
-        scd_left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
+    env->set(insn->src(0),
+             left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
     break;
-  case OPCODE_IF_LE:
-    if (scd_left.min_element() > scd_right.max_element()) {
-      env->set_to_bottom();
-    }
+  case OPCODE_IF_GEZ:
+    env->set(insn->src(0),
+             left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
     break;
   case OPCODE_IF_LEZ:
-    env->set_primitive(
-        insn->src(0),
-        scd_left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
+    env->set(insn->src(0),
+             left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
     break;
-  default:
-    always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
-    not_reached();
+  default: {
+    auto scd_left = left.maybe_get<SignedConstantDomain>();
+    auto scd_right = right.maybe_get<SignedConstantDomain>();
+    if (!scd_left || !scd_right) {
+      break;
+    }
+    switch (op) {
+    case OPCODE_IF_NE:
+    case OPCODE_IF_NEZ: {
+      auto cd_left = scd_left->constant_domain();
+      auto cd_right = scd_right->constant_domain();
+      if (!(cd_left.is_value() && cd_right.is_value())) {
+        break;
+      }
+      if (*cd_left.get_constant() == *cd_right.get_constant()) {
+        env->set_to_bottom();
+      }
+      break;
+    }
+    case OPCODE_IF_LT:
+      if (scd_left->min_element() >= scd_right->max_element()) {
+        env->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_GE:
+      if (scd_left->max_element() < scd_right->min_element()) {
+        env->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_GT:
+      if (scd_left->max_element() <= scd_right->min_element()) {
+        env->set_to_bottom();
+      }
+      break;
+    case OPCODE_IF_LE:
+      if (scd_left->min_element() > scd_right->max_element()) {
+        env->set_to_bottom();
+      }
+      break;
+    default:
+      always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
+      not_reached();
+    }
+    break;
+  }
   }
 }
 

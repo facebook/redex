@@ -26,7 +26,7 @@ static ConstantEnvironment env_with_params(const IRCode* code,
   size_t idx{0};
   ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
-    env.set_primitive(mie.insn->dest(), args.get(idx++));
+    env.set(mie.insn->dest(), args.get(idx++));
   }
   return env;
 }
@@ -115,11 +115,11 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
   for (auto* sfield : cls->get_sfields()) {
     auto value = sfield->get_static_value();
     if (value == nullptr) {
-      env->set_primitive(sfield, SignedConstantDomain(0));
+      env->set(sfield, SignedConstantDomain(0));
     } else if (is_primitive(sfield->get_type())) {
-      env->set_primitive(sfield, SignedConstantDomain(value->value()));
+      env->set(sfield, SignedConstantDomain(value->value()));
     } else {
-      env->set_primitive(sfield, SignedConstantDomain::top());
+      env->set(sfield, SignedConstantDomain::top());
     }
   }
 }

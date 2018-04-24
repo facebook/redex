@@ -14,6 +14,7 @@
 #include "ConstantAbstractDomain.h"
 #include "ConstantArrayDomain.h"
 #include "ControlFlow.h"
+#include "DisjointUnionAbstractDomain.h"
 #include "FixpointIterators.h"
 #include "HashedAbstractPartition.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -107,31 +108,22 @@ using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
-/*
- * We have a number of environments with "Constant" in their names. The naming
- * scheme is as follows: when the word comes before Constant, it is referring
- * to the variable (key); when it comes after it is referring to the domain
- * (value).
- */
-
-template <typename Variable>
-using ConstantPrimitiveEnvironment =
-    PatriciaTreeMapAbstractEnvironment<Variable, SignedConstantDomain>;
-
 // For now, this only represents new-array instructions. Can be extended to
 // new-instance in the future.
 using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
-
-template <typename Variable>
-using ConstantArrayEnvironment =
-    PatriciaTreeMapAbstractEnvironment<Variable, AbstractHeapPointer>;
 
 using ConstantArrayHeap =
     PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
                                        ConstantPrimitiveArrayDomain>;
 
-using FieldConstantEnvironment =
+using ConstantFieldEnvironment =
     PatriciaTreeMapAbstractEnvironment<DexField*, SignedConstantDomain>;
+
+using ConstantValue =
+    DisjointUnionAbstractDomain<SignedConstantDomain, AbstractHeapPointer>;
+
+using ConstantRegisterEnvironment =
+    PatriciaTreeMapAbstractEnvironment<reg_t, ConstantValue>;
 
 /*
  * Currently, this models:
@@ -144,9 +136,8 @@ using FieldConstantEnvironment =
  */
 class ConstantEnvironment final
     : public ReducedProductAbstractDomain<ConstantEnvironment,
-                                          ConstantPrimitiveEnvironment<reg_t>,
-                                          ConstantArrayEnvironment<reg_t>,
-                                          FieldConstantEnvironment,
+                                          ConstantRegisterEnvironment,
+                                          ConstantFieldEnvironment,
                                           ConstantArrayHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
@@ -157,44 +148,41 @@ class ConstantEnvironment final
   // insert a redundant '= default'.
   ConstantEnvironment() = default;
 
-  ConstantEnvironment(
-      std::initializer_list<std::pair<reg_t, SignedConstantDomain>> l)
+  ConstantEnvironment(std::initializer_list<std::pair<reg_t, ConstantValue>> l)
       : ReducedProductAbstractDomain(
-            std::make_tuple(ConstantPrimitiveEnvironment<reg_t>(l),
-                            ConstantArrayEnvironment<reg_t>(),
-                            FieldConstantEnvironment(),
+            std::make_tuple(ConstantRegisterEnvironment(l),
+                            ConstantFieldEnvironment(),
                             ConstantArrayHeap())) {}
 
-  static void reduce_product(std::tuple<ConstantPrimitiveEnvironment<reg_t>,
-                                        ConstantArrayEnvironment<reg_t>,
-                                        FieldConstantEnvironment,
+  static void reduce_product(std::tuple<ConstantRegisterEnvironment,
+                                        ConstantFieldEnvironment,
                                         ConstantArrayHeap>&) {}
   /*
    * Getters and setters
    */
 
-  const ConstantPrimitiveEnvironment<reg_t>& get_primitive_environment() const {
+  const ConstantRegisterEnvironment& get_register_environment() const {
     return ReducedProductAbstractDomain::get<0>();
   }
 
-  const ConstantArrayEnvironment<reg_t>& get_array_environment() const {
+  const ConstantFieldEnvironment& get_field_environment() const {
     return ReducedProductAbstractDomain::get<1>();
   }
 
-  const FieldConstantEnvironment& get_field_environment() const {
+  const ConstantArrayHeap& get_array_heap() const {
     return ReducedProductAbstractDomain::get<2>();
   }
 
-  const ConstantArrayHeap& get_array_heap() const {
-    return ReducedProductAbstractDomain::get<3>();
+  ConstantValue get(reg_t reg) const {
+    return get_register_environment().get(reg);
   }
 
   SignedConstantDomain get_primitive(reg_t reg) const {
-    return get_primitive_environment().get(reg);
+    return get_register_environment().get(reg).get<SignedConstantDomain>();
   }
 
   AbstractHeapPointer get_array_pointer(reg_t reg) const {
-    return get_array_environment().get(reg);
+    return get_register_environment().get(reg).get<AbstractHeapPointer>();
   }
 
   /*
@@ -215,50 +203,27 @@ class ConstantEnvironment final
     return get_field_environment().get(field);
   }
 
-  ConstantEnvironment& mutate_primitive_environment(
-      std::function<void(ConstantPrimitiveEnvironment<reg_t>*)> f) {
+  ConstantEnvironment& mutate_register_environment(
+      std::function<void(ConstantRegisterEnvironment*)> f) {
     apply<0>(f);
     return *this;
   }
 
-  ConstantEnvironment& mutate_array_environment(
-      std::function<void(ConstantArrayEnvironment<reg_t>*)> f) {
-    apply<1>(f);
-    return *this;
-  }
-
   ConstantEnvironment& mutate_field_environment(
-      std::function<void(FieldConstantEnvironment*)> f) {
-    apply<2>(f);
+      std::function<void(ConstantFieldEnvironment*)> f) {
+    apply<1>(f);
     return *this;
   }
 
   ConstantEnvironment& mutate_array_heap(
       std::function<void(ConstantArrayHeap*)> f) {
-    apply<3>(f);
+    apply<2>(f);
     return *this;
   }
 
-  ConstantEnvironment& set_primitive(reg_t reg,
-                                     const SignedConstantDomain& value) {
-    // If the register was bound to an array pointer before, we must unbind it
-    mutate_array_environment([&](ConstantArrayEnvironment<reg_t>* env) {
-      env->set(reg, AbstractHeapPointer::top());
-    });
-    return mutate_primitive_environment(
-        [&](ConstantPrimitiveEnvironment<reg_t>* env) {
-          env->set(reg, value);
-        });
-  }
-
-  ConstantEnvironment& set_array_pointer(reg_t reg,
-                                         const AbstractHeapPointer& ptr) {
-    // If the register was bound to a primitive value before, we must unbind it
-    mutate_primitive_environment([&](ConstantPrimitiveEnvironment<reg_t>* env) {
-      env->set(reg, SignedConstantDomain::top());
-    });
-    return mutate_array_environment(
-        [&](ConstantArrayEnvironment<reg_t>* env) { env->set(reg, ptr); });
+  ConstantEnvironment& set(reg_t reg, const ConstantValue& value) {
+    return mutate_register_environment(
+        [&](ConstantRegisterEnvironment* env) { env->set(reg, value); });
   }
 
   /*
@@ -268,7 +233,7 @@ class ConstantEnvironment final
       reg_t reg,
       const AbstractHeapPointer::ConstantType& ptr_val,
       const ConstantPrimitiveArrayDomain& value) {
-    set_array_pointer(reg, AbstractHeapPointer(ptr_val));
+    set(reg, AbstractHeapPointer(ptr_val));
     mutate_array_heap(
         [&](ConstantArrayHeap* heap) { heap->set(ptr_val, value); });
     return *this;
@@ -295,24 +260,14 @@ class ConstantEnvironment final
     });
   }
 
-  /*
-   * Regardless of the type of the register, bind it to Top.
-   */
-  ConstantEnvironment& set_register_to_top(reg_t reg) {
-    set_primitive(reg, SignedConstantDomain::top());
-    set_array_pointer(reg, AbstractHeapPointer::top());
-    return *this;
-  }
-
-  ConstantEnvironment& set_primitive(DexField* field,
-                                     const SignedConstantDomain& value) {
+  ConstantEnvironment& set(DexField* field, const SignedConstantDomain& value) {
     return mutate_field_environment(
-        [&](FieldConstantEnvironment* env) { env->set(field, value); });
+        [&](ConstantFieldEnvironment* env) { env->set(field, value); });
   }
 
   ConstantEnvironment& clear_field_environment() {
     return mutate_field_environment(
-        [](FieldConstantEnvironment* env) { env->set_to_top(); });
+        [](ConstantFieldEnvironment* env) { env->set_to_top(); });
   }
 
   static ConstantEnvironment top() { return ConstantEnvironment(); }

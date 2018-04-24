@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "IRInstruction.h"
+#include "TemplateUtil.h"
 
 /*
  * This module provides a way to compose analyses over IRInstructions.
@@ -138,22 +139,6 @@ class InstructionSubAnalyzerBase<Derived, _Env, std::nullptr_t> {
 #undef X
 };
 
-namespace ia_impl {
-
-// Extract the first type in a parameter pack.
-template <typename Head, typename... Tail>
-struct HeadType {
-  using type = Head;
-};
-
-// Check if all template parameters are true.
-// See https://stackoverflow.com/questions/28253399/check-traits-for-all-variadic-template-arguments/28253503#28253503
-template <bool...> struct bool_pack;
-template <bool... v>
-using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
-
-} // namespace ia_impl
-
 /*
  * The run() method of this class will run each sub-analyzer in the Analyzers
  * list from left to right on the given instruction.
@@ -162,19 +147,19 @@ template <typename... Analyzers>
 class InstructionSubAnalyzerCombiner final {
  public:
   // All Analyzers should have the same Env type, so just take the first one.
-  using Env = typename ia_impl::HeadType<Analyzers...>::type::Env;
+  using Env = typename template_util::HeadType<Analyzers...>::type::Env;
 
   ~InstructionSubAnalyzerCombiner() {
     static_assert(
-        ia_impl::all_true<(std::is_base_of<InstructionSubAnalyzerBase<
-                                               Analyzers,
-                                               typename Analyzers::Env,
-                                               typename Analyzers::State>,
-                                           Analyzers>::value)...>::value,
+        template_util::all_true<(std::is_base_of<InstructionSubAnalyzerBase<
+                                                     Analyzers,
+                                                     typename Analyzers::Env,
+                                                     typename Analyzers::State>,
+                                                 Analyzers>::value)...>::value,
         "Not all analyses inherit from the right instance of "
         "InstructionSubAnalyzerBase!");
     static_assert(
-        ia_impl::all_true<(
+        template_util::all_true<(
             std::is_same<typename Analyzers::Env, Env>::value)...>::value,
         "Not all analyses operate on the same Environment!");
   }
@@ -184,10 +169,10 @@ class InstructionSubAnalyzerCombiner final {
 
   // If all sub-analyzers have a default-constructible state, then this
   // combined analyzer is default-constructible.
-  template <
-      bool B = ia_impl::all_true<(std::is_default_constructible<
-                                  typename Analyzers::State>::value)...>::value,
-      typename = typename std::enable_if_t<B>>
+  template <bool B = template_util::all_true<
+                (std::is_default_constructible<
+                    typename Analyzers::State>::value)...>::value,
+            typename = typename std::enable_if_t<B>>
   InstructionSubAnalyzerCombiner()
       : m_states(std::make_tuple(typename Analyzers::State()...)) {}
 

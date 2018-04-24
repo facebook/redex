@@ -233,7 +233,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
  */
 void RuntimeAssertTransform::insert_param_asserts(
     const ConstantEnvironment& env, DexMethod* method) {
-  auto args = env.get_primitive_environment();
+  auto args = env.get_register_environment();
   if (!args.is_value()) {
     return;
   }
@@ -256,10 +256,11 @@ void RuntimeAssertTransform::insert_param_asserts(
       continue;
     }
     auto reg = insn_it->insn->dest();
-    auto scd = args.get(reg);
-    if (scd.is_top()) {
+    auto scd_opt = args.get(reg).maybe_get<SignedConstantDomain>();
+    if (!scd_opt) {
       continue;
     }
+    auto& scd = *scd_opt;
     // The branching instruction that checks whether the constant domain is
     // correct for the given param
     // XXX with some refactoring, we could use insert_if_opcode_check here...

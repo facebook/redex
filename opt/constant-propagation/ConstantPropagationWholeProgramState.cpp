@@ -21,7 +21,7 @@ namespace {
  * to :field_partition.
  */
 void set_fields_in_partition(const DexClass* cls,
-                             const FieldConstantEnvironment& field_env,
+                             const ConstantFieldEnvironment& field_env,
                              ConstantStaticFieldPartition* field_partition) {
   // Note that we *must* iterate over the list of fields in the class and not
   // the bindings in field_env here. This ensures that fields whose values are
@@ -185,8 +185,7 @@ bool WholeProgramAwareSubAnalyzer::analyze_sget(
   if (field == nullptr) {
     return false;
   }
-  env->set_primitive(RESULT_REGISTER,
-                     whole_program_state->get_field_value(field));
+  env->set(RESULT_REGISTER, whole_program_state->get_field_value(field));
   return true;
 }
 
@@ -205,8 +204,7 @@ bool WholeProgramAwareSubAnalyzer::analyze_invoke(
   if (method == nullptr) {
     return false;
   }
-  env->set_primitive(RESULT_REGISTER,
-                     whole_program_state->get_return_value(method));
+  env->set(RESULT_REGISTER, whole_program_state->get_return_value(method));
   return true;
 }
 
