@@ -146,8 +146,8 @@ class InstructionSubAnalyzerBase<Derived, _Env, std::nullptr_t> {
 template <typename... Analyzers>
 class InstructionSubAnalyzerCombiner final {
  public:
-  // All Analyzers should have the same Env type, so just take the first one.
-  using Env = typename template_util::HeadType<Analyzers...>::type::Env;
+  // All Analyzers should have the same Env type.
+  using Env = typename std::common_type<typename Analyzers::Env...>::type;
 
   ~InstructionSubAnalyzerCombiner() {
     static_assert(
@@ -158,10 +158,6 @@ class InstructionSubAnalyzerCombiner final {
                                                  Analyzers>::value)...>::value,
         "Not all analyses inherit from the right instance of "
         "InstructionSubAnalyzerBase!");
-    static_assert(
-        template_util::all_true<(
-            std::is_same<typename Analyzers::Env, Env>::value)...>::value,
-        "Not all analyses operate on the same Environment!");
   }
 
   InstructionSubAnalyzerCombiner(typename Analyzers::State... states)
