@@ -22,6 +22,7 @@
  *
  *
  */
+
 namespace call_graph {
 
 class Edge {
@@ -31,13 +32,31 @@ class Edge {
   DexMethod* caller() const { return m_caller; }
   DexMethod* callee() const { return m_callee; }
 
+  bool operator==(const Edge& that) const {
+    return caller() == that.caller() && callee() == that.callee();
+  }
+
  private:
   DexMethod* m_caller;
   DexMethod* m_callee;
   IRList::iterator m_invoke_it;
 };
 
-using Edges = std::set<std::shared_ptr<Edge>>;
+struct CompareEdges {
+  bool operator()(const std::shared_ptr<Edge>& a,
+                  const std::shared_ptr<Edge>& b) const {
+    return *a == *b;
+  }
+};
+
+struct HashEdges {
+  size_t operator()(const std::shared_ptr<Edge>& e) const {
+    return (size_t)(e->caller()) + ((size_t)e->callee());
+  }
+};
+
+using Edges =
+    std::unordered_set<std::shared_ptr<Edge>, HashEdges, CompareEdges>;
 
 class Node {
  public:
@@ -135,10 +154,10 @@ class GraphInterface {
   static const NodeId entry(const Graph& graph) {
     return graph.entry().method();
   }
-  static std::set<EdgeId> predecessors(const Graph& graph, const NodeId& m) {
+  static Edges predecessors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callers();
   }
-  static std::set<EdgeId> successors(const Graph& graph, const NodeId& m) {
+  static Edges successors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callees();
   }
   static const NodeId source(const Graph& graph, const EdgeId& e) {
