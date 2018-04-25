@@ -128,7 +128,7 @@ void QuickData::serialize(std::shared_ptr<FILE*> fd) {
 
   } // FileHandle lifecycle
 
-  fd = nullptr;
+  *fd = nullptr;
 }
 
 QuickData::QuickData(const char* location) { load_data(location); }

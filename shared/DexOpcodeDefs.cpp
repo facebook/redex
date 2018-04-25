@@ -18,6 +18,7 @@ std::string print(DexOpcode opcode) {
    case DOPCODE_##op:               \
      return #literal;
      DOPS
+     QDOPS
  #undef OP
    case FOPCODE_PACKED_SWITCH:
      return "PACKED_SWITCH_DATA";
@@ -60,9 +61,9 @@ DexOpcode quicken(DexOpcode opcode) {
   case DOPCODE_IPUT_BYTE:
     return DOPCODE_IPUT_BYTE_QUICK;
   case DOPCODE_IPUT_CHAR:
-    return DOPCODE_IGET_CHAR_QUICK;
+    return DOPCODE_IPUT_CHAR_QUICK;
   case DOPCODE_IPUT_SHORT:
-    return DOPCODE_IGET_SHORT_QUICK;
+    return DOPCODE_IPUT_SHORT_QUICK;
 
   default:
     throw std::invalid_argument("Can't quicken opcode.");

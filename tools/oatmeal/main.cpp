@@ -102,7 +102,7 @@ Arguments parse_args(int argc, char* argv[]) {
       {"test-is-oatmeal", no_argument, nullptr, 1},
       {"samsung-oatformat", no_argument, nullptr, 2},
       {"one-oat-per-dex", no_argument, nullptr, 3},
-      {"quickening-map", required_argument, nullptr, 'q'},
+      {"quickening-data", required_argument, nullptr, 'q'},
       {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
