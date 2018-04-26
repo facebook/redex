@@ -254,6 +254,33 @@ void MultiMethodInliner::inline_callees(
     info.not_found += callees.size() - found;
   }
 
+  inline_inlinables(caller, inlinables);
+}
+
+void MultiMethodInliner::inline_callees(
+    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
+  auto ii = InstructionIterable(caller->get_code());
+  auto end = ii.end();
+
+  std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
+  for (auto it = ii.begin(); it != end; ++it) {
+    auto insn = it->insn;
+    if (insns.count(insn)) {
+      auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+      if (callee == nullptr) {
+        continue;
+      }
+      always_assert(callee->is_concrete());
+      inlinables.push_back(std::make_pair(callee, it.unwrap()));
+    }
+  }
+
+  inline_inlinables(caller, inlinables);
+}
+
+void MultiMethodInliner::inline_inlinables(
+    DexMethod* caller,
+    const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables) {
   // attempt to inline all inlinable candidates
   size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
   for (auto inlinable : inlinables) {

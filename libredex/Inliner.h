@@ -98,6 +98,13 @@ class MultiMethodInliner {
   void inline_callees(DexMethod* caller,
                       const std::vector<DexMethod*>& callees);
 
+  /**
+   * Inline callees in the given instructions in the caller, if is_inlinable
+   * below returns true.
+   */
+  void inline_callees(DexMethod* caller,
+                      const std::unordered_set<IRInstruction*>& insns);
+
  private:
   /**
    * Inline all callees into caller.
@@ -116,6 +123,11 @@ class MultiMethodInliner {
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
                     size_t estimated_insn_size);
+
+
+  void inline_inlinables(
+      DexMethod* caller,
+      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
