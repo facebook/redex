@@ -22,6 +22,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
+#include "StringBuilder.h"
 
 namespace {
 
@@ -608,10 +609,10 @@ std::string show(const DexType* p) {
 // in the proguard map
 std::string show(const DexFieldRef* p) {
   if (!p) return "";
-  std::ostringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name()) << ":"
-      << show(p->get_type());
-  return ss.str();
+  string_builders::StaticStringBuilder<5> b;
+  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
+    << show(p->get_type());
+  return b.str();
 }
 
 std::string vshow(const DexField* p) {
@@ -654,20 +655,21 @@ std::string vshow(const DexProto* p, bool include_ret_type = true) {
 // in the proguard map
 std::string show(const DexTypeList* p) {
   if (!p) return "";
-  std::ostringstream ss;
-  for (auto const type : p->get_type_list()) {
-    ss << show(type);
+  const auto& type_list = p->get_type_list();
+  string_builders::DynamicStringBuilder b(type_list.size());
+  for (auto const type : type_list) {
+    b << show(type);
   }
-  return ss.str();
+  return b.str();
 }
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
 std::string show(const DexProto* p) {
   if (!p) return "";
-  std::ostringstream ss;
-  ss << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
-  return ss.str();
+  string_builders::StaticStringBuilder<4> b;
+  b << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
+  return b.str();
 }
 
 std::string show(const DexCode* code) {
@@ -688,10 +690,10 @@ std::string show(const DexCode* code) {
 // in the proguard map
 std::string show(const DexMethodRef* p) {
   if (!p) return "";
-  std::ostringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name())
-      << ":" << show(p->get_proto());
-  return ss.str();
+  string_builders::StaticStringBuilder<5> b;
+  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
+    << show(p->get_proto());
+  return b.str();
 }
 
 std::string vshow(uint32_t acc) {
