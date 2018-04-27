@@ -851,6 +851,11 @@ std::string show(DexOpcode opcode) {
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:
     return "FILLED_ARRAY_DATA";
+  SWITCH_FORMAT_QUICK_FIELD_REF
+  SWITCH_FORMAT_QUICK_METHOD_REF
+  SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
+    not_reached();
+  }
   }
 }
 

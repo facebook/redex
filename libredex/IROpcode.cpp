@@ -474,6 +474,18 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case FOPCODE_FILLED_ARRAY:
     always_assert_log(false, "Cannot create IROpcode from %s", SHOW(op));
     not_reached();
+  SWITCH_FORMAT_QUICK_FIELD_REF {
+    always_assert_log(false, "Invalid use of a quick ref opcode %02x\n", op);
+    not_reached();
+  }
+  SWITCH_FORMAT_QUICK_METHOD_REF {
+    always_assert_log(false, "Invalid use of a quick method opcode %02x\n", op);
+    not_reached();
+  }
+  SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
+    always_assert_log(false, "Invalid use of return-void-no-barrier opcode %02x\n", op);
+    not_reached();
+  }
   }
   always_assert_log(false, "Unknown opcode %02x\n", op);
   not_reached();
