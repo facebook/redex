@@ -10,6 +10,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -459,6 +460,67 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
 
   AbstractValueKind m_kind;
   Value m_value;
+};
+
+// Implement copy on write for Value. The FixpointIterator makes lots of copies
+// of Domain objects. This class delays copying Value until we actually need to
+// (before a write). m_value is read-only until the first write operation.
+//
+// This AbstractValue is recommended whenever copying the underlying abstract
+// value incurs a significant cost
+template <typename Value>
+class CopyOnWriteAbstractValue : AbstractValue<CopyOnWriteAbstractValue<Value>> {
+  using This = CopyOnWriteAbstractValue<Value>;
+ public:
+  void clear() override { get().clear(); }
+
+  AbstractValueKind kind() const override { return get().kind(); }
+
+  bool leq(const This& other) const override {
+    return get().leq(other.get());
+  }
+
+  bool equals(const This& other) const override {
+    return get().equals(other.get());
+  }
+
+  AbstractValueKind join_with(const This& other) override {
+    return get().join_with(other.get());
+  }
+
+  AbstractValueKind widen_with(const This& other) override {
+    return get().widen_with(other.get());
+  }
+
+  AbstractValueKind meet_with(const This& other) override {
+    return get().meet_with(other.get());
+  }
+
+  AbstractValueKind narrow_with(const This& other) override {
+    return get().narrow_with(other.get());
+  }
+
+  // m_value should _only_ be accessed via `get()`
+  Value& get() {
+    upgrade_to_writer();
+    return *m_value;
+  }
+  const Value& get() const {
+    return *m_value;
+  }
+
+ private:
+  // WARNING: This Copy on write implementation is likely to fail with multiple
+  // concurrent accesses
+  void upgrade_to_writer() {
+    if (m_value.use_count() > 1) {
+      // need to make a copy
+      m_value = std::make_shared<Value>(*m_value);
+    }
+  }
+
+  // m_value should only be accessed via `get()`
+  std::shared_ptr<Value> m_value{std::make_shared<Value>()};
 };
 
 /*

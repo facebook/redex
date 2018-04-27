@@ -240,11 +240,12 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   bool has_neighbors(vertex_t v);
 };
 
-class AliasDomain
-    : public AbstractDomainScaffolding<AliasedRegisters, AliasDomain> {
+class AliasDomain final : public AbstractDomainScaffolding<
+                              CopyOnWriteAbstractValue<AliasedRegisters>,
+                              AliasDomain> {
  public:
   explicit AliasDomain(AbstractValueKind kind = AbstractValueKind::Top)
-      : AbstractDomainScaffolding<AliasedRegisters, AliasDomain>(kind) {}
+      : AbstractDomainScaffolding(kind) {}
 
   static AliasDomain bottom() {
     return AliasDomain(AbstractValueKind::Bottom);
@@ -256,7 +257,7 @@ class AliasDomain
     if (is_bottom()) {
       return;
     }
-    operation(*this->get_value());
+    operation(this->get_value()->get());
     normalize();
   }
 };
