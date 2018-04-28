@@ -53,7 +53,7 @@ class WholeProgramState {
    *
    * It will never return Bottom.
    */
-  const SignedConstantDomain get_field_value(const DexField* field) const {
+  const ConstantValue get_field_value(const DexField* field) const {
     if (!m_known_fields.count(field)) {
       return SignedConstantDomain::top();
     }
@@ -66,7 +66,7 @@ class WholeProgramState {
    * This may return Bottom to indicate that a method never returns (i.e. it
    * throws or loops indefinitely).
    */
-  const SignedConstantDomain get_return_value(const DexMethod* method) const {
+  const ConstantValue get_return_value(const DexMethod* method) const {
     if (!m_known_methods.count(method)) {
       return SignedConstantDomain::top();
     }

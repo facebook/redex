@@ -22,7 +22,13 @@
 using namespace constant_propagation;
 using namespace constant_propagation::interprocedural;
 
-struct InterproceduralConstantPropagationTest : public RedexTest {};
+struct InterproceduralConstantPropagationTest : public RedexTest {
+ public:
+  InterproceduralConstantPropagationTest() {
+    // EnumFieldSubAnalyzer requires that this method exists
+    DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z");
+  }
+};
 
 bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
   return a.equals(b);
@@ -281,7 +287,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   EXPECT_TRUE(fp_iter.get_entry_state_at(m3).is_bottom());
 }
 
-struct RuntimeAssertTest : public RedexTest {
+struct RuntimeAssertTest : public InterproceduralConstantPropagationTest {
   DexMethodRef* m_fail_handler;
 
   RuntimeAssertTest() {
@@ -966,7 +972,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
   auto& wps = fp_iter->get_whole_program_state();
-  EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain::top());
+  EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
   InterproceduralConstantPropagationPass(config).run(scope);
   EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);

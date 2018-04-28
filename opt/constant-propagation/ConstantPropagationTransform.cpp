@@ -22,7 +22,12 @@ namespace constant_propagation {
 void Transform::replace_with_const(const ConstantEnvironment& env,
                                    IRList::iterator it) {
   auto* insn = it->insn;
-  auto cst = env.get_primitive(insn->dest()).constant_domain().get_constant();
+  auto value = env.get(insn->dest());
+  auto scd = value.maybe_get<SignedConstantDomain>();
+  if (!scd) {
+    return;
+  }
+  auto cst = scd->constant_domain().get_constant();
   if (!cst) {
     return;
   }
@@ -82,7 +87,11 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_SPUT_SHORT:
   case OPCODE_SPUT_WIDE: {
     auto* field = resolve_field(insn->get_field());
-    auto cst = wps.get_field_value(field).constant_domain().get_constant();
+    auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
+    if (!scd) {
+      break;
+    }
+    auto cst = scd->constant_domain().get_constant();
     if (cst) {
       // This field is known to be constant and must already hold this value.
       // We don't need to write to it again.

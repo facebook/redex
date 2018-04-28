@@ -123,14 +123,14 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
   if (!(is_integer(field->get_type()) || is_object(field->get_type()))) {
     return it;
   }
-  auto scd = wps.get_field_value(field);
-  if (scd.is_top()) {
+  auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
+  if (!scd || scd->is_top()) {
     return it;
   }
   auto fm_it = it.unwrap();
   auto reg = ir_list::move_result_pseudo_of(fm_it)->dest();
   ++fm_it; // skip the move-result-pseudo
-  fm_it = insert_if_opcode_check(code, fm_it, reg, scd);
+  fm_it = insert_if_opcode_check(code, fm_it, reg, *scd);
   auto check_insn_it = fm_it;
   auto tmp = code->allocate_temp();
   // XXX ideally this would use the deobfuscated field name
@@ -192,8 +192,8 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
              ->set_src(0, tmp)));
     return fm_it;
   };
-  auto scd = wps.get_return_value(callee);
-  if (scd.is_bottom()) {
+  auto cst = wps.get_return_value(callee);
+  if (cst.is_bottom()) {
     if (is_move_result(std::next(it)->insn->opcode())) {
       ++it;
     }
@@ -210,11 +210,12 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   if (!(is_integer(ret_type) || is_object(ret_type))) {
     return it;
   }
-  if (scd.is_top()) {
+  auto scd = cst.maybe_get<SignedConstantDomain>();
+  if (!scd || scd->is_top()) {
     return it;
   }
   auto fm_it = it.unwrap();
-  fm_it = insert_if_opcode_check(code, fm_it, reg, scd);
+  fm_it = insert_if_opcode_check(code, fm_it, reg, *scd);
   auto check_insn_it = fm_it;
   fm_it = insert_assertion(fm_it);
   auto bt = new BranchTarget(&*check_insn_it);

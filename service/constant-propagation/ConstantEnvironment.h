@@ -102,15 +102,25 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 // new-instance in the future.
 using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
 
+/*
+ * This represents an object that is uniquely referenced by a single static
+ * field. This enables us to compare these objects easily -- we can determine
+ * whether two different SingletonObjectDomain elements are equal just based
+ * on their representation in the abstract environment, without needing to
+ * check if they are pointing to the same object in the abstract heap.
+ */
+using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
+
 using ConstantArrayHeap =
     PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
                                        ConstantPrimitiveArrayDomain>;
 
-using ConstantFieldEnvironment =
-    PatriciaTreeMapAbstractEnvironment<DexField*, SignedConstantDomain>;
+using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
+                                                  SingletonObjectDomain,
+                                                  AbstractHeapPointer>;
 
-using ConstantValue =
-    DisjointUnionAbstractDomain<SignedConstantDomain, AbstractHeapPointer>;
+using ConstantFieldEnvironment =
+    PatriciaTreeMapAbstractEnvironment<DexField*, ConstantValue>;
 
 using ConstantRegisterEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, ConstantValue>;
@@ -175,6 +185,10 @@ class ConstantEnvironment final
     return get_register_environment().get(reg).get<AbstractHeapPointer>();
   }
 
+  SingletonObjectDomain get_singleton(reg_t reg) const {
+    return get_register_environment().get(reg).get<SingletonObjectDomain>();
+  }
+
   /*
    * Dereference the pointer stored in :reg and return the array it points to.
    */
@@ -189,8 +203,12 @@ class ConstantEnvironment final
     return get_array_heap().get(*ptr.get_constant());
   }
 
-  SignedConstantDomain get_primitive(DexField* field) const {
+  ConstantValue get(DexField* field) const {
     return get_field_environment().get(field);
+  }
+
+  SignedConstantDomain get_primitive(DexField* field) const {
+    return get(field).get<SignedConstantDomain>();
   }
 
   ConstantEnvironment& mutate_register_environment(
@@ -250,7 +268,7 @@ class ConstantEnvironment final
     });
   }
 
-  ConstantEnvironment& set(DexField* field, const SignedConstantDomain& value) {
+  ConstantEnvironment& set(DexField* field, const ConstantValue& value) {
     return mutate_field_environment(
         [&](ConstantFieldEnvironment* env) { env->set(field, value); });
   }
@@ -270,7 +288,7 @@ class ConstantEnvironment final
 };
 
 using ConstantStaticFieldPartition =
-    HashedAbstractPartition<const DexField*, SignedConstantDomain>;
+    HashedAbstractPartition<const DexField*, ConstantValue>;
 
 using ConstantMethodPartition =
-    HashedAbstractPartition<const DexMethod*, SignedConstantDomain>;
+    HashedAbstractPartition<const DexMethod*, ConstantValue>;

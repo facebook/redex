@@ -16,6 +16,7 @@ namespace interprocedural {
 using InstructionAnalyzer =
     InstructionSubAnalyzerCombiner<ClinitFieldSubAnalyzer,
                                    WholeProgramAwareSubAnalyzer,
+                                   EnumFieldSubAnalyzer,
                                    ConstantPrimitiveSubAnalyzer>;
 
 /*
@@ -52,7 +53,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
       if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_STATIC) {
         ArgumentDomain out_args;
         for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          out_args.set(i, state.get_primitive(insn->src(i)));
+          out_args.set(i, state.get(insn->src(i)));
         }
         current_state->set(insn, out_args);
       }
@@ -101,9 +102,12 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
 
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(),
-      [analyzer = InstructionAnalyzer(
-           config.class_under_init, &this->get_whole_program_state(), nullptr)](
-          auto* insn, auto* env) { analyzer.run(insn, env); });
+      [analyzer = InstructionAnalyzer(config.class_under_init,
+                                      &this->get_whole_program_state(),
+                                      EnumFieldSubAnalyzerState(),
+                                      nullptr)](auto* insn, auto* env) {
+        analyzer.run(insn, env);
+      });
   intra_cp->run(env);
 
   return intra_cp;

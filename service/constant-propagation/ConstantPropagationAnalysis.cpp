@@ -285,7 +285,7 @@ bool ClinitFieldSubAnalyzer::analyze_sget(const DexType* class_under_init,
     return false;
   }
   if (field->get_class() == class_under_init) {
-    env->set(RESULT_REGISTER, env->get_primitive(field));
+    env->set(RESULT_REGISTER, env->get(field));
     return true;
   }
   return false;
@@ -299,7 +299,7 @@ bool ClinitFieldSubAnalyzer::analyze_sput(const DexType* class_under_init,
     return false;
   }
   if (field->get_class() == class_under_init) {
-    env->set(field, env->get_primitive(insn->src(0)));
+    env->set(field, env->get(insn->src(0)));
     return true;
   }
   return false;
@@ -315,6 +315,55 @@ bool ClinitFieldSubAnalyzer::analyze_invoke(const DexType* class_under_init,
   if (insn->opcode() == OPCODE_INVOKE_STATIC &&
       class_under_init == insn->get_method()->get_class()) {
     env->clear_field_environment();
+  }
+  return false;
+}
+
+bool EnumFieldSubAnalyzer::analyze_sget(const EnumFieldSubAnalyzerState&,
+                                        const IRInstruction* insn,
+                                        ConstantEnvironment* env) {
+  if (insn->opcode() != OPCODE_SGET_OBJECT) {
+    return false;
+  }
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  if (!is_enum(field)) {
+    return false;
+  }
+  // An enum value is compiled into a static final field of the enum class.
+  // Each of these fields contain a unique object, so we can represent them with
+  // a SingletonObjectDomain.
+  env->set(RESULT_REGISTER, SingletonObjectDomain(field));
+  return true;
+}
+
+bool EnumFieldSubAnalyzer::analyze_invoke(
+    const EnumFieldSubAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto op = insn->opcode();
+  if (op == OPCODE_INVOKE_VIRTUAL) {
+    auto* method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    if (method == nullptr) {
+      return false;
+    }
+    if (method == state.enum_equals) {
+      auto left = env->get(insn->src(0)).maybe_get<SingletonObjectDomain>();
+      auto right = env->get(insn->src(1)).maybe_get<SingletonObjectDomain>();
+      if (!left || !right) {
+        return false;
+      }
+      auto left_field = left->get_constant();
+      auto right_field = right->get_constant();
+      if (!left_field || !right_field) {
+        return false;
+      }
+      env->set(RESULT_REGISTER,
+               SignedConstantDomain(left_field == right_field));
+      return true;
+    }
   }
   return false;
 }
@@ -338,6 +387,60 @@ void FixpointIterator::analyze_node(const NodeId& block,
 /*
  * Helpers for CFG edge analysis
  */
+
+/*
+ * Note that runtime_equals_visitor and runtime_leq_visitor are handling
+ * different notions of equality / order than AbstractDomain::equals() and
+ * AbstractDomain::leq(). The former return true if they can prove that their
+ * respective relations hold for a runtime comparison (e.g. from an if-eq or
+ * packed-switch instruction). In contrast, AbstractDomain::equals() will
+ * return true for two domains representing integers > 0, even though their
+ * corresponding runtime values may be different integers.
+ */
+class runtime_equals_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    auto cd_left = scd_left.constant_domain();
+    auto cd_right = scd_right.constant_domain();
+    if (!(cd_left.is_value() && cd_right.is_value())) {
+      return false;
+    }
+    if (*cd_left.get_constant() == *cd_right.get_constant()) {
+      return true;
+    }
+    return false;
+  }
+
+  bool operator()(const SingletonObjectDomain& d1,
+                  const SingletonObjectDomain& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return false;
+    }
+    if (*d1.get_constant() == *d2.get_constant()) {
+      return true;
+    }
+    return false;
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+class runtime_leq_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() <= scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
 
 /*
  * If we can determine that a branch is not taken based on the constants in the
@@ -370,66 +473,62 @@ static void analyze_if(const IRInstruction* insn,
     env->set(insn->src(0), left.meet(SignedConstantDomain(0)));
     break;
   }
-  case OPCODE_IF_LTZ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_NEZ: {
+    if (ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+      env->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_LT: {
+    if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left)) {
+      env->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_LTZ: {
     env->set(insn->src(0),
              left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
     break;
-  case OPCODE_IF_GTZ:
+  }
+  case OPCODE_IF_GT: {
+    if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right)) {
+      env->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_GTZ: {
     env->set(insn->src(0),
              left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
     break;
-  case OPCODE_IF_GEZ:
+  }
+  case OPCODE_IF_GE: {
+    if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right) &&
+        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+      env->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_GEZ: {
     env->set(insn->src(0),
              left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
     break;
-  case OPCODE_IF_LEZ:
+  }
+  case OPCODE_IF_LE: {
+    if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left) &&
+        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+      env->set_to_bottom();
+    }
+    break;
+  }
+  case OPCODE_IF_LEZ: {
     env->set(insn->src(0),
              left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
     break;
+  }
   default: {
-    auto scd_left = left.maybe_get<SignedConstantDomain>();
-    auto scd_right = right.maybe_get<SignedConstantDomain>();
-    if (!scd_left || !scd_right) {
-      break;
-    }
-    switch (op) {
-    case OPCODE_IF_NE:
-    case OPCODE_IF_NEZ: {
-      auto cd_left = scd_left->constant_domain();
-      auto cd_right = scd_right->constant_domain();
-      if (!(cd_left.is_value() && cd_right.is_value())) {
-        break;
-      }
-      if (*cd_left.get_constant() == *cd_right.get_constant()) {
-        env->set_to_bottom();
-      }
-      break;
-    }
-    case OPCODE_IF_LT:
-      if (scd_left->min_element() >= scd_right->max_element()) {
-        env->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_GE:
-      if (scd_left->max_element() < scd_right->min_element()) {
-        env->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_GT:
-      if (scd_left->max_element() <= scd_right->min_element()) {
-        env->set_to_bottom();
-      }
-      break;
-    case OPCODE_IF_LE:
-      if (scd_left->min_element() > scd_right->max_element()) {
-        env->set_to_bottom();
-      }
-      break;
-    default:
-      always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
-      not_reached();
-    }
-    break;
+    always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
+    not_reached();
   }
   }
 }

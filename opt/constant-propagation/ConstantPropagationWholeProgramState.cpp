@@ -32,7 +32,7 @@ void set_fields_in_partition(const DexClass* cls,
     auto value = field_env.get(field);
     if (!value.is_top()) {
       TRACE(ICONSTP, 2, "%s has value %s after <clinit>\n", SHOW(field),
-            value.constant_domain().str().c_str());
+            value.str().c_str());
       always_assert(field->get_class() == cls->get_type());
     } else {
       TRACE(ICONSTP, 2, "%s has unknown value after <clinit>\n", SHOW(field));
@@ -139,7 +139,7 @@ void WholeProgramState::collect_field_values(const IRInstruction* insn,
     if (field->get_class() == clinit_cls) {
       return;
     }
-    auto value = env.get_primitive(insn->src(0));
+    auto value = env.get(insn->src(0));
     m_field_partition.update(field, [&value](auto* current_value) {
       current_value->join_with(value);
     });
@@ -168,7 +168,7 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
         method, [](auto* current_value) { current_value->set_to_top(); });
     return;
   }
-  auto value = env.get_primitive(insn->src(0));
+  auto value = env.get(insn->src(0));
   m_method_partition.update(method, [&value](auto* current_value) {
     current_value->join_with(value);
   });
@@ -185,7 +185,11 @@ bool WholeProgramAwareSubAnalyzer::analyze_sget(
   if (field == nullptr) {
     return false;
   }
-  env->set(RESULT_REGISTER, whole_program_state->get_field_value(field));
+  auto value = whole_program_state->get_field_value(field);
+  if (value.is_top()) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, value);
   return true;
 }
 
@@ -204,7 +208,11 @@ bool WholeProgramAwareSubAnalyzer::analyze_invoke(
   if (method == nullptr) {
     return false;
   }
-  env->set(RESULT_REGISTER, whole_program_state->get_return_value(method));
+  auto value = whole_program_state->get_return_value(method);
+  if (value.is_top()) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, value);
   return true;
 }
 

@@ -138,4 +138,33 @@ class ClinitFieldSubAnalyzer final
                              ConstantEnvironment* env);
 };
 
+struct EnumFieldSubAnalyzerState {
+  const DexMethod* enum_equals;
+  EnumFieldSubAnalyzerState()
+      : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
+            "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
+    always_assert(enum_equals);
+  }
+};
+
+/*
+ * EnumFieldSubAnalyzer::analyze_sget assumes that when it is called to analyze
+ * some `sget-object LFoo;.X:LFoo` instruction, the sget instruction is not
+ * contained within Foo's class initializer. This means that most users of this
+ * analyzer should put it after the ClinitFieldSubAnalyzer when building the
+ * combined analyzer.
+ */
+class EnumFieldSubAnalyzer final
+    : public InstructionSubAnalyzerBase<EnumFieldSubAnalyzer,
+                                        ConstantEnvironment,
+                                        EnumFieldSubAnalyzerState> {
+ public:
+  static bool analyze_sget(const EnumFieldSubAnalyzerState&,
+                           const IRInstruction*,
+                           ConstantEnvironment*);
+  static bool analyze_invoke(const EnumFieldSubAnalyzerState&,
+                             const IRInstruction*,
+                             ConstantEnvironment*);
+};
+
 } // namespace constant_propagation

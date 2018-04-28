@@ -31,7 +31,7 @@ namespace interprocedural {
 using param_index_t = uint16_t;
 
 using ArgumentDomain =
-    PatriciaTreeMapAbstractEnvironment<param_index_t, SignedConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<param_index_t, ConstantValue>;
 
 /*
  * This map is an abstraction of the execution paths starting from the entry
