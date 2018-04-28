@@ -17,6 +17,7 @@ using InstructionAnalyzer =
     InstructionSubAnalyzerCombiner<ClinitFieldSubAnalyzer,
                                    WholeProgramAwareSubAnalyzer,
                                    EnumFieldSubAnalyzer,
+                                   BoxedBooleanSubAnalyzer,
                                    ConstantPrimitiveSubAnalyzer>;
 
 /*
@@ -105,6 +106,7 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
       [analyzer = InstructionAnalyzer(config.class_under_init,
                                       &this->get_whole_program_state(),
                                       EnumFieldSubAnalyzerState(),
+                                      BoxedBooleanSubAnalyzerState(),
                                       nullptr)](auto* insn, auto* env) {
         analyzer.run(insn, env);
       });

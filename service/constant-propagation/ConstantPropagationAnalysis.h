@@ -167,4 +167,30 @@ class EnumFieldSubAnalyzer final
                              ConstantEnvironment*);
 };
 
+struct BoxedBooleanSubAnalyzerState {
+  const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
+  const DexField* boolean_true{static_cast<DexField*>(
+      DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
+  const DexField* boolean_false{static_cast<DexField*>(
+      DexField::get_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;"))};
+  const DexMethod* boolean_valueof{
+      static_cast<DexMethod*>(DexMethod::get_method(
+          "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;"))};
+  const DexMethod* boolean_booleanvalue{static_cast<DexMethod*>(
+      DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z"))};
+};
+
+class BoxedBooleanSubAnalyzer final
+    : public InstructionSubAnalyzerBase<BoxedBooleanSubAnalyzer,
+                                        ConstantEnvironment,
+                                        BoxedBooleanSubAnalyzerState> {
+ public:
+  static bool analyze_sget(const BoxedBooleanSubAnalyzerState&,
+                           const IRInstruction*,
+                           ConstantEnvironment*);
+  static bool analyze_invoke(const BoxedBooleanSubAnalyzerState&,
+                             const IRInstruction*,
+                             ConstantEnvironment*);
+};
+
 } // namespace constant_propagation

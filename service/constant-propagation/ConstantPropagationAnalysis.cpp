@@ -333,8 +333,11 @@ bool EnumFieldSubAnalyzer::analyze_sget(const EnumFieldSubAnalyzerState&,
     return false;
   }
   // An enum value is compiled into a static final field of the enum class.
-  // Each of these fields contain a unique object, so we can represent them with
-  // a SingletonObjectDomain.
+  // Each of these fields contain a unique object, so we can represent them
+  // with a SingletonObjectDomain.
+  // Note that EnumFieldSubAnalyzer assumes that it is the only one in a
+  // combined chain of SubAnalyzers that creates SingletonObjectDomains of Enum
+  // types.
   env->set(RESULT_REGISTER, SingletonObjectDomain(field));
   return true;
 }
@@ -366,6 +369,71 @@ bool EnumFieldSubAnalyzer::analyze_invoke(
     }
   }
   return false;
+}
+
+bool BoxedBooleanSubAnalyzer::analyze_sget(
+    const BoxedBooleanSubAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (insn->opcode() != OPCODE_SGET_OBJECT) {
+    return false;
+  }
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  // Boolean.TRUE and Boolean.FALSE each contain a unique object, so we can
+  // represent them with a SingletonObjectDomain.
+  // Note that BoxedBooleanSubAnalyzer assumes that it is the only one in a
+  // combined chain of SubAnalyzers that creates SingletonObjectDomains of
+  // Boolean type.
+  if (field != state.boolean_true && field != state.boolean_false) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, SingletonObjectDomain(field));
+  return true;
+}
+
+bool BoxedBooleanSubAnalyzer::analyze_invoke(
+    const BoxedBooleanSubAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto method = insn->get_method();
+  if (method == nullptr || method->get_class() != state.boolean_class) {
+    return false;
+  }
+  if (method == state.boolean_valueof) {
+    auto cst =
+        env->get_primitive(insn->src(0)).constant_domain().get_constant();
+    if (!cst) {
+      return false;
+    }
+    if (*cst == 0) {
+      env->set(RESULT_REGISTER, SingletonObjectDomain(state.boolean_false));
+    } else {
+      env->set(RESULT_REGISTER, SingletonObjectDomain(state.boolean_true));
+    }
+    return true;
+  } else if (method == state.boolean_booleanvalue) {
+    auto value = env->get(insn->src(0)).maybe_get<SingletonObjectDomain>();
+    if (!value) {
+      return false;
+    }
+    auto cst = value->get_constant();
+    if (!cst) {
+      return false;
+    }
+    if (cst == state.boolean_false) {
+      env->set(RESULT_REGISTER, SignedConstantDomain(0));
+      return true;
+    } else if (cst == state.boolean_true) {
+      env->set(RESULT_REGISTER, SignedConstantDomain(1));
+      return true;
+    } else {
+      return false;
+    }
+    return false;
+  }
 }
 
 namespace intraprocedural {
