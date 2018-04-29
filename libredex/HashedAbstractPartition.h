@@ -270,8 +270,6 @@ class HashedAbstractPartition final
     return hap;
   }
 
-  std::string str() const;
-
  private:
   std::unordered_map<Label, Domain, VariableHash, VariableEqual> m_map;
   bool m_is_top{false};
@@ -303,16 +301,4 @@ inline std::ostream& operator<<(
     o << "}";
   }
   return o;
-}
-
-template <typename Label,
-          typename Domain,
-          typename VariableHash,
-          typename VariableEqual>
-inline std::string
-HashedAbstractPartition<Label, Domain, VariableHash, VariableEqual>::str()
-    const {
-  std::ostringstream ss;
-  ss << *this;
-  return ss.str();
 }

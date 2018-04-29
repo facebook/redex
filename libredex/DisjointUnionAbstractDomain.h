@@ -145,8 +145,6 @@ class DisjointUnionAbstractDomain final
     return boost::apply_visitor(visitor, d1.m_variant, d2.m_variant);
   }
 
-  std::string str() const;
-
   template <typename... Ts>
   friend std::ostream& operator<<(std::ostream&,
                                   const DisjointUnionAbstractDomain<Ts...>&);
@@ -161,14 +159,6 @@ std::ostream& operator<<(std::ostream& o,
   o << "[U] ";
   boost::apply_visitor([&o](const auto& dom) { o << dom; }, du.m_variant);
   return o;
-}
-
-template <typename FirstDomain, typename... Domains>
-inline std::string DisjointUnionAbstractDomain<FirstDomain, Domains...>::str()
-    const {
-  std::ostringstream ss;
-  ss << *this;
-  return ss.str();
 }
 
 namespace duad_impl {

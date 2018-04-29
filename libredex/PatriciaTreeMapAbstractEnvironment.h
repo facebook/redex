@@ -133,8 +133,6 @@ class PatriciaTreeMapAbstractEnvironment final
   static PatriciaTreeMapAbstractEnvironment top() {
     return PatriciaTreeMapAbstractEnvironment(AbstractValueKind::Top);
   }
-
-  std::string str() const;
 };
 
 template <typename Variable, typename Domain>
@@ -166,14 +164,6 @@ inline std::ostream& operator<<(
   }
   }
   return o;
-}
-
-template <typename Variable, typename Domain>
-inline std::string PatriciaTreeMapAbstractEnvironment<Variable, Domain>::str()
-    const {
-  std::ostringstream ss;
-  ss << *this;
-  return ss.str();
 }
 
 namespace ptmae_impl {

@@ -9,12 +9,10 @@
 
 #pragma once
 
-#include <iostream>
-#include <list>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
-#include <vector>
 
 /*
  * Stringification functions for core types.  Definitions are in DexClass.cpp
@@ -48,12 +46,32 @@ struct DexPosition;
 struct MethodCreator;
 struct MethodBlock;
 namespace ir_list {
-  template <bool is_const>
-  class InstructionIterableImpl;
+template <bool is_const>
+class InstructionIterableImpl;
 
-  using InstructionIterable = InstructionIterableImpl<false>;
-}
+using InstructionIterable = InstructionIterableImpl<false>;
+} // namespace ir_list
 using SwitchIndices = std::set<int>;
+
+/*
+ * If an object has the << operator defined, use that to obtain its string
+ * representation. But make sure we don't print pointer addresses.
+ */
+template <typename T,
+          // Use SFINAE to check for the existence of operator<<
+          typename = decltype(std::declval<std::ostream&>()
+                              << std::declval<T>()),
+          typename = std::enable_if_t<!std::is_pointer<std::decay_t<T>>::value>>
+std::string show(T&& t) {
+  std::ostringstream os;
+  os << std::forward<T>(t);
+  return os.str();
+}
+
+template <typename T>
+std::string show(const std::unique_ptr<T>& ptr) {
+  return show(ptr.get());
+}
 
 std::string show(const DexString*);
 std::string show(const DexType*);
@@ -86,11 +104,6 @@ std::string show_deobfuscated(const DexFieldRef*);
 std::string show_deobfuscated(const DexMethodRef*);
 std::string show_deobfuscated(const IRInstruction*);
 std::string show_deobfuscated(const DexEncodedValue*);
-
-template <typename T>
-std::string show(const std::unique_ptr<T>& ptr) {
-  return show(ptr.get());
-}
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

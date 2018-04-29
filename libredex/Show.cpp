@@ -10,7 +10,6 @@
 #include "Show.h"
 
 #include <boost/io/detail/quoted_manip.hpp>
-#include <sstream>
 
 #include "ControlFlow.h"
 #include "Creators.h"

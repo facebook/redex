@@ -89,8 +89,7 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
   if (args.is_bottom()) {
     args.set_to_top();
   } else if (!args.is_top()) {
-    TRACE(
-        ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), args.str().c_str());
+    TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
   }
 
   intraprocedural::FixpointIterator::Config config = m_config;

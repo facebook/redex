@@ -245,8 +245,6 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
                  /* smash_bottom */ false);
   }
 
-  std::string str() const;
-
  private:
   // Performs the smash-bottom normalization of a tuple of abstract values.
   void normalize() {
@@ -364,12 +362,4 @@ std::ostream& operator<<(
   tuple_print(o, p.m_product);
   o << ")";
   return o;
-}
-
-template <typename Derived, typename... Domains>
-inline std::string ReducedProductAbstractDomain<Derived, Domains...>::str()
-    const {
-  std::ostringstream ss;
-  ss << *this;
-  return ss.str();
 }
