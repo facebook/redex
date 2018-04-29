@@ -21,22 +21,6 @@
 using Domain = HashedSetAbstractDomain<std::string>;
 using Environment = PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;
 
-template <typename T1, typename T2>
-bool operator==(const HashedAbstractEnvironment<T1, T2>& e1,
-                const HashedAbstractEnvironment<T1, T2>& e2) {
-  return e1.equals(e2);
-}
-
-template <typename T1, typename T2>
-bool operator!=(const HashedAbstractEnvironment<T1, T2>& e1,
-                const HashedAbstractEnvironment<T1, T2>& e2) {
-  return !(e1 == e2);
-}
-
-bool operator==(const Domain& d1, const Domain& d2) { return d1.equals(d2); }
-
-bool operator!=(const Domain& d1, const Domain& d2) { return !(d1 == d2); }
-
 class PatriciaTreeMapAbstractEnvironmentTest : public ::testing::Test {
  protected:
   PatriciaTreeMapAbstractEnvironmentTest()

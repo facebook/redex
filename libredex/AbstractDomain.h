@@ -103,12 +103,12 @@ class AbstractDomain {
    * Many C++ libraries default to using operator== to check for equality,
    * so we define it here as an alias of equals().
    */
-  virtual bool operator==(const Derived& other) const final {
-    return this->equals(other);
+  friend bool operator==(const Derived& self, const Derived& other) {
+    return self.equals(other);
   }
 
-  virtual bool operator!=(const Derived& other) const final {
-    return !this->equals(other);
+  friend bool operator!=(const Derived& self, const Derived& other) {
+    return !self.equals(other);
   }
 
   /*
