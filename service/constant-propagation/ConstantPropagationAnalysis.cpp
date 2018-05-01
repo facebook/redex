@@ -184,7 +184,7 @@ bool LocalArraySubAnalyzer::analyze_invoke(const IRInstruction* insn,
 // another method.
 void LocalArraySubAnalyzer::mark_array_unknown(reg_t reg,
                                                ConstantEnvironment* env) {
-  auto ptr_opt = env->get_array_pointer(reg).get_constant();
+  auto ptr_opt = env->get_pointer(reg).get_constant();
   if (ptr_opt) {
     env->mutate_array_heap([&](ConstantArrayHeap* heap) {
       heap->set(*ptr_opt, ConstantPrimitiveArrayDomain::top());
@@ -432,6 +432,7 @@ bool BoxedBooleanSubAnalyzer::analyze_invoke(
     } else {
       return false;
     }
+  } else {
     return false;
   }
 }

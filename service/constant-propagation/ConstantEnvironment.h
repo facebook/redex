@@ -19,88 +19,22 @@
 #include "HashedAbstractPartition.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
-#include "SignDomain.h"
+#include "SignedConstantDomain.h"
 
-using ConstantDomain = ConstantAbstractDomain<int64_t>;
-
-class SignedConstantDomain
-    : public ReducedProductAbstractDomain<SignedConstantDomain,
-                                          sign_domain::Domain,
-                                          ConstantDomain> {
- public:
-  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
-
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via the
-  // `using` declaration above), but some compilers fail to catch this. So we
-  // insert a redundant '= default'.
-  SignedConstantDomain() = default;
-
-  explicit SignedConstantDomain(int64_t v)
-      : SignedConstantDomain(
-            std::make_tuple(sign_domain::Domain::top(), ConstantDomain(v))) {}
-
-  explicit SignedConstantDomain(sign_domain::Interval interval)
-      : SignedConstantDomain(std::make_tuple(sign_domain::Domain(interval),
-                                             ConstantDomain::top())) {}
-
-  static void reduce_product(
-      std::tuple<sign_domain::Domain, ConstantDomain>& domains) {
-    auto& sdom = std::get<0>(domains);
-    auto& cdom = std::get<1>(domains);
-    if (sdom.element() == sign_domain::Interval::EQZ) {
-      cdom.meet_with(ConstantDomain(0));
-      return;
-    }
-    auto cst = cdom.get_constant();
-    if (!cst) {
-      return;
-    }
-    if (!sign_domain::contains(sdom.element(), *cst)) {
-      sdom.set_to_bottom();
-      return;
-    }
-    sdom.meet_with(sign_domain::from_int(*cst));
-  }
-
-  sign_domain::Domain interval_domain() const { return get<0>(); }
-
-  sign_domain::Interval interval() const { return interval_domain().element(); }
-
-  ConstantDomain constant_domain() const { return get<1>(); }
-
-  static SignedConstantDomain top() {
-    SignedConstantDomain scd;
-    scd.set_to_top();
-    return scd;
-  }
-
-  static SignedConstantDomain bottom() {
-    SignedConstantDomain scd;
-    scd.set_to_bottom();
-    return scd;
-  }
-
-  static SignedConstantDomain default_value() {
-    return SignedConstantDomain(0);
-  }
-
-  /* Return the largest element within the interval. */
-  int64_t max_element() const;
-
-  /* Return the smallest element within the interval. */
-  int64_t min_element() const;
-};
-
-using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
+/*
+ * The definitions in this file serve to abstractly model:
+ *   - Constant primitive values stored in registers
+ *   - Constant array values, referenced by registers that point into the heap
+ *   - Constant primitive values stored in fields
+ */
 
 using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
-// For now, this only represents new-array instructions. Can be extended to
-// new-instance in the future.
-using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
+/*****************************************************************************
+ * Abstract stack / environment values.
+ *****************************************************************************/
 
 /*
  * This represents an object that is uniquely referenced by a single static
@@ -111,29 +45,34 @@ using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
  */
 using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
 
-using ConstantArrayHeap =
-    PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
-                                       ConstantPrimitiveArrayDomain>;
+// For now, this only represents new-array instructions. Can be extended to
+// new-instance in the future.
+using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
 
 using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
                                                   SingletonObjectDomain,
                                                   AbstractHeapPointer>;
 
 using ConstantFieldEnvironment =
-    PatriciaTreeMapAbstractEnvironment<DexField*, ConstantValue>;
+    PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
 
 using ConstantRegisterEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, ConstantValue>;
 
-/*
- * Currently, this models:
- *   - Constant primitive values stored in registers
- *   - Constant array values, referenced by registers that point into the heap
- *   - Constant primitive values stored in fields
- *
- * The array values are stored in an abstract heap. The pointers into the heap
- * are new-array instructions.
- */
+/*****************************************************************************
+ * Heap values.
+ *****************************************************************************/
+
+using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
+
+using ConstantArrayHeap =
+    PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
+                                       ConstantPrimitiveArrayDomain>;
+
+/*****************************************************************************
+ * Combined model of the abstract stack and heap.
+ *****************************************************************************/
+
 class ConstantEnvironment final
     : public ReducedProductAbstractDomain<ConstantEnvironment,
                                           ConstantRegisterEnvironment,
@@ -181,7 +120,7 @@ class ConstantEnvironment final
     return get_register_environment().get(reg).get<SignedConstantDomain>();
   }
 
-  AbstractHeapPointer get_array_pointer(reg_t reg) const {
+  AbstractHeapPointer get_pointer(reg_t reg) const {
     return get_register_environment().get(reg).get<AbstractHeapPointer>();
   }
 
@@ -193,7 +132,7 @@ class ConstantEnvironment final
    * Dereference the pointer stored in :reg and return the array it points to.
    */
   ConstantPrimitiveArrayDomain get_array(reg_t reg) const {
-    const auto& ptr = get_array_pointer(reg);
+    const auto& ptr = get_pointer(reg);
     if (ptr.is_top()) {
       return ConstantPrimitiveArrayDomain::top();
     }
@@ -255,7 +194,7 @@ class ConstantEnvironment final
                                          uint32_t idx,
                                          SignedConstantDomain value) {
     return mutate_array_heap([&](ConstantArrayHeap* heap) {
-      auto ptr = get_array_pointer(reg);
+      auto ptr = get_pointer(reg);
       if (!ptr.is_value()) {
         return;
       }
@@ -286,9 +225,3 @@ class ConstantEnvironment final
     return env;
   }
 };
-
-using ConstantStaticFieldPartition =
-    HashedAbstractPartition<const DexField*, ConstantValue>;
-
-using ConstantMethodPartition =
-    HashedAbstractPartition<const DexMethod*, ConstantValue>;

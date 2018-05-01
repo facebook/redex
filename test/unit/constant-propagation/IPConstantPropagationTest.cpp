@@ -30,14 +30,6 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   }
 };
 
-bool operator==(const ConstantEnvironment& a, const ConstantEnvironment& b) {
-  return a.equals(b);
-}
-
-bool operator==(const ArgumentDomain& a, const ArgumentDomain& b) {
-  return a.equals(b);
-}
-
 // For some reason, gtest won't print your value with the `<<` operator if it
 // is defined on a superclass. So we explicitly define and call the superclass
 // implementation here.

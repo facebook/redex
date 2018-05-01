@@ -22,6 +22,12 @@ class FixpointIterator;
 
 } // namespace interprocedural
 
+using ConstantStaticFieldPartition =
+    HashedAbstractPartition<const DexField*, ConstantValue>;
+
+using ConstantMethodPartition =
+    HashedAbstractPartition<const DexMethod*, ConstantValue>;
+
 /*
  * This class contains flow-insensitive information about fields and method
  * return values, i.e. it can tells us if a field or a return value is constant
