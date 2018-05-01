@@ -245,6 +245,13 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
                  /* smash_bottom */ false);
   }
 
+  friend std::ostream& operator<<(std::ostream& o, const Derived& p) {
+    o << "(";
+    tuple_print(o, p.m_product);
+    o << ")";
+    return o;
+  }
+
  private:
   // Performs the smash-bottom normalization of a tuple of abstract values.
   void normalize() {
@@ -331,35 +338,21 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     combine_with<Index + 1>(other, operation, smash_bottom);
   }
 
+  template <class Tuple, std::size_t... I>
+  static void tuple_print_impl(std::ostream& o,
+                               Tuple&& t,
+                               std::index_sequence<I...>) {
+    int UNUSED print[] = {
+        0, (void(o << (I == 0 ? "" : ", ") << std::get<I>(t)), 0)...};
+  }
+
+  template <class Tuple>
+  static void tuple_print(std::ostream& o, Tuple&& t) {
+    return tuple_print_impl(
+        o,
+        std::forward<Tuple>(t),
+        std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
+  }
+
   std::tuple<Domains...> m_product;
-
-  template <typename T, typename... Ts>
-  friend std::ostream& operator<<(
-      std::ostream& o, const ReducedProductAbstractDomain<T, Ts...>& p);
 };
-
-namespace {
-template <class Tuple, std::size_t... I>
-void tuple_print_impl(std::ostream& o, Tuple&& t, std::index_sequence<I...>) {
-  int UNUSED print[] = {
-      0, (void(o << (I == 0 ? "" : ", ") << std::get<I>(t)), 0)...};
-}
-
-template <class Tuple>
-void tuple_print(std::ostream& o, Tuple&& t) {
-  return tuple_print_impl(
-      o,
-      std::forward<Tuple>(t),
-      std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
-}
-}
-
-template <typename Derived, typename... Domains>
-std::ostream& operator<<(
-    std::ostream& o,
-    const ReducedProductAbstractDomain<Derived, Domains...>& p) {
-  o << "(";
-  tuple_print(o, p.m_product);
-  o << ")";
-  return o;
-}

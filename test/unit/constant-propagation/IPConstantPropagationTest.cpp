@@ -30,15 +30,6 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   }
 };
 
-// For some reason, gtest won't print your value with the `<<` operator if it
-// is defined on a superclass. So we explicitly define and call the superclass
-// implementation here.
-std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
-  return o << static_cast<ReducedProductAbstractDomain<SignedConstantDomain,
-                                                       sign_domain::Domain,
-                                                       ConstantDomain>>(scd);
-}
-
 TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   // Let bar() be the only method calling baz(I)V, passing it a constant
   // argument. baz() should be optimized for that constant argument.
