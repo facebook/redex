@@ -34,8 +34,7 @@ namespace interprocedural {
  *      https://ntrs.nasa.gov/search.jsp?R=20040081118
  */
 std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
-  call_graph::Graph cg =
-      call_graph::Graph::make(scope, m_config.include_virtuals);
+  call_graph::Graph cg = call_graph::single_callee_graph(scope);
   // Rebuild all CFGs here -- this should be more efficient than doing them
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
 #include <unordered_map>
 
 #include "DexClass.h"
@@ -19,11 +20,49 @@
 /*
  * Call graph representation that implements the standard graph interface
  * API for use with fixpoint iteration algorithms.
- *
- *
  */
 
 namespace call_graph {
+
+class Graph;
+
+/*
+ * Currently, we only add edges in the graph when we know the exact callee
+ * an invoke instruction refers to.  That means only invoke-static and
+ * invoke-direct calls, as well as invoke-virtual calls that refer
+ * unambiguously to a single method. This keeps the graph smallish and
+ * easier to analyze.
+ *
+ * TODO: Once we have points-to information, we should expand the callgraph
+ * to include invoke-virtuals that refer to sets of methods.
+ */
+Graph single_callee_graph(const Scope&);
+
+struct CallSite {
+  DexMethod* callee;
+  IRList::iterator invoke;
+
+  CallSite(DexMethod* callee, IRList::iterator invoke)
+      : callee(callee), invoke(invoke) {}
+};
+
+using CallSites = std::vector<CallSite>;
+
+/*
+ * This class determines how the call graph is built. The Graph ctor will start
+ * from the roots and invoke get_callsites() on each returned method
+ * recursively until the graph is fully mapped out. One can think of the
+ * BuildStrategy as implicitly encoding the graph structure, with the Graph
+ * constructor reifying it.
+ */
+class BuildStrategy {
+ public:
+  virtual ~BuildStrategy() {}
+
+  virtual std::vector<DexMethod*> get_roots() const = 0;
+
+  virtual CallSites get_callsites(const DexMethod*) const = 0;
+};
 
 class Edge {
  public:
@@ -32,31 +71,13 @@ class Edge {
   DexMethod* caller() const { return m_caller; }
   DexMethod* callee() const { return m_callee; }
 
-  bool operator==(const Edge& that) const {
-    return caller() == that.caller() && callee() == that.callee();
-  }
-
  private:
   DexMethod* m_caller;
   DexMethod* m_callee;
   IRList::iterator m_invoke_it;
 };
 
-struct CompareEdges {
-  bool operator()(const std::shared_ptr<Edge>& a,
-                  const std::shared_ptr<Edge>& b) const {
-    return *a == *b;
-  }
-};
-
-struct HashEdges {
-  size_t operator()(const std::shared_ptr<Edge>& e) const {
-    return (size_t)(e->caller()) + ((size_t)e->callee());
-  }
-};
-
-using Edges =
-    std::unordered_set<std::shared_ptr<Edge>, HashEdges, CompareEdges>;
+using Edges = std::vector<std::shared_ptr<Edge>>;
 
 class Node {
  public:
@@ -73,22 +94,19 @@ class Node {
   Edges m_successors;
 
   friend class Graph;
-  friend class CompleteGraph;
 };
 
-/*
- * Currently, we only add edges in the graph when we know the exact callee
- * an invoke instruction refers to.  That means only invoke-static and
- * invoke-direct calls, as well as invoke-virtual calls that refer
- * unambiguously to a single method. This keeps the graph smallish and
- * easier to analyze.
- *
- * TODO: Once we have points-to information, we should expand the callgraph
- * to include invoke-virtuals that refer to sets of methods.
- */
-class Graph {
+inline size_t hash_value(const Node& node) {
+  return reinterpret_cast<size_t>(node.method());
+}
+
+} // namespace call_graph
+
+namespace call_graph {
+
+class Graph final {
  public:
-  static Graph make(const Scope&, bool include_virtuals = false);
+  Graph(const BuildStrategy&);
 
   const Node& entry() const { return m_entry; }
 
@@ -99,24 +117,7 @@ class Graph {
     return m_nodes.at(const_cast<DexMethod*>(m));
   }
 
-  struct Cache {
-    Cache(const Scope&, bool /* include_virtuals */);
-
-    MethodRefCache m_resolved_refs;
-    std::unordered_set<const DexMethod*> m_non_virtual;
-  };
-
- protected:
-  Graph() {}
-
-  // Factor out the logic to populate the graph and select the roots
-  void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
-  void compute_roots(Cache&);
-
-  // helper functions
-  bool is_definitely_virtual(const DexMethod*,
-                             const std::unordered_set<const DexMethod*>&) const;
-
+ private:
   Node& make_node(DexMethod*);
 
   void add_edge(DexMethod* caller,
@@ -124,24 +125,7 @@ class Graph {
                 IRList::iterator invoke_it);
 
   Node m_entry = Node(nullptr);
-  std::unordered_map<DexMethod*, Node> m_nodes;
-};
-
-/*
- * We add all the edges from callers to callees, even if the callee is
- * unresolved
- *
- * TODO: Once the Points-to analysis is available, use it
- */
-class CompleteGraph : public Graph {
- public:
-  static CompleteGraph make(const Scope&, bool include_virtuals = false);
-
- protected:
-  explicit CompleteGraph() : Graph() {}
-
-  void populate_graph(const Scope&, bool /* include_virtuals */, Cache&);
-  void compute_roots(Cache&);
+  std::unordered_map<DexMethod*, Node, boost::hash<Node>> m_nodes;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
@@ -169,14 +153,3 @@ class GraphInterface {
 };
 
 } // namespace call_graph
-
-namespace std {
-
-template <>
-struct hash<call_graph::Node> {
-  size_t operator()(const call_graph::Node& node) const {
-    return reinterpret_cast<size_t>(node.method());
-  }
-};
-
-} // namespace std

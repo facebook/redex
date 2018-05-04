@@ -12,73 +12,97 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-namespace call_graph {
+namespace {
 
-Edge::Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it)
-    : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
+using namespace call_graph;
 
-Graph::Cache::Cache(const Scope& scope, bool include_virtuals) {
-  auto non_virtual_vec =
-      include_virtuals ? devirtualize(scope) : std::vector<DexMethod*>();
-  m_non_virtual = std::unordered_set<const DexMethod*>(non_virtual_vec.begin(),
-                                                       non_virtual_vec.end());
-}
+class SingleCalleeStrategy final : public BuildStrategy {
+ public:
+  SingleCalleeStrategy(const Scope& scope) : m_scope(scope) {
+    auto non_virtual_vec = devirtualize(scope);
+    m_non_virtual.insert(non_virtual_vec.begin(), non_virtual_vec.end());
+  }
 
-Graph Graph::make(const Scope& scope, bool include_virtuals) {
-  Graph cg;
-
-  // initialize the caches
-  Cache cache(scope, include_virtuals);
-
-  // build the Graph in two steps:
-  // 1. the edges
-  cg.populate_graph(scope, include_virtuals, cache);
-  // 2. the roots
-  cg.compute_roots(cache);
-
-  return cg;
-}
-
-bool Graph::is_definitely_virtual(
-    const DexMethod* method,
-    const std::unordered_set<const DexMethod*>& non_virtual) const {
-  return method != nullptr && method->is_virtual() &&
-         non_virtual.count(method) == 0;
-}
-
-void Graph::populate_graph(const Scope& scope,
-                           bool include_virtuals,
-                           Cache& cache) {
-  walk::code(scope, [&](DexMethod* caller, IRCode& code) {
+  CallSites get_callsites(const DexMethod* method) const override {
+    CallSites callsites;
+    auto* code = const_cast<IRCode*>(method->get_code());
+    if (code == nullptr) {
+      return callsites;
+    }
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
         auto callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), cache.m_resolved_refs);
-        if (callee == nullptr ||
-            is_definitely_virtual(callee, cache.m_non_virtual)) {
+            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        if (callee == nullptr || is_definitely_virtual(callee)) {
           continue;
         }
         if (callee->is_concrete()) {
-          add_edge(caller, callee, code.iterator_to(mie));
+          callsites.emplace_back(callee, code->iterator_to(mie));
         }
       }
     }
-  });
+    return callsites;
+  }
+
+  std::vector<DexMethod*> get_roots() const override {
+    std::vector<DexMethod*> roots;
+
+    walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
+      if (is_definitely_virtual(method) || root(method)) {
+        roots.emplace_back(method);
+      }
+    });
+    return roots;
+  }
+
+ private:
+  bool is_definitely_virtual(DexMethod* method) const {
+    return method->is_virtual() && m_non_virtual.count(method) == 0;
+  }
+
+  const Scope& m_scope;
+  std::unordered_set<DexMethod*> m_non_virtual;
+  mutable MethodRefCache m_resolved_refs;
+};
+
+} // namespace
+
+namespace call_graph {
+
+Graph single_callee_graph(const Scope& scope) {
+  return Graph(SingleCalleeStrategy(scope));
 }
 
-// Add edges from the single "ghost" entry node to all the "real" entry
-// nodes in the graph. We consider a node to be a potential entry point if
-// it is virtual or if it is marked by a Proguard keep rule.
-void Graph::compute_roots(Cache& cache) {
-  for (auto& pair : m_nodes) {
-    auto method = pair.first;
-    if (is_definitely_virtual(method, cache.m_non_virtual) || root(method)) {
-      auto edge = std::make_shared<Edge>(
-          nullptr, const_cast<DexMethod*>(method), IRList::iterator());
-      m_entry.m_successors.emplace(edge);
-      pair.second.m_predecessors.emplace(edge);
+Edge::Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it)
+    : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
+
+Graph::Graph(const BuildStrategy& strat) {
+  // Add edges from the single "ghost" entry node to all the "real" entry
+  // nodes in the graph.
+  auto roots = strat.get_roots();
+  for (DexMethod* root : roots) {
+    auto edge = std::make_shared<Edge>(nullptr, root, IRList::iterator());
+    m_entry.m_successors.emplace_back(edge);
+    make_node(root).m_predecessors.emplace_back(edge);
+  }
+
+  // Obtain the callsites of each method recursively, building the graph in the
+  // process.
+  std::unordered_set<const DexMethod*> visited;
+  std::function<void(DexMethod*)> visit = [&](auto* caller) {
+    if (visited.count(caller) != 0) {
+      return;
     }
+    visited.emplace(caller);
+    for (const auto& callsite : strat.get_callsites(caller)) {
+      this->add_edge(caller, callsite.callee, callsite.invoke);
+      visit(callsite.callee);
+    }
+  };
+
+  for (DexMethod* root : roots) {
+    visit(root);
   }
 }
 
@@ -95,65 +119,8 @@ void Graph::add_edge(DexMethod* caller,
                      DexMethod* callee,
                      IRList::iterator invoke_it) {
   auto edge = std::make_shared<Edge>(caller, callee, invoke_it);
-  make_node(caller).m_successors.emplace(edge);
-  make_node(callee).m_predecessors.emplace(edge);
-}
-
-CompleteGraph CompleteGraph::make(const Scope& scope, bool include_virtuals) {
-  CompleteGraph cg;
-
-  // initialize the caches
-  Cache cache(scope, include_virtuals);
-
-  // build the Graph in two steps:
-  // 1. the edges
-  cg.populate_graph(scope, include_virtuals, cache);
-  // 2. the roots
-  cg.compute_roots(cache);
-
-  return cg;
-}
-
-// Add all the edges from callers to callee.
-// If the callee can be resolved, use it.
-// Otherwise, use the unresolved method.
-void CompleteGraph::populate_graph(const Scope& scope,
-                                   bool include_virtuals,
-                                   Cache& cache) {
-  TRACE(MORTIROLO, 1, "----- Called subclass\n");
-
-  walk::code(scope, [&](DexMethod* caller, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
-        const auto callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), cache.m_resolved_refs);
-        if (callee != nullptr) {
-          add_edge(caller, callee, code.iterator_to(mie));
-        } else {
-          // add the edge to the unresolved method
-          DexMethod* callee_unresolved =
-              static_cast<DexMethod*>(insn->get_method());
-          add_edge(caller, callee_unresolved, code.iterator_to(mie));
-        }
-      }
-    }
-  });
-}
-
-void CompleteGraph::compute_roots(Cache& cache) {
-  for (auto& pair : m_nodes) {
-    auto method = pair.first;
-    // TODO: change it to use dominators and SCC instead
-    auto preds = make_node(method).m_predecessors.size();
-    if (preds == 0 || is_definitely_virtual(method, cache.m_non_virtual) ||
-        root(method)) {
-      auto edge = std::make_shared<Edge>(
-          nullptr, const_cast<DexMethod*>(method), IRList::iterator());
-      m_entry.m_successors.emplace(edge);
-      pair.second.m_predecessors.emplace(edge);
-    }
-  }
+  make_node(caller).m_successors.emplace_back(edge);
+  make_node(callee).m_predecessors.emplace_back(edge);
 }
 
 } // namespace call_graph
