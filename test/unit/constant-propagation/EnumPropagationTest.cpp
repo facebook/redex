@@ -14,17 +14,12 @@
 #include "Creators.h"
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
+#include "JarLoader.h"
 
 struct EnumTest : public ConstantPropagationTest {
  public:
   EnumTest() {
-    ClassCreator creator(get_enum_type());
-    creator.set_super(get_object_type());
-    auto equals = static_cast<DexMethod*>(DexMethod::make_method(
-        "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"));
-    equals->make_concrete(ACC_PUBLIC | ACC_FINAL, true);
-    creator.add_method(equals);
-    creator.create();
+    always_assert(load_class_file(std::getenv("enum_class_file")));
   }
 
   static DexClass* create_enum() {
