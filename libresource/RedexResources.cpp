@@ -21,7 +21,7 @@
 
 #ifdef _MSC_VER
 #include <mman/sys/mman.h>
-#else Q_OS_LINUX
+#else
 #include <sys/mman.h>
 #endif
 
