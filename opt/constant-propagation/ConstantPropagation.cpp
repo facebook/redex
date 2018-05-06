@@ -40,11 +40,8 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
         auto& cfg = code.cfg();
 
         TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));
-        intraprocedural::FixpointIterator fp_iter(
-            cfg,
-            [analyzer = ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
-              analyzer.run(insn, env);
-            });
+        intraprocedural::FixpointIterator fp_iter(cfg,
+                                                  ConstantPrimitiveAnalyzer());
         fp_iter.run(ConstantEnvironment());
         constant_propagation::Transform tf(m_config.transform);
         return tf.apply(fp_iter, WholeProgramState(), &code);

@@ -102,13 +102,11 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
 
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(),
-      [analyzer = InstructionAnalyzer(config.class_under_init,
-                                      &this->get_whole_program_state(),
-                                      EnumFieldSubAnalyzerState(),
-                                      BoxedBooleanSubAnalyzerState(),
-                                      nullptr)](auto* insn, auto* env) {
-        analyzer.run(insn, env);
-      });
+      InstructionAnalyzer(config.class_under_init,
+                          &this->get_whole_program_state(),
+                          EnumFieldSubAnalyzerState(),
+                          BoxedBooleanSubAnalyzerState(),
+                          nullptr));
   intra_cp->run(env);
 
   return intra_cp;

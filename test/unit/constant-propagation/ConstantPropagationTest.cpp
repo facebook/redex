@@ -68,9 +68,7 @@ TEST(ConstantPropagation, WhiteBox1) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, [analyzer = cp::ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
-        analyzer.run(insn, env);
-      });
+      cfg, cp::ConstantPrimitiveAnalyzer());
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
@@ -104,9 +102,7 @@ TEST(ConstantPropagation, WhiteBox2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, [analyzer = cp::ConstantPrimitiveAnalyzer()](auto* insn, auto* env) {
-        analyzer.run(insn, env);
-      });
+      cfg, cp::ConstantPrimitiveAnalyzer());
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());

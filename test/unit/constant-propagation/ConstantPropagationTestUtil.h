@@ -17,10 +17,7 @@ struct ConstantPropagationTest : public RedexTest {};
 inline void do_const_prop(
     IRCode* code,
     std::function<void(const IRInstruction*, ConstantEnvironment*)>
-        insn_analyzer = std::bind(&cp::ConstantPrimitiveAnalyzer::run,
-                                  cp::ConstantPrimitiveAnalyzer(),
-                                  std::placeholders::_1,
-                                  std::placeholders::_2)) {
+        insn_analyzer = cp::ConstantPrimitiveAnalyzer()) {
   code->build_cfg();
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());

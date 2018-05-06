@@ -102,10 +102,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
     )
 )");
 
-  do_const_prop(code.get(),
-                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-                  analyzer.run(insn, env);
-                });
+  do_const_prop(code.get(), ArrayAnalyzer());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -148,10 +145,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  do_const_prop(code.get(),
-                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-                  analyzer.run(insn, env);
-                });
+  do_const_prop(code.get(), ArrayAnalyzer());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -195,10 +189,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  do_const_prop(code.get(),
-                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-                  analyzer.run(insn, env);
-                });
+  do_const_prop(code.get(), ArrayAnalyzer());
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -224,10 +215,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaPut) {
 )");
 
   auto expected = assembler::to_s_expr(code.get());
-  do_const_prop(code.get(),
-                [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-                  analyzer.run(insn, env);
-                });
+  do_const_prop(code.get(), ArrayAnalyzer());
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -244,10 +232,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsWrite) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-        analyzer.run(insn, env);
-      });
+  cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());
   intra_cp.run(ConstantEnvironment());
   EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }
@@ -266,10 +251,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsRead) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, [analyzer = ArrayAnalyzer()](auto* insn, auto* env) {
-        analyzer.run(insn, env);
-      });
+  cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());
   intra_cp.run(ConstantEnvironment());
   EXPECT_TRUE(intra_cp.get_exit_state_at(cfg.exit_block()).is_bottom());
 }

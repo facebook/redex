@@ -172,7 +172,7 @@ class InstructionSubAnalyzerCombiner final {
   InstructionSubAnalyzerCombiner()
       : m_states(std::make_tuple(typename Analyzers::State()...)) {}
 
-  void run(const IRInstruction* insn, Env* env) const {
+  void operator()(const IRInstruction* insn, Env* env) const {
     auto op = insn->opcode();
     switch (op) {
     case IOPCODE_LOAD_PARAM:

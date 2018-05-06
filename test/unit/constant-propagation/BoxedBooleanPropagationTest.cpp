@@ -11,8 +11,8 @@
 
 #include <gtest/gtest.h>
 
-#include "Creators.h"
 #include "ConstantPropagationTestUtil.h"
+#include "Creators.h"
 #include "IRAssembler.h"
 
 struct BoxedBooleanTest : public ConstantPropagationTest {
@@ -43,6 +43,10 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
   }
 };
 
+using BoxedBooleanAnalyzer =
+    InstructionSubAnalyzerCombiner<cp::BoxedBooleanSubAnalyzer,
+                                   cp::ConstantPrimitiveSubAnalyzer>;
+
 TEST_F(BoxedBooleanTest, booleanValue) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -58,13 +62,7 @@ TEST_F(BoxedBooleanTest, booleanValue) {
     )
 )");
 
-  using Analyzer =
-      InstructionSubAnalyzerCombiner<cp::BoxedBooleanSubAnalyzer,
-                                     cp::ConstantPrimitiveSubAnalyzer>;
-
-  do_const_prop(code.get(), [analyzer = Analyzer()](auto* insn, auto* env) {
-    analyzer.run(insn, env);
-  });
+  do_const_prop(code.get(), BoxedBooleanAnalyzer());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -100,13 +98,7 @@ TEST_F(BoxedBooleanTest, valueOf) {
     )
 )");
 
-  using Analyzer =
-      InstructionSubAnalyzerCombiner<cp::BoxedBooleanSubAnalyzer,
-                                     cp::ConstantPrimitiveSubAnalyzer>;
-
-  do_const_prop(code.get(), [analyzer = Analyzer()](auto* insn, auto* env) {
-    analyzer.run(insn, env);
-  });
+  do_const_prop(code.get(), BoxedBooleanAnalyzer());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
