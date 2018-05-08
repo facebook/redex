@@ -527,6 +527,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
       static_prune_classes);
 
   DexClassesVector outdex;
+  auto const& primary_dex = dexen[0];
 
   // We have a bunch of special logic for the primary dex which we only use if
   // we can't touch the primary dex.
@@ -534,7 +535,6 @@ DexClassesVector run_interdex(InterDexPass* pass,
     // build a separate lookup table for the primary dex, since we have to make
     // sure we keep all classes in the same dex
     dex_emit_tracker primary_det;
-    auto const& primary_dex = dexen[0];
     for (auto const& clazz : primary_dex) {
       std::string clzname(clazz->get_type()->get_name()->c_str());
       primary_det.clookup[clzname] = clazz;
@@ -581,6 +581,37 @@ DexClassesVector run_interdex(InterDexPass* pass,
 
   // NOTE: If primary dex is treated as a normal dex, we are going to modify
   //       it too, based on cold start classes.
+  if (normal_primary_dex && interdexorder.size() > 0) {
+    // We also need to respect the primary dex classes.
+    // For all primary dex classes that are in the interdex order before
+    // any DexEndMarker, we keep it at that position. Otherwise, we add it to
+    // the head of the list.
+    std::string first_end_marker_str("DexEndMarker0.class");
+    auto first_end_marker_it = std::find(
+        interdexorder.begin(), interdexorder.end(), first_end_marker_str);
+    if (first_end_marker_it == interdexorder.end()) {
+      TRACE(IDEX, 3, "Couldn't find first dex end marker.\n");
+    }
+
+    std::vector<std::string> not_already_included;
+    for (const auto& pclass : primary_dex) {
+      const std::string& pclass_str = pclass->get_name()->str();
+      auto pclass_it = std::find(
+          interdexorder.begin(), interdexorder.end(), pclass_str);
+      if (pclass_it == interdexorder.end() || pclass_it > first_end_marker_it) {
+        TRACE(IDEX, 4, "Class %s is not in the interdex order.\n",
+              pclass_str.c_str());
+        not_already_included.push_back(std::string(pclass->c_str()));
+      } else {
+        TRACE(IDEX, 4, "Class %s is in the interdex order. "
+              "No change required.\n", pclass_str.c_str());
+      }
+    }
+    interdexorder.insert(interdexorder.begin(),
+                         not_already_included.begin(),
+                         not_already_included.end());
+  }
+
   for (auto& entry : interdexorder) {
     auto it = det.clookup.find(entry);
     if (it == det.clookup.end()) {
