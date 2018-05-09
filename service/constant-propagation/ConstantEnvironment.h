@@ -216,12 +216,4 @@ class ConstantEnvironment final
     return mutate_field_environment(
         [](ConstantFieldEnvironment* env) { env->set_to_top(); });
   }
-
-  static ConstantEnvironment top() { return ConstantEnvironment(); }
-
-  static ConstantEnvironment bottom() {
-    ConstantEnvironment env;
-    env.set_to_bottom();
-    return env;
-  }
 };

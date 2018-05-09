@@ -60,18 +60,6 @@ class SignedConstantDomain
 
   ConstantDomain constant_domain() const { return get<1>(); }
 
-  static SignedConstantDomain top() {
-    SignedConstantDomain scd;
-    scd.set_to_top();
-    return scd;
-  }
-
-  static SignedConstantDomain bottom() {
-    SignedConstantDomain scd;
-    scd.set_to_bottom();
-    return scd;
-  }
-
   static SignedConstantDomain default_value() {
     return SignedConstantDomain(0);
   }

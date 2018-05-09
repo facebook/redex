@@ -142,14 +142,6 @@ class ConstantArrayDomain final
     return *this;
   }
 
-  static ConstantArrayDomain bottom() {
-    ConstantArrayDomain dom;
-    dom.set_to_bottom();
-    return dom;
-  }
-
-  static ConstantArrayDomain top() { return ConstantArrayDomain(); }
-
   std::string str() const;
 
  private:

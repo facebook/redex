@@ -77,8 +77,11 @@ class AbstractDomain {
                   "Derived is not copy constructible");
     static_assert(std::is_copy_assignable<Derived>::value,
                   "Derived is not copy assignable");
-    // An abstract domain should implement the factory methods top() and
-    // bottom() that respectively produce the top and bottom values.
+    // top() and bottom() are factory methods that respectively produce the top
+    // and bottom values. We define default implementations for them in terms
+    // of set_to_{top, bottom}, but implementors may wish to override those
+    // implementations with more efficient versions. Here we check that any
+    // such overrides bear the correct method signature.
     static_assert(std::is_same<decltype(Derived::bottom()), Derived>::value,
                   "Derived::bottom() does not exist");
     static_assert(std::is_same<decltype(Derived::top()), Derived>::value,
@@ -172,6 +175,18 @@ class AbstractDomain {
   Derived narrowing(const Derived& other) const {
     Derived tmp(static_cast<const Derived&>(*this));
     tmp.narrow_with(other);
+    return tmp;
+  }
+
+  static Derived top() {
+    Derived tmp;
+    tmp.set_to_top();
+    return tmp;
+  }
+
+  static Derived bottom() {
+    Derived tmp;
+    tmp.set_to_bottom();
     return tmp;
   }
 };
@@ -469,16 +484,16 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
 // This AbstractValue is recommended whenever copying the underlying abstract
 // value incurs a significant cost
 template <typename Value>
-class CopyOnWriteAbstractValue : AbstractValue<CopyOnWriteAbstractValue<Value>> {
+class CopyOnWriteAbstractValue
+    : AbstractValue<CopyOnWriteAbstractValue<Value>> {
   using This = CopyOnWriteAbstractValue<Value>;
+
  public:
   void clear() override { get().clear(); }
 
   AbstractValueKind kind() const override { return get().kind(); }
 
-  bool leq(const This& other) const override {
-    return get().leq(other.get());
-  }
+  bool leq(const This& other) const override { return get().leq(other.get()); }
 
   bool equals(const This& other) const override {
     return get().equals(other.get());
@@ -505,9 +520,7 @@ class CopyOnWriteAbstractValue : AbstractValue<CopyOnWriteAbstractValue<Value>> 
     upgrade_to_writer();
     return *m_value;
   }
-  const Value& get() const {
-    return *m_value;
-  }
+  const Value& get() const { return *m_value; }
 
  private:
   // WARNING: This Copy on write implementation is likely to fail with multiple
