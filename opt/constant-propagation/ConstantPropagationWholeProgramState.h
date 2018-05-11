@@ -132,10 +132,10 @@ class WholeProgramState {
  * Incorporate information about the values of static fields and the return
  * values of other methods in the local analysis of a given method.
  */
-class WholeProgramAwareSubAnalyzer final
-    : public InstructionSubAnalyzerBase<WholeProgramAwareSubAnalyzer,
-                                        ConstantEnvironment,
-                                        const WholeProgramState*> {
+class WholeProgramAwareAnalyzer final
+    : public InstructionAnalyzerBase<WholeProgramAwareAnalyzer,
+                                     ConstantEnvironment,
+                                     const WholeProgramState*> {
  public:
   static bool analyze_sget(const WholeProgramState* whole_program_state,
                            const IRInstruction* insn,

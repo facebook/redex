@@ -14,9 +14,6 @@
 #include "AbstractDomainPropertyTest.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationTestUtil.h"
-#include "ObjectDomain.h"
-
-using ConstantObjectDomain = ObjectDomain<ConstantValue>;
 
 INSTANTIATE_TYPED_TEST_CASE_P(ConstantObjectDomain,
                               AbstractDomainPropertyTest,
@@ -65,4 +62,19 @@ TEST_F(ConstantPropagationTest, ObjectOperations) {
   obj.set(field, SignedConstantDomain(1));
   EXPECT_EQ(obj.get(field), ConstantValue::top());
   EXPECT_TRUE(obj.is_top());
+}
+
+TEST_F(ConstantPropagationTest, ConstantEnvironmentObjectOperations) {
+  ConstantEnvironment env;
+
+  auto insn = std::make_unique<IRInstruction>(OPCODE_NEW_INSTANCE);
+  insn->set_type(DexType::make_type("LFoo;"));
+  env.new_heap_value(1, insn.get(), ConstantObjectDomain());
+  EXPECT_EQ(env.get_pointer(1), AbstractHeapPointer(insn.get()));
+
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  env.set_object_field(1, field, SignedConstantDomain(1));
+  EXPECT_EQ(env.get_pointee<ConstantObjectDomain>(env.get_pointer(1))
+                .get<SignedConstantDomain>(field),
+            SignedConstantDomain(1));
 }

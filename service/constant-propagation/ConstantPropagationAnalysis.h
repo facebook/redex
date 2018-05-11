@@ -34,8 +34,7 @@ class FixpointIterator final
    */
   explicit FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
-      const std::function<void(const IRInstruction*, ConstantEnvironment*)>
-          insn_analyzer)
+      InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
       : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}
 
   ConstantEnvironment analyze_edge(
@@ -49,8 +48,7 @@ class FixpointIterator final
                     ConstantEnvironment* state_at_entry) const override;
 
  private:
-  std::function<void(const IRInstruction*, ConstantEnvironment*)>
-      m_insn_analyzer;
+  InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
 };
 
 } // namespace intraprocedural
@@ -61,9 +59,8 @@ class FixpointIterator final
  * to Top. This sub-analyzer should typically be the last one in any list of
  * combined sub-analyzers.
  */
-class ConstantPrimitiveSubAnalyzer final
-    : public InstructionSubAnalyzerBase<ConstantPrimitiveSubAnalyzer,
-                                        ConstantEnvironment> {
+class PrimitiveAnalyzer final
+    : public InstructionAnalyzerBase<PrimitiveAnalyzer, ConstantEnvironment> {
  public:
   static bool analyze_default(const IRInstruction* insn,
                               ConstantEnvironment* env);
@@ -85,14 +82,35 @@ class ConstantPrimitiveSubAnalyzer final
 // This is the most common use of constant propagation, so we define this alias
 // for our convenience.
 using ConstantPrimitiveAnalyzer =
-    InstructionSubAnalyzerCombiner<ConstantPrimitiveSubAnalyzer>;
+    InstructionAnalyzerCombiner<PrimitiveAnalyzer>;
+
+/*
+ * Defines default analyses of opcodes that have the potential to let
+ * heap-allocated values escape. It sets the escaped values to Top.
+ *
+ * This Analyzer should typically be used in sequence with other Analyzers
+ * that allocate values on the abstract heap.
+ */
+class HeapEscapeAnalyzer final
+    : public InstructionAnalyzerBase<HeapEscapeAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_sput(const IRInstruction* insn, ConstantEnvironment* env);
+  static bool analyze_iput(const IRInstruction* insn, ConstantEnvironment* env);
+  static bool analyze_aput(const IRInstruction* insn, ConstantEnvironment* env);
+  static bool analyze_invoke(const IRInstruction* insn,
+                             ConstantEnvironment* env);
+};
 
 /*
  * Handle non-escaping arrays.
+ *
+ * This Analyzer should typically be used followed by the
+ * HeapEscapeAnalyzer in a combined analysis -- LocalArrayAnalyzer only
+ * handles the creation and mutation of array values, but does not account for
+ * how they may escape.
  */
-class LocalArraySubAnalyzer final
-    : public InstructionSubAnalyzerBase<LocalArraySubAnalyzer,
-                                        ConstantEnvironment> {
+class LocalArrayAnalyzer final
+    : public InstructionAnalyzerBase<LocalArrayAnalyzer, ConstantEnvironment> {
  public:
   static bool analyze_new_array(const IRInstruction* insn,
                                 ConstantEnvironment* env);
@@ -101,18 +119,8 @@ class LocalArraySubAnalyzer final
 
   static bool analyze_aput(const IRInstruction* insn, ConstantEnvironment* env);
 
-  static bool analyze_sput(const IRInstruction* insn, ConstantEnvironment* env);
-
-  static bool analyze_iput(const IRInstruction* insn, ConstantEnvironment* env);
-
   static bool analyze_fill_array_data(const IRInstruction* insn,
                                       ConstantEnvironment* env);
-
-  static bool analyze_invoke(const IRInstruction* insn,
-                             ConstantEnvironment* env);
-
- private:
-  static void mark_array_unknown(reg_t reg, ConstantEnvironment* env);
 };
 
 /*
@@ -120,10 +128,10 @@ class LocalArraySubAnalyzer final
  * most cases) complete running before any other piece of code can modify these
  * fields, we can treat them as non-escaping while analyzing these methods.
  */
-class ClinitFieldSubAnalyzer final
-    : public InstructionSubAnalyzerBase<ClinitFieldSubAnalyzer,
-                                        ConstantEnvironment,
-                                        DexType* /* class_under_init */> {
+class ClinitFieldAnalyzer final
+    : public InstructionAnalyzerBase<ClinitFieldAnalyzer,
+                                     ConstantEnvironment,
+                                     DexType* /* class_under_init */> {
  public:
   static bool analyze_sget(const DexType* class_under_init,
                            const IRInstruction* insn,
@@ -138,9 +146,9 @@ class ClinitFieldSubAnalyzer final
                              ConstantEnvironment* env);
 };
 
-struct EnumFieldSubAnalyzerState {
+struct EnumFieldAnalyzerState {
   const DexMethod* enum_equals;
-  EnumFieldSubAnalyzerState()
+  EnumFieldAnalyzerState()
       : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
             "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
     always_assert(enum_equals);
@@ -148,26 +156,26 @@ struct EnumFieldSubAnalyzerState {
 };
 
 /*
- * EnumFieldSubAnalyzer::analyze_sget assumes that when it is called to analyze
+ * EnumFieldAnalyzer::analyze_sget assumes that when it is called to analyze
  * some `sget-object LFoo;.X:LFoo` instruction, the sget instruction is not
  * contained within Foo's class initializer. This means that most users of this
- * analyzer should put it after the ClinitFieldSubAnalyzer when building the
+ * analyzer should put it after the ClinitFieldAnalyzer when building the
  * combined analyzer.
  */
-class EnumFieldSubAnalyzer final
-    : public InstructionSubAnalyzerBase<EnumFieldSubAnalyzer,
-                                        ConstantEnvironment,
-                                        EnumFieldSubAnalyzerState> {
+class EnumFieldAnalyzer final
+    : public InstructionAnalyzerBase<EnumFieldAnalyzer,
+                                     ConstantEnvironment,
+                                     EnumFieldAnalyzerState> {
  public:
-  static bool analyze_sget(const EnumFieldSubAnalyzerState&,
+  static bool analyze_sget(const EnumFieldAnalyzerState&,
                            const IRInstruction*,
                            ConstantEnvironment*);
-  static bool analyze_invoke(const EnumFieldSubAnalyzerState&,
+  static bool analyze_invoke(const EnumFieldAnalyzerState&,
                              const IRInstruction*,
                              ConstantEnvironment*);
 };
 
-struct BoxedBooleanSubAnalyzerState {
+struct BoxedBooleanAnalyzerState {
   const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
   const DexField* boolean_true{static_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
@@ -180,15 +188,15 @@ struct BoxedBooleanSubAnalyzerState {
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z"))};
 };
 
-class BoxedBooleanSubAnalyzer final
-    : public InstructionSubAnalyzerBase<BoxedBooleanSubAnalyzer,
-                                        ConstantEnvironment,
-                                        BoxedBooleanSubAnalyzerState> {
+class BoxedBooleanAnalyzer final
+    : public InstructionAnalyzerBase<BoxedBooleanAnalyzer,
+                                     ConstantEnvironment,
+                                     BoxedBooleanAnalyzerState> {
  public:
-  static bool analyze_sget(const BoxedBooleanSubAnalyzerState&,
+  static bool analyze_sget(const BoxedBooleanAnalyzerState&,
                            const IRInstruction*,
                            ConstantEnvironment*);
-  static bool analyze_invoke(const BoxedBooleanSubAnalyzerState&,
+  static bool analyze_invoke(const BoxedBooleanAnalyzerState&,
                              const IRInstruction*,
                              ConstantEnvironment*);
 };

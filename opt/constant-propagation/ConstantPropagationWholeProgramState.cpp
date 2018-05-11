@@ -174,7 +174,7 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
   });
 }
 
-bool WholeProgramAwareSubAnalyzer::analyze_sget(
+bool WholeProgramAwareAnalyzer::analyze_sget(
     const WholeProgramState* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
@@ -193,7 +193,7 @@ bool WholeProgramAwareSubAnalyzer::analyze_sget(
   return true;
 }
 
-bool WholeProgramAwareSubAnalyzer::analyze_invoke(
+bool WholeProgramAwareAnalyzer::analyze_invoke(
     const WholeProgramState* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {

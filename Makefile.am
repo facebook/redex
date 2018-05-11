@@ -237,6 +237,7 @@ redex_all_SOURCES = \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
 	tools/redex-all/main.cpp

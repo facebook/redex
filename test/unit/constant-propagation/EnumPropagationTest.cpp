@@ -37,8 +37,7 @@ struct EnumTest : public ConstantPropagationTest {
 };
 
 using EnumAnalyzer =
-    InstructionSubAnalyzerCombiner<cp::EnumFieldSubAnalyzer,
-                                   cp::ConstantPrimitiveSubAnalyzer>;
+    InstructionAnalyzerCombiner<cp::EnumFieldAnalyzer, cp::PrimitiveAnalyzer>;
 
 TEST_F(EnumTest, ReferencesEqual) {
   Scope scope{create_enum()};
@@ -92,10 +91,6 @@ TEST_F(EnumTest, ReferencesNotEqual) {
       (return v0)
     )
 )");
-
-  using EnumAnalyzer =
-      InstructionSubAnalyzerCombiner<cp::EnumFieldSubAnalyzer,
-                                     cp::ConstantPrimitiveSubAnalyzer>;
 
   do_const_prop(code.get(), EnumAnalyzer());
 

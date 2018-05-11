@@ -79,9 +79,9 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
   }
 }
 
-using ArrayAnalyzer =
-    InstructionSubAnalyzerCombiner<cp::LocalArraySubAnalyzer,
-                                   cp::ConstantPrimitiveSubAnalyzer>;
+using ArrayAnalyzer = InstructionAnalyzerCombiner<cp::LocalArrayAnalyzer,
+                                                  cp::HeapEscapeAnalyzer,
+                                                  cp::PrimitiveAnalyzer>;
 
 TEST_F(ConstantPropagationTest, PrimitiveArray) {
   auto code = assembler::ircode_from_string(R"(

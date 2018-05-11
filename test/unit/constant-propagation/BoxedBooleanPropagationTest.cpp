@@ -44,8 +44,8 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
 };
 
 using BoxedBooleanAnalyzer =
-    InstructionSubAnalyzerCombiner<cp::BoxedBooleanSubAnalyzer,
-                                   cp::ConstantPrimitiveSubAnalyzer>;
+    InstructionAnalyzerCombiner<cp::BoxedBooleanAnalyzer,
+                                cp::PrimitiveAnalyzer>;
 
 TEST_F(BoxedBooleanTest, booleanValue) {
   auto code = assembler::ircode_from_string(R"(

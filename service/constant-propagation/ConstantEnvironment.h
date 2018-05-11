@@ -17,6 +17,7 @@
 #include "DisjointUnionAbstractDomain.h"
 #include "FixpointIterators.h"
 #include "HashedAbstractPartition.h"
+#include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "SignedConstantDomain.h"
@@ -45,14 +46,16 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
  */
 using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
 
-// For now, this only represents new-array instructions. Can be extended to
-// new-instance in the future.
+/*
+ * This represents a new-instance or new-array instruction.
+ */
 using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
 
 using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
                                                   SingletonObjectDomain,
                                                   AbstractHeapPointer>;
 
+// For storing non-escaping static fields.
 using ConstantFieldEnvironment =
     PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
 
@@ -65,9 +68,14 @@ using ConstantRegisterEnvironment =
 
 using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
 
-using ConstantArrayHeap =
+using ConstantObjectDomain = ObjectDomain<ConstantValue>;
+
+using HeapValue = DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
+                                              ConstantObjectDomain>;
+
+using ConstantHeap =
     PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
-                                       ConstantPrimitiveArrayDomain>;
+                                       HeapValue>;
 
 /*****************************************************************************
  * Combined model of the abstract stack and heap.
@@ -77,7 +85,7 @@ class ConstantEnvironment final
     : public ReducedProductAbstractDomain<ConstantEnvironment,
                                           ConstantRegisterEnvironment,
                                           ConstantFieldEnvironment,
-                                          ConstantArrayHeap> {
+                                          ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -91,11 +99,11 @@ class ConstantEnvironment final
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstantRegisterEnvironment(l),
                             ConstantFieldEnvironment(),
-                            ConstantArrayHeap())) {}
+                            ConstantHeap())) {}
 
   static void reduce_product(std::tuple<ConstantRegisterEnvironment,
                                         ConstantFieldEnvironment,
-                                        ConstantArrayHeap>&) {}
+                                        ConstantHeap>&) {}
   /*
    * Getters and setters
    */
@@ -108,7 +116,7 @@ class ConstantEnvironment final
     return ReducedProductAbstractDomain::get<1>();
   }
 
-  const ConstantArrayHeap& get_array_heap() const {
+  const ConstantHeap& get_heap() const {
     return ReducedProductAbstractDomain::get<2>();
   }
 
@@ -129,17 +137,27 @@ class ConstantEnvironment final
   }
 
   /*
-   * Dereference the pointer stored in :reg and return the array it points to.
+   * Dereference :ptr and return the HeapValue that it points to.
    */
-  ConstantPrimitiveArrayDomain get_array(reg_t reg) const {
-    const auto& ptr = get_pointer(reg);
+  template <typename HeapValue>
+  HeapValue get_pointee(const AbstractHeapPointer& ptr) const {
     if (ptr.is_top()) {
-      return ConstantPrimitiveArrayDomain::top();
+      return HeapValue::top();
     }
     if (ptr.is_bottom()) {
-      return ConstantPrimitiveArrayDomain::bottom();
+      return HeapValue::bottom();
     }
-    return get_array_heap().get(*ptr.get_constant());
+    return get_heap().get(*ptr.get_constant()).get<HeapValue>();
+  }
+
+  /*
+   * Dereference the pointer stored in :reg and return the HeapValue that it
+   * points to.
+   */
+  template <typename HeapValue>
+  HeapValue get_pointee(reg_t reg) const {
+    const auto& ptr = get_pointer(reg);
+    return get_pointee<HeapValue>(ptr);
   }
 
   ConstantValue get(DexField* field) const {
@@ -162,8 +180,7 @@ class ConstantEnvironment final
     return *this;
   }
 
-  ConstantEnvironment& mutate_array_heap(
-      std::function<void(ConstantArrayHeap*)> f) {
+  ConstantEnvironment& mutate_heap(std::function<void(ConstantHeap*)> f) {
     apply<2>(f);
     return *this;
   }
@@ -176,13 +193,12 @@ class ConstantEnvironment final
   /*
    * Store :ptr_val in :reg, and make it point to :value.
    */
-  ConstantEnvironment& set_array(
+  ConstantEnvironment& new_heap_value(
       reg_t reg,
       const AbstractHeapPointer::ConstantType& ptr_val,
-      const ConstantPrimitiveArrayDomain& value) {
+      const HeapValue& value) {
     set(reg, AbstractHeapPointer(ptr_val));
-    mutate_array_heap(
-        [&](ConstantArrayHeap* heap) { heap->set(ptr_val, value); });
+    mutate_heap([&](ConstantHeap* heap) { heap->set(ptr_val, value); });
     return *this;
   }
 
@@ -192,18 +208,33 @@ class ConstantEnvironment final
    */
   ConstantEnvironment& set_array_binding(reg_t reg,
                                          uint32_t idx,
-                                         SignedConstantDomain value) {
-    return mutate_array_heap([&](ConstantArrayHeap* heap) {
+                                         const SignedConstantDomain& value) {
+    return mutate_heap([&](ConstantHeap* heap) {
       auto ptr = get_pointer(reg);
       if (!ptr.is_value()) {
         return;
       }
-      heap->update(*ptr.get_constant(),
-                   [&](const ConstantPrimitiveArrayDomain& arr) {
-                     auto copy = arr;
-                     copy.set(idx, value);
-                     return copy;
-                   });
+      heap->update(*ptr.get_constant(), [&](const HeapValue& arr) {
+        auto copy = arr.get<ConstantPrimitiveArrayDomain>();
+        copy.set(idx, value);
+        return copy;
+      });
+    });
+  }
+
+  ConstantEnvironment& set_object_field(reg_t reg,
+                                        const DexField* field,
+                                        const ConstantValue& value) {
+    return mutate_heap([&](ConstantHeap* heap) {
+      auto ptr = get_pointer(reg);
+      if (!ptr.is_value()) {
+        return;
+      }
+      heap->update(*ptr.get_constant(), [&](const HeapValue& arr) {
+        auto copy = arr.get<ConstantObjectDomain>();
+        copy.set(field, value);
+        return copy;
+      });
     });
   }
 
