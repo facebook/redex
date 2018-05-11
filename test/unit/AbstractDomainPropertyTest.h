@@ -38,6 +38,12 @@ class AbstractDomainPropertyTest : public ::testing::Test {
   static std::vector<Domain> bottom_values() { return {Domain::bottom()}; }
   static std::vector<Domain> non_extremal_values() { return {}; }
 
+  // We define these empty methods so that they can be template-specialized
+  // by AbstractDomain implementors.
+  static void SetUpTestCase() {}
+
+  static void TearDownTestCase() {}
+
   static std::vector<Domain> all_values() {
     std::vector<Domain> result;
     const auto& tops = top_values();
