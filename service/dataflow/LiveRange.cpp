@@ -20,8 +20,7 @@
 
 namespace {
 
-using namespace regalloc::live_range;
-using namespace std::placeholders;
+using namespace live_range;
 
 /*
  * Type aliases for disjoint_sets
@@ -36,21 +35,29 @@ using DefSets = boost::disjoint_sets<RankPMap, ParentPMap>;
  * Allocates a unique symbolic register for every disjoint set of defs.
  */
 class SymRegMapper {
-  reg_t m_next_symreg {0};
-  std::unordered_map<Def, reg_t> m_def_to_reg;
  public:
-   reg_t make(Def def) {
-     if (m_def_to_reg.find(def) == m_def_to_reg.end()) {
-       m_def_to_reg[def] = m_next_symreg++;
-     }
-     return m_def_to_reg.at(def);
-   }
-   reg_t at(Def def) {
-     return m_def_to_reg.at(def);
-   }
-   reg_t regs_size() const {
-     return m_next_symreg;
-   }
+  SymRegMapper(bool width_aware) : m_width_aware(width_aware) {}
+
+  reg_t make(Def def) {
+    if (m_def_to_reg.find(def) == m_def_to_reg.end()) {
+      if (m_width_aware) {
+        m_def_to_reg[def] = m_next_symreg;
+        m_next_symreg += def->dest_is_wide() ? 2 : 1;
+      } else {
+        m_def_to_reg[def] = m_next_symreg++;
+      }
+    }
+    return m_def_to_reg.at(def);
+  }
+
+  reg_t at(Def def) { return m_def_to_reg.at(def); }
+
+  reg_t regs_size() const { return m_next_symreg; }
+
+ private:
+  bool m_width_aware;
+  reg_t m_next_symreg{0};
+  std::unordered_map<Def, reg_t> m_def_to_reg;
 };
 
 using UDChains = std::unordered_map<Use, PatriciaTreeSet<Def>>;
@@ -82,9 +89,7 @@ class DefsDomain final : public AbstractDomainReverseAdaptor<
   // compilers fail to catch this. So we insert a redundant '= default'.
   DefsDomain() = default;
 
-  size_t size() const {
-    return unwrap().size();
-  }
+  size_t size() const { return unwrap().size(); }
 
   const PatriciaTreeSet<IRInstruction*>& elements() const {
     return unwrap().elements();
@@ -98,9 +103,7 @@ class DefsEnvironment final
  public:
   using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
 
-  DefsDomain get(reg_t reg) {
-    return unwrap().get(reg);
-  }
+  DefsDomain get(reg_t reg) { return unwrap().get(reg); }
 
   DefsEnvironment& set(reg_t reg, const DefsDomain& value) {
     unwrap().set(reg, value);
@@ -164,15 +167,13 @@ UDChains calculate_ud_chains(IRCode* code) {
 
 } // namespace
 
-namespace regalloc {
-
 namespace live_range {
 
 bool Use::operator==(const Use& that) const {
   return insn == that.insn && reg == that.reg;
 }
 
-void renumber_registers(IRCode* code) {
+void renumber_registers(IRCode* code, bool width_aware) {
   auto chains = calculate_ud_chains(code);
 
   Rank rank;
@@ -184,7 +185,7 @@ void renumber_registers(IRCode* code) {
     }
   }
   unify_defs(chains, &def_sets);
-  SymRegMapper sym_reg_mapper;
+  SymRegMapper sym_reg_mapper(width_aware);
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
@@ -195,7 +196,7 @@ void renumber_registers(IRCode* code) {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      auto& defs = chains.at(Use {insn, insn->src(i)});
+      auto& defs = chains.at(Use{insn, insn->src(i)});
       insn->set_src(i, sym_reg_mapper.at(def_sets.find_set(*defs.begin())));
     }
   }
@@ -203,5 +204,3 @@ void renumber_registers(IRCode* code) {
 }
 
 } // namespace live_range
-
-} // namespace regalloc

@@ -201,7 +201,6 @@ redex_all_SOURCES = \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
-	opt/regalloc/LiveRange.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc/RegisterType.cpp \
 	opt/regalloc/Split.cpp \
@@ -239,6 +238,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/SignDomain.cpp \
+	service/dataflow/LiveRange.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

@@ -97,7 +97,7 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
   code->set_registers_size(1);
 
   code->build_cfg();
-  live_range::renumber_registers(code.get());
+  live_range::renumber_registers(code.get(), /* width_aware */ false);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -136,7 +136,7 @@ TEST_F(RegAllocTest, LiveRange) {
 )");
 
   code->build_cfg();
-  live_range::renumber_registers(code.get());
+  live_range::renumber_registers(code.get(), /* width_aware */ false);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -161,6 +161,38 @@ TEST_F(RegAllocTest, LiveRange) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 6);
+}
+
+TEST_F(RegAllocTest, WidthAwareLiveRange) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (const-wide v0 0)
+     (sput-wide v0 "LFoo;.bar:I")
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+     (check-cast v0 "Ljava/lang/Object;")
+     (move-result-pseudo-object v0)
+    )
+)");
+
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (const-wide v1 0)
+     (sput-wide v1 "LFoo;.bar:I")
+     (new-instance "Ljava/lang/Object;")
+     (move-result-pseudo-object v3) ; skip v2 since we have a wide value in v1
+     (check-cast v3 "Ljava/lang/Object;")
+     (move-result-pseudo-object v4)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(code->get_registers_size(), 5);
 }
 
 TEST_F(RegAllocTest, VirtualRegistersFile) {

@@ -7,8 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include <cstdint>
 #include <boost/functional/hash.hpp>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -20,8 +20,6 @@
  * Muchnick's Advanced Compiler Design & Implementation, Section 16.3.3 for
  * details.
  */
-
-namespace regalloc {
 
 namespace live_range {
 
@@ -39,26 +37,25 @@ struct Use {
 
 } // namespace live_range
 
-} // namespace regalloc
-
 namespace std {
 
 template <>
-struct hash<regalloc::live_range::Use> {
-  size_t operator()(const regalloc::live_range::Use& use) const {
+struct hash<live_range::Use> {
+  size_t operator()(const live_range::Use& use) const {
     size_t seed = boost::hash<IRInstruction*>()(use.insn);
     boost::hash_combine(seed, use.reg);
     return seed;
   }
 };
-}
 
-namespace regalloc {
+} // namespace std
 
 namespace live_range {
 
-void renumber_registers(IRCode*);
+/*
+ * width_aware means that the renumbering process will allocate 2 slots per
+ * wide register. In general, callers should use the default (true) value.
+ */
+void renumber_registers(IRCode*, bool width_aware = true);
 
 } // namespace live_range
-
-} // namespace regalloc
