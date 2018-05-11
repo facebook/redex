@@ -248,3 +248,33 @@ class ConstantEnvironment final
         [](ConstantFieldEnvironment* env) { env->set_to_top(); });
   }
 };
+
+/*
+ * For modeling the stack + heap at method return statements.
+ */
+class ReturnState : public ReducedProductAbstractDomain<ReturnState,
+                                                        ConstantValue,
+                                                        ConstantHeap> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via the
+  // `using` declaration above), but some compilers fail to catch this. So we
+  // insert a redundant '= default'.
+  ReturnState() = default;
+
+  ReturnState(const ConstantValue& value, const ConstantHeap& heap)
+      : ReducedProductAbstractDomain(std::make_tuple(value, heap)) {}
+
+  static void reduce_product(std::tuple<ConstantValue, ConstantHeap>&) {}
+
+  ConstantValue get_value() { return ReducedProductAbstractDomain::get<0>(); }
+
+  template <typename Domain>
+  Domain get_value() {
+    return ReducedProductAbstractDomain::get<0>().template get<Domain>();
+  }
+
+  ConstantHeap get_heap() { return ReducedProductAbstractDomain::get<1>(); }
+};

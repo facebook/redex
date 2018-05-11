@@ -437,6 +437,59 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
+void semantically_inline_method(
+    IRCode* callee_code,
+    const IRInstruction* insn,
+    const InstructionAnalyzer<ConstantEnvironment>& analyzer,
+    ConstantEnvironment* env) {
+  callee_code->build_cfg();
+  auto& cfg = callee_code->cfg();
+
+  // Set up the environment at entry into the callee.
+  ConstantEnvironment call_entry_env;
+  auto load_param_it = callee_code->get_param_instructions().begin();
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    call_entry_env.set(load_param_it->insn->dest(), env->get(insn->src(i)));
+    ++load_param_it;
+  }
+  call_entry_env.mutate_heap(
+      [env](ConstantHeap* heap) { *heap = env->get_heap(); });
+
+  // Analyze the callee.
+  auto fp_iter =
+      std::make_unique<intraprocedural::FixpointIterator>(cfg, analyzer);
+  fp_iter->run(call_entry_env);
+
+  // Update the caller's environment with the callee's return states.
+  auto return_state = collect_return_state(callee_code, *fp_iter);
+  env->set(RESULT_REGISTER, return_state.get_value());
+  env->mutate_heap(
+      [&return_state](ConstantHeap* heap) { *heap = return_state.get_heap(); });
+}
+
+ReturnState collect_return_state(
+    IRCode* code, const intraprocedural::FixpointIterator& fp_iter) {
+  auto& cfg = code->cfg();
+  auto return_state = ReturnState::bottom();
+  for (cfg::Block* b : cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(b);
+    for (auto& mie : InstructionIterable(b)) {
+      auto* insn = mie.insn;
+      fp_iter.analyze_instruction(insn, &env);
+      if (is_return(insn->opcode())) {
+        if (insn->opcode() != OPCODE_RETURN_VOID) {
+          return_state.join_with(
+              ReturnState(env.get(insn->dest()), env.get_heap()));
+        } else {
+          return_state.join_with(
+              ReturnState(ConstantValue::top(), env.get_heap()));
+        }
+      }
+    }
+  }
+  return return_state;
+}
+
 namespace intraprocedural {
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,

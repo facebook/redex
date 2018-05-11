@@ -201,4 +201,35 @@ class BoxedBooleanAnalyzer final
                              ConstantEnvironment*);
 };
 
+/*
+ * Utility methods.
+ */
+
+/*
+ * Analyze the invoke instruction given by :insn by running an abstract
+ * interpreter on the :callee_code with the provided arguments. By analyzing the
+ * callee with the exact arguments at this callsite -- instead of the join of
+ * the arguments at every possible callsites -- we can get more precision in the
+ * return value / final heap state of the invoke.
+ *
+ * :env should represent the ConstantEnvironment at the point before the invoke
+ * instruction gets executed. semantically_inline_method will update :env to
+ * reflect the ConstantEnvironment at the point after the invoke instruction
+ * has finished executing.
+ *
+ * Note that this method will not recursively inline invocations within
+ * :callee_code. We can extend it to support that in the future.
+ */
+void semantically_inline_method(
+    IRCode* callee_code,
+    const IRInstruction* insn,
+    const InstructionAnalyzer<ConstantEnvironment>& analyzer,
+    ConstantEnvironment* env);
+
+/*
+ * Do a join over the states at each return opcode in a method.
+ */
+ReturnState collect_return_state(IRCode* code,
+                                 const intraprocedural::FixpointIterator&);
+
 } // namespace constant_propagation
