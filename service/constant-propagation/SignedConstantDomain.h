@@ -60,6 +60,10 @@ class SignedConstantDomain
 
   ConstantDomain constant_domain() const { return get<1>(); }
 
+  boost::optional<ConstantDomain::ConstantType> get_constant() const {
+    return constant_domain().get_constant();
+  }
+
   static SignedConstantDomain default_value() {
     return SignedConstantDomain(0);
   }

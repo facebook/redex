@@ -69,9 +69,8 @@ bool addition_out_of_bounds(int64_t a, int64_t b) {
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   IROpcode op = insn->opcode();
-  auto left = env->get_primitive(insn->src(0)).constant_domain().get_constant();
-  auto right =
-      env->get_primitive(insn->src(1)).constant_domain().get_constant();
+  auto left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+  auto right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
 
   if (left && right) {
     int32_t result;
@@ -105,7 +104,7 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 namespace constant_propagation {
 
 static void set_escaped(reg_t reg, ConstantEnvironment* env) {
-  auto ptr_opt = env->get_pointer(reg).get_constant();
+  auto ptr_opt = env->get<AbstractHeapPointer>(reg).get_constant();
   if (ptr_opt) {
     env->mutate_heap(
         [&](ConstantHeap* heap) { heap->set(*ptr_opt, HeapValue::top()); });
@@ -146,8 +145,8 @@ bool HeapEscapeAnalyzer::analyze_invoke(const IRInstruction* insn,
 
 bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,
                                            ConstantEnvironment* env) {
-  auto length = env->get_primitive(insn->src(0));
-  auto length_value_opt = length.constant_domain().get_constant();
+  auto length = env->get<SignedConstantDomain>(insn->src(0));
+  auto length_value_opt = length.get_constant();
   if (!length_value_opt) {
     return false;
   }
@@ -162,7 +161,7 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
     return false;
   }
   boost::optional<int64_t> idx_opt =
-      env->get_primitive(insn->src(1)).constant_domain().get_constant();
+      env->get<SignedConstantDomain>(insn->src(1)).get_constant();
   if (!idx_opt) {
     return false;
   }
@@ -177,11 +176,11 @@ bool LocalArrayAnalyzer::analyze_aput(const IRInstruction* insn,
     return false;
   }
   boost::optional<int64_t> idx_opt =
-      env->get_primitive(insn->src(2)).constant_domain().get_constant();
+      env->get<SignedConstantDomain>(insn->src(2)).get_constant();
   if (!idx_opt) {
     return false;
   }
-  auto val = env->get_primitive(insn->src(0));
+  auto val = env->get<SignedConstantDomain>(insn->src(0));
   env->set_array_binding(insn->src(1), *idx_opt, val);
   return true;
 }
@@ -268,8 +267,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
           lit);
 
     auto result = SignedConstantDomain::top();
-    auto cst =
-        env->get_primitive(insn->src(0)).constant_domain().get_constant();
+    auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
     if (cst && !addition_out_of_bounds(lit, *cst)) {
       result = SignedConstantDomain(*cst + lit);
     }
@@ -403,8 +401,7 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
     return false;
   }
   if (method == state.boolean_valueof) {
-    auto cst =
-        env->get_primitive(insn->src(0)).constant_domain().get_constant();
+    auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
     if (!cst) {
       return false;
     }
@@ -523,12 +520,12 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
  public:
   bool operator()(const SignedConstantDomain& scd_left,
                   const SignedConstantDomain& scd_right) const {
-    auto cd_left = scd_left.constant_domain();
-    auto cd_right = scd_right.constant_domain();
-    if (!(cd_left.is_value() && cd_right.is_value())) {
+    auto cst_left = scd_left.get_constant();
+    auto cst_right = scd_right.get_constant();
+    if (!(cst_left && cst_right)) {
       return false;
     }
-    if (*cd_left.get_constant() == *cd_right.get_constant()) {
+    if (*cst_left == *cst_right) {
       return true;
     }
     return false;

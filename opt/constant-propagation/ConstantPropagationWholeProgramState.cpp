@@ -21,7 +21,7 @@ namespace {
  * to :field_partition.
  */
 void set_fields_in_partition(const DexClass* cls,
-                             const ConstantFieldEnvironment& field_env,
+                             const StaticFieldEnvironment& field_env,
                              ConstantStaticFieldPartition* field_partition) {
   // Note that we *must* iterate over the list of fields in the class and not
   // the bindings in field_env here. This ensures that fields whose values are

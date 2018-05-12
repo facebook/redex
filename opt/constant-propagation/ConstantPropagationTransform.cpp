@@ -27,7 +27,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   if (!scd) {
     return;
   }
-  auto cst = scd->constant_domain().get_constant();
+  auto cst = scd->get_constant();
   if (!cst) {
     return;
   }
@@ -91,7 +91,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (!scd) {
       break;
     }
-    auto cst = scd->constant_domain().get_constant();
+    auto cst = scd->get_constant();
     if (cst) {
       // This field is known to be constant and must already hold this value.
       // We don't need to write to it again.

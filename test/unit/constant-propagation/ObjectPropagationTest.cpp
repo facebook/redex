@@ -70,11 +70,11 @@ TEST_F(ConstantPropagationTest, ConstantEnvironmentObjectOperations) {
   auto insn = std::make_unique<IRInstruction>(OPCODE_NEW_INSTANCE);
   insn->set_type(DexType::make_type("LFoo;"));
   env.new_heap_value(1, insn.get(), ConstantObjectDomain());
-  EXPECT_EQ(env.get_pointer(1), AbstractHeapPointer(insn.get()));
+  EXPECT_EQ(env.get<AbstractHeapPointer>(1), AbstractHeapPointer(insn.get()));
 
   auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
   env.set_object_field(1, field, SignedConstantDomain(1));
-  EXPECT_EQ(env.get_pointee<ConstantObjectDomain>(env.get_pointer(1))
-                .get<SignedConstantDomain>(field),
-            SignedConstantDomain(1));
+  EXPECT_EQ(
+      env.get_pointee<ConstantObjectDomain>(1).get<SignedConstantDomain>(field),
+      SignedConstantDomain(1));
 }

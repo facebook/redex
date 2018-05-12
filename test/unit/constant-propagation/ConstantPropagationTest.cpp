@@ -74,12 +74,13 @@ TEST(ConstantPropagation, WhiteBox1) {
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
   // Specifying `0u` here to avoid any ambiguity as to whether it is the null
   // pointer
-  EXPECT_EQ(exit_state.get_primitive(0u), SignedConstantDomain::top());
-  EXPECT_EQ(exit_state.get_primitive(1), SignedConstantDomain(0));
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(0u),
+            SignedConstantDomain::top());
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(1), SignedConstantDomain(0));
   // v2 can contain either the value 0 or 1
-  EXPECT_EQ(exit_state.get_primitive(2),
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(2),
             SignedConstantDomain(sign_domain::Interval::GEZ));
-  EXPECT_EQ(exit_state.get_primitive(3), SignedConstantDomain(0));
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(3), SignedConstantDomain(0));
 }
 
 TEST(ConstantPropagation, WhiteBox2) {
@@ -106,7 +107,7 @@ TEST(ConstantPropagation, WhiteBox2) {
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
-  EXPECT_EQ(exit_state.get_primitive(0u),
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(0u),
             SignedConstantDomain(sign_domain::Interval::GEZ));
-  EXPECT_EQ(exit_state.get_primitive(1), SignedConstantDomain(0));
+  EXPECT_EQ(exit_state.get<SignedConstantDomain>(1), SignedConstantDomain(0));
 }

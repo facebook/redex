@@ -56,7 +56,7 @@ using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
                                                   AbstractHeapPointer>;
 
 // For storing non-escaping static fields.
-using ConstantFieldEnvironment =
+using StaticFieldEnvironment =
     PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
 
 using ConstantRegisterEnvironment =
@@ -84,7 +84,7 @@ using ConstantHeap =
 class ConstantEnvironment final
     : public ReducedProductAbstractDomain<ConstantEnvironment,
                                           ConstantRegisterEnvironment,
-                                          ConstantFieldEnvironment,
+                                          StaticFieldEnvironment,
                                           ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
@@ -98,11 +98,11 @@ class ConstantEnvironment final
   ConstantEnvironment(std::initializer_list<std::pair<reg_t, ConstantValue>> l)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstantRegisterEnvironment(l),
-                            ConstantFieldEnvironment(),
+                            StaticFieldEnvironment(),
                             ConstantHeap())) {}
 
   static void reduce_product(std::tuple<ConstantRegisterEnvironment,
-                                        ConstantFieldEnvironment,
+                                        StaticFieldEnvironment,
                                         ConstantHeap>&) {}
   /*
    * Getters and setters
@@ -112,7 +112,7 @@ class ConstantEnvironment final
     return ReducedProductAbstractDomain::get<0>();
   }
 
-  const ConstantFieldEnvironment& get_field_environment() const {
+  const StaticFieldEnvironment& get_field_environment() const {
     return ReducedProductAbstractDomain::get<1>();
   }
 
@@ -124,16 +124,18 @@ class ConstantEnvironment final
     return get_register_environment().get(reg);
   }
 
-  SignedConstantDomain get_primitive(reg_t reg) const {
-    return get_register_environment().get(reg).get<SignedConstantDomain>();
+  template <typename Domain>
+  Domain get(reg_t reg) const {
+    return get_register_environment().get(reg).template get<Domain>();
   }
 
-  AbstractHeapPointer get_pointer(reg_t reg) const {
-    return get_register_environment().get(reg).get<AbstractHeapPointer>();
+  ConstantValue get(DexField* field) const {
+    return get_field_environment().get(field);
   }
 
-  SingletonObjectDomain get_singleton(reg_t reg) const {
-    return get_register_environment().get(reg).get<SingletonObjectDomain>();
+  template <typename Domain>
+  Domain get(const DexField* field) const {
+    return get_field_environment().get(field).template get<Domain>();
   }
 
   /*
@@ -156,16 +158,8 @@ class ConstantEnvironment final
    */
   template <typename HeapValue>
   HeapValue get_pointee(reg_t reg) const {
-    const auto& ptr = get_pointer(reg);
+    const auto& ptr = get<AbstractHeapPointer>(reg);
     return get_pointee<HeapValue>(ptr);
-  }
-
-  ConstantValue get(DexField* field) const {
-    return get_field_environment().get(field);
-  }
-
-  SignedConstantDomain get_primitive(DexField* field) const {
-    return get(field).get<SignedConstantDomain>();
   }
 
   ConstantEnvironment& mutate_register_environment(
@@ -175,7 +169,7 @@ class ConstantEnvironment final
   }
 
   ConstantEnvironment& mutate_field_environment(
-      std::function<void(ConstantFieldEnvironment*)> f) {
+      std::function<void(StaticFieldEnvironment*)> f) {
     apply<1>(f);
     return *this;
   }
@@ -188,6 +182,11 @@ class ConstantEnvironment final
   ConstantEnvironment& set(reg_t reg, const ConstantValue& value) {
     return mutate_register_environment(
         [&](ConstantRegisterEnvironment* env) { env->set(reg, value); });
+  }
+
+  ConstantEnvironment& set(const DexField* field, const ConstantValue& value) {
+    return mutate_field_environment(
+        [&](StaticFieldEnvironment* env) { env->set(field, value); });
   }
 
   /*
@@ -210,7 +209,7 @@ class ConstantEnvironment final
                                          uint32_t idx,
                                          const SignedConstantDomain& value) {
     return mutate_heap([&](ConstantHeap* heap) {
-      auto ptr = get_pointer(reg);
+      auto ptr = get<AbstractHeapPointer>(reg);
       if (!ptr.is_value()) {
         return;
       }
@@ -226,7 +225,7 @@ class ConstantEnvironment final
                                         const DexField* field,
                                         const ConstantValue& value) {
     return mutate_heap([&](ConstantHeap* heap) {
-      auto ptr = get_pointer(reg);
+      auto ptr = get<AbstractHeapPointer>(reg);
       if (!ptr.is_value()) {
         return;
       }
@@ -238,14 +237,9 @@ class ConstantEnvironment final
     });
   }
 
-  ConstantEnvironment& set(DexField* field, const ConstantValue& value) {
-    return mutate_field_environment(
-        [&](ConstantFieldEnvironment* env) { env->set(field, value); });
-  }
-
   ConstantEnvironment& clear_field_environment() {
     return mutate_field_environment(
-        [](ConstantFieldEnvironment* env) { env->set_to_top(); });
+        [](StaticFieldEnvironment* env) { env->set_to_top(); });
   }
 };
 

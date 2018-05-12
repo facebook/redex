@@ -61,7 +61,7 @@ static IRList::iterator insert_if_opcode_check(IRCode* code,
                                                reg_t reg_to_check,
                                                SignedConstantDomain scd) {
   always_assert(!scd.is_top() && !scd.is_bottom());
-  const auto& cst = scd.constant_domain().get_constant();
+  const auto& cst = scd.get_constant();
   if (cst) {
     // If we have an exact constant, create a const instruction that loads
     // that value and check for equality.
@@ -266,7 +266,7 @@ void RuntimeAssertTransform::insert_param_asserts(
     // correct for the given param
     // XXX with some refactoring, we could use insert_if_opcode_check here...
     IRList::iterator check_insn_it;
-    const auto& cst = scd.constant_domain().get_constant();
+    const auto& cst = scd.get_constant();
     if (cst) {
       // If we have an exact constant, create a const instruction that loads
       // that value and check for equality.
