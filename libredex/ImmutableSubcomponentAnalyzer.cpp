@@ -240,6 +240,37 @@ class Analyzer final
     return abs_path.access_path();
   }
 
+  std::set<size_t> find_access_path_registers(
+      const AbstractAccessPathEnvironment& env,
+      const AccessPath& path_to_find) const {
+    if (!env.is_value()) {
+      return {};
+    }
+    std::set<size_t> res;
+    auto& bindings = env.bindings();
+    for (auto it = bindings.begin(); it != bindings.end(); ++it) {
+      auto domain = it->second;
+      if (domain.access_path()) {
+        auto path = *domain.access_path();
+        if (path_to_find == path && it->first != RESULT_REGISTER) {
+          res.emplace(it->first);
+        }
+      }
+    }
+    return res;
+  }
+
+  std::set<size_t> find_access_path_registers(
+      IRInstruction* insn,
+      const AccessPath& path) const {
+    auto it = m_environments.find(insn);
+    if (it == m_environments.end()) {
+      return {};
+    }
+    auto env = it->second;
+    return find_access_path_registers(env, path);
+  }
+
   void populate_environments() {
     // We reserve enough space for the map in order to avoid repeated rehashing
     // during the computation.
@@ -252,6 +283,38 @@ class Analyzer final
         analyze_instruction(insn, &current_state);
       }
     }
+  }
+
+  BindingSnapshot get_known_access_path_bindings(
+      const AbstractAccessPathEnvironment& env) {
+    BindingSnapshot ret;
+    if (env.kind() == AbstractValueKind::Value) {
+      auto bindings = env.bindings();
+      for (auto it = bindings.begin(); it != bindings.end(); ++it) {
+        auto domain = it->second;
+        if (domain.access_path()) {
+          auto path = *domain.access_path();
+          if (it->first != RESULT_REGISTER) {
+            ret.emplace(it->first, path);
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  std::unordered_map<cfg::BlockId, BlockStateSnapshot> get_block_state_snapshot() {
+    std::unordered_map<cfg::BlockId, BlockStateSnapshot> ret;
+    for (NodeId block : m_cfg.blocks()) {
+      auto entry_state = get_entry_state_at(block);
+      auto exit_state = get_exit_state_at(block);
+      BlockStateSnapshot snapshot = {
+        get_known_access_path_bindings(entry_state),
+        get_known_access_path_bindings(exit_state)
+      };
+      ret.emplace(block->id(), snapshot);
+    }
+    return ret;
   }
 
  private:
@@ -311,4 +374,20 @@ boost::optional<AccessPath> ImmutableSubcomponentAnalyzer::get_access_path(
     return boost::none;
   }
   return m_analyzer->get_access_path(reg, insn);
+}
+
+std::set<size_t> ImmutableSubcomponentAnalyzer::find_access_path_registers(
+    IRInstruction* insn,
+    const AccessPath& path) const {
+  if (m_analyzer == nullptr) {
+    return {};
+  }
+  return m_analyzer->find_access_path_registers(insn, path);
+}
+
+std::unordered_map<cfg::BlockId, BlockStateSnapshot> ImmutableSubcomponentAnalyzer::get_block_state_snapshot() const {
+  if (m_analyzer == nullptr) {
+    return {{}};
+  }
+  return m_analyzer->get_block_state_snapshot();
 }

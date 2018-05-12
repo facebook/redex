@@ -19,6 +19,7 @@
 #include <boost/optional.hpp>
 
 #include "DexClass.h"
+#include "ControlFlow.h"
 
 namespace isa_impl {
 
@@ -94,6 +95,17 @@ class AccessPath final {
   friend class isa_impl::AbstractAccessPath;
 };
 
+/*
+ * Holds the register to access path mappings for a block's entry state and exit
+ * state.
+ */
+using BindingSnapshot = std::unordered_map<uint32_t, AccessPath>;
+
+struct BlockStateSnapshot {
+  BindingSnapshot entry_state_bindings;
+  BindingSnapshot exit_state_bindings;
+};
+
 // To enable the use of boost::hash.
 size_t hash_value(const AccessPath& path);
 
@@ -126,6 +138,16 @@ class ImmutableSubcomponentAnalyzer final {
    */
   boost::optional<AccessPath> get_access_path(size_t reg,
                                               IRInstruction* insn) const;
+
+  /*
+   * If the given access path has been computed before and exists in the
+   * instruction's entry state, returns the registers which store the path.
+  */
+  std::set<size_t> find_access_path_registers(
+    IRInstruction* insn,
+    const AccessPath& path) const;
+
+  std::unordered_map<cfg::BlockId, BlockStateSnapshot> get_block_state_snapshot() const;
 
  private:
   std::unique_ptr<isa_impl::Analyzer> m_analyzer;
