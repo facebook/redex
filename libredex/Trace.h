@@ -65,6 +65,7 @@
   TM(QUICK)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
+  TM(REFU)               \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \
@@ -73,6 +74,7 @@
   TM(RMU)                \
   TM(RMUF)               \
   TM(RM_INTF)            \
+  TM(SDIS)               \
   TM(SHORTEN)            \
   TM(SINK)               \
   TM(SINL)               \
@@ -82,7 +84,6 @@
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
-  TM(TREF)               \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \

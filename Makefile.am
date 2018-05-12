@@ -64,6 +64,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
+  -I$(top_srcdir)/service/reference-update \
+  -I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
@@ -240,6 +242,9 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
+  service/reference-update/MethodReference.cpp \
+  service/reference-update/TypeReference.cpp \
+  service/switch-dispatch/SwitchDispatch.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \
