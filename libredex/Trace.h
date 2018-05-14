@@ -43,6 +43,7 @@
   TM(HOTNESS)            \
   TM(ICONSTP)            \
   TM(IDEX)               \
+  TM(GETTER)             \
   TM(INL)                \
   TM(INLINIT)            \
   TM(INLRES)             \
