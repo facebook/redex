@@ -39,9 +39,16 @@ void patch_callsite(const CallSiteSpec& spec,
   const auto call_insn = spec.call_insn;
   const auto callee = spec.new_callee;
   TRACE(REFU, 9, " patching call site at %s\n", SHOW(call_insn));
-  always_assert_log(is_public(callee),
-                    "Updating a call site with a non-public new callee %s\n",
-                    SHOW(callee));
+
+  // Update package protected or protected methods to public.
+  if (is_static(callee) || is_any_init(callee) || !is_private(callee)) {
+    set_public(callee);
+  }
+  always_assert_log(
+      is_public(callee) || callee->get_class() == caller->get_class(),
+      "Updating a call site of %s when not accessible from %s\n",
+      SHOW(callee), SHOW(caller));
+
   auto code = caller->get_code();
   auto additional_arg_reg = code->allocate_temp();
   auto load_additional_arg =
