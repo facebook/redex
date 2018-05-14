@@ -102,6 +102,8 @@ DexProto* update_proto_reference(
     auto merger_type = old_to_new.at(rtype);
     rtype = is_array(proto->get_rtype()) ? make_array_type(merger_type)
                                          : const_cast<DexType*>(merger_type);
+  } else {
+    rtype = proto->get_rtype();
   }
   std::deque<DexType*> lst;
   for (const auto arg_type : proto->get_args()->get_type_list()) {
