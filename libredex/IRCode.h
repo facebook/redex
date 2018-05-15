@@ -98,6 +98,12 @@ class IRCode {
 
   uint16_t allocate_temp() { return m_registers_size++; }
 
+  uint16_t allocate_wide_temp() {
+    uint16_t new_reg = m_registers_size;
+    m_registers_size += 2;
+    return new_reg;
+  }
+
   /*
    * Find the subrange of load-param instructions. These instructions should
    * always be at the beginning of the method.
