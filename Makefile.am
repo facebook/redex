@@ -64,8 +64,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
-  -I$(top_srcdir)/service/reference-update \
-  -I$(top_srcdir)/service/switch-dispatch \
+	-I$(top_srcdir)/service/reference-update \
+	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
@@ -178,9 +178,7 @@ redex_all_SOURCES = \
 	opt/constant-propagation/ConstantPropagation.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/ConstantPropagationTransform.cpp \
-	opt/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
-	opt/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
@@ -239,12 +237,14 @@ redex_all_SOURCES = \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
+	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
-  service/reference-update/MethodReference.cpp \
-  service/reference-update/TypeReference.cpp \
-  service/switch-dispatch/SwitchDispatch.cpp \
+	service/reference-update/MethodReference.cpp \
+	service/reference-update/TypeReference.cpp \
+	service/switch-dispatch/SwitchDispatch.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

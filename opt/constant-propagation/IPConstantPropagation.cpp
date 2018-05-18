@@ -20,6 +20,47 @@ namespace constant_propagation {
 
 namespace interprocedural {
 
+using CombinedAnalyzer = InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
+                                                     WholeProgramAwareAnalyzer,
+                                                     EnumFieldAnalyzer,
+                                                     BoxedBooleanAnalyzer,
+                                                     PrimitiveAnalyzer>;
+
+std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
+    const DexMethod* method,
+    const WholeProgramState& wps,
+    ArgumentDomain args) {
+  always_assert(method->get_code() != nullptr);
+  auto& code = *method->get_code();
+  // Currently, our callgraph does not include calls to non-devirtualizable
+  // virtual methods. So those methods may appear unreachable despite being
+  // reachable.
+  if (args.is_bottom()) {
+    args.set_to_top();
+  } else if (!args.is_top()) {
+    TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
+  }
+
+  auto env = env_with_params(&code, args);
+  DexType* class_under_init{nullptr};
+  if (is_clinit(method)) {
+    class_under_init = method->get_class();
+    set_encoded_values(type_class(class_under_init), &env);
+  }
+  TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
+
+  auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
+      code.cfg(),
+      CombinedAnalyzer(class_under_init,
+                       &wps,
+                       EnumFieldAnalyzerState(),
+                       BoxedBooleanAnalyzerState(),
+                       nullptr));
+  intra_cp->run(env);
+
+  return intra_cp;
+}
+
 /*
  * This algorithm is based off the approach in this paper[1]. We start off by
  * assuming no knowledge of any field values or method return values, i.e. we
@@ -42,7 +83,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
     code.build_cfg();
     code.cfg().calculate_exit_block();
   });
-  auto fp_iter = std::make_unique<FixpointIterator>(cg);
+  auto fp_iter = std::make_unique<FixpointIterator>(cg, analyze_procedure);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});

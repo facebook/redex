@@ -49,13 +49,29 @@ using Domain = HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
 constexpr IRInstruction* CURRENT_PARTITION_LABEL = nullptr;
 
 /*
+ * Return an environment populated with parameter values.
+ */
+ConstantEnvironment env_with_params(const IRCode* code,
+                                    const ArgumentDomain& args);
+
+using ProcedureAnalysisFactory =
+    std::function<std::unique_ptr<intraprocedural::FixpointIterator>(
+        const DexMethod*, const WholeProgramState&, ArgumentDomain)>;
+
+/*
  * Performs interprocedural constant propagation of stack / register values.
+ *
+ * The intraprocedural propagation logic is delegated to the
+ * ProcedureAnalysisFactory.
  */
 class FixpointIterator
     : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
  public:
-  FixpointIterator(const call_graph::Graph& call_graph)
-      : MonotonicFixpointIterator(call_graph), m_wps(new WholeProgramState()) {}
+  FixpointIterator(const call_graph::Graph& call_graph,
+                   const ProcedureAnalysisFactory& proc_analysis_factory)
+      : MonotonicFixpointIterator(call_graph),
+        m_wps(new WholeProgramState()),
+        m_proc_analysis_factory(proc_analysis_factory) {}
 
   void analyze_node(DexMethod* const& method,
                     Domain* current_state) const override;
@@ -74,6 +90,7 @@ class FixpointIterator
 
  private:
   std::unique_ptr<const WholeProgramState> m_wps;
+  ProcedureAnalysisFactory m_proc_analysis_factory;
 };
 
 } // namespace interprocedural

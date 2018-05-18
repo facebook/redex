@@ -13,17 +13,11 @@ namespace constant_propagation {
 
 namespace interprocedural {
 
-using CombinedAnalyzer = InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
-                                                     WholeProgramAwareAnalyzer,
-                                                     EnumFieldAnalyzer,
-                                                     BoxedBooleanAnalyzer,
-                                                     PrimitiveAnalyzer>;
-
 /*
  * Return an environment populated with parameter values.
  */
-static ConstantEnvironment env_with_params(const IRCode* code,
-                                           const ArgumentDomain& args) {
+ConstantEnvironment env_with_params(const IRCode* code,
+                                    const ArgumentDomain& args) {
   size_t idx{0};
   ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
@@ -79,36 +73,10 @@ Domain FixpointIterator::analyze_edge(
 
 std::unique_ptr<intraprocedural::FixpointIterator>
 FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
-  always_assert(method->get_code() != nullptr);
-  auto& code = *method->get_code();
   auto args = this->get_entry_state_at(const_cast<DexMethod*>(method));
-  // Currently, our callgraph does not include calls to non-devirtualizable
-  // virtual methods. So those methods may appear unreachable despite being
-  // reachable.
-  if (args.is_bottom()) {
-    args.set_to_top();
-  } else if (!args.is_top()) {
-    TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
-  }
-
-  auto env = env_with_params(&code, args.get(CURRENT_PARTITION_LABEL));
-  DexType* class_under_init{nullptr};
-  if (is_clinit(method)) {
-    class_under_init = method->get_class();
-    set_encoded_values(type_class(class_under_init), &env);
-  }
-  TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
-
-  auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-      code.cfg(),
-      CombinedAnalyzer(class_under_init,
-                       &this->get_whole_program_state(),
-                       EnumFieldAnalyzerState(),
-                       BoxedBooleanAnalyzerState(),
-                       nullptr));
-  intra_cp->run(env);
-
-  return intra_cp;
+  return m_proc_analysis_factory(method,
+                                 this->get_whole_program_state(),
+                                 args.get(CURRENT_PARTITION_LABEL));
 }
 
 } // namespace interprocedural
