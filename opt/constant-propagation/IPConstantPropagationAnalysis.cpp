@@ -91,17 +91,17 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
     TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
   }
 
-  intraprocedural::FixpointIterator::Config config = m_config;
   auto env = env_with_params(&code, args.get(CURRENT_PARTITION_LABEL));
+  DexType* class_under_init{nullptr};
   if (is_clinit(method)) {
-    config.class_under_init = method->get_class();
-    set_encoded_values(type_class(config.class_under_init), &env);
+    class_under_init = method->get_class();
+    set_encoded_values(type_class(class_under_init), &env);
   }
   TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
 
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(),
-      CombinedAnalyzer(config.class_under_init,
+      CombinedAnalyzer(class_under_init,
                        &this->get_whole_program_state(),
                        EnumFieldAnalyzerState(),
                        BoxedBooleanAnalyzerState(),

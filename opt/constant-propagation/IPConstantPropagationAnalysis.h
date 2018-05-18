@@ -54,12 +54,8 @@ constexpr IRInstruction* CURRENT_PARTITION_LABEL = nullptr;
 class FixpointIterator
     : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
  public:
-  FixpointIterator(const call_graph::Graph& call_graph,
-                   const intraprocedural::FixpointIterator::Config& config =
-                       intraprocedural::FixpointIterator::Config())
-      : MonotonicFixpointIterator(call_graph),
-        m_config(config),
-        m_wps(new WholeProgramState()) {}
+  FixpointIterator(const call_graph::Graph& call_graph)
+      : MonotonicFixpointIterator(call_graph), m_wps(new WholeProgramState()) {}
 
   void analyze_node(DexMethod* const& method,
                     Domain* current_state) const override;
@@ -77,7 +73,6 @@ class FixpointIterator
   }
 
  private:
-  intraprocedural::FixpointIterator::Config m_config;
   std::unique_ptr<const WholeProgramState> m_wps;
 };
 

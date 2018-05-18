@@ -42,8 +42,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
     code.build_cfg();
     code.cfg().calculate_exit_block();
   });
-  auto fp_iter =
-      std::make_unique<FixpointIterator>(cg, m_config.intraprocedural_analysis);
+  auto fp_iter = std::make_unique<FixpointIterator>(cg);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});

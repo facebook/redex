@@ -28,7 +28,6 @@ class PassImpl : public Pass {
     // be treated as Top.
     size_t max_heap_analysis_iterations{0};
 
-    intraprocedural::FixpointIterator::Config intraprocedural_analysis;
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
   };

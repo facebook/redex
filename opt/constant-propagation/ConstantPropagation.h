@@ -16,8 +16,6 @@
 class ConstantPropagationPass : public Pass {
  public:
   struct Config {
-    constant_propagation::intraprocedural::FixpointIterator::Config
-        intraprocedural_analysis;
     constant_propagation::Transform::Config transform;
   };
 

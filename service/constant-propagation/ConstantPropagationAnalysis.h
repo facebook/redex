@@ -21,13 +21,6 @@ class FixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
                                        ConstantEnvironment> {
  public:
-  struct Config {
-    // If we are analyzing a class initializer, this is expected to point to
-    // the DexType of the class. It indicates that the analysis can treat the
-    // static fields of this class as non-escaping.
-    DexType* class_under_init{nullptr};
-  };
-
   /*
    * The fixpoint iterator takes an optional WholeProgramState argument that
    * it will use to determine the static field values and method return values.
