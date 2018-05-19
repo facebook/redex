@@ -52,9 +52,14 @@ class RemoveGotos {
    * - C has exactly one parent (B)
    * - C does not fallthrough to the next block implicitly. (e.g copying C into
    * B does not cause any inconsistencies in the CFG)
+   * - B and C both point to the same catch handler
    */
   static cfg::Block* find_mergeable_block(IRCode* code) {
     code->build_cfg();
+    // This is used to store map of try blocks to catch, so
+    // that we can not select to merge blocks across boundaries.
+    std::unordered_map<cfg::Block*, MethodItemEntry*> catch_map;
+    build_catch_map(code, catch_map);
     for (cfg::Block* current_block : code->cfg().blocks()) {
       if (current_block->succs().size() != 1 || !has_goto(current_block)) {
         continue;
@@ -62,12 +67,28 @@ class RemoveGotos {
 
       cfg::Block* next_block = current_block->succs()[0]->target();
       if (next_block != current_block && next_block->preds().size() == 1 &&
+          (catch_map[current_block] == catch_map[next_block]) &&
           (next_block->succs().empty() || has_goto(next_block))) {
         return current_block;
       }
     }
 
     return nullptr;
+  }
+
+  static void build_catch_map(IRCode* code, std::unordered_map<cfg::Block*, MethodItemEntry*>& catch_map) {
+    MethodItemEntry* catch_mei = nullptr;
+    for (cfg::Block* current_block : code->cfg().blocks()) {
+      auto mie = current_block->begin();
+      if (mie->type == MFLOW_TRY) {
+        if (mie->tentry->type == TRY_START) {
+          catch_mei = mie->tentry->catch_start;
+        } else if (mie->tentry->type == TRY_END) {
+          catch_mei = nullptr;
+        }
+      }
+      catch_map[current_block] = catch_mei;
+    }
   }
 
  public:
