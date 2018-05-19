@@ -63,9 +63,25 @@ template <typename T,
                               << std::declval<T>()),
           typename = std::enable_if_t<!std::is_pointer<std::decay_t<T>>::value>>
 std::string show(T&& t) {
-  std::ostringstream os;
-  os << std::forward<T>(t);
-  return os.str();
+  std::ostringstream o;
+  o << std::forward<T>(t);
+  return o.str();
+}
+
+/*
+ * If we have a pointer, try to obtain the string representation of the value
+ * it points to.
+ */
+template <typename T,
+          // Use SFINAE to check for the existence of operator<<
+          typename = decltype(std::declval<std::ostream&>()
+                              << std::declval<T>())>
+std::string show(T* t) {
+  std::ostringstream o;
+  if (t != nullptr) {
+    o << *t;
+  }
+  return o.str();
 }
 
 template <typename T>
@@ -73,16 +89,22 @@ std::string show(const std::unique_ptr<T>& ptr) {
   return show(ptr.get());
 }
 
-std::string show(const DexString*);
-std::string show(const DexType*);
+// XXX Currently, we have some printing methods defined as operator<< and
+// others as show(). I (jezng) would like to see us standardize on operator<<
+// if possible. The template methods above provide a bridge in the meantime,
+// allowing us to use show() whenever operator<< is defined.
+std::ostream& operator<<(std::ostream&, const DexString&);
+std::ostream& operator<<(std::ostream&, const DexType&);
+std::ostream& operator<<(std::ostream&, const DexClass&);
+std::ostream& operator<<(std::ostream&, const DexPosition&);
+std::ostream& operator<<(std::ostream&, const MethodItemEntry&);
+
 std::string show(const DexFieldRef*);
 std::string show(const DexDebugEntry*);
 std::string show(const DexTypeList*);
 std::string show(const DexProto*);
 std::string show(const DexCode*);
 std::string show(const DexMethodRef*);
-std::string show(const DexPosition*);
-std::string show(const DexClass*);
 std::string show(const DexEncodedValue*);
 std::string show(const DexAnnotation*);
 std::string show(const DexAnnotationSet*);
@@ -90,7 +112,6 @@ std::string show(const DexAnnotationDirectory*);
 std::string show(const DexDebugInstruction*);
 std::string show(const IRInstruction*);
 std::string show(const IRCode*);
-std::string show(const MethodItemEntry&);
 std::string show(const cfg::ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);

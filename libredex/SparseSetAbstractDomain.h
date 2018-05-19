@@ -162,6 +162,21 @@ class SparseSetValue final
 
   size_t size() const override { return m_element_num; }
 
+  friend std::ostream& operator<<(std::ostream& o,
+                                  const SparseSetValue& value) {
+    o << "[#" << value.size() << "]";
+    const auto& elements = value.elements();
+    o << "{";
+    for (auto it = elements.begin(); it != elements.end();) {
+      o << *it++;
+      if (it != elements.end()) {
+        o << ", ";
+      }
+    }
+    o << "}";
+    return o;
+  }
+
  private:
   uint16_t m_capacity;
   uint16_t m_element_num;

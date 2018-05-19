@@ -86,6 +86,20 @@ class SetValue final : public PowersetImplementation<
     return AbstractValueKind::Value;
   }
 
+  friend std::ostream& operator<<(std::ostream& o, const SetValue& value) {
+    o << "[#" << value.size() << "]";
+    const auto& elements = value.elements();
+    o << "{";
+    for (auto it = elements.begin(); it != elements.end();) {
+      o << *it++;
+      if (it != elements.end()) {
+        o << ", ";
+      }
+    }
+    o << "}";
+    return o;
+  }
+
  private:
   std::unordered_set<Element, Hash, Equal> m_set;
 

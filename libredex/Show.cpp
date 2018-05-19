@@ -592,16 +592,16 @@ std::string show_helper(const DexAnnotation* anno, bool deobfuscated) {
 
 } // namespace
 
-std::string show(const DexString* p) {
-  if (!p) return "";
-  return std::string(p->c_str());
+std::ostream& operator<<(std::ostream& o, const DexString& str) {
+  o << str.c_str();
+  return o;
 }
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexType* p) {
-  if (!p) return "";
-  return show(p->get_name());
+std::ostream& operator<<(std::ostream& o, const DexType& type) {
+  o << *type.get_name();
+  return o;
 }
 
 // This format must match the proguard map format because it's used to look up
@@ -731,9 +731,9 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexClass* p) {
-  if (!p) return "";
-  return show(p->get_type());
+std::ostream& operator<<(std::ostream& o, const DexClass& cls) {
+  o << *cls.get_type();
+  return o;
 }
 
 std::string vshow(const DexClass* p) {
@@ -936,10 +936,9 @@ std::string show(const DexDebugInstruction* insn) {
   return ss.str();
 }
 
-std::string show(const DexPosition* pos) {
-  std::ostringstream ss;
-  ss << show(pos->file) << ":" << pos->line;
-  return ss.str();
+std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
+  o << *pos.file << ":" << pos.line;
+  return o;
 }
 
 std::string show(const DexDebugEntry* entry) {
@@ -973,39 +972,40 @@ std::string show(const SwitchIndices& si) {
   return ss.str();
 }
 
-std::string show(const MethodItemEntry& mei) {
-  std::ostringstream ss;
-  ss << "[" << &mei << "] ";
-  switch (mei.type) {
+std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
+  o << "[" << &mie << "] ";
+  switch (mie.type) {
   case MFLOW_OPCODE:
-    ss << "OPCODE: " << show(mei.insn);
-    return ss.str();
+    o << "OPCODE: " << show(mie.insn);
+    break;
   case MFLOW_DEX_OPCODE:
-    ss << "DEX_OPCODE: " << show(mei.dex_insn);
-    return ss.str();
+    o << "DEX_OPCODE: " << show(mie.dex_insn);
+    break;
   case MFLOW_TARGET:
-    if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET: MULTI " << mei.target->case_key << " ";
+    if (mie.target->type == BRANCH_MULTI) {
+      o << "TARGET: MULTI " << mie.target->case_key << " ";
     } else {
-      ss << "TARGET: SIMPLE ";
+      o << "TARGET: SIMPLE ";
     }
-    ss << mei.target->src;
-    return ss.str();
+    o << mie.target->src;
+    break;
   case MFLOW_TRY:
-    ss << "TRY: " << show(mei.tentry->type) << " " << mei.tentry->catch_start;
-    return ss.str();
+    o << "TRY: " << show(mie.tentry->type) << " " << mie.tentry->catch_start;
+    break;
   case MFLOW_CATCH:
-    ss << "CATCH: " << show(mei.centry->catch_type);
-    return ss.str();
+    o << "CATCH: " << show(mie.centry->catch_type);
+    break;
   case MFLOW_DEBUG:
-    ss << "DEBUG: " << show(mei.dbgop);
-    return ss.str();
+    o << "DEBUG: " << show(mie.dbgop);
+    break;
   case MFLOW_POSITION:
-    ss << "POSITION: " << show(mei.pos);
-    return ss.str();
+    o << "POSITION: " << *mie.pos;
+    break;
   case MFLOW_FALLTHROUGH:
-    return "FALLTHROUGH";
+    o << "FALLTHROUGH";
+    break;
   }
+  return o;
 }
 
 std::string show(const IRList* ir) {

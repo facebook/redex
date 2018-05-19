@@ -69,6 +69,12 @@ class SetValue final
     return AbstractValueKind::Value;
   }
 
+  friend std::ostream& operator<<(std::ostream& o, const SetValue& value) {
+    o << "[#" << value.size() << "]";
+    o << value.m_set;
+    return o;
+  }
+
  private:
   PatriciaTreeSet<Element> m_set;
 

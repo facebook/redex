@@ -158,37 +158,22 @@ class PowersetAbstractDomain
     }
     }
   }
-};
 
-template <typename Element,
-          typename Powerset,
-          typename Snapshot,
-          typename Derived>
-inline std::ostream& operator<<(
-    std::ostream& o,
-    const PowersetAbstractDomain<Element, Powerset, Snapshot, Derived>& s) {
-  switch (s.kind()) {
-  case AbstractValueKind::Bottom: {
-    o << "_|_";
-    break;
-  }
-  case AbstractValueKind::Top: {
-    o << "T";
-    break;
-  }
-  case AbstractValueKind::Value: {
-    o << "[#" << s.size() << "]";
-    o << "{";
-    auto& elements = s.elements();
-    for (auto it = elements.begin(); it != elements.end();) {
-      o << *it++;
-      if (it != elements.end()) {
-        o << ", ";
-      }
+  friend std::ostream& operator<<(std::ostream& o, const Derived& s) {
+    switch (s.kind()) {
+    case AbstractValueKind::Bottom: {
+      o << "_|_";
+      break;
     }
-    o << "}";
-    break;
+    case AbstractValueKind::Top: {
+      o << "T";
+      break;
+    }
+    case AbstractValueKind::Value: {
+      o << *s.get_value();
+      break;
+    }
+    }
+    return o;
   }
-  }
-  return o;
-}
+};
