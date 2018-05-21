@@ -937,7 +937,12 @@ std::string show(const DexDebugInstruction* insn) {
 }
 
 std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
-  o << *pos.file << ":" << pos.line;
+  if (pos.file == nullptr) {
+    o << "Unknown source";
+  } else {
+    o << *pos.file;
+  }
+  o << ":" << pos.line;
   return o;
 }
 
