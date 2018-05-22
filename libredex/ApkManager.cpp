@@ -22,7 +22,7 @@ void check_directory(std::string& dir) {
 std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename) {
   check_directory(m_apk_dir);
   std::ostringstream path;
-  path << m_apk_dir << "/assets/";
+  path << m_apk_dir << "/assets/secondary-program-dex-jars/";
   std::string assets_dir = path.str();
   check_directory(assets_dir);
   path << filename;
