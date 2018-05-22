@@ -13,6 +13,7 @@
 #include <cstring>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -615,10 +616,15 @@ typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
 
 struct DexTryItem {
   uint32_t m_start_addr;
-  uint32_t m_insn_count;
+  uint16_t m_insn_count;
   DexCatches m_catches;
   DexTryItem(uint32_t start_addr, uint32_t insn_count):
-    m_start_addr(start_addr), m_insn_count(insn_count) {}
+    m_start_addr(start_addr) {
+    always_assert_log(insn_count <= std::numeric_limits<uint16_t>::max(),
+                      "too many instructions in a single try region %d > 2^16",
+                      insn_count);
+    m_insn_count = insn_count;
+  }
 };
 
 class IRCode;
