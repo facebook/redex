@@ -15,6 +15,7 @@
 #include <boost/numeric/conversion/cast.hpp>
 #include <memory>
 #include <unordered_set>
+#include <limits>
 #include <list>
 
 #include "ControlFlow.h"
@@ -709,6 +710,23 @@ void gather_debug_entries(
   }
 }
 
+// We can't output regions with more than 2^16 code units.
+// But the IR has no such restrictions. This function splits up a large try
+// region into many small try regions that have the exact same catch
+// information.
+void split_and_insert_try_regions(
+    uint32_t start,
+    uint32_t end,
+    const DexCatches& catches,
+    std::vector<std::unique_ptr<DexTryItem>>* tries) {
+  constexpr uint32_t max = std::numeric_limits<uint16_t>::max();
+  for (; start < end; start += max) {
+    auto tri = std::make_unique<DexTryItem>(start, std::min(max, end - start));
+    tri->m_catches = catches;
+    tries->push_back(std::move(tri));
+  }
+}
+
 } // namespace
 
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
@@ -916,18 +934,19 @@ bool IRCode::try_sync(DexCode* code) {
                       "mismatched try start (%s) and end (%s)",
                       SHOW(*try_start),
                       SHOW(*try_end));
-    auto insn_count = entry_to_addr.at(try_end) - entry_to_addr.at(try_start);
-    if (insn_count == 0) {
+    auto start_addr = entry_to_addr.at(try_start);
+    auto end_addr = entry_to_addr.at(try_end);
+    if (start_addr == end_addr) {
       continue;
     }
-    auto try_item = new DexTryItem(entry_to_addr.at(try_start), insn_count);
+
+    DexCatches catches;
     for (auto mei = try_end->tentry->catch_start;
         mei != nullptr;
         mei = mei->centry->next) {
-      try_item->m_catches.emplace_back(mei->centry->catch_type,
-                                       entry_to_addr.at(mei));
+      catches.emplace_back(mei->centry->catch_type, entry_to_addr.at(mei));
     }
-    tries.emplace_back(try_item);
+    split_and_insert_try_regions(start_addr, end_addr, catches, &tries);
   }
   always_assert_log(active_try == nullptr, "unclosed try_start found");
 
