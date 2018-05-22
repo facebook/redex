@@ -46,4 +46,8 @@ void update_method_signature_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
+void update_field_type_references(
+    const Scope& scope,
+    const std::unordered_map<const DexType*, DexType*>& old_to_new);
+
 } // namespace type_reference
