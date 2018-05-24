@@ -33,7 +33,8 @@
   X(return)           \
   X(monitor)          \
   X(const)            \
-  X(const_object)     \
+  X(const_string)     \
+  X(const_class)      \
   X(check_cast)       \
   X(instance_of)      \
   X(array_length)     \
@@ -328,8 +329,10 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_CONST_WIDE:
       return analyze_const(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST_STRING:
+      return analyze_const_string(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST_CLASS:
-      return analyze_const_object(
+      return analyze_const_class(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_FILL_ARRAY_DATA:
       return analyze_fill_array_data(

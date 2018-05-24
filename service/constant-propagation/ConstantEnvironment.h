@@ -19,6 +19,7 @@
 #include "HashedAbstractPartition.h"
 #include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
 #include "SignedConstantDomain.h"
 
@@ -46,13 +47,18 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
  */
 using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
 
+using StringSetDomain = PatriciaTreeSetAbstractDomain<const DexString*>;
+
 /*
  * This represents a new-instance or new-array instruction.
  */
 using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
 
+// TODO: Refactor so that we don't have to list every single possible
+// sub-Domain here.
 using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
                                                   SingletonObjectDomain,
+                                                  StringSetDomain,
                                                   AbstractHeapPointer>;
 
 // For storing non-escaping static fields.
