@@ -11,10 +11,11 @@
 
 #include <functional>
 #include <memory>
+#include <ostream>
 #include <type_traits>
 #include <utility>
 
-#include "Debug.h"
+#include "Exceptions.h"
 
 /*
  * This is an API for abstract domains, which are the fundamental structures in
@@ -201,6 +202,25 @@ class AbstractDomain {
 
 enum class AbstractValueKind { Bottom, Value, Top };
 
+inline std::ostream& operator<<(std::ostream& o,
+                                const AbstractValueKind& kind) {
+  switch (kind) {
+  case AbstractValueKind::Bottom: {
+    o << "_|_";
+    break;
+  }
+  case AbstractValueKind::Value: {
+    o << "V";
+    break;
+  }
+  case AbstractValueKind::Top: {
+    o << "T";
+    break;
+  }
+  }
+  return o;
+}
+
 /*
  * This interface represents the structure of the regular elements of an
  * abstract domain (like a constant, an interval, a points-to set, etc.).
@@ -266,6 +286,19 @@ class AbstractValue {
 };
 
 /*
+ * This exception flags the use of an abstract value with invalid kind in the
+ * given context.
+ */
+class invalid_abstract_value
+    : public virtual abstract_interpretation_exception {};
+
+using expected_kind =
+    boost::error_info<struct tag_expected_kind, AbstractValueKind>;
+
+using actual_kind =
+    boost::error_info<struct tag_actual_kind, AbstractValueKind>;
+
+/*
  * This abstract domain combinator takes an abstract value specification and
  * constructs a full-fledged abstract domain, handling all the logic for Top and
  * Bottom. It takes a poset and adds the two extremal elements Top and Bottom.
@@ -320,7 +353,8 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
    * A convenience constructor for creating Bottom and Top.
    */
   explicit AbstractDomainScaffolding(AbstractValueKind kind) : m_kind(kind) {
-    always_assert(kind != AbstractValueKind::Value);
+    RUNTIME_CHECK(kind != AbstractValueKind::Value,
+                  invalid_abstract_value() << actual_kind(kind));
   }
 
   AbstractValueKind kind() const { return m_kind; }
@@ -356,8 +390,14 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
     if (is_top()) {
       return false;
     }
-    always_assert(m_kind == AbstractValueKind::Value &&
-                  other.m_kind == AbstractValueKind::Value);
+    RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(m_kind));
+    RUNTIME_CHECK(other.m_kind == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(other.m_kind));
     return m_value.leq(other.m_value);
   }
 
@@ -368,7 +408,10 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
     if (is_top()) {
       return other.is_top();
     }
-    always_assert(m_kind == AbstractValueKind::Value);
+    RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(m_kind));
     if (other.m_kind != AbstractValueKind::Value) {
       return false;
     }

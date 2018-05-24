@@ -13,14 +13,13 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 
 /*
  * This is the general interface for arbitrary encodings of a lattice. 'Element'
@@ -251,7 +250,10 @@ class BitVectorSemiLattice final {
   BitVectorSemiLattice(
       std::initializer_list<Element> elements,
       std::initializer_list<std::pair<Element, Element>> hasse_diagram) {
-    always_assert(elements.size() == cardinality);
+    RUNTIME_CHECK(elements.size() == cardinality,
+                  invalid_argument()
+                      << argument_name("elements")
+                      << operation_name("BitVectorSemiLattice()"));
 
     // We assign each element of the lattice an index, so that we can construct
     // the Boolean matrix.
@@ -278,8 +280,9 @@ class BitVectorSemiLattice final {
       // then matrix[y][x] = 1.
       auto x_it = element_to_index.find(pair.first);
       auto y_it = element_to_index.find(pair.second);
-      always_assert(x_it != element_to_index.end() &&
-                    y_it != element_to_index.end());
+      RUNTIME_CHECK(x_it != element_to_index.end() &&
+                        y_it != element_to_index.end(),
+                    internal_error());
       matrix[y_it->second][x_it->second] = true;
     }
 
@@ -316,44 +319,19 @@ class BitVectorSemiLattice final {
       }
     }
 
-    // This sanity check verifies that the bitwise And of any two pairs of
-    // elements (i.e., the Meet or the Join of those elements depending on the
-    // lattice considered) corresponds to an actual element in the lattice.
-    // In other words, this procedure makes sure that the input Hasse diagram
-    // does define a semi-lattice.
-    if (debug) {
-      // We count the number of bit vectors that have all their bits set to one.
-      size_t all_bits_are_set = 0;
-      // We count the number of bit vectors that have only one bit set to one.
-      size_t one_bit_is_set = 0;
-      for (size_t i = 0; i < cardinality; ++i) {
-        Encoding x = m_element_to_encoding[index_to_element[i]];
-        if (x.all()) {
-          ++all_bits_are_set;
-        }
-        if (x.count() == 1) {
-          ++one_bit_is_set;
-        }
-        for (size_t j = 0; j < cardinality; ++j) {
-          Encoding y = m_element_to_encoding[index_to_element[j]];
-          always_assert(m_encoding_to_element.find(x & y) !=
-                        m_encoding_to_element.end());
-        }
-      }
-      always_assert(all_bits_are_set == 1);
-      always_assert(one_bit_is_set == 1);
-    }
+    // Make sure that we obtain a semi-lattice.
+    sanity_check(&index_to_element[0]);
   }
 
   Encoding encode(const Element& element) const {
     auto it = m_element_to_encoding.find(element);
-    assert(it != m_element_to_encoding.end());
+    RUNTIME_CHECK(it != m_element_to_encoding.end(), undefined_operation());
     return it->second;
   }
 
   Element decode(const Encoding& encoding) const {
     auto it = m_encoding_to_element.find(encoding);
-    assert(it != m_encoding_to_element.end());
+    RUNTIME_CHECK(it != m_encoding_to_element.end(), undefined_operation());
     return it->second;
   }
 
@@ -374,6 +352,36 @@ class BitVectorSemiLattice final {
   Encoding top() const { return m_top; }
 
  private:
+  // This sanity check verifies that the bitwise And of any two pairs of
+  // elements (i.e., the Meet or the Join of those elements depending on the
+  // lattice considered) corresponds to an actual element in the lattice.
+  // In other words, this procedure makes sure that the input Hasse diagram
+  // defines a semi-lattice.
+  void sanity_check(Element* index_to_element) {
+    // We count the number of bit vectors that have all their bits set to one.
+    size_t all_bits_are_set = 0;
+    // We count the number of bit vectors that have only one bit set to one.
+    size_t one_bit_is_set = 0;
+    for (size_t i = 0; i < cardinality; ++i) {
+      Encoding x = m_element_to_encoding[index_to_element[i]];
+      if (x.all()) {
+        ++all_bits_are_set;
+      }
+      if (x.count() == 1) {
+        ++one_bit_is_set;
+      }
+      for (size_t j = 0; j < cardinality; ++j) {
+        Encoding y = m_element_to_encoding[index_to_element[j]];
+        RUNTIME_CHECK(m_encoding_to_element.find(x & y) !=
+                          m_encoding_to_element.end(),
+                      internal_error());
+      }
+    }
+    RUNTIME_CHECK(all_bits_are_set == 1 && one_bit_is_set == 1,
+                  internal_error()
+                      << error_msg("Missing or duplicate extremal element"));
+  }
+
   std::unordered_map<Element, Encoding, Hash, Equal> m_element_to_encoding;
   std::unordered_map<Encoding, Element> m_encoding_to_element;
   Encoding m_bottom;

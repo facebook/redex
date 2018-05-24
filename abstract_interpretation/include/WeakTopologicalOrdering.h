@@ -12,18 +12,18 @@
 #include <cstddef>
 #include <functional>
 #include <future>
-#include <iostream>
 #include <iterator>
 #include <limits>
+#include <ostream>
 #include <stack>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
-#include "Debug.h"
-#include "Util.h"
+#include "Exceptions.h"
 
 template <typename NodeId>
 class WtoComponent;
+
 template <typename NodeId, typename NodeHash>
 class WeakTopologicalOrdering;
 
@@ -39,7 +39,7 @@ class WtoComponentIterator final
     : public std::iterator<std::forward_iterator_tag, WtoComponent<NodeId>> {
  public:
   WtoComponentIterator& operator++() {
-    assert(m_component != m_end);
+    RUNTIME_CHECK(m_component != m_end, undefined_operation());
     // All components of a WTO are stored linearly inside a vector in reverse
     // order. The subcomponents of an SCC are stored between the head node and
     // the next component in the WTO.
@@ -62,12 +62,12 @@ class WtoComponentIterator final
   }
 
   const WtoComponent<NodeId>& operator*() {
-    assert(m_component != m_end);
+    RUNTIME_CHECK(m_component != m_end, undefined_operation());
     return *m_component;
   }
 
   const WtoComponent<NodeId>* operator->() {
-    assert(m_component != m_end);
+    RUNTIME_CHECK(m_component != m_end, undefined_operation());
     return m_component;
   }
 
@@ -103,7 +103,7 @@ class WtoComponent final {
                int32_t position,
                int32_t next_component_position)
       : m_node(node), m_kind(kind) {
-    assert(position > next_component_position);
+    RUNTIME_CHECK(position > next_component_position, internal_error());
     // When a component is constructed, its position inside the vector is
     // specified by its absolute index. Since we want to navigate the WTO by
     // recursively exploring SCCs, it's more efficient to maintain relative
@@ -128,7 +128,7 @@ class WtoComponent final {
   bool is_scc() const { return m_kind == Kind::Scc; }
 
   iterator begin() const {
-    assert(is_scc());
+    RUNTIME_CHECK(is_scc(), undefined_operation());
     // All the components of a WTO are stored linearly inside a vector. A vector
     // guarantees that all its elements are stored adjacently in a contiguous
     // block of memory, which allows us to safely perform pointer arithmetic
@@ -138,7 +138,7 @@ class WtoComponent final {
   }
 
   iterator end() const {
-    assert(is_scc());
+    RUNTIME_CHECK(is_scc(), undefined_operation());
     auto end_ptr = this - m_next_component_offset;
     return iterator(end_ptr, end_ptr);
   }
@@ -205,10 +205,9 @@ class WeakTopologicalOrdering final {
   }
 
  private:
-
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
-  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
+
   uint32_t visit(const NodeId& vertex, int32_t* partition) {
     m_stack.push(vertex);
     uint32_t head = set_dfn(vertex, ++m_num);

@@ -14,7 +14,6 @@
 #include <sstream>
 
 #include "AbstractDomain.h"
-#include "TemplateUtil.h"
 
 /*
  * The disjoint union of abstract domains D1 ... Dn can hold any one of those
@@ -53,8 +52,8 @@ class DisjointUnionAbstractDomain final
         std::is_base_of<AbstractDomain<FirstDomain>, FirstDomain>::value,
         "All members of the disjoint union must inherit from AbstractDomain");
     static_assert(
-        template_util::all_true<(std::is_base_of<AbstractDomain<Domains>,
-                                                 Domains>::value)...>::value,
+        all_true<(std::is_base_of<AbstractDomain<Domains>,
+                                  Domains>::value)...>::value,
         "All members of the disjoint union must inherit from AbstractDomain");
   }
 
@@ -150,6 +149,14 @@ class DisjointUnionAbstractDomain final
                                   const DisjointUnionAbstractDomain<Ts...>&);
 
  private:
+  // Check if all template parameters are true (see
+  // https://stackoverflow.com/questions/28253399/check-traits-for-all-variadic-template-arguments/28253503#28253503)
+  template <bool...>
+  struct bool_pack;
+
+  template <bool... v>
+  using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
+
   boost::variant<FirstDomain, Domains...> m_variant;
 };
 

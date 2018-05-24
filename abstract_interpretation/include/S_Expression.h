@@ -28,7 +28,7 @@
 #include <boost/functional/hash_fwd.hpp>
 #include <boost/optional.hpp>
 
-#include "Debug.h"
+#include "Exceptions.h"
 
 namespace s_expr_impl {
 
@@ -289,12 +289,9 @@ class s_expr_istream final {
  */
 class s_patn {
  public:
+  class pattern_matching_error
+      : public virtual abstract_interpretation_exception {};
 
-  class MatchException final : public std::runtime_error {
-   public:
-    explicit MatchException(const std::string& what_arg)
-        : std::runtime_error(what_arg) {}
-  };
   /*
    * The wildcard pattern matches any S-expression.
    */
@@ -485,13 +482,18 @@ class List final : public Component {
   size_t size() const { return m_list.size(); }
 
   s_expr get_element(size_t index) const {
-    // The `at` function throws an exception if the index doesn't lie within
-    // the bounds of the vector.
-    return m_list.at(index);
+    try {
+      return m_list.at(index);
+    } catch (const std::out_of_range& e) {
+      // The `at` function throws an exception if the index doesn't lie within
+      // the bounds of the vector.
+      BOOST_THROW_EXCEPTION(invalid_argument() << argument_name("index"));
+    }
   }
 
   s_expr tail(size_t index) const {
-    always_assert(index <= m_list.size());
+    RUNTIME_CHECK(index <= m_list.size(),
+                  invalid_argument() << argument_name("index"));
     // If index == m_list.size(), the function returns the empty list.
     return s_expr(std::next(m_list.begin(), index), m_list.end());
   }
@@ -677,30 +679,30 @@ inline bool s_expr::is_list() const {
 }
 
 inline int32_t s_expr::get_int32() const {
-  always_assert(is_int32());
+  RUNTIME_CHECK(is_int32(), undefined_operation());
   return std::static_pointer_cast<s_expr_impl::Int32Atom>(m_component)
       ->get_value();
 }
 
 inline const std::string& s_expr::get_string() const {
-  always_assert(is_string());
+  RUNTIME_CHECK(is_string(), undefined_operation());
   return std::static_pointer_cast<s_expr_impl::StringAtom>(m_component)
       ->get_string();
 }
 
 inline size_t s_expr::size() const {
-  always_assert(is_list());
+  RUNTIME_CHECK(is_list(), undefined_operation());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)->size();
 }
 
 inline s_expr s_expr::operator[](size_t index) const {
-  always_assert(is_list());
+  RUNTIME_CHECK(is_list(), undefined_operation());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)
       ->get_element(index);
 }
 
 inline s_expr s_expr::tail(size_t index) const {
-  always_assert(is_list());
+  RUNTIME_CHECK(is_list(), undefined_operation());
   return std::static_pointer_cast<s_expr_impl::List>(m_component)->tail(index);
 }
 
@@ -726,7 +728,9 @@ inline std::string s_expr::str() const {
 }
 
 inline void s_expr::add_element(const s_expr& element) {
-  always_assert(m_component->kind() == s_expr_impl::ComponentKind::List);
+  RUNTIME_CHECK(m_component->kind() == s_expr_impl::ComponentKind::List,
+                invalid_argument() << argument_name("element")
+                                   << operation_name("s_expr::add_element()"));
   auto list = std::static_pointer_cast<s_expr_impl::List>(m_component);
   list->add_element(element);
 }
@@ -871,8 +875,7 @@ inline bool s_patn::match_with(const s_expr& expr) {
 }
 
 inline void s_patn::must_match(const s_expr& expr, const std::string& msg) {
-  if (!m_pattern->match_with(expr)) {
-    throw MatchException("Could not find match against " + expr.str() + ": " +
-                         msg);
-  }
+  RUNTIME_CHECK(m_pattern->match_with(expr),
+                pattern_matching_error() << error_msg(
+                    "Could not find match against " + expr.str() + ": " + msg));
 }

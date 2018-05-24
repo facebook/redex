@@ -12,13 +12,12 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 
 /*
  * A partition is a mapping from a set of of labels to elements in an abstract
@@ -63,7 +62,7 @@ class HashedAbstractPartition final
    * HashedAbstractPartition is set to Top.
    */
   size_t size() const {
-    assert(!is_top());
+    RUNTIME_CHECK(!is_top(), undefined_operation());
     return m_map.size();
   }
 
@@ -73,7 +72,7 @@ class HashedAbstractPartition final
    */
   const std::unordered_map<Label, Domain, VariableHash, VariableEqual>&
   bindings() const {
-    assert(!is_top());
+    RUNTIME_CHECK(!is_top(), undefined_operation());
     return m_map;
   }
 
@@ -225,7 +224,7 @@ class HashedAbstractPartition final
         operation(&binding->second, other_binding.second);
         // By construction, it's impossible to have Bottom in both operands,
         // hence the result can never be Bottom.
-        always_assert(!binding->second.is_bottom());
+        RUNTIME_CHECK(!binding->second.is_bottom(), internal_error());
       }
     }
   }

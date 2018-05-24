@@ -12,13 +12,12 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 #include "PatriciaTreeMap.h"
 
 namespace ptmae_impl {
@@ -73,12 +72,18 @@ class PatriciaTreeMapAbstractEnvironment final
   }
 
   size_t size() const {
-    assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->m_map.size();
   }
 
   const MapType& bindings() const {
-    assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->m_map;
   }
 
@@ -237,7 +242,8 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
  private:
   void insert_binding(const Variable& variable, const Domain& value) {
-    assert(!value.is_bottom());
+    // The Bottom value is handled by the caller and should never occur here.
+    RUNTIME_CHECK(!value.is_bottom(), internal_error());
     m_map.insert_or_assign(variable, value);
   }
 

@@ -9,6 +9,7 @@ AM_CXXFLAGS = --std=gnu++14 -O3 -Wall -g
 # Include paths
 #
 AM_CPPFLAGS = \
+	-I$(top_srcdir)/abstract_interpretation/include \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \

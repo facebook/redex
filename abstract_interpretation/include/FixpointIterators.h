@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 #include "WeakTopologicalOrdering.h"
 
 /*
@@ -116,10 +115,10 @@ class MonotonicFixpointIterator {
                   "Domain does not inherit from AbstractDomain");
 
     // Check that GraphInterface has the necessary methods.
-    // We specify it here instead of putting the static asserts in the dtor of
-    // a CRTP-style base class because the destructor may not be instantiated
-    // when we don't create any instances of the GraphInterface class.
-    //
+    // We specify it here instead of putting the static asserts in the
+    // destructor of a CRTP-style base class because the destructor may not be
+    // instantiated when we don't create any instances of the GraphInterface
+    // class.
     // The graph is specified by its root node together with the successors,
     // predecessors, and edge source/target functions.
     static_assert(

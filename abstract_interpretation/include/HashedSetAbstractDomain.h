@@ -13,7 +13,6 @@
 #include <initializer_list>
 #include <unordered_set>
 
-#include "Debug.h"
 #include "PowersetAbstractDomain.h"
 
 template <typename Element, typename Hash, typename Equal>

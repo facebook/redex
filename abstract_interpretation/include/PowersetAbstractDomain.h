@@ -11,12 +11,11 @@
 
 #include <cstddef>
 #include <initializer_list>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <type_traits>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 
 /*
  * The definition of an abstract value belonging to a powerset abstract domain.
@@ -93,12 +92,18 @@ class PowersetAbstractDomain
       : AbstractDomainScaffolding<Powerset, Derived>(kind) {}
 
   Snapshot elements() const {
-    always_assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->elements();
   }
 
   size_t size() const {
-    always_assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->size();
   }
 

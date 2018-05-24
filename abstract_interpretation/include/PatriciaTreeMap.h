@@ -9,18 +9,17 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <iostream>
 #include <iterator>
 #include <memory>
+#include <ostream>
 #include <stack>
 #include <type_traits>
 #include <utility>
 
-#include "Debug.h"
 #include "PatriciaTreeUtil.h"
-#include "Util.h"
 
 // Forward declarations.
 namespace ptmap_impl {
@@ -159,9 +158,7 @@ class PatriciaTreeMap final {
 
   size_t size() const {
     size_t s = 0;
-    for (auto UNUSED pair : *this) {
-      ++s;
-    }
+    std::for_each(begin(), end(), [&s](const auto&) { ++s; });
     return s;
   }
 
@@ -788,7 +785,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
           if (Value::is_default_value(y)) {
             return x;
           }
-          always_assert_log(false, "Malformed Patricia tree.\n");
+          BOOST_THROW_EXCEPTION(internal_error()
+                                << error_msg("Malformed Patricia tree"));
         },
         intersect(combine, s0, t0),
         intersect(combine, s1, t1));
@@ -826,7 +824,7 @@ class PatriciaTreeIterator final
 
   PatriciaTreeIterator& operator++() {
     // We disallow incrementing the end iterator.
-    always_assert(m_leaf != nullptr);
+    RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
     if (m_stack.empty()) {
       // This means that we were on the rightmost leaf. We've reached the end of
       // the iteration.
@@ -879,7 +877,7 @@ class PatriciaTreeIterator final
       m_stack.push(branch);
       t = branch->left_tree();
       // A branch node always has two children.
-      assert(t != nullptr);
+      RUNTIME_CHECK(t != nullptr, internal_error());
     }
     m_leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
   }

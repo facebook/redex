@@ -9,6 +9,8 @@
 
 #include "SignDomain.h"
 
+#include "Debug.h"
+
 namespace sign_domain {
 
 /*

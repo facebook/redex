@@ -12,13 +12,12 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
 
 namespace hae_impl {
 
@@ -101,13 +100,19 @@ class HashedAbstractEnvironment final
   bool is_value() const { return this->kind() == AbstractValueKind::Value; }
 
   size_t size() const {
-    assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->m_map.size();
   }
 
   const std::unordered_map<Variable, Domain, VariableHash, VariableEqual>&
   bindings() const {
-    assert(this->kind() == AbstractValueKind::Value);
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
     return this->get_value()->m_map;
   }
 
@@ -315,8 +320,9 @@ class MapValue final
 
  private:
   void insert_binding(const Variable& variable, const Domain& value) {
-    // The Bottom case is handled in HashedAbstractEnvironment.
-    assert(!value.is_bottom());
+    // The Bottom value is handled in HashedAbstractEnvironment and should
+    // never occur here.
+    RUNTIME_CHECK(!value.is_bottom(), internal_error());
     if (value.is_top()) {
       // Bindings with the Top value are not explicitly represented.
       m_map.erase(variable);

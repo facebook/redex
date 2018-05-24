@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -17,8 +18,6 @@
 #include <type_traits>
 
 #include "AbstractDomain.h"
-#include "Debug.h"
-#include "Util.h"
 
 /*
  * The reduced cartesian product of abstract domains D1 x ... x Dn consists of
@@ -199,14 +198,12 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
 
   void set_to_bottom() override {
     return tuple_apply(
-        [](auto&&... c) { int UNUSED expand[] = {(c.set_to_bottom(), 0)...}; },
-        m_product);
+        [](auto&&... c) { discard({(c.set_to_bottom(), 0)...}); }, m_product);
   }
 
   void set_to_top() override {
-    return tuple_apply(
-        [](auto&&... c) { int UNUSED expand[] = {(c.set_to_top(), 0)...}; },
-        m_product);
+    return tuple_apply([](auto&&... c) { discard({(c.set_to_top(), 0)...}); },
+                       m_product);
   }
 
   // We leave the Meet and Narrowing methods virtual, because one might want
@@ -260,10 +257,19 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     }
   }
 
+  // When using tuple_apply, we often need to expand a parameter pack in order
+  // to perform an operation on each parameter. This is achieved using the
+  // expansion of a brace-enclosed initializer {(expr)...}, where expr operates
+  // via side effects. Since we don't use the result of the initializer
+  // expansion, some compilers may complain. We use this function to explicitly
+  // discard the initializer list and silence those compilers.
+  template <typename T>
+  static void discard(const std::initializer_list<T>&) {}
+
   // The following methods are used to unpack a tuple of operations/predicates
   // and apply them to a tuple of abstract values. We use an implementation of
-  // C++ 17's std::apply to iterate tuple elements.
-  // - http://en.cppreference.com/w/cpp/utility/apply
+  // C++ 17's std::apply to iterate over the elements of a tuple (see
+  // http://en.cppreference.com/w/cpp/utility/apply).
 
   template <class F, class Tuple, std::size_t... I>
   constexpr decltype(auto) static tuple_apply_impl(F&& f,
@@ -285,7 +291,7 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     return tuple_apply(
         [predicate](const Domains&... component) {
           bool result = true;
-          bool UNUSED expand[] = {(result &= predicate(component))...};
+          discard({(result &= predicate(component))...});
           return result;
         },
         m_product);
@@ -296,7 +302,7 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     return tuple_apply(
         [predicate](const Domains&... component) {
           bool result = false;
-          bool UNUSED expand[] = {(result |= predicate(component))...};
+          discard({(result |= predicate(component))...});
           return result;
         },
         m_product);
@@ -342,8 +348,7 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
   static void tuple_print_impl(std::ostream& o,
                                Tuple&& t,
                                std::index_sequence<I...>) {
-    int UNUSED print[] = {
-        0, (void(o << (I == 0 ? "" : ", ") << std::get<I>(t)), 0)...};
+    discard({0, (void(o << (I == 0 ? "" : ", ") << std::get<I>(t)), 0)...});
   }
 
   template <class Tuple>

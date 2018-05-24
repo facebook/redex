@@ -9,21 +9,21 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
 #include <iterator>
 #include <memory>
+#include <ostream>
 #include <stack>
 #include <type_traits>
 #include <utility>
 
 #include <boost/functional/hash.hpp>
 
-#include "Debug.h"
+#include "Exceptions.h"
 #include "PatriciaTreeUtil.h"
-#include "Util.h"
 
 // Forward declarations.
 namespace pt_impl {
@@ -133,9 +133,7 @@ class PatriciaTreeSet final {
 
   size_t size() const {
     size_t s = 0;
-    for (Element UNUSED x : *this) {
-      ++s;
-    }
+    std::for_each(begin(), end(), [&s](const auto&) { ++s; });
     return s;
   }
 
@@ -885,7 +883,7 @@ class PatriciaTreeIterator final
 
   PatriciaTreeIterator& operator++() {
     // We disallow incrementing the end iterator.
-    always_assert(m_leaf != nullptr);
+    RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
     if (m_stack.empty()) {
       // This means that we were on the rightmost leaf. We've reached the end of
       // the iteration.
@@ -933,7 +931,7 @@ class PatriciaTreeIterator final
       m_stack.push(branch);
       t = branch->left_tree();
       // A branch node always has two children.
-      assert(t != nullptr);
+      RUNTIME_CHECK(t != nullptr, internal_error());
     }
     m_leaf = std::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
   }
