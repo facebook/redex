@@ -25,26 +25,28 @@ namespace ssad_impl {
  * 2(1-4):59-69,1993.
  */
 
-class SparseSetValue final
-    : public PowersetImplementation<uint16_t,
-                                    const SparseSetValue&,
-                                    SparseSetValue> {
+class SparseSetValue final : public PowersetImplementation<
+                                 uint16_t,
+                                 const SparseSetValue&,
+                                 SparseSetValue> {
  public:
-  // Default constructor to pass sanity check in
-  // AbstractValue's destructor.
+  // Default constructor to pass sanity check in AbstractValue's destructor.
   SparseSetValue() : m_capacity(0), m_element_num(0) {}
 
-  // Constructor that sets the maximum number
-  // of elements this set can hold.
+  // Constructor that sets the maximum number of elements this set can hold.
   SparseSetValue(uint16_t max_size)
       : m_capacity(max_size),
         m_element_num(0),
         m_dense(max_size),
         m_sparse(max_size) {}
 
-  void clear() override { m_element_num = 0; }
+  void clear() override {
+    m_element_num = 0;
+  }
 
-  const SparseSetValue& elements() const override { return *(this); }
+  const SparseSetValue& elements() const override {
+    return *(this);
+  }
 
   // Returning a vector that contains all the elements in the sparse set.
   // (for test use)
@@ -52,7 +54,9 @@ class SparseSetValue final
     return std::vector<uint16_t>(begin(), end());
   }
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const override {
+    return AbstractValueKind::Value;
+  }
 
   // Checking if candidate is a member of the set.
   bool contains(const uint16_t& candidate) const override {
@@ -108,7 +112,9 @@ class SparseSetValue final
     }
   }
 
-  std::vector<uint16_t>::iterator begin() { return m_dense.begin(); }
+  std::vector<uint16_t>::iterator begin() {
+    return m_dense.begin();
+  }
 
   std::vector<uint16_t>::iterator end() {
     return std::next(m_dense.begin(), m_element_num);
@@ -160,10 +166,13 @@ class SparseSetValue final
     return meet_with(other);
   }
 
-  size_t size() const override { return m_element_num; }
+  size_t size() const override {
+    return m_element_num;
+  }
 
-  friend std::ostream& operator<<(std::ostream& o,
-                                  const SparseSetValue& value) {
+  friend std::ostream& operator<<(
+      std::ostream& o,
+      const SparseSetValue& value) {
     o << "[#" << value.size() << "]";
     const auto& elements = value.elements();
     o << "{";
@@ -192,25 +201,27 @@ class SparseSetValue final
  * used AbstractDomainScaffolding template to build the domain
  */
 
-class SparseSetAbstractDomain final
-    : public PowersetAbstractDomain<uint16_t,
-                                    ssad_impl::SparseSetValue,
-                                    const ssad_impl::SparseSetValue&,
-                                    SparseSetAbstractDomain> {
+class SparseSetAbstractDomain final : public PowersetAbstractDomain<
+                                          uint16_t,
+                                          ssad_impl::SparseSetValue,
+                                          const ssad_impl::SparseSetValue&,
+                                          SparseSetAbstractDomain> {
  public:
   using Value = ssad_impl::SparseSetValue;
 
   SparseSetAbstractDomain()
-      : PowersetAbstractDomain<uint16_t,
-                               Value,
-                               const Value&,
-                               SparseSetAbstractDomain>() {}
+      : PowersetAbstractDomain<
+            uint16_t,
+            Value,
+            const Value&,
+            SparseSetAbstractDomain>() {}
 
   SparseSetAbstractDomain(AbstractValueKind kind)
-      : PowersetAbstractDomain<uint16_t,
-                               Value,
-                               const Value&,
-                               SparseSetAbstractDomain>(kind) {}
+      : PowersetAbstractDomain<
+            uint16_t,
+            Value,
+            const Value&,
+            SparseSetAbstractDomain>(kind) {}
 
   explicit SparseSetAbstractDomain(uint16_t max_size) {
     this->set_to_value(Value(max_size));
