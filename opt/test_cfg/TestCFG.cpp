@@ -39,6 +39,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
     if (example != nullptr && m != example) {
       return;
     }
+    code.sanity_check();
 
     const auto& before_lits = get_lits(&code);
 

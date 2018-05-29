@@ -261,6 +261,8 @@ class IRCode {
    */
   size_t count_opcodes() const { return m_ir_list->count_opcodes(); }
 
+  void sanity_check() const { m_ir_list->sanity_check(); }
+
   IRList::iterator begin() { return m_ir_list->begin(); }
   IRList::iterator end() { return m_ir_list->end(); }
   IRList::const_iterator begin() const { return m_ir_list->begin(); }

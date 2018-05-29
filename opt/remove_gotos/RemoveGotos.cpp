@@ -112,11 +112,11 @@ class RemoveGotos {
       cfg::Block* next_block = current_block->succs()[0]->target();
 
       std::vector<MethodItemEntry*> next_block_mies;
-      auto next_iter = next_block->begin();
-      next_iter = code->erase(next_iter);
-      while (next_iter != next_block->end()) {
-        next_block_mies.push_back(&(*next_iter));
-        next_iter = code->erase(next_iter);
+      for (auto next_iter = next_block->begin(); next_iter != next_block->end();
+           next_iter = code->erase(next_iter)) {
+        if (next_iter->type != MFLOW_TARGET) {
+          next_block_mies.push_back(&(*next_iter));
+        }
       }
 
       auto goto_iter = find_goto(current_block);
