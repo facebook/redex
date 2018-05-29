@@ -53,6 +53,7 @@
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(MMINL)              \
+  TM(MMODE)               \
   TM(MORTIROLO)          \
   TM(MTRANS)             \
   TM(OBFUSCATE)          \
