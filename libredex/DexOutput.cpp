@@ -1575,7 +1575,8 @@ make_locator_index(DexStoresVector& stores)
             clsnr)))
           .second;
         // We shouldn't see the same class defined in two dexen
-        assert(inserted);
+        always_assert_log(inserted, "This was already inserted %s\n",
+                          (*clsit)->get_deobfuscated_name().c_str());
         (void) inserted; // Shut up compiler when defined(NDEBUG)
       }
     }

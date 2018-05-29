@@ -67,12 +67,11 @@ class InterDexPass : public Pass {
     pc.get("normal_primary_dex", false, m_normal_primary_dex);
     pc.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
     pc.get("scroll_classes_file", "", m_scroll_classes_file);
+    pc.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   }
 
   virtual void run_pass(DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  void get_scroll_classes();
 
   std::vector<std::unique_ptr<InterDexPassPlugin>> m_plugins;
 
@@ -82,4 +81,5 @@ class InterDexPass : public Pass {
   bool m_normal_primary_dex;
   int64_t m_linear_alloc_limit;
   std::string m_scroll_classes_file;
+  bool m_can_touch_coldstart_cls;
 };
