@@ -20,13 +20,19 @@ OpcodeFormat format(DexOpcode opcode) {
   case code:                   \
     return FMT_##fmt;
     DOPS
-    QDOPS
 #undef OP
-  case FOPCODE_PACKED_SWITCH : return FMT_fopcode;
+  case FOPCODE_PACKED_SWITCH :
+    return FMT_fopcode;
   case FOPCODE_SPARSE_SWITCH:
     return FMT_fopcode;
   case FOPCODE_FILLED_ARRAY:
     return FMT_fopcode;
+#define OP(op, code, fmt, ...) \
+  case code:                   \
+    always_assert_log(false, "Unexpected quick opcode 0x%x", opcode);
+    break;
+    QDOPS
+#undef OP
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
