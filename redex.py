@@ -289,6 +289,12 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
+    try:
+        os.makedirs(dirname(output_apk_path))
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
 
 
