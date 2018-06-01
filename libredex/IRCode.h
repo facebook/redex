@@ -35,6 +35,12 @@ class IRCode {
    */
   bool try_sync(DexCode*);
 
+  void split_and_insert_try_regions(
+      uint32_t start,
+      uint32_t end,
+      const DexCatches& catches,
+      std::vector<std::unique_ptr<DexTryItem>>* tries);
+
   IRList* m_ir_list;
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 

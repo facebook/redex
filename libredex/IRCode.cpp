@@ -710,24 +710,46 @@ void gather_debug_entries(
   }
 }
 
+} // namespace
+
 // We can't output regions with more than 2^16 code units.
 // But the IR has no such restrictions. This function splits up a large try
 // region into many small try regions that have the exact same catch
 // information.
-void split_and_insert_try_regions(
+//
+// Also, try region boundaries must lie on instruction boundaries.
+void IRCode::split_and_insert_try_regions(
     uint32_t start,
     uint32_t end,
     const DexCatches& catches,
     std::vector<std::unique_ptr<DexTryItem>>* tries) {
+
+  const auto& get_last_addr_before = [this](uint32_t requested_addr) {
+    uint32_t valid_addr = 0;
+    for (const auto& mie : *m_ir_list) {
+      if (mie.type == MFLOW_DEX_OPCODE) {
+        auto insn_size = mie.dex_insn->size();
+        if (valid_addr == requested_addr ||
+            valid_addr + insn_size > requested_addr) {
+          return valid_addr;
+        }
+        valid_addr += insn_size;
+      }
+    }
+    always_assert_log(false, "no valid address for %d", requested_addr);
+  };
+
   constexpr uint32_t max = std::numeric_limits<uint16_t>::max();
-  for (; start < end; start += max) {
-    auto tri = std::make_unique<DexTryItem>(start, std::min(max, end - start));
+  while (start < end) {
+    auto size = (end - start <= max)
+                    ? end - start
+                    : get_last_addr_before(start + max) - start;
+    auto tri = std::make_unique<DexTryItem>(start, size);
     tri->m_catches = catches;
     tries->push_back(std::move(tri));
+    start += size;
   }
 }
-
-} // namespace
 
 std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
   auto dex_code = std::make_unique<DexCode>();
