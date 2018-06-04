@@ -47,6 +47,7 @@
   TM(INL)                \
   TM(INLINIT)            \
   TM(INLRES)             \
+  TM(INSTRUMENT)         \
   TM(INTF)               \
   TM(LITHO_BLD)          \
   TM(LOC)                \

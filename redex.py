@@ -653,6 +653,7 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'resid-dedup-mapping.json', 'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
     copy_file_to_out_dir(dex_dir, args.out, 'resid-splitres-mapping.json', 'resid map after split pass', 'redex-resid-splitres-mapping.json')
     copy_file_to_out_dir(dex_dir, args.out, 'type-erasure-mappings.txt', 'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'instrument-methods-idx.txt', 'instrumented methods id map', 'redex-instrument-methods-idx.txt')
 
     if config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all
