@@ -55,8 +55,6 @@ enum EscapeReason : uint32_t {
   HAS_ARRAY_TYPE = 0x4,
   // interface is in the signature of a native method
   NATIVE_METHOD = 0x8,
-  // interface appears in a const-cast instruction
-  CONST_CLASS = 0x10,
   // a method ref to the interface is for a method not defined on the interface
   UNKNOWN_MREF = 0x20,
   // a field ref whose class is the interface
