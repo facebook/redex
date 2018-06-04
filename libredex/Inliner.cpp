@@ -69,7 +69,7 @@ constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = 1L << 32;
  * size greater than 16. See
  * http://androidxref.com/5.0.0_r2/xref/art/compiler/dex/verified_method.cc#107
  */
-constexpr uint32_t SOFT_MAX_INSTRUCTION_SIZE = 1 << 16;
+constexpr uint32_t SOFT_MAX_INSTRUCTION_SIZE = 1 << 15;
 constexpr uint32_t INSTRUCTION_BUFFER = 1 << 12;
 
 /**
