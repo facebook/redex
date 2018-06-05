@@ -110,6 +110,7 @@ struct BlockStateSnapshot {
 size_t hash_value(const AccessPath& path);
 
 bool operator==(const AccessPath& x, const AccessPath& y);
+bool operator!=(const AccessPath& x, const AccessPath& y);
 
 std::ostream& operator<<(std::ostream& o, const AccessPath& path);
 

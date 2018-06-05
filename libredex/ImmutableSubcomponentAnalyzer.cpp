@@ -41,6 +41,10 @@ bool operator==(const AccessPath& x, const AccessPath& y) {
   return x.parameter() == y.parameter() && x.getters() == y.getters();
 }
 
+bool operator!=(const AccessPath& x, const AccessPath& y) {
+  return !(x == y);
+}
+
 std::ostream& operator<<(std::ostream& o, const AccessPath& path) {
   o << "p" << path.parameter();
   for (DexMethodRef* method : path.getters()) {
