@@ -412,8 +412,9 @@ Given an APK, produce a better APK!
             description=description)
 
     parser.add_argument('input_apk', help='Input APK file')
-    parser.add_argument('-o', '--out', nargs='?', default='./redex-out.apk',
-            help='Output APK file name (defaults to ./redex-out.apk)')
+    parser.add_argument('-o', '--out', nargs='?', type=os.path.realpath,
+            default='redex-out.apk',
+            help='Output APK file name (defaults to redex-out.apk)')
     parser.add_argument('-j', '--jarpath', dest='jarpaths', action='append', default=[],
             help='Path to dependent library jar file')
 
