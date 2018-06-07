@@ -15,6 +15,7 @@
 #include <vector>
 #include <unordered_set>
 
+#include "file-utils.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
@@ -196,7 +197,8 @@ void flush_out_dex(InterDexPass* pass,
 
 void flush_out_secondary(InterDexPass* pass,
                          dex_emit_tracker& det,
-                         DexClassesVector& outdex) {
+                         DexClassesVector& outdex,
+                         const std::shared_ptr<FILE*>& mixed_mode) {
   // don't emit dex if we don't have any classes
   if (!det.outs.size()) {
     return;
@@ -227,10 +229,30 @@ void flush_out_secondary(InterDexPass* pass,
       auto clazz = it->second;
       det.outs.push_back(clazz);
     }
+    if (mixed_mode != nullptr) {
+      auto mixed_mode_fh = FileHandle(*mixed_mode);
+      mixed_mode_fh.seek_end();
+      write_str(mixed_mode_fh, canaryname + "\n");
+    }
   }
 
   // Now emit our outs list...
   flush_out_dex(pass, det, outdex);
+}
+
+void flush_out_secondary(InterDexPass* pass,
+                         dex_emit_tracker& det,
+                         DexClassesVector& outdex) {
+  flush_out_secondary(pass, det, outdex, nullptr);
+}
+
+void flush_out_mixed_mode_dex(InterDexPass* pass,
+                              ApkManager& apk_manager,
+                              dex_emit_tracker& det,
+                              DexClassesVector& outdex) {
+  auto mix_mode = apk_manager.new_asset_file("mixed_mode.txt");
+  flush_out_secondary(pass, det, outdex, mix_mode);
+  *mix_mode = nullptr;
 }
 
 bool is_canary(DexClass* clazz) {
@@ -512,6 +534,7 @@ void get_mix_mode_classes(const std::string& scroll_classes_file,
 
 
 DexClassesVector run_interdex(InterDexPass* pass,
+                              ApkManager& apk_manager,
                               const DexClassesVector& dexen,
                               const std::string& scroll_classes_file,
                               ConfigFiles& cfg,
@@ -733,7 +756,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
   }
   // Flush the scroll classes
   if (det.outs.size()) {
-    flush_out_secondary(pass, det, outdex);
+    flush_out_mixed_mode_dex(pass, apk_manager, det, outdex);
   }
 
   TRACE(IDEX, 1, "InterDex secondary dex count %d\n", (int)(outdex.size() - 1));
@@ -769,8 +792,8 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
   }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
-  dexen = run_interdex(this, dexen, m_scroll_classes_file, cfg, true,
-                       m_static_prune, m_normal_primary_dex,
+  dexen = run_interdex(this, mgr.apk_manager(), dexen, m_scroll_classes_file,
+                       cfg, true, m_static_prune, m_normal_primary_dex,
                        m_can_touch_coldstart_cls);
   for (const auto& plugin : m_plugins) {
     plugin->cleanup(original_scope);

@@ -153,6 +153,7 @@ libredex_la_SOURCES = \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
 	shared/DexDefs.cpp \
+	shared/file-utils.cpp \
 	util/Sha1.cpp
 
 libredex_la_LIBADD = \
