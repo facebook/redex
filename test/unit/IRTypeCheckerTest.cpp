@@ -159,9 +159,9 @@ TEST_F(IRTypeCheckerTest, move_result_pseudo_no_suffix) {
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_THAT(checker.what(),
-              MatchesRegex("^Did not find move-result-pseudo after "
-                           "[0x[0-9a-f]*] OPCODE: CHECK_CAST v14, "
-                           "Ljava/lang/Object;"));
+              ContainsRegex("^Did not find move-result-pseudo after "
+                            "[0x[0-9a-f]*] OPCODE: CHECK_CAST v14, "
+                            "Ljava/lang/Object;"));
 }
 
 TEST_F(IRTypeCheckerTest, arrayRead) {

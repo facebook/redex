@@ -19,15 +19,31 @@
 
 namespace {
 
+// return true if `it` should be the last instruction of this block
 bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
   auto next = std::next(it);
   if (next == ir->end()) {
     return true;
   }
-  if (next->type == MFLOW_TARGET || next->type == MFLOW_TRY ||
-      next->type == MFLOW_CATCH) {
+
+  // End the block before the first target in a contiguous sequence of targets.
+  if (next->type == MFLOW_TARGET && it->type != MFLOW_TARGET) {
     return true;
   }
+
+  // End the block before the first catch marker in a contiguous sequence of
+  // catch markers.
+  if (next->type == MFLOW_CATCH && it->type != MFLOW_CATCH) {
+    return true;
+  }
+
+  // End the block before a TRY_START
+  // and after a TRY_END
+  if ((next->type == MFLOW_TRY && next->tentry->type == TRY_START) ||
+      (it->type == MFLOW_TRY && it->tentry->type == TRY_END)) {
+    return true;
+  }
+
   if (in_try && it->type == MFLOW_OPCODE &&
       opcode::may_throw(it->insn->opcode())) {
     return true;
@@ -39,6 +55,7 @@ bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
       it->insn->opcode() == OPCODE_THROW) {
     return true;
   }
+
   return false;
 }
 
@@ -51,6 +68,16 @@ bool ends_with_may_throw(cfg::Block* p) {
            opcode::may_throw(last->insn->opcode());
   }
   return false;
+}
+
+bool cannot_throw(cfg::Block* b) {
+  for (const auto& mie : InstructionIterable(b)) {
+    auto op = mie.insn->opcode();
+    if (op == OPCODE_THROW || opcode::may_throw(op)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 } // namespace
@@ -87,6 +114,12 @@ IRList::const_iterator Block::end() const {
   } else {
     return m_end;
   }
+}
+
+bool Block::is_catch() const {
+  return m_parent->get_pred_edge_if(this, [](const std::shared_ptr<Edge> e) {
+    return e->type() == EDGE_THROW;
+  }) != nullptr;
 }
 
 void Block::remove_opcode(const IRList::iterator& it) {
@@ -227,7 +260,7 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
   connect_blocks(branch_to_targets);
   add_catch_edges(try_ends, try_catches);
   if (m_editable) {
-    remove_try_markers();
+    remove_try_catch_markers();
   }
 
   if (m_editable) {
@@ -256,25 +289,25 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
   }
 
   set_entry_block(block);
-  // The first block can be a branch target.
-  auto begin = ir->begin();
-  if (begin->type == MFLOW_TARGET) {
-    branch_to_targets[begin->target->src].push_back(block);
-  }
-  MethodItemEntry* active_try = nullptr;
+  bool in_try = false;
   for (auto it = ir->begin(); it != ir->end(); ++it) {
     if (it->type == MFLOW_TRY) {
-      // Assumption: MFLOW_TRYs are only at the beginning of blocks
-      always_assert(!m_editable || it == boundaries[block].first);
-      always_assert(m_editable || it == block->m_begin);
       if (it->tentry->type == TRY_START) {
-        active_try = it->tentry->catch_start;
+        // Assumption: TRY_STARTs are only at the beginning of blocks
+        always_assert(!m_editable || it == boundaries[block].first);
+        always_assert(m_editable || it == block->m_begin);
+        in_try = true;
       } else if (it->tentry->type == TRY_END) {
-        active_try = nullptr;
+        try_ends.emplace_back(it->tentry, block);
+        in_try = false;
       }
-      block->m_catch_start = active_try;
+    } else if (it->type == MFLOW_CATCH) {
+      try_catches[it->centry] = block;
+    } else if (it->type == MFLOW_TARGET) {
+      branch_to_targets[it->target->src].push_back(block);
     }
-    if (!end_of_block(ir, it, active_try != nullptr)) {
+
+    if (!end_of_block(ir, it, in_try)) {
       continue;
     }
 
@@ -296,31 +329,6 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       boundaries[block].first = next;
     } else {
       block->m_begin = next;
-    }
-    block->m_catch_start = active_try;
-    // Record branch targets to add edges in the next pass.
-    if (next->type == MFLOW_TARGET) {
-      // If there is a consecutive list of MFLOW_TARGETs, put them all in the
-      // same basic block. Being parsimonious in the number of BBs we generate
-      // is a significant performance win for our analyses.
-      do {
-        branch_to_targets[next->target->src].push_back(block);
-      } while (++next != ir->end() && next->type == MFLOW_TARGET);
-      // for the next iteration of the for loop, we want `it` to point to the
-      // last of the series of MFLOW_TARGET mies. Since `next` is currently
-      // pointing to the mie *after* that element, and since `it` will be
-      // incremented on every iteration, we need to decrement by 2 here.
-      it = std::prev(next, 2);
-      // Record try/catch blocks to add edges in the next pass.
-    } else if (next->type == MFLOW_TRY && next->tentry->type == TRY_END) {
-      try_ends.emplace_back(next->tentry, block);
-    } else if (next->type == MFLOW_CATCH) {
-      // If there is a consecutive list of MFLOW_CATCHes, put them all in the
-      // same basic block.
-      do {
-        try_catches[next->centry] = block;
-      } while (++next != ir->end() && next->type == MFLOW_CATCH);
-      it = std::prev(next, 2);
     }
   }
   TRACE(CFG, 5, "  build: boundaries found\n");
@@ -397,22 +405,24 @@ void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
     auto try_end = tep.first;
     auto tryendblock = tep.second;
     size_t bid = tryendblock->id();
-    always_assert(bid > 0);
-    --bid;
     while (true) {
       Block* block = m_blocks.at(bid);
       if (ends_with_may_throw(block)) {
-        for (auto mei = try_end->catch_start; mei != nullptr;
-             mei = mei->centry->next) {
-          auto catchblock = try_catches.at(mei->centry);
-          add_edge(block, catchblock, EDGE_THROW);
+        uint32_t i = 0;
+        for (auto mie = try_end->catch_start; mie != nullptr;
+             mie = mie->centry->next) {
+          auto catchblock = try_catches.at(mie->centry);
+          // Create a throw edge with the information from this catch entry
+          add_edge(block, catchblock, mie->centry->catch_type, i);
+          ++i;
         }
       }
       auto block_begin = block->begin();
       if (block_begin != block->end() && block_begin->type == MFLOW_TRY) {
         auto tentry = block_begin->tentry;
         if (tentry->type == TRY_START) {
-          always_assert(tentry->catch_start == try_end->catch_start);
+          always_assert_log(tentry->catch_start == try_end->catch_start, "%s",
+                            SHOW(*this));
           break;
         }
       }
@@ -640,32 +650,19 @@ void ControlFlowGraph::insert_branches_and_targets(
   }
 }
 
-// remove all TRY START and ENDs because we may reorder the blocks
-void ControlFlowGraph::remove_try_markers() {
+// remove all try and catch markers because we may reorder the blocks
+void ControlFlowGraph::remove_try_catch_markers() {
   always_assert(m_editable);
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
-    b->m_entries.remove_and_dispose_if(
-        [b](const MethodItemEntry& mie) {
-          if (mie.type == MFLOW_TRY) {
-            // make sure we're not losing any information
-            if (mie.tentry->type == TRY_START) {
-              always_assert(b->m_catch_start == mie.tentry->catch_start);
-            } else if (mie.tentry->type == TRY_END) {
-              always_assert(b->m_catch_start == nullptr);
-            } else {
-              always_assert_log(false, "Bogus MethodItemEntry MFLOW_TRY");
-            }
-            // delete tries
-            return true;
-          }
-          // leave everything else
-          return false;
-        });
+    b->m_entries.remove_and_dispose_if([](const MethodItemEntry& mie) {
+      return mie.type == MFLOW_TRY || mie.type == MFLOW_CATCH;
+    });
   }
 }
 
 IRList* ControlFlowGraph::linearize() {
+  always_assert(m_editable);
   IRList* result = new IRList;
 
   TRACE(CFG, 5, "before linearize:\n%s", SHOW(*this));
@@ -674,7 +671,7 @@ IRList* ControlFlowGraph::linearize() {
 
   const std::vector<Block*>& ordering = order();
   insert_branches_and_targets(ordering);
-  insert_try_markers(ordering);
+  insert_try_catch_markers(ordering);
 
   for (Block* b : ordering) {
     result->splice(result->end(), b->m_entries);
@@ -683,30 +680,160 @@ IRList* ControlFlowGraph::linearize() {
   return result;
 }
 
-void ControlFlowGraph::insert_try_markers(const std::vector<Block*>& ordering) {
-  // add back the TRY START and ENDS
+void ControlFlowGraph::insert_try_catch_markers(
+    const std::vector<Block*>& ordering) {
+  // add back the TRY START, TRY_ENDS, and, MFLOW_CATCHes
+
+  const auto& insert_try_marker_between = [](Block* prev,
+                                             MethodItemEntry* new_try_marker,
+                                             Block* b) {
+    auto first_it = b->get_first_insn();
+    if (first_it != b->end() &&
+        opcode::is_move_result_pseudo(first_it->insn->opcode())) {
+      // Make sure we don't split up a move-result-pseudo and its primary
+      // instruction by placing the marker after the move-result-pseudo
+      //
+      // TODO: relax the constraint that move-result-pseudo must be immediately
+      // after its partner, allowing non-opcode MethodItemEntries between
+      b->m_entries.insert_after(first_it, *new_try_marker);
+    } else if (new_try_marker->tentry->type == TRY_START) {
+      // TRY_START belongs at the front of a block
+      b->m_entries.push_front(*new_try_marker);
+    } else {
+      // TRY_END belongs at the end of a block
+      prev->m_entries.push_back(*new_try_marker);
+    }
+  };
+
+  std::unordered_map<MethodItemEntry*, Block*> catch_to_containing_block;
   Block* prev = nullptr;
+  MethodItemEntry* active_catch = nullptr;
   for (auto it = ordering.begin(); it != ordering.end(); prev = *(it++)) {
     Block* b = *it;
-    if (prev == nullptr || b->m_catch_start != prev->m_catch_start) {
-      // current try changes upon entering this block.
-      // end the previous try
-      if (prev != nullptr && prev->m_catch_start != nullptr) {
-        prev->m_entries.push_back(
-            *new MethodItemEntry(TRY_END, prev->m_catch_start));
-      }
-      if (b->m_catch_start != nullptr) {
-        b->m_entries.push_front(
-            *new MethodItemEntry(TRY_START, b->m_catch_start));
-      }
+    MethodItemEntry* new_catch = create_catch(b, &catch_to_containing_block);
+
+    if (new_catch == nullptr && cannot_throw(b) && !b->is_catch()) {
+      // Generate fewer try regions by merging blocks that cannot throw into the
+      // previous try region.
+      //
+      // But, we have to be careful to not include the catch block of this try
+      // region, which would create invalid Dex Try entries. For any given try
+      // region, none of its catches may be inside that region.
+      continue;
     }
 
-    // and end the last block too
-    if (std::next(it) == ordering.end() && b->m_catch_start != nullptr) {
-      b->m_entries.push_back(*new MethodItemEntry(TRY_END, b->m_catch_start));
+    if (active_catch != new_catch) {
+      // If we're switching try regions between these blocks, the TRY_END must
+      // come first then the TRY_START. We insert the TRY_START earlier because
+      // we're using `insert_after` which inserts things in reverse order
+      if (new_catch != nullptr) {
+        // Start a new try region before b
+        auto new_start = new MethodItemEntry(TRY_START, new_catch);
+        insert_try_marker_between(prev, new_start, b);
+      }
+      if (active_catch != nullptr) {
+        // End the current try region before b
+        auto new_end = new MethodItemEntry(TRY_END, active_catch);
+        insert_try_marker_between(prev, new_end, b);
+      }
+      active_catch = new_catch;
     }
   }
+  if (active_catch != nullptr) {
+    ordering.back()->m_entries.push_back(
+        *new MethodItemEntry(TRY_END, active_catch));
+  }
 }
+
+MethodItemEntry* ControlFlowGraph::create_catch(
+    Block* block,
+    std::unordered_map<MethodItemEntry*, Block*>* catch_to_containing_block) {
+  always_assert(m_editable);
+
+  using EdgeVector = std::vector<std::shared_ptr<Edge>>;
+  EdgeVector throws = get_succ_edges_if(block, [](const std::shared_ptr<Edge> e) {
+    return e->type() == EDGE_THROW;
+  });
+  if (throws.empty()) {
+    // No need to create a catch if there are no throws
+    return nullptr;
+  }
+
+  std::sort(throws.begin(), throws.end(),
+            [](const std::shared_ptr<Edge> e1, const std::shared_ptr<Edge> e2) {
+              return e1->m_throw_info->index < e2->m_throw_info->index;
+            });
+  const auto& throws_end = throws.end();
+
+  // recurse through `throws` adding catch entries to blocks at the ends of
+  // throw edges and connecting the catch entry `next` pointers according to the
+  // throw edge indices.
+  //
+  // We stop early if we find find an equivalent linked list of catch entries
+  std::function<MethodItemEntry*(EdgeVector::iterator)> add_catch;
+  add_catch = [this, &add_catch, &throws_end, catch_to_containing_block](
+                  EdgeVector::iterator it) -> MethodItemEntry* {
+    if (it == throws_end) {
+      return nullptr;
+    }
+    auto edge = *it;
+    auto catch_block = edge->target();
+    for (auto& mie : *catch_block) {
+      // Is there already a catch here that's equivalent to the catch we would
+      // create?
+      if (mie.type == MFLOW_CATCH &&
+          catch_entries_equivalent_to_throw_edges(&mie, it, throws_end,
+                                                  *catch_to_containing_block)) {
+        // The linked list of catch entries starting at `mie` is equivalent to
+        // the rest of `throws` from `it` to `end`. So we don't need to create
+        // another one, use the existing list.
+        return &mie;
+      }
+    }
+    // create a new catch entry and insert it into the bytecode
+    auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
+    edge->target()->m_entries.push_front(*new_catch);
+    catch_to_containing_block->emplace(new_catch, edge->target());
+
+    // recurse to the next throw item
+    new_catch->centry->next = add_catch(std::next(it));
+    return new_catch;
+  };
+  return add_catch(throws.begin());
+}
+
+// Follow the catch entry linked list starting at `first_mie` and check if the
+// throw edges (pointed to by `it`) are equivalent to the linked list. The throw
+// edges should be sorted by their indices.
+//
+// This function is useful in avoiding generating multiple identical catch
+// entries
+bool ControlFlowGraph::catch_entries_equivalent_to_throw_edges(
+    MethodItemEntry* first_mie,
+    std::vector<std::shared_ptr<cfg::Edge>>::iterator it,
+    std::vector<std::shared_ptr<cfg::Edge>>::iterator end,
+    const std::unordered_map<MethodItemEntry*, Block*>&
+        catch_to_containing_block) {
+
+  for (auto mie = first_mie; mie != nullptr; mie = mie->centry->next) {
+    always_assert(mie->type == MFLOW_CATCH);
+    if (it == end) {
+      return false;
+    }
+
+    auto edge = *it;
+    always_assert_log(catch_to_containing_block.count(mie) > 0,
+                      "%s not found in %s", SHOW(*mie), SHOW(*this));
+    if (mie->centry->catch_type != edge->m_throw_info->catch_type ||
+        catch_to_containing_block.at(mie) != edge->target()) {
+      return false;
+    }
+
+    ++it;
+  }
+  return it == end;
+}
+
 
 std::vector<Block*> ControlFlowGraph::blocks() const {
   std::vector<Block*> result;
@@ -865,7 +992,7 @@ void ControlFlowGraph::remove_succ_edge_if(Block* block,
 }
 
 std::shared_ptr<Edge> ControlFlowGraph::get_pred_edge_if(
-    Block* block, const EdgePredicate& predicate) {
+    const Block* block, const EdgePredicate& predicate) const {
   for (auto e : block->preds()) {
     if (predicate(e)) {
       return e;
@@ -875,13 +1002,35 @@ std::shared_ptr<Edge> ControlFlowGraph::get_pred_edge_if(
 }
 
 std::shared_ptr<Edge> ControlFlowGraph::get_succ_edge_if(
-    Block* block, const EdgePredicate& predicate) {
+    const Block* block, const EdgePredicate& predicate) const {
   for (auto e : block->succs()) {
     if (predicate(e)) {
       return e;
     }
   }
   return nullptr;
+}
+
+std::vector<std::shared_ptr<Edge>> ControlFlowGraph::get_pred_edges_if(
+    const Block* block, const EdgePredicate& predicate) const {
+  std::vector<std::shared_ptr<Edge>> result;
+  for (auto e : block->preds()) {
+    if (predicate(e)) {
+      result.push_back(e);
+    }
+  }
+  return result;
+}
+
+std::vector<std::shared_ptr<Edge>> ControlFlowGraph::get_succ_edges_if(
+    const Block* block, const EdgePredicate& predicate) const {
+  std::vector<std::shared_ptr<Edge>> result;
+  for (auto e : block->succs()) {
+    if (predicate(e)) {
+      result.push_back(e);
+    }
+  }
+  return result;
 }
 
 // Move this edge out of the vectors between its old blocks
@@ -892,6 +1041,28 @@ void ControlFlowGraph::redirect_edge(std::shared_ptr<Edge> edge,
   edge->m_target = new_target;
   edge->src()->m_succs.push_back(edge);
   edge->target()->m_preds.push_back(edge);
+}
+
+bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1, const Block* b2) const {
+  const auto& is_throw = [](const std::shared_ptr<Edge>& e) {
+    return e->type() == EDGE_THROW;
+  };
+  const auto& throws1 = get_succ_edges_if(b1, is_throw);
+  const auto& throws2 = get_succ_edges_if(b2, is_throw);
+  if (throws1.size() != throws2.size()) {
+    return false;
+  }
+  auto it1 = throws1.begin();
+  auto it2 = throws2.begin();
+  for (; it1 != throws1.end(); ++it1, ++it2) {
+    auto e1 = *it1;
+    auto e2 = *it2;
+    if (e1->target() != e2->target() ||
+        e1->m_throw_info->catch_type != e2->m_throw_info->catch_type) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {

@@ -37,6 +37,7 @@ class IRInstruction;
 class IRCode;
 
 namespace cfg {
+class Block;
 class ControlFlowGraph;
 }
 
@@ -112,6 +113,7 @@ std::string show(const DexAnnotationDirectory*);
 std::string show(const DexDebugInstruction*);
 std::string show(const IRInstruction*);
 std::string show(const IRCode*);
+std::string show(const cfg::Block* block);
 std::string show(const cfg::ControlFlowGraph&);
 std::string show(const MethodCreator*);
 std::string show(const MethodBlock*);

@@ -1256,7 +1256,7 @@ Result check_structure(const IRCode* code) {
     } else if (insn->has_move_result_pseudo() &&
                (it == code->end() || !is_move_result_pseudo(*std::next(it)))) {
       return Result::make_error("Did not find move-result-pseudo after " +
-                                show(*it));
+                                show(*it) + " in \n" + show(code));
     }
   }
   return Result::Ok();

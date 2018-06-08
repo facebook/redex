@@ -264,23 +264,33 @@ static void associate_debug_entries(IRList* ir,
   dbg.get_entries().clear();
 }
 
+// Insert MFLOW_TRYs and MFLOW_CATCHes
 static void associate_try_items(IRList* ir,
                                 DexCode& code,
                                 const EntryAddrBiMap& bm) {
-  auto const& tries = code.get_tries();
-  for (auto& tri : tries) {
+  // We insert the catches after the try markers to handle the case where the
+  // try block ends on the same instruction as the beginning of the catch block.
+  // We need to end the try block before we start the catch block, not vice
+  // versa.
+  //
+  // The pairs have location first, then new catch entry second.
+  std::vector<std::pair<MethodItemEntry*, MethodItemEntry*>> catches_to_insert;
+
+  const auto& tries = code.get_tries();
+  for (const auto& tri : tries) {
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
-    for (auto catz : tri->m_catches) {
+    for (const auto& catz : tri->m_catches) {
       auto catzop = bm.by<Addr>().at(catz.second);
       TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
-      auto catch_mei = new MethodItemEntry(catz.first);
-      catch_start = catch_start == nullptr ? catch_mei : catch_start;
+      auto catch_mie = new MethodItemEntry(catz.first);
+      catch_start = catch_start == nullptr ? catch_mie : catch_start;
       if (last_catch != nullptr) {
-        last_catch->next = catch_mei;
+        last_catch->next = catch_mie;
       }
-      last_catch = catch_mei->centry;
-      ir->insert_before(ir->iterator_to(*catzop), *catch_mei);
+      last_catch = catch_mie->centry;
+      // Delay addition of catch entries until after try entries
+      catches_to_insert.emplace_back(catzop, catch_mie);
     }
 
     auto begin = bm.by<Addr>().at(tri->m_start_addr);
@@ -292,6 +302,10 @@ static void associate_try_items(IRList* ir,
     TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
+  }
+
+  for (const auto& pair : catches_to_insert) {
+    ir->insert_before(ir->iterator_to(*pair.first), *pair.second);
   }
 }
 

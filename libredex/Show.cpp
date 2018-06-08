@@ -999,6 +999,9 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
     break;
   case MFLOW_CATCH:
     o << "CATCH: " << show(mie.centry->catch_type);
+    if (mie.centry->next != nullptr) {
+      o << " (next " << mie.centry->next << ")";
+    }
     break;
   case MFLOW_DEBUG:
     o << "DEBUG: " << show(mie.dbgop);
@@ -1022,6 +1025,14 @@ std::string show(const IRList* ir) {
   return ret;
 }
 
+std::string show(const cfg::Block* block) {
+  std::ostringstream ss;
+  for (const auto& mie : *block) {
+    ss << "   " << show(mie) << "\n";
+  }
+  return ss.str();
+}
+
 std::string show(const cfg::ControlFlowGraph& cfg) {
   const auto& blocks = cfg.blocks();
   std::ostringstream ss;
@@ -1035,9 +1046,7 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
     }
     ss << "\n";
 
-    for (auto const& mei : *b) {
-      ss << "   " << show(mei) << "\n";
-    }
+    ss << show(b);
 
     ss << "   succs:";
     for (auto& s : b->succs()) {

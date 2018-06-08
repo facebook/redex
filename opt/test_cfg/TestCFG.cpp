@@ -46,6 +46,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
     // build and linearize the CFG
     TRACE(CFG, 5, "IRCode before:\n%s", SHOW(&code));
     code.build_cfg(/* editable */ true);
+    TRACE(CFG, 5, "%s", SHOW(code.cfg()));
     code.clear_cfg();
     TRACE(CFG, 5, "IRCode after:\n%s", SHOW(&code));
 

@@ -394,6 +394,7 @@ TEST(ControlFlow, infinite) {
   auto input_code = assembler::ircode_from_string(str);
   auto expected_code = assembler::ircode_from_string(str);
 
+  TRACE(CFG, 1, "%s", SHOW(input_code));
   input_code->build_cfg(true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
