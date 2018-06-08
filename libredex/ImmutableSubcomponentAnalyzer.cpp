@@ -24,6 +24,7 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "Resolver.h"
 
 std::string AccessPath::to_string() const {
   std::ostringstream out;
@@ -207,6 +208,18 @@ class Analyzer final
     case IOPCODE_LOAD_PARAM_WIDE: {
       // These pseudo-operations have already been analyzed during the
       // initialization of the fixpoint iteration. There's nothing more to do.
+      break;
+    }
+    case OPCODE_IGET_OBJECT: {
+      auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+      auto source = insn->src(0);
+      if (field == nullptr || !is_local_analyzable(source) ||
+          !is_final(field)) {
+        current_state->set(RESULT_REGISTER, AbstractAccessPathDomain::top());
+      } else {
+        AccessPath p{AccessPathKind::FinalField, source, field, {}};
+        current_state->set(RESULT_REGISTER, AbstractAccessPathDomain(p));
+      }
       break;
     }
     case OPCODE_NEW_INSTANCE: {
