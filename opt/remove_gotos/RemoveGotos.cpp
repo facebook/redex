@@ -30,115 +30,120 @@ constexpr const char* METRIC_GOTO_REMOVED = "num_goto_removed";
 
 class RemoveGotos {
  private:
-  static bool is_goto(const MethodItemEntry& mie) {
-    return mie.type == MFLOW_OPCODE && mie.insn->opcode() == OPCODE_GOTO;
-  }
-
-  static bool has_goto(cfg::Block* block_ptr) {
-    return is_goto(*std::prev(block_ptr->end()));
-  }
-
-  static IRList::iterator find_goto(cfg::Block* block_ptr) {
-    auto iter = std::find_if(block_ptr->begin(),
-                             block_ptr->end(),
-                             [](MethodItemEntry& mei) { return is_goto(mei); });
-    always_assert(block_ptr->end() != iter);
-    return iter;
-  }
 
   /*
-   * A block B is mergeable if and only if
-   * - B jumps to another block C unconditionally
-   * - C has exactly one parent (B)
-   * - C does not fallthrough to the next block implicitly. (e.g copying C into
-   * B does not cause any inconsistencies in the CFG)
+   * A blocks B and C can be merged together if and only if
+   * - B jumps to C unconditionally
+   * - C's only predecessor is B
    * - B and C both point to the same catch handler
+   *
+   * If current_block (B) has a mergable child (C), return C.
+   * Otherwise, return nullptr
    */
-  static cfg::Block* find_mergeable_block(IRCode* code) {
-    code->build_cfg();
-    // This is used to store map of try blocks to catch, so
-    // that we can not select to merge blocks across boundaries.
-    std::unordered_map<cfg::Block*, MethodItemEntry*> catch_map;
-    build_catch_map(code, catch_map);
-    for (cfg::Block* current_block : code->cfg().blocks()) {
-      if (current_block->succs().size() != 1 || !has_goto(current_block)) {
-        continue;
-      }
-
-      cfg::Block* next_block = current_block->succs()[0]->target();
-      if (next_block != current_block && next_block->preds().size() == 1 &&
-          (catch_map[current_block] == catch_map[next_block]) &&
-          (next_block->succs().empty() || has_goto(next_block))) {
-        return current_block;
-      }
+  static cfg::Block* mergable_child(cfg::ControlFlowGraph& cfg,
+                                    cfg::Block* current_block) {
+    const auto& succs = current_block->succs();
+    if (succs.size() != 1) {
+      return nullptr;
+    }
+    const auto& edge = succs[0];
+    if (edge->type() != cfg::EDGE_GOTO) {
+      return nullptr;
     }
 
+    cfg::Block* next_block = edge->target();
+    if (next_block != current_block && next_block->preds().size() == 1 &&
+        cfg.blocks_are_in_same_try(current_block, next_block)) {
+      return next_block;
+    }
     return nullptr;
   }
 
-  static void build_catch_map(IRCode* code, std::unordered_map<cfg::Block*, MethodItemEntry*>& catch_map) {
-    MethodItemEntry* catch_mei = nullptr;
-    for (cfg::Block* current_block : code->cfg().blocks()) {
-      auto mie = current_block->begin();
-      if (mie->type == MFLOW_TRY) {
-        if (mie->tentry->type == TRY_START) {
-          catch_mei = mie->tentry->catch_start;
-        } else if (mie->tentry->type == TRY_END) {
-          catch_mei = nullptr;
+  static std::vector<cfg::Block*> get_mergable_blocks(
+      cfg::ControlFlowGraph& cfg, cfg::Block* first_block) {
+    std::vector<cfg::Block*> result;
+
+    result.emplace_back(first_block);
+    for (auto block = mergable_child(cfg, first_block); block != nullptr;
+         block = mergable_child(cfg, block)) {
+      result.emplace_back(block);
+    }
+
+    return result;
+  }
+
+  /*
+   * Returns the number of blocks that were removed
+   */
+  static size_t merge_blocks(cfg::ControlFlowGraph& cfg) {
+    std::unordered_set<cfg::Block*> visited_blocks;
+
+    size_t num_merged = 0;
+    // We can safely delete blocks while iterating through because cfg.blocks()
+    // copies the block pointers into a vector.
+    for (cfg::Block* block : cfg.blocks()) {
+      if (visited_blocks.count(block) == 0) {
+        const auto& chain = get_mergable_blocks(cfg, block);
+        visited_blocks.insert(chain.begin(), chain.end());
+        if (chain.size() > 1) {
+          TRACE(RMGOTO, 3, "Found optimizing chain: { ");
+          for (const auto& b : chain) {
+            TRACE(RMGOTO, 3, "%d ", b->id());
+          }
+          TRACE(RMGOTO, 3, "}\n");
+
+          // Traverse in reverse order because the child block is deleted
+          auto prev = chain.rend();
+          for (auto it = chain.rbegin(); it != chain.rend(); prev = it++) {
+            if (prev != chain.rend()) {
+              TRACE(RMGOTO, 3, "merge %d into %d\n", (*prev)->id(), (*it)->id());
+              // merge *prev into *it
+              cfg.merge_blocks(*it, *prev);
+            }
+          }
+          num_merged += chain.size() - 1;
         }
       }
-      catch_map[current_block] = catch_mei;
     }
+    return num_merged;
   }
 
  public:
-  size_t process_method(DexMethod* method) {
-    size_t num_goto_removed = 0;
+  static size_t process_method(DexMethod* method) {
     auto code = method->get_code();
-    always_assert(code != nullptr);
 
     TRACE(RMGOTO, 4, "Class: %s\n", SHOW(method->get_class()));
-    TRACE(RMGOTO, 4, "Method: %s\n", SHOW(method->get_name()));
-    TRACE(RMGOTO, 4, "Initial opcode count: %d\n", code->count_opcodes());
+    TRACE(RMGOTO, 3, "Method: %s\n", SHOW(method->get_name()));
+    auto init_opcode_count = code->count_opcodes();
+    TRACE(RMGOTO, 4, "Initial opcode count: %d\n", init_opcode_count);
 
-    cfg::Block* current_block = find_mergeable_block(code);
-    while (current_block != nullptr) {
-      TRACE(RMGOTO,
-            5,
-            "Found optimizing pair, parent block id: %d\n",
-            current_block->id());
-      num_goto_removed++;
+    TRACE(RMGOTO, 3, "input code\n%s", SHOW(code));
+    code->build_cfg(true);
+    auto& cfg = code->cfg();
 
-      cfg::Block* next_block = current_block->succs()[0]->target();
+    TRACE(RMGOTO, 3, "before %s\n", SHOW(cfg));
 
-      std::vector<MethodItemEntry*> next_block_mies;
-      for (auto next_iter = next_block->begin(); next_iter != next_block->end();
-           next_iter = code->erase(next_iter)) {
-        if (next_iter->type != MFLOW_TARGET) {
-          next_block_mies.push_back(&(*next_iter));
-        }
-      }
+    size_t num_goto_removed = merge_blocks(cfg);
 
-      auto goto_iter = find_goto(current_block);
-      auto current_iter = goto_iter;
-      for (auto& mie : next_block_mies) {
-        current_iter = code->insert_after(current_iter, *mie);
-      }
-      code->erase(goto_iter);
+    TRACE(RMGOTO, 3, "%d blocks merged\n", num_goto_removed);
+    TRACE(RMGOTO, 3, "after %s\n", SHOW(cfg));
+    TRACE(RMGOTO, 5, "Opcode count: %d\n", code->count_opcodes());
 
-      TRACE(RMGOTO, 5, "Opcode count: %d\n", code->count_opcodes());
-      current_block = find_mergeable_block(code);
-    }
-
+    code->clear_cfg();
+    auto final_opcode_count = code->count_opcodes();
+    always_assert_log(final_opcode_count <= init_opcode_count,
+                      "method %s got larger: %s",
+                      SHOW(method),
+                      SHOW(cfg));
     TRACE(RMGOTO, 4, "Final opcode count: %d\n", code->count_opcodes());
+    TRACE(RMGOTO, 3, "output code\n%s", SHOW(code));
     return num_goto_removed;
   }
 };
 } // namespace
 
 size_t RemoveGotosPass::run(DexMethod* method) {
-  RemoveGotos rmgotos;
-  return rmgotos.process_method(method);
+  return RemoveGotos::process_method(method);
 }
 
 void RemoveGotosPass::run_pass(DexStoresVector& stores,
@@ -146,16 +151,18 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t total_gotos_removed = walk::parallel::reduce_methods<RemoveGotos, size_t>(
-      scope,
-      [](RemoveGotos& rmgotos, DexMethod* m) -> size_t {
-        if (!m->get_code()) {
-          return 0;
-        }
-        return rmgotos.process_method(m);
-      },
-      [](size_t a, size_t b) { return a + b; },
-      [](unsigned int /*thread_index*/) { return RemoveGotos(); });
+  size_t total_gotos_removed =
+      walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+          scope,
+          [](std::nullptr_t, DexMethod* m) -> size_t {
+            if (!m->get_code()) {
+              return 0;
+            }
+            return RemoveGotos::process_method(m);
+          },
+          [](size_t a, size_t b) { return a + b; },
+          [](unsigned int /* thread_index */) { return nullptr; });
+
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
   TRACE(RMGOTO,
         1,

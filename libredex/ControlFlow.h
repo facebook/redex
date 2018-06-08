@@ -306,6 +306,10 @@ class ControlFlowGraph {
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
+  // merge succ into pred
+  // Assumption: pred is the only predecessor of succ (and vice versa)
+  void merge_blocks(Block* pred, Block* succ);
+
   // remove the IRInstruction that `it` points to.
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing

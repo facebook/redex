@@ -174,10 +174,11 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
   code->push_back(*if_mie);
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
   code->push_back(target);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   RemoveGotosPass().run(m_method);
 
-  EXPECT_EQ(4, std::distance(code->begin(), code->end()));
+  EXPECT_EQ(5, std::distance(code->begin(), code->end())) << show(code);
 }
 
 // Code:    ABC
@@ -206,45 +207,4 @@ TEST_F(RemoveGotosTest, preserveSimplifiedMethod) {
   }
   EXPECT_EQ(iter->insn->opcode(), OPCODE_RETURN_VOID);
   EXPECT_EQ(ins.end(), ++iter);
-}
-
-/*
- * Considering blocks A ..... B C
- * where A -> B is a goto and B -> C is implicit (it just falls through)
- * moving B into A will break the CFG flow because the implicit link is broken.
- * therefore, even though in the CFG it appears to be able to be combined,
- * we shouldn't move them (without first applying some extra transformations)
- *
- * This appeared with a target falling through to a try catch block.
- */
-TEST_F(RemoveGotosTest, excludeImplicitLinks) {
-  using namespace dex_asm;
-  clear_method_code();
-  auto code = m_method->get_code();
-  auto exception_type = DexType::make_type("Ljava/lang/Exception;");
-  auto catch_start = new MethodItemEntry(exception_type);
-  auto gt = create_goto();
-
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*gt.first);
-
-  code->push_back(dasm(OPCODE_MOVE, {0_v, 0_v}));
-  code->push_back(gt.second);
-
-  code->push_back(TRY_START, catch_start);
-  code->push_back(dasm(OPCODE_DIV_DOUBLE, {0_v, 0_v, 1_v}));
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-  code->push_back(TRY_END, catch_start);
-
-  code->build_cfg();
-  printf("Initial cfg: %s\n", SHOW(code->cfg()));
-
-  auto num_goto_removed = RemoveGotosPass().run(m_method);
-
-  code->build_cfg();
-  printf("Final cfg: %s\n", SHOW(code->cfg()));
-
-  EXPECT_EQ(5, code->cfg().blocks().size());
-  EXPECT_EQ(5, code->count_opcodes());
-  EXPECT_EQ(0, num_goto_removed);
 }

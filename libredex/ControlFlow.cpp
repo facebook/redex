@@ -958,7 +958,7 @@ void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
 void ControlFlowGraph::remove_edge(std::shared_ptr<Edge> edge) {
   remove_edge_if(
       edge->src(), edge->target(),
-      [edge](const std::shared_ptr<Edge>& e) { return edge == e; });
+      [&edge](const std::shared_ptr<Edge>& e) { return edge == e; });
 }
 
 void ControlFlowGraph::remove_edge_if(
@@ -1089,6 +1089,26 @@ std::vector<std::shared_ptr<Edge>> ControlFlowGraph::get_succ_edges_if(
     }
   }
   return result;
+}
+
+void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
+  // remove the edges between them
+  remove_all_edges(pred, succ);
+  // move succ's code into pred
+  pred->m_entries.splice(pred->m_entries.end(), succ->m_entries);
+
+  // move succ's outgoing edges to pred.
+  auto all = [](const std::shared_ptr<Edge>&) { return true; };
+  // Intentionally copy the vector of edges because set_edge_source edits the
+  // edge vectors
+  auto succs = get_succ_edges_if(succ, all);
+  for (auto succ_edge : succs) {
+    set_edge_source(succ_edge, pred);
+  }
+
+  // remove the succ block
+  m_blocks.erase(succ->id());
+  delete succ;
 }
 
 void ControlFlowGraph::set_edge_target(std::shared_ptr<Edge> edge,
