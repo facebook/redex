@@ -35,11 +35,6 @@ void visit(cfg::Block* b, std::unordered_set<cfg::Block*>& visited);
  */
 size_t remove_unreachable_blocks(IRCode* code);
 
-// TODO: move to CFG
-// remove old_block
-// if new_block is not null, reroute old_targets predecessors to new_target
-void replace_block(IRCode* code, cfg::Block* old_block, cfg::Block* new_block);
-
 // if pos is inside a try block, return the corresponding catch
 // if not, return null
 MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos);

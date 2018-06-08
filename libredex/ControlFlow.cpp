@@ -122,20 +122,16 @@ bool Block::is_catch() const {
   }) != nullptr;
 }
 
+bool Block::same_try(Block* other) const {
+  always_assert(other->m_parent == this->m_parent);
+  return m_parent->blocks_are_in_same_try(this, other);
+}
+
 void Block::remove_opcode(const IRList::iterator& it) {
   always_assert(m_parent->editable());
   always_assert(it->type == MFLOW_OPCODE);
   always_assert(!is_branch(it->insn->opcode()));
   m_entries.remove_opcode(it);
-}
-
-void Block::remove_debug_line_info() {
-  for (MethodItemEntry& mie : *this) {
-    if (mie.type == MFLOW_POSITION) {
-      mie.pos.release();
-      mie.type = MFLOW_FALLTHROUGH;
-    }
-  }
 }
 
 bool Block::has_pred(Block* b, EdgeType t) const {
@@ -607,6 +603,30 @@ void ControlFlowGraph::sanity_check() {
                                   e) != forward_edges.end(),
                         "block %d -> %d, %s", e->src()->id(), b->id(),
                         SHOW(*this));
+    }
+  }
+
+  no_dangling_dex_positions();
+}
+
+void ControlFlowGraph::no_dangling_dex_positions() {
+  std::unordered_set<DexPosition*> positions;
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    for (const auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION) {
+        positions.insert(mie.pos.get());
+      }
+    }
+  }
+
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    for (const auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+        always_assert_log(positions.count(mie.pos->parent) > 0, "%s in %s",
+                          SHOW(mie), SHOW(*this));
+      }
     }
   }
 }
@@ -1185,6 +1205,24 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
   sanity_check();
 }
 
+void ControlFlowGraph::remove_block(Block* block) {
+  remove_pred_edges(block);
+  remove_succ_edges(block);
+  m_blocks.erase(block->id());
+  block->m_entries.clear_and_dispose();
+  delete block;
+}
+
+// delete old_block and reroute its predecessors to new_block
+void ControlFlowGraph::replace_block(Block* old_block,
+                                     Block* new_block) {
+  std::vector<std::shared_ptr<Edge>> to_redirect = old_block->preds();
+  for (auto e : to_redirect) {
+    set_edge_target(e, new_block);
+  }
+  remove_block(old_block);
+}
+
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   o << "digraph {\n";
   for (auto* block : blocks()) {
@@ -1293,17 +1331,6 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
     }
   }
   return postorder;
-}
-
-Block* ControlFlowGraph::find_block_that_ends_here(
-    const IRList::iterator& loc) const {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    if (b->end() == loc) {
-      return b;
-    }
-  }
-  return nullptr;
 }
 
 Block* ControlFlowGraph::idom_intersect(

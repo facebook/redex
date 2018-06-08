@@ -43,14 +43,6 @@
  * TODO?: make MethodItemEntry's fields private?
  */
 
-// Forward declarations
-namespace cfg {
-class Block;
-}
-namespace transform {
-void replace_block(IRCode*, cfg::Block*, cfg::Block*);
-}
-
 namespace cfg {
 
 enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
@@ -68,6 +60,10 @@ struct ThrowInfo {
 
   ThrowInfo(DexType* catch_type, uint32_t index)
       : catch_type(catch_type), index(index) {}
+
+  bool operator==(const ThrowInfo& other) {
+    return catch_type == other.catch_type && index == other.index;
+  }
 };
 
 class Edge final {
@@ -107,8 +103,23 @@ class Edge final {
 
   bool operator==(const Edge& that) const {
     return m_src == that.m_src && m_target == that.m_target &&
-           m_type == that.m_type;
+           equals_ignore_source_and_target(that);
   }
+
+  bool equals_ignore_source(const Edge& that) const {
+    return m_target == that.m_target && equals_ignore_source_and_target(that);
+  }
+
+  bool equals_ignore_target(const Edge& that) const {
+    return m_src == that.m_src && equals_ignore_source_and_target(that);
+  }
+
+  bool equals_ignore_source_and_target(const Edge& that) const {
+    return m_type == that.m_type &&
+           ((m_throw_info == nullptr && that.m_throw_info == nullptr) ||
+            *m_throw_info == *that.m_throw_info);
+  }
+
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
@@ -171,10 +182,9 @@ class Block {
 
   bool is_catch() const;
 
-  void remove_opcode(const IRList::iterator& it);
+  bool same_try(Block* other) const;
 
-  // remove all debug source code line numbers from this block
-  void remove_debug_line_info();
+  void remove_opcode(const IRList::iterator& it);
 
   opcode::Branchingness branchingness() {
     always_assert_log(
@@ -200,7 +210,6 @@ class Block {
   friend class ControlFlowGraph;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
-  friend void transform::replace_block(IRCode*, Block*, Block*);
 
   // return an iterator to the conditional branch (including switch) in this
   // block. If there is no such instruction, return end()
@@ -316,12 +325,17 @@ class ControlFlowGraph {
   // edges.
   void remove_opcode(const InstructionIterator& it);
 
+  // delete old_block and reroute its predecessors to new_block
+  void replace_block(Block* old_block, Block* new_block);
+
+  // Remove this block from the graph and release associated memory.
+  // Remove all incoming and outgoing edges.
+  void remove_block(Block* block);
+
   /*
    * Print the graph in the DOT graph description language.
    */
   std::ostream& write_dot_format(std::ostream&) const;
-
-  Block* find_block_that_ends_here(const IRList::iterator& loc) const;
 
   // Find a common dominator block that is closest to both block.
   Block* idom_intersect(
@@ -346,6 +360,9 @@ class ControlFlowGraph {
 
   // SIGABORT if the internal state of the CFG is invalid
   void sanity_check();
+
+  // SIGABORT if there are dangling parent pointers to deleted DexPositions
+  void no_dangling_dex_positions();
 
  private:
   using BranchToTargets =
