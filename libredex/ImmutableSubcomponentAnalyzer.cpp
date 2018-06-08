@@ -34,11 +34,14 @@ std::string AccessPath::to_string() const {
 size_t hash_value(const AccessPath& path) {
   size_t seed = boost::hash_range(path.getters().begin(), path.getters().end());
   boost::hash_combine(seed, path.parameter());
+  boost::hash_combine(seed, path.kind());
+  boost::hash_combine(seed, path.field());
   return seed;
 }
 
 bool operator==(const AccessPath& x, const AccessPath& y) {
-  return x.parameter() == y.parameter() && x.getters() == y.getters();
+  return x.parameter() == y.parameter() && x.kind() == y.kind() &&
+         x.field() == y.field() && x.getters() == y.getters();
 }
 
 bool operator!=(const AccessPath& x, const AccessPath& y) {
@@ -46,7 +49,12 @@ bool operator!=(const AccessPath& x, const AccessPath& y) {
 }
 
 std::ostream& operator<<(std::ostream& o, const AccessPath& path) {
-  o << "p" << path.parameter();
+  auto kind = path.kind();
+  o << (kind == AccessPathKind::Parameter ? "p" : "v");
+  o << path.parameter();
+  if (kind == AccessPathKind::FinalField) {
+    o << "." << show(path.field());
+  }
   for (DexMethodRef* method : path.getters()) {
     o << "." << method->get_name()->str() << "()";
   }
@@ -353,7 +361,8 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
     switch (mie.insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       init.set(mie.insn->dest(),
-               isa_impl::AbstractAccessPathDomain(AccessPath(parameter)));
+               isa_impl::AbstractAccessPathDomain(
+                   AccessPath(AccessPathKind::Parameter, parameter)));
       break;
     }
     case IOPCODE_LOAD_PARAM:

@@ -142,7 +142,7 @@ TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
     if (insn->has_method() && strcmp(insn->get_method()->c_str(), "baz") == 0) {
       found = true;
       {
-        AccessPath p{1, {get_a}};
+        AccessPath p{AccessPathKind::Parameter, 1, {get_a}};
         auto path_str = p.to_string();
         EXPECT_EQ(path_str, "p1.getA()");
         auto reg = analyzer.find_access_path_registers(insn, p);
@@ -153,7 +153,7 @@ TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
         std::vector<DexMethodRef*> getters;
         getters.emplace_back(get_a);
         getters.emplace_back(get_b);
-        AccessPath p = AccessPath(1, getters);
+        AccessPath p = AccessPath(AccessPathKind::Parameter, 1, getters);
         auto path_str = p.to_string();
         EXPECT_EQ(path_str, "p1.getA().getB()");
         auto reg = analyzer.find_access_path_registers(insn, p);
@@ -175,11 +175,11 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   auto get_b = DexMethod::make_method(
     "Lcom/facebook/A;.getB:()Lcom/facebook/B;");
 
-  AccessPath path_a{1, {get_a}};
+  AccessPath path_a{AccessPathKind::Parameter, 1, {get_a}};
   std::vector<DexMethodRef*> b_getters;
   b_getters.emplace_back(get_a);
   b_getters.emplace_back(get_b);
-  auto path_b = AccessPath(1, b_getters);
+  auto path_b = AccessPath(AccessPathKind::Parameter, 1, b_getters);
 
   ImmutableSubcomponentAnalyzer analyzer(method, is_immutable_getter);
   auto snapshot = analyzer.get_block_state_snapshot();
@@ -195,5 +195,41 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
     state2.entry_state_bindings.find(0),
     state2.entry_state_bindings.end());
 
+  delete g_redex;
+}
+
+TEST(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
+  g_redex = new RedexContext();
+  AccessPath p0{AccessPathKind::Parameter, 0};
+  AccessPath v0{AccessPathKind::Local, 0};
+  EXPECT_NE(p0, v0);
+  auto get_a = DexMethod::make_method(
+      "Lcom/facebook/Structure;.getA:()Lcom/facebook/A;");
+  auto get_b =
+      DexMethod::make_method("Lcom/facebook/A;.getB:()Lcom/facebook/B;");
+  auto field_c = reinterpret_cast<DexField*>(
+      DexField::make_field("Lcom/facebook/A;.C:Ljava/lang/String;"));
+  field_c->make_concrete(DexAccessFlags::ACC_FINAL |
+                         DexAccessFlags::ACC_PUBLIC);
+  AccessPath f0{AccessPathKind::FinalField, 0, field_c, {}};
+  {
+    AccessPath p{AccessPathKind::Parameter, 0};
+    EXPECT_EQ(p, p0);
+    EXPECT_EQ(hash_value(p), hash_value(p0));
+  }
+  {
+    AccessPath p{AccessPathKind::Parameter, 0, {get_a}};
+    EXPECT_NE(p, p0);
+  }
+  {
+    AccessPath f{AccessPathKind::FinalField, 0, field_c, {}};
+    EXPECT_EQ(f, f0);
+    EXPECT_EQ(hash_value(f), hash_value(f0));
+    AccessPath f2{AccessPathKind::FinalField, 2, field_c, {}};
+    EXPECT_NE(f0, f2);
+    AccessPath f_a{AccessPathKind::FinalField, 0, field_c, {get_a}};
+    AccessPath f_b{AccessPathKind::FinalField, 0, field_c, {get_b}};
+    EXPECT_NE(f_a, f_b);
+  }
   delete g_redex;
 }
