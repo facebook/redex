@@ -46,7 +46,7 @@ size_t cold_start_set_dex_count = 1000;
 
 bool emit_canaries = false;
 int64_t linear_alloc_limit;
-std::unordered_map<DexClass*, int32_t> scroll_classes;
+std::unordered_set<DexClass*> mixed_mode_classes;
 
 void gather_refs(InterDexPass* pass,
                  const DexClass* cls,
@@ -328,8 +328,8 @@ bool should_skip_class(InterDexPass* pass, DexClass* clazz) {
   return false;
 }
 
-bool is_scroll_class(DexClass* clazz) {
-  return scroll_classes.count(clazz);
+bool is_mixed_mode_class(DexClass* clazz) {
+  return mixed_mode_classes.count(clazz);
 }
 
 /*
@@ -349,8 +349,8 @@ void emit_class(InterDexPass* pass,
     TRACE(IDEX, 3, "IDEX: Skipping class :: %s\n", SHOW(clazz));
     return;
   }
-  if (!is_primary && check_if_skip && is_scroll_class(clazz)) {
-    TRACE(IDEX, 2, "IDEX: Skipping Scroll class :: %s\n", SHOW(clazz));
+  if (!is_primary && check_if_skip && is_mixed_mode_class(clazz)) {
+    TRACE(IDEX, 2, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
     return;
   }
 
@@ -482,61 +482,112 @@ std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
   return unreferenced_classes;
 }
 
-void get_mix_mode_classes(const std::string& scroll_classes_file) {
-  std::ifstream input(scroll_classes_file.c_str(), std::ifstream::in);
+void get_mix_mode_classes(const std::string& mixed_mode_classes_file) {
+  std::ifstream input(mixed_mode_classes_file.c_str(), std::ifstream::in);
   if (!input) {
-    TRACE(IDEX, 1, "Scroll class file: %s : not found\n", scroll_classes_file.c_str());
+    TRACE(IDEX, 1, "Mixed mode class file: %s : not found\n",
+          mixed_mode_classes_file.c_str());
     return;
   }
   std::string class_name;
-  int32_t class_no = 0;
   while (input >> class_name) {
     auto type = DexType::get_type(class_name.c_str());
     if (!type) {
-      TRACE(IDEX, 2, "Couldn't find DexType for scroll class: %s\n", class_name.c_str());
+      TRACE(IDEX, 2, "Couldn't find DexType for mixed mode class: %s\n",
+            class_name.c_str());
       continue;
     }
     auto cls = type_class(type);
     if (!cls) {
-      TRACE(IDEX, 2, "Couldn't find DexClass for scroll class: %s\n", class_name.c_str());
+      TRACE(IDEX, 2, "Couldn't find DexClass for mixed mode class: %s\n",
+            class_name.c_str());
       continue;
     }
-    if (scroll_classes.count(cls)) {
-      TRACE(IDEX, 1, "Duplicate classes found in scroll list\n");
+    if (mixed_mode_classes.count(cls)) {
+      TRACE(IDEX, 1, "Duplicate classes found in mixed mode list\n");
       exit(1);
     }
-    TRACE(IDEX, 2, "Adding %s in scroll list\n", SHOW(cls));
-    scroll_classes[cls] = class_no++;
+    TRACE(IDEX, 2, "Adding %s in mixed mode list\n", SHOW(cls));
+    mixed_mode_classes.emplace(cls);
   }
   input.close();
 }
 
-void get_mix_mode_classes(const std::string& scroll_classes_file,
+void get_mix_mode_classes(const std::string& mixed_mode_classes_file,
                           const DexClassesVector& dexen) {
   // If we have the list of the classes defined, use it.
-  if (!scroll_classes_file.empty()) {
-    get_mix_mode_classes(scroll_classes_file);
+  if (!mixed_mode_classes_file.empty()) {
+    get_mix_mode_classes(mixed_mode_classes_file);
     return;
   }
 
   // Otherwise, check for classes that have the mix mode flag set.
-  int32_t class_no = 0;
   for (const auto& dex : dexen) {
     for (const auto& cls : dex) {
       if (cls->rstate.has_mix_mode()) {
         TRACE(IDEX, 4, "Adding class %s to the scroll list\n", SHOW(cls));
-        scroll_classes[cls] = class_no++;
+        mixed_mode_classes.emplace(cls);
       }
     }
   }
 }
 
+void emit_mixed_mode_classes(const std::vector<std::string>& interdexorder,
+                             InterDexPass* pass,
+                             dex_emit_tracker& det,
+                             DexClassesVector& outdex,
+                             ApkManager& apk_manager,
+                             bool can_touch_interdex_order) {
+  // Emit mix mode classes in a separate dex.
+  // We respect the order of the classes in the interdexorder,
+  //   for the mixed mode classes that it contains.
 
+  // NOTE: When we got here, we would have removed the coldstart
+  //       mixed mode classes, if we couldn't touch them.
+  //       The only classes that might still be in the mixed_mode_cls
+  //       set would be the extended ones, which we will remove
+  //       if needed.
+  for (auto& elem : interdexorder) {
+    auto det_it = det.clookup.find(elem);
+    if (det_it == det.clookup.end()) {
+      continue;
+    }
+
+    auto clazz = det_it->second;
+    if (mixed_mode_classes.count(clazz)) {
+      if (can_touch_interdex_order) {
+        TRACE(IDEX, 2, " Emitting mixed mode class, that is also in the "
+              "interdex list: %s \n", SHOW(clazz));
+        emit_class(pass, det, outdex, clazz, false, false);
+      }
+      mixed_mode_classes.erase(clazz);
+    }
+  }
+
+  for (const auto& clazz : mixed_mode_classes) {
+    const auto& cls_name = clazz->get_name()->str();
+    if (!det.clookup.count(cls_name)) {
+      TRACE(IDEX, 2, "Ignoring mixed mode class %s as it is not found in "
+            "dexes\n", cls_name.c_str());
+      continue;
+    }
+    TRACE(IDEX, 2, " Emitting mixed mode class: %s \n", cls_name.c_str());
+    emit_class(pass, det, outdex, clazz, false, false);
+  }
+
+  // Flush the mixed mode classes
+  if (det.outs.size()) {
+    flush_out_mixed_mode_dex(pass, apk_manager, det, outdex);
+  }
+
+  // Clearing up the mixed mode classes.
+  mixed_mode_classes.clear();
+}
 
 DexClassesVector run_interdex(InterDexPass* pass,
                               ApkManager& apk_manager,
                               const DexClassesVector& dexen,
-                              const std::string& scroll_classes_file,
+                              const std::string& mixed_mode_classes_file,
                               ConfigFiles& cfg,
                               bool allow_cutting_off_dex,
                               bool static_prune_classes,
@@ -555,7 +606,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
   cls_skipped_in_secondary = 0;
 
   auto interdexorder = cfg.get_coldstart_classes();
-  get_mix_mode_classes(scroll_classes_file, dexen);
+  get_mix_mode_classes(mixed_mode_classes_file, dexen);
 
   dex_emit_tracker det;
   for (auto const& dex : dexen) {
@@ -679,23 +730,34 @@ DexClassesVector run_interdex(InterDexPass* pass,
         flush_out_secondary(pass, det, outdex);
         cold_start_set_dex_count = outdex.size();
         end_markers_present = true;
+
+        if (last_end_marker_it == it_interdex &&
+            mixed_mode_classes.size() > 0) {
+          TRACE(IDEX, 3, "Emitting the mixed mode dex between the coldstart "
+                "set and the extended set of classes.\n");
+          bool can_touch_interdex_order = can_touch_coldstart_cls ||
+                                          can_touch_coldstart_extended_cls;
+          emit_mixed_mode_classes(
+              interdexorder, pass, det, outdex, apk_manager,
+              can_touch_interdex_order);
+        }
       }
       continue;
     }
+
     auto clazz = it->second;
 
     // If we can't touch coldstart classes, simply remove the class
     // from the mix mode class list. Otherwise, we will end up moving
     // the class in the mixed mode dex.
-    if (!can_touch_coldstart_cls && scroll_classes.count(clazz)) {
+    if (!can_touch_coldstart_cls && mixed_mode_classes.count(clazz)) {
       if (last_end_marker_it > it_interdex) {
         TRACE(IDEX, 2, "%s is part of coldstart classes. Removing it from the "
               "list of mix mode classes\n", SHOW(clazz));
-        scroll_classes.erase(clazz);
+        mixed_mode_classes.erase(clazz);
       } else if (!can_touch_coldstart_extended_cls) {
-        TRACE(IDEX, 2, "%s is part of the extended coldstart classes. "
-              "Removing it from the list of mix mode classes\n", SHOW(clazz));
-        scroll_classes.erase(clazz);
+        always_assert_log(false, "We shouldn't get here since we cleared "
+                          "it up when emitting the mixed mode dex!\n");
       }
     }
 
@@ -706,6 +768,16 @@ DexClassesVector run_interdex(InterDexPass* pass,
     }
 
     emit_class(pass, det, outdex, clazz);
+  }
+
+  if (last_end_marker_it == interdexorder.end()) {
+    // If we got here, we didn't find the delimiter -> emitting the mixed mode
+    // classes here.
+    TRACE(IDEX, 3, "Emitting the mixed mode dex after the interdex order.\n");
+    bool can_touch_interdex_order = can_touch_coldstart_cls ||
+                                    can_touch_coldstart_extended_cls;
+    emit_mixed_mode_classes(interdexorder, pass, det, outdex,
+                            apk_manager, can_touch_interdex_order);
   }
 
   // Now emit the classes we omitted from the original coldstart set
@@ -752,29 +824,6 @@ DexClassesVector run_interdex(InterDexPass* pass,
     flush_out_secondary(pass, det, outdex);
   }
 
-  // Sort and emit scroll classes by value
-  typedef std::pair<DexClass*,int32_t> scroll_pair;
-  std::vector<scroll_pair> scrollVec(scroll_classes.begin(), scroll_classes.end());
-  std::sort(scrollVec.begin(),scrollVec.end(),
-    [](const scroll_pair &a, const scroll_pair & b) -> bool
-    {
-      return a.second < b.second;
-    });
-  for (auto cl_pair : scrollVec) {
-    std::string cls_name(cl_pair.first->get_type()->get_name()->c_str());
-    TRACE(IDEX, 2, " cls_name %s\n", cls_name.c_str());
-    if (!det.clookup.count(cls_name)) {
-      TRACE(IDEX, 2, "Ignoring scroll class %s as it is not found in dexes\n", SHOW(cl_pair.first));
-      continue;
-    }
-    TRACE(IDEX, 2, " Emitting scroll class: %s \n", SHOW(cl_pair.first));
-    emit_class(pass, det, outdex, cl_pair.first, false, false);
-  }
-  // Flush the scroll classes
-  if (det.outs.size()) {
-    flush_out_mixed_mode_dex(pass, apk_manager, det, outdex);
-  }
-
   TRACE(IDEX, 1, "InterDex secondary dex count %d\n", (int)(outdex.size() - 1));
   TRACE(IDEX, 1,
         "global stats: %lu mrefs, %lu frefs, %lu cls, %lu dmeth, %lu smeth, "
@@ -808,7 +857,7 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
   }
   emit_canaries = m_emit_canaries;
   linear_alloc_limit = m_linear_alloc_limit;
-  dexen = run_interdex(this, mgr.apk_manager(), dexen, m_scroll_classes_file,
+  dexen = run_interdex(this, mgr.apk_manager(), dexen, m_mixed_mode_classes_file,
                        cfg, true, m_static_prune, m_normal_primary_dex,
                        m_can_touch_coldstart_cls,
                        m_can_touch_coldstart_extended_cls);
