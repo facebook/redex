@@ -1041,7 +1041,7 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
     ss << " Block B" << b->id() << ":\n";
 
     ss << "   preds:";
-    for (auto& p : b->preds()) {
+    for (const auto& p : b->preds()) {
       ss << " (" << *p << " B" << p->src()->id() << ")";
     }
     ss << "\n";

@@ -25,7 +25,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (auto& pred : block->preds()) {
+    for (const auto& pred : block->preds()) {
       insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {
@@ -52,7 +52,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (auto pred : block->preds()) {
+    for (const auto& pred : block->preds()) {
       insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {

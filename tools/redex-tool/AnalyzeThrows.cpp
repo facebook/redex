@@ -135,7 +135,7 @@ void collect_throwing_blocks(
     const auto block = blocks_to_visit.front();
     blocks_to_visit.pop();
     for (const auto& pred_edge : block->preds()) {
-      auto* pred = pred_edge->src();
+      auto pred = pred_edge->src();
       if (no_throw_blocks.count(pred) == 0) {
         blocks_to_visit.push(pred);
         no_throw_blocks.insert(pred);

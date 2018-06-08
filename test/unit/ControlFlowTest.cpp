@@ -747,7 +747,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
   code->build_cfg(true);
   auto& cfg = code->cfg();
   cfg.remove_pred_edge_if(cfg.entry_block(),
-                          [](const std::shared_ptr<cfg::Edge> e) {
+                          [](const cfg::Edge* e) {
                             return e->type() == EDGE_BRANCH;
                           });
   code->clear_cfg();

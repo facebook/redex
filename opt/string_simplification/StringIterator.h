@@ -44,7 +44,7 @@ class StringIterator : public MonotonicFixpointIterator<cfg::GraphInterface,
   size_t get_instructions_removed() const { return m_instructions_removed; }
 
   Environment analyze_edge(
-      const std::shared_ptr<cfg::Edge>&,
+      const EdgeId&,
       const Environment& exit_state_at_source) const override {
     return exit_state_at_source;
   }

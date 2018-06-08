@@ -152,10 +152,10 @@ class Block {
   }
 
   BlockId id() const { return m_id; }
-  const std::vector<std::shared_ptr<Edge>>& preds() const {
+  const std::vector<Edge*>& preds() const {
     return m_preds;
   }
-  const std::vector<std::shared_ptr<Edge>>& succs() const {
+  const std::vector<Edge*>& succs() const {
     return m_succs;
   }
 
@@ -227,8 +227,8 @@ class Block {
   IRList::iterator m_begin;
   IRList::iterator m_end;
 
-  std::vector<std::shared_ptr<Edge>> m_preds;
-  std::vector<std::shared_ptr<Edge>> m_succs;
+  std::vector<Edge*> m_preds;
+  std::vector<Edge*> m_succs;
 
   // the graph that this block belongs to
   const ControlFlowGraph* m_parent = nullptr;
@@ -276,10 +276,11 @@ class ControlFlowGraph {
   template <class... Args>
   void add_edge(Args&&... args);
 
-  // remove this edge from the graph entirely
-  void remove_edge(std::shared_ptr<Edge> edge);
+  // Remove this edge from the graph but do not release its memory.
+  // This can be used to temporarily remove an edge while moving it elsewhere.
+  void remove_edge(Edge* edge);
 
-  using EdgePredicate = std::function<bool(const std::shared_ptr<Edge>& e)>;
+  using EdgePredicate = std::function<bool(const Edge* e)>;
 
   void remove_edge_if(Block* source,
                       Block* target,
@@ -294,23 +295,23 @@ class ControlFlowGraph {
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
-  void set_edge_target(std::shared_ptr<Edge> e, Block* new_target);
+  void set_edge_target(Edge* e, Block* new_target);
 
   // Make `e` come from a new source block
   // The target block is unchanged.
-  void set_edge_source(std::shared_ptr<Edge> e, Block* source_target);
+  void set_edge_source(Edge* e, Block* source_target);
 
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists
-  std::shared_ptr<cfg::Edge> get_pred_edge_if(
+  Edge* get_pred_edge_if(
       const Block* block, const EdgePredicate& predicate) const;
-  std::shared_ptr<cfg::Edge> get_succ_edge_if(
+  Edge* get_succ_edge_if(
       const Block* block, const EdgePredicate& predicate) const;
 
   // return all edges for which predicate returns true
-  std::vector<std::shared_ptr<Edge>> get_pred_edges_if(
+  std::vector<Edge*> get_pred_edges_if(
       const Block* block, const EdgePredicate& predicate) const;
-  std::vector<std::shared_ptr<Edge>> get_succ_edges_if(
+  std::vector<Edge*> get_succ_edges_if(
       const Block* block, const EdgePredicate& predicate) const;
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
@@ -372,6 +373,7 @@ class ControlFlowGraph {
   using Boundaries =
       std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<BlockId, Block*>;
+  using Edges = std::vector<Edge*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
 
@@ -444,8 +446,8 @@ class ControlFlowGraph {
   // Used while turning back into a linear representation.
   bool catch_entries_equivalent_to_throw_edges(
       MethodItemEntry* first_mie,
-      std::vector<std::shared_ptr<cfg::Edge>>::iterator it,
-      std::vector<std::shared_ptr<cfg::Edge>>::iterator end,
+      std::vector<Edge*>::iterator it,
+      std::vector<Edge*>::iterator end,
       const std::unordered_map<MethodItemEntry*, Block*>&
           catch_to_containing_block);
 
@@ -454,11 +456,12 @@ class ControlFlowGraph {
   // Move edge between new_source and new_target.
   // If either new_source or new_target is null, don't change that field of the
   // edge
-  void move_edge(std::shared_ptr<Edge> edge,
-                 Block* new_source,
-                 Block* new_target);
+  void move_edge(Edge* edge, Block* new_source, Block* new_target);
 
+  // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;
+  Edges m_edges;
+
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable;
@@ -470,7 +473,7 @@ class GraphInterface {
  public:
   using Graph = ControlFlowGraph;
   using NodeId = Block*;
-  using EdgeId = std::shared_ptr<Edge>;
+  using EdgeId = Edge*;
   static NodeId entry(const Graph& graph) {
     return const_cast<NodeId>(graph.entry_block());
   }

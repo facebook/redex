@@ -31,7 +31,7 @@ class FixpointIterator final
       : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}
 
   ConstantEnvironment analyze_edge(
-      const std::shared_ptr<cfg::Edge>&,
+      const EdgeId&,
       const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,

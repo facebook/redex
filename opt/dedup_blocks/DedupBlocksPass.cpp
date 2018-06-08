@@ -89,11 +89,11 @@ struct BlockEquals {
     if (b1_succs.size() != b2_succs.size()) {
       return false;
     }
-    for (const std::shared_ptr<cfg::Edge>& b1_succ : b1_succs) {
+    for (const cfg::Edge* b1_succ : b1_succs) {
       const auto& in_b2 =
           std::find_if(b2_succs.begin(),
                        b2_succs.end(),
-                       [&](const std::shared_ptr<cfg::Edge>& e) {
+                       [&](const cfg::Edge* e) {
                          return e->equals_ignore_source(*b1_succ);
                        });
       if (in_b2 == b2_succs.end()) {
