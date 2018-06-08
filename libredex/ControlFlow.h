@@ -136,6 +136,10 @@ class Block {
   explicit Block(const ControlFlowGraph* parent, BlockId id)
       : m_id(id), m_parent(parent) {}
 
+  ~Block() {
+    m_entries.clear_and_dispose();
+  }
+
   BlockId id() const { return m_id; }
   const std::vector<std::shared_ptr<Edge>>& preds() const {
     return m_preds;
@@ -182,8 +186,10 @@ class Block {
   bool empty() const { return m_entries.empty(); }
 
   IRList::iterator get_last_insn();
-
   IRList::iterator get_first_insn();
+
+  // including move-result-pseudo
+  bool starts_with_move_result();
 
   // Remove the first target in this block that corresponds to `branch`.
   // Returns a not-none CaseKey for multi targets, boost::none otherwise.
@@ -257,6 +263,7 @@ class ControlFlowGraph {
    */
   void calculate_exit_block();
 
+  // args are arguments to an Edge constructor
   template <class... Args>
   void add_edge(Args&&... args);
 
@@ -278,7 +285,11 @@ class ControlFlowGraph {
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
-  void redirect_edge(std::shared_ptr<Edge> e, Block* new_target);
+  void set_edge_target(std::shared_ptr<Edge> e, Block* new_target);
+
+  // Make `e` come from a new source block
+  // The target block is unchanged.
+  void set_edge_source(std::shared_ptr<Edge> e, Block* source_target);
 
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists
@@ -321,6 +332,9 @@ class ControlFlowGraph {
   bool editable() const { return m_editable; }
 
   size_t num_blocks() const { return m_blocks.size(); }
+
+  // remove blocks with no predecessors
+  void remove_unreachable_blocks();
 
   // transform the CFG to an equivalent but more canonical state
   // Assumes m_editable is true
@@ -415,6 +429,13 @@ class ControlFlowGraph {
           catch_to_containing_block);
 
   void remove_all_edges(Block* pred, Block* succ);
+
+  // Move edge between new_source and new_target.
+  // If either new_source or new_target is null, don't change that field of the
+  // edge
+  void move_edge(std::shared_ptr<Edge> edge,
+                 Block* new_source,
+                 Block* new_target);
 
   Blocks m_blocks;
   Block* m_entry_block{nullptr};

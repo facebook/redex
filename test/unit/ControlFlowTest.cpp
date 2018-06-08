@@ -441,7 +441,7 @@ TEST(ControlFlow, unreachable) {
   )");
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      ; cfg simplification removes the empty block
+      ; cfg simplification removes the unreachable empty block
       (return-void)
     )
   )");
@@ -459,7 +459,7 @@ TEST(ControlFlow, unreachable) {
 }
 
 TEST(ControlFlow, unreachable2) {
-  auto str = R"(
+  auto input_code = assembler::ircode_from_string(R"(
     (
       (:lbl)
       (return-void)
@@ -467,9 +467,13 @@ TEST(ControlFlow, unreachable2) {
       (const v0 0)
       (goto :lbl)
     )
-  )";
-  auto input_code = assembler::ircode_from_string(str);
-  auto expected_code = assembler::ircode_from_string(str);
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      ; cfg simplification removes the unreachable block
+      (return-void)
+    )
+  )");
 
   input_code->build_cfg(true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
@@ -680,14 +684,7 @@ TEST(ControlFlow, remove_switch) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (:exit)
       (return-void)
-
-      (const v0 0)
-      (goto :exit)
-
-      (const v1 1)
-      (goto :exit)
     )
 )");
   EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
@@ -720,14 +717,6 @@ TEST(ControlFlow, remove_switch2) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (goto :exit)
-
-      (const v0 0)
-      (goto :exit)
-
-      (const v1 1)
-
-      (:exit)
       (return-void)
     )
 )");
@@ -740,13 +729,13 @@ TEST(ControlFlow, remove_pred_edge_if) {
     (
       (:a 0)
       (const v0 1)
-      (goto :end)
+      (if-eqz v0 :end)
 
       (sparse-switch v0 (:a :b))
 
       (:b 1)
       (const v0 2)
-      (goto :end)
+      (if-eqz v0 :end)
 
       (const v0 3)
 
@@ -766,13 +755,13 @@ TEST(ControlFlow, remove_pred_edge_if) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
-      (goto :end)
+      (if-eqz v0 :end)
 
       (sparse-switch v0 (:b))
 
       (:b 1)
       (const v0 2)
-      (goto :end)
+      (if-eqz v0 :end)
 
       (const v0 3)
 

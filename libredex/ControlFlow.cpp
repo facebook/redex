@@ -189,6 +189,17 @@ IRList::iterator Block::get_first_insn() {
   return end();
 }
 
+bool Block::starts_with_move_result() {
+  auto first_it = get_first_insn();
+  if (first_it != end()) {
+    auto first_op = first_it->insn->opcode();
+    if (is_move_result(first_op) || opcode::is_move_result_pseudo(first_op)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // We remove the first matching target because multiple switch cases can point
 // to the same block. We use this function to move information from the target
 // entries to the CFG edges. The two edges are identical, save the case key, so
@@ -469,6 +480,8 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
 }
 
 void ControlFlowGraph::simplify() {
+  remove_unreachable_blocks();
+
   // remove empty blocks
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
@@ -484,22 +497,56 @@ void ControlFlowGraph::simplify() {
         ++it;
         continue;
       }
+      // b is empty. Reorganize the edges so we can remove it
 
+      // Remove the one goto edge from b to succ
       remove_all_edges(b, succ);
 
-      // redirect from my predecessors to my successor (skipping this block)
-      // Can't move edges around while we iterate through the edge list
+      // Redirect from b's predecessors to b's successor (skipping b). We can't
+      // move edges around while we iterate through the edge list though.
       std::vector<std::shared_ptr<Edge>> need_redirect(b->m_preds.begin(),
                                                        b->m_preds.end());
-      for (auto pred_edge : need_redirect) {
-        redirect_edge(pred_edge, succ);
+      for (const auto& pred_edge : need_redirect) {
+        set_edge_target(pred_edge, succ);
       }
     }
 
     if (b->empty()) {
+      delete b;
       it = m_blocks.erase(it);
     } else {
       ++it;
+    }
+  }
+}
+
+// remove blocks with no predecessors
+void ControlFlowGraph::remove_unreachable_blocks() {
+  remove_unreachable_succ_edges();
+  std::unordered_set<DexPosition*> deleted_positions;
+  for (auto it = m_blocks.begin(); it != m_blocks.end();) {
+    Block* b = it->second;
+    const auto& preds = b->preds();
+    if (preds.size() == 0 && b != entry_block()) {
+      for (const auto& mie : *b) {
+        if (mie.type == MFLOW_POSITION) {
+          deleted_positions.insert(mie.pos.get());
+        }
+      }
+      delete b;
+      it = m_blocks.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  // We don't want to leave any dangling dex parent pointers behind
+  for (const auto& entry : m_blocks) {
+    for (const auto& mie : *entry.second) {
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr &&
+          deleted_positions.count(mie.pos->parent)) {
+        mie.pos->parent = nullptr;
+      }
     }
   }
 }
@@ -580,7 +627,8 @@ std::vector<Block*> ControlFlowGraph::order() {
   //   (D) It places default successors immediately after
 
   std::vector<Block*> ordering;
-  std::set<BlockId> finished_blocks;
+  // "finished" blocks have been added to `ordering`
+  std::unordered_set<BlockId> finished_blocks;
 
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
@@ -588,28 +636,38 @@ std::vector<Block*> ControlFlowGraph::order() {
       continue;
     }
 
+    always_assert_log(!b->starts_with_move_result(), "%d is wrong %s", b->id(),
+                      SHOW(*this));
     ordering.push_back(b);
     finished_blocks.insert(b->id());
 
     // If the GOTO edge leads to a block with a move-result(-pseudo), then that
     // block must be placed immediately after this one because we can't insert
     // anything between an instruction and its move-result(-pseudo).
-    auto goto_edge = get_succ_edge_if(
-        b, [](const std::shared_ptr<Edge>& e) { return e->type() == EDGE_GOTO; });
-    if (goto_edge != nullptr) {
+    auto goto_edge = get_succ_edge_if(b, [](const std::shared_ptr<Edge>& e) {
+      return e->type() == EDGE_GOTO;
+    });
+    while (goto_edge != nullptr) {
+      // make sure we handle a chain of blocks that all start with move-results
       auto goto_block = goto_edge->target();
-      auto first_it = goto_block->get_first_insn();
-      if (first_it != goto_block->end()) {
-        auto first_op = first_it->insn->opcode();
-        if ((is_move_result(first_op) ||
-             opcode::is_move_result_pseudo(first_op)) &&
-            finished_blocks.count(goto_block->id()) == 0) {
-          ordering.push_back(goto_block);
-          finished_blocks.insert(goto_block->id());
-        }
+      always_assert_log(m_blocks.count(goto_block->id()) > 0,
+                        "bogus block reference %d -> %d in %s",
+                        goto_edge->src()->id(), goto_block->id(), SHOW(*this));
+      if (goto_block->starts_with_move_result() &&
+          finished_blocks.count(goto_block->id()) == 0) {
+        ordering.push_back(goto_block);
+        finished_blocks.insert(goto_block->id());
+        goto_edge =
+            get_succ_edge_if(goto_block, [](const std::shared_ptr<Edge>& e) {
+              return e->type() == EDGE_GOTO;
+            });
+      } else {
+        goto_edge = nullptr;
       }
     }
   }
+  always_assert(ordering.size() == m_blocks.size());
+
   return ordering;
 }
 
@@ -1033,12 +1091,30 @@ std::vector<std::shared_ptr<Edge>> ControlFlowGraph::get_succ_edges_if(
   return result;
 }
 
+void ControlFlowGraph::set_edge_target(std::shared_ptr<Edge> edge,
+                                       Block* new_target) {
+  move_edge(edge, nullptr, new_target);
+}
+
+void ControlFlowGraph::set_edge_source(std::shared_ptr<Edge> edge,
+                                       Block* new_source) {
+  move_edge(edge, new_source, nullptr);
+}
+
 // Move this edge out of the vectors between its old blocks
 // and into the vectors between the new blocks
-void ControlFlowGraph::redirect_edge(std::shared_ptr<Edge> edge,
-                                     Block* new_target) {
+void ControlFlowGraph::move_edge(std::shared_ptr<Edge> edge,
+                                 Block* new_source,
+                                 Block* new_target) {
   remove_edge(edge);
-  edge->m_target = new_target;
+
+  if (new_source != nullptr) {
+    edge->m_src = new_source;
+  }
+  if (new_target != nullptr) {
+    edge->m_target = new_target;
+  }
+
   edge->src()->m_succs.push_back(edge);
   edge->target()->m_preds.push_back(edge);
 }
