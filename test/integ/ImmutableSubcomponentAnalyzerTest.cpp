@@ -26,19 +26,14 @@
 
 std::vector<std::vector<std::string>> expected_paths = {
     // First call to `check`
-    {"p0.getA()",
-     "p0.getA().getB()",
-     "p0.getA().getC()",
-     "p0.getB().getD()",
+    {"p0.getA()", "p0.getA().getB()", "p0.getA().getC()", "p0.getB().getD()",
      "p0.getA().getB().getD().getE()"},
     // Second call to `check`
-    {"p1.getA()",
-     "p1.getB()",
-     "p1.getA().getC()",
-     "p1.getB().getD()",
+    {"p1.getA()", "p1.getB()", "p1.getA().getC()", "p1.getB().getD()",
      "p1.getB().getD().getE()"},
     // Third call to `check`
-    {"?", "?", "?", "?", "?"}};
+    {"v11.getA()", "v11.getA().getB()", "v11.getA().getC()",
+     "v11.getB().getD()", "v10"}};
 
 void validate_arguments(size_t occurrence,
                         IRInstruction* insn,

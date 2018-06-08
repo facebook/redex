@@ -159,6 +159,8 @@ using register_t = uint32_t;
 // Operations that may throw an exception also store their result in that
 // special register, but they are transparent for this particular analysis.
 register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
+// Used for new-instance handling. Shouldn't collide with anything.
+register_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
 
 using AbstractAccessPathEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractAccessPathDomain>;
@@ -170,10 +172,12 @@ class Analyzer final
   using NodeId = cfg::Block*;
 
   Analyzer(const cfg::ControlFlowGraph& cfg,
-           std::function<bool(DexMethodRef*)> is_immutable_getter)
+           std::function<bool(DexMethodRef*)> is_immutable_getter,
+           const std::unordered_set<uint16_t> allowed_locals)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
         m_cfg(cfg),
-        m_is_immutable_getter(is_immutable_getter) {}
+        m_is_immutable_getter(is_immutable_getter),
+        m_allowed_locals(allowed_locals) {}
 
   void analyze_node(
       const NodeId& node,
@@ -191,6 +195,10 @@ class Analyzer final
     return exit_state_at_source;
   }
 
+  bool is_local_analyzable(uint16_t reg) const {
+    return m_allowed_locals.count(reg) > 0;
+  }
+
   void analyze_instruction(IRInstruction* insn,
                            AbstractAccessPathEnvironment* current_state) const {
     switch (insn->opcode()) {
@@ -201,12 +209,46 @@ class Analyzer final
       // initialization of the fixpoint iteration. There's nothing more to do.
       break;
     }
+    case OPCODE_NEW_INSTANCE: {
+      // Fill in the state in two steps, completed with the next IR instruction.
+      AccessPath p{AccessPathKind::Local, UNKNOWN_REGISTER};
+      current_state->set(RESULT_REGISTER, AbstractAccessPathDomain(p));
+      break;
+    }
+    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
+      auto dest = insn->dest();
+      auto result_domain = current_state->get(RESULT_REGISTER);
+      current_state->set(dest, result_domain);
+      // Special handling for when this follows new-instance.
+      if (result_domain.is_value() && result_domain.access_path()) {
+        auto path = *result_domain.access_path();
+        if (path.parameter() == UNKNOWN_REGISTER) {
+          // Fill in the actual local var that was unknown during new-instance.
+          if (is_local_analyzable(dest)) {
+            AccessPath p{AccessPathKind::Local, dest};
+            current_state->set(dest, AbstractAccessPathDomain(p));
+          } else {
+            current_state->set(dest, AbstractAccessPathDomain::top());
+          }
+        }
+      }
+      break;
+    }
     case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_RESULT_OBJECT: {
-      current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+      auto dest = insn->dest();
+      auto result_domain = current_state->get(RESULT_REGISTER);
+      if (!result_domain.is_value() && is_local_analyzable(dest)) {
+        // Allow this register to be the starting point of further analysis.
+        auto domain =
+            AbstractAccessPathDomain(AccessPath(AccessPathKind::Local, dest));
+        current_state->set(dest, domain);
+      } else {
+        current_state->set(dest, result_domain);
+      }
       break;
     }
     case OPCODE_INVOKE_VIRTUAL: {
@@ -334,11 +376,34 @@ class Analyzer final
   std::function<bool(DexMethodRef*)> m_is_immutable_getter;
   std::unordered_map<IRInstruction*, AbstractAccessPathEnvironment>
       m_environments;
+  const std::unordered_set<uint16_t> m_allowed_locals;
 };
 
 } // namespace isa_impl
 
 ImmutableSubcomponentAnalyzer::~ImmutableSubcomponentAnalyzer() {}
+
+// Determine any unambigious registers that can be the starting point for
+// analysis. For example, a register that is a dest exactly once can be
+// considered an AccessPath, much like param registers (this should not break
+// existing AccessPath comparison/equality checks).
+std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
+  std::unordered_map<uint16_t, size_t> dest_freq;
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->dests_size() > 0) {
+      auto dest = insn->dest();
+      dest_freq[dest] = dest_freq[dest] + 1;
+    }
+  }
+  std::unordered_set<uint16_t> unambiguous;
+  for (const auto& pair : dest_freq) {
+    if (pair.second == 1) {
+      unambiguous.emplace(pair.first);
+    }
+  }
+  return unambiguous;
+}
 
 ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
     DexMethod* dex_method,
@@ -350,7 +415,10 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   code->build_cfg();
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  m_analyzer = std::make_unique<isa_impl::Analyzer>(cfg, is_immutable_getter);
+  std::unordered_set<uint16_t> unambiguous =
+      compute_unambiguous_registers(code);
+  m_analyzer = std::make_unique<isa_impl::Analyzer>(
+      cfg, is_immutable_getter, unambiguous);
 
   // We set up the initial environment by going over the LOAD_PARAM_*
   // pseudo-instructions.
