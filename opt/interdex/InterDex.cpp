@@ -541,7 +541,8 @@ DexClassesVector run_interdex(InterDexPass* pass,
                               bool allow_cutting_off_dex,
                               bool static_prune_classes,
                               bool normal_primary_dex,
-                              bool can_touch_coldstart_cls) {
+                              bool can_touch_coldstart_cls,
+                              bool can_touch_coldstart_extended_cls) {
 
   global_dmeth_cnt = 0;
   global_smeth_cnt = 0;
@@ -660,7 +661,16 @@ DexClassesVector run_interdex(InterDexPass* pass,
                          not_already_included.end());
   }
 
-  for (auto& entry : interdexorder) {
+
+  // Last end market delimits where the whole coldstart set ends
+  // and the extended coldstart set begins.
+  std::string last_end_marker_str("LDexEndMarker1;");
+  auto last_end_marker_it = std::find(
+      interdexorder.begin(), interdexorder.end(), last_end_marker_str);
+
+  for (auto it_interdex = interdexorder.begin();
+       it_interdex != interdexorder.end(); ++it_interdex) {
+    auto& entry = *it_interdex;
     auto it = det.clookup.find(entry);
     if (it == det.clookup.end()) {
       TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
@@ -677,10 +687,16 @@ DexClassesVector run_interdex(InterDexPass* pass,
     // If we can't touch coldstart classes, simply remove the class
     // from the mix mode class list. Otherwise, we will end up moving
     // the class in the mixed mode dex.
-    if (!can_touch_coldstart_cls && scroll_classes.count(clazz) > 0) {
-      TRACE(IDEX, 2, "%s is part of coldstart classes. Removing it from the "
-            "list of mix mode classes\n", SHOW(clazz));
-      scroll_classes.erase(clazz);
+    if (!can_touch_coldstart_cls && scroll_classes.count(clazz)) {
+      if (last_end_marker_it > it_interdex) {
+        TRACE(IDEX, 2, "%s is part of coldstart classes. Removing it from the "
+              "list of mix mode classes\n", SHOW(clazz));
+        scroll_classes.erase(clazz);
+      } else if (!can_touch_coldstart_extended_cls) {
+        TRACE(IDEX, 2, "%s is part of the extended coldstart classes. "
+              "Removing it from the list of mix mode classes\n", SHOW(clazz));
+        scroll_classes.erase(clazz);
+      }
     }
 
     if (unreferenced_classes.count(clazz)) {
@@ -794,7 +810,8 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
   linear_alloc_limit = m_linear_alloc_limit;
   dexen = run_interdex(this, mgr.apk_manager(), dexen, m_scroll_classes_file,
                        cfg, true, m_static_prune, m_normal_primary_dex,
-                       m_can_touch_coldstart_cls);
+                       m_can_touch_coldstart_cls,
+                       m_can_touch_coldstart_extended_cls);
   for (const auto& plugin : m_plugins) {
     plugin->cleanup(original_scope);
   }
