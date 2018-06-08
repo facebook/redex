@@ -135,6 +135,9 @@ def run_pass(
     if script_args.verify_none_mode or config_json.get("verify_none_mode"):
         args += ['--verify-none-mode']
 
+    if script_args.is_art_build:
+        args += ['--is-art-build']
+
     if script_args.warn:
         args += ['--warn', script_args.warn]
     args += ['--proguard-config=' + x for x in script_args.proguard_configs]
@@ -467,6 +470,7 @@ Given an APK, produce a better APK!
     parser.add_argument('--gdb', action='store_true', help='Run redex binary in gdb')
     parser.add_argument('--ignore-zipalign', action='store_true', help='Ignore if zipalign is not found')
     parser.add_argument('--verify-none-mode', action='store_true', help='Enable verify-none mode on redex')
+    parser.add_argument('--is-art-build', action='store_true', help='States that this is an art only build.')
     parser.add_argument('--page-align-libs', action='store_true',
            help='Preserve 4k page alignment for uncompressed libs')
 
