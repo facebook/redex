@@ -254,10 +254,12 @@ class Analyzer final
       }
       break;
     }
+    case OPCODE_MOVE:
     case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
+    case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT: {
       auto dest = insn->dest();
       auto result_domain = current_state->get(RESULT_REGISTER);
@@ -277,9 +279,11 @@ class Analyzer final
       // This analysis is only concerned with instance methods (i.e. not static)
       DexMethodRef* dex_method = insn->get_method();
       auto proto = dex_method->get_proto();
-      if (is_object(proto->get_rtype()) && proto->get_args()->size() == 0 &&
+      auto supported_return_type =
+          is_object(proto->get_rtype()) || is_primitive(proto->get_rtype());
+      if (supported_return_type && proto->get_args()->size() == 0 &&
           m_is_immutable_getter(dex_method)) {
-        // Note that a getter takes no arguments and returns an object.
+        // Note that a getter takes no arguments.
         AbstractAccessPathDomain abs_path = current_state->get(insn->src(0));
         abs_path.append(dex_method);
         current_state->set(RESULT_REGISTER, abs_path);
