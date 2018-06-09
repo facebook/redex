@@ -272,9 +272,9 @@ class Analyzer final
       break;
     }
     case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_VIRTUAL: {
-      // This analysis is only concerned with non-interface getter methods for
-      // now.
+      // This analysis is only concerned with instance methods (i.e. not static)
       DexMethodRef* dex_method = insn->get_method();
       auto proto = dex_method->get_proto();
       if (is_object(proto->get_rtype()) && proto->get_args()->size() == 0 &&
