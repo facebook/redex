@@ -210,6 +210,13 @@ class Analyzer final
       // initialization of the fixpoint iteration. There's nothing more to do.
       break;
     }
+    case OPCODE_CHECK_CAST: {
+      // Slightly different in IR land than dex bytecode. Treat this as a move,
+      // which will be followed up by a IOPCODE_MOVE_RESULT_PSEUDO_OBJECT (also
+      // a move).
+      current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
+      break;
+    }
     case OPCODE_IGET_OBJECT: {
       auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
       auto source = insn->src(0);
@@ -264,8 +271,10 @@ class Analyzer final
       }
       break;
     }
+    case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL: {
-      // This analysis is only concerned with virtual calls to getter methods.
+      // This analysis is only concerned with non-interface getter methods for
+      // now.
       DexMethodRef* dex_method = insn->get_method();
       auto proto = dex_method->get_proto();
       if (is_object(proto->get_rtype()) && proto->get_args()->size() == 0 &&
