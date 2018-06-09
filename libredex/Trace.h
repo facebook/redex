@@ -22,7 +22,6 @@
   TM(BIND)               \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
-  TM(COMP_BUILDERS)      \
   TM(CFG)                \
   TM(CFP)                \
   TM(CLP_GQL)            \
