@@ -86,7 +86,11 @@ class ConcurrentContainer {
 
   iterator find(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    return iterator(&m_slots[0], slot, m_slots[slot].find(key));
+    const auto& it = m_slots[slot].find(key);
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return iterator(&m_slots[0], slot, it);
   }
 
   size_t size() const {

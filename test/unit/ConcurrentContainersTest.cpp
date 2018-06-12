@@ -32,10 +32,14 @@ class ConcurrentContainersTest : public ::testing::Test {
         m_size(kSampleSize),
         m_elem_dist(0, 1000000000),
         m_data(generate_random_data()),
+        m_subset_data(generate_random_subset(m_data)),
         m_data_set(m_data.begin(), m_data.end()) {
     for (size_t t = 0; t < kThreads; ++t) {
       for (size_t i = t; i < m_data.size(); i += kThreads) {
         m_samples[t].push_back(m_data[i]);
+      }
+      for (size_t i = t; i < m_data.size(); i += kThreads) {
+        m_subset_samples[t].push_back(m_subset_data[i]);
       }
     }
   }
@@ -48,11 +52,20 @@ class ConcurrentContainersTest : public ::testing::Test {
     return s;
   }
 
+  std::vector<uint32_t> generate_random_subset(
+      const std::vector<uint32_t>& data) {
+    auto new_data = data;
+    std::random_shuffle(new_data.begin(), new_data.end());
+    new_data.erase(new_data.begin(), new_data.begin() + m_size / 2);
+    return new_data;
+  }
+
   void run_on_samples(
+      const std::vector<uint32_t> samples[],
       std::function<void(const std::vector<uint32_t>&)> operation) {
     std::vector<boost::thread> threads;
     for (size_t t = 0; t < kThreads; ++t) {
-      const auto& sample = m_samples[t];
+      const auto& sample = samples[t];
       threads.emplace_back([&sample, operation]() { operation(sample); });
     }
     for (auto& thread : threads) {
@@ -60,13 +73,25 @@ class ConcurrentContainersTest : public ::testing::Test {
     }
   }
 
+  void run_on_samples(
+      std::function<void(const std::vector<uint32_t>&)> operation) {
+    run_on_samples(m_samples, operation);
+  }
+
+  void run_on_subset_samples(
+      std::function<void(const std::vector<uint32_t>&)> operation) {
+    run_on_samples(m_subset_samples, operation);
+  }
+
   std::random_device m_rd_device;
   std::mt19937 m_generator;
   uint32_t m_size;
   std::uniform_int_distribution<uint32_t> m_elem_dist;
   std::vector<uint32_t> m_data;
+  std::vector<uint32_t> m_subset_data;
   std::unordered_set<uint32_t> m_data_set;
   std::vector<uint32_t> m_samples[kThreads];
+  std::vector<uint32_t> m_subset_samples[kThreads];
 };
 
 TEST_F(ConcurrentContainersTest, concurrentSetTest) {
@@ -82,6 +107,17 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
   for (uint32_t x : m_data) {
     EXPECT_EQ(1, set.count(x));
     EXPECT_NE(set.end(), set.find(x));
+  }
+
+  run_on_subset_samples([&set](const std::vector<uint32_t>& sample) {
+    for (size_t i = 0; i < sample.size(); ++i) {
+      set.erase(sample[i]);
+    }
+  });
+
+  for (uint32_t x : m_subset_data) {
+    EXPECT_EQ(0, set.count(x));
+    EXPECT_EQ(set.end(), set.find(x));
   }
 
   run_on_samples([&set](const std::vector<uint32_t>& sample) {
@@ -144,6 +180,18 @@ TEST_F(ConcurrentContainersTest, concurrentMapTest) {
     EXPECT_NE(map.end(), it);
     EXPECT_EQ(s, it->first);
     EXPECT_EQ(x + occurrences[x], it->second);
+  }
+
+  run_on_subset_samples([&map](const std::vector<uint32_t>& sample) {
+    for (size_t i = 0; i < sample.size(); ++i) {
+      map.erase(std::to_string(sample[i]));
+    }
+  });
+
+  for (uint32_t x : m_subset_data) {
+    std::string s = std::to_string(x);
+    EXPECT_EQ(0, map.count(s));
+    EXPECT_EQ(map.end(), map.find(s));
   }
 
   run_on_samples([&map](const std::vector<uint32_t>& sample) {
