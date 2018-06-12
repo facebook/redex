@@ -293,6 +293,22 @@ void LocalDcePass::run(DexMethod* m) {
   LocalDce(find_pure_methods()).dce(m);
 }
 
+void LocalDcePass::eval_pass(DexStoresVector& stores,
+                             ConfigFiles& cfg,
+                             PassManager& mgr) {
+
+  auto no_optimization_annos = cfg.get_no_optimizations_annos();
+  auto scope = build_class_scope(stores);
+  auto match = m::any_annos<DexMethod>(
+      m::as_type<DexAnnotation>(m::in<DexType>(no_optimization_annos)));
+
+  walk::methods(scope, [&](DexMethod* method) {
+    if (match.matches(method)) {
+      m_do_not_optimize_methods.insert(method);
+    }
+  });
+}
+
 void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& cfg,
                             PassManager& mgr) {
@@ -308,6 +324,10 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
       [&](std::nullptr_t, DexMethod* m) {
         auto* code = m->get_code();
         if (code == nullptr) {
+          return LocalDce::Stats();
+        }
+        if (m_do_not_optimize_methods.find(m) !=
+            m_do_not_optimize_methods.end()) {
           return LocalDce::Stats();
         }
         LocalDce ldce(pure_methods);
