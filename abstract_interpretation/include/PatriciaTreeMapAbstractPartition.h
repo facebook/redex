@@ -1,0 +1,222 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#pragma once
+
+#include <iostream>
+
+#include <cstddef>
+#include <functional>
+#include <initializer_list>
+#include <ostream>
+#include <utility>
+
+#include "AbstractDomain.h"
+#include "PatriciaTreeMap.h"
+
+/*
+ * An abstract partition based on Patricia trees that is cheap to copy.
+ *
+ * In order to minimize the size of the underlying tree, we do not explicitly
+ * represent bindings of a label to the Bottom element.
+ *
+ * See HashedAbstractPartition.h for more details about abstract partitions.
+ *
+ * This implementation differs slightly from the textbook definition of a
+ * partition: our Top partition cannot have its labels re-bound to anything
+ * other than Top. I.e. for all labels L and domains D,
+ *
+ *   PatriciaTreeMapAbstractPartition::top().set(L, D) ==
+ * PatriciaTreeMapAbstractPartition::top()
+ *
+ * This makes for a much simpler implementation.
+ */
+template <typename Label, typename Domain>
+class PatriciaTreeMapAbstractPartition final
+    : public AbstractDomain<PatriciaTreeMapAbstractPartition<Label, Domain>> {
+ public:
+  struct ValueInterface {
+    using type = Domain;
+
+    static type default_value() { return type::bottom(); }
+
+    static bool is_default_value(const type& x) { return x.is_bottom(); }
+
+    static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+    static bool leq(const type& x, const type& y) { return x.leq(y); }
+  };
+
+  using MapType = PatriciaTreeMap<Label, ValueInterface>;
+
+  /*
+   * The default constructor produces the Bottom value.
+   */
+  PatriciaTreeMapAbstractPartition() = default;
+
+  PatriciaTreeMapAbstractPartition(
+      std::initializer_list<std::pair<Label, Domain>> l) {
+    for (const auto& p : l) {
+      set(p.first, p.second);
+    }
+  }
+
+  /*
+   * Number of bindings not set to Bottom. This operation is not defined if the
+   * PatriciaTreeMapAbstractPartition is set to Top.
+   */
+  size_t size() const {
+    RUNTIME_CHECK(!is_top(), undefined_operation());
+    return m_map.size();
+  }
+
+  /*
+   * Get the bindings that are not set to Bottom. This operation is not defined
+   * if the PatriciaTreeMapAbstractPartition is set to Top.
+   */
+  const MapType& bindings() const {
+    RUNTIME_CHECK(!is_top(), undefined_operation());
+    return m_map;
+  }
+
+  Domain get(const Label& label) const {
+    if (is_top()) {
+      return Domain::top();
+    }
+    return m_map.at(label);
+  }
+
+  /*
+   * This is a no-op if the partition is set to Top.
+   */
+  PatriciaTreeMapAbstractPartition& set(const Label& label,
+                                        const Domain& value) {
+    if (is_top()) {
+      return *this;
+    }
+    m_map.insert_or_assign(label, value);
+    return *this;
+  }
+
+  /*
+   * This is a no-op if the partition is set to Top.
+   */
+  PatriciaTreeMapAbstractPartition& update(
+      const Label& label, std::function<Domain(const Domain&)> operation) {
+    if (is_top()) {
+      return *this;
+    }
+    m_map.update(operation, label);
+    return *this;
+  }
+
+  bool is_top() const override { return m_is_top; }
+
+  bool is_bottom() const override { return !m_is_top && m_map.is_empty(); }
+
+  void set_to_bottom() override {
+    m_map.clear();
+    m_is_top = false;
+  }
+
+  void set_to_top() override {
+    m_map.clear();
+    m_is_top = true;
+  }
+
+  bool leq(const PatriciaTreeMapAbstractPartition& other) const override {
+    if (is_top()) {
+      return other.is_top();
+    }
+    if (other.is_top()) {
+      return true;
+    }
+    return m_map.leq(other.m_map);
+  }
+
+  bool equals(const PatriciaTreeMapAbstractPartition& other) const override {
+    if (m_is_top != other.m_is_top) {
+      return false;
+    }
+    return m_map.equals(other.m_map);
+  }
+
+  void join_with(const PatriciaTreeMapAbstractPartition& other) override {
+    join_like_operation(
+        other, [](const Domain& x, const Domain& y) { return x.join(y); });
+  }
+
+  void widen_with(const PatriciaTreeMapAbstractPartition& other) override {
+    join_with(other);
+  }
+
+  void meet_with(const PatriciaTreeMapAbstractPartition& other) override {
+    meet_like_operation(
+        other, [](const Domain& x, const Domain& y) { return x.meet(y); });
+  }
+
+  void narrow_with(const PatriciaTreeMapAbstractPartition& other) override {
+    meet_with(other);
+  }
+
+  void join_like_operation(
+      const PatriciaTreeMapAbstractPartition& other,
+      std::function<Domain(const Domain&, const Domain&)> operation) {
+    if (is_top()) {
+      return;
+    }
+    if (other.is_top()) {
+      set_to_top();
+      return;
+    }
+    m_map.union_with(operation, other.m_map);
+  }
+
+  void meet_like_operation(
+      const PatriciaTreeMapAbstractPartition& other,
+      std::function<Domain(const Domain&, const Domain&)> operation) {
+    if (is_top()) {
+      *this = other;
+      return;
+    }
+    if (other.is_top()) {
+      return;
+    }
+    m_map.intersection_with(operation, other.m_map);
+  }
+
+  static PatriciaTreeMapAbstractPartition bottom() {
+    return PatriciaTreeMapAbstractPartition();
+  }
+
+  static PatriciaTreeMapAbstractPartition top() {
+    auto part = PatriciaTreeMapAbstractPartition();
+    part.m_is_top = true;
+    return part;
+  }
+
+ private:
+  MapType m_map;
+  bool m_is_top{false};
+};
+
+template <typename Label, typename Domain>
+inline std::ostream& operator<<(
+    std::ostream& o,
+    const PatriciaTreeMapAbstractPartition<Label, Domain>& partition) {
+  if (partition.is_bottom()) {
+    o << "_|_";
+  } else if (partition.is_top()) {
+    o << "T";
+  } else {
+    o << "[#" << partition.size() << "]";
+    o << partition.bindings();
+  }
+  return o;
+}

@@ -111,9 +111,10 @@ T snd(const T&, const T& second) {
  *     // The equality predicate for values.
  *     static bool equals(const type& x, const type& y);
  *
- *     // A partial order relation over values. This function only needs to be
- *     // implemented when one wants to use the lifted partial order relation
- *     // over maps PatriciaTreeMap::leq().
+ *     // A partial order relation over values. In order to use the lifted
+ *     // partial order relation over maps PatriciaTreeMap::leq(), this method
+ *     // must be implemented. Additionally, value::type must be an
+ *     // implementation of an AbstractDomain.
  *     static bool leq(const type& x, const type& y);
  *   }
  */
@@ -129,7 +130,15 @@ class PatriciaTreeMap final {
   using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
 
-  PatriciaTreeMap() = default;
+  PatriciaTreeMap() {
+    if (std::is_same<decltype(Value::leq(std::declval<typename Value::type>(),
+                                         std::declval<typename Value::type>())),
+                     bool>::value) {
+      RUNTIME_CHECK(Value::default_value().is_top() ||
+                        Value::default_value().is_bottom(),
+                    undefined_operation());
+    }
+  }
 
   ~PatriciaTreeMap() {
     // The destructor is the only method that is guaranteed to be created when a
@@ -147,11 +156,14 @@ class PatriciaTreeMap final {
                                             std::declval<mapped_type>())),
                      bool>::value,
         "Value::equals() does not exist");
-    static_assert(
-        std::is_same<decltype(Value::leq(std::declval<mapped_type>(),
-                                         std::declval<mapped_type>())),
-                     bool>::value,
-        "Value::leq() does not exist");
+    static_assert(!std::is_same<decltype(Value::leq(
+                                    std::declval<typename Value::type>(),
+                                    std::declval<typename Value::type>())),
+                                bool>::value ||
+                      std::is_base_of<AbstractDomain<typename Value::type>,
+                                      typename Value::type>::value,
+                  "Value::leq() is defined, but Value::type is not an "
+                  "implementation of AbstractDomain");
   }
 
   bool is_empty() const { return m_tree == nullptr; }
@@ -283,7 +295,7 @@ class PatriciaTreeMap final {
 
   template <typename T = Key,
             typename = typename std::enable_if_t<std::is_pointer<T>::value>>
-  static typename std::remove_pointer<T>::type deref(Key x) {
+  static const typename std::remove_pointer<T>::type& deref(Key x) {
     return *x;
   }
 
@@ -458,19 +470,19 @@ template <typename IntegerType, typename Value>
 inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
                 const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
-    // This conditions allows the leq to run in sublinear time when comparing
-    // Patricia trees that share some structure.
+    // This condition allows the leq operation to run in sublinear time when
+    // comparing Patricia trees that share some structure.
     return true;
   }
   if (s == nullptr) {
-    return false;
+    return !Value::default_value().is_top();
   }
   if (t == nullptr) {
-    return true;
+    return Value::default_value().is_top();
   }
   if (s->is_leaf()) {
     if (t->is_branch()) {
-      return false;
+      return !Value::default_value().is_top();
     }
     const auto& s_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
@@ -483,7 +495,7 @@ inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     auto* s_value = find_value(leaf->key(), s);
     if (s_value == nullptr) {
-      return false;
+      return Value::leq(Value::default_value(), leaf->value());
     }
     return Value::leq(*s_value, leaf->value());
   }
@@ -505,9 +517,9 @@ inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
   if (m < n && match_prefix(q, p, m)) {
     return leq(is_zero_bit(q, m) ? s0 : s1, t);
   }
-  // Otherwise, tree t contains bindings to (non-Top) values that are not bound
-  // in s (and therefore implicitly bound to Top).
-  return false;
+  // Otherwise, the tree t contains bindings to (non-default) values that are
+  // not bound in s (and therefore implicitly bound to the default value).
+  return !Value::default_value().is_top();
 }
 
 // A Patricia tree is a canonical representation of the set of keys it contains.
@@ -705,7 +717,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
     const typename Value::type& value,
     const std::shared_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
   auto combined_value = combine(leaf->value(), value);
-  if (combined_value.is_top()) {
+  if (Value::is_default_value(combined_value)) {
     return nullptr;
   }
   if (!combined_value.equals(leaf->value())) {

@@ -614,6 +614,11 @@ std::string show(const DexFieldRef* p) {
   return b.str();
 }
 
+std::ostream& operator<<(std::ostream& o, const DexFieldRef& p) {
+  o << show(&p);
+  return o;
+}
+
 std::string vshow(const DexField* p) {
   if (!p) return "";
   std::ostringstream ss;

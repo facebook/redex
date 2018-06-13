@@ -32,7 +32,7 @@
  *
  * This implementation differs slightly from the textbook definition of a
  * partition: our Top partition cannot have its labels re-bound to anything
- * than Top. I.e. for all labels L and domains D,
+ * other than Top. I.e. for all labels L and domains D,
  *
  *   HashedAbstractPartition::top().set(L, D) == HashedAbstractPartition::top()
  *
@@ -40,11 +40,11 @@
  */
 template <typename Label,
           typename Domain,
-          typename VariableHash = std::hash<Label>,
-          typename VariableEqual = std::equal_to<Label>>
+          typename LabelHash = std::hash<Label>,
+          typename LabelEqual = std::equal_to<Label>>
 class HashedAbstractPartition final
     : public AbstractDomain<
-          HashedAbstractPartition<Label, Domain, VariableHash, VariableEqual>> {
+          HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>> {
  public:
   /*
    * The default constructor produces the Bottom value.
@@ -70,8 +70,8 @@ class HashedAbstractPartition final
    * Get the bindings that are not set to Bottom. This operation is not defined
    * if the HashedAbstractPartition is set to Top.
    */
-  const std::unordered_map<Label, Domain, VariableHash, VariableEqual>&
-  bindings() const {
+  const std::unordered_map<Label, Domain, LabelHash, LabelEqual>& bindings()
+      const {
     RUNTIME_CHECK(!is_top(), undefined_operation());
     return m_map;
   }
@@ -270,17 +270,17 @@ class HashedAbstractPartition final
   }
 
  private:
-  std::unordered_map<Label, Domain, VariableHash, VariableEqual> m_map;
+  std::unordered_map<Label, Domain, LabelHash, LabelEqual> m_map;
   bool m_is_top{false};
 };
 
 template <typename Label,
           typename Domain,
-          typename VariableHash,
-          typename VariableEqual>
+          typename LabelHash,
+          typename LabelEqual>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const HashedAbstractPartition<Label, Domain, VariableHash, VariableEqual>&
+    const HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>&
         partition) {
   if (partition.is_bottom()) {
     o << "_|_";

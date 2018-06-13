@@ -155,16 +155,7 @@ inline std::ostream& operator<<(
   }
   case AbstractValueKind::Value: {
     o << "[#" << e.size() << "]";
-    o << "{";
-    auto& bindings = e.bindings();
-    for (auto it = bindings.begin(); it != bindings.end();) {
-      o << it->first << " -> " << it->second;
-      ++it;
-      if (it != bindings.end()) {
-        o << ", ";
-      }
-    }
-    o << "}";
+    o << e.bindings();
     break;
   }
   }

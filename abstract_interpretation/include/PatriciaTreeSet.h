@@ -268,7 +268,7 @@ class PatriciaTreeSet final {
 
   template <typename T = Element,
             typename = typename std::enable_if_t<std::is_pointer<T>::value>>
-  static typename std::remove_pointer<T>::type deref(Element x) {
+  static const typename std::remove_pointer<T>::type& deref(Element x) {
     return *x;
   }
 
