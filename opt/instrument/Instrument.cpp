@@ -33,10 +33,8 @@ namespace {
 
 static bool debug = false;
 
-// For example, "Lcom/facebook/debug/" is in the set. We match either
-// "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
-bool is_excluded(std::string cls_name,
-                 const std::unordered_set<std::string>& set) {
+bool match_class_name(std::string cls_name,
+                      const std::unordered_set<std::string>& set) {
   always_assert(cls_name.back() == ';');
   cls_name.back() = '/';
   size_t pos = cls_name.find('/', 0);
@@ -47,6 +45,24 @@ bool is_excluded(std::string cls_name,
     pos = cls_name.find('/', pos + 1);
   }
   return false;
+}
+
+// For example, "Lcom/facebook/debug/" is in the set. We match either
+// "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
+bool is_excluded(std::string cls_name,
+                 const std::unordered_set<std::string>& set) {
+  return match_class_name(cls_name, set);
+}
+
+// Check for inclusion in whitelist of methods/classes.
+bool is_included(std::string method,
+                 std::string cls_name,
+                 const std::unordered_set<std::string>& set) {
+  if (match_class_name(cls_name, set)) {
+    return true;
+  }
+  // Check for method by its full name(Class_Name;Method_Name).
+  return set.count(cls_name + method);
 }
 
 DexMethod* find_analysis_method(const DexClass& cls, const std::string& name) {
@@ -213,8 +229,8 @@ void write_method_index_file(const std::string& file_name,
   for (size_t i = 0; i < method_id_vector.size(); ++i) {
     ofs << i + 1 << ", " << show(method_id_vector[i]) << std::endl;
   }
-  TRACE(
-      INSTRUMENT, 2, "method index file was written to: %s", file_name.c_str());
+  TRACE(INSTRUMENT, 2, "method index file was written to: %s",
+        file_name.c_str());
 }
 } // namespace
 
@@ -283,7 +299,18 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       return;
     }
     const auto& cls_name = show(method->get_class());
-    if (is_excluded(cls_name, m_exclude)) {
+    if (!m_whitelist.empty() &&
+        !is_included(method->get_name()->str(), cls_name, m_whitelist)) {
+      return;
+    }
+
+    // In case of a conflict, when an entry is present in both blacklist
+    // and whitelist, the blacklist is given priority and the entry
+    // is not instrumented. Even in cases where a method is present
+    // in whitelist and corresponding class is blacklisted, the method
+    // is not instrumented.
+
+    if (is_excluded(cls_name, m_blacklist)) {
       ++excluded;
       TRACE(INSTRUMENT, 7, "Excluding: %s\n", SHOW(method));
       return;
@@ -294,8 +321,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     method_id_vector.push_back(method);
     TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
 
-    instrument_onMethodBegin(
-        method, index * m_num_stats_per_method, onMethodBegin);
+    instrument_onMethodBegin(method, index * m_num_stats_per_method,
+                             onMethodBegin);
+
   });
 
   TRACE(INSTRUMENT,
@@ -305,8 +333,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         excluded);
 
   // Patch stat array size.
-  patch_stat_array_size(
-      *analysis_cls, "sStats", index * m_num_stats_per_method);
+  patch_stat_array_size(*analysis_cls, "sStats",
+                        index * m_num_stats_per_method);
   // Patch method count constant.
   patch_method_count(*analysis_cls, "sMethodCount", index);
 

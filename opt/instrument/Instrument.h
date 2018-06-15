@@ -24,10 +24,14 @@ class InstrumentPass : public Pass {
     pc.get("method_index_file_name", "instrument-methods-idx.txt",
            m_method_index_file_name);
 
-    std::vector<std::string> exclude_list;
-    pc.get("exclude", {}, exclude_list);
-    for (const auto& e : exclude_list) {
-      m_exclude.insert(e);
+    std::vector<std::string> list;
+    pc.get("blacklist", {}, list);
+    for (const auto& e : list) {
+      m_blacklist.insert(e);
+    }
+    pc.get("whitelist", {}, list);
+    for (const auto& i : list) {
+      m_whitelist.insert(i);
     }
   }
 
@@ -38,5 +42,6 @@ class InstrumentPass : public Pass {
   std::string m_onMethodBegin_name;
   int64_t m_num_stats_per_method;
   std::string m_method_index_file_name;
-  std::unordered_set<std::string> m_exclude;
+  std::unordered_set<std::string> m_blacklist;
+  std::unordered_set<std::string> m_whitelist;
 };
