@@ -570,8 +570,9 @@ def run_redex(args):
     # xz-compressed file. We need to decompress that file so that we can scan
     # through it looking for classnames.
     xz_compressed_libs = join(extracted_apk_dir, 'assets/lib/libs.xzs')
-    temporary_lib_file = join(extracted_apk_dir, 'lib/concated_native_libs.so')
-    if os.path.exists(xz_compressed_libs):
+    libs_dir = join(extracted_apk_dir, 'lib')
+    temporary_lib_file = join(libs_dir, 'concated_native_libs.so')
+    if os.path.exists(xz_compressed_libs) and os.path.exists(libs_dir):
         cmd = 'xz -d --stdout {} > {}'.format(xz_compressed_libs, temporary_lib_file)
         subprocess.check_call(cmd, shell=True)
 
