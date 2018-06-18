@@ -22,7 +22,7 @@ std::ostream& operator<<(std::ostream& os, const EscapeDomain& dom) {
   auto elem = dom.element();
   switch (elem) {
   case EscapeState::MAY_ESCAPE:
-    os << "ESCAPED";
+    os << "MAY_ESCAPE";
     break;
   case EscapeState::NOT_ESCAPED:
     os << "NOT_ESCAPED";
