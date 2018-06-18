@@ -408,14 +408,14 @@ void keep_class_members(
     const Scope& scope,
     const std::vector<std::string>& keep_class_mems) {
   for (auto const& cls : scope) {
-    std::string name = std::string(cls->get_type()->get_name()->c_str());
+    const std::string& name = cls->get_type()->get_name()->str();
     for (auto const& class_mem : keep_class_mems) {
       std::string class_mem_str = std::string(class_mem.c_str());
       std::size_t pos = class_mem_str.find(name);
       if (pos != std::string::npos) {
         std::string rem_str = class_mem_str.substr(pos+name.size());
         for (auto const& f : cls->get_sfields()) {
-          if (rem_str.find(std::string(f->get_name()->c_str()))!=std::string::npos) {
+          if (rem_str.find(f->get_name()->str()) != std::string::npos) {
             mark_only_reachable_directly(f);
             mark_only_reachable_directly(cls);
           }

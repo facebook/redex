@@ -127,7 +127,7 @@ std::vector<DexClass*> get_coldstart_classes(
   std::vector<DexClass*> coldstart_classes;
   for (auto const& dex : dexen) {
     for (auto const& cls : dex) {
-      class_string_map[std::string(cls->get_type()->get_name()->c_str())] = cls;
+      class_string_map[cls->get_type()->get_name()->str()] = cls;
     }
   }
   for (auto const& class_string : interdex_list) {

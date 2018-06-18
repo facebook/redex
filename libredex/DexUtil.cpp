@@ -261,7 +261,8 @@ DexType* get_array_type(const DexType* type) {
 
 DexType* make_array_type(const DexType* type) {
   always_assert(type != nullptr);
-  return DexType::make_type(DexString::make_string("[" + std::string(type->get_name()->c_str())));
+  return DexType::make_type(
+      DexString::make_string("[" + type->get_name()->str()));
 }
 
 void create_runtime_exception_block(

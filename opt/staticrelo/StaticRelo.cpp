@@ -122,7 +122,7 @@ std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
   std::unordered_map<const DexClass*, size_t> coldstart_classes;
   for (auto const& dex : dexen) {
     for (auto const& cls : dex) {
-      class_string_map[std::string(cls->get_type()->get_name()->c_str())] = cls;
+      class_string_map[cls->get_type()->get_name()->str()] = cls;
     }
   }
   int rank = 0;

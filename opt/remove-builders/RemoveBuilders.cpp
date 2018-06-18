@@ -357,7 +357,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
         DexMethod* method_copy = DexMethod::make_method_from(
             method,
             method->get_class(),
-            DexString::make_string(std::string(method->get_name()->c_str()) +
+            DexString::make_string(method->get_name()->str() +
                                    "$redex_builders"));
         bool was_not_removed =
             !b_transform.inline_methods(

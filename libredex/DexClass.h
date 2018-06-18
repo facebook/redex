@@ -103,6 +103,10 @@ class DexString {
     return get_string(nstr, (uint32_t)strlen(nstr));
   }
 
+  static DexString* get_string(const std::string &str) {
+    return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
+  }
+
  public:
   bool is_simple() const {
     return size() == m_utfsize;
@@ -203,6 +207,10 @@ class DexType {
     return get_type(DexString::get_string(type_string));
   }
 
+  static DexType* get_type(const std::string &str) {
+    return get_type(DexString::get_string(str));
+  }
+
   static DexType* get_type(const char* type_string, int utfsize) {
     return get_type(DexString::get_string(type_string, utfsize));
   }
@@ -214,6 +222,7 @@ class DexType {
 
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
+  const std::string& str() const { return get_name()->str(); }
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -382,8 +391,7 @@ class DexField : public DexFieldRef {
       return;
     }
     always_assert_log(false, "attach_annotation_set failed for field %s.%s\n",
-                      m_spec.cls->get_name()->c_str(),
-                      m_spec.name->c_str());
+                      m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -1050,6 +1058,7 @@ class DexClass {
   DexType* get_type() const { return m_self; }
   DexString* get_name() const { return m_self->get_name(); }
   const char* c_str() const { return get_name()->c_str(); }
+  const std::string& str() const { return get_name()->str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const;

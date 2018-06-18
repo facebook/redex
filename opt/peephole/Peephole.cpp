@@ -490,7 +490,7 @@ struct Matcher {
   }
 
   DexString* get_simple_name(const DexType* type) {
-    std::string full(type->get_name()->c_str());
+    const std::string& full = type->get_name()->str();
     auto lpos = full.rfind('/');
     auto simple = full.substr(lpos + 1, full.size() - lpos - 2);
     return DexString::make_string(simple.c_str());

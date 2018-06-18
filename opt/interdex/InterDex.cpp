@@ -611,7 +611,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
   dex_emit_tracker det;
   for (auto const& dex : dexen) {
     for (auto const& clazz : dex) {
-      std::string clzname(clazz->get_type()->get_name()->c_str());
+      const std::string& clzname = clazz->get_type()->get_name()->str();
       det.clookup[clzname] = clazz;
       TRACE(IDEX, 2, "Adding class to dex.clookup %s , %s\n", clzname.c_str(), SHOW(clazz));
     }
@@ -635,7 +635,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
     // sure we keep all classes in the same dex
     dex_emit_tracker primary_det;
     for (auto const& clazz : primary_dex) {
-      std::string clzname(clazz->get_type()->get_name()->c_str());
+      const std::string& clzname = clazz->get_type()->get_name()->str();
       primary_det.clookup[clzname] = clazz;
     }
 
@@ -701,7 +701,7 @@ DexClassesVector run_interdex(InterDexPass* pass,
       if (pclass_it == interdexorder.end() || pclass_it > first_end_marker_it) {
         TRACE(IDEX, 4, "Class %s is not in the interdex order.\n",
               pclass_str.c_str());
-        not_already_included.push_back(std::string(pclass->c_str()));
+        not_already_included.push_back(pclass->str());
       } else {
         TRACE(IDEX, 4, "Class %s is in the interdex order. "
               "No change required.\n", pclass_str.c_str());

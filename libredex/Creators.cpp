@@ -18,9 +18,8 @@ namespace {
 
 // TODO: make naming of methods smart
 DexString* get_name(DexMethod* meth) {
-  std::string name(meth->get_name()->c_str());
-  name = "__st__" + name;
-  return DexString::make_string(name.c_str());
+  std::string name = "__st__" + meth->get_name()->str();
+  return DexString::make_string(name);
 }
 
 DexProto* make_static_sig(DexMethod* meth) {

@@ -55,7 +55,7 @@ void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
 DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
   auto fdt = dex_member_refs::parse_field(full_descriptor);
   auto cls = DexType::get_type(fdt.cls.c_str());
-  auto name = DexString::get_string(fdt.name.c_str());
+  auto name = DexString::get_string(fdt.name);
   auto type = DexType::get_type(fdt.type.c_str());
   return DexField::get_field(cls, name, type);
 }
@@ -63,7 +63,7 @@ DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
 DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
   auto fdt = dex_member_refs::parse_field(full_descriptor);
   auto cls = DexType::make_type(fdt.cls.c_str());
-  auto name = DexString::make_string(fdt.name.c_str());
+  auto name = DexString::make_string(fdt.name);
   auto type = DexType::make_type(fdt.type.c_str());
   return DexField::make_field(cls, name, type);
 }
@@ -514,7 +514,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
 DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
   auto mdt = dex_member_refs::parse_method(full_descriptor);
   auto cls = DexType::get_type(mdt.cls.c_str());
-  auto name = DexString::get_string(mdt.name.c_str());
+  auto name = DexString::get_string(mdt.name);
   std::deque<DexType*> args;
   for (auto& arg_str : mdt.args) {
     args.push_back(DexType::get_type(arg_str.c_str()));
@@ -527,7 +527,7 @@ DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
 DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
   auto mdt = dex_member_refs::parse_method(full_descriptor);
   auto cls = DexType::make_type(mdt.cls.c_str());
-  auto name = DexString::make_string(mdt.name.c_str());
+  auto name = DexString::make_string(mdt.name);
   std::deque<DexType*> args;
   for (auto& arg_str : mdt.args) {
     args.push_back(DexType::make_type(arg_str.c_str()));
@@ -970,7 +970,7 @@ static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
     }
   }
   auto type_string = ss.str();
-  return DexString::make_string(type_string.c_str());
+  return DexString::make_string(type_string);
 }
 
 DexProto* DexProto::make_proto(DexType* rtype, DexTypeList* args) {
