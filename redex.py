@@ -596,7 +596,8 @@ def run_redex(args):
             continue
         key = key_value[0]
         value = key_value[1]
-        log("Got Override %s = %s from %s. Previous %s" % (key, value, key_value_str, config_dict[key]))
+        prev_value = config_dict.get(key, "(No previous value)")
+        log("Got Override %s = %s from %s. Previous %s" % (key, value, key_value_str, prev_value))
         config_dict[key] = value
 
     log('Running redex-all on {} dex files '.format(len(dexen)))
