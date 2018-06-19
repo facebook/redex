@@ -17,10 +17,6 @@
 
 struct IRCodeTest : public RedexTest {};
 
-std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
   using namespace dex_asm;
 

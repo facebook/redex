@@ -32,6 +32,7 @@
   TM(DBGSTRIP)           \
   TM(DC)                 \
   TM(DCE)                \
+  TM(DEAD_CODE)          \
   TM(DEDUP_BLOCKS)       \
   TM(DEDUP_RES)          \
   TM(DELINIT)            \

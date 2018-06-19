@@ -99,6 +99,7 @@ std::ostream& operator<<(std::ostream&, const DexType&);
 std::ostream& operator<<(std::ostream&, const DexClass&);
 std::ostream& operator<<(std::ostream&, const DexPosition&);
 std::ostream& operator<<(std::ostream&, const DexFieldRef&);
+std::ostream& operator<<(std::ostream&, const IRInstruction&);
 std::ostream& operator<<(std::ostream&, const MethodItemEntry&);
 
 std::string show(const DexFieldRef*);

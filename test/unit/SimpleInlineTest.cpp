@@ -17,10 +17,6 @@
 
 struct SimpleInlineTest : public RedexTest {};
 
-std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 /*
  * Test that we correctly insert move instructions that map caller args to
  * callee params.

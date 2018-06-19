@@ -889,6 +889,11 @@ std::string show(const IRInstruction* insn) {
   return show_insn(insn, false);
 }
 
+std::ostream& operator<<(std::ostream& o, const IRInstruction& insn) {
+  o << show(&insn);
+  return o;
+}
+
 std::string show(const DexDebugInstruction* insn) {
   if (!insn) return "";
   std::ostringstream ss;

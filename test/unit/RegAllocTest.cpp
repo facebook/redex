@@ -33,11 +33,6 @@ using namespace regalloc;
 
 struct RegAllocTest : public RedexTest {};
 
-// for nicer gtest error messages
-std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 /*
  * Check that we pick the most pessimistic move instruction (of the right type)
  * that can address arbitrarily large registers -- we will shrink it down later

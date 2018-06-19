@@ -15,10 +15,6 @@
 
 using namespace dex_asm;
 
-std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 MethodCreator make_method_creator() {
 
   MethodCreator mc(DexType::make_type("Lfoo;"),

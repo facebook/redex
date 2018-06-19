@@ -24,10 +24,6 @@ std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
   return os << show(&to_show);
 }
 
-std::ostream& operator<<(std::ostream& os, const IRInstruction& to_show) {
-  return os << show(&to_show);
-}
-
 std::ostream& operator<<(std::ostream& os, const IROpcode& to_show) {
   return os << show(to_show);
 }
