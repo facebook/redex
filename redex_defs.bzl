@@ -15,3 +15,29 @@ REDEX_SERVICE = "%s:service" % REDEX_ROOT
 REDEX_OPT = "%s:opt" % REDEX_ROOT
 
 REDEX_ABSTRACT_INTERPRETATION = "%s:abstract-interpretation" % REDEX_ROOT
+
+# Always issue warning, compile a release build with optimization
+# and pthreads, make a debug build with no optimization and no inlining.
+warnings = [
+    "-Wall",
+    "-Wsign-compare",
+    "-Wnon-virtual-dtor",
+    "-Wmissing-field-initializers",
+    "-Wshadow",
+]
+
+cxxflags_shared = [
+    "-std=gnu++14",
+    "-g",
+]
+
+cxxflags_nowarn = cxxflags_shared + ["-O3"]
+
+cxxflags = cxxflags_nowarn + warnings
+
+cxxflags_dbg_nowarn = cxxflags_shared + [
+    "-O0",
+    "-fno-inline",
+]
+
+cxxflags_dbg = cxxflags_dbg_nowarn + warnings

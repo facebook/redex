@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "Pass.h"
 #include "SideEffectSummary.h"
 #include "UsedVarsAnalysis.h"
@@ -22,5 +24,16 @@ class DeadCodeEliminationPass final : public Pass {
       const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
       IRCode& code);
 
+  virtual void configure_pass(const PassConfig& pc) override {
+    std::string external_summaries_file;
+    pc.get("external_summaries", "", external_summaries_file);
+    if (external_summaries_file != "") {
+      m_external_summaries_file = external_summaries_file;
+    }
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  boost::optional<std::string> m_external_summaries_file;
 };

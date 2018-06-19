@@ -64,12 +64,14 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
   walk::parallel::code(
       scope, [&](const DexMethod* method, IRCode& code) { code.build_cfg(); });
 
-  auto non_overridden_virtuals_vec = devirtualize(scope);
-  std::unordered_set<const DexMethod*> non_overridden_virtuals(
-      non_overridden_virtuals_vec.begin(), non_overridden_virtuals_vec.end());
+  auto non_overridden_virtuals = find_non_overridden_virtuals(scope);
 
-  const auto& effect_summaries =
-      get_effect_summaries(scope, non_overridden_virtuals);
+  EffectSummaryMap effect_summaries;
+  if (m_external_summaries_file) {
+    load_effect_summaries(*m_external_summaries_file, &effect_summaries);
+  }
+  summarize_all_method_effects(
+      scope, non_overridden_virtuals, &effect_summaries);
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     auto used_vars_fp_iter =

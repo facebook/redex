@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # Copyright (c) 2016-present, Facebook, Inc.
 # All rights reserved.
@@ -29,6 +29,7 @@ import timeit
 import zipfile
 
 from os.path import abspath, basename, dirname, isdir, isfile, join
+from pipes import quote
 
 import pyredex.logger as logger
 import pyredex.unpacker as unpacker
@@ -74,13 +75,13 @@ def write_debugger_commands(args):
     fd, gdb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-gdb-')
     with os.fdopen(fd, 'w') as f:
         f.write('gdb --args ')
-        f.write(' '.join(args))
+        f.write(' '.join(map(quote, args)))
         os.fchmod(fd, 0o775)
 
     fd, lldb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-lldb-')
     with os.fdopen(fd, 'w') as f:
         f.write('lldb -- ')
-        f.write(' '.join(args))
+        f.write(' '.join(map(quote, args)))
         os.fchmod(fd, 0o775)
 
     return {
@@ -160,7 +161,7 @@ def run_pass(
     start = timer()
 
     if script_args.debug:
-        print(' '.join(args))
+        print(' '.join(map(quote, args)))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
@@ -474,6 +475,9 @@ Given an APK, produce a better APK!
     parser.add_argument('--page-align-libs', action='store_true',
            help='Preserve 4k page alignment for uncompressed libs')
 
+    parser.add_argument('--side-effect-summaries',
+           help='Side effect information for external methods')
+
     return parser
 
 def remove_comments_from_line(l):
@@ -587,7 +591,12 @@ def run_redex(args):
     for store in store_files:
         dexen.append(store)
     log('Unpacking APK finished in {:.2f} seconds'.format(
-            timer() - unpack_start_time))
+        timer() - unpack_start_time))
+
+    if args.side_effect_summaries is not None:
+        args.passthru_json.append(
+            'DeadCodeEliminationPass.external_summaries="%s"' % args.side_effect_summaries
+        )
 
     for key_value_str in args.passthru_json:
         key_value = key_value_str.split('=', 1)

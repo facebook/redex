@@ -117,12 +117,14 @@ class EffectSummaryBuilder final {
 
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_INTERFACE: {
+      TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
       summary->effects |= EFF_UNKNOWN_INVOKE;
       break;
     }
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL: {
+      TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
       auto method = resolve_method(insn->get_method(), opcode_to_search(insn),
                                    *m_mref_cache);
       if (op == OPCODE_INVOKE_VIRTUAL &&
@@ -132,6 +134,7 @@ class EffectSummaryBuilder final {
       }
       auto summ_it = m_effect_summaries.find(method);
       if (summ_it == m_effect_summaries.end()) {
+        TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
         summary->effects |= EFF_UNKNOWN_INVOKE;
         break;
       }
@@ -165,6 +168,8 @@ class EffectSummaryBuilder final {
         summary->modified_params.emplace(m_param_insn_map.at(insn));
       } else if (env.get_pointee(insn).equals(
                      EscapeDomain(EscapeState::MAY_ESCAPE))) {
+        TRACE(DEAD_CODE, 3, "Escaping write to value allocated by %s\n",
+              SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
       }
     }
@@ -259,8 +264,9 @@ void analyze_methods(
 
     if (traceEnabled(DEAD_CODE, 3)) {
       const auto& summary = effect_summaries->at(method);
-      TRACE(DEAD_CODE, 3, "%s %s unknown side effects\n", SHOW(method),
-            summary.effects != EFF_NONE ? "has" : "does not have");
+      TRACE(DEAD_CODE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
+            summary.effects != EFF_NONE ? "has" : "does not have",
+            summary.effects);
       if (summary.modified_params.size() != 0) {
         TRACE(DEAD_CODE, 3, "Modified params: ");
         for (auto idx : summary.modified_params) {
@@ -272,15 +278,15 @@ void analyze_methods(
   }
 }
 
-EffectSummaryMap get_effect_summaries(
+void summarize_all_method_effects(
     const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals) {
-  EffectSummaryMap effect_summaries;
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
+    EffectSummaryMap* effect_summaries) {
   // This method is special: the bytecode verifier requires that this method
   // be called before a newly-allocated object gets used in any way. We can
   // model this by treating the method as modifying its `this` parameter --
   // changing it from uninitialized to initialized.
-  effect_summaries[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
+  (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
       EffectSummary({0});
 
   PointersFixpointIteratorMap ptrs_fp_iter_map;
@@ -293,9 +299,71 @@ EffectSummaryMap get_effect_summaries(
   // TODO: This call iterates serially over all the methods; it's the biggest
   // bottleneck of the pass & should be parallelized.
   analyze_methods(scope, non_overridden_virtuals, ptrs_fp_iter_map, &mref_cache,
-                  &effect_summaries);
+                  effect_summaries);
   for (auto& pair : ptrs_fp_iter_map) {
     delete pair.second;
   }
-  return effect_summaries;
+}
+
+s_expr EffectSummary::to_s_expr() const {
+  std::vector<s_expr> s_exprs;
+  s_exprs.emplace_back(std::to_string(effects));
+  std::vector<s_expr> mod_param_s_exprs;
+  for (auto idx : modified_params) {
+    mod_param_s_exprs.emplace_back(idx);
+  }
+  s_exprs.emplace_back(mod_param_s_exprs);
+  return s_expr(s_exprs);
+}
+
+boost::optional<EffectSummary> EffectSummary::from_s_expr(const s_expr& expr) {
+  if (expr.size() != 2) {
+    return boost::none;
+  }
+  EffectSummary summary;
+  if (!expr[0].is_string()) {
+    return boost::none;
+  }
+  summary.effects = std::stoi(expr[0].str());
+  if (!expr[1].is_list()) {
+    return boost::none;
+  }
+  for (size_t i = 0; i < expr[1].size(); ++i) {
+    summary.modified_params.emplace(expr[1][i].get_int32());
+  }
+  return summary;
+}
+
+void load_effect_summaries(const std::string& filename,
+                           EffectSummaryMap* effect_summaries) {
+  std::ifstream file_input(filename);
+  s_expr_istream s_expr_input(file_input);
+  size_t load_count{0};
+  while (s_expr_input.good()) {
+    s_expr expr;
+    s_expr_input >> expr;
+    if (s_expr_input.eoi()) {
+      break;
+    }
+    always_assert_log(!s_expr_input.fail(), "%s\n",
+                      s_expr_input.what().c_str());
+    DexMethodRef* dex_method =
+        DexMethod::get_method(expr[0].get_string().c_str());
+    if (dex_method == nullptr) {
+      continue;
+    }
+    auto summary_opt = EffectSummary::from_s_expr(expr[1]);
+    always_assert_log(summary_opt, "Couldn't parse S-expression: %s\n",
+                      expr.str().c_str());
+    auto it = effect_summaries->find(dex_method);
+    if (it == effect_summaries->end()) {
+      effect_summaries->emplace(dex_method, *summary_opt);
+    } else {
+      TRACE(DEAD_CODE, 2, "Collision with summary for method %s\n",
+            SHOW(dex_method));
+    }
+    ++load_count;
+  }
+  TRACE(DEAD_CODE, 2, "Loaded %lu summaries from %s\n", load_count,
+        filename.c_str());
 }

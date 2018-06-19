@@ -66,6 +66,10 @@ struct EffectSummary {
   friend bool operator==(const EffectSummary& a, const EffectSummary& b) {
     return a.effects == b.effects && a.modified_params == b.modified_params;
   }
+
+  s_expr to_s_expr() const;
+
+  static boost::optional<EffectSummary> from_s_expr(const s_expr&);
 };
 
 using EffectSummaryMap = std::unordered_map<const DexMethodRef*, EffectSummary>;
@@ -83,6 +87,13 @@ EffectSummary analyze_code_effects(
 /*
  * Get the effect summary for all methods in scope.
  */
-EffectSummaryMap get_effect_summaries(
+void summarize_all_method_effects(
     const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals);
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
+    EffectSummaryMap* effect_summaries);
+
+/*
+ * Load the serialized effect summaries from a file.
+ */
+void load_effect_summaries(const std::string& filename,
+                           EffectSummaryMap* effect_summaries);
