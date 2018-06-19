@@ -48,7 +48,7 @@ class StaticStringBuilder {
   std::string str() const {
     std::string result;
     result.reserve(m_total_chars);
-    for (int i = 0; i < m_index; ++i) {
+    for (uint32_t i = 0; i < m_index; ++i) {
       result += m_strings[i];
     }
     return result;
