@@ -110,6 +110,11 @@ class EffectSummaryBuilder final {
       break;
     }
 
+    case OPCODE_FILL_ARRAY_DATA: {
+      classify_heap_write(env, insn->src(0), summary);
+      break;
+    }
+
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_INTERFACE: {
       summary->effects |= EFF_UNKNOWN_INVOKE;
