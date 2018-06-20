@@ -14,7 +14,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "FixpointIterators.h"
+#include "MonotonicFixpointIterator.h"
 #include "StringDomain.h"
 
 constexpr const char* STRING_DEF = "Ljava/lang/String;";

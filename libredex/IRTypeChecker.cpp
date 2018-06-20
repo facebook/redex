@@ -25,10 +25,10 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
-#include "FixpointIterators.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "Match.h"
+#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 

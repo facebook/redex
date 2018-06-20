@@ -13,8 +13,8 @@
 #include <unordered_map>
 
 #include "DexClass.h"
-#include "FixpointIterators.h"
 #include "IRCode.h"
+#include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 
 /*

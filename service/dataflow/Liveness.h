@@ -10,7 +10,7 @@
 #pragma once
 
 #include "ControlFlow.h"
-#include "FixpointIterators.h"
+#include "MonotonicFixpointIterator.h"
 #include "SparseSetAbstractDomain.h"
 
 using LivenessDomain = SparseSetAbstractDomain;

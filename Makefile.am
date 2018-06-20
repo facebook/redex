@@ -67,6 +67,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
+	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/shared \
@@ -185,6 +186,9 @@ redex_all_SOURCES = \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
+	opt/dead-code-elimination/DeadCodeEliminationPass.cpp \
+	opt/dead-code-elimination/SideEffectSummary.cpp \
+	opt/dead-code-elimination/UsedVarsAnalysis.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \

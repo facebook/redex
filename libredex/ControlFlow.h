@@ -13,7 +13,6 @@
 #include <type_traits>
 #include <utility>
 
-#include "FixpointIterators.h"
 #include "IRCode.h"
 
 /**

@@ -13,6 +13,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "ObjectDomain.h"
+#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"

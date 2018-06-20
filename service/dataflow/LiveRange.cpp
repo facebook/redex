@@ -13,8 +13,8 @@
 #include <boost/property_map/property_map.hpp>
 
 #include "ControlFlow.h"
-#include "FixpointIterators.h"
 #include "IRCode.h"
+#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 

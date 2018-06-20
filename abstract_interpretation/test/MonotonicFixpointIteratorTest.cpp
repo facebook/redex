@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "MonotonicFixpointIterator.h"
+
 #include <functional>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -17,7 +19,6 @@
 
 #include <boost/functional/hash.hpp>
 
-#include "FixpointIterators.h"
 #include "HashedSetAbstractDomain.h"
 
 /*
