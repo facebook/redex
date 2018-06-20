@@ -1276,5 +1276,9 @@ if __name__ == "__main__":
             seen.add(tup[0])
             if not tup[0].endswith('[]'):
                 class_serials.append(tup)
+
+    # On Dalvik these serial numbers correspond to classload order,
+    # so it's useful to sort by them.
+    class_serials.sort(key=lambda x: x[1])
     for cls in class_serials:
         print(str(cls[0]) + ".class")

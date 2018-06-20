@@ -311,7 +311,7 @@ void keep_fields(RegexMap& regex_map,
 }
 
 std::string field_regex(const MemberSpecification& field_spec) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << proguard_parser::form_member_regex(field_spec.name);
   ss << "\\:";
   ss << proguard_parser::form_type_regex(field_spec.descriptor);

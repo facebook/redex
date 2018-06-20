@@ -374,3 +374,16 @@ TEST(AliasedRegistersTest, AbstractValueJoin) {
   EXPECT_FALSE(a.are_aliases(four, two));
   EXPECT_FALSE(a.are_aliases(four, three));
 }
+
+TEST(AliasedRegistersTest, CopyOnWriteDomain) {
+  AliasDomain x(AbstractValueKind::Top);
+  AliasDomain y = x; // take a reference
+
+  x.update([](AliasedRegisters& a) { // cause a change in x. Forcing a copy
+    a.move(zero, one);
+  });
+
+  y.update([](AliasedRegisters& a) { // make sure y isn't still referencing x
+    EXPECT_FALSE(a.are_aliases(zero, one));
+  });
+}

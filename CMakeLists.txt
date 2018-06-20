@@ -13,6 +13,7 @@ add_dependent_packages_for_redex()
 
 file(GLOB includes
         "libredex"
+        "service/*"
         "opt/*"
         "util"
         "liblocator"
@@ -29,6 +30,8 @@ include_directories(
 file(GLOB_RECURSE redex_srcs
         "libredex/*.cpp"
         "libredex/*.h"
+        "service/*.cpp"
+        "service/*.h"
         "opt/*.cpp"
         "opt/*.h"
         "util/Sha1.*"

@@ -19,6 +19,7 @@
 #include <boost/optional.hpp>
 
 #include "DexClass.h"
+#include "ControlFlow.h"
 
 namespace isa_impl {
 
@@ -27,6 +28,8 @@ class AbstractAccessPath;
 class Analyzer;
 
 } // namespace isa_impl
+
+enum class AccessPathKind { Parameter, Local, FinalField, Unknown };
 
 /*
  * This analysis is aimed at identifying the components and subcomponents of
@@ -58,8 +61,8 @@ class Analyzer;
  */
 
 /*
- * An access path is a sequence of getters originating from a parameter of the
- * method analyzed.
+ * An access path is a sequence of getters originating from an unambiguous
+ * register (for instance, a param register) of the method analyzed.
  *
  * Examples:
  *
@@ -71,33 +74,81 @@ class AccessPath final {
  public:
   // The default constructor is required by the abstract domain combinators. We
   // just return an impossible access path.
-  AccessPath() : m_parameter(std::numeric_limits<size_t>::max()) {}
+  AccessPath()
+      : m_kind(AccessPathKind::Unknown),
+        m_parameter(std::numeric_limits<size_t>::max()),
+        m_field(nullptr) {}
 
   /*
    * Returns an empty access path.
    */
-  explicit AccessPath(size_t parameter) : m_parameter(parameter) {}
+  AccessPath(AccessPathKind kind, size_t parameter)
+      : m_kind(kind), m_parameter(parameter), m_field(nullptr) {}
 
-  AccessPath(size_t parameter, const std::vector<DexMethodRef*>& getters)
-      : m_parameter(parameter), m_getters(getters) {}
+  AccessPath(AccessPathKind kind,
+             size_t parameter,
+             const std::vector<DexMethodRef*>& getters)
+      : m_kind(kind),
+        m_parameter(parameter),
+        m_getters(getters),
+        m_field(nullptr) {
+    always_assert_log(kind != AccessPathKind::FinalField,
+                      "Must specify a field ref");
+  }
+
+  AccessPath(AccessPathKind kind,
+             size_t parameter,
+             DexField* field,
+             const std::vector<DexMethodRef*>& getters)
+      : m_kind(kind),
+        m_parameter(parameter),
+        m_getters(getters),
+        m_field(field) {
+    if (kind == AccessPathKind::FinalField) {
+      always_assert_log(field != nullptr, "Must specify a field.");
+      always_assert_log((field->get_access() & ACC_FINAL) == ACC_FINAL,
+                        "Field should be final!");
+    } else {
+      always_assert_log(field == nullptr, "Field not relevant for kind.");
+    }
+  }
+
+  AccessPathKind kind() const { return m_kind; }
 
   size_t parameter() const { return m_parameter; }
 
   std::vector<DexMethodRef*> getters() const { return m_getters; }
 
+  DexField* field() const { return m_field; }
+
   std::string to_string() const;
 
  private:
+  AccessPathKind m_kind;
   size_t m_parameter;
   std::vector<DexMethodRef*> m_getters;
+  // Optional members only applicable to some AccessPathKinds.
+  DexField* m_field;
 
   friend class isa_impl::AbstractAccessPath;
+};
+
+/*
+ * Holds the register to access path mappings for a block's entry state and exit
+ * state.
+ */
+using BindingSnapshot = std::unordered_map<uint32_t, AccessPath>;
+
+struct BlockStateSnapshot {
+  BindingSnapshot entry_state_bindings;
+  BindingSnapshot exit_state_bindings;
 };
 
 // To enable the use of boost::hash.
 size_t hash_value(const AccessPath& path);
 
 bool operator==(const AccessPath& x, const AccessPath& y);
+bool operator!=(const AccessPath& x, const AccessPath& y);
 
 std::ostream& operator<<(std::ostream& o, const AccessPath& path);
 
@@ -126,6 +177,16 @@ class ImmutableSubcomponentAnalyzer final {
    */
   boost::optional<AccessPath> get_access_path(size_t reg,
                                               IRInstruction* insn) const;
+
+  /*
+   * If the given access path has been computed before and exists in the
+   * instruction's entry state, returns the registers which store the path.
+  */
+  std::set<size_t> find_access_path_registers(
+    IRInstruction* insn,
+    const AccessPath& path) const;
+
+  std::unordered_map<cfg::BlockId, BlockStateSnapshot> get_block_state_snapshot() const;
 
  private:
   std::unique_ptr<isa_impl::Analyzer> m_analyzer;

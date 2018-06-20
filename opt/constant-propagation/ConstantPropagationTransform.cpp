@@ -22,7 +22,12 @@ namespace constant_propagation {
 void Transform::replace_with_const(const ConstantEnvironment& env,
                                    IRList::iterator it) {
   auto* insn = it->insn;
-  auto cst = env.get_primitive(insn->dest()).constant_domain().get_constant();
+  auto value = env.get(insn->dest());
+  auto scd = value.maybe_get<SignedConstantDomain>();
+  if (!scd) {
+    return;
+  }
+  auto cst = scd->get_constant();
   if (!cst) {
     return;
   }
@@ -82,7 +87,11 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_SPUT_SHORT:
   case OPCODE_SPUT_WIDE: {
     auto* field = resolve_field(insn->get_field());
-    auto cst = wps.get_field_value(field).constant_domain().get_constant();
+    auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
+    if (!scd) {
+      break;
+    }
+    auto cst = scd->get_constant();
     if (cst) {
       // This field is known to be constant and must already hold this value.
       // We don't need to write to it again.
@@ -108,8 +117,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
 void Transform::eliminate_dead_branch(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
-    Block* block) {
-  auto insn_it = transform::find_last_instruction(block);
+    cfg::Block* block) {
+  auto insn_it = block->get_last_insn();
   if (insn_it == block->end()) {
     return;
   }
@@ -123,7 +132,7 @@ void Transform::eliminate_dead_branch(
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
-      auto is_fallthrough = edge->type() == EDGE_GOTO;
+      auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
       TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s\n",
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;

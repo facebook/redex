@@ -481,6 +481,22 @@ static bool parse_class(uint8_t* buffer,
   return true;
 }
 
+bool load_class_file(const std::string& filename, Scope* classes) {
+  // It's not exactly efficient to call init_basic_types repeatedly for each
+  // class file that we load, but load_class_file should typically only be used
+  // in tests to load a small number of files.
+  init_basic_types();
+
+  std::ifstream ifs(filename, std::ifstream::binary);
+  auto buf = ifs.rdbuf();
+  size_t size = buf->pubseekoff(0, ifs.end, ifs.in);
+  buf->pubseekpos(0, ifs.in);
+  auto buffer = std::make_unique<char[]>(size);
+  buf->sgetn(buffer.get(), size);
+  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), classes,
+                     /* attr_hook */ nullptr);
+}
+
 /******************
  * Begin Jar Loading code.
  *

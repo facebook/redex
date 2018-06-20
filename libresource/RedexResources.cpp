@@ -18,7 +18,13 @@
 #include <boost/regex.hpp>
 #include <sstream>
 #include <string>
+
+#ifdef _MSC_VER
+#include <mman/sys/mman.h>
+#else
 #include <sys/mman.h>
+#endif
+
 #include <sys/stat.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -147,7 +153,7 @@ void extract_js_asset_registrations(
     if (!boost::regex_search (registration, m, location_regex) || m.size() == 0) {
       continue;
     }
-    std::stringstream asset_path;
+    std::ostringstream asset_path;
     asset_path << m[1].str() << '/'; // location
     if (!boost::regex_search (registration, m, name_regex) || m.size() == 0) {
       continue;
@@ -157,7 +163,7 @@ void extract_js_asset_registrations(
     boost::replace_all(full_path, "/", "_");;
     boost::algorithm::to_lower(full_path);
 
-    std::stringstream stripped_asset_path;
+    std::ostringstream stripped_asset_path;
     std::ostream_iterator<char, char> oi(stripped_asset_path);
     boost::regex_replace(oi, full_path.begin(), full_path.end(),
       special_char_regex, "", boost::match_default | boost::format_all);
@@ -330,6 +336,21 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
   return result;
 }
 
+std::string read_attribute_name_at_idx(
+    const android::ResXMLTree& parser,
+    size_t idx) {
+  size_t len;
+  auto name_chars = parser.getAttributeName8(idx, &len);
+  if (name_chars != nullptr) {
+    return std::string(name_chars);
+  } else {
+    auto wide_chars = parser.getAttributeName(idx, &len);
+    android::String16 s16(wide_chars, len);
+    auto converted = convert_from_string16(s16);
+    return converted;
+  }
+}
+
 void extract_classes_from_layout(
     const std::string& layout_contents,
     const std::unordered_set<std::string>& attributes_to_read,
@@ -370,12 +391,12 @@ void extract_classes_from_layout(
       if (!attributes_to_read.empty()) {
         for (size_t i = 0; i < parser.getAttributeCount(); i++) {
           auto ns_id = parser.getAttributeNamespaceID(i);
-          auto name = parser.getAttributeName8(i, &len);
+          std::string name = read_attribute_name_at_idx(parser, i);
           std::string fully_qualified;
           if (ns_id >= 0) {
-            fully_qualified = namespace_prefix_map[ns_id] + ":" + std::string(name);
+            fully_qualified = namespace_prefix_map[ns_id] + ":" + name;
           } else {
-            fully_qualified = std::string(name);
+            fully_qualified = name;
           }
           if (attributes_to_read.count(fully_qualified) != 0) {
             auto val = parser.getAttributeStringValue(i, &len);
@@ -455,7 +476,7 @@ std::unordered_set<std::string> extract_classes_from_native_lib(const std::strin
  */
 std::string read_entire_file(const std::string& filename) {
   std::ifstream in(filename, std::ios::in | std::ios::binary);
-  std::stringstream sstr;
+  std::ostringstream sstr;
   sstr << in.rdbuf();
   return sstr.str();
 }
@@ -1019,7 +1040,7 @@ int rename_classes_in_layout(
     &serialized,
     out_num_renamed);
 
-  if (out_num_renamed == 0 || status != android::OK) {
+  if (*out_num_renamed == 0 || status != android::OK) {
     unmap_and_close(file_desc, fp, len);
     return status;
   }

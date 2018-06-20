@@ -44,7 +44,7 @@ std::string convert_scalar_type(std::string type) {
 std::string convert_field(const std::string &cls,
     const std::string &type,
     const std::string &name) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << cls << "." << name << ":" << type;
   return ss.str();
 }
@@ -55,7 +55,7 @@ std::string convert_method(
   const std::string &methodname,
   const std::string &args
 ) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << cls << "." << methodname << ":(" << args << ")" << rtype;
   return ss.str();
 }
@@ -281,33 +281,28 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   };
 
   std::function<void(DexClass*)> worker_pg_map = [&](DexClass* cls) {
-    TRACE(PGR, 4, "deob cls %s %s\n",
-          proguard_name(cls).c_str(),
-          pm.deobfuscate_class(proguard_name(cls)).c_str());
-    cls->set_deobfuscated_name(pm.deobfuscate_class(proguard_name(cls)));
+    TRACE(PGR, 4, "deob cls %s %s\n", SHOW(cls),
+          pm.deobfuscate_class(show(cls)).c_str());
+    cls->set_deobfuscated_name(pm.deobfuscate_class(show(cls)));
     for (const auto& m : cls->get_dmethods()) {
-      TRACE(PGR, 4, "deob dmeth %s %s\n",
-            proguard_name(m).c_str(),
-            pm.deobfuscate_method(proguard_name(m)).c_str());
-      m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
+      TRACE(PGR, 4, "deob dmeth %s %s\n", SHOW(m),
+            pm.deobfuscate_method(show(m)).c_str());
+      m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
     }
     for (const auto& m : cls->get_vmethods()) {
-      TRACE(PM, 4, "deob vmeth %s %s\n",
-            proguard_name(m).c_str(),
-            pm.deobfuscate_method(proguard_name(m)).c_str());
-      m->set_deobfuscated_name(pm.deobfuscate_method(proguard_name(m)));
+      TRACE(PM, 4, "deob vmeth %s %s\n", SHOW(m),
+            pm.deobfuscate_method(show(m)).c_str());
+      m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
     }
     for (const auto& f : cls->get_ifields()) {
-      TRACE(PM, 4, "deob ifield %s %s\n",
-            proguard_name(f).c_str(),
-            pm.deobfuscate_field(proguard_name(f)).c_str());
-      f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));
+      TRACE(PM, 4, "deob ifield %s %s\n", SHOW(f),
+            pm.deobfuscate_field(show(f)).c_str());
+      f->set_deobfuscated_name(pm.deobfuscate_field(show(f)));
     }
     for (const auto& f : cls->get_sfields()) {
-      TRACE(PM, 4, "deob sfield %s %s\n",
-            proguard_name(f).c_str(),
-            pm.deobfuscate_field(proguard_name(f)).c_str());
-      f->set_deobfuscated_name(pm.deobfuscate_field(proguard_name(f)));
+      TRACE(PM, 4, "deob sfield %s %s\n", SHOW(f),
+            pm.deobfuscate_field(show(f)).c_str());
+      f->set_deobfuscated_name(pm.deobfuscate_field(show(f)));
     }
   };
 
@@ -321,43 +316,6 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   }
 
   wq.run_all();
-}
-
-std::string proguard_name(const DexType* type) {
-  assert(type->get_name()->c_str() == show(type));
-  return type->get_name()->c_str();
-}
-
-std::string proguard_name(const DexClass* cls) {
-  assert(cls->get_name()->c_str() == show(cls));
-  return cls->get_name()->c_str();
-}
-
-std::string proguard_name(const DexMethodRef* method) {
-  // Format:
-  //  <class descriptor>.<method name>:(<arg descriptors>)<return descriptor>
-  std::stringstream ss;
-  ss << proguard_name(method->get_class()) << "." << method->get_name()->c_str()
-      << ":" << "(";
-
-  auto proto = method->get_proto();
-
-  for (auto& arg_type: proto->get_args()->get_type_list()) {
-    ss << proguard_name(arg_type);
-  }
-  ss << ")";
-
-  ss << proguard_name(proto->get_rtype());
-  assert(ss.str() == show(method));
-  return ss.str();
-}
-
-std::string proguard_name(const DexFieldRef* field) {
-  std::stringstream ss;
-  ss << proguard_name(field->get_class()) << "." << field->get_name()->c_str()
-      << ":" << proguard_name(field->get_type());
-  assert(ss.str() == show(field));
-  return ss.str();
 }
 
 std::string convert_type(std::string type) {

@@ -124,11 +124,11 @@ const VirtualScope* TypeSystem::find_virtual_scope(
 
   auto type = meth->get_class();
   while (type != nullptr) {
-    TRACE(VIRT, 1, "check... %s\n", SHOW(type));
+    TRACE(VIRT, 5, "check... %s\n", SHOW(type));
     for (const auto& scope : m_class_scopes.get(type)) {
-      TRACE(VIRT, 1, "check... %s\n", SHOW(scope->methods[0].first));
+      TRACE(VIRT, 5, "check... %s\n", SHOW(scope->methods[0].first));
       if (match(scope->methods[0].first, meth)) {
-        TRACE(VIRT, 1, "return scope\n");
+        TRACE(VIRT, 5, "return scope\n");
         return scope;
       }
     }

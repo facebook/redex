@@ -18,6 +18,7 @@ std::string print(DexOpcode opcode) {
    case DOPCODE_##op:               \
      return #literal;
      DOPS
+     QDOPS
  #undef OP
    case FOPCODE_PACKED_SWITCH:
      return "PACKED_SWITCH_DATA";
@@ -29,3 +30,42 @@ std::string print(DexOpcode opcode) {
      return "NO_VALID_OPCODE";
    }
  }
+
+DexOpcode quicken(DexOpcode opcode) {
+  switch (opcode) {
+  case DOPCODE_RETURN_VOID:
+    return DOPCODE_RETURN_VOID_NO_BARRIER;
+  case DOPCODE_IGET:
+    return DOPCODE_IGET_QUICK;
+  case DOPCODE_IGET_WIDE:
+    return DOPCODE_IGET_WIDE_QUICK;
+  case DOPCODE_IGET_OBJECT:
+    return DOPCODE_IGET_OBJECT_QUICK;
+  case DOPCODE_IGET_BOOLEAN:
+    return DOPCODE_IGET_BOOLEAN_QUICK;
+  case DOPCODE_IGET_BYTE:
+    return DOPCODE_IGET_BYTE_QUICK;
+  case DOPCODE_IGET_CHAR:
+    return DOPCODE_IGET_CHAR_QUICK;
+  case DOPCODE_IGET_SHORT:
+    return DOPCODE_IGET_SHORT_QUICK;
+
+  case DOPCODE_IPUT:
+    return DOPCODE_IPUT_QUICK;
+  case DOPCODE_IPUT_WIDE:
+    return DOPCODE_IPUT_WIDE_QUICK;
+  case DOPCODE_IPUT_OBJECT:
+    return DOPCODE_IPUT_OBJECT_QUICK;
+  case DOPCODE_IPUT_BOOLEAN:
+    return DOPCODE_IPUT_BOOLEAN_QUICK;
+  case DOPCODE_IPUT_BYTE:
+    return DOPCODE_IPUT_BYTE_QUICK;
+  case DOPCODE_IPUT_CHAR:
+    return DOPCODE_IPUT_CHAR_QUICK;
+  case DOPCODE_IPUT_SHORT:
+    return DOPCODE_IPUT_SHORT_QUICK;
+
+  default:
+    throw std::invalid_argument("Can't quicken opcode.");
+  }
+}

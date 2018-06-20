@@ -962,7 +962,7 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << type_shorty(rtype);
   if (args != nullptr) {
     for (auto arg : args->get_type_list()) {

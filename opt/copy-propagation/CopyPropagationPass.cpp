@@ -77,7 +77,7 @@ class AliasFixpointIterator final
   Stats& m_stats;
 
   AliasFixpointIterator(
-      ControlFlowGraph& cfg,
+      cfg::ControlFlowGraph& cfg,
       const CopyPropagationPass::Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
       Stats& stats)
@@ -93,7 +93,7 @@ class AliasFixpointIterator final
   // if deletes is not null, this time is for real.
   // fill the `deletes` vector with redundant instructions
   // if deletes is null, analyze only. Make no changes to the code.
-  void run_on_block(Block* block,
+  void run_on_block(cfg::Block* block,
                     AliasedRegisters& aliases,
                     std::unordered_set<IRInstruction*>* deletes) const {
 
@@ -354,7 +354,7 @@ class AliasFixpointIterator final
     return source;
   }
 
-  void analyze_node(Block* const& node,
+  void analyze_node(cfg::Block* const& node,
                     AliasDomain* current_state) const override {
     current_state->update([&](AliasedRegisters& aliases) {
       run_on_block(node, aliases, nullptr);

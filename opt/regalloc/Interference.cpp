@@ -277,7 +277,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
   }
 
   auto& cfg = code->cfg();
-  for (Block* block : cfg.blocks()) {
+  for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
       if (it->type != MFLOW_OPCODE) {

@@ -9,31 +9,44 @@
 
 #pragma once
 
-#include <cassert>
+#include "DexEncoding.h"
+#include "DexOpcodeDefs.h"
+#include "file-utils.h"
+
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#define CHECK(cond, ...)                                                     \
-  do {                                                                       \
-    auto cond_eval = (cond);                                                 \
-    if (!cond_eval) {                                                        \
-      fprintf(stderr, "%s:%d CHECK(%s) failed.", __FILE__, __LINE__, #cond); \
-      fprintf(stderr, " " __VA_ARGS__);                                      \
-      fprintf(stderr, "\n");                                                 \
-    }                                                                        \
-    assert(cond_eval);                                                       \
-  } while (0)
+//#define DEBUG_LOG
+//#define PERF_LOG
 
-#define UNCOPYABLE(klass)       \
-  klass(const klass&) = delete; \
-  klass& operator=(const klass&) = delete;
+#define PACK __attribute__((packed))
 
-#define MOVABLE(klass)      \
-  klass(klass&&) = default; \
-  klass& operator=(klass&&) = default;
+#ifdef PERF_LOG
+#include <chrono>
+
+#define START_TRACE() \
+  auto trace_start = std::chrono::high_resolution_clock::now();
+
+#define END_TRACE(TAG)                                        \
+  using namespace std::chrono;                                \
+  auto trace_end = std::chrono::high_resolution_clock::now(); \
+  printf("TRACE[%s]: %llu ms\n",                              \
+         TAG,                                                 \
+         duration_cast<microseconds>(trace_end - trace_start).count());
+
+#else
+#define START_TRACE() \
+  do {                \
+  } while (0);
+
+#define END_TRACE(TAG) \
+  do {                 \
+  } while (0);
+
+#endif
 
 template <typename T1, typename T2, typename L>
 static void foreach_pair(const T1& t1, const T2& t2, const L& fn) {
@@ -104,78 +117,58 @@ struct ConstBuffer {
   }
 };
 
-class FileHandle {
- public:
-  explicit FileHandle(FILE* fh) : bytes_written_(0), seek_ref_(0), fh_(fh) {}
-  UNCOPYABLE(FileHandle);
+void write_buf(FileHandle& fh, ConstBuffer buf);
 
-  FILE* get() const { return fh_; }
+struct WritableBuffer {
+  FileHandle& fh;
+  char* begin;
+  size_t current;
+  size_t max_size;
 
-  virtual ~FileHandle() {
-    if (fh_ != nullptr) {
-      fclose(fh_);
-      fh_ = nullptr;
+  WritableBuffer(FileHandle& fh_, char* begin_, size_t max_size_)
+      : fh(fh_), begin(begin_), max_size(max_size_) {
+    current = 0;
+  }
+
+  ~WritableBuffer() {
+    if (current > 0) {
+      START_TRACE()
+      write_buf(fh, ConstBuffer{begin, current});
+      END_TRACE("buffer write")
     }
   }
 
-  FileHandle& operator=(FileHandle&& other) {
-    bytes_written_ = other.bytes_written_;
-    seek_ref_ = other.seek_ref_;
-    fh_ = other.fh_;
-    other.fh_ = nullptr;
-    return *this;
+  void operator<<(char* to_write) {
+    if (current == max_size) {
+      write_buf(fh, ConstBuffer{begin, current});
+      current = 0;
+    }
+    begin[current] = *to_write;
+    current++;
   }
 
-  FileHandle(FileHandle&& other) {
-    bytes_written_ = other.bytes_written_;
-    seek_ref_ = other.seek_ref_;
-    fh_ = other.fh_;
-    other.fh_ = nullptr;
+  void operator<<(const char* to_write) {
+    operator<<(const_cast<char *>(to_write));
   }
 
-  size_t bytes_written() const { return bytes_written_; }
-  void reset_bytes_written() { bytes_written_ = 0; }
+  void operator<<(const uint16_t* to_write) {
+    const char* char_write = reinterpret_cast<const char*>(to_write);
+    operator<<(char_write);
+    operator<<(char_write + 1);
+  }
 
-  virtual size_t fwrite(const void* p, size_t size, size_t count);
-  size_t fread(void* ptr, size_t size, size_t count);
+  void operator<<(const uint16_t to_write) {
+    operator<<(&to_write);
+  }
 
-  template <typename T>
-  std::unique_ptr<T> read_object() {
-    auto ret = std::unique_ptr<T>(new T);
-    if (this->fread(ret.get(), sizeof(T), 1) != 1) {
-      return std::unique_ptr<T>(nullptr);
-    } else {
-      return ret;
+  void print(size_t size) {
+    size_t start = (current >= size) ? current - size : 0;
+    for (size_t i = start; i < current; ++i) {
+      printf("%02x%s", begin[i], (i == size - 1) ? "\r\n" : " ");
     }
   }
-
-  bool feof();
-  bool ferror();
-
-  bool seek_set(long offset);
-  bool seek_begin() { return seek_set(0); }
-  bool seek_end();
-
-  // Adjust the offset from which seek_set(N) is computed. Keeps oat-writing
-  // code much cleaner by hiding the elf file .rodata offset from the oat code.
-  void set_seek_reference_to_fpos();
-  void set_seek_reference(long offset);
-
- protected:
-  size_t fwrite_impl(const void* p, size_t size, size_t count);
-  virtual void flush() {}
-  size_t bytes_written_;
-
-  // seek_set() operates relative to this point.
-  long seek_ref_;
-
- private:
-  FILE* fh_;
 };
 
-void write_word(FileHandle& fh, uint32_t value);
-
-void write_buf(FileHandle& fh, ConstBuffer buf);
 void write_padding(FileHandle& fh, char byte, size_t num);
 
 template <typename T>
@@ -191,31 +184,15 @@ void write_vec(FileHandle& fh, const std::vector<T>& obj) {
 }
 
 void write_str_and_null(FileHandle& fh, const std::string& str);
-void write_str(FileHandle& fh, const std::string& str);
 void stream_file(FileHandle& in, FileHandle& out);
+
+bool is_vdex_file(ConstBuffer buf);
 
 size_t get_filesize(FileHandle& fh);
 
-inline uint32_t read_uleb128(char** _ptr) {
-  uint8_t* ptr = reinterpret_cast<uint8_t*>(*_ptr);
-  uint32_t result = *(ptr++);
+std::string read_string(const uint8_t* dstr);
 
-  if (result > 0x7f) {
-    int cur = *(ptr++);
-    result = (result & 0x7f) | ((cur & 0x7f) << 7);
-    if (cur > 0x7f) {
-      cur = *(ptr++);
-      result |= (cur & 0x7f) << 14;
-      if (cur > 0x7f) {
-        cur = *(ptr++);
-        result |= (cur & 0x7f) << 21;
-        if (cur > 0x7f) {
-          cur = *(ptr++);
-          result |= cur << 28;
-        }
-      }
-    }
-  }
-  *_ptr = reinterpret_cast<char*>(ptr);
-  return result;
+inline uint32_t read_uleb128(char** _ptr) {
+  return read_uleb128(
+      reinterpret_cast<const uint8_t**>(const_cast<const char**>(_ptr)));
 }

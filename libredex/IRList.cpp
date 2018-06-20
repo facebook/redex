@@ -414,6 +414,18 @@ size_t IRList::count_opcodes() const {
   return count;
 }
 
+void IRList::sanity_check() const {
+  std::unordered_set<const MethodItemEntry*> entries;
+  for (const auto& mie : m_list) {
+    entries.insert(&mie);
+  }
+  for (const auto& mie : m_list) {
+    if (mie.type == MFLOW_TARGET) {
+      always_assert(entries.count(mie.target->src) > 0);
+    }
+  }
+}
+
 /*
  * This method fixes the goto branches when the instruction is removed or
  * replaced by another instruction.
@@ -640,8 +652,9 @@ namespace ir_list {
 IRInstruction* primary_instruction_of_move_result_pseudo(
     IRList::iterator it) {
   --it;
-  always_assert(it->type == MFLOW_OPCODE &&
-                it->insn->has_move_result_pseudo());
+  always_assert_log(it->type == MFLOW_OPCODE &&
+                        it->insn->has_move_result_pseudo(),
+                    "%s does not have a move result pseudo", SHOW(*it));
   return it->insn;
 }
 

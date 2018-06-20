@@ -317,6 +317,8 @@ class IRList {
     m_list.remove_and_dispose_if(predicate, IRListDisposer());
   }
 
+  void sanity_check() const;
+
   IRList::iterator begin() { return m_list.begin(); }
   IRList::iterator end() { return m_list.end(); }
   IRList::const_iterator begin() const { return m_list.begin(); }

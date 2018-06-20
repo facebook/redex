@@ -9,6 +9,7 @@
 
 #include "PassManager.h"
 
+#include <boost/filesystem.hpp>
 #include <cstdio>
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
@@ -17,6 +18,7 @@
 #endif
 #include <unordered_set>
 
+#include "ApkManager.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -24,7 +26,6 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "InstructionLowering.h"
-#include "InterDex.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "PrintSeeds.h"
@@ -35,6 +36,16 @@
 #include "Timer.h"
 #include "Walkers.h"
 
+namespace {
+
+std::string get_apk_dir(const Json::Value& config) {
+  auto apkdir = config["apk_dir"].asString();
+  apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
+  return apkdir;
+}
+
+}
+
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
   return pg_config;
@@ -42,20 +53,25 @@ redex::ProguardConfiguration empty_pg_config() {
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
-                         bool verify_none_mode)
-    : PassManager(passes, empty_pg_config(), config, verify_none_mode) {
+                         bool verify_none_mode,
+                         bool is_art_build)
+    : PassManager(passes, empty_pg_config(), config,
+                  verify_none_mode, is_art_build) {
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const redex::ProguardConfiguration& pg_config,
                          const Json::Value& config,
-                         bool verify_none_mode)
+                         bool verify_none_mode,
+                         bool is_art_build)
     : m_config(config),
+      m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(pg_config),
       m_testing_mode(false),
-      m_verify_none_mode(verify_none_mode) {
+      m_verify_none_mode(verify_none_mode),
+      m_art_build(is_art_build) {
   init(config);
   if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
     std::string pass_name{getenv("PROFILE_PASS")};
@@ -301,7 +317,7 @@ const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
 const std::unordered_map<std::string, int>&
 PassManager::get_interdex_metrics() {
   for (const auto& pass_info : m_pass_info) {
-    if (pass_info.pass->name() == INTERDEX_PASS_NAME) {
+    if (pass_info.pass->name() == "InterDexPass") {
       return pass_info.metrics;
     }
   }

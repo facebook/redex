@@ -13,6 +13,7 @@
 #include <cstring>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -59,12 +60,6 @@ class DexOutputIdx;
 class DexString;
 class DexType;
 using Scope = std::vector<DexClass*>;
-
-// Forward decls to break cycle with ProguardMap.h
-std::string proguard_name(const DexType* cls);
-std::string proguard_name(const DexClass* cls);
-std::string proguard_name(const DexMethodRef* method);
-std::string proguard_name(const DexFieldRef* field);
 
 class DexString {
   friend struct RedexContext;
@@ -351,6 +346,7 @@ class DexField : public DexFieldRef {
   void set_external() {
     always_assert_log(!m_concrete,
         "Unexpected concrete field %s\n", SHOW(this));
+    m_deobfuscated_name = show(this);
     m_external = true;
   }
 
@@ -370,8 +366,8 @@ class DexField : public DexFieldRef {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
 
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
@@ -620,10 +616,15 @@ typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
 
 struct DexTryItem {
   uint32_t m_start_addr;
-  uint32_t m_insn_count;
+  uint16_t m_insn_count;
   DexCatches m_catches;
   DexTryItem(uint32_t start_addr, uint32_t insn_count):
-    m_start_addr(start_addr), m_insn_count(insn_count) {}
+    m_start_addr(start_addr) {
+    always_assert_log(insn_count <= std::numeric_limits<uint16_t>::max(),
+                      "too many instructions in a single try region %d > 2^16",
+                      insn_count);
+    m_insn_count = insn_count;
+  }
 };
 
 class IRCode;
@@ -873,8 +874,8 @@ class DexMethod : public DexMethodRef {
   }
 
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
 
   /** return just the name of the method */
@@ -907,6 +908,7 @@ class DexMethod : public DexMethodRef {
   void set_external() {
     always_assert_log(!m_concrete,
         "Unexpected concrete method %s\n", SHOW(this));
+    m_deobfuscated_name = show(this);
     m_external = true;
   }
   void set_dex_code(std::unique_ptr<DexCode> code) {
@@ -1059,8 +1061,8 @@ class DexClass {
   void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
   void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
-  std::string get_deobfuscated_name() const {
-    return is_external() ? proguard_name(this) : m_deobfuscated_name;
+  const std::string& get_deobfuscated_name() const {
+    return m_deobfuscated_name;
   }
   const std::string& get_dex_location() const {
     return m_dex_location;

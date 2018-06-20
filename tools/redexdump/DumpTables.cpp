@@ -26,7 +26,7 @@
 static std::string get_proto(ddump_data* rd,
                              uint32_t idx,
                              bool with_shorty = true) {
-  std::stringstream ss;
+  std::ostringstream ss;
   dex_proto_id* proto = rd->dex_proto_ids + idx;
   if (with_shorty) {
     ss << dex_string_by_idx(rd, proto->shortyidx) << " ";
@@ -50,7 +50,7 @@ static std::string get_proto(ddump_data* rd,
  * class field_type field_name
  */
 static std::string get_field(ddump_data* rd, uint32_t idx) {
-  std::stringstream ss;
+  std::ostringstream ss;
   dex_field_id* field = rd->dex_field_ids + idx;
   ss << dex_string_by_type_idx(rd, field->classidx) << " "
      << dex_string_by_type_idx(rd, field->typeidx) << " "
@@ -63,7 +63,7 @@ static std::string get_field(ddump_data* rd, uint32_t idx) {
  * class method_proto_no_shorty method_name
  */
 static std::string get_method(ddump_data* rd, uint32_t idx) {
-  std::stringstream ss;
+  std::ostringstream ss;
   dex_method_id* method = rd->dex_method_ids + idx;
   ss << dex_string_by_type_idx(rd, method->classidx) << " "
      << dex_string_by_idx(rd, method->nameidx) << " "
@@ -77,7 +77,7 @@ static std::string get_method(ddump_data* rd, uint32_t idx) {
 static std::string get_flags(uint32_t flags,
                              bool cls = true,
                              bool method = false) {
-  std::stringstream ss;
+  std::ostringstream ss;
   if (flags & DexAccessFlags::ACC_PUBLIC) {
     ss << "public ";
   }
@@ -128,7 +128,7 @@ static std::string get_flags(uint32_t flags,
 static std::string get_class_def(ddump_data* rd,
                                  uint32_t idx,
                                  bool metadata = true) {
-  std::stringstream ss;
+  std::ostringstream ss;
   dex_class_def* cls_def = rd->dex_class_defs + idx;
   ss << get_flags(cls_def->access_flags)
      << dex_string_by_type_idx(rd, cls_def->typeidx);
@@ -182,7 +182,7 @@ static std::string get_class_def(ddump_data* rd,
  * ...
  */
 static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
-  std::stringstream ss;
+  std::ostringstream ss;
   const dex_class_def* class_defs =
       (dex_class_def*)(rd->dexmmap + rd->dexh->class_defs_off) + idx;
   auto cls_off = class_defs->class_data_offset;
@@ -233,7 +233,7 @@ static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
 
 static std::string get_code_item(dex_code_item** pcode_item) {
   dex_code_item* code_item = *pcode_item;
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "registers_size: " << code_item->registers_size << ", "
      << "ins_size: " << code_item->ins_size << ", "
      << "outs_size: " << code_item->outs_size << ", "
@@ -430,7 +430,7 @@ static std::string get_debug_item(const uint8_t** pdebug_item) {
     read_uleb128(pdebug_item);
   }
   auto num_opcodes = count_debug_instructions(*pdebug_item);
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "line_start: " << line_start << ", "
      << "parameters_size: " << parameters_size << ", "
      << "num_opcodes: " << num_opcodes << "\n";

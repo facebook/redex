@@ -12,12 +12,12 @@
 
 template <typename T>
 std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
-    const std::vector<Block*>& blocks,
+    const std::vector<cfg::Block*>& blocks,
     const T& bottom,
     const std::function<void(IRList::iterator, T*)>& trans,
     const T& entry_value) {
   std::vector<T> block_outs(blocks.size(), bottom);
-  std::deque<Block*> work_list(blocks.begin(), blocks.end());
+  std::deque<cfg::Block*> work_list(blocks.begin(), blocks.end());
   while (!work_list.empty()) {
     auto block = work_list.front();
     work_list.pop_front();
@@ -25,7 +25,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (auto& pred : block->preds()) {
+    for (const auto& pred : block->preds()) {
       insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {
@@ -52,7 +52,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     if (block->id() == 0) {
       insn_in = entry_value;
     }
-    for (auto pred : block->preds()) {
+    for (const auto& pred : block->preds()) {
       insn_in.meet(block_outs[pred->src()->id()]);
     }
     for (auto it = block->begin(); it != block->end(); ++it) {
@@ -70,7 +70,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
 
 template <typename T>
 std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
-    const std::vector<Block*>& blocks,
+    const std::vector<cfg::Block*>& blocks,
     const T& bottom,
     const std::function<void(IRList::iterator, T*)>& trans) {
   return forwards_dataflow(blocks, bottom, trans, bottom);

@@ -137,6 +137,7 @@ inline bool is_non_virtual_scope(const VirtualScope* scope) {
   if (scope->methods[0].second ==
       (VirtualFlags::FINAL | VirtualFlags::TOP_DEF)) {
     always_assert(scope->methods.size() == 1);
+    always_assert(!is_impl_scope(scope));
     return true;
   }
   return false;

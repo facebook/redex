@@ -61,7 +61,7 @@ static IRList::iterator insert_if_opcode_check(IRCode* code,
                                                reg_t reg_to_check,
                                                SignedConstantDomain scd) {
   always_assert(!scd.is_top() && !scd.is_bottom());
-  const auto& cst = scd.constant_domain().get_constant();
+  const auto& cst = scd.get_constant();
   if (cst) {
     // If we have an exact constant, create a const instruction that loads
     // that value and check for equality.
@@ -123,14 +123,14 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
   if (!(is_integer(field->get_type()) || is_object(field->get_type()))) {
     return it;
   }
-  auto scd = wps.get_field_value(field);
-  if (scd.is_top()) {
+  auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
+  if (!scd || scd->is_top()) {
     return it;
   }
   auto fm_it = it.unwrap();
   auto reg = ir_list::move_result_pseudo_of(fm_it)->dest();
   ++fm_it; // skip the move-result-pseudo
-  fm_it = insert_if_opcode_check(code, fm_it, reg, scd);
+  fm_it = insert_if_opcode_check(code, fm_it, reg, *scd);
   auto check_insn_it = fm_it;
   auto tmp = code->allocate_temp();
   // XXX ideally this would use the deobfuscated field name
@@ -192,8 +192,8 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
              ->set_src(0, tmp)));
     return fm_it;
   };
-  auto scd = wps.get_return_value(callee);
-  if (scd.is_bottom()) {
+  auto cst = wps.get_return_value(callee);
+  if (cst.is_bottom()) {
     if (is_move_result(std::next(it)->insn->opcode())) {
       ++it;
     }
@@ -210,11 +210,12 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   if (!(is_integer(ret_type) || is_object(ret_type))) {
     return it;
   }
-  if (scd.is_top()) {
+  auto scd = cst.maybe_get<SignedConstantDomain>();
+  if (!scd || scd->is_top()) {
     return it;
   }
   auto fm_it = it.unwrap();
-  fm_it = insert_if_opcode_check(code, fm_it, reg, scd);
+  fm_it = insert_if_opcode_check(code, fm_it, reg, *scd);
   auto check_insn_it = fm_it;
   fm_it = insert_assertion(fm_it);
   auto bt = new BranchTarget(&*check_insn_it);
@@ -233,7 +234,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
  */
 void RuntimeAssertTransform::insert_param_asserts(
     const ConstantEnvironment& env, DexMethod* method) {
-  auto args = env.get_primitive_environment();
+  auto args = env.get_register_environment();
   if (!args.is_value()) {
     return;
   }
@@ -256,15 +257,16 @@ void RuntimeAssertTransform::insert_param_asserts(
       continue;
     }
     auto reg = insn_it->insn->dest();
-    auto scd = args.get(reg);
-    if (scd.is_top()) {
+    auto scd_opt = args.get(reg).maybe_get<SignedConstantDomain>();
+    if (!scd_opt) {
       continue;
     }
+    auto& scd = *scd_opt;
     // The branching instruction that checks whether the constant domain is
     // correct for the given param
     // XXX with some refactoring, we could use insert_if_opcode_check here...
     IRList::iterator check_insn_it;
-    const auto& cst = scd.constant_domain().get_constant();
+    const auto& cst = scd.get_constant();
     if (cst) {
       // If we have an exact constant, create a const instruction that loads
       // that value and check for equality.

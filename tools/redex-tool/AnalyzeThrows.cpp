@@ -19,12 +19,12 @@
 
 namespace {
 
-using LogicalBlock = std::vector<std::vector<Block*>>;
+using LogicalBlock = std::vector<std::vector<cfg::Block*>>;
 
 /**
  * Return true if the block ends with a throw instruction.
  */
-bool is_throw_block(const DexMethod* meth, Block* block) {
+bool is_throw_block(const DexMethod* meth, cfg::Block* block) {
   // check last instruction of a block to see if it's a throw
   for (auto insn = block->rbegin(); insn != block->rend(); ++insn) {
     if (insn->type != MFLOW_OPCODE) continue;
@@ -52,7 +52,7 @@ bool is_throw_block(const DexMethod* meth, Block* block) {
  * If switches and array initialization are around this is not
  * doing the right thing.
  */
-int block_size(const std::vector<Block*>& logical_block) {
+int block_size(const std::vector<cfg::Block*>& logical_block) {
   int count = 0;
   for (const auto& block : logical_block) {
     for (auto insn = block->begin(); insn != block->end(); ++insn) {
@@ -95,9 +95,9 @@ void print_blocks_by_size(const LogicalBlock& throwing_blocks) {
  * throw path.
  */
 void walk_predecessors(
-    Block* block,
-    std::vector<Block*>& throw_code,
-    std::unordered_set<Block*>& left_blocks) {
+    cfg::Block* block,
+    std::vector<cfg::Block*>& throw_code,
+    std::unordered_set<cfg::Block*>& left_blocks) {
   throw_code.emplace_back(block);
   const auto& preds = block->preds();
   for (const auto& pred_edge : preds) {
@@ -116,8 +116,8 @@ void walk_predecessors(
 void collect_throwing_blocks(
     DexMethod* meth, LogicalBlock& throwing_blocks) {
   const auto& blocks = meth->get_code()->cfg().blocks();
-  std::queue<Block*> blocks_to_visit;
-  std::unordered_set<Block*> no_throw_blocks;
+  std::queue<cfg::Block*> blocks_to_visit;
+  std::unordered_set<cfg::Block*> no_throw_blocks;
   // collect all blocks with a return
   for (const auto& block : blocks) {
     for (auto insn = block->rbegin(); insn != block->rend(); ++insn) {
@@ -135,7 +135,7 @@ void collect_throwing_blocks(
     const auto block = blocks_to_visit.front();
     blocks_to_visit.pop();
     for (const auto& pred_edge : block->preds()) {
-      auto* pred = pred_edge->src();
+      auto pred = pred_edge->src();
       if (no_throw_blocks.count(pred) == 0) {
         blocks_to_visit.push(pred);
         no_throw_blocks.insert(pred);
@@ -149,8 +149,8 @@ void collect_throwing_blocks(
     return;
   }
   // collect all remaining blocks
-  std::unordered_set<Block*> left_blocks;
-  std::queue<Block*> throw_blocks;
+  std::unordered_set<cfg::Block*> left_blocks;
+  std::queue<cfg::Block*> throw_blocks;
   for (const auto& block : blocks) {
     if (no_throw_blocks.count(block) > 0) continue;
     if (is_throw_block(meth, block)) {
@@ -164,7 +164,7 @@ void collect_throwing_blocks(
   while (!throw_blocks.empty()) {
     const auto block = throw_blocks.front();
     throw_blocks.pop();
-    std::vector<Block*> throw_code;
+    std::vector<cfg::Block*> throw_code;
     walk_predecessors(block, throw_code, left_blocks);
     throwing_blocks.push_back(std::move(throw_code));
   }

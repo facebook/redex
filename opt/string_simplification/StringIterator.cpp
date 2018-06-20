@@ -12,7 +12,7 @@
 
 #include "StringIterator.h"
 
-using NodeId = Block*;
+using NodeId = cfg::Block*;
 using Environment = StringProdEnvironment;
 
 template <typename T>
@@ -30,7 +30,7 @@ IRList::iterator next_insn(IRList::iterator it) {
   return future;
 }
 
-IRList::iterator next_insn(IRList::iterator it, Block* blk) {
+IRList::iterator next_insn(IRList::iterator it, cfg::Block* blk) {
   auto future = std::next(it);
   while (future->type != MFLOW_OPCODE && future != blk->end()) {
     future = std::next(future);
@@ -112,7 +112,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
         continue;
       }
       auto val = env->eval(insn->src(i));
-      if (val.kind() != StringyValue::Kind::Value ||
+      if (val.kind() != AbstractValueKind::Value ||
           !val.value().is_static_string()) {
         env->put(insn->src(i), StringyDomain::top());
       }

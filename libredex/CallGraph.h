@@ -9,28 +9,60 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
 #include <unordered_map>
 
 #include "DexClass.h"
+#include "FixpointIterators.h"
 #include "IRCode.h"
 #include "Resolver.h"
-#include "FixpointIterators.h"
 
 /*
- * Call graph representation that implements the standard graph interface API
- * for use with fixpoint iteration algorithms.
- *
- * Currently, we only add edges in the graph when we know the exact callee an
- * invoke instruction refers to.  That means only invoke-static and
- * invoke-direct calls, as well as invoke-virtual calls that refer
- * unambiguously to a single method. This keeps the graph smallish and easier
- * to analyze.
- *
- * TODO: Once we have points-to information, we should expand the callgraph to
- * include invoke-virtuals that refer to sets of methods.
+ * Call graph representation that implements the standard graph interface
+ * API for use with fixpoint iteration algorithms.
  */
 
 namespace call_graph {
+
+class Graph;
+
+/*
+ * Currently, we only add edges in the graph when we know the exact callee
+ * an invoke instruction refers to.  That means only invoke-static and
+ * invoke-direct calls, as well as invoke-virtual calls that refer
+ * unambiguously to a single method. This keeps the graph smallish and
+ * easier to analyze.
+ *
+ * TODO: Once we have points-to information, we should expand the callgraph
+ * to include invoke-virtuals that refer to sets of methods.
+ */
+Graph single_callee_graph(const Scope&);
+
+struct CallSite {
+  DexMethod* callee;
+  IRList::iterator invoke;
+
+  CallSite(DexMethod* callee, IRList::iterator invoke)
+      : callee(callee), invoke(invoke) {}
+};
+
+using CallSites = std::vector<CallSite>;
+
+/*
+ * This class determines how the call graph is built. The Graph ctor will start
+ * from the roots and invoke get_callsites() on each returned method
+ * recursively until the graph is fully mapped out. One can think of the
+ * BuildStrategy as implicitly encoding the graph structure, with the Graph
+ * constructor reifying it.
+ */
+class BuildStrategy {
+ public:
+  virtual ~BuildStrategy() {}
+
+  virtual std::vector<DexMethod*> get_roots() const = 0;
+
+  virtual CallSites get_callsites(const DexMethod*) const = 0;
+};
 
 class Edge {
  public:
@@ -49,7 +81,8 @@ using Edges = std::vector<std::shared_ptr<Edge>>;
 
 class Node {
  public:
-  /* implicit */ Node(DexMethod* m): m_method(m) {}
+  /* implicit */
+  Node(DexMethod* m) : m_method(m) {}
   DexMethod* method() const { return m_method; }
   bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
@@ -63,9 +96,17 @@ class Node {
   friend class Graph;
 };
 
-class Graph {
+inline size_t hash_value(const Node& node) {
+  return reinterpret_cast<size_t>(node.method());
+}
+
+} // namespace call_graph
+
+namespace call_graph {
+
+class Graph final {
  public:
-  explicit Graph(const Scope&, bool include_virtuals = false);
+  Graph(const BuildStrategy&);
 
   const Node& entry() const { return m_entry; }
 
@@ -84,24 +125,23 @@ class Graph {
                 IRList::iterator invoke_it);
 
   Node m_entry = Node(nullptr);
-  std::unordered_map<DexMethod*, Node> m_nodes;
+  std::unordered_map<DexMethod*, Node, boost::hash<Node>> m_nodes;
 };
 
-class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
+// A static-method-only API for use with the monotonic fixpoint iterator.
+class GraphInterface {
  public:
   using Graph = call_graph::Graph;
   using NodeId = DexMethod*;
   using EdgeId = std::shared_ptr<Edge>;
 
-  ~GraphInterface() = delete;
-
   static const NodeId entry(const Graph& graph) {
     return graph.entry().method();
   }
-  static std::vector<EdgeId> predecessors(const Graph& graph, const NodeId& m) {
+  static Edges predecessors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callers();
   }
-  static std::vector<EdgeId> successors(const Graph& graph, const NodeId& m) {
+  static Edges successors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callees();
   }
   static const NodeId source(const Graph& graph, const EdgeId& e) {
@@ -113,14 +153,3 @@ class GraphInterface : public FixpointIteratorGraphSpec<GraphInterface> {
 };
 
 } // namespace call_graph
-
-namespace std {
-
-template <>
-struct hash<call_graph::Node> {
-  size_t operator()(const call_graph::Node& node) const {
-    return reinterpret_cast<size_t>(node.method());
-  }
-};
-
-} // namespace std

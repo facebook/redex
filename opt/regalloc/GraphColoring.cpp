@@ -17,6 +17,7 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "Transform.h"
 #include "VirtualRegistersFile.h"
 
@@ -26,7 +27,7 @@ namespace regalloc {
  * Find the first instruction in a block (if any) that uses a given register.
  */
 static IRList::iterator find_first_use_in_block(reg_t use,
-                                                Block* block) {
+                                                cfg::Block* block) {
   auto ii = InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
@@ -42,9 +43,9 @@ static IRList::iterator find_first_use_in_block(reg_t use,
 
 static void find_first_uses_dfs(
     reg_t reg,
-    Block* block,
-    std::vector<Block*>* blocks_with_uses,
-    std::unordered_set<const Block*>* visited_blocks) {
+    cfg::Block* block,
+    std::vector<cfg::Block*>* blocks_with_uses,
+    std::unordered_set<const cfg::Block*>* visited_blocks) {
   if (visited_blocks->count(block) != 0) {
     return;
   }
@@ -63,9 +64,9 @@ static void find_first_uses_dfs(
 /*
  * Search for the first uses of a register, starting from the entry block.
  */
-static std::vector<Block*> find_first_uses(reg_t reg, Block* entry) {
-  std::unordered_set<const Block*> visited_blocks;
-  std::vector<Block*> blocks_with_uses;
+static std::vector<cfg::Block*> find_first_uses(reg_t reg, cfg::Block* entry) {
+  std::unordered_set<const cfg::Block*> visited_blocks;
+  std::vector<cfg::Block*> blocks_with_uses;
   find_first_uses_dfs(reg, entry, &blocks_with_uses, &visited_blocks);
   return blocks_with_uses;
 }
@@ -855,7 +856,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
   }
 
   auto& cfg = code->cfg();
-  Block* start_block = cfg.entry_block();
+  cfg::Block* start_block = cfg.entry_block();
   auto postorder_dominator = cfg.immediate_dominators();
   for (auto param : params) {
     auto block_uses = find_first_uses(param, start_block);
@@ -866,14 +867,14 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       // There are multiple use sites for this param register.
       // Find the immediate dominator of the blocks that contain those uses and
       // insert a load at its end.
-      Block* idom = block_uses[0];
+      cfg::Block* idom = block_uses[0];
       for (size_t index = 1; index < block_uses.size(); ++index) {
         idom = cfg.idom_intersect(postorder_dominator, idom, block_uses[index]);
       }
       TRACE(REG, 5, "Inserting param load of v%u in B%u\n", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
-      auto insn_it = transform::find_last_instruction(idom);
+      auto insn_it = idom->get_last_insn();
       if (insn_it != idom->end() && !is_branch(insn_it->insn->opcode()) &&
           !opcode::may_throw(insn_it->insn->opcode())) {
         ++insn_it;
@@ -1048,7 +1049,7 @@ void Allocator::allocate(IRCode* code) {
     LivenessFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
 
-    TRACE(REG, 5, "Allocating:\n%s\n", SHOW(code->cfg()));
+    TRACE(REG, 5, "Allocating:\n%s\n", ::SHOW(code->cfg()));
     auto ig =
         interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
@@ -1058,7 +1059,7 @@ void Allocator::allocate(IRCode* code) {
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
       fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
-      TRACE(REG, 5, "Post-coalesce:\n%s\n", SHOW(code->cfg()));
+      TRACE(REG, 5, "Post-coalesce:\n%s\n", ::SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
       // moves that were inserted by spilling

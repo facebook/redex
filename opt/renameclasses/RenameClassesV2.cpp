@@ -916,8 +916,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(
     if (is_raw_resource(path)) {
       continue;
     }
-    size_t num_renamed;
-    ssize_t out_delta;
+    size_t num_renamed = 0;
+    ssize_t out_delta = 0;
     TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());
     rename_classes_in_layout(path, aliases_for_layouts, &num_renamed, &out_delta);
     TRACE(

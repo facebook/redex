@@ -97,7 +97,7 @@ class Analyzer final
     : public MonotonicFixpointIterator<cfg::GraphInterface,
                                        AbstractObjectEnvironment> {
  public:
-  explicit Analyzer(const ControlFlowGraph& cfg)
+  explicit Analyzer(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {
     MonotonicFixpointIterator::run(AbstractObjectEnvironment::top());
     populate_environments(cfg);
@@ -171,10 +171,12 @@ class Analyzer final
       if (insn->get_method() == m_for_name) {
         auto class_name = current_state->get(insn->src(0)).get_constant();
         if (class_name && class_name->kind == STRING) {
+          auto internal_name = DexString::make_string(
+            JavaNameUtil::external_to_internal(class_name->dex_string->str()));
           current_state->set(
               RESULT_REGISTER,
               AbstractObjectDomain(AbstractObject(
-                  CLASS, DexType::make_type(class_name->dex_string))));
+                  CLASS, DexType::make_type(internal_name))));
           break;
         }
       }
@@ -279,11 +281,11 @@ class Analyzer final
   // instruction. Since we use an abstract domain based on Patricia trees, the
   // memory footprint of storing the abstract state at each program point is
   // small.
-  void populate_environments(const ControlFlowGraph& cfg) {
+  void populate_environments(const cfg::ControlFlowGraph& cfg) {
     // We reserve enough space for the map in order to avoid repeated rehashing
     // during the computation.
     m_environments.reserve(cfg.blocks().size() * 16);
-    for (Block* block : cfg.blocks()) {
+    for (cfg::Block* block : cfg.blocks()) {
       AbstractObjectEnvironment current_state = get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
@@ -336,7 +338,7 @@ SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method) {
     return;
   }
   code->build_cfg();
-  ControlFlowGraph& cfg = code->cfg();
+  cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(cfg);
 }

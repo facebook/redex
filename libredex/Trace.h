@@ -22,7 +22,6 @@
   TM(BIND)               \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
-  TM(COMP_BUILDERS)      \
   TM(CFG)                \
   TM(CFP)                \
   TM(CLP_GQL)            \
@@ -43,15 +42,18 @@
   TM(HOTNESS)            \
   TM(ICONSTP)            \
   TM(IDEX)               \
+  TM(GETTER)             \
   TM(INL)                \
   TM(INLINIT)            \
   TM(INLRES)             \
+  TM(INSTRUMENT)         \
   TM(INTF)               \
   TM(LITHO_BLD)          \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(MMINL)              \
+  TM(MMODE)               \
   TM(MORTIROLO)          \
   TM(MTRANS)             \
   TM(OBFUSCATE)          \
@@ -65,6 +67,7 @@
   TM(QUICK)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
+  TM(REFU)               \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \
@@ -73,6 +76,7 @@
   TM(RMU)                \
   TM(RMUF)               \
   TM(RM_INTF)            \
+  TM(SDIS)               \
   TM(SHORTEN)            \
   TM(SINK)               \
   TM(SINL)               \
@@ -82,7 +86,6 @@
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
-  TM(TREF)               \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \
@@ -116,10 +119,10 @@ void trace(TraceModule module, int level, const char* fmt, ...);
 
 struct TraceContext {
   explicit TraceContext(const std::string& current_method) {
-    s_current_method = current_method;
+    s_current_method = &current_method;
   }
-  ~TraceContext() { s_current_method.clear(); }
+  ~TraceContext() { s_current_method = nullptr; }
 
-  thread_local static std::string s_current_method;
+  thread_local static const std::string* s_current_method;
   static std::mutex s_trace_mutex;
 };

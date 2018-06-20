@@ -21,7 +21,7 @@
 
 #include "CopyPropagationPass.h"
 
-int count_sgets(ControlFlowGraph& cfg) {
+int count_sgets(cfg::ControlFlowGraph& cfg) {
   int sgets = 0;
   for (auto& mie : InstructionIterable(cfg)) {
     TRACE(RME, 1, "%s\n", SHOW(mie.insn));

@@ -59,7 +59,7 @@ inline const char* maptype_to_string(uint16_t maptype) {
 }
 
 std::string format_map(ddump_data* rd) {
-  std::stringstream ss;
+  std::ostringstream ss;
   unsigned int count;
   dex_map_item* maps;
   get_dex_map_items(rd, &count, &maps);
@@ -164,7 +164,7 @@ const char* check_size(uint8_t value_type, uint8_t value_arg) {
 }
 
 std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
-  std::stringstream ss;
+  std::ostringstream ss;
   const uint8_t* aitem = *_aitem;
   uint8_t value = *aitem++;
   uint8_t upperbits = value >> 5;
@@ -237,7 +237,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
 }
 
 std::string format_annotation(ddump_data* rd, const uint8_t** _aitem) {
-  std::stringstream ss;
+  std::ostringstream ss;
   const uint8_t* aitem = *_aitem;
   uint32_t type_idx = read_uleb128(&aitem);
   uint32_t size = read_uleb128(&aitem);
@@ -254,7 +254,7 @@ std::string format_annotation(ddump_data* rd, const uint8_t** _aitem) {
 }
 
 std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem) {
-  std::stringstream ss;
+  std::ostringstream ss;
   const uint8_t* aitem = *_aitem;
   uint8_t viz = *aitem++;
   *_aitem = aitem;
@@ -264,7 +264,7 @@ std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem) {
 }
 
 std::string format_method(ddump_data* rd, int idx) {
-  std::stringstream ss;
+  std::ostringstream ss;
   dex_method_id* method = rd->dex_method_ids + idx;
   char* type = nullptr;
   char* name = nullptr;

@@ -18,6 +18,9 @@ class ReferencedState {
   bool m_bystring{false};
   bool m_byresources{false};
 
+  // Flag that specifies if this member is used for mix-mode compilation.
+  bool m_mix_mode{false};
+
   // ProGuard keep settings
   //
   // Specify classes and class members that are entry-points.
@@ -55,6 +58,7 @@ class ReferencedState {
       this->m_bytype = other.m_bytype;
       this->m_bystring = other.m_bystring;
       this->m_byresources = other.m_byresources;
+      this->m_mix_mode = other.m_mix_mode;
 
       this->m_keep = other.m_keep;
       this->m_assumenosideeffects = other.m_assumenosideeffects;
@@ -140,4 +144,7 @@ class ReferencedState {
   void increment_keep_count() { m_keep_count++; }
 
   void set_whyareyoukeeping() { m_whyareyoukeeping = true; }
+
+  bool has_mix_mode() const { return m_mix_mode; }
+  void set_mix_mode() { m_mix_mode = true; }
 };

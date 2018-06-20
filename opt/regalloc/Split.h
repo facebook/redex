@@ -26,10 +26,10 @@ enum BlockMode {
 struct SplitConstraints {
   // Map of catch blocks and number of incoming control flow edges on
   // which a given register dies.
-  std::unordered_map<Block*, size_t> catch_blocks;
+  std::unordered_map<cfg::Block*, size_t> catch_blocks;
   // Map of non-catch blocks and number of incoming control flow edges on
   // which a given register dies.
-  std::unordered_map<Block*, size_t> other_blocks;
+  std::unordered_map<cfg::Block*, size_t> other_blocks;
   // Set of MethodItemEntry of invoke-xxx or fill-new-array before move-result
   // if the move-result's dest is the given register.
   std::unordered_set<MethodItemEntry*> write_result;
@@ -47,11 +47,11 @@ struct SplitCosts {
     return load_store.split_store + load_store.split_load;
   }
 
-  const std::unordered_map<Block*, size_t>& death_at_catch(reg_t u) const {
+  const std::unordered_map<cfg::Block*, size_t>& death_at_catch(reg_t u) const {
     return reg_constraints.at(u).catch_blocks;
   }
 
-  const std::unordered_map<Block*, size_t>& death_at_other(reg_t u) const {
+  const std::unordered_map<cfg::Block*, size_t>& death_at_other(reg_t u) const {
     return reg_constraints.at(u).other_blocks;
   }
 
@@ -63,11 +63,11 @@ struct SplitCosts {
 
   void increase_store(reg_t u) { ++reg_constraints[u].split_store; }
 
-  void add_catch_block(reg_t u, Block* catch_block) {
+  void add_catch_block(reg_t u, cfg::Block* catch_block) {
     ++reg_constraints[u].catch_blocks[catch_block];
   }
 
-  void add_other_block(reg_t u, Block* other_block) {
+  void add_other_block(reg_t u, cfg::Block* other_block) {
     ++reg_constraints[u].other_blocks[other_block];
   }
 
@@ -92,7 +92,7 @@ struct BlockModeInsn {
 };
 
 struct BlockLoadInfo {
-  using BlockEdge = std::pair<Block*, Block*>;
+  using BlockEdge = std::pair<cfg::Block*, cfg::Block*>;
 
   struct block_edge_comparator {
     bool operator()(const BlockEdge& b1, const BlockEdge& b2) const {
@@ -104,9 +104,9 @@ struct BlockLoadInfo {
   };
 
   // Map of catch blocks and registers already loaded in these blocks.
-  std::unordered_map<Block*, std::unordered_set<reg_t>> try_loaded_regs;
+  std::unordered_map<cfg::Block*, std::unordered_set<reg_t>> try_loaded_regs;
   // Map of non-catch blocks and registers already loaded in these blocks.
-  std::unordered_map<Block*, std::unordered_set<reg_t>> other_loaded_regs;
+  std::unordered_map<cfg::Block*, std::unordered_set<reg_t>> other_loaded_regs;
   // Map of the edges between two blocks and what their type is and load
   // instructions we should inserted for these edges.
   // This is an ordered map because we iterate through it.

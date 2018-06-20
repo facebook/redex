@@ -57,7 +57,7 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(*goto_mie);
   // this TRY_END is in a block that is dead code
   code->push_back(TRY_END, catch_start);
-  code->push_back(dasm(OPCODE_CONST, {0_v, 0x1_L}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
 

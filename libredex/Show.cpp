@@ -10,7 +10,6 @@
 #include "Show.h"
 
 #include <boost/io/detail/quoted_manip.hpp>
-#include <sstream>
 
 #include "ControlFlow.h"
 #include "Creators.h"
@@ -22,6 +21,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
+#include "StringBuilder.h"
 
 namespace {
 
@@ -45,7 +45,7 @@ std::string humanize(std::string const& type) {
   } else if (type.compare("Z") == 0) {
     return "boolean";
   } else if (type[0] == '[') {
-    std::stringstream ss;
+    std::ostringstream ss;
     ss << humanize(type.substr(1)) << "[]";
     return ss.str();
   } else if (type[0] == 'L') {
@@ -57,7 +57,7 @@ std::string humanize(std::string const& type) {
 // TODO: make sure names reported handles collisions correctly.
 //       i.e. ACC_VOLATILE and ACC_BRIDGE etc.
 std::string accessibility(uint32_t acc, bool method = false) {
-  std::stringstream ss;
+  std::ostringstream ss;
   if (acc & DexAccessFlags::ACC_PUBLIC) {
     ss << "public ";
   }
@@ -115,7 +115,7 @@ std::string show(DexAnnotationVisibility vis) {
 
 std::string show_opcode(const DexInstruction* insn) {
   if (!insn) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   auto opcode = insn->opcode();
   switch (opcode) {
   case DOPCODE_NOP:
@@ -579,7 +579,7 @@ std::string show_helper(const DexAnnotation* anno, bool deobfuscated) {
   if (!anno) {
     return "";
   }
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "type:" << show(anno->type()) << " visibility:" << show(anno->viz())
      << " annotations:";
   if (deobfuscated) {
@@ -592,27 +592,36 @@ std::string show_helper(const DexAnnotation* anno, bool deobfuscated) {
 
 } // namespace
 
-std::string show(const DexString* p) {
-  if (!p) return "";
-  return std::string(p->c_str());
+std::ostream& operator<<(std::ostream& o, const DexString& str) {
+  o << str.c_str();
+  return o;
 }
 
-std::string show(const DexType* p) {
-  if (!p) return "";
-  return show(p->get_name());
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
+std::ostream& operator<<(std::ostream& o, const DexType& type) {
+  o << *type.get_name();
+  return o;
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexFieldRef* p) {
   if (!p) return "";
-  std::stringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name()) << ":"
-      << show(p->get_type());
-  return ss.str();
+  string_builders::StaticStringBuilder<5> b;
+  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
+    << show(p->get_type());
+  return b.str();
+}
+
+std::ostream& operator<<(std::ostream& o, const DexFieldRef& p) {
+  o << show(&p);
+  return o;
 }
 
 std::string vshow(const DexField* p) {
   if (!p) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type())) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name());
   if (p->get_anno_set()) {
@@ -646,25 +655,30 @@ std::string vshow(const DexProto* p, bool include_ret_type = true) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexTypeList* p) {
   if (!p) return "";
-  std::stringstream ss;
-  for (auto const type : p->get_type_list()) {
-    ss << show(type);
+  const auto& type_list = p->get_type_list();
+  string_builders::DynamicStringBuilder b(type_list.size());
+  for (auto const type : type_list) {
+    b << show(type);
   }
-  return ss.str();
+  return b.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexProto* p) {
   if (!p) return "";
-  std::stringstream ss;
-  ss << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
-  return ss.str();
+  string_builders::StaticStringBuilder<4> b;
+  b << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
+  return b.str();
 }
 
 std::string show(const DexCode* code) {
   if (!code) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "regs: " << code->get_registers_size()
       << ", ins: " << code->get_ins_size()
       << ", outs: " << code->get_outs_size() << "\n";
@@ -676,12 +690,14 @@ std::string show(const DexCode* code) {
   return ss.str();
 }
 
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
 std::string show(const DexMethodRef* p) {
   if (!p) return "";
-  std::stringstream ss;
-  ss << show(p->get_class()) << "." << show(p->get_name())
-      << ":" << show(p->get_proto());
-  return ss.str();
+  string_builders::StaticStringBuilder<5> b;
+  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
+    << show(p->get_proto());
+  return b.str();
 }
 
 std::string vshow(uint32_t acc) {
@@ -694,7 +710,7 @@ std::string vshow(const DexType* t) {
 
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   if (!p) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << vshow(p->get_access())
      << vshow(p->get_proto()->get_rtype()) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name())
@@ -718,14 +734,16 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   return ss.str();
 }
 
-std::string show(const DexClass* p) {
-  if (!p) return "";
-  return show(p->get_type());
+// This format must match the proguard map format because it's used to look up
+// in the proguard map
+std::ostream& operator<<(std::ostream& o, const DexClass& cls) {
+  o << *cls.get_type();
+  return o;
 }
 
 std::string vshow(const DexClass* p) {
   if (!p) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type()))
      << " extends " << humanize(show(p->get_super_class()));
   if (p->get_interfaces()) {
@@ -760,7 +778,7 @@ std::string show_deobfuscated(const DexAnnotation* anno) {
 
 std::string show(const DexAnnotationSet* p) {
   if (!p) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   bool first = true;
   for (auto const anno : p->get_annotations()) {
     if (!first) ss << ", ";
@@ -772,7 +790,7 @@ std::string show(const DexAnnotationSet* p) {
 
 std::string show(const DexAnnotationDirectory* p) {
   if (!p) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   if (p->m_class) {
     ss << "class annotations:\n" << show(p->m_class) << "\n";
   }
@@ -837,12 +855,17 @@ std::string show(DexOpcode opcode) {
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:
     return "FILLED_ARRAY_DATA";
+  SWITCH_FORMAT_QUICK_FIELD_REF
+  SWITCH_FORMAT_QUICK_METHOD_REF
+  SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
+    not_reached();
+  }
   }
 }
 
 std::string show(const DexInstruction* insn) {
   if (!insn) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << show_opcode(insn);
   bool first = true;
   if (insn->dests_size()) {
@@ -868,7 +891,7 @@ std::string show(const IRInstruction* insn) {
 
 std::string show(const DexDebugInstruction* insn) {
   if (!insn) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   switch (insn->opcode()) {
   case DBG_END_SEQUENCE:
     ss << "DBG_END_SEQUENCE";
@@ -918,14 +941,18 @@ std::string show(const DexDebugInstruction* insn) {
   return ss.str();
 }
 
-std::string show(const DexPosition* pos) {
-  std::stringstream ss;
-  ss << show(pos->file) << ":" << pos->line;
-  return ss.str();
+std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
+  if (pos.file == nullptr) {
+    o << "Unknown source";
+  } else {
+    o << *pos.file;
+  }
+  o << ":" << pos.line;
+  return o;
 }
 
 std::string show(const DexDebugEntry* entry) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << std::hex;
   switch (entry->type) {
     case DexDebugEntryType::Instruction:
@@ -948,46 +975,50 @@ std::string show(TryEntryType t) {
 }
 
 std::string show(const SwitchIndices& si) {
-  std::stringstream ss;
+  std::ostringstream ss;
   for (auto index : si) {
     ss << index << " ";
   }
   return ss.str();
 }
 
-std::string show(const MethodItemEntry& mei) {
-  std::stringstream ss;
-  ss << "[" << &mei << "] ";
-  switch (mei.type) {
+std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
+  o << "[" << &mie << "] ";
+  switch (mie.type) {
   case MFLOW_OPCODE:
-    ss << "OPCODE: " << show(mei.insn);
-    return ss.str();
+    o << "OPCODE: " << show(mie.insn);
+    break;
   case MFLOW_DEX_OPCODE:
-    ss << "DEX_OPCODE: " << show(mei.dex_insn);
-    return ss.str();
+    o << "DEX_OPCODE: " << show(mie.dex_insn);
+    break;
   case MFLOW_TARGET:
-    if (mei.target->type == BRANCH_MULTI) {
-      ss << "TARGET: MULTI " << mei.target->case_key << " ";
+    if (mie.target->type == BRANCH_MULTI) {
+      o << "TARGET: MULTI " << mie.target->case_key << " ";
     } else {
-      ss << "TARGET: SIMPLE ";
+      o << "TARGET: SIMPLE ";
     }
-    ss << mei.target->src;
-    return ss.str();
+    o << mie.target->src;
+    break;
   case MFLOW_TRY:
-    ss << "TRY: " << show(mei.tentry->type) << " " << mei.tentry->catch_start;
-    return ss.str();
+    o << "TRY: " << show(mie.tentry->type) << " " << mie.tentry->catch_start;
+    break;
   case MFLOW_CATCH:
-    ss << "CATCH: " << show(mei.centry->catch_type);
-    return ss.str();
+    o << "CATCH: " << show(mie.centry->catch_type);
+    if (mie.centry->next != nullptr) {
+      o << " (next " << mie.centry->next << ")";
+    }
+    break;
   case MFLOW_DEBUG:
-    ss << "DEBUG: " << show(mei.dbgop);
-    return ss.str();
+    o << "DEBUG: " << show(mie.dbgop);
+    break;
   case MFLOW_POSITION:
-    ss << "POSITION: " << show(mei.pos);
-    return ss.str();
+    o << "POSITION: " << *mie.pos;
+    break;
   case MFLOW_FALLTHROUGH:
-    return "FALLTHROUGH";
+    o << "FALLTHROUGH";
+    break;
   }
+  return o;
 }
 
 std::string show(const IRList* ir) {
@@ -999,26 +1030,32 @@ std::string show(const IRList* ir) {
   return ret;
 }
 
-std::string show(const ControlFlowGraph& cfg) {
+std::string show(const cfg::Block* block) {
+  std::ostringstream ss;
+  for (const auto& mie : *block) {
+    ss << "   " << show(mie) << "\n";
+  }
+  return ss.str();
+}
+
+std::string show(const cfg::ControlFlowGraph& cfg) {
   const auto& blocks = cfg.blocks();
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "CFG:\n";
   for (const auto& b : blocks) {
     ss << " Block B" << b->id() << ":\n";
 
     ss << "   preds:";
-    for (auto& p : b->preds()) {
-      ss << " B" << p->src()->id();
+    for (const auto& p : b->preds()) {
+      ss << " (" << *p << " B" << p->src()->id() << ")";
     }
     ss << "\n";
 
-    for (auto const& mei : *b) {
-      ss << "   " << show(mei) << "\n";
-    }
+    ss << show(b);
 
     ss << "   succs:";
     for (auto& s : b->succs()) {
-      ss << " B" << s->target()->id();
+      ss << " (" << *s << " B" << s->target()->id() << ")";
     }
     ss << "\n";
   }
@@ -1027,7 +1064,7 @@ std::string show(const ControlFlowGraph& cfg) {
 
 std::string show(const MethodCreator* mc) {
   if (!mc) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "MethodCode for " << SHOW(mc->method) << "\n";
   ss << "locals: ";
   for (auto& loc : mc->locals) {
@@ -1040,12 +1077,12 @@ std::string show(const MethodCreator* mc) {
 
 std::string show(const MethodBlock* block) {
   if (!block) return "";
-  std::stringstream ss;
+  std::ostringstream ss;
   return ss.str();
 }
 
 std::string show(DexIdx* p) {
-  std::stringstream ss;
+  std::ostringstream ss;
   ss << "----------------------------------------\n"
      << "strings\n"
      << "----------------------------------------\n";
@@ -1078,7 +1115,7 @@ std::string show(const IRCode* mt) {
 }
 
 std::string show(const ir_list::InstructionIterable& it) {
-  std::stringstream ss;
+  std::ostringstream ss;
   for (auto& mei : it) {
     ss << show(mei.insn) << "\n";
   }
@@ -1086,7 +1123,7 @@ std::string show(const ir_list::InstructionIterable& it) {
 }
 
 std::string show_context(IRCode const* code, IRInstruction const* insn) {
-  std::stringstream ss;
+  std::ostringstream ss;
   auto iter = code->begin();
   while ((*iter).insn != insn) {
     always_assert(iter != code->end());

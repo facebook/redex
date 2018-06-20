@@ -95,7 +95,7 @@ std::string show_access(const DexAccessFlags access, bool isMethod) {
 std::string show_access_flags(const DexAccessFlags flags,
                               const DexAccessFlags negated_flags,
                               bool isMethod) {
-  std::stringstream ss;
+  std::ostringstream ss;
   for (int offset = 0; offset < 32; offset++) {
     const DexAccessFlags access = static_cast<DexAccessFlags>(1 << offset);
     if ((flags & access) == 0) {
@@ -121,7 +121,7 @@ std::string show_access_flags(const DexAccessFlags flags,
 }
 
 std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
-  std::stringstream ss;
+  std::ostringstream ss;
   for (const auto& field : fields) {
     if (!(field.annotationType.empty())) {
       ss << "@" << field.annotationType << " ";
@@ -136,7 +136,7 @@ std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
 
 std::string show_methods(
     const std::vector<redex::MemberSpecification>& methods) {
-  std::stringstream ss;
+  std::ostringstream ss;
   for (const auto& method : methods) {
     if (!(method.annotationType.empty())) {
       ss << "@" << method.annotationType << " ";
@@ -150,7 +150,7 @@ std::string show_methods(
 }
 
 std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
-  std::stringstream text;
+  std::ostringstream text;
   auto field_count = 0;
   for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
     field_count += field_spec.count;
@@ -192,7 +192,7 @@ std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
   }
 
   if (show_source) {
-    std::stringstream source;
+    std::ostringstream source;
     source << keep_rule.source_filename << ":" << keep_rule.source_line;
     return '\'' + text.str() + "\' from " + source.str();
   }

@@ -98,6 +98,13 @@ class MultiMethodInliner {
   void inline_callees(DexMethod* caller,
                       const std::vector<DexMethod*>& callees);
 
+  /**
+   * Inline callees in the given instructions in the caller, if is_inlinable
+   * below returns true.
+   */
+  void inline_callees(DexMethod* caller,
+                      const std::unordered_set<IRInstruction*>& insns);
+
  private:
   /**
    * Inline all callees into caller.
@@ -116,6 +123,11 @@ class MultiMethodInliner {
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
                     size_t estimated_insn_size);
+
+
+  void inline_inlinables(
+      DexMethod* caller,
+      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -187,6 +199,10 @@ class MultiMethodInliner {
    */
   bool cross_store_reference(const DexMethod* context);
 
+  bool is_estimate_over_max(uint64_t estimated_insn_size,
+                            const DexMethod* callee,
+                            uint64_t max);
+
   /**
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
    * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
@@ -196,7 +212,7 @@ class MultiMethodInliner {
    * registers.
    */
   bool caller_too_large(DexType* caller_type,
-                        size_t estimated_insn_size,
+                        size_t estimated_caller_size,
                         const DexMethod* callee);
 
   /**

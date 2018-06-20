@@ -61,7 +61,7 @@ using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparat
 
 size_t illegal_elements(const MethodInsns& method_to_insns,
                         const char* msj,
-                        std::stringstream& ss) {
+                        std::ostringstream& ss) {
   size_t num_illegal_cross_store_refs = 0;
   for (const auto& pair : method_to_insns) {
     const auto method = pair.first;
@@ -128,7 +128,7 @@ class Breadcrumbs {
         bad_type_insns.size() > 0 ||
         bad_field_insns.size() > 0 ||
         bad_meth_insns.size() > 0) {
-      std::stringstream ss;
+      std::ostringstream ss;
       for (const auto& bad_field : bad_fields) {
         for (const auto& field : bad_field.second) {
           bad_fields_count++;
@@ -203,7 +203,7 @@ class Breadcrumbs {
 
   void report_illegal_refs(bool fail_if_illegal_refs, PassManager& mgr) {
     size_t num_illegal_fields = 0;
-    std::stringstream ss;
+    std::ostringstream ss;
     for (const auto& pair : illegal_field) {
       const auto type = pair.first;
       const auto& fields = pair.second;

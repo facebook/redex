@@ -32,45 +32,69 @@
  * delete all but one of the blocks. Naming one of them the canonical block.
  *
  * Then, reroute all the predecessors of all the blocks to that canonical block.
+ *
+ * Merging these blocks will make some debug line numbers incorrect.
+ * Here's an example
+ *
+ * Bar getBar() {
+ *   if (condition1) {
+ *     Bar bar = makeBar();
+ *     if (condition2) {
+ *       return bar;
+ *     }
+ *     cleanup();
+ *   } else if (condition3) {
+ *     cleanup();
+ *   }
+ *   return null;
+ * }
+ *
+ * The blocks that call `cleanup()` will be merged.
+ *
+ * No matter which branch we took to call `cleanup()`, a stack trace will always
+ * report the same line number (probably the first one in this example, because
+ * it will have a lower block id).
+ *
+ * We could delete the line number information inside the canonical block, but
+ * arguably, having stack traces that point to similar looking code (in a different
+ * location) is better than having stack traces point to the nearest line of
+ * source code before or after the merged block.
+ *
+ * Deleting the line info would also make things complicated if `cleanup()` is
+ * inlined into `getBar()`. We would be unable to reconstruct the inlined stack
+ * frame if we deleted the callsite's line number.
  */
 
 namespace {
 
 using hash_t = std::size_t;
 
-struct BlockAsKey {
-  IRCode* code;
-  Block* block;
-
-  BlockAsKey(IRCode* c, Block* b) : code(c), block(b) {}
-
-  bool operator==(const BlockAsKey& other) const {
-    return same_successors(other) && same_try_regions(other) &&
-           same_code(other);
+struct BlockEquals {
+  bool operator()(cfg::Block* b1, cfg::Block* b2) const {
+    return same_successors(b1, b2) && b1->same_try(b2) &&
+           same_code(b1, b2);
   }
 
-  // Structural equality of opcodes except branch targets are ignored
-  // because they are unknown until we sync back to DexInstructions.
-  bool same_code(const BlockAsKey& other) const {
-    return InstructionIterable(block).structural_equals(
-        InstructionIterable(other.block));
+  // Structural equality of opcodes
+  static bool same_code(cfg::Block* b1, cfg::Block* b2) {
+    return InstructionIterable(b1).structural_equals(
+        InstructionIterable(b2));
   }
 
   // The blocks must also have the exact same successors
   // (and reached in the same ways)
-  bool same_successors(const BlockAsKey& other) const {
-    const auto& b1_succs = this->block->succs();
-    const auto& b2_succs = other.block->succs();
+  static bool same_successors(cfg::Block* b1, cfg::Block* b2) {
+    const auto& b1_succs = b1->succs();
+    const auto& b2_succs = b2->succs();
     if (b1_succs.size() != b2_succs.size()) {
       return false;
     }
-    for (const std::shared_ptr<cfg::Edge>& b1_succ : b1_succs) {
+    for (const cfg::Edge* b1_succ : b1_succs) {
       const auto& in_b2 =
           std::find_if(b2_succs.begin(),
                        b2_succs.end(),
-                       [&](const std::shared_ptr<cfg::Edge>& e) {
-                         return e->target() == b1_succ->target() &&
-                                e->type() == b1_succ->type();
+                       [&](const cfg::Edge* e) {
+                         return e->equals_ignore_source(*b1_succ);
                        });
       if (in_b2 == b2_succs.end()) {
         // b1 has a succ that b2 doesn't. Note that both the succ blocks and
@@ -80,21 +104,21 @@ struct BlockAsKey {
     }
     return true;
   }
-
-  // return true if in the same try region (or both in no try region at all)
-  bool same_try_regions(const BlockAsKey& other) const {
-    return transform::find_active_catch(code, this->block->begin()) ==
-           transform::find_active_catch(code, other.block->begin());
-  }
 };
 
 struct BlockHasher {
-  hash_t operator()(const BlockAsKey& key) const {
+  hash_t operator()(cfg::Block* b) const {
     hash_t result = 0;
-    for (auto& mie : InstructionIterable(key.block)) {
+    for (auto& mie : InstructionIterable(b)) {
       result ^= mie.insn->hash();
     }
     return result;
+  }
+};
+
+struct BlockCompare {
+  bool operator()(const cfg::Block* a, const cfg::Block* b) const {
+    return *a < *b;
   }
 };
 
@@ -110,41 +134,47 @@ class DedupBlocksImpl {
       if (m_config.method_black_list.count(method) != 0) {
         return;
       }
-      code.build_cfg();
 
-      duplicates_t dups = collect_duplicates(&code);
+      code.build_cfg(true);
+      auto& cfg = code.cfg();
+
+      Duplicates dups = collect_duplicates(cfg);
       if (dups.size() > 0) {
         record_stats(dups);
-        deduplicate(dups, method);
+        deduplicate(dups, cfg);
       }
+
+      code.clear_cfg();
     });
     report_stats();
   }
 
  private:
-  using duplicates_t =
-      std::unordered_map<BlockAsKey, std::unordered_set<Block*>, BlockHasher>;
+  using Duplicates = std::unordered_map<cfg::Block*,
+                                        std::set<cfg::Block*, BlockCompare>,
+                                        BlockHasher,
+                                        BlockEquals>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
   const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
   const std::vector<DexClass*>& m_scope;
   PassManager& m_mgr;
   const DedupBlocksPass::Config& m_config;
 
-  // Stats
-  std::mutex lock;
   std::atomic_int m_num_eligible_blocks{0};
   std::atomic_int m_num_blocks_removed{0};
+
   // map from block size to number of blocks with that size
   std::unordered_map<size_t, size_t> m_dup_sizes;
+  std::mutex lock;
 
   // Find blocks with the same exact code
-  duplicates_t collect_duplicates(IRCode* code) {
-    const auto& blocks = code->cfg().blocks();
-    duplicates_t duplicates;
+  Duplicates collect_duplicates(const cfg::ControlFlowGraph& cfg) {
+    const auto& blocks = cfg.blocks();
+    Duplicates duplicates;
 
-    for (Block* block : blocks) {
-      if (should_remove(code->cfg(), block)) {
-        duplicates[BlockAsKey{code, block}].insert(block);
+    for (cfg::Block* block : blocks) {
+      if (is_eligible(block)) {
+        duplicates[block].insert(block);
         ++m_num_eligible_blocks;
       }
     }
@@ -155,44 +185,105 @@ class DedupBlocksImpl {
 
   // remove all but one of a duplicate set. Reroute the predecessors to the
   // canonical block
-  void deduplicate(const duplicates_t& dups, DexMethod* method) {
-    const auto& code = method->get_code();
+  void deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
+
+    fix_dex_pos_pointers(dups, cfg);
+
     for (const auto& entry : dups) {
-      std::unordered_set<Block*> blocks = entry.second;
+      const auto& blocks = entry.second;
 
       // canon is block with lowest id.
-      Block* canon = nullptr;
-      size_t canon_id = std::numeric_limits<size_t>::max();
-      for (Block* block : blocks) {
-        size_t id = block->id();
-        if (id <= canon_id) {
-          canon_id = id;
-          canon = block;
-        }
-      }
+      cfg::Block* canon = *blocks.begin();
 
-      for (Block* block : blocks) {
-        if (block->id() == canon_id) {
-          // We remove the debug line information because it will be incorrect
-          // for every block we reroute here. When there's no debug info,
-          // the jvm will report the error on the closing brace of the function.
-          // It's not perfect but it's better than incorrect information.
-          canon->remove_debug_line_info();
-        } else {
-          transform::replace_block(code, block, canon);
+      for (cfg::Block* block : blocks) {
+        if (block != canon) {
+          always_assert(canon->id() < block->id());
+
+          cfg.replace_block(block, canon);
           ++m_num_blocks_removed;
         }
       }
     }
   }
 
-  static bool should_remove(const ControlFlowGraph& cfg, Block* block) {
+  // DexPositions have `parent` pointers to other DexPositions inside the same
+  // method. We will delete some of these DexPositions, which would create
+  // dangling pointers.
+  //
+  // This method changes those parent pointers to the equivalent DexPosition
+  // in the canonical block
+  void fix_dex_pos_pointers(const Duplicates& dups,
+                            cfg::ControlFlowGraph& cfg) {
+    // A map from the DexPositions we're about to delete to the equivalent
+    // DexPosition in the canonical block.
+    std::unordered_map<DexPosition*, DexPosition*> position_replace_map;
+
+    for (const auto& entry : dups) {
+      const auto& blocks = entry.second;
+
+      // canon is block with lowest id.
+      cfg::Block* canon = *blocks.begin();
+
+      std::vector<DexPosition*> canon_positions;
+      for (auto& mie : *canon) {
+        if (mie.type == MFLOW_POSITION) {
+          canon_positions.push_back(mie.pos.get());
+        }
+      }
+
+      for (cfg::Block* block : blocks) {
+        if (block != canon) {
+          // All of `block`s positions are about to be deleted. Add the mapping
+          // from this position to the equivalent canonical position.
+          size_t i = 0;
+          for (auto& mie : *block) {
+            if (mie.type == MFLOW_POSITION) {
+              // If canon has no DexPositions, clear out parent pointers
+              auto replacement =
+                  !canon_positions.empty() ? canon_positions.at(i) : nullptr;
+              position_replace_map.emplace(mie.pos.get(), replacement);
+
+              ++i;
+              if (i >= canon_positions.size()) {
+                // block has more DexPositions than canon.
+                // keep re-using the last one, I guess? FIXME
+                //
+                // TODO: Maybe we could associate DexPositions with their
+                // closest IRInstruction, then combine the DexPositions that
+                // share the same deduped IRInstruction.
+                i = canon_positions.size() - 1;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Search for dangling parent pointers and replace them
+    for (cfg::Block* b : cfg.blocks()) {
+      for (auto& mie : *b) {
+        if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+          auto it = position_replace_map.find(mie.pos->parent);
+          if (it != position_replace_map.end()) {
+            mie.pos->parent = it->second;
+          }
+        }
+      }
+    }
+  }
+
+  static bool is_eligible(cfg::Block* block) {
     if (!has_opcodes(block)) {
       return false;
     }
 
     if (block->is_catch()) {
       // TODO. Should be possible. Skip now for simplicity
+      return false;
+    }
+
+    // We can't split up move-result(-pseudo) instruction pairs
+    if (begins_with_move_result(block)) {
       return false;
     }
 
@@ -234,38 +325,24 @@ class DedupBlocksImpl {
     // We try to avoid this situation by not considering blocks that call
     // constructors, but this isn't bulletproof. FIXME
     if (calls_constructor(block)) {
+      // TODO(T27582908): This could be more precise
       return false;
-    }
-
-    // We can't replace blocks that are involved in a fallthrough because they
-    // depend on their position in the list of instructions. Deduplicating
-    // will involve sending control to a block in a different place.
-    for (auto& pred : block->preds()) {
-      if (!has_opcodes(pred->src())) {
-        // Skip this case because it's complicated. It should be fixed by
-        // upcoming changes to the CFG
-        return false;
-      }
-
-      if (is_fallthrough(pred.get())) {
-        return false;
-      }
-    }
-
-    for (auto& succ : block->succs()) {
-      if (is_fallthrough(succ.get())) {
-        return false;
-      }
     }
 
     return true;
   }
 
-  static bool calls_constructor(Block* block) {
+  static bool begins_with_move_result(cfg::Block* block) {
+    const auto& first_mie = *block->get_first_insn();
+    auto first_op = first_mie.insn->opcode();
+    return is_move_result(first_op) || opcode::is_move_result_pseudo(first_op);
+  }
+
+  static bool calls_constructor(cfg::Block* block) {
     for (const auto& mie : InstructionIterable(block)) {
-      if (is_invoke(mie.insn->opcode())) {
+      if (is_invoke_direct(mie.insn->opcode())) {
         auto meth =
-            resolve_method(mie.insn->get_method(), opcode_to_search(mie.insn));
+            resolve_method(mie.insn->get_method(), MethodSearch::Direct);
         if (meth != nullptr && is_init(meth)) {
           return true;
         }
@@ -274,24 +351,14 @@ class DedupBlocksImpl {
     return false;
   }
 
-  // `edge` falls through to its successor iff the connecting edge in the CFG
-  // is a goto but `edge->src()`'s last instruction isn't a goto
-  static bool is_fallthrough(const cfg::Edge* edge) {
-    always_assert_log(has_opcodes(edge->src()), "need opcodes");
-    const auto& last_of_block = last_opcode(edge->src());
-
-    return edge->type() == EDGE_GOTO &&
-           last_of_block->insn->opcode() != OPCODE_GOTO;
-  }
-
-  void record_stats(const duplicates_t& duplicates) {
+  void record_stats(const Duplicates& duplicates) {
     // avoid the expensive lock if we won't actually print the information
-    if (traceEnabled(RME, 2)) {
+    if (traceEnabled(DEDUP_BLOCKS, 2)) {
       std::lock_guard<std::mutex> guard{lock};
       for (const auto& entry : duplicates) {
-        std::unordered_set<Block*> blocks = entry.second;
+        const auto& blocks = entry.second;
         // all blocks have the same number of opcodes
-        Block* block = *blocks.begin();
+        cfg::Block* block = *blocks.begin();
         m_dup_sizes[num_opcodes(block)] += blocks.size();
       }
     }
@@ -316,7 +383,7 @@ class DedupBlocksImpl {
   }
 
   // remove sets with only one block
-  static void remove_singletons(duplicates_t& duplicates) {
+  static void remove_singletons(Duplicates& duplicates) {
     for (auto it = duplicates.begin(); it != duplicates.end();) {
       if (it->second.size() <= 1) {
         it = duplicates.erase(it);
@@ -326,7 +393,7 @@ class DedupBlocksImpl {
     }
   }
 
-  static boost::optional<MethodItemEntry&> last_opcode(Block* block) {
+  static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {
     for (auto it = block->rbegin(); it != block->rend(); it++) {
       if (it->type == MFLOW_OPCODE) {
         return *it;
@@ -335,12 +402,12 @@ class DedupBlocksImpl {
     return boost::none;
   }
 
-  static bool has_opcodes(Block* block) {
-    const auto& it = InstructionIterable(block);
-    return it.begin() != it.end();
+  static bool has_opcodes(cfg::Block* block) {
+    const auto& iterable = InstructionIterable(block);
+    return !iterable.empty();
   }
 
-  static size_t num_opcodes(Block* block) {
+  static size_t num_opcodes(cfg::Block* block) {
     size_t result = 0;
     const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
@@ -349,11 +416,11 @@ class DedupBlocksImpl {
     return result;
   }
 
-  static void print_dups(duplicates_t dups) {
+  static void print_dups(Duplicates dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {\n");
     for (const auto& entry : dups) {
       TRACE(DEDUP_BLOCKS, 4, "  hash = %lu\n", BlockHasher{}(entry.first));
-      for (Block* b : entry.second) {
+      for (cfg::Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %d\n", b->id());
         for (const MethodItemEntry& mie : *b) {
           TRACE(DEDUP_BLOCKS, 4, "      %s\n", SHOW(mie));

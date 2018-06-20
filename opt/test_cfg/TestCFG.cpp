@@ -15,16 +15,6 @@
 #include "IRTypeChecker.h"
 #include "Walkers.h"
 
-std::vector<int64_t> get_lits(IRCode* code) {
-  std::vector<int64_t> result;
-  for (const auto& mie : InstructionIterable(code)) {
-    if (mie.insn->has_literal()) {
-      result.push_back(mie.insn->get_literal());
-    }
-  }
-  return result;
-}
-
 /**
  * This isn't a real optimization pass. It just tests the CFG.
  * this should only run in redex-unstable
@@ -39,12 +29,14 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
     if (example != nullptr && m != example) {
       return;
     }
+    code.sanity_check();
 
-    const auto& before_lits = get_lits(&code);
+    const auto& before_code = show(&code);
 
     // build and linearize the CFG
     TRACE(CFG, 5, "IRCode before:\n%s", SHOW(&code));
     code.build_cfg(/* editable */ true);
+    TRACE(CFG, 5, "%s", SHOW(code.cfg()));
     code.clear_cfg();
     TRACE(CFG, 5, "IRCode after:\n%s", SHOW(&code));
 
@@ -53,22 +45,12 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
     checker.run();
     if (!checker.good()) {
       std::string msg = checker.what();
-      TRACE(
-          CFG, 1, "%s: Inconsistency in Dex code. %s\n", SHOW(m), msg.c_str());
+      TRACE(CFG, 1,
+            "%s: Inconsistency in Dex code. %s\n"
+            "Before Code:\n%s\n"
+            "After Code:\n%s\n",
+            SHOW(m), msg.c_str(), before_code.c_str(), SHOW(&code));
       always_assert(false);
-    }
-
-    const auto& after_lits = get_lits(&code);
-
-    size_t i = 0;
-    for (auto v : after_lits) {
-      always_assert_log(v == before_lits[i],
-                        "%s: literal changed from %ld to %ld. Code:\n%s",
-                        SHOW(m),
-                        v,
-                        before_lits[i],
-                        SHOW(&code));
-      ++i;
     }
   });
 }

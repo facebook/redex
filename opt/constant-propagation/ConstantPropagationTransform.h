@@ -11,6 +11,7 @@
 
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 
 namespace constant_propagation {
@@ -61,7 +62,7 @@ class Transform final {
 
   void eliminate_dead_branch(const intraprocedural::FixpointIterator&,
                              const ConstantEnvironment&,
-                             Block*);
+                             cfg::Block*);
 
   const Config m_config;
   std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;

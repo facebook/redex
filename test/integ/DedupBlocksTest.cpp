@@ -21,7 +21,7 @@
 
 #include "DedupBlocksPass.h"
 
-int count_someFunc_calls(ControlFlowGraph& cfg) {
+int count_someFunc_calls(cfg::ControlFlowGraph& cfg) {
   int num_some_func_calls = 0;
   for (auto& mie : InstructionIterable(cfg)) {
     TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));

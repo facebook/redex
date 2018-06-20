@@ -268,9 +268,9 @@ void AliasedRegisters::clear() {
   m_insert_order.clear();
 }
 
-AliasedRegisters::Kind AliasedRegisters::kind() const {
-  return (boost::num_edges(m_graph) > 0) ? AliasedRegisters::Kind::Value
-                                         : AliasedRegisters::Kind::Top;
+AbstractValueKind AliasedRegisters::kind() const {
+  return (boost::num_edges(m_graph) > 0) ? AbstractValueKind::Value
+                                         : AbstractValueKind::Top;
 }
 
 // The lattice looks like this:
@@ -311,18 +311,18 @@ bool AliasedRegisters::equals(const AliasedRegisters& other) const {
          leq(other);
 }
 
-AliasedRegisters::Kind AliasedRegisters::narrow_with(
+AbstractValueKind AliasedRegisters::narrow_with(
     const AliasedRegisters& other) {
   return meet_with(other);
 }
 
-AliasedRegisters::Kind AliasedRegisters::widen_with(
+AbstractValueKind AliasedRegisters::widen_with(
     const AliasedRegisters& other) {
   return join_with(other);
 }
 
 // alias group union
-AliasedRegisters::Kind AliasedRegisters::meet_with(
+AbstractValueKind AliasedRegisters::meet_with(
     const AliasedRegisters& other) {
 
   const auto& iters = boost::edges(other.m_graph);
@@ -335,7 +335,7 @@ AliasedRegisters::Kind AliasedRegisters::meet_with(
       this->merge_groups_of(r1, r2, other);
     }
   }
-  return AliasedRegisters::Kind::Value;
+  return AbstractValueKind::Value;
 }
 
 void AliasedRegisters::merge_groups_of(const Value& r1,
@@ -360,7 +360,7 @@ void AliasedRegisters::merge_groups_of(const Value& r1,
 }
 
 // edge intersection
-AliasedRegisters::Kind AliasedRegisters::join_with(
+AbstractValueKind AliasedRegisters::join_with(
     const AliasedRegisters& other) {
 
   // fill `deletes` with edges that aren't in `other`
@@ -385,7 +385,7 @@ AliasedRegisters::Kind AliasedRegisters::join_with(
   }
 
   handle_edge_intersection_insert_order(other);
-  return AliasedRegisters::Kind::Value;
+  return AbstractValueKind::Value;
 }
 
 void AliasedRegisters::handle_edge_intersection_insert_order(

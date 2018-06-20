@@ -15,7 +15,7 @@
 #include "IRCode.h"
 #include "VerifyUtil.h"
 
-int count_ifs(ControlFlowGraph& cfg) {
+int count_ifs(cfg::ControlFlowGraph& cfg) {
   size_t num_ifs = 0;
   for (const auto& mie : InstructionIterable(cfg)) {
     if (is_conditional_branch(mie.insn->opcode())) {
@@ -25,7 +25,7 @@ int count_ifs(ControlFlowGraph& cfg) {
   return num_ifs;
 }
 
-int count_ops(ControlFlowGraph& cfg, IROpcode op) {
+int count_ops(cfg::ControlFlowGraph& cfg, IROpcode op) {
   size_t result = 0;
   for (const auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->opcode() == op) {

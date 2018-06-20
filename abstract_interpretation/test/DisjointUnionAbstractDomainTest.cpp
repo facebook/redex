@@ -1,0 +1,52 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+#include "DisjointUnionAbstractDomain.h"
+
+#include <gtest/gtest.h>
+#include <string>
+
+#include "AbstractDomainPropertyTest.h"
+#include "ConstantAbstractDomain.h"
+
+using IntDomain = ConstantAbstractDomain<int>;
+using StringDomain = ConstantAbstractDomain<std::string>;
+using IntStringDomain = DisjointUnionAbstractDomain<IntDomain, StringDomain>;
+
+INSTANTIATE_TYPED_TEST_CASE_P(DisjointUnionAbstractDomain,
+                              AbstractDomainPropertyTest,
+                              IntStringDomain);
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::top_values() {
+  return {IntDomain::top(), StringDomain::top()};
+}
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::bottom_values() {
+  return {IntDomain::bottom(), StringDomain::bottom()};
+}
+
+template <>
+std::vector<IntStringDomain>
+AbstractDomainPropertyTest<IntStringDomain>::non_extremal_values() {
+  return {IntDomain(0), StringDomain("foo")};
+}
+
+TEST(DisjointUnionAbstractDomainTest, basicOperations) {
+  IntStringDomain zero = IntDomain(0);
+  IntStringDomain str = StringDomain("");
+  EXPECT_TRUE(zero.join(str).is_top());
+  EXPECT_TRUE(zero.meet(str).is_bottom());
+  EXPECT_NLEQ(zero, str);
+  EXPECT_NLEQ(str, zero);
+  EXPECT_NE(zero, str);
+}

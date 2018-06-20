@@ -9,13 +9,15 @@
 
 #pragma once
 
-#include "memory-accounter.h"
 #include "OatmealUtil.h"
+#include "memory-accounter.h"
 
 #include <cstring>
 #include <vector>
 
-#define PACK __attribute__((packed))
+typedef uint32_t VdexChecksum;
+
+constexpr uint32_t kDexMagicNum = 0x0a786564;
 
 struct PACK DexClassDef {
   uint16_t class_idx;
@@ -28,15 +30,6 @@ struct PACK DexClassDef {
   uint32_t annotations_off;
   uint32_t class_data_off;
   uint32_t static_values_off;
-};
-
-struct PACK VdexFileHeader {
-  uint8_t magic_[4];
-  uint8_t version_[4];
-  uint32_t number_of_dex_files_;
-  uint32_t dex_size_;
-  uint32_t verifier_deps_size_;
-  uint32_t quickening_info_size_;
 };
 
 // Header for dex files. Note that this currently consumes the entire
@@ -85,3 +78,23 @@ struct PACK MethodId {
   uint16_t proto_idx; // index into proto_ids_ array for method prototype
   uint32_t name_idx; // index into string_ids_ array for method name
 };
+
+class QuickData;
+
+void quicken_dex(const char* location,
+                 const QuickData* quick_data,
+                 FileHandle& out);
+
+class stream {
+ public:
+  // This is a "static class". Disallow construction.
+  stream() = delete;
+  ~stream() = delete;
+
+  using InsnWalkerFn = const std::function<void(DexOpcode, const uint16_t* const ptr)>&;
+  using CodeItemWalkerFn = const std::function<void(const uint8_t* const ptr)>&;
+
+  static void stream_dex(const uint8_t* begin, const size_t size, InsnWalkerFn walker, CodeItemWalkerFn code_item_walker = nullptr);
+};
+
+void print_dex_opcodes(const uint8_t* begin, const size_t size);

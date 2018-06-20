@@ -116,14 +116,6 @@ void apply_deobfuscated_names(
   const ProguardMap&);
 
 /**
- * Return the dexdump-formatted name of the object.
- */
-std::string proguard_name(const DexType* cls);
-std::string proguard_name(const DexClass* cls);
-std::string proguard_name(const DexMethodRef* method);
-std::string proguard_name(const DexFieldRef* field);
-
-/**
  * Convert a dot-style name to a dexdump-style name, e.g.:
  *   com.foo.MyClass -> Lcom/foo/MyClass;
  *   void -> V

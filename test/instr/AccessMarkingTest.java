@@ -16,21 +16,6 @@ import java.lang.reflect.Method;
 import org.junit.Test;
 
 public class AccessMarkingTest {
-  private static boolean isFinal(Class<?> cls) {
-    return (cls.getModifiers() & Modifier.FINAL) != 0;
-  }
-
-  private static boolean isFinal(Method m) {
-    return (m.getModifiers() & Modifier.FINAL) != 0;
-  }
-
-  private static boolean isStatic(Method m) {
-    return (m.getModifiers() & Modifier.STATIC) != 0;
-  }
-
-  private static boolean isPrivate(Method m) {
-    return (m.getModifiers() & Modifier.PRIVATE) != 0;
-  }
 
   @Test
   public void test() {
@@ -42,38 +27,6 @@ public class AccessMarkingTest {
   }
 
   @Test
-  public void testClassFinal() throws ClassNotFoundException {
-    assertThat(isFinal(Super.class)).isFalse();
-    assertThat(isFinal(Sub.class)).isTrue();
-  }
-
-  @Test
-  public void testClassAbstract() {
-    assertThat(isFinal(Abstract.class)).isFalse();
-  }
-
-  @Test
-  public void testMethodFinal() throws NoSuchMethodException {
-    assertThat(isFinal(Super.class.getDeclaredMethod("foo"))).isFalse();
-    assertThat(isFinal(Sub.class.getDeclaredMethod("foo"))).isTrue();
-  }
-
-  @Test
-  public void testMethodStatic() throws NoSuchMethodException {
-    Method bar = Super.class.getDeclaredMethod("bar");
-    Method baz = Sub.class.getDeclaredMethod("baz");
-    assertThat(isFinal(bar)).isTrue();
-    assertThat(isFinal(baz)).isTrue();
-  }
-
-  @Test
-  public void testMethodAbstract() throws NoSuchMethodException {
-    Method nope = Abstract.class.getDeclaredMethod("nope");
-    assertThat(isStatic(nope)).isFalse();
-    assertThat(isFinal(nope)).isFalse();
-  }
-
-  @Test
   public void testCallStaticThroughSub() {
     assertThat(new Sub().bar()).isEqualTo(3);
   }
@@ -81,8 +34,6 @@ public class AccessMarkingTest {
   @Test
   public void testPrivate() throws NoSuchMethodException {
     assertThat(new Doubler(4).get()).isEqualTo(8);
-    Method doubleit = Doubler.class.getDeclaredMethod("doubleit");
-    assertThat(isPrivate(doubleit)).isTrue();
   }
 }
 

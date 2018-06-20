@@ -336,19 +336,7 @@ void AnalysisImpl::analyze_opcodes() {
                  auto op = insn->opcode();
                  switch (op) {
                  // type ref
-                 case OPCODE_CONST_CLASS: {
-                   // const_class is problematic because DI can use it as a key
-                   // to mark
-                   // different instances to retrieve, so we simply drop all
-                   // single impl
-                   // that are used with const_class
-                   const auto typeref = insn->get_type();
-                   auto intf = get_and_check_single_impl(typeref);
-                   if (intf) {
-                     escape_interface(intf, CONST_CLASS);
-                   }
-                   return;
-                 }
+                 case OPCODE_CONST_CLASS:
                  case OPCODE_CHECK_CAST:
                  case OPCODE_INSTANCE_OF:
                  case OPCODE_NEW_INSTANCE:

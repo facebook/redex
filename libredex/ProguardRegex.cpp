@@ -53,6 +53,7 @@ std::string form_type_regex(std::string proguard_regex) {
     proguard_regex = "L**;";
   }
   std::string r;
+  r.reserve(2 * proguard_regex.size());
   for (size_t i = 0; i < proguard_regex.size(); i++) {
     const char ch = proguard_regex[i];
     // Convert % to a match against primvitive types without

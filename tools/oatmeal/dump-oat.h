@@ -17,7 +17,6 @@
 #include <vector>
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
-constexpr uint32_t kVdexMagicNum = 0x78656476;
 
 enum class OatVersion : uint32_t {
   UNKNOWN = 0,
@@ -111,7 +110,8 @@ class OatFile {
                       const std::string& arch,
                       bool write_elf,
                       const std::string& art_image_location,
-                      bool samsung_mode);
+                      bool samsung_mode,
+                      const std::string& quick_data_location);
 };
 
 enum class InstructionSet {

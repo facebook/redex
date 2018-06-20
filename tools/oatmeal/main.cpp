@@ -10,6 +10,7 @@
 #include "dump-oat.h"
 #include "memory-accounter.h"
 #include "OatmealUtil.h"
+#include "vdex.h"
 
 #include <getopt.h>
 
@@ -46,6 +47,7 @@ struct Arguments {
   std::string oat_version;
 
   bool dump_classes = false;
+  bool dump_code = false;
   bool dump_tables = false;
   bool dump_memory_usage = false;
 
@@ -54,6 +56,8 @@ struct Arguments {
   std::string arch;
 
   std::string art_image_location;
+
+  std::string quick_data_location;
 
   bool test_is_oatmeal = false;
 
@@ -89,6 +93,7 @@ Arguments parse_args(int argc, char* argv[]) {
       {"oat", required_argument, nullptr, 'o'},
       {"oat-version", required_argument, nullptr, 'v'},
       {"dump-classes", no_argument, nullptr, 'c'},
+      {"dump-code", no_argument, nullptr, 'w'},
       {"dump-tables", no_argument, nullptr, 't'},
       {"dump-memory-usage", no_argument, nullptr, 'm'},
       {"print-unverified-classes", no_argument, nullptr, 'p'},
@@ -97,6 +102,7 @@ Arguments parse_args(int argc, char* argv[]) {
       {"test-is-oatmeal", no_argument, nullptr, 1},
       {"samsung-oatformat", no_argument, nullptr, 2},
       {"one-oat-per-dex", no_argument, nullptr, 3},
+      {"quickening-data", required_argument, nullptr, 'q'},
       {nullptr, 0, nullptr, 0}};
 
   Arguments ret;
@@ -151,6 +157,10 @@ Arguments parse_args(int argc, char* argv[]) {
       ret.dump_classes = true;
       break;
 
+    case 'w':
+      ret.dump_code = true;
+      break;
+
     case 't':
       ret.dump_tables = true;
       break;
@@ -177,6 +187,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
     case 3:
       ret.one_oat_per_dex = true;
+      break;
+
+    case 'q':
+      ret.quick_data_location = expand(optarg);
       break;
 
     case ':':
@@ -253,6 +267,12 @@ int dump(const Arguments& args) {
   ConstBuffer oatfile_buffer{oat_file_contents.get(), oat_file_size};
   auto ma_scope = MemoryAccounter::NewScope(oatfile_buffer);
 
+  CHECK(oatfile_buffer.len > 4);
+  if (*(reinterpret_cast<const uint32_t*>(oatfile_buffer.ptr)) == kVdexMagicNum) {
+    auto vdexfile = VdexFile::parse(oatfile_buffer);
+    vdexfile->print();
+    return 0;
+  }
   auto oatfile =
       OatFile::parse(oatfile_buffer, args.dex_files, args.test_is_oatmeal);
 
@@ -307,7 +327,8 @@ int build(const Arguments& args) {
                  args.arch,
                  args.write_elf,
                  args.art_image_location,
-                 args.samsung_mode);
+                 args.samsung_mode,
+                 args.quick_data_location);
 
   return 0;
 }

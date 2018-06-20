@@ -11,20 +11,22 @@
 // OatFile::build and OatFile::parse, below.
 
 #include "dump-oat.h"
+#include "OatmealUtil.h"
+#include "QuickData.h"
+#include "Util.h"
 #include "dex.h"
 #include "elf-writer.h"
 #include "memory-accounter.h"
-#include "OatmealUtil.h"
-#include "Util.h"
+#include "vdex.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-
-#include <algorithm>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #define PACK __attribute__((packed))
@@ -169,14 +171,16 @@ struct PACK OatHeader_Common {
   }
 
   void print() {
-    char magic_str[5] = {};
-    char version_str[5] = {};
-    memcpy(magic_str, &magic, 3); // magic has a newline character at idx 4.
-    memcpy(version_str, &version, 4);
-
-    printf("  magic:   0x%08x '%s'\n", magic, magic_str);
-    printf("  version: 0x%08x '%s'\n", version, version_str);
-    printf("  checksum: 0x%08x\n", adler32_checksum);
+    //char magic_str[5] = {};
+    //char version_str[5] = {};
+    //memcpy(magic_str, &magic, 3); // magic has a newline character at idx 4.
+    //memcpy(version_str, &version, 4);
+    printf("OatHeader_Common: {magic: 0x%08x, \
+      version: 0x%08x, \
+      checksum: 0x%08x}\n",
+      magic,
+      version,
+      adler32_checksum);
   }
 };
 
@@ -307,43 +311,47 @@ struct PACK OatHeader {
   }
 
   void print() {
-    common.print();
-    printf(
-        "  isa: %s\n"
-        "  isa features bitmap: 0x%08x\n"
-        "  dex_file_count: 0x%08x\n"
-        "  executable_offset: 0x%08x\n"
-        "  interpreter_to_interpreter_bridge_offset: 0x%08x\n"
-        "  interpreter_to_compiled_code_bridge_offset: 0x%08x\n"
-        "  jni_dlsym_lookup_offset: 0x%08x\n",
-        instruction_set_str(instruction_set),
-        instruction_set_features_bitmap,
-        dex_file_count,
-        executable_offset,
-        interpreter_to_interpreter_bridge_offset,
-        interpreter_to_compiled_code_bridge_offset,
-        jni_dlsym_lookup_offset);
+    printf("OatHeader: {magic: 0x%08x, \
+      version: 0x%08x, \
+      checksum: 0x%08x, \
+      isa: %s, \
+      isa_features_bitmap: 0x%08x, \
+      dex_file_count: 0x%08x, \
+      executable_offset: 0x%08x, \
+      interpreter_to_interpreter_bridge_offset: 0x%08x, \
+      interpreter_to_compiled_code_bridge_offset: 0x%08x, \
+      jni_dlsym_lookup_offset: 0x%08x",
+      common.magic,
+      common.version,
+      common.adler32_checksum,
+      instruction_set_str(instruction_set),
+      instruction_set_features_bitmap,
+      dex_file_count,
+      executable_offset,
+      interpreter_to_interpreter_bridge_offset,
+      interpreter_to_compiled_code_bridge_offset,
+      jni_dlsym_lookup_offset);
 
     if (common.version == static_cast<uint32_t>(OatVersion::V_045) ||
         common.version == static_cast<uint32_t>(OatVersion::V_039)) {
       printf(
-          "  portable_imt_conflict_trampoline_offset: 0x%08x\n"
-          "  portable_resolution_trampoline_offset: 0x%08x\n"
-          "  portable_to_interpreter_bridge_offset: 0x%08x\n",
+          "portable_imt_conflict_trampoline_offset: 0x%08x, \
+          portable_resolution_trampoline_offset: 0x%08x, \
+          portable_to_interpreter_bridge_offset: 0x%08x",
           portable_imt_conflict_trampoline_offset,
           portable_resolution_trampoline_offset,
           portable_to_interpreter_bridge_offset);
     }
 
     printf(
-        "  quick_generic_jni_trampoline_offset: 0x%08x\n"
-        "  quick_imt_conflict_trampoline_offset: 0x%08x\n"
-        "  quick_resolution_trampoline_offset: 0x%08x\n"
-        "  quick_to_interpreter_bridge_offset: 0x%08x\n"
-        "  image_patch_delta: 0x%08x\n"
-        "  image_file_location_oat_checksum: 0x%08x\n"
-        "  image_file_location_oat_data_begin: 0x%08x\n"
-        "  key_value_store_size: 0x%08x\n",
+        "quick_generic_jni_trampoline_offset: 0x%08x, \
+        quick_imt_conflict_trampoline_offset: 0x%08x, \
+        quick_resolution_trampoline_offset: 0x%08x, \
+        quick_to_interpreter_bridge_offset: 0x%08x, \
+        image_patch_delta: 0x%08x, \
+        image_file_location_oat_checksum: 0x%08x, \
+        image_file_location_oat_data_begin: 0x%08x, \
+        key_value_store_size: 0x%08x}\n",
         quick_generic_jni_trampoline_offset,
         quick_imt_conflict_trampoline_offset,
         quick_resolution_trampoline_offset,
@@ -391,7 +399,7 @@ class KeyValueStore {
 
   void print() const {
     for (const auto& e : kv_pairs_) {
-      printf("  %s: %s\n", e.first.c_str(), e.second.c_str());
+      printf("KeyValueStore: {%s: %s}\n", e.first.c_str(), e.second.c_str());
     }
   }
 
@@ -501,8 +509,9 @@ class DexIdBufs {
 };
 
 // Class meta data for all the classes that appear in the dex files.
-// - DexFileListing specifies the beginning of the class listing for
-//   each dex file.
+// ClassOffsets[0]...ClassOffsets[D] and OatClass[0]..OatClass[C] sections
+// - DexFileListing (OatDexFile[0]...OatDexFile[D]) specifies the beginning of
+//   the ClassOffsets for each dex file.
 // - The class listing for a dex file is doubly indirect. It consists of an
 //   array of offsets, whose length is specified by
 //   DexFileHeader::class_defs_size. Each offset in that array points to
@@ -737,14 +746,20 @@ class DexFileListing_079 : public DexFileListing {
   }
 
   void print() {
+    size_t i = 0;
     for (const auto& e : dex_files_) {
-      printf("  {\n");
-      printf("    location: %s\n", e.location.c_str());
-      printf("    location_checksum: 0x%08x\n", e.location_checksum);
-      printf("    file_offset: 0x%08x\n", e.file_offset);
-      printf("    classes_offset: 0x%08x\n", e.classes_offset);
-      printf("    lookup_table_offset: 0x%08x\n", e.lookup_table_offset);
-      printf("  }\n");
+      printf("OatDexFile[%zu]: {location: %s, \
+        location_checksum: 0x%08x, \
+        file_offset: 0x%08x, \
+        classes_offset: 0x%08x, \
+        lookup_table_offset: 0x%08x}\n",
+        i,
+        e.location.c_str(),
+        e.location_checksum,
+        e.file_offset,
+        e.classes_offset,
+        e.lookup_table_offset);
+      i++;
     }
   }
 
@@ -817,29 +832,94 @@ class DexFileListing_124 : public DexFileListing_079 {
                                         bool samsung_mode);
 };
 
-// Shows up only in API 27
-struct OatDexFileRecord {
-  OatDexFileRecord() = default;
-  OatDexFileRecord(uint32_t loc_size,
-                   const std::string& location,
-                   uint32_t file_checksum,
-                   uint32_t file_offset)
-      : location_size(loc_size),
-        location_data(location),
-        dex_file_checksum(file_checksum),
-        dex_file_offset(file_offset) {}
+class DexFileListing_131 : public DexFileListing_124 {
+ public:
+   struct DexFile_131 : public DexFile_124 {
+     DexFile_131() = default;
+     DexFile_131(const std::string& location_,
+                 uint32_t location_checksum_,
+                 uint32_t file_offset_,
+                 uint32_t num_classes_,
+                 uint32_t classes_offset_,
+                 uint32_t lookup_table_offset_,
+                 uint32_t dex_layout_sections_offset_,
+                 uint32_t method_bss_mapping_offset_)
+         : DexFile_124(location_, location_checksum_, file_offset_, num_classes_, classes_offset_, lookup_table_offset_),
+           dex_layout_sections_offset(dex_layout_sections_offset_),
+           method_bss_mapping_offset(method_bss_mapping_offset_) {}
 
-  uint32_t location_size;
-  std::string location_data;
-  uint32_t dex_file_checksum;
-  uint32_t dex_file_offset;
+     uint32_t dex_layout_sections_offset;
+     uint32_t method_bss_mapping_offset;
+   };
 
-  static OatDexFileRecord build(const DexInput& dex, uint32_t& next_offset);
-  static void write(FileHandle& oat_fh, const OatDexFileRecord& record);
-  uint32_t size() const {
-    // 3 ints for dex file location size, checksum, offset into the vdex plus
-    // the actual size of the dex file path.
-    return sizeof(uint32_t) * 3 + location_data.size();
+  MOVABLE(DexFileListing_131);
+  DexFileListing_131(int numDexFiles, ConstBuffer buf)
+      : DexFileListing_124(numDexFiles, buf) {
+    CHECK(numDexFiles <= 1,
+          "For V124/V131 we only support one dex per odex/vdex pair");
+  }
+
+  static uint32_t compute_size(const std::vector<DexInput>& dex_input,
+                               bool /*samsung_mode*/) {
+    // Locations are *not* null terminated.
+    const auto num_files = dex_input.size();
+    uint32_t total_file_location_size = 0;
+    for (const auto& e : dex_input) {
+      total_file_location_size += e.location.size();
+    }
+    return num_files * sizeof(uint32_t) + // location len
+           total_file_location_size +
+           num_files * sizeof(uint32_t) + // location checksum
+           num_files * sizeof(uint32_t) + // dex file offset
+           num_files * sizeof(uint32_t) + // classes offset
+           num_files * sizeof(uint32_t) + // lookup_table_offset
+           num_files * sizeof(uint32_t) + // dex_layout_sections_offset
+           num_files * sizeof(uint32_t); // method_bss_mapping_offset
+  }
+
+  static std::vector<DexFile_131> build(const std::vector<DexInput>& dexes,
+                                        uint32_t& next_offset,
+                                        bool samsung_mode);
+
+  static void write(
+      FileHandle& fh,
+      const std::vector<DexFileListing_131::DexFile_131>& dex_files,
+      bool /*samsung_mode*/) {
+    for (const auto& file : dex_files) {
+      uint32_t location_len = file.location.size();
+      write_word(fh, location_len);
+
+      ConstBuffer location{file.location.c_str(), location_len};
+      // Locations are *not* null terminated.
+      write_buf(fh, location);
+      write_word(fh, file.location_checksum);
+      write_word(fh, file.file_offset);
+      write_word(fh, file.classes_offset);
+      write_word(fh, file.lookup_table_offset);
+      write_word(fh, file.dex_layout_sections_offset);
+      write_word(fh, file.method_bss_mapping_offset);
+
+      #ifdef DEBUG_LOG
+
+      printf("WRITING DexFileListing_131: \
+          location_len: %u\
+          location: %s\
+          location_checksum: %04x\
+          file_offset: %u\
+          classes_offset: %u\
+          lookup_table_offset: %u\
+          dex_layout_sections_offset: %u\
+          method_bss_mapping_offset: %u\n",
+          location_len,
+          file.location.c_str(),
+          file.location_checksum,
+          file.file_offset,
+          file.classes_offset,
+          file.lookup_table_offset,
+          file.dex_layout_sections_offset,
+          file.method_bss_mapping_offset);
+      #endif
+    }
   }
 };
 
@@ -947,7 +1027,6 @@ class DexFileListing_064 : public DexFileListing {
 
       auto dex_header = DexFileHeader::parse(oat_buf.slice(file.file_offset));
       const auto num_classes = dex_header.class_defs_size;
-
       if (!dex_files_only) {
         file.class_info.reserve(num_classes);
 
@@ -1144,17 +1223,29 @@ class DexFiles {
   // in DexFileListing are relative to the beginning of the OAT file.
   DexFiles(const DexFileListing& dex_file_listing, ConstBuffer buf) {
     for (const auto& file_offset : dex_file_listing.dex_file_offsets()) {
-      auto dex_file_buf = buf.slice(file_offset);
-      headers_.push_back(DexFileHeader::parse(dex_file_buf));
+      auto dex_header_buf = buf.slice(file_offset);
+      auto dh = DexFileHeader::parse(dex_header_buf);
+      headers_.push_back(std::move(dh));
+
+      auto dex_buf = buf.slice(file_offset, file_offset + dh.file_size);
+      dexes_.push_back(dex_buf);
     }
   }
 
   void print() {
     for (const auto& e : headers_) {
-      printf("  { DexFile\n");
-      printf("    file_size: 0x%08x\n", e.file_size);
-      printf("    num_classes: 0x%08x\n", e.class_defs_size);
-      printf("  }\n");
+      printf("DexFile: { \
+      file_size: 0x%08x(%u), \
+      num_classes: 0x%08x(%u)}\n",
+      e.file_size,
+      e.file_size,
+      e.class_defs_size,
+      e.class_defs_size);
+    }
+    size_t index = 0;
+    for (const auto& e : dexes_) {
+      print_dex_opcodes(reinterpret_cast<const uint8_t*>(e.ptr), headers_[index].file_size);
+      index++;
     }
   }
 
@@ -1162,6 +1253,7 @@ class DexFiles {
 
  private:
   std::vector<DexFileHeader> headers_;
+  std::vector<ConstBuffer> dexes_;
 };
 
 class OatClasses_079 : public OatClasses {
@@ -1184,8 +1276,9 @@ class OatClasses_079 : public OatClasses {
 
   void print_unverified_classes();
 
+  template<typename DexFileType>
   static void write(
-      const std::vector<DexFileListing_079::DexFile_079>& dex_files,
+      const std::vector<DexFileType>& dex_files,
       FileHandle& cksum_fh);
 
  protected:
@@ -1338,29 +1431,60 @@ void OatClasses_079::print_unverified_classes() {
   }
 }
 
+template<typename DexFileType>
 void OatClasses_079::write(
-    const std::vector<DexFileListing_079::DexFile_079>& dex_files,
+    const std::vector<DexFileType>& dex_files,
     FileHandle& cksum_fh) {
+  #ifdef DEBUG_LOG
+  printf("WRITING OatClasses:\n");
+  #endif
+
+  size_t dex_count = 0;
   for (const auto& dex_file : dex_files) {
     CHECK(dex_file.classes_offset == cksum_fh.bytes_written());
+
     const auto num_classes = dex_file.num_classes;
     uint32_t table_offset =
         dex_file.classes_offset + num_classes * sizeof(uint32_t);
 
+    #ifdef DEBUG_LOG
+    printf("WRITING OatClasses for dex[%zu]: \
+      #classes: %u :: \
+      #offset: %u (-> %u)\n",
+      dex_count,
+      num_classes,
+      dex_file.classes_offset,
+      table_offset);
+    #endif
+
     // write pointers to ClassInfo.
-    for (unsigned int i = 0; i < num_classes; i++) {
+    for (size_t i = 0; i < num_classes; i++) {
       write_word(cksum_fh, table_offset + i * sizeof(uint32_t));
+
+      #ifdef DEBUG_LOG
+      printf("#ClassOffsets[%zu] -> %zu\n",
+        i,
+        table_offset + i * sizeof(uint32_t));
+      #endif
     }
     CHECK(table_offset == cksum_fh.bytes_written());
 
     // Write ClassInfo structs.
     OatClasses::ClassInfo info(OatClasses::Status::kStatusVerified,
                                OatClasses::Type::kOatClassNoneCompiled);
-    for (unsigned int i = 0; i < num_classes; i++) {
+    for (size_t i = 0; i < num_classes; i++) {
       write_obj(cksum_fh, info);
+
+      #ifdef DEBUG_LOG
+      printf("#OatClass[%zu]:%u ::  type: %u\n",
+        i,
+        table_offset,
+        info.type);
+      #endif
       table_offset += sizeof(OatClasses::ClassInfo);
     }
     CHECK(table_offset == cksum_fh.bytes_written());
+    dex_count++;
   }
 }
 
@@ -1609,19 +1733,21 @@ class LookupTables {
 
   void print() {
     for (const auto& e : tables_) {
-      printf("  { Type lookup table %s\n", e.dex_file.c_str());
-      printf("    num_entries: %u\n", e.num_entries);
+      printf("Type_lookup_table[%s]: { \
+        num_entries: %u, \
+        entries: [",
+        e.dex_file.c_str(),
+        e.num_entries);
       for (unsigned int i = 0; i < e.num_entries; i++) {
         const auto& entry = e.entries[i];
         if (entry.str_offset != 0) {
-          printf("    {\n");
-          printf("    str: %s\n",
-                 oat_buf_.slice(e.dex_file_offset + entry.str_offset).ptr);
-          printf("    str offset: 0x%08x\n", entry.str_offset);
-          printf("    }\n");
+          printf("{str: %s, \
+            str offset: 0x%08x}",
+            oat_buf_.slice(e.dex_file_offset + entry.str_offset).ptr,
+            entry.str_offset);
         }
       }
-      printf("  }\n");
+      printf("]}\n");
     }
   }
 
@@ -1629,9 +1755,10 @@ class LookupTables {
     return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
   }
 
+  template<typename DexFileType>
   static void write(
       const std::vector<DexInput>& dex_input_vec,
-      const std::vector<DexFileListing_079::DexFile_079>& dex_files,
+      const std::vector<DexFileType>& dex_files,
       FileHandle& cksum_fh) {
     foreach_pair(
         dex_input_vec,
@@ -1920,7 +2047,8 @@ class OatFile_064 : public OatFile {
                       InstructionSet isa,
                       bool write_elf,
                       const std::string& art_image_location,
-                      bool samsung_mode);
+                      bool samsung_mode,
+                      const QuickData* quick_data);
 
  private:
   OatFile_064(OatHeader h,
@@ -1951,12 +2079,11 @@ class OatFile_079 : public OatFile {
   static std::unique_ptr<OatFile> parse(bool dex_files_only,
                                         ConstBuffer buf,
                                         size_t oat_offset) {
-
     auto header = OatHeader::parse(buf);
     auto key_value_store = KeyValueStore(
         buf.slice(header.size()).truncate(header.key_value_store_size));
-
     auto rest = buf.slice(header.size() + header.key_value_store_size);
+
     DexFileListing_079 dfl(header.dex_file_count, rest);
 
     DexFiles dex_files(dfl, buf);
@@ -2015,7 +2142,8 @@ class OatFile_079 : public OatFile {
                       InstructionSet isa,
                       bool write_elf,
                       const std::string& art_image_location,
-                      bool samsung_mode);
+                      bool samsung_mode,
+                      const QuickData* quick_data);
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     std::vector<OatDexFile> ret;
@@ -2094,7 +2222,9 @@ class OatFile_124 : public OatFile {
   UNCOPYABLE(OatFile_124);
   MOVABLE(OatFile_124);
 
-  static std::unique_ptr<OatFile> parse(bool dex_files_only,
+  template<typename DexFileListingType,
+           typename OatFileType>
+  static std::unique_ptr<OatFile> oatfile_124_131_parse(bool dex_files_only,
                                         ConstBuffer buf,
                                         size_t oat_offset,
                                         const std::vector<DexInput>& dexes) {
@@ -2110,7 +2240,7 @@ class OatFile_124 : public OatFile {
         buf.slice(header.size()).truncate(header.key_value_store_size));
 
     auto rest = buf.slice(header.size() + header.key_value_store_size);
-    DexFileListing_124 dfl(header.dex_file_count, rest);
+    DexFileListingType dfl(header.dex_file_count, rest);
 
     auto dex_file_name = dexes[0].filename;
     auto dex_file = FileHandle(fopen(dex_file_name.c_str(), "r"));
@@ -2142,7 +2272,7 @@ class OatFile_124 : public OatFile {
     DexFiles dex_files(dfl, dex_file_buf);
 
     if (dex_files_only) {
-      return std::unique_ptr<OatFile>(new OatFile_124(header,
+      return std::unique_ptr<OatFile>(new OatFileType(header,
                                                       key_value_store,
                                                       std::move(dfl),
                                                       std::move(dex_files),
@@ -2152,7 +2282,7 @@ class OatFile_124 : public OatFile {
     LookupTables lookup_tables(dfl, dex_files, buf);
     OatClasses_124 oat_classes(dfl, dex_files, buf, dex_file_buf);
 
-    return std::unique_ptr<OatFile>(new OatFile_124(header,
+    return std::unique_ptr<OatFile>(new OatFileType(header,
                                                     key_value_store,
                                                     std::move(dfl),
                                                     std::move(dex_files),
@@ -2160,6 +2290,150 @@ class OatFile_124 : public OatFile {
                                                     std::move(oat_classes),
                                                     oat_offset));
   }
+
+  static std::unique_ptr<OatFile> parse(bool dex_files_only,
+                                        ConstBuffer buf,
+                                        size_t oat_offset,
+                                        const std::vector<DexInput>& dexes) {
+
+    return oatfile_124_131_parse<DexFileListing_124, OatFile_124>(dex_files_only, buf, oat_offset, dexes);
+  }
+
+  void print(bool dump_classes,
+             bool dump_tables,
+             bool print_unverified_classes) override {
+    printf("Header:\n");
+    header_.print();
+    printf("Key/Value store:\n");
+    key_value_store_.print();
+    printf("Dex File Listing:\n");
+    dex_file_listing_->print();
+    printf("Dex Files:\n");
+    dex_files_.print();
+
+    if (dump_tables) {
+      printf("LookupTables:\n");
+      lookup_tables_.print();
+    }
+    if (dump_classes) {
+      printf("Classes:\n");
+      oat_classes_.print();
+    }
+    if (print_unverified_classes) {
+      oat_classes_.print_unverified_classes();
+    }
+  }
+
+  bool is_samsung() const override { return false; }
+
+  Status status() override { return Status::PARSE_SUCCESS; }
+
+  static Status build(const std::string& oat_file_name,
+                      const std::vector<DexInput>& dex_input,
+                      const OatVersion oat_version,
+                      InstructionSet isa,
+                      bool write_elf,
+                      const std::string& art_image_location,
+                      bool samsung_mode,
+                      const QuickData* quick_data);
+
+  std::vector<OatDexFile> get_oat_dexfiles() override {
+    std::vector<OatDexFile> ret;
+    ret.reserve(dex_file_listing_->dex_files().size());
+    for (const auto& dex : dex_file_listing_->dex_files()) {
+      ret.emplace_back(dex.location, dex.location_checksum, dex.file_offset);
+    }
+    return ret;
+  }
+
+  size_t oat_offset() const override { return oat_offset_; }
+
+  std::unique_ptr<std::string> get_art_image_loc() const override {
+    auto img_loc = key_value_store_.get("image-location");
+    if (img_loc == nullptr) {
+      return nullptr;
+    }
+    return std::unique_ptr<std::string>(new std::string(img_loc));
+  }
+
+  bool created_by_oatmeal() const override {
+    return key_value_store_.has_key(kCreatedByOatmeal);
+  }
+
+  std::string version_string() const override {
+    char buf[5] = {};
+    memcpy(buf, &header_.common.version, 4);
+    return std::string(buf);
+  }
+
+private:
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFileListing_124 dfl,
+              DexFiles dex_files,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_files_(std::move(dex_files)),
+        oat_offset_(oat_data_offset),
+        dex_file_listing_(&dfl) {}
+
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFileListing_124 dfl,
+              DexFiles dex_files,
+              LookupTables lt,
+              OatClasses_124 oat_classes,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_files_(std::move(dex_files)),
+        lookup_tables_(std::move(lt)),
+        oat_classes_(std::move(oat_classes)),
+        oat_offset_(oat_data_offset),
+        dex_file_listing_(&dfl) {}
+
+protected:
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFiles dex_files,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_files_(std::move(dex_files)),
+        oat_offset_(oat_data_offset),
+        dex_file_listing_(nullptr) {}
+
+  OatFile_124(OatHeader h,
+              KeyValueStore kv,
+              DexFiles dex_files,
+              LookupTables lt,
+              OatClasses_124 oat_classes,
+              size_t oat_data_offset)
+      : header_(h),
+        key_value_store_(kv),
+        dex_files_(std::move(dex_files)),
+        lookup_tables_(std::move(lt)),
+        oat_classes_(std::move(oat_classes)),
+        oat_offset_(oat_data_offset),
+        dex_file_listing_(nullptr) {}
+
+  OatHeader header_;
+  KeyValueStore key_value_store_;
+  DexFiles dex_files_;
+  LookupTables lookup_tables_;
+  OatClasses_124 oat_classes_;
+  size_t oat_offset_;
+
+private:
+    std::unique_ptr<DexFileListing_124> dex_file_listing_;
+};
+
+
+class OatFile_131 : public OatFile_124 {
+ public:
+  UNCOPYABLE(OatFile_131);
+  MOVABLE(OatFile_131);
 
   void print(bool dump_classes,
              bool dump_tables,
@@ -2196,7 +2470,8 @@ class OatFile_124 : public OatFile {
                       InstructionSet isa,
                       bool write_elf,
                       const std::string& art_image_location,
-                      bool samsung_mode);
+                      bool samsung_mode,
+                      const QuickData* quick_data);
 
   std::vector<OatDexFile> get_oat_dexfiles() override {
     std::vector<OatDexFile> ret;
@@ -2228,39 +2503,34 @@ class OatFile_124 : public OatFile {
   }
 
  private:
-  OatFile_124(OatHeader h,
+  OatFile_131(OatHeader h,
               KeyValueStore kv,
-              DexFileListing_124 dfl,
+              DexFileListing_131 dfl,
               DexFiles dex_files,
               size_t oat_data_offset)
-      : header_(h),
-        key_value_store_(kv),
-        dex_file_listing_(std::move(dfl)),
-        dex_files_(std::move(dex_files)),
-        oat_offset_(oat_data_offset) {}
+      : OatFile_124(h,
+                    kv,
+                    std::move(dex_files),
+                    oat_data_offset),
+        dex_file_listing_(std::move(dfl)) {}
 
-  OatFile_124(OatHeader h,
+  OatFile_131(OatHeader h,
               KeyValueStore kv,
-              DexFileListing_124 dfl,
+              DexFileListing_131 dfl,
               DexFiles dex_files,
               LookupTables lt,
               OatClasses_124 oat_classes,
               size_t oat_data_offset)
-      : header_(h),
-        key_value_store_(kv),
-        dex_file_listing_(std::move(dfl)),
-        dex_files_(std::move(dex_files)),
-        lookup_tables_(std::move(lt)),
-        oat_classes_(std::move(oat_classes)),
-        oat_offset_(oat_data_offset) {}
+      : OatFile_124(h,
+                    kv,
+                    std::move(dex_files),
+                    std::move(lt),
+                    std::move(oat_classes),
+                    oat_data_offset),
+      dex_file_listing_(std::move(dfl)) {}
 
-  OatHeader header_;
-  KeyValueStore key_value_store_;
-  DexFileListing_124 dex_file_listing_;
-  DexFiles dex_files_;
-  LookupTables lookup_tables_;
-  OatClasses_124 oat_classes_;
-  size_t oat_offset_;
+
+  DexFileListing_131 dex_file_listing_;
 };
 
 class OatFile_Unknown : public OatFile {
@@ -2670,36 +2940,95 @@ std::vector<DexFileListing_124::DexFile_124> DexFileListing_124::build(
   return dex_files;
 }
 
-OatDexFileRecord OatDexFileRecord::build(const DexInput& dex,
-                                         uint32_t& next_offset) {
-  auto dex_location = dex.location;
-  OatDexFileRecord record(
-      static_cast<uint32_t>(dex_location.size()), dex_location, 0x0, 0x0);
-  next_offset += record.size();
-  return record;
+std::vector<DexFileListing_131::DexFile_131> DexFileListing_131::build(
+    const std::vector<DexInput>& dex_input,
+    uint32_t& next_offset,
+    bool /*samsung_mode*/) {
+  CHECK(dex_input.size() == 1);
+
+  std::vector<DexFileListing_131::DexFile_131> dex_files;
+  dex_files.reserve(dex_input.size());
+
+  for (const auto dex : dex_input) {
+    // We load the dex bytecode in the VDEX file after the header and
+    // the checksum for the DEX right after.
+    auto dex_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
+
+    auto dex_fh = FileHandle(fopen(dex.filename.c_str(), "r"));
+    CHECK(dex_fh.get() != nullptr);
+
+    auto file_size = get_filesize(dex_fh);
+    CHECK(file_size >= sizeof(DexFileHeader));
+
+    // read the header to get the count of classes.
+    DexFileHeader header = {};
+    CHECK(dex_fh.fread(&header, sizeof(DexFileHeader), 1) == 1);
+
+    auto num_classes = header.class_defs_size;
+    auto class_table_size =
+        num_classes * sizeof(uint32_t) // array of pointers to ClassInfo structs
+        + num_classes * sizeof(OatClasses::ClassInfo);
+
+    auto lookup_table_size = LookupTables::numEntries(num_classes) *
+                             sizeof(LookupTables::LookupTableEntry);
+
+    dex_files.push_back(DexFileListing_131::DexFile_131(
+        dex.location,
+        header.checksum,
+        dex_offset,
+        // temporarily store sizes instead of offsets here.
+        // they will be replaced with offsets in the next loop.
+        num_classes,
+        class_table_size,
+        lookup_table_size,
+        0, //dex_layout_sections_offset
+        0)); // method_bss_mapping_offset
+  }
+
+  CHECK(is_aligned<4>(next_offset));
+  // note non-const ref
+  for (auto& dex_file : dex_files) {
+    auto cur_size = dex_file.classes_offset;
+    dex_file.classes_offset = next_offset;
+    next_offset += cur_size;
+    CHECK(is_aligned<4>(next_offset));
+  }
+  for (auto& dex_file : dex_files) {
+    auto cur_size = dex_file.lookup_table_offset;
+    dex_file.lookup_table_offset = next_offset;
+    next_offset += cur_size;
+    CHECK(is_aligned<4>(next_offset));
+  }
+
+  return dex_files;
 }
 
-void OatDexFileRecord::write(FileHandle& oat_fh,
-                             const OatDexFileRecord& record) {
-  write_word(oat_fh, record.location_size);
-  auto buf =
-      ConstBuffer{reinterpret_cast<const char*>(record.location_data.data()),
-                  record.location_size};
-  write_buf(oat_fh, buf);
-  write_word(oat_fh, record.dex_file_checksum);
-  write_word(oat_fh, record.dex_file_offset);
+void write_dex_file(const DexInput& input,
+                    const QuickData* quick_data,
+                    FileHandle& cksum_fh) {
+  if (quick_data != nullptr) {
+    START_TRACE()
+    quicken_dex(input.filename.c_str(), quick_data, cksum_fh);
+    END_TRACE("quicken_dex")
+  } else {
+    START_TRACE()
+    auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
+    stream_file(dex_fh, cksum_fh);
+    END_TRACE("stream_dex")
+  }
 }
+
 
 template <typename DexFileListingType>
 void write_dex_files(const std::vector<DexInput>& dex_input,
                      const std::vector<DexFileListingType>& dex_files,
+                     const QuickData* quick_data,
                      FileHandle& cksum_fh) {
   foreach_pair(dex_input,
                dex_files,
                [&](const DexInput& input, const DexFileListingType& dex_file) {
                  CHECK(dex_file.file_offset == cksum_fh.bytes_written());
-                 auto dex_fh = FileHandle(fopen(input.filename.c_str(), "r"));
-                 stream_file(dex_fh, cksum_fh);
+                 write_dex_file(input, quick_data, cksum_fh);
                });
 }
 
@@ -2760,6 +3089,18 @@ std::unique_ptr<ImageInfo_064> read_image_info_064(
                         art_header->oat_data_begin));
 }
 
+std::unique_ptr<QuickData> read_quick_data(
+    const std::string& quick_data_location) {
+  struct stat buffer;
+  if (stat(quick_data_location.c_str(), &buffer) != 0) {
+    fprintf(stderr,
+            "Failed to locate quickening metadata file: %s\n",
+            quick_data_location.c_str());
+    return std::unique_ptr<QuickData>(nullptr);
+  }
+  return std::make_unique<QuickData>(quick_data_location.c_str());
+}
+
 template <typename DexFileListingType,
           typename OatClassesType,
           typename LookupTablesType,
@@ -2770,7 +3111,8 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
                               InstructionSet isa,
                               bool write_elf,
                               const std::string& art_image_location,
-                              bool samsung_mode) {
+                              bool samsung_mode,
+                              const QuickData* quick_data) {
 
   const std::vector<KeyValueStore::KeyValue> key_value = {
       {"classpath", ""},
@@ -2842,7 +3184,7 @@ OatFile::Status build_oatfile(const std::string& oat_file_name,
     SamsungLookupTablesType::write(dex_input, dex_files, oat_fh);
   }
 
-  write_dex_files(dex_input, dex_files, oat_fh);
+  write_dex_files(dex_input, dex_files, quick_data, oat_fh);
   OatClassesType::write(dex_files, oat_fh);
 
   LookupTablesType::write(dex_input, dex_files, oat_fh);
@@ -2892,13 +3234,15 @@ void write_vdex_header(FileHandle& fh,
   write_word(fh, vdex_checksum);
 }
 
+template <typename DexFileListingType>
 OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
                                       OatVersion oat_version,
                                       const DexInput& dex_input,
                                       InstructionSet isa,
                                       bool write_elf,
                                       const std::string& art_image_location,
-                                      bool samsung_mode) {
+                                      bool samsung_mode,
+                                      const QuickData* quick_data) {
   const std::vector<KeyValueStore::KeyValue> key_value = {
       {"classpath", ""},
       {"compiler-filter", "assume-verified"},
@@ -2920,21 +3264,15 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
   ////////// Compute sizes and offsets.
   const auto keyvalue_size = KeyValueStore::compute_size(key_value);
   const auto dex_file_listing_size =
-      DexFileListing_124::compute_size(single_dex_input, samsung_mode);
+      DexFileListingType::compute_size(single_dex_input, samsung_mode);
 
   // Neither the keyvalue store or the DexFileListing require alignment.
+  uint32_t oat_dex_files_offset = OatHeader::size(oat_version) + keyvalue_size;
   uint32_t next_offset = align<4>(OatHeader::size(oat_version) + keyvalue_size +
                                   dex_file_listing_size);
 
   auto dex_files =
-      DexFileListing_124::build(single_dex_input, next_offset, samsung_mode);
-
-  OatDexFileRecord dex_file_record;
-  uint32_t oat_dex_files_offset = 0;
-  if (oat_version == OatVersion::V_131) {
-    oat_dex_files_offset = next_offset;
-    dex_file_record = OatDexFileRecord::build(dex_input, next_offset);
-  }
+      DexFileListingType::build(single_dex_input, next_offset, samsung_mode);
 
   auto oat_size = align<0x1000>(next_offset);
   auto header = build_header(
@@ -2966,7 +3304,7 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
   KeyValueStore::write(oat_fh, key_value);
 
   // write DexFileListing
-  DexFileListing_124::write(oat_fh, dex_files, samsung_mode);
+  DexFileListingType::write(oat_fh, dex_files, samsung_mode);
 
   // Write padding to align to 4 bytes.
   auto padding = align<4>(oat_fh.bytes_written()) - oat_fh.bytes_written();
@@ -2974,10 +3312,6 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
   write_buf(oat_fh, ConstBuffer{buf, padding});
 
   // Write lookup tables.
-  if (samsung_mode) {
-    SamsungLookupTablesNil::write(single_dex_input, dex_files, oat_fh);
-  }
-
   CHECK(oat_file_name.substr(oat_file_name.size() - 5) == std::string(".odex"),
         "V124/V131 Oatmeal should generate .odex files");
 
@@ -3005,20 +3339,11 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
 
   write_vdex_header(
       vdex_fh, vdexVersion(oat_version), 1, dex_file_size, 0, 0, dex_checksum);
-
-  stream_file(dex_fh, vdex_fh);
+  write_dex_file(dex_input, quick_data, vdex_fh);
 
   OatClasses_124::write(dex_files, oat_fh);
 
   LookupTables::write(single_dex_input, dex_files, oat_fh);
-
-  if (oat_version == OatVersion::V_131) {
-    dex_file_record.dex_file_checksum = dex_checksum;
-    // Advance past the VDEX header plus the DEX file checksum inside the .vdex
-    // file.
-    dex_file_record.dex_file_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
-    OatDexFileRecord::write(oat_fh, dex_file_record);
-  }
 
   ////////// Update header with final checksum.
   CHECK(oat_fh.seek_begin());
@@ -3046,18 +3371,16 @@ OatFile::Status build_vdex_odex_pairs(const std::string& oat_file_name,
   return OatFile::Status::BUILD_SUCCESS;
 }
 
-template <>
-OatFile::Status build_oatfile<DexFileListing_124,
-                              OatClasses_124,
-                              LookupTables,
-                              SamsungLookupTablesNil>(
+template <typename DexFileListinType>
+OatFile::Status build_oatfile_after_v124(
     const std::string& oat_file_name,
     const std::vector<DexInput>& dex_input,
     const OatVersion oat_version,
     InstructionSet isa,
     bool write_elf,
     const std::string& art_image_location,
-    bool samsung_mode) {
+    bool samsung_mode,
+    const QuickData* quick_data) {
   // Make sure the output is a directory where we will place ODEX and VDEX files
   CHECK(oat_file_name[oat_file_name.size() - 1] == '/');
   OatFile::Status result = OatFile::Status::BUILD_SUCCESS;
@@ -3072,13 +3395,15 @@ OatFile::Status build_oatfile<DexFileListing_124,
     CHECK(oat_version == OatVersion::V_124 || oat_version == OatVersion::V_131,
           "must not build vdex/odex pairs for non-Oreo builds");
 
-    auto partial_result = build_vdex_odex_pairs(odex_file_name,
-                                                oat_version,
-                                                dex,
-                                                isa,
-                                                write_elf,
-                                                art_image_location,
-                                                samsung_mode);
+    auto partial_result = build_vdex_odex_pairs<DexFileListinType>(
+          odex_file_name,
+          oat_version,
+          dex,
+          isa,
+          write_elf,
+          art_image_location,
+          samsung_mode,
+          quick_data);
 
     if (partial_result != OatFile::Status::BUILD_SUCCESS) {
       fprintf(stderr,
@@ -3098,7 +3423,8 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                    InstructionSet isa,
                                    bool write_elf,
                                    const std::string& art_image_location,
-                                   bool samsung_mode) {
+                                   bool samsung_mode,
+                                   const QuickData* quick_data) {
   return build_oatfile<DexFileListing_064,
                        OatClasses_064,
                        LookupTables_Nil,
@@ -3108,7 +3434,8 @@ OatFile::Status OatFile_064::build(const std::string& oat_file_name,
                                             isa,
                                             write_elf,
                                             art_image_location,
-                                            samsung_mode);
+                                            samsung_mode,
+                                            quick_data);
 }
 
 OatFile::Status OatFile_079::build(const std::string& oat_file_name,
@@ -3117,7 +3444,8 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                    InstructionSet isa,
                                    bool write_elf,
                                    const std::string& art_image_location,
-                                   bool samsung_mode) {
+                                   bool samsung_mode,
+                                   const QuickData* quick_data) {
   return build_oatfile<DexFileListing_079,
                        OatClasses_079,
                        LookupTables,
@@ -3127,7 +3455,8 @@ OatFile::Status OatFile_079::build(const std::string& oat_file_name,
                                                isa,
                                                write_elf,
                                                art_image_location,
-                                               samsung_mode);
+                                               samsung_mode,
+                                               quick_data);
 }
 
 OatFile::Status OatFile_124::build(const std::string& oat_file_name,
@@ -3136,17 +3465,34 @@ OatFile::Status OatFile_124::build(const std::string& oat_file_name,
                                    InstructionSet isa,
                                    bool write_elf,
                                    const std::string& art_image_location,
-                                   bool samsung_mode) {
-  return build_oatfile<DexFileListing_124,
-                       OatClasses_124,
-                       LookupTables,
-                       SamsungLookupTablesNil>(oat_file_name,
+                                   bool samsung_mode,
+                                   const QuickData* quick_data) {
+  return build_oatfile_after_v124<DexFileListing_124>(oat_file_name,
                                                dex_input,
                                                oat_version,
                                                isa,
                                                write_elf,
                                                art_image_location,
-                                               samsung_mode);
+                                               samsung_mode,
+                                               quick_data);
+}
+
+OatFile::Status OatFile_131::build(const std::string& oat_file_name,
+                                   const std::vector<DexInput>& dex_input,
+                                   const OatVersion oat_version,
+                                   InstructionSet isa,
+                                   bool write_elf,
+                                   const std::string& art_image_location,
+                                   bool samsung_mode,
+                                   const QuickData* quick_data) {
+  return build_oatfile_after_v124<DexFileListing_131>(oat_file_name,
+                                               dex_input,
+                                               oat_version,
+                                               isa,
+                                               write_elf,
+                                               art_image_location,
+                                               samsung_mode,
+                                               quick_data);
 }
 
 OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
@@ -3155,8 +3501,10 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                const std::string& arch,
                                bool write_elf,
                                const std::string& art_image_location,
-                               bool samsung_mode) {
-
+                               bool samsung_mode,
+                               const std::string& quick_data_location) {
+  std::unique_ptr<QuickData> quick_metadata =
+      read_quick_data(quick_data_location);
   auto build_fn = [&](const std::string& oat_file_name,
                       const std::vector<DexInput>& dexes) {
     auto version = versionInt(oat_version);
@@ -3170,7 +3518,8 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 isa,
                                 write_elf,
                                 art_image_location,
-                                samsung_mode);
+                                samsung_mode,
+                                quick_metadata.get());
 
     case OatVersion::V_039:
     case OatVersion::V_045:
@@ -3182,16 +3531,27 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
                                 isa,
                                 write_elf,
                                 art_image_location,
-                                samsung_mode);
+                                samsung_mode,
+                                quick_metadata.get());
     case OatVersion::V_124:
-    case OatVersion::V_131:
       return OatFile_124::build(oat_file_name,
                                 dexes,
                                 version,
                                 isa,
                                 write_elf,
                                 art_image_location,
-                                samsung_mode);
+                                samsung_mode,
+                                quick_metadata.get());
+    case OatVersion::V_131:
+      return OatFile_131::build(oat_file_name,
+                                dexes,
+                                version,
+                                isa,
+                                write_elf,
+                                art_image_location,
+                                samsung_mode,
+                                quick_metadata.get());
+
     default:
       fprintf(stderr, "version 0x%08x unknown\n", static_cast<int>(version));
       return Status::BUILD_UNSUPPORTED_VERSION;

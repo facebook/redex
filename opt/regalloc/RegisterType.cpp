@@ -359,6 +359,7 @@ static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
     }
   }
   const auto& types = method->get_proto()->get_args()->get_type_list();
+  always_assert_log(types.size() > i, "Invalid invoke insn %s\n", SHOW(insn));
   auto* type = types.at(i);
   if (is_wide_type(type)) {
     return RegisterType::WIDE;

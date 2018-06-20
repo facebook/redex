@@ -69,11 +69,13 @@ struct Arguments {
   std::string out_dir;
   std::vector<std::string> dex_files;
   bool verify_none_mode{false};
+  bool art_build{false};
 };
 
 UNUSED void dump_args(const Arguments& args) {
   std::cout << "out_dir: " << args.out_dir << std::endl;
   std::cout << "verify_none_mode: " << args.verify_none_mode << std::endl;
+  std::cout << "art_build: " << args.art_build << std::endl;
   std::cout << "jar_paths: " << std::endl;
   for (const auto& e : args.jar_paths) {
     std::cout << "  " << e << std::endl;
@@ -106,7 +108,7 @@ Json::Value parse_config(const std::string& config_file) {
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
-  std::stringstream temp_stream(value_string);
+  std::istringstream temp_stream(value_string);
   Json::Value temp_json;
   temp_stream >> temp_json;
   return temp_json;
@@ -157,7 +159,7 @@ Json::Value default_config() {
       "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass",
   };
-  std::stringstream temp_json("{\"redex\":{\"passes\":[]}}");
+  std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
   Json::Value cfg;
   temp_json >> cfg;
   for (auto const& pass : passes) {
@@ -208,6 +210,9 @@ Arguments parse_args(int argc, char* argv[]) {
       "run redex in verify-none mode\n"
       "  \tThis will activate optimization passes or code in some passes that "
       "wouldn't normally operate with verification enabled.");
+  od.add_options()(
+      "is-art-build",
+      "If specified, states that the current build is art specific.\n");
   od.add_options()(",S",
                    po::value<std::vector<std::string>>(), // Accumulation
                    "-Skey=string\n"
@@ -334,6 +339,12 @@ Arguments parse_args(int argc, char* argv[]) {
         std::cerr << "warning: cannot parse -J" << key_value << std::endl;
       }
     }
+  }
+
+  if (vm.count("is-art-build")) {
+    args.art_build = true;
+  } else {
+    args.art_build = false;
   }
 
   TRACE(
@@ -514,7 +525,7 @@ int main(int argc, char* argv[]) {
 
     std::set<std::string> library_jars;
     for (const auto jar_path : args.jar_paths) {
-      std::stringstream jar_stream(jar_path);
+      std::istringstream jar_stream(jar_path);
       std::string dependent_jar_path;
       while (std::getline(jar_stream, dependent_jar_path, ':')) {
         TRACE(MAIN,
@@ -588,7 +599,8 @@ int main(int argc, char* argv[]) {
     cfg.outdir = args.out_dir;
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, pg_config, args.config, args.verify_none_mode);
+    PassManager manager(passes, pg_config, args.config, args.verify_none_mode,
+                        args.art_build);
     instruction_lowering::Stats instruction_lowering_stats;
     {
       Timer t("Running optimization passes");
@@ -618,7 +630,7 @@ int main(int argc, char* argv[]) {
     for (auto& store : stores) {
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
-        std::stringstream ss;
+        std::ostringstream ss;
         ss << args.out_dir << "/" << store.get_name();
         if (store.get_name().compare("classes") == 0) {
           // primary/secondary dex store, primary has no numeral and secondaries

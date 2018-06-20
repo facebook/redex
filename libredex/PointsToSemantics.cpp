@@ -739,9 +739,9 @@ using AnchorEnvironment =
 class AnchorPropagation final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AnchorEnvironment> {
  public:
-  using NodeId = Block*;
+  using NodeId = cfg::Block*;
 
-  AnchorPropagation(const ControlFlowGraph& cfg,
+  AnchorPropagation(const cfg::ControlFlowGraph& cfg,
                     bool is_static_method,
                     IRCode* code)
       : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
@@ -895,7 +895,7 @@ class PointsToActionGenerator final {
     IRCode* code = m_dex_method->get_code();
     always_assert(code != nullptr);
     code->build_cfg();
-    ControlFlowGraph& cfg = code->cfg();
+    cfg::ControlFlowGraph& cfg = code->cfg();
     cfg.calculate_exit_block();
 
     // We first propagate the anchors across the code.
@@ -943,7 +943,7 @@ class PointsToActionGenerator final {
   done:
     // We go over each IR instruction and generate the corresponding points-to
     // actions.
-    for (Block* block : cfg.blocks()) {
+    for (cfg::Block* block : cfg.blocks()) {
       AnchorEnvironment state = m_analysis->get_entry_state_at(block);
       for (const MethodItemEntry& mie : InstructionIterable(*block)) {
         IRInstruction* insn = mie.insn;
@@ -956,8 +956,8 @@ class PointsToActionGenerator final {
 
  private:
   // We associate each anchor with a unique points-to variable.
-  void name_anchors(const ControlFlowGraph& cfg) {
-    for (Block* block : cfg.blocks()) {
+  void name_anchors(const cfg::ControlFlowGraph& cfg) {
+    for (cfg::Block* block : cfg.blocks()) {
       for (const MethodItemEntry& mie : *block) {
         if (mie.type == MFLOW_OPCODE) {
           IRInstruction* insn = mie.insn;
