@@ -11,7 +11,9 @@
 
 #include <boost/optional/optional.hpp>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "IRCode.h"
 
@@ -22,23 +24,34 @@
  * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
+ * EDITABLE MODE:
  * Right now there are two types of CFGs. Editable and non-editable:
  * A non editable CFG's blocks have begin and end pointers into the big linear
  * IRList inside IRCode.
  * An editable CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
- * EDITABLE MODE:
+ * Editable mode is the new version of the CFG. In the future, it will replace
+ * IRCode entirely as the primary code representation. To build an editable CFG,
+ * call
+ *
+ * `code->build_cfg(true)`
+ *
+ * The editable CFG takes the MethodItemEntries from the IRCode object and moves
+ * them into the blocks. You can make all sorts of changes to the CFG and when
+ * you're done, move it all back into an IRCode object with
+ *
+ * `code->clear_cfg()`
+ *
  * It is easier to maintain the data structure when there is no unnecessary
- * information duplication. Therefore, MFLOW_TARGETs and OPCODE_GOTOs are
- * deleted and their information is moved to the edges of the CFG.
+ * information duplication. Therefore, MFLOW_TARGETs, OPCODE_GOTOs, MFLOW_TRYs,
+ * and MFLOW_CATCHes are deleted and their information is moved to the edges of
+ * the CFG.
  *
  * TODO: Add useful CFG editing methods
  * TODO: phase out edits to the IRCode and move them all to the editable CFG
  * TODO: remove non-editable CFG option
  *
- * TODO?: remove unreachable blocks in simplify?
- * TODO?: remove items instead of replacing with MFLOW_FALLTHROUGH?
  * TODO?: make MethodItemEntry's fields private?
  */
 
@@ -141,7 +154,7 @@ using ConstInstructionIterable = InstructionIterableImpl</* is_const */ true>;
 
 // A piece of "straight-line" code. Targets are only at the beginning of a block
 // and branches (throws, gotos, switches, etc) are only at the end of a block.
-class Block {
+class Block final {
  public:
   explicit Block(const ControlFlowGraph* parent, BlockId id)
       : m_id(id), m_parent(parent) {}
@@ -275,22 +288,8 @@ class ControlFlowGraph {
   template <class... Args>
   void add_edge(Args&&... args);
 
-  // Remove this edge from the graph but do not release its memory.
-  // This can be used to temporarily remove an edge while moving it elsewhere.
-  void remove_edge(Edge* edge);
-
   using EdgePredicate = std::function<bool(const Edge* e)>;
-
-  void remove_edge_if(Block* source,
-                      Block* target,
-                      const EdgePredicate& predicate);
-
-  void remove_succ_edge_if(Block* block, const EdgePredicate& predicate);
-
-  void remove_pred_edge_if(Block* block, const EdgePredicate& predicate);
-
-  void remove_succ_edges(Block* b);
-  void remove_pred_edges(Block* b);
+  using EdgeSet = std::unordered_set<Edge*>;
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
@@ -312,6 +311,20 @@ class ControlFlowGraph {
       const Block* block, const EdgePredicate& predicate) const;
   std::vector<Edge*> get_succ_edges_if(
       const Block* block, const EdgePredicate& predicate) const;
+
+  // remove_..._edge:
+  //   * These functions remove edges from the graph and free the memory
+  //   * the `_if` functions take a predicate to decide which edges to delete
+  void delete_edge(Edge* edge);
+  void delete_edge_if(Block* source,
+                         Block* target,
+                         const EdgePredicate& predicate);
+  void delete_succ_edge_if(Block* block,
+                              const EdgePredicate& predicate);
+  void delete_pred_edge_if(Block* block,
+                              const EdgePredicate& predicate);
+  void delete_succ_edges(Block* b);
+  void delete_pred_edges(Block* b);
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
@@ -372,7 +385,6 @@ class ControlFlowGraph {
   using Boundaries =
       std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<BlockId, Block*>;
-  using Edges = std::vector<Edge*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
 
@@ -450,7 +462,43 @@ class ControlFlowGraph {
       const std::unordered_map<MethodItemEntry*, Block*>&
           catch_to_containing_block);
 
-  void remove_all_edges(Block* pred, Block* succ);
+  // remove_..._edge:
+  //   * These functions remove edges from the graph.
+  //   * They do not free the memory of the edge. `free_edge` does that.
+  //   * The cleanup flag controls whether or not `cleanup_deleted_edges` is
+  //     called. See that function for more documentation.
+  //   * the `_if` functions take a predicate to decide which edges to delete
+  //   * They return which edges were removed (with the exception of
+  //     `remove_edge`)
+  EdgeSet remove_all_edges(Block* pred, Block* succ, bool cleanup = true);
+
+  void remove_edge(Edge* edge, bool cleanup = true);
+  EdgeSet remove_edge_if(Block* source,
+                              Block* target,
+                              const EdgePredicate& predicate,
+                              bool cleanup = true);
+  EdgeSet remove_succ_edge_if(Block* block,
+                                   const EdgePredicate& predicate,
+                                   bool cleanup = true);
+  EdgeSet remove_pred_edge_if(Block* block,
+                                   const EdgePredicate& predicate,
+                                   bool cleanup = true);
+  EdgeSet remove_succ_edges(Block* b, bool cleanup = true);
+  EdgeSet remove_pred_edges(Block* b, bool cleanup = true);
+
+  // Assumes the edge is already removed.
+  void free_edge(Edge* edge);
+
+  // Assumes the edge is already removed.
+  void free_edges(const EdgeSet& edges);
+
+  // The `cleanup` boolean flag on the edge removal functions controls whether
+  // or not to call this function afterwards.
+  //   * `cleanup` false means only remove the edges
+  //   * `cleanup` true means remove the edges and edit the instructions to
+  //      match the edge state. For example, delete branch/switch with only one
+  //      outgoing edge instructions.
+  void cleanup_deleted_edges(const EdgeSet& edges);
 
   // Move edge between new_source and new_target.
   // If either new_source or new_target is null, don't change that field of the
@@ -459,7 +507,7 @@ class ControlFlowGraph {
 
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;
-  Edges m_edges;
+  EdgeSet m_edges;
 
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};

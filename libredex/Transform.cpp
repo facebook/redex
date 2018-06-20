@@ -119,7 +119,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
     }
     // Remove all successor edges. Note that we don't need to try and remove
     // predecessors since by definition, unreachable blocks have no preds
-    cfg.remove_succ_edges(b);
+    cfg.delete_succ_edges(b);
     insns_removed += remove_block(code, b);
   }
 

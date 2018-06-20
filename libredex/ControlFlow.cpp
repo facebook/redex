@@ -266,11 +266,9 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
 
   connect_blocks(branch_to_targets);
   add_catch_edges(try_ends, try_catches);
-  if (m_editable) {
-    remove_try_catch_markers();
-  }
 
   if (m_editable) {
+    remove_try_catch_markers();
     TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
     simplify();
     TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
@@ -930,7 +928,10 @@ ControlFlowGraph::~ControlFlowGraph() {
   }
 
   for (Edge* e : m_edges) {
-    delete e;
+    // `free_edge` leaves behind "holes"
+    if (e != nullptr) {
+      delete e;
+    }
   }
 }
 
@@ -960,39 +961,60 @@ void ControlFlowGraph::calculate_exit_block() {
 template <class... Args>
 void ControlFlowGraph::add_edge(Args&&... args) {
   Edge* edge = new Edge(std::forward<Args>(args)...);
-  m_edges.push_back(edge);
+  m_edges.insert(edge);
   edge->src()->m_succs.emplace_back(edge);
   edge->target()->m_preds.emplace_back(edge);
 }
 
-void ControlFlowGraph::remove_all_edges(Block* p, Block* s) {
-  p->m_succs.erase(std::remove_if(p->m_succs.begin(),
-                                  p->m_succs.end(),
-                                  [s](const Edge* e) {
-                                    return e->target() == s;
-                                  }),
-                   p->succs().end());
-  s->m_preds.erase(std::remove_if(s->m_preds.begin(),
-                                  s->m_preds.end(),
-                                  [p](const Edge* e) {
-                                    return e->src() == p;
-                                  }),
-                   s->preds().end());
+// public API edge removal functions
+void ControlFlowGraph::delete_edge(Edge* edge) {
+  remove_edge(edge);
+  free_edge(edge);
 }
 
-void ControlFlowGraph::remove_edge(Edge* edge) {
-  remove_edge_if(
-      edge->src(), edge->target(),
-      [edge](const Edge* e) { return edge == e; });
+void ControlFlowGraph::delete_edge_if(Block* source,
+                                      Block* target,
+                                      const EdgePredicate& predicate) {
+  free_edges(remove_edge_if(source, target, predicate));
 }
 
-void ControlFlowGraph::remove_edge_if(
+void ControlFlowGraph::delete_succ_edge_if(Block* block,
+                                           const EdgePredicate& predicate) {
+  free_edges(remove_succ_edge_if(block, predicate));
+}
+
+void ControlFlowGraph::delete_pred_edge_if(Block* block,
+                                           const EdgePredicate& predicate) {
+  free_edges(remove_pred_edge_if(block, predicate));
+}
+
+void ControlFlowGraph::delete_succ_edges(Block* b) {
+  free_edges(remove_succ_edges(b));
+}
+
+void ControlFlowGraph::delete_pred_edges(Block* b) {
+  free_edges(remove_pred_edges(b));
+}
+
+// private edge removal functions
+//   These are raw removal, they don't free the edge.
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_all_edges(
+    Block* p, Block* s, bool cleanup) {
+  return remove_edge_if(p, s, [](const Edge*) { return true; }, cleanup);
+}
+
+void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
+  remove_edge_if(edge->src(), edge->target(),
+                      [edge](const Edge* e) { return edge == e; }, cleanup);
+}
+
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_edge_if(
     Block* source,
     Block* target,
-    const EdgePredicate& predicate) {
-
+    const EdgePredicate& predicate,
+    bool cleanup) {
   auto& forward_edges = source->m_succs;
-  std::unordered_set<Edge*> to_remove;
+  EdgeSet to_remove;
   forward_edges.erase(
       std::remove_if(forward_edges.begin(),
                      forward_edges.end(),
@@ -1009,68 +1031,111 @@ void ControlFlowGraph::remove_edge_if(
   reverse_edges.erase(
       std::remove_if(reverse_edges.begin(),
                      reverse_edges.end(),
-                     [&to_remove](Edge* e) {
-                       return to_remove.count(e) > 0;
-                     }),
+                     [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
       reverse_edges.end());
+
+  if (cleanup) {
+    cleanup_deleted_edges(to_remove);
+  }
+  return to_remove;
 }
 
-void ControlFlowGraph::remove_pred_edge_if(Block* block,
-                                           const EdgePredicate& predicate) {
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edge_if(
+    Block* block, const EdgePredicate& predicate, bool cleanup) {
   auto& reverse_edges = block->m_preds;
 
   std::vector<Block*> source_blocks;
-  std::unordered_set<Edge*> to_remove;
-  reverse_edges.erase(std::remove_if(reverse_edges.begin(),
-                             reverse_edges.end(),
-                             [&source_blocks, &to_remove,
-                              &predicate](Edge* e) {
-                               if (predicate(e)) {
-                                 source_blocks.push_back(e->src());
-                                 to_remove.insert(e);
-                                 return true;
-                               }
-                               return false;
-                             }),
-              reverse_edges.end());
+  EdgeSet to_remove;
+  reverse_edges.erase(
+      std::remove_if(reverse_edges.begin(),
+                     reverse_edges.end(),
+                     [&source_blocks, &to_remove, &predicate](Edge* e) {
+                       if (predicate(e)) {
+                         source_blocks.push_back(e->src());
+                         to_remove.insert(e);
+                         return true;
+                       }
+                       return false;
+                     }),
+      reverse_edges.end());
 
   for (Block* source_block : source_blocks) {
     auto& forward_edges = source_block->m_succs;
-    forward_edges.erase(std::remove_if(forward_edges.begin(), forward_edges.end(),
-                                 [&to_remove](Edge* e) {
-                                   return to_remove.count(e) > 0;
-                                 }),
-                  forward_edges.end());
+    forward_edges.erase(
+        std::remove_if(
+            forward_edges.begin(), forward_edges.end(),
+            [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+        forward_edges.end());
   }
+
+  if (cleanup) {
+    cleanup_deleted_edges(to_remove);
+  }
+  return to_remove;
 }
 
-void ControlFlowGraph::remove_succ_edge_if(Block* block,
-                                           const EdgePredicate& predicate) {
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edge_if(
+    Block* block, const EdgePredicate& predicate, bool cleanup) {
 
   auto& forward_edges = block->m_succs;
 
   std::vector<Block*> target_blocks;
   std::unordered_set<Edge*> to_remove;
-  forward_edges.erase(std::remove_if(forward_edges.begin(),
-                             forward_edges.end(),
-                             [&target_blocks, &to_remove,
-                              &predicate](Edge* e) {
-                               if (predicate(e)) {
-                                 target_blocks.push_back(e->target());
-                                 to_remove.insert(e);
-                                 return true;
-                               }
-                               return false;
-                             }),
-              forward_edges.end());
+  forward_edges.erase(
+      std::remove_if(forward_edges.begin(),
+                     forward_edges.end(),
+                     [&target_blocks, &to_remove, &predicate](Edge* e) {
+                       if (predicate(e)) {
+                         target_blocks.push_back(e->target());
+                         to_remove.insert(e);
+                         return true;
+                       }
+                       return false;
+                     }),
+      forward_edges.end());
 
   for (Block* target_block : target_blocks) {
     auto& reverse_edges = target_block->m_preds;
-    reverse_edges.erase(std::remove_if(reverse_edges.begin(), reverse_edges.end(),
-                                 [&to_remove](Edge* e) {
-                                   return to_remove.count(e) > 0;
-                                 }),
-                  reverse_edges.end());
+    reverse_edges.erase(
+        std::remove_if(
+            reverse_edges.begin(), reverse_edges.end(),
+            [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+        reverse_edges.end());
+  }
+
+  if (cleanup) {
+    cleanup_deleted_edges(to_remove);
+  }
+  return to_remove;
+}
+
+// After `edges` have been removed from the graph,
+//   * Turn BRANCHes/SWITCHes with one outgoing edge into GOTOs
+void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
+  for (Edge* e : edges) {
+    auto pred_block = e->src();
+    auto last_it = pred_block->get_last_insn();
+    if (last_it != pred_block->end()) {
+      auto last_insn = last_it->insn;
+      auto op = last_insn->opcode();
+      auto remaining_forward_edges = pred_block->succs();
+      if ((is_conditional_branch(op) || is_switch(op)) &&
+          remaining_forward_edges.size() == 1) {
+        pred_block->m_entries.erase_and_dispose(last_it);
+        e->m_type = EDGE_GOTO;
+      }
+    }
+  }
+}
+
+void ControlFlowGraph::free_edge(Edge* edge) {
+  m_edges.erase(edge);
+  delete edge;
+}
+
+void ControlFlowGraph::free_edges(const EdgeSet& edges) {
+  for (Edge* e : edges) {
+    free_edge(e);
   }
 }
 
@@ -1151,7 +1216,7 @@ void ControlFlowGraph::set_edge_source(Edge* edge,
 void ControlFlowGraph::move_edge(Edge* edge,
                                  Block* new_source,
                                  Block* new_target) {
-  remove_edge(edge);
+  remove_edge(edge, /* cleanup */ false);
 
   if (new_source != nullptr) {
     edge->m_src = new_source;
@@ -1198,7 +1263,7 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
     // leaving behind only an EDGE_GOTO (and maybe an EDGE_THROW?)
     remove_succ_edge_if(block, [](const Edge* e) {
       return e->type() == EDGE_BRANCH;
-    });
+    }, /* cleanup */ false);
     block->m_entries.erase_and_dispose(it.unwrap());
   } else if (is_goto(op)) {
     always_assert_log(false, "There are no GOTO instructions in the CFG");
@@ -1413,12 +1478,12 @@ ControlFlowGraph::immediate_dominators() const {
   return postorder_dominator;
 }
 
-void ControlFlowGraph::remove_succ_edges(Block* b) {
-  remove_succ_edge_if(b, [](const Edge*) { return true; });
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edges(Block* b, bool cleanup) {
+  return remove_succ_edge_if(b, [](const Edge*) { return true; }, cleanup);
 }
 
-void ControlFlowGraph::remove_pred_edges(Block* b) {
-  remove_pred_edge_if(b, [](const Edge*) { return true; });
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b, bool cleanup) {
+  return remove_pred_edge_if(b, [](const Edge*) { return true; }, cleanup);
 }
 
 } // namespace cfg
