@@ -27,6 +27,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/constant-propagation \
+	-I$(top_srcdir)/opt/dead-code-elimination \
 	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
