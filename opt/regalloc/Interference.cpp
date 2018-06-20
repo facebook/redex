@@ -11,8 +11,8 @@
 
 #include "ControlFlow.h"
 #include "DexUtil.h"
-#include "FixpointIterators.h"
 #include "IRCode.h"
+#include "MonotonicFixpointIterator.h"
 
 namespace regalloc {
 

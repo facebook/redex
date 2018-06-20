@@ -7,6 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
+#include "MonotonicFixpointIterator.h"
+
 #include <algorithm>
 #include <cstring>
 #include <functional>
@@ -25,7 +27,6 @@
 #include "IRInstruction.h"
 #include "RedexContext.h"
 
-#include "FixpointIterators.h"
 #include "HashedSetAbstractDomain.h"
 
 /*
