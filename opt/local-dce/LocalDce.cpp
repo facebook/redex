@@ -265,6 +265,9 @@ bool LocalDce::is_required(IRInstruction* inst,
     if (is_invoke(inst->opcode())) {
       const auto meth =
           resolve_method(inst->get_method(), opcode_to_search(inst));
+      if (meth == nullptr) {
+        return true;
+      }
       if (!is_pure(inst->get_method(), meth)) {
         return true;
       }
@@ -283,7 +286,7 @@ bool LocalDce::is_required(IRInstruction* inst,
 }
 
 bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
-  if (meth != nullptr && assumenosideeffects(meth)) {
+  if (assumenosideeffects(meth)) {
     return true;
   }
   return m_pure_methods.find(ref) != m_pure_methods.end();
