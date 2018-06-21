@@ -21,6 +21,12 @@
 #define INTERDEX_PASS_NAME "InterDexPass"
 #define INTERDEX_PLUGIN "InterDexPlugin"
 
+enum DexStatus {
+  FIRST_COLDSTART_DEX = 0,
+  FIRST_EXTENDED_DEX = 1,
+  SCROLL_DEX = 2,
+};
+
 class InterDexPassPlugin {
  public:
   // Run plugin initialization here. Pass should run this before running
@@ -61,22 +67,7 @@ class InterDexPass : public Pass {
     PluginRegistry::get().register_pass(INTERDEX_PASS_NAME, std::move(plugin));
   }
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("static_prune", false, m_static_prune);
-    pc.get("emit_canaries", true, m_emit_canaries);
-    pc.get("normal_primary_dex", false, m_normal_primary_dex);
-    pc.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
-    pc.get("scroll_classes_file", "", m_mixed_mode_classes_file);
-
-    pc.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
-    pc.get("can_touch_coldstart_extended_cls", false,
-           m_can_touch_coldstart_extended_cls);
-    always_assert_log(
-        !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
-        "can_touch_coldstart_extended_cls needs to be true, when we can touch "
-        "coldstart classes. Please set can_touch_coldstart_extended_cls "
-        "to true\n");
-  }
+  virtual void configure_pass(const PassConfig& pc) override;
 
   virtual void run_pass(DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -91,4 +82,5 @@ class InterDexPass : public Pass {
   std::string m_mixed_mode_classes_file;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
+  std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
 };
