@@ -7,69 +7,65 @@
 
 #pragma once
 
-#include <iostream>
+#include <ostream>
 
 #include "PowersetAbstractDomain.h"
 
 namespace ssad_impl {
 
 /*
- * The definition of an abstract value belonging to an abstract domain,
- * a sparse set data structure implemented using two arrays(vectors)
- * with fixed size, following the paper below:
+ * An implementation of a powerset abstract domain based on the sparse data
+ * structure described in the following paper:
  *
- * P. Briggs & L. Torczon. An Efficient Representation for
- * Sparse Sets. ACM Letters on Programming Languages and Systems,
- * 2(1-4):59-69,1993.
+ * P. Briggs & L. Torczon. An Efficient Representation for Sparse Sets. ACM
+ * Letters on Programming Languages and Systems, 2(1-4):59-69,1993.
+ *
+ * This powerset domain can only handle elements that are unsigned integers
+ * belonging to a fixed-size universe {0, ..., max_size-1}.
  */
-
-class SparseSetValue final : public PowersetImplementation<
-                                 uint16_t,
-                                 const SparseSetValue&,
-                                 SparseSetValue> {
+template <typename IntegerType>
+class SparseSetValue final
+    : public PowersetImplementation<IntegerType,
+                                    std::vector<IntegerType>,
+                                    SparseSetValue<IntegerType>> {
  public:
-  // Default constructor to pass sanity check in AbstractValue's destructor.
+  using iterator = typename std::vector<IntegerType>::iterator;
+  using const_iterator = typename std::vector<IntegerType>::const_iterator;
+
+  // This constructor is defined solely to satisfy the requirement that an
+  // AbstractDomain must be default-constructible. It shouldn't be used in
+  // practice.
   SparseSetValue() : m_capacity(0), m_element_num(0) {}
 
-  // Constructor that sets the maximum number of elements this set can hold.
-  SparseSetValue(uint16_t max_size)
+  // Returns an empty set over a universe of the given size.
+  SparseSetValue(size_t max_size)
       : m_capacity(max_size),
         m_element_num(0),
         m_dense(max_size),
         m_sparse(max_size) {}
 
-  void clear() override {
-    m_element_num = 0;
+  void clear() override { m_element_num = 0; }
+
+  // Returns a vector that contains all the elements in the sparse set.
+  std::vector<IntegerType> elements() const override {
+    return std::vector<IntegerType>(begin(), end());
   }
 
-  const SparseSetValue& elements() const override {
-    return *(this);
-  }
+  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
-  // Returning a vector that contains all the elements in the sparse set.
-  // (for test use)
-  std::vector<uint16_t> vals() const {
-    return std::vector<uint16_t>(begin(), end());
-  }
-
-  AbstractValueKind kind() const override {
-    return AbstractValueKind::Value;
-  }
-
-  // Checking if candidate is a member of the set.
-  bool contains(const uint16_t& candidate) const override {
-    if (candidate >= m_capacity) {
+  bool contains(const IntegerType& element) const override {
+    if (element >= m_capacity) {
       return false;
     }
-    uint16_t dense_idx = m_sparse[candidate];
-    return dense_idx < m_element_num && m_dense[dense_idx] == candidate;
+    size_t dense_idx = m_sparse[element];
+    return dense_idx < m_element_num && m_dense[dense_idx] == element;
   }
 
   bool leq(const SparseSetValue& other) const override {
     if (m_element_num > other.m_element_num) {
       return false;
     }
-    for (int i = 0; i < m_element_num; ++i) {
+    for (size_t i = 0; i < m_element_num; ++i) {
       if (!other.contains(m_dense[i])) {
         return false;
       }
@@ -81,48 +77,38 @@ class SparseSetValue final : public PowersetImplementation<
     return (m_element_num == other.m_element_num) && this->leq(other);
   }
 
-  // Adding elem to the set, if success return true,
-  // return false otherwise.
-  void add(const uint16_t& elem) override {
-    if (elem < m_capacity) {
-      uint16_t dense_idx = m_sparse[elem];
-      uint16_t n = m_element_num;
-      if (dense_idx >= m_element_num || m_dense[dense_idx] != elem) {
-        m_sparse[elem] = n;
-        m_dense[n] = elem;
+  void add(const IntegerType& element) override {
+    if (element < m_capacity) {
+      size_t dense_idx = m_sparse[element];
+      size_t n = m_element_num;
+      if (dense_idx >= m_element_num || m_dense[dense_idx] != element) {
+        m_sparse[element] = n;
+        m_dense[n] = element;
         m_element_num = n + 1;
       }
     }
   }
 
-  // Delete elem from the set, if success return true,
-  // return false otherwise.
-  void remove(const uint16_t& elem) override {
-    if (elem < m_capacity) {
-      uint16_t dense_idx = m_sparse[elem];
-      uint16_t n = m_element_num;
-      if (dense_idx < n && m_dense[dense_idx] == elem) {
-        uint16_t last_elem = m_dense[n - 1];
+  void remove(const IntegerType& element) override {
+    if (element < m_capacity) {
+      size_t dense_idx = m_sparse[element];
+      size_t n = m_element_num;
+      if (dense_idx < n && m_dense[dense_idx] == element) {
+        IntegerType last_element = m_dense[n - 1];
         m_element_num = n - 1;
-        m_dense[dense_idx] = last_elem;
-        m_sparse[last_elem] = dense_idx;
+        m_dense[dense_idx] = last_element;
+        m_sparse[last_element] = dense_idx;
       }
     }
   }
 
-  std::vector<uint16_t>::iterator begin() {
-    return m_dense.begin();
-  }
+  iterator begin() { return m_dense.begin(); }
 
-  std::vector<uint16_t>::iterator end() {
-    return std::next(m_dense.begin(), m_element_num);
-  }
+  iterator end() { return std::next(m_dense.begin(), m_element_num); }
 
-  std::vector<uint16_t>::const_iterator begin() const {
-    return m_dense.cbegin();
-  }
+  const_iterator begin() const { return m_dense.begin(); }
 
-  std::vector<uint16_t>::const_iterator end() const {
+  const_iterator end() const {
     return std::next(m_dense.begin(), m_element_num);
   }
 
@@ -132,8 +118,8 @@ class SparseSetValue final : public PowersetImplementation<
       m_sparse.resize(other.m_capacity);
       m_capacity = other.m_capacity;
     }
-    for (auto e : other) {
-      this->add(e);
+    for (IntegerType e : other) {
+      add(e);
     }
     return AbstractValueKind::Value;
   }
@@ -143,17 +129,14 @@ class SparseSetValue final : public PowersetImplementation<
   }
 
   AbstractValueKind meet_with(const SparseSetValue& other) override {
-    for (auto it = this->begin(); it != this->end();) {
+    for (auto it = begin(); it != end();) {
       if (!other.contains(*it)) {
-        // If other doesn't contain this value
-        // call remove() to remove the value at current position
-        // remove() will fill this position with the last element
-        // in the dense array, so we hold at the position to check
-        // the value just filled in the next round.
-        this->remove(*it);
+        // If other doesn't contain this element, we remove it using the current
+        // position. The function remove() will fill this position with the last
+        // element in the dense array.
+        remove(*it);
       } else {
-        // If other contains this value, we can
-        // move on to the next position.
+        // If other contains this element, we just move on to the next position.
         ++it;
       }
     }
@@ -164,13 +147,10 @@ class SparseSetValue final : public PowersetImplementation<
     return meet_with(other);
   }
 
-  size_t size() const override {
-    return m_element_num;
-  }
+  size_t size() const override { return m_element_num; }
 
-  friend std::ostream& operator<<(
-      std::ostream& o,
-      const SparseSetValue& value) {
+  friend std::ostream& operator<<(std::ostream& o,
+                                  const SparseSetValue& value) {
     o << "[#" << value.size() << "]";
     const auto& elements = value.elements();
     o << "{";
@@ -185,43 +165,49 @@ class SparseSetValue final : public PowersetImplementation<
   }
 
  private:
-  uint16_t m_capacity;
-  uint16_t m_element_num;
-  std::vector<uint16_t> m_dense;
-  std::vector<uint16_t> m_sparse;
-  friend class SparseSetAbstractDomain;
+  size_t m_capacity;
+  size_t m_element_num;
+  std::vector<IntegerType> m_dense;
+  std::vector<size_t> m_sparse;
 };
 
 } // namespace ssad_impl
 
 /*
- * An implementation of abstract domain using sparse set data structure
- * used AbstractDomainScaffolding template to build the domain
+ * We defined a powerset abstract domain based on the sparse set data structure.
  */
-
-class SparseSetAbstractDomain final : public PowersetAbstractDomain<
-                                          uint16_t,
-                                          ssad_impl::SparseSetValue,
-                                          const ssad_impl::SparseSetValue&,
-                                          SparseSetAbstractDomain> {
+template <typename IntegerType>
+class SparseSetAbstractDomain final
+    : public PowersetAbstractDomain<IntegerType,
+                                    ssad_impl::SparseSetValue<IntegerType>,
+                                    std::vector<IntegerType>,
+                                    SparseSetAbstractDomain<IntegerType>> {
  public:
-  using Value = ssad_impl::SparseSetValue;
+  using Value = ssad_impl::SparseSetValue<IntegerType>;
+
+  ~SparseSetAbstractDomain() {
+    // The destructor is the only method that is guaranteed to be created when
+    // a class template is instantiated. This is a good place to perform all
+    // the sanity checks on the template parameters.
+    static_assert(std::is_unsigned<IntegerType>::value,
+                  "IntegerType is not an unsigned arihmetic type");
+    static_assert(sizeof(IntegerType) <= sizeof(size_t),
+                  "IntegerType is too large");
+  }
 
   SparseSetAbstractDomain()
-      : PowersetAbstractDomain<
-            uint16_t,
-            Value,
-            const Value&,
-            SparseSetAbstractDomain>() {}
+      : PowersetAbstractDomain<IntegerType,
+                               Value,
+                               std::vector<IntegerType>,
+                               SparseSetAbstractDomain>() {}
 
-  SparseSetAbstractDomain(AbstractValueKind kind)
-      : PowersetAbstractDomain<
-            uint16_t,
-            Value,
-            const Value&,
-            SparseSetAbstractDomain>(kind) {}
+  explicit SparseSetAbstractDomain(AbstractValueKind kind)
+      : PowersetAbstractDomain<IntegerType,
+                               Value,
+                               std::vector<IntegerType>,
+                               SparseSetAbstractDomain>(kind) {}
 
-  explicit SparseSetAbstractDomain(uint16_t max_size) {
+  explicit SparseSetAbstractDomain(IntegerType max_size) {
     this->set_to_value(Value(max_size));
   }
 

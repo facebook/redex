@@ -81,8 +81,8 @@ T snd(const T&, const T& second) {
 } // namespace ptmap_impl
 
 /*
- * This implements a map of integer keys and AbstractDomain values. It's based
- * on the following paper:
+ * This structure implements a map of integer keys and AbstractDomain values.
+ * It's based on the following paper:
  *
  *   C. Okasaki, A. Gill. Fast Mergeable Integer Maps. In Workshop on ML (1998).
  *

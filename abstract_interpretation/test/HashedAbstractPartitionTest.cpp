@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "HashedAbstractPartition.h"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <string>
 
-#include "HashedAbstractPartition.h"
 #include "HashedSetAbstractDomain.h"
 
 using Domain = HashedSetAbstractDomain<std::string>;

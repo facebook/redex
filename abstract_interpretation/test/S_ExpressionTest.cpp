@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "S_Expression.h"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
@@ -13,8 +15,6 @@
 #include <unordered_set>
 
 #include <boost/functional/hash.hpp>
-
-#include "S_Expression.h"
 
 void check_s_expr_istream(s_expr_istream& input) { EXPECT_TRUE(input.good()); }
 

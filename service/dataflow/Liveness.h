@@ -13,7 +13,7 @@
 #include "MonotonicFixpointIterator.h"
 #include "SparseSetAbstractDomain.h"
 
-using LivenessDomain = SparseSetAbstractDomain;
+using LivenessDomain = SparseSetAbstractDomain<uint16_t>;
 
 class LivenessFixpointIterator final
     : public MonotonicFixpointIterator<

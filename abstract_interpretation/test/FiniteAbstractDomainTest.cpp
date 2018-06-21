@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "FiniteAbstractDomain.h"
+
 #include <gtest/gtest.h>
 #include <sstream>
-
-#include "FiniteAbstractDomain.h"
 
 enum Elements { BOTTOM, A, B, C, D, E, TOP };
 
