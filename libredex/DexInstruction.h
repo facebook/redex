@@ -407,3 +407,5 @@ inline bool is_const(IROpcode op) {
 inline bool is_monitor(IROpcode op) {
   return op == OPCODE_MONITOR_ENTER || op == OPCODE_MONITOR_EXIT;
 }
+
+inline bool is_instance_of(IROpcode op) { return op == OPCODE_INSTANCE_OF; }
