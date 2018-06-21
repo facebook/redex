@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <iostream>
+#include <ostream>
 
 #include <cstddef>
 #include <functional>

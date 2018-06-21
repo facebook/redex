@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "PatriciaTreeMapAbstractEnvironment.h"
+
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -14,7 +16,6 @@
 
 #include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 using Domain = HashedSetAbstractDomain<std::string>;
 using Environment = PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;

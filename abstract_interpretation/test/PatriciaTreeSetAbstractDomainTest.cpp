@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "PatriciaTreeSetAbstractDomain.h"
+
 #include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -13,7 +15,6 @@
 #include <vector>
 
 #include "PatriciaTreeSet.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 using Domain = PatriciaTreeSetAbstractDomain<std::string*>;
 

@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "PatriciaTreeSet.h"
+
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -14,8 +16,6 @@
 #include <sstream>
 #include <unordered_set>
 #include <vector>
-
-#include "PatriciaTreeSet.h"
 
 using pt_set = PatriciaTreeSet<uint32_t>;
 

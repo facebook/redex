@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "WeakTopologicalOrdering.h"
+
 #include <gtest/gtest.h>
 #include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
-
-#include "WeakTopologicalOrdering.h"
 
 class SimpleGraph final {
  public:
