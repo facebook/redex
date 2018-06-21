@@ -731,15 +731,17 @@ void process_keep(
     const Scope& external_classes,
     const ClassHierarchy& hierarchy,
     std::function<void(RegexMap&, KeepSpec&, DexClass*)> keep_processor,
-    const std::string& name) {
+    const std::string& name,
+    bool process_external = false) {
   Timer t("Process keep for " + name);
 
   auto process_single_keep = [&keep_processor](ClassMatcher& class_match,
                                                KeepSpec& keep_rule,
                                                DexClass* cls,
-                                               RegexMap& regex_map) {
+                                               RegexMap& regex_map,
+                                               bool process_external) {
     // Skip external classes.
-    if (cls == nullptr || cls->is_external()) {
+    if (cls == nullptr || (!process_external && cls->is_external())) {
       return;
     }
     if (class_match.match(cls)) {
@@ -749,12 +751,17 @@ void process_keep(
 
   // We only parallelize if keep_rule needs to be applied to all classes.
   auto wq = workqueue_foreach<KeepSpec*>(
-      [&process_single_keep, &classes](KeepSpec* keep_rule) {
+      [&process_single_keep, &classes, &external_classes, process_external](KeepSpec* keep_rule) {
         RegexMap regex_map;
         ClassMatcher class_match(*keep_rule);
 
         for (const auto& cls : classes) {
-          process_single_keep(class_match, *keep_rule, cls, regex_map);
+          process_single_keep(class_match, *keep_rule, cls, regex_map, process_external);
+        }
+        if (process_external) {
+          for (const auto& cls : external_classes) {
+            process_single_keep(class_match, *keep_rule, cls, regex_map, process_external);
+          }
         }
       });
 
@@ -766,7 +773,7 @@ void process_keep(
     const auto& className = keep_rule.class_spec.className;
     if (!classname_contains_wildcard(className)) {
       DexClass* cls = find_single_class(pg_map, className);
-      process_single_keep(class_match, keep_rule, cls, regex_map);
+      process_single_keep(class_match, keep_rule, cls, regex_map, process_external);
       continue;
     }
 
@@ -778,10 +785,10 @@ void process_keep(
       if (super != nullptr) {
         TypeSet children;
         get_all_children(hierarchy, super->get_type(), children);
-        process_single_keep(class_match, keep_rule, super, regex_map);
+        process_single_keep(class_match, keep_rule, super, regex_map, process_external);
         for (auto const* type : children) {
           process_single_keep(
-              class_match, keep_rule, type_class(type), regex_map);
+              class_match, keep_rule, type_class(type), regex_map, process_external);
         }
       }
       continue;
@@ -875,7 +882,8 @@ void process_proguard_rules(const ProguardMap& pg_map,
                external_classes,
                hierarchy,
                process_assumenosideeffects,
-               "assumenosideeffects");
+               "assumenosideeffects",
+                /* process_external = */ true);
 
   // By default, keep all annotation classes.
   for (auto cls : classes) {
