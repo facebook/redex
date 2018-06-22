@@ -116,7 +116,8 @@ class Edge final {
   bool equals_ignore_source_and_target(const Edge& that) const {
     return m_type == that.m_type &&
            ((m_throw_info == nullptr && that.m_throw_info == nullptr) ||
-            *m_throw_info == *that.m_throw_info);
+            *m_throw_info == *that.m_throw_info) &&
+           m_case_key == that.m_case_key;
   }
 
   Block* src() const { return m_src; }
