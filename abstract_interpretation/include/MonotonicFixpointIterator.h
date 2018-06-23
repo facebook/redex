@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
-#include <mutex>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
@@ -95,8 +94,6 @@ class MonotonicFixpointIteratorContext final {
  *
  * The recursive iteration strategy is described in Bourdoncle's paper on weak
  * topological orderings.
- *
- * The fixpoint iterator is thread safe.
  */
 template <typename GraphInterface,
           typename Domain,
@@ -230,7 +227,6 @@ class MonotonicFixpointIterator {
    * initial conditions.
    */
   void run(const Domain& init) {
-    std::lock_guard<std::recursive_mutex> guard(m_lock);
     clear();
     Context context(init);
     for (const WtoComponent<NodeId>& component : m_wto) {
@@ -242,7 +238,6 @@ class MonotonicFixpointIterator {
    * Returns the invariant computed by the fixpoint iterator at a node entry.
    */
   Domain get_entry_state_at(const NodeId& node) const {
-    std::lock_guard<std::recursive_mutex> guard(m_lock);
     auto it = m_entry_states.find(node);
     return (it == m_entry_states.end()) ? Domain::bottom() : it->second;
   }
@@ -251,7 +246,6 @@ class MonotonicFixpointIterator {
    * Returns the invariant computed by the fixpoint iterator at a node exit.
    */
   Domain get_exit_state_at(const NodeId& node) const {
-    std::lock_guard<std::recursive_mutex> guard(m_lock);
     auto it = m_exit_states.find(node);
     // It's impossible to get rid of this condition by initializing all exit
     // states to _|_ prior to starting the fixpoint iteration. The reason is
@@ -347,7 +341,6 @@ class MonotonicFixpointIterator {
     }
   }
 
-  mutable std::recursive_mutex m_lock;
   const Graph& m_graph;
   WeakTopologicalOrdering<NodeId, NodeHash> m_wto;
   std::unordered_map<NodeId, Domain, NodeHash> m_entry_states;
