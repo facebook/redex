@@ -321,9 +321,11 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     method_id_vector.push_back(method);
     TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
 
-    instrument_onMethodBegin(method, index * m_num_stats_per_method,
-                             onMethodBegin);
-
+    // NOTE: Only for testing D8607258! We test the method index file is safely
+    // uploaded. So we enabled this pass but prevent actual instrumentation.
+    //
+    // instrument_onMethodBegin(method, index * m_num_stats_per_method,
+    //                         onMethodBegin);
   });
 
   TRACE(INSTRUMENT,
