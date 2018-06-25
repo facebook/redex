@@ -66,6 +66,7 @@
   TM(PM)                 \
   TM(PTA)                \
   TM(QUICK)              \
+  TM(REDEX)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REFU)               \
