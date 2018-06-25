@@ -221,8 +221,10 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
 
 namespace {
 
-size_t inline_static_final_gets(const Scope& scope,
-                                const cp::WholeProgramState& wps) {
+size_t inline_static_final_gets(
+    const Scope& scope,
+    const cp::WholeProgramState& wps,
+    const std::unordered_set<const DexType*>& black_list_types) {
   size_t inlined_count{0};
   walk::code(scope, [&](const DexMethod* method, IRCode& code) {
     if (is_clinit(method)) {
@@ -236,6 +238,9 @@ size_t inline_static_final_gets(const Scope& scope,
       auto op = insn->opcode();
       if (is_sget(op)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+        if (field == nullptr || black_list_types.count(field->get_class())) {
+          continue;
+        }
         auto replacement = ConstantValue::apply_visitor(
             cp::value_to_instruction_visitor(
                 ir_list::move_result_pseudo_of(it)),
@@ -286,10 +291,10 @@ void aggressively_delete_static_finals(const Scope& scope) {
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope) {
+size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(scope);
-    return inline_static_final_gets(scope, wps);
+    return inline_static_final_gets(scope, wps, config.black_list_types);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return 0;
@@ -307,9 +312,9 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto inlined_count = run(scope);
+  auto inlined_count = run(scope, m_config);
 
-  if (m_aggressively_delete) {
+  if (m_config.aggressively_delete) {
     aggressively_delete_static_finals(scope);
   }
 
