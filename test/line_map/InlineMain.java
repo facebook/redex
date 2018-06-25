@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.redexlinemap;
@@ -38,8 +36,8 @@ public class InlineMain extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
-        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
-        "com.facebook.redexlinemap.InlineMain.testBasic(InlineMain.java:37)"
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:12)",
+        "com.facebook.redexlinemap.InlineMain.testBasic(InlineMain.java:35)"
       ));
     }
   }
@@ -54,9 +52,9 @@ public class InlineMain extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 3), Arrays.asList(
-        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
-        "com.facebook.redexlinemap.InlineMain.testInlineOnce(InlineSeparateFile.java:18)",
-        "com.facebook.redexlinemap.InlineMain.testInlineOnce(InlineMain.java:53)"
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:12)",
+        "com.facebook.redexlinemap.InlineMain.testInlineOnce(InlineSeparateFile.java:16)",
+        "com.facebook.redexlinemap.InlineMain.testInlineOnce(InlineMain.java:51)"
       ));
     }
   }
@@ -71,10 +69,10 @@ public class InlineMain extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 4), Arrays.asList(
-        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
-        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineSeparateFile.java:22)",
-        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineSeparateFile.java:26)",
-        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineMain.java:70)"
+        "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:12)",
+        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineSeparateFile.java:20)",
+        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineSeparateFile.java:24)",
+        "com.facebook.redexlinemap.InlineMain.testInlineTwice(InlineMain.java:68)"
       ));
     }
   }
@@ -100,8 +98,8 @@ public class InlineMain extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
-       "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:88)",
-       "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:99)"
+       "com.facebook.redexlinemap.InlineMain.ignoreAndThrow(InlineMain.java:86)",
+       "com.facebook.redexlinemap.InlineMain.testPositionReset(InlineMain.java:97)"
       ));
     }
   }
@@ -123,9 +121,9 @@ public class InlineMain extends InstrumentationTestCase {
       assertEquals(
           TraceUtil.traceToString(trace, 3),
           Arrays.asList(
-            "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:14)",
-            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:113)",
-            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:120)"));
+            "com.facebook.redexlinemap.InlineSeparateFile.wrapsThrow(InlineSeparateFile.java:12)",
+            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:111)",
+            "com.facebook.redexlinemap.InlineMain.testElseThrows(InlineMain.java:118)"));
     }
   }
 }

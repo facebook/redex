@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "MonotonicFixpointIterator.h"
@@ -170,18 +168,18 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
               }
               if (it->type == MFLOW_POSITION) {
                 switch (it->pos->line) {
-                case 48: {
+                case 46: {
                   EXPECT_THAT(live_out.elements(),
                               ::testing::UnorderedElementsAre("v0", "v2"));
                   break;
                 }
-                case 49:
-                case 50: {
+                case 47:
+                case 48: {
                   EXPECT_THAT(live_out.elements(),
                               ::testing::UnorderedElementsAre("v1", "v2"));
                   break;
                 }
-                case 51: {
+                case 49: {
                   EXPECT_THAT(live_out.elements(),
                               ::testing::UnorderedElementsAre("v0", "v2"));
                   break;

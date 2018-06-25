@@ -172,7 +172,8 @@ likely to be addressed.
 
 # License
 
-ReDex is BSD-licensed.  We also provide an additional patent grant.
+ReDex is MIT-licensed, see the LICENSE file in the root directory of this
+source tree.
 
 ---
 
