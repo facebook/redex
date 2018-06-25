@@ -52,7 +52,8 @@ class RemoveGotos {
     }
 
     cfg::Block* next_block = edge->target();
-    if (next_block != current_block && next_block->preds().size() == 1 &&
+    if (next_block != current_block && next_block != cfg.entry_block() &&
+        next_block->preds().size() == 1 &&
         cfg.blocks_are_in_same_try(current_block, next_block)) {
       return next_block;
     }
