@@ -158,7 +158,10 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
           rat.apply(*intra_cp, fp_iter.get_whole_program_state(), method);
           return Transform::Stats();
         } else {
-          Transform tf(m_config.transform);
+          Transform::Config config(m_config.transform);
+          config.class_under_init =
+              is_clinit(method) ? method->get_class() : nullptr;
+          Transform tf(config);
           return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
         }
       },

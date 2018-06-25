@@ -137,6 +137,13 @@ class DisjointUnionAbstractDomain final
   template <typename Visitor>
   static typename Visitor::result_type apply_visitor(
       const Visitor& visitor,
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& dom) {
+    return boost::apply_visitor(visitor, dom.m_variant);
+  }
+
+  template <typename Visitor>
+  static typename Visitor::result_type apply_visitor(
+      const Visitor& visitor,
       const DisjointUnionAbstractDomain<FirstDomain, Domains...>& d1,
       const DisjointUnionAbstractDomain<FirstDomain, Domains...>& d2) {
     return boost::apply_visitor(visitor, d1.m_variant, d2.m_variant);

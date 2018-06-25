@@ -23,4 +23,15 @@ template <bool...> struct bool_pack;
 template <bool... v>
 using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
 
+template <typename...> struct contains;
+
+template <typename T>
+struct contains<T> : std::false_type {};
+
+template <typename T, typename Head, typename... Ts>
+struct contains<T, Head, Ts...> {
+  static constexpr bool value =
+      std::is_same<T, Head>::value || contains<T, Ts...>::value;
+};
+
 } // namespace template_util

@@ -872,7 +872,9 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   auto expected_clinit_code = assembler::ircode_from_string(R"(
      (
       (const v0 1)
+      (sput v0 "LFoo;.corge:I") ; these field writes will be removed by RMUF
       (const v0 0)
+      (sput v0 "LFoo;.qux:I")
       (return-void)
      )
   )");

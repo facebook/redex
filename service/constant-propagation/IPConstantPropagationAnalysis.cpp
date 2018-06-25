@@ -83,13 +83,21 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
 
 void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
   for (auto* sfield : cls->get_sfields()) {
+    if (sfield->is_external()) {
+      continue;
+    }
     auto value = sfield->get_static_value();
-    if (value == nullptr) {
+    if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, SignedConstantDomain(0));
     } else if (is_primitive(sfield->get_type())) {
       env->set(sfield, SignedConstantDomain(value->value()));
+    } else if (sfield->get_type() == get_string_type() &&
+               value->evtype() == DEVT_STRING) {
+      env->set(
+          sfield,
+          StringDomain(static_cast<DexEncodedValueString*>(value)->string()));
     } else {
-      env->set(sfield, SignedConstantDomain::top());
+      env->set(sfield, ConstantValue::top());
     }
   }
 }

@@ -199,6 +199,67 @@ class BoxedBooleanAnalyzer final
  */
 
 /*
+ * runtime_equals_visitor and runtime_leq_visitor are handling different
+ * notions of equality / order than AbstractDomain::equals() and
+ * AbstractDomain::leq(). The former return true if they can prove that their
+ * respective relations hold for a runtime comparison (e.g. from an if-eq or
+ * packed-switch instruction). In contrast, AbstractDomain::equals() will
+ * return true for two domains representing integers > 0, even though their
+ * corresponding runtime values may be different integers.
+ */
+class runtime_equals_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    auto cst_left = scd_left.get_constant();
+    auto cst_right = scd_right.get_constant();
+    if (!(cst_left && cst_right)) {
+      return false;
+    }
+    if (*cst_left == *cst_right) {
+      return true;
+    }
+    return false;
+  }
+
+  // SingletonObjectDomain and StringDomains are equal iff their respective
+  // constants are equal.
+  template <
+      typename Constant,
+      typename = typename std::enable_if_t<
+          template_util::contains<Constant, const DexField*, const DexString*>::
+              value>>
+  bool operator()(const ConstantAbstractDomain<Constant>& d1,
+                  const ConstantAbstractDomain<Constant>& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return false;
+    }
+    if (*d1.get_constant() == *d2.get_constant()) {
+      return true;
+    }
+    return false;
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+class runtime_leq_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() <= scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+/*
  * Analyze the invoke instruction given by :insn by running an abstract
  * interpreter on the :callee_code with the provided arguments. By analyzing the
  * callee with the exact arguments at this callsite -- instead of the join of

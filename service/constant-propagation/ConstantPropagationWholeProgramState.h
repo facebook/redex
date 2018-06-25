@@ -33,19 +33,31 @@ using ConstantMethodPartition =
  * return values, i.e. it can tells us if a field or a return value is constant
  * throughout the entire program.
  *
- * It exposes a read-only interface to emphasize that it is never written to as
- * part of the inter/intra-procedural fixpoint iteration process. Instead, it
- * takes the results of a completed fixpoint iteration and extracts the
- * constant values.
+ * It should never be written to as part of the inter/intra-procedural fixpoint
+ * iteration process. Instead, it takes the results of a completed fixpoint
+ * iteration and extracts the constant values.
  */
 class WholeProgramState {
  public:
-  WholeProgramState() {
+  // By default, the field and method partitions are initialized to Bottom.
+  WholeProgramState() = default;
+
+  WholeProgramState(const Scope&, const interprocedural::FixpointIterator&);
+
+  /*
+   * If we only have knowledge of the constant values in a single class --
+   * instead of a view of the constants in the whole program -- we can still
+   * determine that the values of static final fields are constant throughout
+   * the entire program. This method records the values of those fields in the
+   * WholeProgramState.
+   */
+  void collect_static_finals(const DexClass*, StaticFieldEnvironment);
+
+  void set_to_top() {
     m_field_partition.set_to_top();
     m_method_partition.set_to_top();
   }
 
-  WholeProgramState(const Scope&, const interprocedural::FixpointIterator&);
   bool leq(const WholeProgramState& other) const {
     return m_field_partition.leq(other.m_field_partition) &&
            m_method_partition.leq(other.m_method_partition);
@@ -59,9 +71,9 @@ class WholeProgramState {
    *
    * It will never return Bottom.
    */
-  const ConstantValue get_field_value(const DexField* field) const {
+  ConstantValue get_field_value(const DexField* field) const {
     if (!m_known_fields.count(field)) {
-      return SignedConstantDomain::top();
+      return ConstantValue::top();
     }
     return m_field_partition.get(field);
   }
@@ -72,9 +84,9 @@ class WholeProgramState {
    * This may return Bottom to indicate that a method never returns (i.e. it
    * throws or loops indefinitely).
    */
-  const ConstantValue get_return_value(const DexMethod* method) const {
+  ConstantValue get_return_value(const DexMethod* method) const {
     if (!m_known_methods.count(method)) {
-      return SignedConstantDomain::top();
+      return ConstantValue::top();
     }
     return m_method_partition.get(method);
   }
@@ -88,8 +100,6 @@ class WholeProgramState {
   }
 
  private:
-  void set_fields_with_encoded_values(const Scope&);
-
   void collect(const Scope& scope,
                const interprocedural::FixpointIterator& fp_iter);
 

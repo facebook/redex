@@ -49,6 +49,8 @@ using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
 
 using StringSetDomain = PatriciaTreeSetAbstractDomain<const DexString*>;
 
+using StringDomain = ConstantAbstractDomain<const DexString*>;
+
 /*
  * This represents a new-instance or new-array instruction.
  */
@@ -59,6 +61,7 @@ using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
 using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
                                                   SingletonObjectDomain,
                                                   StringSetDomain,
+                                                  StringDomain,
                                                   AbstractHeapPointer>;
 
 // For storing non-escaping static fields.

@@ -193,6 +193,7 @@ redex_all_SOURCES = \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
+	opt/final_inline/FinalInlineV2.cpp \
 	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
 	opt/instrument/Instrument.cpp \

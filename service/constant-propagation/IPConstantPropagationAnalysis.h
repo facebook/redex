@@ -70,8 +70,11 @@ class FixpointIterator
   FixpointIterator(const call_graph::Graph& call_graph,
                    const ProcedureAnalysisFactory& proc_analysis_factory)
       : MonotonicFixpointIterator(call_graph),
-        m_wps(new WholeProgramState()),
-        m_proc_analysis_factory(proc_analysis_factory) {}
+        m_proc_analysis_factory(proc_analysis_factory) {
+    auto wps = new WholeProgramState();
+    wps->set_to_top();
+    m_wps.reset(wps);
+  }
 
   void analyze_node(DexMethod* const& method,
                     Domain* current_state) const override;
