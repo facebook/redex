@@ -15,7 +15,6 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
-#include "ConstantPropagationWholeProgramState.h"
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -67,15 +66,16 @@ class StringAnalyzer
  * this pass cannot safely optimize the static final constants.
  */
 Scope reverse_tsort_by_clinit_deps(const Scope& scope) {
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   Scope result;
   std::unordered_set<const DexClass*> visiting;
   std::unordered_set<const DexClass*> visited;
   std::function<void(DexClass*)> visit = [&](DexClass* cls) {
-    if (visited.count(cls)) {
+    if (visited.count(cls) != 0 || scope_set.count(cls) == 0) {
       return;
     }
     if (visiting.count(cls)) {
-      throw class_initialization_cycle(cls);
+      throw final_inline::class_initialization_cycle(cls);
     }
     visiting.emplace(cls);
     auto clinit = cls->get_clinit();
@@ -167,6 +167,10 @@ void encode_values(DexClass* cls, StaticFieldEnvironment field_env) {
   }
 }
 
+} // namespace
+
+namespace final_inline {
+
 /*
  * This method determines the values of the static fields after the <clinit>
  * has finished running and generates their encoded_value equivalents.
@@ -212,6 +216,10 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
   }
   return wps;
 }
+
+} // namespace final_inline
+
+namespace {
 
 size_t inline_static_final_gets(const Scope& scope,
                                 const cp::WholeProgramState& wps) {
@@ -280,9 +288,9 @@ void aggressively_delete_static_finals(const Scope& scope) {
 
 size_t FinalInlinePassV2::run(const Scope& scope) {
   try {
-    auto wps = analyze_and_simplify_clinits(scope);
+    auto wps = final_inline::analyze_and_simplify_clinits(scope);
     return inline_static_final_gets(scope, wps);
-  } catch (class_initialization_cycle& e) {
+  } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return 0;
   }

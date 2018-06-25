@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 #include "Pass.h"
 
@@ -28,6 +29,8 @@ class FinalInlinePassV2 : public Pass {
   bool m_aggressively_delete{true};
 };
 
+namespace final_inline {
+
 class class_initialization_cycle : public std::exception {
  public:
   class_initialization_cycle(const DexClass* cls) {
@@ -39,3 +42,8 @@ class class_initialization_cycle : public std::exception {
  private:
   std::string m_msg;
 };
+
+constant_propagation::WholeProgramState analyze_and_simplify_clinits(
+    const Scope& scope);
+
+} // namespace final_inline
