@@ -151,7 +151,8 @@ class PatriciaTreeMapAbstractPartition final
   }
 
   void widen_with(const PatriciaTreeMapAbstractPartition& other) override {
-    join_with(other);
+    join_like_operation(
+        other, [](const Domain& x, const Domain& y) { return x.widening(y); });
   }
 
   void meet_with(const PatriciaTreeMapAbstractPartition& other) override {
@@ -160,7 +161,8 @@ class PatriciaTreeMapAbstractPartition final
   }
 
   void narrow_with(const PatriciaTreeMapAbstractPartition& other) override {
-    meet_with(other);
+    meet_like_operation(
+        other, [](const Domain& x, const Domain& y) { return x.narrowing(y); });
   }
 
   void join_like_operation(

@@ -216,7 +216,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
   AbstractValueKind widen_with(const MapValue& other) override {
     return join_like_operation(
-        other, [](const Domain& x, const Domain& y) { return x.join(y); });
+        other, [](const Domain& x, const Domain& y) { return x.widening(y); });
   }
 
   AbstractValueKind meet_with(const MapValue& other) override {
@@ -226,7 +226,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
   AbstractValueKind narrow_with(const MapValue& other) override {
     return meet_like_operation(
-        other, [](const Domain& x, const Domain& y) { return x.meet(y); });
+        other, [](const Domain& x, const Domain& y) { return x.narrowing(y); });
   }
 
  private:
