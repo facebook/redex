@@ -216,9 +216,9 @@ void patch_method_count(DexClass& analysis_cls,
     return;
   }
 
-  std::cerr << "[InstrumentPass] error: cannot patch const size." << std::endl;
-  std::cerr << show(code) << std::endl;
-  exit(1);
+  // TODO(minjang): If sput is deleted, insert a sput here again.
+  std::cout << "[InstrumentPass] warning: cannot patch const size." << std::endl;
+  // std::cout << show(code) << std::endl;
 }
 
 void write_method_index_file(const std::string& file_name,
