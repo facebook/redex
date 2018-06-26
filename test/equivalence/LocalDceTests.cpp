@@ -12,7 +12,7 @@
 
 class DceTest : public EquivalenceTest {
   virtual void transform_method(DexMethod* m) {
-    LocalDcePass::run(m);
+    LocalDcePass::run(m->get_code());
   }
 };
 

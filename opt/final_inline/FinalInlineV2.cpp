@@ -204,7 +204,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       transform_config.class_under_init = cls->get_type();
       cp::Transform(transform_config).apply(intra_cp, wps, code);
       // Delete the instructions rendered dead by the removal of those sputs.
-      LocalDcePass::run(clinit);
+      LocalDcePass::run(code);
       // If the clinit is empty now, delete it.
       if (is_trivial_clinit(clinit)) {
         cls->remove_method(clinit);

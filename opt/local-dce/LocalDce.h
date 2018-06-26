@@ -49,7 +49,7 @@ class LocalDce {
 
   const Stats& get_stats() const { return m_stats; }
 
-  void dce(DexMethod* method);
+  void dce(IRCode*);
 
  private:
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
@@ -64,7 +64,7 @@ class LocalDcePass : public Pass {
  public:
   LocalDcePass() : Pass("LocalDcePass") {}
 
-  static void run(DexMethod* method);
+  static void run(IRCode* code);
 
   virtual void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

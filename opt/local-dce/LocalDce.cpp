@@ -159,18 +159,16 @@ void update_liveness(const IRInstruction* inst,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void LocalDce::dce(DexMethod* method) {
-  auto code = method->get_code();
+void LocalDce::dce(IRCode* code) {
   code->build_cfg();
   auto& cfg = code->cfg();
   auto blocks = cfg::postorder_sort(cfg.blocks());
-  auto regs = method->get_code()->get_registers_size();
+  auto regs = code->get_registers_size();
   std::vector<boost::dynamic_bitset<>> liveness(
       cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
   bool changed;
   std::vector<IRList::iterator> dead_instructions;
 
-  TRACE(DCE, 5, "%s\n", SHOW(method));
   TRACE(DCE, 5, "%s", SHOW(cfg));
 
   // Iterate liveness analysis to a fixed point.
@@ -225,7 +223,6 @@ void LocalDce::dce(DexMethod* method) {
   } while (changed);
 
   // Remove dead instructions.
-  TRACE(DCE, 2, "%s\n", SHOW(method));
   std::unordered_set<IRInstruction*> seen;
   for (auto dead : dead_instructions) {
     if (seen.count(dead->insn)) {
@@ -290,8 +287,8 @@ bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
   return m_pure_methods.find(ref) != m_pure_methods.end();
 }
 
-void LocalDcePass::run(DexMethod* m) {
-  LocalDce(find_pure_methods()).dce(m);
+void LocalDcePass::run(IRCode* code) {
+  LocalDce(find_pure_methods()).dce(code);
 }
 
 void LocalDcePass::eval_pass(DexStoresVector& stores,
@@ -332,7 +329,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
           return LocalDce::Stats();
         }
         LocalDce ldce(pure_methods);
-        ldce.dce(m);
+        ldce.dce(code);
         return ldce.get_stats();
       },
       [](LocalDce::Stats a, LocalDce::Stats b) {
