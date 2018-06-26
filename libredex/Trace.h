@@ -17,6 +17,7 @@
   TM(ADD_REDEX_TXT)      \
   TM(ACCESS)             \
   TM(ANNO)               \
+  TM(ARGS)               \
   TM(BIND)               \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
