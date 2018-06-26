@@ -41,6 +41,7 @@ size_t global_cls_cnt;
 size_t cls_skipped_in_primary = 0;
 size_t cls_skipped_in_secondary = 0;
 size_t cold_start_set_dex_count = 1000;
+size_t scroll_set_dex_count = 1000;
 
 bool emit_canaries = false;
 int64_t linear_alloc_limit;
@@ -389,7 +390,8 @@ class InterDex {
       bool static_prune_classes,
       bool normal_primary_dex,
       bool can_touch_coldstart_cls,
-      bool can_touch_coldstart_extended_cls)
+      bool can_touch_coldstart_extended_cls,
+      bool emit_scroll_set_marker)
     : m_dexen(dexen),
       m_mixed_mode_classes_file(mixed_mode_classes_file),
       m_mixed_mode_dex_statuses(mixed_mode_dex_statuses),
@@ -399,7 +401,8 @@ class InterDex {
       m_static_prune_classes(static_prune_classes),
       m_normal_primary_dex(normal_primary_dex),
       m_can_touch_coldstart_cls(can_touch_coldstart_cls),
-      m_can_touch_coldstart_extended_cls(can_touch_coldstart_extended_cls) {}
+      m_can_touch_coldstart_extended_cls(can_touch_coldstart_extended_cls),
+      m_emit_scroll_set_marker(emit_scroll_set_marker) {}
 
   DexClassesVector run();
 
@@ -445,6 +448,7 @@ class InterDex {
   bool m_normal_primary_dex;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
+  bool m_emit_scroll_set_marker;
 
   // Number of secondary dexes emitted.
   size_t m_secondary_dexes{0};
@@ -626,6 +630,11 @@ DexClassesVector InterDex::run() {
               interdexorder, det, outdex, can_touch_interdex_order);
         }
       }
+      if (m_emit_scroll_set_marker && it_interdex == scroll_list_end_it) {
+        // have a separate dex for scroll
+        flush_out_secondary(det, outdex, dconfig);
+        scroll_set_dex_count = outdex.size() - m_secondary_dexes;
+      }
       continue;
     }
 
@@ -695,6 +704,7 @@ DexClassesVector InterDex::run() {
   if (!end_markers_present) {
     // -1 because we're not counting the primary dex
     cold_start_set_dex_count = outdex.size();
+    scroll_set_dex_count = 0;
   }
 
   // Now emit the classes that weren't specified in the head or primary list.
@@ -1027,6 +1037,10 @@ void InterDexPass::configure_pass(const PassConfig& pc) {
   pc.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   pc.get("can_touch_coldstart_extended_cls", false,
          m_can_touch_coldstart_extended_cls);
+
+  pc.get("emit_scroll_set_marker", false,
+           m_emit_scroll_set_marker);
+
   always_assert_log(
       !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
       "can_touch_coldstart_extended_cls needs to be true, when we can touch "
@@ -1056,7 +1070,8 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
                     this, mgr.apk_manager(),
                     cfg, m_static_prune, m_normal_primary_dex,
                     m_can_touch_coldstart_cls,
-                    m_can_touch_coldstart_extended_cls);
+                    m_can_touch_coldstart_extended_cls,
+                    m_emit_scroll_set_marker);
   dexen = interdex.run();
 
   for (const auto& plugin : m_plugins) {

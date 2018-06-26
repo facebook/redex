@@ -15,6 +15,7 @@
 #include "Util.h"
 
 #define METRIC_COLD_START_SET_DEX_COUNT "cold_start_set_dex_count"
+#define METRIC_SCROLL_SET_DEX_COUNT "scroll_set_dex_count"
 
 #define INTERDEX_PASS_NAME "InterDexPass"
 #define INTERDEX_PLUGIN "InterDexPlugin"
@@ -81,4 +82,5 @@ class InterDexPass : public Pass {
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
+  bool m_emit_scroll_set_marker;
 };
