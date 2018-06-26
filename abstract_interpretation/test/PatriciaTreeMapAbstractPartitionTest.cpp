@@ -15,6 +15,8 @@
 #include "AbstractDomainPropertyTest.h"
 #include "HashedSetAbstractDomain.h"
 
+using namespace sparta;
+
 using Domain = HashedSetAbstractDomain<std::string>;
 
 using Partition = PatriciaTreeMapAbstractPartition<uint32_t, Domain>;

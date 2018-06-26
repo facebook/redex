@@ -17,6 +17,8 @@
 
 #include "AbstractDomain.h"
 
+namespace sparta {
+
 /*
  * The reduced cartesian product of abstract domains D1 x ... x Dn consists of
  * tuples of abstract values (v1, ..., vn) that represent the intersection of
@@ -359,3 +361,5 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
 
   std::tuple<Domains...> m_product;
 };
+
+} // namespace sparta

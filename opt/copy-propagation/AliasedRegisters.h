@@ -142,7 +142,7 @@ class Value {
   }
 };
 
-class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
+class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
  public:
   AliasedRegisters() {}
 
@@ -166,19 +166,19 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
 
   void clear() override;
 
-  AbstractValueKind kind() const override;
+  sparta::AbstractValueKind kind() const override;
 
   bool leq(const AliasedRegisters& other) const override;
 
   bool equals(const AliasedRegisters& other) const override;
 
-  AbstractValueKind join_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind join_with(const AliasedRegisters& other) override;
 
-  AbstractValueKind widen_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind widen_with(const AliasedRegisters& other) override;
 
-  AbstractValueKind meet_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind meet_with(const AliasedRegisters& other) override;
 
-  AbstractValueKind narrow_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind narrow_with(const AliasedRegisters& other) override;
 
  private:
   // An undirected graph where register values are vertices
@@ -240,18 +240,22 @@ class AliasedRegisters final : public AbstractValue<AliasedRegisters> {
   bool has_neighbors(vertex_t v);
 };
 
-class AliasDomain final : public AbstractDomainScaffolding<
-                              CopyOnWriteAbstractValue<AliasedRegisters>,
-                              AliasDomain> {
+class AliasDomain final
+    : public sparta::AbstractDomainScaffolding<
+          sparta::CopyOnWriteAbstractValue<AliasedRegisters>,
+          AliasDomain> {
  public:
-  explicit AliasDomain(AbstractValueKind kind = AbstractValueKind::Top)
+  explicit AliasDomain(
+      sparta::AbstractValueKind kind = sparta::AbstractValueKind::Top)
       : AbstractDomainScaffolding(kind) {}
 
   static AliasDomain bottom() {
-    return AliasDomain(AbstractValueKind::Bottom);
+    return AliasDomain(sparta::AbstractValueKind::Bottom);
   }
 
-  static AliasDomain top() { return AliasDomain(AbstractValueKind::Top); }
+  static AliasDomain top() {
+    return AliasDomain(sparta::AbstractValueKind::Top);
+  }
 
   void update(std::function<void(AliasedRegisters&)> operation) {
     if (is_bottom()) {

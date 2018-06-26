@@ -44,6 +44,8 @@
 #include "Trace.h"
 #include "Walkers.h"
 
+using namespace sparta;
+
 s_expr PointsToVariable::to_s_expr() const {
   return s_expr({s_expr("V"), s_expr(m_id)});
 }

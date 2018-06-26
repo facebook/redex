@@ -19,6 +19,8 @@
 
 #include "AbstractDomain.h"
 
+namespace sparta {
+
 /*
  * This is the general interface for arbitrary encodings of a lattice. 'Element'
  * is the type of the symbolic names for the lattice elements and 'Encoding' is
@@ -150,16 +152,21 @@ class FiniteAbstractDomain final
   Encoding m_encoding;
 };
 
+} // namespace sparta
+
 template <typename Element,
           typename Lattice,
           typename Encoding,
           Lattice* lattice>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const FiniteAbstractDomain<Element, Lattice, Encoding, lattice>& x) {
+    const typename sparta::
+        FiniteAbstractDomain<Element, Lattice, Encoding, lattice>& x) {
   o << x.element();
   return o;
 }
+
+namespace sparta {
 
 namespace fad_impl {
 
@@ -528,3 +535,5 @@ class BitVectorLattice final
                                  Equal>
       m_opposite_semi_lattice;
 };
+
+} // namespace sparta

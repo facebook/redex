@@ -16,6 +16,8 @@
 
 #include <boost/functional/hash.hpp>
 
+using namespace sparta;
+
 void check_s_expr_istream(s_expr_istream& input) { EXPECT_TRUE(input.good()); }
 
 s_expr parse(const std::string& str) {
@@ -41,10 +43,8 @@ void erroneous_parse(const std::string& str, size_t count, std::string& what) {
 }
 
 TEST(S_ExpressionTest, basicOperations) {
-  auto e1 = s_expr({s_expr("cons"),
-                    s_expr("a"),
-                    s_expr({s_expr("cons"),
-                            s_expr("b"),
+  auto e1 = s_expr({s_expr("cons"), s_expr("a"),
+                    s_expr({s_expr("cons"), s_expr("b"),
                             s_expr({s_expr("cons"), s_expr("c"), s_expr()})})});
   std::string e1_out = "(cons a (cons b (cons c ())))";
   EXPECT_EQ(e1_out, e1.str());
@@ -69,8 +69,7 @@ TEST(S_ExpressionTest, basicOperations) {
   EXPECT_TRUE(e1[2][2][2].is_nil());
   EXPECT_EQ(0, e1[2][2][2].size());
 
-  std::vector<s_expr> v2({s_expr(0),
-                          s_expr(-1),
+  std::vector<s_expr> v2({s_expr(0), s_expr(-1),
                           s_expr(std::numeric_limits<int32_t>::min()),
                           s_expr(std::numeric_limits<int32_t>::max())});
   auto e2 = s_expr(v2);
@@ -91,9 +90,7 @@ TEST(S_ExpressionTest, basicOperations) {
     EXPECT_EQ(a1, a2);
   }
 
-  std::vector<s_expr> v3({s_expr("abcd"),
-                          s_expr("a_b1"),
-                          s_expr("12345"),
+  std::vector<s_expr> v3({s_expr("abcd"), s_expr("a_b1"), s_expr("12345"),
                           s_expr("#abc{}()123!"),
                           s_expr("1ab\tcd\nef\"gh\"i")});
   auto e3 = s_expr(v3.begin(), v3.end());

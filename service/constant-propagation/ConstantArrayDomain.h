@@ -34,18 +34,20 @@
  */
 template <typename Domain>
 class ConstantArrayDomain final
-    : public ReducedProductAbstractDomain<
+    : public sparta::ReducedProductAbstractDomain<
           ConstantArrayDomain<Domain>,
-          ConstantAbstractDomain<uint32_t> /* array length */,
-          PatriciaTreeMapAbstractEnvironment<uint32_t,
-                                             Domain> /* array values */> {
+          sparta::ConstantAbstractDomain<uint32_t> /* array length */,
+          sparta::PatriciaTreeMapAbstractEnvironment<
+              uint32_t,
+              Domain> /* array values */> {
  public:
-  using ArrayLengthDomain = ConstantAbstractDomain<uint32_t>;
+  using ArrayLengthDomain = sparta::ConstantAbstractDomain<uint32_t>;
   using ArrayValuesDomain =
-      PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;
-  using SuperType = ReducedProductAbstractDomain<ConstantArrayDomain<Domain>,
-                                                 ArrayLengthDomain,
-                                                 ArrayValuesDomain>;
+      sparta::PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;
+  using SuperType =
+      sparta::ReducedProductAbstractDomain<ConstantArrayDomain<Domain>,
+                                           ArrayLengthDomain,
+                                           ArrayValuesDomain>;
   using typename SuperType::ReducedProductAbstractDomain;
 
   // Some older compilers complain that the class is not default constructible.
@@ -99,7 +101,8 @@ class ConstantArrayDomain final
   }
 
   // NOTE: This will throw if array_values() is Top.
-  const typename PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>::MapType&
+  const typename sparta::PatriciaTreeMapAbstractEnvironment<uint32_t,
+                                                            Domain>::MapType&
   bindings() const {
     return array_values().bindings();
   }

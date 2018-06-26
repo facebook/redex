@@ -31,15 +31,15 @@ enum class Interval {
   SIZE // The number of items in Interval
 };
 
-using Lattice = BitVectorLattice<Interval,
-                                 static_cast<size_t>(Interval::SIZE),
-                                 boost::hash<Interval>>;
+using Lattice = sparta::BitVectorLattice<Interval,
+                                         static_cast<size_t>(Interval::SIZE),
+                                         boost::hash<Interval>>;
 
 extern Lattice lattice;
 
 // join and meet are the equivalent of interval union and intersection
 // respectively.
-using Domain =
+using Domain = sparta::
     FiniteAbstractDomain<Interval, Lattice, Lattice::Encoding, &lattice>;
 
 std::ostream& operator<<(std::ostream&, Interval);

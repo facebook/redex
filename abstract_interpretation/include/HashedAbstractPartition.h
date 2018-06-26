@@ -17,6 +17,8 @@
 
 #include "AbstractDomain.h"
 
+namespace sparta {
+
 /*
  * A partition is a mapping from a set of of labels to elements in an abstract
  * domain. It denotes a union of properties. A partition is Bottom iff all its
@@ -272,14 +274,17 @@ class HashedAbstractPartition final
   bool m_is_top{false};
 };
 
+} // namespace sparta
+
 template <typename Label,
           typename Domain,
           typename LabelHash,
           typename LabelEqual>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>&
-        partition) {
+    const typename sparta::
+        HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>&
+            partition) {
   if (partition.is_bottom()) {
     o << "_|_";
   } else if (partition.is_top()) {

@@ -15,6 +15,8 @@
 
 #include "AbstractDomain.h"
 
+namespace sparta {
+
 /*
  * The definition of an abstract value belonging to a powerset abstract domain.
  * The `Snapshot` parameter describes the type of the container returned by the
@@ -180,3 +182,5 @@ class PowersetAbstractDomain
     return o;
   }
 };
+
+} // namespace sparta

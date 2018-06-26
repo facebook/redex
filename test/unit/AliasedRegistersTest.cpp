@@ -14,6 +14,7 @@
 #include <unordered_map>
 
 using namespace aliased_registers;
+using namespace sparta;
 
 Value zero = Value::create_register(0);
 Value one = Value::create_register(1);

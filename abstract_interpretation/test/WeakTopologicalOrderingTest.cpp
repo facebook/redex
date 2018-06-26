@@ -13,6 +13,8 @@
 #include <string>
 #include <unordered_map>
 
+using namespace sparta;
+
 class SimpleGraph final {
  public:
   SimpleGraph() {}

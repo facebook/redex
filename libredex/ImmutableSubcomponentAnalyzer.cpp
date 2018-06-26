@@ -26,6 +26,8 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
 
+using namespace sparta;
+
 std::string AccessPath::to_string() const {
   std::ostringstream out;
   out << *this;

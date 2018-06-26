@@ -10,6 +10,8 @@
 #include <gtest/gtest.h>
 #include <sstream>
 
+using namespace sparta;
+
 enum Elements { BOTTOM, A, B, C, D, E, TOP };
 
 using Lattice = BitVectorLattice<Elements, 7, std::hash<int>>;

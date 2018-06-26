@@ -28,9 +28,11 @@
 
 #include "Exceptions.h"
 
-namespace s_expr_impl {
+namespace sparta {
 
 // Forward declarations.
+namespace s_expr_impl {
+
 class Component;
 class Pattern;
 
@@ -167,6 +169,19 @@ class s_expr final {
    */
   std::string str() const;
 
+  friend bool operator==(const s_expr& e1, const s_expr& e2) {
+    return e1.equals(e2);
+  }
+
+  friend bool operator!=(const s_expr& e1, const s_expr& e2) {
+    return !e1.equals(e2);
+  }
+
+  /*
+   * We need this function in order to use boost::hash<s_expr>.
+   */
+  friend size_t hash_value(const s_expr& e) { return e.hash_value(); }
+
  private:
   // Appends an element to a list. This operation is used during parsing.
   void add_element(const s_expr& element);
@@ -177,25 +192,14 @@ class s_expr final {
   friend class s_expr_istream;
 };
 
-/*
- * We define standard predicates and operations, so that S-expressions can be
- * used in STL containers.
- */
+} // namespace sparta
 
-inline bool operator==(const s_expr& e1, const s_expr& e2) {
-  return e1.equals(e2);
-}
-
-inline bool operator!=(const s_expr& e1, const s_expr& e2) {
-  return !e1.equals(e2);
-}
-
-inline size_t hash_value(const s_expr& e) { return e.hash_value(); }
-
-inline std::ostream& operator<<(std::ostream& output, const s_expr& e) {
+inline std::ostream& operator<<(std::ostream& output, const sparta::s_expr& e) {
   e.print(output);
   return output;
 }
+
+namespace sparta {
 
 /*
  * This is a stream-like structure for parsing S-expressions from a character
@@ -877,3 +881,5 @@ inline void s_patn::must_match(const s_expr& expr, const std::string& msg) {
                 pattern_matching_error() << error_msg(
                     "Could not find match against " + expr.str() + ": " + msg));
 }
+
+} // namespace sparta

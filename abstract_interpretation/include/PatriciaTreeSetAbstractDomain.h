@@ -14,6 +14,8 @@
 #include "PatriciaTreeSet.h"
 #include "PowersetAbstractDomain.h"
 
+namespace sparta {
+
 template <typename Element>
 class PatriciaTreeSetAbstractDomain;
 
@@ -76,7 +78,7 @@ class SetValue final
   PatriciaTreeSet<Element> m_set;
 
   template <typename T>
-  friend class ::PatriciaTreeSetAbstractDomain;
+  friend class sparta::PatriciaTreeSetAbstractDomain;
 };
 
 } // namespace ptsad_impl
@@ -142,3 +144,5 @@ class PatriciaTreeSetAbstractDomain final
     return PatriciaTreeSetAbstractDomain(AbstractValueKind::Top);
   }
 };
+
+} // namespace sparta

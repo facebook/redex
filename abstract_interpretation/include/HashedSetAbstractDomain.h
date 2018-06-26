@@ -13,6 +13,9 @@
 
 #include "PowersetAbstractDomain.h"
 
+namespace sparta {
+
+// Forward declaration.
 template <typename Element, typename Hash, typename Equal>
 class HashedSetAbstractDomain;
 
@@ -101,7 +104,7 @@ class SetValue final : public PowersetImplementation<
   std::unordered_set<Element, Hash, Equal> m_set;
 
   template <typename T1, typename T2, typename T3>
-  friend class ::HashedSetAbstractDomain;
+  friend class sparta::HashedSetAbstractDomain;
 };
 
 } // namespace hsad_impl
@@ -149,3 +152,5 @@ class HashedSetAbstractDomain final
     return HashedSetAbstractDomain(AbstractValueKind::Top);
   }
 };
+
+} // namespace sparta

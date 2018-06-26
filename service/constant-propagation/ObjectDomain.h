@@ -32,13 +32,13 @@ enum class EscapeState {
 
 namespace escape_domain_impl {
 
-using Lattice = BitVectorLattice<EscapeState,
-                                 /* cardinality */ 3,
-                                 boost::hash<EscapeState>>;
+using Lattice = sparta::BitVectorLattice<EscapeState,
+                                         /* cardinality */ 3,
+                                         boost::hash<EscapeState>>;
 
 extern Lattice lattice;
 
-using Domain =
+using Domain = sparta::
     FiniteAbstractDomain<EscapeState, Lattice, Lattice::Encoding, &lattice>;
 
 } // namespace escape_domain_impl
@@ -49,18 +49,19 @@ std::ostream& operator<<(std::ostream& os, const EscapeDomain& dom);
 
 template <typename FieldValue>
 class ObjectDomain final
-    : public ReducedProductAbstractDomain<
+    : public sparta::ReducedProductAbstractDomain<
           ObjectDomain<FieldValue>,
           EscapeDomain,
-          PatriciaTreeMapAbstractEnvironment<const DexField*, FieldValue>> {
+          sparta::PatriciaTreeMapAbstractEnvironment<const DexField*,
+                                                     FieldValue>> {
 
  public:
   using FieldEnvironment =
-      PatriciaTreeMapAbstractEnvironment<const DexField*, FieldValue>;
+      sparta::PatriciaTreeMapAbstractEnvironment<const DexField*, FieldValue>;
 
-  using Base = ReducedProductAbstractDomain<ObjectDomain<FieldValue>,
-                                            EscapeDomain,
-                                            FieldEnvironment>;
+  using Base = sparta::ReducedProductAbstractDomain<ObjectDomain<FieldValue>,
+                                                    EscapeDomain,
+                                                    FieldEnvironment>;
 
   using Base::Base;
 

@@ -14,6 +14,8 @@
 
 #include "AbstractDomainPropertyTest.h"
 
+using namespace sparta;
+
 using Domain = HashedSetAbstractDomain<std::string>;
 
 INSTANTIATE_TYPED_TEST_CASE_P(HashedSetAbstractDomain,

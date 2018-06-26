@@ -7,6 +7,8 @@
 
 #pragma once
 
+namespace sparta {
+
 namespace pt_util {
 
 template <typename IntegerType>
@@ -35,3 +37,5 @@ IntegerType match_prefix(IntegerType k, IntegerType p, IntegerType m) {
 }
 
 } // namespace pt_util
+
+} // namespace sparta

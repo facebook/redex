@@ -18,8 +18,8 @@ namespace constant_propagation {
 namespace intraprocedural {
 
 class FixpointIterator final
-    : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       ConstantEnvironment> {
+    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
+                                               ConstantEnvironment> {
  public:
   /*
    * The fixpoint iterator takes an optional WholeProgramState argument that

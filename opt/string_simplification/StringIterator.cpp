@@ -12,6 +12,8 @@
 
 #include "StringIterator.h"
 
+using namespace sparta;
+
 using NodeId = cfg::Block*;
 using Environment = StringProdEnvironment;
 

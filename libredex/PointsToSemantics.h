@@ -118,9 +118,9 @@ class PointsToVariable final {
     return PointsToVariable(this_var_id());
   }
 
-  s_expr to_s_expr() const;
+  sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToVariable> from_s_expr(const s_expr& e);
+  static boost::optional<PointsToVariable> from_s_expr(const sparta::s_expr& e);
 
  private:
   static constexpr int32_t null_var_id() { return -1; }
@@ -294,9 +294,10 @@ struct PointsToOperation {
 
   bool is_disjunction() const { return kind == PTS_DISJUNCTION; }
 
-  s_expr to_s_expr() const;
+  sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToOperation> from_s_expr(const s_expr& e);
+  static boost::optional<PointsToOperation> from_s_expr(
+      const sparta::s_expr& e);
 };
 
 /*
@@ -392,9 +393,9 @@ class PointsToAction final {
                                     InputIterator first,
                                     InputIterator last);
 
-  s_expr to_s_expr() const;
+  sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToAction> from_s_expr(const s_expr& e);
+  static boost::optional<PointsToAction> from_s_expr(const sparta::s_expr& e);
 
  private:
   static constexpr int32_t lhs_key() { return -1; }
@@ -475,9 +476,10 @@ class PointsToMethodSemantics {
    */
   void shrink();
 
-  s_expr to_s_expr() const;
+  sparta::s_expr to_s_expr() const;
 
-  static boost::optional<PointsToMethodSemantics> from_s_expr(const s_expr& e);
+  static boost::optional<PointsToMethodSemantics> from_s_expr(
+      const sparta::s_expr& e);
 
  private:
   DexMethodRef* m_dex_method;
@@ -539,7 +541,7 @@ class PointsToSemantics final {
 
  private:
   MethodKind default_method_kind() const;
-  
+
   void initialize_entry(DexMethod* dex_method);
 
   void generate_points_to_actions(DexMethod* dex_method);

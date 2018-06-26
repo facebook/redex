@@ -14,6 +14,8 @@
 #include "AbstractDomainPropertyTest.h"
 #include "FiniteAbstractDomain.h"
 
+using namespace sparta;
+
 enum Elements0 { BOT0, TOP0 };
 enum Elements1 { BOT1, A, B, TOP1 };
 enum Elements2 { BOT2, C, D, E, F, TOP2 };

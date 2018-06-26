@@ -22,6 +22,8 @@
 #include "Resolver.h"
 #include "Walkers.h"
 
+using namespace sparta;
+
 // This pass eliminates writes to registers that already hold the written value.
 //
 // For example,

@@ -24,6 +24,8 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 
+using namespace sparta;
+
 namespace sra {
 
 bool operator==(const AbstractObject& x, const AbstractObject& y) {

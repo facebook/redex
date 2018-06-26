@@ -24,6 +24,8 @@
 #include <numeric>
 #include <unordered_set>
 
+using namespace sparta;
+
 // Implemented by an undirected graph where nodes are Registers and edges are an
 // alias between them.
 //

@@ -19,6 +19,8 @@
 
 #include "HashedSetAbstractDomain.h"
 
+using namespace sparta;
+
 /*
  * In order to test the fixpoint iterator, we implement a liveness analysis on a
  * skeleton language. A statement simply contains the variables it defines and

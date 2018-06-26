@@ -17,6 +17,8 @@
 #include <unordered_set>
 #include <vector>
 
+using namespace sparta;
+
 using pt_set = PatriciaTreeSet<uint32_t>;
 
 class PatriciaTreeSetTest : public ::testing::Test {

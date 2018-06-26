@@ -14,6 +14,8 @@
 
 #include "HashedSetAbstractDomain.h"
 
+using namespace sparta;
+
 using Domain = HashedSetAbstractDomain<std::string>;
 
 using Partition = HashedAbstractPartition<std::string, Domain>;

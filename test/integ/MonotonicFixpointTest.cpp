@@ -29,6 +29,8 @@
 
 #include "HashedSetAbstractDomain.h"
 
+using namespace sparta;
+
 /*
  * The abstract domain for liveness is just the powerset domain of registers,
  * which we represent here as strings for simplicity.
