@@ -17,6 +17,8 @@
 
 #include "AbstractDomain.h"
 
+namespace sparta {
+
 namespace hae_impl {
 
 template <typename Variable,
@@ -178,16 +180,19 @@ class HashedAbstractEnvironment final
   }
 };
 
+} // namespace sparta
+
 template <typename Variable,
           typename Domain,
           typename VariableHash,
           typename VariableEqual>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const HashedAbstractEnvironment<Variable,
-                                    Domain,
-                                    VariableHash,
-                                    VariableEqual>& e) {
+    const typename sparta::HashedAbstractEnvironment<Variable,
+                                                     Domain,
+                                                     VariableHash,
+                                                     VariableEqual>& e) {
+  using namespace sparta;
   switch (e.kind()) {
   case AbstractValueKind::Bottom: {
     o << "_|_";
@@ -214,6 +219,8 @@ inline std::ostream& operator<<(
   }
   return o;
 }
+
+namespace sparta {
 
 namespace hae_impl {
 
@@ -380,7 +387,9 @@ class MapValue final
   std::unordered_map<Variable, Domain, VariableHash, VariableEqual> m_map;
 
   template <typename T1, typename T2, typename T3, typename T4>
-  friend class ::HashedAbstractEnvironment;
+  friend class sparta::HashedAbstractEnvironment;
 };
 
 } // namespace hae_impl
+
+} // namespace sparta

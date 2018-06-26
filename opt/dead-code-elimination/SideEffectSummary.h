@@ -64,9 +64,9 @@ struct EffectSummary {
     return a.effects == b.effects && a.modified_params == b.modified_params;
   }
 
-  s_expr to_s_expr() const;
+  sparta::s_expr to_s_expr() const;
 
-  static boost::optional<EffectSummary> from_s_expr(const s_expr&);
+  static boost::optional<EffectSummary> from_s_expr(const sparta::s_expr&);
 };
 
 using EffectSummaryMap = std::unordered_map<const DexMethodRef*, EffectSummary>;

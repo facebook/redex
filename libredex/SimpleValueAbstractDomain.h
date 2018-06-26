@@ -35,15 +35,15 @@ class SimpleValue;
  */
 template <typename T>
 class SimpleValueAbstractDomain
-    : public AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
-                                       SimpleValueAbstractDomain<T>> {
+    : public sparta::AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
+                                               SimpleValueAbstractDomain<T>> {
  public:
   static SimpleValueAbstractDomain<T> bottom() {
-    return SimpleValueAbstractDomain(AbstractValueKind::Bottom);
+    return SimpleValueAbstractDomain(sparta::AbstractValueKind::Bottom);
   }
 
   static SimpleValueAbstractDomain<T> top() {
-    return SimpleValueAbstractDomain<T>(AbstractValueKind::Top);
+    return SimpleValueAbstractDomain<T>(sparta::AbstractValueKind::Top);
   }
 
   static SimpleValueAbstractDomain<T> value(T value) {
@@ -52,9 +52,10 @@ class SimpleValueAbstractDomain
     return result;
   }
 
-  SimpleValueAbstractDomain<T>(AbstractValueKind kind = AbstractValueKind::Top)
-      : AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
-                                  SimpleValueAbstractDomain<T>>(kind) {}
+  SimpleValueAbstractDomain<T>(
+      sparta::AbstractValueKind kind = sparta::AbstractValueKind::Top)
+      : sparta::AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
+                                          SimpleValueAbstractDomain<T>>(kind) {}
 
   T value() const { return this->get_value()->value(); }
 };
@@ -75,13 +76,15 @@ inline std::ostream& operator<<(std::ostream& o,
 namespace svad_impl {
 
 template <typename T>
-class SimpleValue final : public AbstractValue<SimpleValue<T>> {
+class SimpleValue final : public sparta::AbstractValue<SimpleValue<T>> {
  public:
   friend class SimpleValueAbstractDomain<T>;
 
   void clear() override{};
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  sparta::AbstractValueKind kind() const override {
+    return sparta::AbstractValueKind::Value;
+  }
 
   bool equals(const SimpleValue<T>& other) const override {
     return m_value == other.m_value;
@@ -89,7 +92,8 @@ class SimpleValue final : public AbstractValue<SimpleValue<T>> {
 
   bool leq(const SimpleValue<T>& other) const override { return equals(other); }
 
-  AbstractValueKind join_with(const SimpleValue<T>& other) override {
+  sparta::AbstractValueKind join_with(const SimpleValue<T>& other) override {
+    using namespace sparta;
     if (!equals(other)) {
       return AbstractValueKind::Top;
     } else {
@@ -97,7 +101,8 @@ class SimpleValue final : public AbstractValue<SimpleValue<T>> {
     }
   }
 
-  AbstractValueKind meet_with(const SimpleValue<T>& other) override {
+  sparta::AbstractValueKind meet_with(const SimpleValue<T>& other) override {
+    using namespace sparta;
     if (!equals(other)) {
       return AbstractValueKind::Bottom;
     } else {
@@ -105,11 +110,11 @@ class SimpleValue final : public AbstractValue<SimpleValue<T>> {
     }
   }
 
-  AbstractValueKind widen_with(const SimpleValue<T>& other) override {
+  sparta::AbstractValueKind widen_with(const SimpleValue<T>& other) override {
     return join_with(other);
   }
 
-  AbstractValueKind narrow_with(const SimpleValue<T>& other) override {
+  sparta::AbstractValueKind narrow_with(const SimpleValue<T>& other) override {
     return meet_with(other);
   }
 

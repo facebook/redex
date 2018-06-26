@@ -15,6 +15,8 @@
 
 #include "Exceptions.h"
 
+namespace sparta {
+
 /*
  * This is an API for abstract domains, which are the fundamental structures in
  * Abstract Interpretation, as described in the seminal paper:
@@ -200,8 +202,11 @@ class AbstractDomain {
 
 enum class AbstractValueKind { Bottom, Value, Top };
 
+} // namespace sparta
+
 inline std::ostream& operator<<(std::ostream& o,
-                                const AbstractValueKind& kind) {
+                                const sparta::AbstractValueKind& kind) {
+  using namespace sparta;
   switch (kind) {
   case AbstractValueKind::Bottom: {
     o << "_|_";
@@ -218,6 +223,8 @@ inline std::ostream& operator<<(std::ostream& o,
   }
   return o;
 }
+
+namespace sparta {
 
 /*
  * This interface represents the structure of the regular elements of an
@@ -637,9 +644,12 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
   Domain m_domain;
 };
 
+} // namespace sparta
+
 template <typename Domain, typename Derived>
 inline std::ostream& operator<<(
-    std::ostream& o, const AbstractDomainReverseAdaptor<Domain, Derived>& d) {
+    std::ostream& o,
+    const typename sparta::AbstractDomainReverseAdaptor<Domain, Derived>& d) {
   o << d.unwrap();
   return o;
 }

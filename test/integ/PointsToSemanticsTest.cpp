@@ -22,6 +22,8 @@
 #include "JarLoader.h"
 #include "RedexContext.h"
 
+using namespace sparta;
+
 std::set<std::string> method_semantics = {
     // PointsToSemantics' class initializer
     "Lcom/facebook/redextest/PointsToSemantics;#<clinit>: ()V {\n"

@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+using namespace sparta;
+
 using Domain = SparseSetAbstractDomain<uint16_t>;
 
 TEST(SparseSetAbstractDomainTest, latticeOperations) {

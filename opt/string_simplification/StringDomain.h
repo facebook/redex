@@ -39,13 +39,15 @@ using pointer_reference_t = uint32_t;
  * x and then appending "const" to it.
  *
  */
-class StringyValue final : public AbstractValue<StringyValue> {
+class StringyValue final : public sparta::AbstractValue<StringyValue> {
  public:
   friend class StringyDomain;
 
   void clear() override{};
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  sparta::AbstractValueKind kind() const override {
+    return sparta::AbstractValueKind::Value;
+  }
 
   bool equals(const StringyValue& other) const override {
     return m_suffix == other.m_suffix && m_base_reg == other.m_base_reg;
@@ -53,7 +55,8 @@ class StringyValue final : public AbstractValue<StringyValue> {
 
   bool leq(const StringyValue& other) const override { return equals(other); }
 
-  AbstractValueKind join_with(const StringyValue& other) override {
+  sparta::AbstractValueKind join_with(const StringyValue& other) override {
+    using namespace sparta;
     if (!equals(other)) {
       return AbstractValueKind::Top;
     } else {
@@ -61,7 +64,8 @@ class StringyValue final : public AbstractValue<StringyValue> {
     }
   }
 
-  AbstractValueKind meet_with(const StringyValue& other) override {
+  sparta::AbstractValueKind meet_with(const StringyValue& other) override {
+    using namespace sparta;
     if (!equals(other)) {
       return AbstractValueKind::Bottom;
     } else {
@@ -69,11 +73,11 @@ class StringyValue final : public AbstractValue<StringyValue> {
     }
   }
 
-  AbstractValueKind widen_with(const StringyValue& other) override {
+  sparta::AbstractValueKind widen_with(const StringyValue& other) override {
     return join_with(other);
   }
 
-  AbstractValueKind narrow_with(const StringyValue& other) override {
+  sparta::AbstractValueKind narrow_with(const StringyValue& other) override {
     return meet_with(other);
   }
 
@@ -112,15 +116,17 @@ inline std::ostream& operator<<(std::ostream& o, const StringyValue& sv) {
 }
 
 class StringyDomain final
-    : public AbstractDomainScaffolding<StringyValue, StringyDomain> {
+    : public sparta::AbstractDomainScaffolding<StringyValue, StringyDomain> {
  public:
   friend std::ostream& operator<<(std::ostream& o, const StringyDomain& sd);
 
   static StringyDomain bottom() {
-    return StringyDomain(AbstractValueKind::Bottom);
+    return StringyDomain(sparta::AbstractValueKind::Bottom);
   }
 
-  static StringyDomain top() { return StringyDomain(AbstractValueKind::Top); }
+  static StringyDomain top() {
+    return StringyDomain(sparta::AbstractValueKind::Top);
+  }
 
   static StringyDomain value(
       std::string suffix,
@@ -149,7 +155,7 @@ class StringyDomain final
     }
   }
 
-  StringyDomain(AbstractValueKind kind = AbstractValueKind::Top)
+  StringyDomain(sparta::AbstractValueKind kind = sparta::AbstractValueKind::Top)
       : AbstractDomainScaffolding<StringyValue, StringyDomain>(kind) {}
 
   StringyValue value() const { return *get_value(); }
@@ -169,18 +175,20 @@ inline std::ostream& operator<<(std::ostream& o, const StringyDomain& sd) {
 using PointerDomain = SimpleValueAbstractDomain<pointer_reference_t>;
 
 using PointerReferenceEnvironment =
-    PatriciaTreeMapAbstractEnvironment<string_register_t, PointerDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<string_register_t,
+                                               PointerDomain>;
 
 using StringConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<pointer_reference_t, StringyDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<pointer_reference_t,
+                                               StringyDomain>;
 
 // We need a layer of indirection to be able to solve the pointer analysis
 // during the string concatenation because multiple registers can point to the
 // same StringBuilder.
 class StringProdEnvironment final
-    : public ReducedProductAbstractDomain<StringProdEnvironment,
-                                          PointerReferenceEnvironment,
-                                          StringConstantEnvironment> {
+    : public sparta::ReducedProductAbstractDomain<StringProdEnvironment,
+                                                  PointerReferenceEnvironment,
+                                                  StringConstantEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 

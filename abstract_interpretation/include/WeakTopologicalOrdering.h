@@ -19,6 +19,9 @@
 
 #include "Exceptions.h"
 
+namespace sparta {
+
+// Forward declarations
 template <typename NodeId>
 class WtoComponent;
 
@@ -78,9 +81,9 @@ class WtoComponentIterator final
   const WtoComponent<NodeId>* m_end;
 
   template <typename T>
-  friend class ::WtoComponent;
+  friend class sparta::WtoComponent;
   template <typename T1, typename T2>
-  friend class ::WeakTopologicalOrdering;
+  friend class sparta::WeakTopologicalOrdering;
 };
 
 } // namespace wto_impl
@@ -285,9 +288,12 @@ class WeakTopologicalOrdering final {
   uint32_t m_num;
 };
 
+} // namespace sparta
+
 template <typename NodeId>
-inline std::ostream& operator<<(std::ostream& o,
-                                const WtoComponent<NodeId>& c) {
+inline std::ostream& operator<<(
+    std::ostream& o, const typename sparta::WtoComponent<NodeId>& c) {
+  using namespace sparta;
   if (c.is_scc()) {
     o << "(" << c.head_node();
     for (const WtoComponent<NodeId>& sub : c) {
@@ -301,8 +307,9 @@ inline std::ostream& operator<<(std::ostream& o,
 }
 
 template <typename NodeId>
-inline std::ostream& operator<<(std::ostream& o,
-                                const WeakTopologicalOrdering<NodeId>& wto) {
+inline std::ostream& operator<<(
+    std::ostream& o,
+    const typename sparta::WeakTopologicalOrdering<NodeId>& wto) {
   for (auto it = wto.begin(); it != wto.end();) {
     o << *it++;
     if (it != wto.end()) {

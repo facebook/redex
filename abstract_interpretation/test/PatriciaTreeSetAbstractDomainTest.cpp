@@ -16,6 +16,8 @@
 
 #include "PatriciaTreeSet.h"
 
+using namespace sparta;
+
 using Domain = PatriciaTreeSetAbstractDomain<std::string*>;
 
 class PatriciaTreeSetAbstractDomainTest : public ::testing::Test {

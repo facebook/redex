@@ -19,6 +19,20 @@
 
 #include "PatriciaTreeUtil.h"
 
+// Forward declarations
+namespace sparta {
+
+template <typename Key, typename Value>
+class PatriciaTreeMap;
+
+} // namespace sparta
+
+template <typename Key, typename Value>
+std::ostream& operator<<(std::ostream&,
+                         const typename sparta::PatriciaTreeMap<Key, Value>&);
+
+namespace sparta {
+
 // Forward declarations.
 namespace ptmap_impl {
 
@@ -306,15 +320,19 @@ class PatriciaTreeMap final {
   std::shared_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>> m_tree;
 
   template <typename T, typename V>
-  friend std::ostream& operator<<(std::ostream&, const PatriciaTreeMap<T, V>&);
+  friend std::ostream& ::operator<<(std::ostream&,
+                                    const PatriciaTreeMap<T, V>&);
 
   template <typename T, typename V>
   friend class ptmap_impl::PatriciaTreeIterator;
 };
 
+} // namespace sparta
+
 template <typename Key, typename Value>
-inline std::ostream& operator<<(std::ostream& o,
-                                const PatriciaTreeMap<Key, Value>& s) {
+inline std::ostream& operator<<(
+    std::ostream& o, const typename sparta::PatriciaTreeMap<Key, Value>& s) {
+  using namespace sparta;
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
     o << PatriciaTreeMap<Key, Value>::deref(it->first) << " -> " << it->second;
@@ -325,6 +343,8 @@ inline std::ostream& operator<<(std::ostream& o,
   o << "}";
   return o;
 }
+
+namespace sparta {
 
 namespace ptmap_impl {
 
@@ -897,3 +917,5 @@ class PatriciaTreeIterator final
 };
 
 } // namespace ptmap_impl
+
+} // namespace sparta

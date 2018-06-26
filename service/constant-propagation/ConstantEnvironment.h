@@ -43,31 +43,32 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
  * on their representation in the abstract environment, without needing to
  * check if they are pointing to the same object in the abstract heap.
  */
-using SingletonObjectDomain = ConstantAbstractDomain<const DexField*>;
+using SingletonObjectDomain = sparta::ConstantAbstractDomain<const DexField*>;
 
-using StringSetDomain = PatriciaTreeSetAbstractDomain<const DexString*>;
+using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
-using StringDomain = ConstantAbstractDomain<const DexString*>;
+using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 
 /*
  * This represents a new-instance or new-array instruction.
  */
-using AbstractHeapPointer = ConstantAbstractDomain<const IRInstruction*>;
+using AbstractHeapPointer =
+    sparta::ConstantAbstractDomain<const IRInstruction*>;
 
 // TODO: Refactor so that we don't have to list every single possible
 // sub-Domain here.
-using ConstantValue = DisjointUnionAbstractDomain<SignedConstantDomain,
-                                                  SingletonObjectDomain,
-                                                  StringSetDomain,
-                                                  StringDomain,
-                                                  AbstractHeapPointer>;
+using ConstantValue = sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
+                                                          SingletonObjectDomain,
+                                                          StringSetDomain,
+                                                          StringDomain,
+                                                          AbstractHeapPointer>;
 
 // For storing non-escaping static fields.
 using StaticFieldEnvironment =
-    PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
+    sparta::PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
 
 using ConstantRegisterEnvironment =
-    PatriciaTreeMapAbstractEnvironment<reg_t, ConstantValue>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ConstantValue>;
 
 /*****************************************************************************
  * Heap values.
@@ -77,22 +78,23 @@ using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
 
 using ConstantObjectDomain = ObjectDomain<ConstantValue>;
 
-using HeapValue = DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
-                                              ConstantObjectDomain>;
+using HeapValue =
+    sparta::DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
+                                        ConstantObjectDomain>;
 
-using ConstantHeap =
-    PatriciaTreeMapAbstractEnvironment<AbstractHeapPointer::ConstantType,
-                                       HeapValue>;
+using ConstantHeap = sparta::PatriciaTreeMapAbstractEnvironment<
+    AbstractHeapPointer::ConstantType,
+    HeapValue>;
 
 /*****************************************************************************
  * Combined model of the abstract stack and heap.
  *****************************************************************************/
 
 class ConstantEnvironment final
-    : public ReducedProductAbstractDomain<ConstantEnvironment,
-                                          ConstantRegisterEnvironment,
-                                          StaticFieldEnvironment,
-                                          ConstantHeap> {
+    : public sparta::ReducedProductAbstractDomain<ConstantEnvironment,
+                                                  ConstantRegisterEnvironment,
+                                                  StaticFieldEnvironment,
+                                                  ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -253,9 +255,9 @@ class ConstantEnvironment final
 /*
  * For modeling the stack + heap at method return statements.
  */
-class ReturnState : public ReducedProductAbstractDomain<ReturnState,
-                                                        ConstantValue,
-                                                        ConstantHeap> {
+class ReturnState : public sparta::ReducedProductAbstractDomain<ReturnState,
+                                                                ConstantValue,
+                                                                ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 

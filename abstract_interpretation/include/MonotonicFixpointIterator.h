@@ -17,6 +17,8 @@
 #include "AbstractDomain.h"
 #include "WeakTopologicalOrdering.h"
 
+namespace sparta {
+
 /*
  * This data structure contains the current state of the fixpoint iteration,
  * which is provided to the user when an extrapolation step is executed, so as
@@ -379,3 +381,5 @@ class BackwardsFixpointIterationAdaptor {
     return GraphInterface::source(graph, edge);
   }
 };
+
+} // namespace sparta

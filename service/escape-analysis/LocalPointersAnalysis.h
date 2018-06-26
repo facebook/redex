@@ -9,8 +9,8 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "ObjectDomain.h"
 #include "MonotonicFixpointIterator.h"
+#include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
@@ -32,18 +32,19 @@ using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
-using PointerSet = PatriciaTreeSetAbstractDomain<const IRInstruction*>;
+using PointerSet = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
 using PointerEnvironment =
-    PatriciaTreeMapAbstractEnvironment<reg_t, PointerSet>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, PointerSet>;
 
 using HeapDomain =
-    PatriciaTreeMapAbstractPartition<const IRInstruction*, EscapeDomain>;
+    sparta::PatriciaTreeMapAbstractPartition<const IRInstruction*,
+                                             EscapeDomain>;
 
 class Environment final
-    : public ReducedProductAbstractDomain<Environment,
-                                          PointerEnvironment,
-                                          HeapDomain> {
+    : public sparta::ReducedProductAbstractDomain<Environment,
+                                                  PointerEnvironment,
+                                                  HeapDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -117,7 +118,8 @@ inline bool is_alloc_opcode(IROpcode op) {
 }
 
 class FixpointIterator final
-    : public MonotonicFixpointIterator<cfg::GraphInterface, Environment> {
+    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
+                                               Environment> {
  public:
   FixpointIterator(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg) {}

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <ostream>
 #include <sstream>
 #include <type_traits>
 #include <utility>
@@ -14,6 +15,8 @@
 #include <boost/optional.hpp>
 
 #include "AbstractDomain.h"
+
+namespace sparta {
 
 /*
  * This abstract domain combinator constructs the lattice of constants of a
@@ -130,24 +133,27 @@ class ConstantAbstractDomain final
   static ConstantAbstractDomain top() {
     return ConstantAbstractDomain(AbstractValueKind::Top);
   }
+
+  friend std::ostream& operator<<(
+      std::ostream& out,
+      const typename sparta::ConstantAbstractDomain<Constant>& x) {
+    using namespace sparta;
+    switch (x.kind()) {
+    case AbstractValueKind::Bottom: {
+      out << "_|_";
+      break;
+    }
+    case AbstractValueKind::Top: {
+      out << "T";
+      break;
+    }
+    case AbstractValueKind::Value: {
+      out << *x.get_constant();
+      break;
+    }
+    }
+    return out;
+  }
 };
 
-template <typename Constant>
-inline std::ostream& operator<<(std::ostream& out,
-                                const ConstantAbstractDomain<Constant>& x) {
-  switch (x.kind()) {
-  case AbstractValueKind::Bottom: {
-    out << "_|_";
-    break;
-  }
-  case AbstractValueKind::Top: {
-    out << "T";
-    break;
-  }
-  case AbstractValueKind::Value: {
-    out << *x.get_constant();
-    break;
-  }
-  }
-  return out;
-}
+} // namespace sparta

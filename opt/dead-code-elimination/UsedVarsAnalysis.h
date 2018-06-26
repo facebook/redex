@@ -18,13 +18,15 @@ using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
-using UsedRegisters = PatriciaTreeSetAbstractDomain<reg_t>;
+using UsedRegisters = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 
-using UsedPointers = PatriciaTreeSetAbstractDomain<const IRInstruction*>;
+using UsedPointers =
+    sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
-class UsedVarsSet final : public ReducedProductAbstractDomain<UsedVarsSet,
-                                                              UsedRegisters,
-                                                              UsedPointers> {
+class UsedVarsSet final
+    : public sparta::ReducedProductAbstractDomain<UsedVarsSet,
+                                                  UsedRegisters,
+                                                  UsedPointers> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -63,8 +65,8 @@ class UsedVarsSet final : public ReducedProductAbstractDomain<UsedVarsSet,
  * instructions which it can determine to have no observable side-effects.
  */
 class UsedVarsFixpointIterator final
-    : public MonotonicFixpointIterator<
-          BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
+    : public sparta::MonotonicFixpointIterator<
+          sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
           UsedVarsSet> {
  public:
   using NodeId = cfg::Block*;

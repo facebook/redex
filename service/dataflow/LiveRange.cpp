@@ -19,6 +19,7 @@
 namespace {
 
 using namespace live_range;
+using namespace sparta;
 
 /*
  * Type aliases for disjoint_sets

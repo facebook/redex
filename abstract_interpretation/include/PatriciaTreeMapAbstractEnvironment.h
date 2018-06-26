@@ -18,6 +18,8 @@
 #include "AbstractDomain.h"
 #include "PatriciaTreeMap.h"
 
+namespace sparta {
+
 namespace ptmae_impl {
 
 template <typename Variable, typename Domain>
@@ -138,10 +140,14 @@ class PatriciaTreeMapAbstractEnvironment final
   }
 };
 
+} // namespace sparta
+
 template <typename Variable, typename Domain>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const PatriciaTreeMapAbstractEnvironment<Variable, Domain>& e) {
+    const typename sparta::PatriciaTreeMapAbstractEnvironment<Variable, Domain>&
+        e) {
+  using namespace sparta;
   switch (e.kind()) {
   case AbstractValueKind::Bottom: {
     o << "_|_";
@@ -159,6 +165,8 @@ inline std::ostream& operator<<(
   }
   return o;
 }
+
+namespace sparta {
 
 namespace ptmae_impl {
 
@@ -266,7 +274,9 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   PatriciaTreeMap<Variable, ValueInterface> m_map;
 
   template <typename T1, typename T2>
-  friend class ::PatriciaTreeMapAbstractEnvironment;
+  friend class sparta::PatriciaTreeMapAbstractEnvironment;
 };
 
 } // namespace ptmae_impl
+
+} // namespace sparta

@@ -23,6 +23,8 @@
 #include "Exceptions.h"
 #include "PatriciaTreeUtil.h"
 
+namespace sparta {
+
 // Forward declarations.
 namespace pt_impl {
 
@@ -236,6 +238,19 @@ class PatriciaTreeSet final {
 
   void clear() { m_tree.reset(); }
 
+  friend std::ostream& operator<<(std::ostream& o,
+                                  const PatriciaTreeSet<Element>& s) {
+    o << "{";
+    for (auto it = s.begin(); it != s.end(); ++it) {
+      o << PatriciaTreeSet<Element>::deref(*it);
+      if (std::next(it) != s.end()) {
+        o << ", ";
+      }
+    }
+    o << "}";
+    return o;
+  }
+
  private:
   // These functions are used to handle the type conversions required when
   // manipulating sets of pointers. The first parameter is necessary to make
@@ -279,25 +294,8 @@ class PatriciaTreeSet final {
   std::shared_ptr<pt_impl::PatriciaTree<IntegerType>> m_tree;
 
   template <typename T>
-  friend std::ostream& operator<<(std::ostream&, const PatriciaTreeSet<T>&);
-
-  template <typename T>
   friend class pt_impl::PatriciaTreeIterator;
 };
-
-template <typename Element>
-inline std::ostream& operator<<(std::ostream& o,
-                                const PatriciaTreeSet<Element>& s) {
-  o << "{";
-  for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeSet<Element>::deref(*it);
-    if (std::next(it) != s.end()) {
-      o << ", ";
-    }
-  }
-  o << "}";
-  return o;
-}
 
 namespace pt_impl {
 
@@ -939,3 +937,5 @@ class PatriciaTreeIterator final
 };
 
 } // namespace pt_impl
+
+} // namespace sparta

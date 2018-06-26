@@ -10,12 +10,12 @@
 #include "ConstantAbstractDomain.h"
 #include "SignDomain.h"
 
-using ConstantDomain = ConstantAbstractDomain<int64_t>;
+using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;
 
 class SignedConstantDomain
-    : public ReducedProductAbstractDomain<SignedConstantDomain,
-                                          sign_domain::Domain,
-                                          ConstantDomain> {
+    : public sparta::ReducedProductAbstractDomain<SignedConstantDomain,
+                                                  sign_domain::Domain,
+                                                  ConstantDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 

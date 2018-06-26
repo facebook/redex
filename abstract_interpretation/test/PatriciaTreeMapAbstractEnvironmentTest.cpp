@@ -17,6 +17,8 @@
 #include "HashedAbstractEnvironment.h"
 #include "HashedSetAbstractDomain.h"
 
+using namespace sparta;
+
 using Domain = HashedSetAbstractDomain<std::string>;
 using Environment = PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;
 

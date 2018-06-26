@@ -16,8 +16,8 @@ namespace constant_propagation {
 namespace intraprocedural {
 
 class FixpointIterator final
-    : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       ConstantEnvironment> {
+    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
+                                               ConstantEnvironment> {
  public:
   /*
    * The fixpoint iterator takes an optional WholeProgramState argument that
@@ -227,8 +227,8 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
       typename = typename std::enable_if_t<
           template_util::contains<Constant, const DexField*, const DexString*>::
               value>>
-  bool operator()(const ConstantAbstractDomain<Constant>& d1,
-                  const ConstantAbstractDomain<Constant>& d2) const {
+  bool operator()(const sparta::ConstantAbstractDomain<Constant>& d1,
+                  const sparta::ConstantAbstractDomain<Constant>& d2) const {
     if (!(d1.is_value() && d2.is_value())) {
       return false;
     }

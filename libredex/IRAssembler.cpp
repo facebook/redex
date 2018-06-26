@@ -12,6 +12,8 @@
 #include <sstream>
 #include <string>
 
+using namespace sparta;
+
 namespace {
 
 #define OP(OP, KIND, STR) {OPCODE_##OP, STR},

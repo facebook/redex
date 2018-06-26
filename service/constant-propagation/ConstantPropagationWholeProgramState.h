@@ -21,10 +21,10 @@ class FixpointIterator;
 } // namespace interprocedural
 
 using ConstantStaticFieldPartition =
-    HashedAbstractPartition<const DexField*, ConstantValue>;
+    sparta::HashedAbstractPartition<const DexField*, ConstantValue>;
 
 using ConstantMethodPartition =
-    HashedAbstractPartition<const DexMethod*, ConstantValue>;
+    sparta::HashedAbstractPartition<const DexMethod*, ConstantValue>;
 
 /*
  * This class contains flow-insensitive information about fields and method

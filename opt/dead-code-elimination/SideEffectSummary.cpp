@@ -11,6 +11,8 @@
 #include "ConcurrentContainers.h"
 #include "Walkers.h"
 
+using namespace sparta;
+
 namespace ptrs = local_pointers;
 
 namespace {

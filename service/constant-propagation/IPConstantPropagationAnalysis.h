@@ -30,7 +30,7 @@ namespace interprocedural {
 using param_index_t = uint16_t;
 
 using ArgumentDomain =
-    PatriciaTreeMapAbstractEnvironment<param_index_t, ConstantValue>;
+    sparta::PatriciaTreeMapAbstractEnvironment<param_index_t, ConstantValue>;
 
 /*
  * This map is an abstraction of the execution paths starting from the entry
@@ -43,7 +43,8 @@ using ArgumentDomain =
  * contained in the method to the ArgumentDomains representing the arguments
  * passed to the callee.
  */
-using Domain = HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
+using Domain =
+    sparta::HashedAbstractPartition<const IRInstruction*, ArgumentDomain>;
 
 constexpr IRInstruction* CURRENT_PARTITION_LABEL = nullptr;
 
@@ -64,7 +65,8 @@ using ProcedureAnalysisFactory =
  * ProcedureAnalysisFactory.
  */
 class FixpointIterator
-    : public MonotonicFixpointIterator<call_graph::GraphInterface, Domain> {
+    : public sparta::MonotonicFixpointIterator<call_graph::GraphInterface,
+                                               Domain> {
  public:
   FixpointIterator(const call_graph::Graph& call_graph,
                    const ProcedureAnalysisFactory& proc_analysis_factory)

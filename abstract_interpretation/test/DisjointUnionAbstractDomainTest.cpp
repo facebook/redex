@@ -5,13 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// Because of the rules of argument-dependent lookup, we need to include the
+// definition of operator<< for ConstantAbstractDomain before that of operator<<
+// for DisjointUnionAbstractDomain.
+#include "ConstantAbstractDomain.h"
+
 #include "DisjointUnionAbstractDomain.h"
 
 #include <gtest/gtest.h>
 #include <string>
 
 #include "AbstractDomainPropertyTest.h"
-#include "ConstantAbstractDomain.h"
+
+using namespace sparta;
 
 using IntDomain = ConstantAbstractDomain<int>;
 using StringDomain = ConstantAbstractDomain<std::string>;

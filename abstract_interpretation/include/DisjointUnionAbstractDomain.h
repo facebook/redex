@@ -13,6 +13,20 @@
 
 #include "AbstractDomain.h"
 
+// Forward declarations.
+namespace sparta {
+
+template <typename FirstDomain, typename... Domains>
+class DisjointUnionAbstractDomain;
+
+} // namespace sparta
+
+template <typename... Domains>
+std::ostream& operator<<(
+    std::ostream&, const sparta::DisjointUnionAbstractDomain<Domains...>&);
+
+namespace sparta {
+
 /*
  * The disjoint union of abstract domains D1 ... Dn can hold any one of those
  * n domains. The join and meet of different domains is always Top and Bottom
@@ -150,8 +164,8 @@ class DisjointUnionAbstractDomain final
   }
 
   template <typename... Ts>
-  friend std::ostream& operator<<(std::ostream&,
-                                  const DisjointUnionAbstractDomain<Ts...>&);
+  friend std::ostream& ::operator<<(std::ostream&,
+                                    const DisjointUnionAbstractDomain<Ts...>&);
 
  private:
   // Check if all template parameters are true (see
@@ -165,13 +179,18 @@ class DisjointUnionAbstractDomain final
   boost::variant<FirstDomain, Domains...> m_variant;
 };
 
+} // namespace sparta
+
 template <typename... Domains>
-std::ostream& operator<<(std::ostream& o,
-                         const DisjointUnionAbstractDomain<Domains...>& du) {
+std::ostream& operator<<(
+    std::ostream& o,
+    const typename sparta::DisjointUnionAbstractDomain<Domains...>& du) {
   o << "[U] ";
   boost::apply_visitor([&o](const auto& dom) { o << dom; }, du.m_variant);
   return o;
 }
+
+namespace sparta {
 
 namespace duad_impl {
 
@@ -296,3 +315,5 @@ bool DisjointUnionAbstractDomain<FirstDomain, Domains...>::equals(
   return boost::apply_visitor(duad_impl::equals_visitor(), this->m_variant,
                               other.m_variant);
 }
+
+} // namespace sparta

@@ -11,11 +11,11 @@
 #include "MonotonicFixpointIterator.h"
 #include "SparseSetAbstractDomain.h"
 
-using LivenessDomain = SparseSetAbstractDomain<uint16_t>;
+using LivenessDomain = sparta::SparseSetAbstractDomain<uint16_t>;
 
 class LivenessFixpointIterator final
-    : public MonotonicFixpointIterator<
-          BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
+    : public sparta::MonotonicFixpointIterator<
+          sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
           LivenessDomain> {
  public:
   using NodeId = cfg::Block*;

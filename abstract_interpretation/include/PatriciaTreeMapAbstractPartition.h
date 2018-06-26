@@ -18,6 +18,8 @@
 #include "AbstractDomain.h"
 #include "PatriciaTreeMap.h"
 
+namespace sparta {
+
 /*
  * An abstract partition based on Patricia trees that is cheap to copy.
  *
@@ -206,10 +208,13 @@ class PatriciaTreeMapAbstractPartition final
   bool m_is_top{false};
 };
 
+} // namespace sparta
+
 template <typename Label, typename Domain>
 inline std::ostream& operator<<(
     std::ostream& o,
-    const PatriciaTreeMapAbstractPartition<Label, Domain>& partition) {
+    const typename sparta::PatriciaTreeMapAbstractPartition<Label, Domain>&
+        partition) {
   if (partition.is_bottom()) {
     o << "_|_";
   } else if (partition.is_top()) {

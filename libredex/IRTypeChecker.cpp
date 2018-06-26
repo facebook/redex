@@ -30,6 +30,8 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 
+using namespace sparta;
+
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
   case BOTTOM: {

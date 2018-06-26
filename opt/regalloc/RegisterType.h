@@ -43,13 +43,14 @@ enum class RegisterType {
 
 namespace register_type_impl {
 
-using Lattice = BitVectorLattice<RegisterType,
-                                 static_cast<size_t>(RegisterType::SIZE),
-                                 boost::hash<RegisterType>>;
+using Lattice =
+    sparta::BitVectorLattice<RegisterType,
+                             static_cast<size_t>(RegisterType::SIZE),
+                             boost::hash<RegisterType>>;
 
 extern Lattice lattice;
 
-using Domain =
+using Domain = sparta::
     FiniteAbstractDomain<RegisterType, Lattice, Lattice::Encoding, &lattice>;
 
 } // namespace register_type_impl

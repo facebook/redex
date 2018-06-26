@@ -11,6 +11,8 @@
 
 #include "PowersetAbstractDomain.h"
 
+namespace sparta {
+
 namespace ssad_impl {
 
 /*
@@ -219,3 +221,5 @@ class SparseSetAbstractDomain final
     return SparseSetAbstractDomain(AbstractValueKind::Top);
   }
 };
+
+} // namespace sparta
