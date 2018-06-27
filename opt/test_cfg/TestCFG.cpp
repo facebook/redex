@@ -53,4 +53,4 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
   });
 }
 
-TestCFGPass s_pass;
+static TestCFGPass s_pass;

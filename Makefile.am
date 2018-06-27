@@ -234,6 +234,7 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/singleimpl/SingleImplUtil.cpp \
+	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
 	opt/string_simplification/StringIterator.cpp \
