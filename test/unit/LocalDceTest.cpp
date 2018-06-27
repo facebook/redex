@@ -55,9 +55,9 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(*goto_mie);
   // this TRY_END is in a block that is dead code
   code->push_back(TRY_END, catch_start);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-  code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->push_back(*catch_start);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
@@ -149,10 +149,11 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(TRY_END, catch_start);
   // this one doesn't wrap a may-throw opcode
   code->push_back(TRY_START, catch_start);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
   code->push_back(TRY_END, catch_start);
-  code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->push_back(*catch_start);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);

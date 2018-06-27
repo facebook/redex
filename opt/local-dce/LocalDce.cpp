@@ -103,31 +103,6 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
   return ret;
 }
 
-void remove_empty_try_regions(IRCode* code) {
-  // comb the method looking for superfluous try sections that do not enclose
-  // throwing opcodes; remove them. note that try sections should never be
-  // nested, otherwise this won't produce the right result.
-  bool encloses_throw{false};
-  MethodItemEntry* try_start{nullptr};
-  for (auto& mie : *code) {
-    if (mie.type == MFLOW_TRY) {
-      auto tentry = mie.tentry;
-      if (tentry->type == TRY_START) {
-        encloses_throw = false;
-        try_start = &mie;
-      } else if (!encloses_throw /* && tentry->type == TRY_END */) {
-        try_start->type = MFLOW_FALLTHROUGH;
-        try_start = nullptr;
-        mie.type = MFLOW_FALLTHROUGH;
-      }
-    } else if (mie.type == MFLOW_OPCODE) {
-      auto op = mie.insn->opcode();
-      encloses_throw =
-          encloses_throw || opcode::may_throw(op) || op == OPCODE_THROW;
-    }
-  }
-}
-
 /*
  * Update the liveness vector given that `inst` is live.
  */
@@ -160,14 +135,16 @@ void update_liveness(const IRInstruction* inst,
 ////////////////////////////////////////////////////////////////////////////////
 
 void LocalDce::dce(IRCode* code) {
-  code->build_cfg();
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   auto blocks = cfg::postorder_sort(cfg.blocks());
   auto regs = code->get_registers_size();
-  std::vector<boost::dynamic_bitset<>> liveness(
-      cfg.blocks().size(), boost::dynamic_bitset<>(regs + 1));
+  std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
+  for (cfg::Block* b : blocks) {
+    liveness.emplace(b->id(), boost::dynamic_bitset<>(regs + 1));
+  }
   bool changed;
-  std::vector<IRList::iterator> dead_instructions;
+  std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions;
 
   TRACE(DCE, 5, "%s", SHOW(cfg));
 
@@ -190,8 +167,8 @@ void LocalDce::dce(IRCode* code) {
               5,
               "  S%lu: %s\n",
               s->target()->id(),
-              SHOW(liveness[s->target()->id()]));
-        bliveness |= liveness[s->target()->id()];
+              SHOW(liveness.at(s->target()->id())));
+        bliveness |= liveness.at(s->target()->id());
       }
 
       // Compute live-in for this block by walking its instruction list in
@@ -207,7 +184,8 @@ void LocalDce::dce(IRCode* code) {
           // move-result-pseudo instructions will be automatically removed
           // when their primary instruction is deleted.
           if (!opcode::is_move_result_pseudo(it->insn->opcode())) {
-            dead_instructions.push_back(std::prev(it.base()));
+            auto forward_it = std::prev(it.base());
+            dead_instructions.emplace_back(b, forward_it);
           }
         }
         TRACE(CFG,
@@ -224,30 +202,24 @@ void LocalDce::dce(IRCode* code) {
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
-  for (auto dead : dead_instructions) {
-    if (seen.count(dead->insn)) {
+  for (const auto& pair : dead_instructions) {
+    cfg::Block* b = pair.first;
+    IRList::iterator it = pair.second;
+    if (seen.count(it->insn)) {
       continue;
     }
-    TRACE(DCE, 2, "DEAD: %s\n", SHOW(dead->insn));
-    code->remove_opcode(dead);
-    seen.emplace(dead->insn);
+    TRACE(DCE, 2, "DEAD: %s\n", SHOW(it->insn));
+    seen.emplace(it->insn);
+    b->remove_opcode(it);
   }
+  auto unreachable_insn_count = cfg.remove_unreachable_blocks();
+
   m_stats.dead_instruction_count += dead_instructions.size();
-
-  // if we deleted an instruction that may throw, we'll need to remove any
-  // EDGE_THROW edges in the CFG... ideally we would just prune that edge,
-  // but we can do a conservative and inefficient hack for now and just
-  // rebuild the entire graph
-  if (dead_instructions.size() > 0) {
-    code->build_cfg();
-  }
-
-  m_stats.unreachable_instruction_count +=
-      transform::remove_unreachable_blocks(code);
-  remove_empty_try_regions(code);
+  m_stats.unreachable_instruction_count += unreachable_insn_count;
 
   TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
   TRACE(DCE, 5, "%s", SHOW(code->cfg()));
+  code->clear_cfg();
 }
 
 /*
@@ -312,7 +284,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DCE, 1,
-        "LocalDcePass not run because no ProGuard configuration was provided.");
+          "LocalDcePass not run because no ProGuard configuration was "
+          "provided.\n");
     return;
   }
   const auto& pure_methods = find_pure_methods();
@@ -321,13 +294,11 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
       scope,
       [&](std::nullptr_t, DexMethod* m) {
         auto* code = m->get_code();
-        if (code == nullptr) {
+        if (code == nullptr || m_do_not_optimize_methods.find(m) !=
+                                   m_do_not_optimize_methods.end()) {
           return LocalDce::Stats();
         }
-        if (m_do_not_optimize_methods.find(m) !=
-            m_do_not_optimize_methods.end()) {
-          return LocalDce::Stats();
-        }
+
         LocalDce ldce(pure_methods);
         ldce.dce(code);
         return ldce.get_stats();
@@ -341,6 +312,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
+  TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d\n",
+        stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
 
 std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
