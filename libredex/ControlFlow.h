@@ -155,7 +155,7 @@ using ConstInstructionIterable = InstructionIterableImpl</* is_const */ true>;
 // and branches (throws, gotos, switches, etc) are only at the end of a block.
 class Block final {
  public:
-  explicit Block(const ControlFlowGraph* parent, BlockId id)
+  explicit Block(ControlFlowGraph* parent, BlockId id)
       : m_id(id), m_parent(parent) {}
 
   ~Block() {
@@ -195,16 +195,15 @@ class Block final {
 
   bool same_try(Block* other) const;
 
+  void remove_opcode(const ir_list::InstructionIterator&);
   void remove_opcode(const IRList::iterator& it);
 
-  opcode::Branchingness branchingness() {
-    always_assert_log(
-        !empty(), "block %d is empty\n%s\n", id(), SHOW(*m_parent));
-    const auto& last = rbegin();
-    return last->branchingness();
-  }
+  opcode::Branchingness branchingness();
 
+  // returns true if there are no MethodItemEntries (not IRInstructions)
   bool empty() const { return m_entries.empty(); }
+
+  uint32_t num_opcodes() const;
 
   IRList::iterator get_last_insn();
   IRList::iterator get_first_insn();
@@ -242,7 +241,7 @@ class Block final {
   std::vector<Edge*> m_succs;
 
   // the graph that this block belongs to
-  const ControlFlowGraph* m_parent = nullptr;
+  ControlFlowGraph* m_parent = nullptr;
 };
 
 struct DominatorInfo {
@@ -327,8 +326,11 @@ class ControlFlowGraph {
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
-  // merge succ into pred
-  // Assumption: pred is the only predecessor of succ (and vice versa)
+  // Merge `succ` into `pred` and delete `succ`
+  //
+  // `pred` must be the only predecessor of `succ`
+  // `succ` must be the only successor of `pred`
+  // `pred` and `succ` must be in the same try region
   void merge_blocks(Block* pred, Block* succ);
 
   // remove the IRInstruction that `it` points to.
@@ -364,7 +366,8 @@ class ControlFlowGraph {
   size_t num_blocks() const { return m_blocks.size(); }
 
   // remove blocks with no predecessors
-  void remove_unreachable_blocks();
+  // returns the number of instructions removed
+  uint32_t remove_unreachable_blocks();
 
   // transform the CFG to an equivalent but more canonical state
   // Assumes m_editable is true
@@ -460,6 +463,9 @@ class ControlFlowGraph {
       std::vector<Edge*>::iterator end,
       const std::unordered_map<MethodItemEntry*, Block*>&
           catch_to_containing_block);
+
+  // remove blocks with no entries
+  void remove_empty_blocks();
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.
@@ -571,6 +577,12 @@ class InstructionIteratorImpl {
     }
   }
 
+  friend class Block;
+  InstructionIteratorImpl(Cfg& cfg,
+                          Block* b,
+                          const ir_list::InstructionIterator& it)
+      : m_cfg(cfg), m_block(m_cfg.m_blocks.find(b->id())), m_it(it) {}
+
  public:
   using reference = Mie&;
   using difference_type = long;
@@ -579,8 +591,8 @@ class InstructionIteratorImpl {
   using iterator_category = std::forward_iterator_tag;
 
   InstructionIteratorImpl() = delete;
-  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin)
-      : m_cfg(cfg) {
+
+  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(cfg) {
     always_assert(m_cfg.editable());
     if (is_begin) {
       m_block = m_cfg.m_blocks.begin();

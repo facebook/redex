@@ -836,3 +836,84 @@ TEST(ControlFlow, cleanup_after_deleting_goto) {
   EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
             assembler::to_s_expr(code.get()));
 }
+
+TEST(ControlFlow, remove_sget) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sget Lcom/Foo.bar:I)
+      (move-result-pseudo v0)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  auto iterable = cfg::InstructionIterable(cfg);
+  std::vector<cfg::InstructionIterator> to_delete;
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_SGET) {
+      to_delete.push_back(it);
+    }
+  }
+
+  for (auto& it : to_delete) {
+    cfg.remove_opcode(it);
+  }
+
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, branchingness) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-string "one")
+      (move-result-pseudo v0)
+      (if-eqz v0 :a)
+
+      (const-string "two")
+      (move-result-pseudo v0)
+      (goto :end)
+
+      (:a)
+      (const-string "three")
+      (move-result-pseudo v0)
+
+      (:end)
+      (const-string "four")
+      (move-result-pseudo v0)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  uint16_t blocks_checked = 0;
+  for (Block* b : cfg.blocks()) {
+    std::string str = b->get_first_insn()->insn->get_string()->str();
+    if (str == "one") {
+      EXPECT_EQ(opcode::BRANCH_IF, b->branchingness());
+      ++blocks_checked;
+    }
+    if (str == "two" || str == "three") {
+      EXPECT_EQ(opcode::BRANCH_GOTO, b->branchingness());
+      ++blocks_checked;
+    }
+    if (str == "four") {
+      EXPECT_EQ(opcode::BRANCH_RETURN, b->branchingness());
+      ++blocks_checked;
+    }
+  }
+  EXPECT_EQ(4, blocks_checked);
+  delete g_redex;
+}
