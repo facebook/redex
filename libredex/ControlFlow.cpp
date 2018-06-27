@@ -1120,7 +1120,7 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       if ((is_conditional_branch(op) || is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
         pred_block->m_entries.erase_and_dispose(last_it);
-        e->m_type = EDGE_GOTO;
+        remaining_forward_edges.at(0)->m_type = EDGE_GOTO;
       }
     }
   }

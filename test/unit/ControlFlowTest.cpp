@@ -770,7 +770,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
             assembler::to_s_expr(code.get()));
 }
 
-TEST(ControlFlow, cleanup) {
+TEST(ControlFlow, cleanup_after_deleting_branch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -796,6 +796,40 @@ TEST(ControlFlow, cleanup) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
+      (return-void)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
+}
+
+TEST(ControlFlow, cleanup_after_deleting_goto) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (if-eqz v0 :true)
+
+      (const v0 0)
+
+      (:true)
+      (const v1 1)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+
+  auto& cfg = code->cfg();
+  cfg.delete_succ_edge_if(
+      cfg.entry_block(),
+      [](const cfg::Edge* e) { return e->type() == EDGE_GOTO; });
+
+  code->clear_cfg();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (const v1 1)
       (return-void)
     )
 )");
