@@ -202,7 +202,7 @@ DexType* make_array_type(const DexType*);
 /**
  * True if the method is a constructor (matches the "<init>" name)
  */
-bool is_init(const DexMethod* method);
+bool is_init(const DexMethodRef* method);
 
 /**
  * True if the method is a static constructor (matches the "<clinit>" name)

@@ -403,3 +403,99 @@ TEST_F(DedupBlocksTest, diamond) {
       << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
       << cfg_str(code) << SHOW(method->get_code());
 }
+
+// in Code:  A B C (where B == C,
+//      and they contain a pair of new-instance and constructor instructions)
+// in CFG:   A -> B
+//            \
+//             > C
+// out Code: A B
+// out CFG:  A -> B
+TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v0 :c)
+
+      (:b)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+
+      (:c)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("blockWithNewInstanceAndConstroctor");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v0 :c)
+
+      (:b)
+      (:c)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code))
+      << "expected:\n"
+      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual\n"
+      << cfg_str(code) << SHOW(method->get_code());
+}
+
+// in Code: A B C(where B == C,
+//      and they construct an object from A)
+// in CFG:  A -> B
+//           \
+//            > C
+// out Code: the same as the in Code
+// out CFG: the same as the in CFG
+TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
+  std::string str_code = R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+
+      (:c)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str_code);
+  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+  run_dedup_blocks();
+  auto expect_code = assembler::ircode_from_string(str_code);
+  EXPECT_EQ(assembler::to_s_expr(expect_code.get()),
+            assembler::to_s_expr(code))
+      << "expected:\n"
+      << cfg_str(expect_code.get()) << SHOW(expect_code) << "actual\n"
+      << cfg_str(code) << SHOW(method->get_code());
+}

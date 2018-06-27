@@ -173,7 +173,7 @@ bool has_hierarchy_in_scope(DexClass* cls) {
   return super == get_object_type();
 }
 
-bool is_init(const DexMethod* method) {
+bool is_init(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<init>") == 0;
 }
 

@@ -335,6 +335,8 @@ inline bool is_invoke_direct(IROpcode op) { return op == OPCODE_INVOKE_DIRECT; }
 
 inline bool is_invoke_static(IROpcode op) { return op == OPCODE_INVOKE_STATIC; }
 
+inline bool is_new_instance(IROpcode op) { return op == OPCODE_NEW_INSTANCE; }
+
 inline bool is_filled_new_array(IROpcode op) {
   return op == OPCODE_FILLED_NEW_ARRAY;
 }
