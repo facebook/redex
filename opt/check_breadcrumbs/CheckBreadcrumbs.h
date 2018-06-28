@@ -22,6 +22,7 @@ class CheckBreadcrumbsPass : public Pass {
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("fail", false, fail);
     pc.get("fail_if_illegal_refs", false, fail_if_illegal_refs);
+    pc.get("reject_illegal_refs_root_store", false, reject_illegal_refs_root_store);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -29,4 +30,5 @@ class CheckBreadcrumbsPass : public Pass {
 private:
   bool fail;
   bool fail_if_illegal_refs;
+  bool reject_illegal_refs_root_store;
 };

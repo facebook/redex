@@ -99,12 +99,14 @@ class Breadcrumbs {
   MethodInsns illegal_method_call;
   XStoreRefs xstores;
   bool multiple_root_store_dexes;
+  bool reject_illegal_refs_root_store;
 
  public:
 
-  explicit Breadcrumbs(const Scope& scope, DexStoresVector& stores)
+  explicit Breadcrumbs(const Scope& scope, DexStoresVector& stores, bool reject_illegal_refs_root_store)
     : scope(scope),
-      xstores(stores) {
+      xstores(stores),
+      reject_illegal_refs_root_store(reject_illegal_refs_root_store) {
     classes.insert(scope.begin(), scope.end());
     multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   }
@@ -261,10 +263,11 @@ class Breadcrumbs {
     size_t caller_store_idx = xstores.get_store_idx(caller);
     size_t callee_store_idx = xstores.get_store_idx(callee);
     if (caller_store_idx < callee_store_idx) {
-      // Accept primary to secondary references.
+      // Primary to secondary reference.
       if (multiple_root_store_dexes &&
           caller_store_idx == 0 &&
-          callee_store_idx == 1) {
+          callee_store_idx == 1 &&
+          !reject_illegal_refs_root_store) {
         return false;
       }
 
@@ -447,7 +450,7 @@ void CheckBreadcrumbsPass::run_pass(
     ConfigFiles& cfg,
     PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope, stores);
+  Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);
