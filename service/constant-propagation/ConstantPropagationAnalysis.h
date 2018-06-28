@@ -214,10 +214,7 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
     if (!(cst_left && cst_right)) {
       return false;
     }
-    if (*cst_left == *cst_right) {
-      return true;
-    }
-    return false;
+    return *cst_left == *cst_right;
   }
 
   // SingletonObjectDomain and StringDomains are equal iff their respective
@@ -232,10 +229,7 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
     if (!(d1.is_value() && d2.is_value())) {
       return false;
     }
-    if (*d1.get_constant() == *d2.get_constant()) {
-      return true;
-    }
-    return false;
+    return *d1.get_constant() == *d2.get_constant();
   }
 
   template <typename Domain, typename OtherDomain>
@@ -249,6 +243,27 @@ class runtime_leq_visitor : public boost::static_visitor<bool> {
   bool operator()(const SignedConstantDomain& scd_left,
                   const SignedConstantDomain& scd_right) const {
     return scd_left.max_element() <= scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+/*
+ * Note: We cannot replace the runtime_lt_visitor by combining the
+ * runtime_leq_visitor and the negation of the runtime_equals_visitor. Suppose
+ * the runtime_leq_visitor returns true and the runtime_equals_visitor returns
+ * false. That means that the LHS must be less than or equal to the RHS, and
+ * that they *might* not be equal. Since they may still be equal, we cannot
+ * conclude that the LHS must be less than the RHS.
+ */
+class runtime_lt_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() < scd_right.min_element();
   }
 
   template <typename Domain, typename OtherDomain>

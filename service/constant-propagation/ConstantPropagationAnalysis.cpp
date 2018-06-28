@@ -566,8 +566,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_GE: {
-    if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right) &&
-        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+    if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
       env->set_to_bottom();
     }
     break;
@@ -578,8 +577,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_LE: {
-    if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left) &&
-        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+    if (ConstantValue::apply_visitor(runtime_lt_visitor(), right, left)) {
       env->set_to_bottom();
     }
     break;
