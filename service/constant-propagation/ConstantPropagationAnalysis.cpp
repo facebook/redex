@@ -562,6 +562,27 @@ class runtime_leq_visitor : public boost::static_visitor<bool> {
 };
 
 /*
+ * Note: We cannot replace the runtime_lt_visitor by combining the
+ * runtime_leq_visitor and the negation of the runtime_equals_visitor. Suppose
+ * the runtime_leq_visitor returns true and the runtime_equals_visitor returns
+ * false. That means that the LHS must be less than or equal to the RHS, and
+ * that they *might* not be equal. Since they may still be equal, we cannot
+ * conclude that the LHS must be less than the RHS.
+ */
+class runtime_lt_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() < scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+/*
  * If we can determine that a branch is not taken based on the constants in the
  * environment, set the environment to bottom upon entry into the unreachable
  * block.
@@ -622,8 +643,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_GE: {
-    if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right) &&
-        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+    if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
       env->set_to_bottom();
     }
     break;
@@ -634,8 +654,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_LE: {
-    if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left) &&
-        !ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
+    if (ConstantValue::apply_visitor(runtime_lt_visitor(), right, left)) {
       env->set_to_bottom();
     }
     break;
