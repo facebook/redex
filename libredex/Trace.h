@@ -18,6 +18,7 @@
   TM(ACCESS)             \
   TM(ANNO)               \
   TM(ARGS)               \
+  TM(BBPROFILE)          \
   TM(BIND)               \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
@@ -53,7 +54,7 @@
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(MMINL)              \
-  TM(MMODE)               \
+  TM(MMODE)              \
   TM(MORTIROLO)          \
   TM(MTRANS)             \
   TM(OBFUSCATE)          \
@@ -101,9 +102,9 @@
 
 enum TraceModule : int {
 #define TM(x) x,
-TMS
+  TMS
 #undef TM
-  N_TRACE_MODULES,
+      N_TRACE_MODULES,
 };
 
 bool traceEnabled(TraceModule module, int level);

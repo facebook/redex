@@ -24,6 +24,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/analysis_ref_graph \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
+	-I$(top_srcdir)/opt/basic-block \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/constant-propagation \
@@ -179,6 +180,7 @@ redex_all_SOURCES = \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
 	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
+	opt/basic-block/BasicBlockProfile.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
