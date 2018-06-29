@@ -22,6 +22,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/remove_empty_classes \
+	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/simpleinline \
