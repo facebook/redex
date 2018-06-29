@@ -96,6 +96,7 @@
   TM(SWIN)               \
   TM(SWCL)               \
   TM(SW)                 \
+  TM(IFCS_ANALYSIS)      \
   TM(UNREF_INTF)
 
 enum TraceModule : int {
