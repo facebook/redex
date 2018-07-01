@@ -9,14 +9,10 @@
 
 #include <boost/filesystem.hpp>
 #include <cstdio>
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
 #include <unordered_set>
 
 #include "ApkManager.h"
+#include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -26,6 +22,7 @@
 #include "InstructionLowering.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
+#include "JemallocUtil.h"
 #include "PrintSeeds.h"
 #include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
@@ -72,15 +69,18 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
       m_art_build(is_art_build) {
   init(config);
   if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
-    std::string pass_name{getenv("PROFILE_PASS")};
     // Resolve the pass in the constructor so that any typos / references to
     // nonexistent passes are caught as early as possible
-    auto pass_it = std::find_if(
-        m_activated_passes.begin(),
-        m_activated_passes.end(),
-        [&pass_name](const Pass* pass) { return pass->name() == pass_name; });
-    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), *pass_it);
-    fprintf(stderr, "Will run profiler for %s\n", pass_name.c_str());
+    auto pass = find_pass(getenv("PROFILE_PASS"));
+    always_assert(pass != nullptr);
+    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), pass);
+    fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
+  }
+  if (getenv("MALLOC_PROFILE_PASS")) {
+    m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
+    always_assert(m_malloc_profile_pass != nullptr);
+    fprintf(stderr, "Will run jemalloc profiler for %s\n",
+            m_malloc_profile_pass->name().c_str());
   }
 }
 
@@ -121,42 +121,6 @@ void PassManager::run_type_checker(const Scope& scope,
 }
 
 const std::string PASS_ORDER_KEY = "pass_order";
-
-/*
- * Appends the PID of the current process to :cmd and invokes it.
- */
-pid_t spawn_profiler(const std::string& cmd) {
-#ifdef _POSIX_VERSION
-  auto parent = getpid();
-  auto child = fork();
-  if (child == -1) {
-    always_assert_log(false, "Failed to fork");
-    not_reached();
-  } else if (child != 0) {
-    return child;
-  } else {
-    std::ostringstream ss;
-    ss << cmd << " " << parent;
-    auto full_cmd = ss.str();
-    execl("/bin/sh", "/bin/sh", "-c", full_cmd.c_str(), nullptr);
-    always_assert_log(false, "exec of profiler command failed");
-    not_reached();
-  }
-#else
-  fprintf(stderr, "spawn_profiler() is a no-op");
-  return 0;
-#endif
-}
-
-pid_t kill_and_wait(pid_t pid, int sig) {
-#ifdef _POSIX_VERSION
-  kill(pid, sig);
-  return waitpid(pid, nullptr, 0);
-#else
-  fprintf(stderr, "kill_and_wait() is a no-op");
-  return 0;
-#endif
-}
 
 void PassManager::run_passes(DexStoresVector& stores,
                              const Scope& external_classes,
@@ -243,17 +207,16 @@ void PassManager::run_passes(DexStoresVector& stores,
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
-    bool run_profiler{m_profiler_info && m_profiler_info->pass == pass};
-    pid_t profiler{-1};
-    if (run_profiler) {
-      fprintf(stderr, "Running profiler...\n");
-      profiler = spawn_profiler(m_profiler_info->command);
+
+    {
+      ScopedCommandProfiling cmd_prof(
+          m_profiler_info && m_profiler_info->pass == pass
+              ? boost::make_optional(m_profiler_info->command)
+              : boost::none);
+      jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      pass->run_pass(stores, cfg, *this);
     }
-    pass->run_pass(stores, cfg, *this);
-    if (run_profiler) {
-      fprintf(stderr, "Waiting for profiler to finish...\n");
-      kill_and_wait(profiler, SIGINT);
-    }
+
     if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
       scope = build_class_scope(it);
       run_type_checker(scope, polymorphic_constants, verify_moves);
@@ -292,6 +255,14 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
     }
   }
   always_assert_log(false, "No pass named %s!", name);
+}
+
+Pass* PassManager::find_pass(const std::string& pass_name) const {
+  auto pass_it = std::find_if(
+      m_activated_passes.begin(),
+      m_activated_passes.end(),
+      [&pass_name](const Pass* pass) { return pass->name() == pass_name; });
+  return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
 }
 
 void PassManager::incr_metric(const std::string& key, int value) {

@@ -98,6 +98,11 @@ def add_extra_environment_args(env):
         # libraries (namely jsoncpp and boost).
         env['ASAN_OPTIONS'] = 'detect_leaks=0:detect_container_overflow=0'
 
+    # If we haven't set MALLOC_CONF but we have requested to profile the memory
+    # of a specific pass, set some reasonable defaults
+    if 'MALLOC_PROFILE_PASS' in env and 'MALLOC_CONF' not in env:
+        env['MALLOC_CONF'] = 'prof:true,prof_prefix:jeprof.out,prof_gdump:true,prof_active:false'
+
 def run_pass(
         executable_path,
         script_args,

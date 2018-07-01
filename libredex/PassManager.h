@@ -78,6 +78,8 @@ class PassManager {
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
+  Pass* find_pass(const std::string& pass_name) const;
+
   void init(const Json::Value& config);
 
   static void run_type_checker(const Scope& scope,
@@ -107,4 +109,5 @@ class PassManager {
   };
 
   boost::optional<ProfilerInfo> m_profiler_info;
+  Pass* m_malloc_profile_pass{nullptr};
 };

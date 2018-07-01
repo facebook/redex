@@ -158,6 +158,8 @@ libredex_la_SOURCES = \
 	libresource/VectorImpl.cpp \
 	shared/DexDefs.cpp \
 	shared/file-utils.cpp \
+	util/CommandProfiling.cpp \
+	util/JemallocUtil.cpp \
 	util/Sha1.cpp
 
 libredex_la_LIBADD = \
@@ -272,6 +274,7 @@ redex_all_LDADD = \
 	-lpthread
 
 redex_all_LDFLAGS = \
+	-Wl,-U,_mallctl \
 	-rdynamic # function names in stack traces
 
 redexdump_SOURCES = \

@@ -18,6 +18,8 @@
 #include "Transform.h"
 #include "Walkers.h"
 
+#include "JemallocUtil.h"
+
 using namespace regalloc;
 
 void RegAllocPass::run_pass(DexStoresVector& stores,
