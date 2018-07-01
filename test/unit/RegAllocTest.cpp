@@ -277,7 +277,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -385,7 +385,7 @@ TEST_F(RegAllocTest, Coalesce) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -417,7 +417,7 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -457,7 +457,7 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -555,7 +555,7 @@ TEST_F(RegAllocTest, SelectRange) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set = init_range_set(code.get());
   EXPECT_EQ(range_set.size(), 1);
@@ -598,7 +598,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   auto invoke_it =
       std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
@@ -651,7 +651,7 @@ TEST_F(RegAllocTest, AlignRanges) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   for (auto& mie : InstructionIterable(code.get())) {
@@ -689,7 +689,7 @@ TEST_F(RegAllocTest, Spill) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -742,7 +742,7 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -787,7 +787,7 @@ TEST_F(RegAllocTest, ContainmentGraph) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -843,7 +843,7 @@ TEST_F(RegAllocTest, FindSplit) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -878,7 +878,7 @@ TEST_F(RegAllocTest, Split) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
@@ -929,7 +929,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(

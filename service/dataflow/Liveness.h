@@ -9,9 +9,9 @@
 
 #include "ControlFlow.h"
 #include "MonotonicFixpointIterator.h"
-#include "SparseSetAbstractDomain.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 
-using LivenessDomain = sparta::SparseSetAbstractDomain<uint16_t>;
+using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
 
 class LivenessFixpointIterator final
     : public sparta::MonotonicFixpointIterator<

@@ -1045,7 +1045,7 @@ void Allocator::allocate(IRCode* code) {
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     LivenessFixpointIterator fixpoint_iter(cfg);
-    fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+    fixpoint_iter.run(LivenessDomain());
 
     TRACE(REG, 5, "Allocating:\n%s\n", ::SHOW(code->cfg()));
     auto ig =
@@ -1056,7 +1056,7 @@ void Allocator::allocate(IRCode* code) {
       first = false;
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
-      fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+      fixpoint_iter.run(LivenessDomain());
       TRACE(REG, 5, "Post-coalesce:\n%s\n", ::SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
