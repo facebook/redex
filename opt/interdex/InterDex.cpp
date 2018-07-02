@@ -560,7 +560,7 @@ DexClassesVector InterDex::run() {
     // For all primary dex classes that are in the interdex order before
     // any DexEndMarker, we keep it at that position. Otherwise, we add it to
     // the head of the list.
-    std::string first_end_marker_str("DexEndMarker0.class");
+    std::string first_end_marker_str("LDexEndMarker0;");
     auto first_end_marker_it = std::find(
         interdexorder.begin(), interdexorder.end(), first_end_marker_str);
     if (first_end_marker_it == interdexorder.end()) {
