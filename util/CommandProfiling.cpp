@@ -7,7 +7,7 @@
 
 #include "CommandProfiling.h"
 
-#if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
+#if defined(__unix__) || defined(__APPLE__)
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>

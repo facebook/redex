@@ -271,10 +271,10 @@ redex_all_LDADD = \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	$(BOOST_THREAD_LIB) \
-	-lpthread
+	-lpthread \
+	-ldl
 
 redex_all_LDFLAGS = \
-	-Wl,-U,_mallctl \
 	-rdynamic # function names in stack traces
 
 redexdump_SOURCES = \
@@ -290,7 +290,8 @@ redexdump_LDADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_THREAD_LIB) \
-	-lpthread
+	-lpthread \
+	-ldl
 
 #
 # redex: Python driver script

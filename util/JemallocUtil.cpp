@@ -5,23 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <dlfcn.h>
+#endif
+
 #include "Debug.h"
 
 extern "C" {
 
-// Weak symbols are not part of the language standard, but GCC and Clang support
-// them.
-#ifdef __GNUC__
+typedef int (*MallctlFn)(
+    const char* name, void* oldp, size_t* oldlenp, void* newp, size_t newlen);
 
-// Weak symbol: the linker will not raise an error if it cannot resolve this.
-// Instead, mallctl will just be a nullptr at runtime. This avoids making
-// jemalloc a required build dependency.
-int mallctl(const char* name,
-            void* oldp,
-            size_t* oldlenp,
-            void* newp,
-            size_t newlen) __attribute__((weak));
-
+#if defined(__unix__) || defined(__APPLE__)
+// We use dynamic lookup to avoid making jemalloc a required build dependency.
+static auto mallctl =
+    reinterpret_cast<MallctlFn>(dlsym(RTLD_DEFAULT, "mallctl"));
+#else
+MallctlFn mallctl = nullptr;
 #endif
 
 }
@@ -29,16 +29,12 @@ int mallctl(const char* name,
 namespace {
 
 void set_profile_active(bool active) {
-#ifdef __GNUC__
   if (mallctl == nullptr) {
     return;
   }
   int err =
       mallctl("prof.active", nullptr, nullptr, (void*)&active, sizeof(active));
   always_assert_log(err == 0, "mallctl failed with: %d", err);
-#else
-  fprintf(stderr, "set_profile_active is a no-op without weak symbol support");
-#endif
 }
 
 } // namespace
