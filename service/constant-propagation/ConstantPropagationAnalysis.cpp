@@ -442,10 +442,11 @@ void semantically_inline_method(
 
   // Set up the environment at entry into the callee.
   ConstantEnvironment call_entry_env;
-  auto load_param_it = callee_code->get_param_instructions().begin();
+  auto load_params = callee_code->get_param_instructions();
+  auto load_params_it = InstructionIterable(load_params).begin();
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    call_entry_env.set(load_param_it->insn->dest(), env->get(insn->src(i)));
-    ++load_param_it;
+    call_entry_env.set(load_params_it->insn->dest(), env->get(insn->src(i)));
+    ++load_params_it;
   }
   call_entry_env.mutate_heap(
       [env](ConstantHeap* heap) { *heap = env->get_heap(); });

@@ -33,10 +33,10 @@ void fix_colliding_method(
 
     auto code = meth->get_code();
     auto new_param_reg = code->allocate_temp();
-    auto& last_param = code->get_param_instructions().back().insn;
+    auto params = code->get_param_instructions();
     auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
     new_param_load->set_dest(new_param_reg);
-    code->insert_after(last_param, std::vector<IRInstruction*>{new_param_load});
+    code->insert_before(params.end(), new_param_load);
     TRACE(REFU, 9, "sig: patching colliding method %s\n", SHOW(meth));
   }
 
