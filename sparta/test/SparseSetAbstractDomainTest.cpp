@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <ostream>
-#include <string>
-#include <vector>
+#include <sstream>
 
 using namespace sparta;
 
@@ -78,7 +76,7 @@ TEST(SparseSetAbstractDomainTest, latticeOperations) {
   EXPECT_THAT(e3.elements(), ::testing::UnorderedElementsAre(2, 3, 4));
 }
 
-TEST(HashedSetAbstractDomainTest, destructiveOperations) {
+TEST(SparseSetAbstractDomainTest, destructiveOperations) {
   Domain e1(16);
   Domain e2(16);
   Domain e3(16);
