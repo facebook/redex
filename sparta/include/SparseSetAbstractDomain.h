@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <iterator>
 #include <ostream>
+#include <vector>
 
 #include "PowersetAbstractDomain.h"
 

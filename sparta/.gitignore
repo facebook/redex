@@ -1,0 +1,10 @@
+**/*.o
+**/*.lo
+**/.deps
+**/.dirstamp
+**/*~
+**/Makefile
+**/Makefile.in
+
+
+/build-cmake/

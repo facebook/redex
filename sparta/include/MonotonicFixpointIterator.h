@@ -85,7 +85,7 @@ class MonotonicFixpointIteratorContext final {
 
 /*
  * This is the implementation of a monotonically increasing chaotic fixpoint
- * iteration sequence with widening over a control-flow graph using the
+ * iteration sequence with widening over a control-flow graph (CFG) using the
  * recursive iteration strategy induced by a weak topological ordering of the
  * nodes in the control-flow graph. A detailed exposition of chaotic fixpoint
  * iteration and its use in Abstract Interpretation can be found in the
@@ -96,6 +96,25 @@ class MonotonicFixpointIteratorContext final {
  *
  * The recursive iteration strategy is described in Bourdoncle's paper on weak
  * topological orderings.
+ *
+ * The interface to the CFG is specified by a structure that should have the
+ * following layout:
+ *
+ * class CFG {
+ *  using Graph = ...;
+ *  using NodeId = ...;
+ *  using EdgeId = ...;
+ *
+ *  static const NodeId entry(const Graph& graph) { ... }
+ *  static const NodeId source(const Graph& graph, const EdgeId& e) { ... }
+ *  static const NodeId target(const Graph& graph, const EdgeId& e) { ... }
+ *
+ *  // Edges is an arbitrary type representing a collection of edges. The only
+ *  // requirement is that it must define a standard iterator interface.
+ *  static Edges predecessors(const Graph& graph, const NodeId& m) { ... }
+ *  static Edges successors(const Graph& graph, const NodeId& m) { ... }
+ * }
+ *
  */
 template <typename GraphInterface,
           typename Domain,
@@ -349,6 +368,15 @@ class MonotonicFixpointIterator {
   std::unordered_map<NodeId, Domain, NodeHash> m_exit_states;
 };
 
+/*
+ * This combinator takes the specification of a CFG and produces an interface to
+ * the reverse CFG, where the direction of edges has been flipped. The original
+ * CFG must expose an exit node, which becomes the entry node of the reverse
+ * CFG. The purpose of this transformation is to perform a backwards analysis
+ * (e.g., live variable analysis). In the theory of Abstract Interpretation,
+ * performing a backwards analysis simply amounts to performing a forwards
+ * analysis on the reverse CFG.
+ */
 template <typename GraphInterface>
 class BackwardsFixpointIterationAdaptor {
  public:
