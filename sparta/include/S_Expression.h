@@ -225,7 +225,7 @@ class s_expr_istream final {
   s_expr_istream& operator=(const s_expr_istream&) = delete;
 
   s_expr_istream(std::istream& input)
-      : m_input(input), m_status(Status::Good), m_what("OK") {}
+      : m_input(input), m_line_number(1), m_status(Status::Good), m_what("OK") {}
 
   s_expr_istream& operator>>(s_expr& expr);
 
@@ -259,6 +259,7 @@ class s_expr_istream final {
 
   std::stack<s_expr> m_stack;
   std::istream& m_input;
+  size_t m_line_number;
   Status m_status;
   std::string m_what;
 };
@@ -803,6 +804,7 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
     }
     case ';': {
       m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      ++m_line_number;
       break;
     }
     default: {
@@ -834,6 +836,9 @@ inline void s_expr_istream::skip_white_spaces() {
   for (;;) {
     char c = m_input.peek();
     if (m_input.good() && std::isspace(c)) {
+      if (c == '\n') {
+        ++m_line_number;
+      }
       m_input.get();
     } else {
       return;
@@ -844,7 +849,9 @@ inline void s_expr_istream::skip_white_spaces() {
 inline void s_expr_istream::set_status(Status status,
                                        const std::string& what_arg) {
   m_status = status;
-  m_what = what_arg;
+  std::ostringstream ss;
+  ss << "On line " << m_line_number << ": " << what_arg;
+  m_what = ss.str();
 }
 
 inline s_patn::s_patn()

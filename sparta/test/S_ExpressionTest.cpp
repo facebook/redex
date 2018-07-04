@@ -160,17 +160,38 @@ TEST(S_ExpressionTest, basicOperations) {
 
   std::string error;
   erroneous_parse("((a) b ()", 1, error);
-  EXPECT_EQ("Incomplete S-expression", error);
+  EXPECT_EQ("On line 1: Incomplete S-expression", error);
+  erroneous_parse("(\n(a)\nb\n()\n", 1, error);
+  EXPECT_EQ("On line 5: Incomplete S-expression", error);
   erroneous_parse("((a) b c))", 2, error);
-  EXPECT_EQ("Extra ')' encountered", error);
+  EXPECT_EQ("On line 1: Extra ')' encountered", error);
+  erroneous_parse(R"(
+    (
+      (a)
+      b
+      c
+    ))
+  )", 2, error);
+  EXPECT_EQ("On line 6: Extra ')' encountered", error);
   erroneous_parse("(a b #9999999999999)", 1, error);
-  EXPECT_EQ("Error parsing int32_t literal", error);
+  EXPECT_EQ("On line 1: Error parsing int32_t literal", error);
   erroneous_parse("(a b #-9999999999999)", 1, error);
-  EXPECT_EQ("Error parsing int32_t literal", error);
+  EXPECT_EQ("On line 1: Error parsing int32_t literal", error);
   erroneous_parse("(a b \"abcdef)", 1, error);
-  EXPECT_EQ("Error parsing string literal", error);
+  EXPECT_EQ("On line 1: Error parsing string literal", error);
   erroneous_parse("123, (a b c)", 2, error);
-  EXPECT_EQ("Unexpected character encountered: ','", error);
+  EXPECT_EQ("On line 1: Unexpected character encountered: ','", error);
+  erroneous_parse(R"(;Should only take 1 endline in an inline comment\n\n\n
+    (
+      (const-string "foo\n\bar")
+      123, (a b c)
+    )
+  )", 2, error);
+  EXPECT_EQ("On line 4: Unexpected character encountered: ','", error);
+  erroneous_parse(R"(;The error should be on line 2
+    (123, (a b c) ; End of line 2
+  )", 2, error);
+  EXPECT_EQ("On line 2: Unexpected character encountered: ','", error);
 }
 
 TEST(S_ExpressionTest, patternMatching) {
