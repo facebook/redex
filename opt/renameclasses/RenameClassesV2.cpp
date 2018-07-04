@@ -25,7 +25,7 @@
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (62)
 #define BASE MAX_IDENT_CHAR
-#define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
+#define MAX_CLASS_NAME_LENGTH 6
 
 static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
 static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
@@ -130,22 +130,18 @@ static char getident(int num) {
 }
 
 void get_next_ident(char *out, int num) {
-  int low = num;
-  int mid = (num / BASE);
-  int top = (mid / BASE);
-  always_assert_log(num <= MAX_IDENT,
-                    "Bailing, Ident %d, greater than maximum\n", num);
-  if (top) {
-    *out++ = getident(top);
-    low -= (top * BASE * BASE);
+  char* ptr = out;
+  while (num) {
+    *ptr++ = getident(num % BASE);
+    num /= BASE;
   }
-  if (mid) {
-    mid -= (top * BASE);
-    *out++ = getident(mid);
-    low -= (mid * BASE);
+  *ptr-- = '\0';
+  // reverse
+  while (out < ptr) {
+    std::swap(*out, *ptr);
+    out++;
+    ptr--;
   }
-  *out++ = getident(low);
-  *out++ = '\0';
 }
 
 static int s_base_strings_size = 0;
@@ -748,7 +744,7 @@ void RenameClassesPassV2::rename_classes(
 
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
-    char clzname[4];
+    char clzname[MAX_CLASS_NAME_LENGTH + 1];
     const char* padding = "0000000000000";
     get_next_ident(clzname, s_sequence);
     // The X helps our hacked Dalvik classloader recognize that a
@@ -948,6 +944,9 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
+
+  always_assert_log(scope.size() < std::pow(BASE, MAX_CLASS_NAME_LENGTH),
+                    "scope size %uz too large", scope.size());
   int total_classes = scope.size();
 
   s_base_strings_size = 0;
@@ -955,14 +954,14 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   s_sequence = 0;
   // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
   s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
+  TRACE(RENAME, 1,
+        "Total classes in scope for renaming: %d chosen padding: %d\n",
+        total_classes, s_padding);
 
   rename_classes(scope, cfg, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
-  TRACE(RENAME, 1,
-      "Total classes in scope for renaming: %d chosen padding: %d\n",
-      total_classes, s_padding);
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes \n",
       s_base_strings_size, s_ren_strings_size,
       s_base_strings_size - s_ren_strings_size);
