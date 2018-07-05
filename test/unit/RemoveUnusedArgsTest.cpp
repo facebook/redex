@@ -26,14 +26,14 @@ struct RemoveUnusedArgsTest : testing::Test {
     m_remove_args = new remove_unused_args::RemoveArgs(dummy_scope);
   }
 
-   ~RemoveUnusedArgsTest() { delete g_redex; }
+  ~RemoveUnusedArgsTest() { delete g_redex; }
 };
 
 // Checks argument liveness on a method with no arguments
 TEST_F(RemoveUnusedArgsTest, noArgs) {
   // no args alive
   auto method = assembler::method_from_string(R"(
-    (method (private) "LFoo;.baz:()V"
+    (method (static) "LFoo;.baz:()V"
       (
         (const v0 0)
         (mul-int v0 v0 v0)
@@ -42,9 +42,12 @@ TEST_F(RemoveUnusedArgsTest, noArgs) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre());
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 0;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre());
+  EXPECT_THAT(dead_insns.size(), 0);
 }
 
 // Checks liveness on methods with a single used argument
@@ -60,9 +63,12 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArg) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(1));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 0;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0));
+  EXPECT_THAT(dead_insns.size(), 0);
 }
 
 // Checks liveness on methods with a single used WIDE argument
@@ -77,9 +83,12 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgWide) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_EQ(live_arg_regs.size(), 1);
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 0;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0));
+  EXPECT_THAT(dead_insns.size(), 0);
 }
 
 // Checks liveness on methods with multiple args, not wide
@@ -98,9 +107,12 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgs) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(3, 5));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 2;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 2));
+  EXPECT_THAT(dead_insns.size(), 1);
 }
 
 // Checks liveness on methods with multiple wide args
@@ -118,9 +130,12 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgsWide) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(3, 5));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 2;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1));
+  EXPECT_THAT(dead_insns.size(), 1);
 }
 
 // Checks liveness on methods with multiple blocks, only default sized args
@@ -148,10 +163,12 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksRegularArgs) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  std::vector<uint16_t> expected_live_regs{2, 3, 4};
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(2, 3, 4));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 2;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2));
+  EXPECT_THAT(dead_insns.size(), 0);
 }
 
 // Checks liveness on methods with multiple blocks, only wide sized args
@@ -179,9 +196,12 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksWideArgs) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(2, 4, 6));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 2;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2));
+  EXPECT_THAT(dead_insns.size(), 0);
 }
 
 // Checks liveness on methods with multiple blocks, mixed size args
@@ -211,7 +231,10 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksMixedArgs) {
     )
   )");
 
-  auto code = method->get_code();
-  auto live_arg_regs = m_remove_args->compute_live_arg_regs(code);
-  EXPECT_THAT(live_arg_regs, ::testing::ElementsAre(2, 4, 5, 7));
+  std::vector<IRInstruction*> dead_insns;
+  size_t num_args = 3;
+  auto live_arg_idxs =
+      m_remove_args->compute_live_args(method, dead_insns, num_args);
+  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2, 3));
+  EXPECT_THAT(dead_insns.size(), 0);
 }
