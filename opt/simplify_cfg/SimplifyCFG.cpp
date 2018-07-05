@@ -19,10 +19,10 @@ void SimplifyCFGPass::run_pass(DexStoresVector& stores,
   auto total_insns_removed =
       walk::parallel::reduce_methods<std::nullptr_t, int64_t, Scope>(
           scope,
-          [](std::nullptr_t, DexMethod* m) {
+          [](std::nullptr_t, DexMethod* m) -> int64_t {
             auto code = m->get_code();
             if (code == nullptr) {
-              return 0l;
+              return 0;
             }
 
             int64_t before_insns = code->count_opcodes();
