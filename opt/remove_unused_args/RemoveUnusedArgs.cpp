@@ -17,6 +17,8 @@
 #include "IRCode.h"
 #include "Liveness.h"
 #include "Match.h"
+#include "TypeSystem.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 // NOTE:
@@ -29,17 +31,20 @@
  */
 namespace remove_unused_args {
 
-constexpr const char* METRIC_ARGS_REMOVED = "callsite_args_removed";
+constexpr const char* METRIC_CALLSITE_ARGS_REMOVED = "callsite_args_removed";
+constexpr const char* METRIC_METHOD_PARAMS_REMOVED = "method_params_removed";
+constexpr const char* METRIC_METHODS_UPDATED = "method_signatures_updated";
 
 void RemoveArgs::run() {
-  m_num_args_removed = 0;
+  m_num_callsite_args_removed = 0;
+  m_num_method_params_removed = 0;
   m_num_methods_updated = 0;
   update_meths_with_unused_args();
   update_callsites();
 }
 
 /**
- * Returns a vector of live argument indicies.
+ * Returns a vector of live argument indices.
  * Updates dead_insns with the load_params that await removal.
  * For instance methods, the 'this' argument is always considered live.
  * e.g. We return {0, 2} for a method whose 0th and 2nd args are live.
@@ -93,6 +98,8 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
  */
 bool RemoveArgs::update_method_signature(DexMethod* method,
                                          std::deque<DexType*> live_args) {
+  always_assert_log(method->is_def(),
+                    "We don't treat virtuals, so methods must be defined\n");
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   auto updated_proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), live_args_list);
@@ -127,13 +134,18 @@ void RemoveArgs::update_meths_with_unused_args() {
 
     if (!can_rename(method)) {
       // Nothing to do if ProGuard says we can't change the method args.
+      TRACE(ARGS,
+            5,
+            "Removable args found, but method is disqualified by ProGuard "
+            "rules: %s\n",
+            SHOW(method));
       return;
     }
 
-    // TODO <anwangster> deal with virtual methods specially
-    //  (*) use is_non_virtual_scope() to determine if it's devirtualizable
-    //      if devirtualizable, proceed with live arg computation
-    if (method->is_virtual()) {
+    // If a method is devirtualizable, proceed with live arg computation.
+    auto virtual_scope = m_type_system.find_virtual_scope(method);
+    if (method->is_virtual() && !is_non_virtual_scope(virtual_scope)) {
+      // TODO <anwangster> (*) deal with true virtual methods specially
       return;
     }
 
@@ -141,8 +153,7 @@ void RemoveArgs::update_meths_with_unused_args() {
     auto live_arg_idxs = compute_live_args(method, dead_insns, num_args);
 
     // No removable arguments -> don't update method arg list.
-    if ((is_static(method) && live_arg_idxs.size() == num_args) ||
-        (!is_static(method) && live_arg_idxs.size() == num_args + 1)) {
+    if (dead_insns.empty()) {
       return;
     }
 
@@ -159,7 +170,7 @@ void RemoveArgs::update_meths_with_unused_args() {
       live_args.push_back(args_list.at(arg_num));
     }
 
-    if (!update_method_signature(method, live_args)) {
+    if (!update_method_signature(method, std::move(live_args))) {
       // If we didn't update the signature, we don't want to update callsites.
       return;
     }
@@ -169,6 +180,7 @@ void RemoveArgs::update_meths_with_unused_args() {
     for (auto dead_insn : dead_insns) {
       method->get_code()->remove_opcode(dead_insn);
     }
+    m_num_method_params_removed += dead_insns.size();
     m_live_regs_map.emplace(method, live_arg_idxs);
   });
 }
@@ -195,7 +207,7 @@ void RemoveArgs::update_callsite(IRInstruction* instr) {
   }
   always_assert_log(instr->srcs_size() > updated_srcs.size(),
                     "In RemoveArgs, callsites always update to fewer args\n");
-  m_num_args_removed += instr->srcs_size() - updated_srcs.size();
+  m_num_callsite_args_removed += instr->srcs_size() - updated_srcs.size();
   instr->set_arg_word_count(updated_srcs.size());
 }
 
@@ -208,12 +220,8 @@ void RemoveArgs::update_callsites() {
   walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
     for (const auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      auto opcode = insn->opcode();
-      if (opcode == OPCODE_INVOKE_DIRECT || opcode == OPCODE_INVOKE_STATIC) {
+      if (is_invoke(insn->opcode())) {
         update_callsite(insn);
-      } else if (opcode == OPCODE_INVOKE_VIRTUAL) {
-        // TODO <anwangster>
-        //   maybe coalesce with above branch
       }
     }
   });
@@ -226,16 +234,26 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
 
   RemoveArgs rm_args(scope);
   rm_args.run();
-  size_t num_args_removed = rm_args.get_num_args_removed();
+  size_t num_callsite_args_removed = rm_args.get_num_callsite_args_removed();
+  size_t num_method_params_removed = rm_args.get_num_method_params_removed();
   size_t num_methods_updated = rm_args.get_num_methods_updated();
 
-  TRACE(ARGS, 1, "Removed %d redundant callsite arguments\n", num_args_removed);
+  TRACE(ARGS,
+        1,
+        "Removed %d redundant callsite arguments\n",
+        num_callsite_args_removed);
+  TRACE(ARGS,
+        1,
+        "Removed %d redundant method parameters\n",
+        num_method_params_removed);
   TRACE(ARGS,
         1,
         "Updated %d methods with redundant parameters\n",
         num_methods_updated);
 
-  mgr.set_metric(METRIC_ARGS_REMOVED, num_args_removed);
+  mgr.set_metric(METRIC_CALLSITE_ARGS_REMOVED, num_callsite_args_removed);
+  mgr.set_metric(METRIC_METHOD_PARAMS_REMOVED, num_method_params_removed);
+  mgr.set_metric(METRIC_METHODS_UPDATED, num_methods_updated);
 }
 
 static RemoveUnusedArgsPass s_pass;

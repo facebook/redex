@@ -27,13 +27,13 @@ void check_callsite_regs(DexMethod* method, int num_args_expected) {
 // Sanity check: three foo constructors are defined
 TEST_F(PreVerify, CtorsDefined) {
   auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
-  EXPECT_NE(nullptr, foo);
+  ASSERT_NE(nullptr, foo);
 
   auto ctors = foo->get_ctors();
   EXPECT_EQ(ctors.size(), 3);
   for (uint i = 0; i < 3; ++i) {
     auto ctor = ctors.at(i);
-    EXPECT_NE(nullptr, ctor);
+    ASSERT_NE(nullptr, ctor);
   }
 }
 
@@ -41,10 +41,10 @@ TEST_F(PreVerify, CtorsDefined) {
 TEST_F(PreVerify, RemoveCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo = find_vmethod_named(*foo_user, "use_foo1");
-  EXPECT_NE(nullptr, use_foo);
+  ASSERT_NE(nullptr, use_foo);
   use_foo->balloon();
 
   check_callsite_regs(use_foo, 2);
@@ -53,10 +53,10 @@ TEST_F(PreVerify, RemoveCtorArg) {
 TEST_F(PostVerify, RemoveCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo = find_vmethod_named(*foo_user, "use_foo1");
-  EXPECT_NE(nullptr, use_foo);
+  ASSERT_NE(nullptr, use_foo);
   use_foo->balloon();
 
   check_callsite_regs(use_foo, 1);
@@ -66,10 +66,10 @@ TEST_F(PostVerify, RemoveCtorArg) {
 TEST_F(PreVerify, DontRemoveUsedCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo2 = find_vmethod_named(*foo_user, "use_foo2");
-  EXPECT_NE(nullptr, use_foo2);
+  ASSERT_NE(nullptr, use_foo2);
   use_foo2->balloon();
 
   check_callsite_regs(use_foo2, 3);
@@ -78,10 +78,10 @@ TEST_F(PreVerify, DontRemoveUsedCtorArg) {
 TEST_F(PostVerify, DontRemoveUsedCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo2 = find_vmethod_named(*foo_user, "use_foo2");
-  EXPECT_NE(nullptr, use_foo2);
+  ASSERT_NE(nullptr, use_foo2);
   use_foo2->balloon();
 
   check_callsite_regs(use_foo2, 3);
@@ -91,10 +91,10 @@ TEST_F(PostVerify, DontRemoveUsedCtorArg) {
 TEST_F(PreVerify, CollidingCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo3 = find_vmethod_named(*foo_user, "use_foo3");
-  EXPECT_NE(nullptr, use_foo3);
+  ASSERT_NE(nullptr, use_foo3);
   use_foo3->balloon();
 
   check_callsite_regs(use_foo3, 4);
@@ -103,10 +103,10 @@ TEST_F(PreVerify, CollidingCtorArg) {
 TEST_F(PostVerify, CollidingCtorArg) {
   auto foo_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/FooUser;");
-  EXPECT_NE(nullptr, foo_user);
+  ASSERT_NE(nullptr, foo_user);
 
   auto use_foo3 = find_vmethod_named(*foo_user, "use_foo3");
-  EXPECT_NE(nullptr, use_foo3);
+  ASSERT_NE(nullptr, use_foo3);
   use_foo3->balloon();
 
   check_callsite_regs(use_foo3, 4);
@@ -116,17 +116,17 @@ TEST_F(PostVerify, CollidingCtorArg) {
 TEST_F(PreVerify, StaticsNoArgs) {
   auto statics =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
-  EXPECT_NE(nullptr, statics);
+  ASSERT_NE(nullptr, statics);
 
   auto static1 = find_dmethod_named(*statics, "static1");
-  EXPECT_NE(nullptr, static1);
+  ASSERT_NE(nullptr, static1);
 
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static1 = find_vmethod_named(*statics_user, "use_static1");
-  EXPECT_NE(nullptr, use_static1);
+  ASSERT_NE(nullptr, use_static1);
   use_static1->balloon();
 
   check_callsite_regs(use_static1, 0);
@@ -135,10 +135,10 @@ TEST_F(PreVerify, StaticsNoArgs) {
 TEST_F(PostVerify, StaticsNoArgs) {
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static1 = find_vmethod_named(*statics_user, "use_static1");
-  EXPECT_NE(nullptr, use_static1);
+  ASSERT_NE(nullptr, use_static1);
   use_static1->balloon();
 
   check_callsite_regs(use_static1, 0);
@@ -148,17 +148,17 @@ TEST_F(PostVerify, StaticsNoArgs) {
 TEST_F(PreVerify, StaticsUsedArgs) {
   auto statics =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
-  EXPECT_NE(nullptr, statics);
+  ASSERT_NE(nullptr, statics);
 
   auto static2 = find_dmethod_named(*statics, "static2");
-  EXPECT_NE(nullptr, static2);
+  ASSERT_NE(nullptr, static2);
 
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static2 = find_vmethod_named(*statics_user, "use_static2");
-  EXPECT_NE(nullptr, use_static2);
+  ASSERT_NE(nullptr, use_static2);
   use_static2->balloon();
 
   check_callsite_regs(use_static2, 1);
@@ -167,10 +167,10 @@ TEST_F(PreVerify, StaticsUsedArgs) {
 TEST_F(PostVerify, StaticsUsedArgs) {
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static2 = find_vmethod_named(*statics_user, "use_static2");
-  EXPECT_NE(nullptr, use_static2);
+  ASSERT_NE(nullptr, use_static2);
   use_static2->balloon();
 
   check_callsite_regs(use_static2, 1);
@@ -180,17 +180,17 @@ TEST_F(PostVerify, StaticsUsedArgs) {
 TEST_F(PreVerify, StaticsUnusedArgs) {
   auto statics =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
-  EXPECT_NE(nullptr, statics);
+  ASSERT_NE(nullptr, statics);
 
   auto static3 = find_dmethod_named(*statics, "static3");
-  EXPECT_NE(nullptr, static3);
+  ASSERT_NE(nullptr, static3);
 
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static3 = find_vmethod_named(*statics_user, "use_static3");
-  EXPECT_NE(nullptr, use_static3);
+  ASSERT_NE(nullptr, use_static3);
   use_static3->balloon();
 
   check_callsite_regs(use_static3, 2);
@@ -199,10 +199,10 @@ TEST_F(PreVerify, StaticsUnusedArgs) {
 TEST_F(PostVerify, StaticsUnusedArgs) {
   auto statics_user =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
-  EXPECT_NE(nullptr, statics_user);
+  ASSERT_NE(nullptr, statics_user);
 
   auto use_static3 = find_vmethod_named(*statics_user, "use_static3");
-  EXPECT_NE(nullptr, use_static3);
+  ASSERT_NE(nullptr, use_static3);
   use_static3->balloon();
 
   check_callsite_regs(use_static3, 1);
@@ -212,7 +212,7 @@ TEST_F(PostVerify, StaticsUnusedArgs) {
 TEST_F(PreVerify, PrivatesUsedArgs) {
   auto privates =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Privates;");
-  EXPECT_NE(nullptr, privates);
+  ASSERT_NE(nullptr, privates);
   Scope scope = {privates};
   balloon_for_test(scope);
 
@@ -244,7 +244,7 @@ TEST_F(PreVerify, PrivatesUsedArgs) {
 TEST_F(PostVerify, PrivatesUsedArgs) {
   auto privates =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Privates;");
-  EXPECT_NE(nullptr, privates);
+  ASSERT_NE(nullptr, privates);
   Scope scope = {privates};
   balloon_for_test(scope);
 
@@ -263,12 +263,81 @@ TEST_F(PostVerify, PrivatesUsedArgs) {
   EXPECT_EQ(overloaded_methods.size(), 2);
   auto name1 = overloaded_methods.at(0)->get_name()->str();
   auto name2 = overloaded_methods.at(1)->get_name()->str();
-  EXPECT_NE(name1, name2);
+  ASSERT_NE(name1, name2);
 
   auto use_private_first = find_vmethod_named(*privates, "use_private_first");
   check_callsite_regs(use_private_first, 3);
   auto use_private_second = find_vmethod_named(*privates, "use_private_second");
   check_callsite_regs(use_private_second, 3);
+}
+
+// Check nonvirtual method arg removal for unused args
+TEST_F(PreVerify, PublicNonVirtualsUsedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1");
+  ASSERT_NE(nullptr, non_virtual1);
+  auto code = non_virtual1->get_code();
+
+  auto non_virtuals_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
+  ASSERT_NE(nullptr, non_virtuals_user);
+
+  auto use_non_virtual1 =
+      find_vmethod_named(*non_virtuals_user, "use_non_virtual1");
+  ASSERT_NE(nullptr, use_non_virtual1);
+  use_non_virtual1->balloon();
+
+  check_callsite_regs(use_non_virtual1, 2);
+}
+
+TEST_F(PostVerify, NonVirtualsUsedArgs) {
+  auto non_virtuals_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
+  ASSERT_NE(nullptr, non_virtuals_user);
+
+  auto use_non_virtual1 =
+      find_vmethod_named(*non_virtuals_user, "use_non_virtual1");
+  ASSERT_NE(nullptr, use_non_virtual1);
+  use_non_virtual1->balloon();
+
+  check_callsite_regs(use_non_virtual1, 1);
+}
+
+// Check protected method arg removal for unused args
+TEST_F(PreVerify, ProtectedNonVirtualsUsedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual2 = find_vmethod_named(*non_virtuals, "non_virtual2");
+  ASSERT_NE(nullptr, non_virtual2);
+
+  auto non_virtuals_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
+  ASSERT_NE(nullptr, non_virtuals_user);
+
+  auto use_non_virtual2 =
+      find_vmethod_named(*non_virtuals_user, "use_non_virtual2");
+  ASSERT_NE(nullptr, use_non_virtual2);
+  use_non_virtual2->balloon();
+
+  check_callsite_regs(use_non_virtual2, 2);
+}
+
+TEST_F(PostVerify, ProtectedNonVirtualsUsedArgs) {
+  auto non_virtuals_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
+  ASSERT_NE(nullptr, non_virtuals_user);
+
+  auto use_non_virtual2 =
+      find_vmethod_named(*non_virtuals_user, "use_non_virtual2");
+  ASSERT_NE(nullptr, use_non_virtual2);
+  use_non_virtual2->balloon();
+
+  check_callsite_regs(use_non_virtual2, 1);
 }
 
 } // namespace

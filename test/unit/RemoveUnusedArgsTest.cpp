@@ -16,6 +16,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RemoveUnusedArgs.h"
+#include "ScopeHelper.h"
 
 struct RemoveUnusedArgsTest : testing::Test {
   remove_unused_args::RemoveArgs* m_remove_args;
@@ -23,6 +24,10 @@ struct RemoveUnusedArgsTest : testing::Test {
   RemoveUnusedArgsTest() {
     g_redex = new RedexContext();
     Scope dummy_scope;
+    auto obj_t = get_object_type();
+    auto dummy_t = DexType::make_type("LA;");
+    auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
+    dummy_scope.push_back(dummy_cls);
     m_remove_args = new remove_unused_args::RemoveArgs(dummy_scope);
   }
 

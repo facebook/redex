@@ -71,8 +71,7 @@ class StaticsUser {
     Statics.static2(true);
   }
 
-  public void use_static3() {
-    Foo foo = new Foo(5);
+  public void use_static3(Foo foo) {
     double dub = 4.0;
     Statics.static3(foo, dub);
   }
@@ -95,5 +94,28 @@ class Privates {
   // second
   private void private1(int c, double x, double y) {
     x = x * y;
+  }
+}
+
+class Parent {
+}
+
+class NonVirtuals extends Parent {
+  public void non_virtual1(int x) {
+    x = 5;
+  }
+
+  protected void non_virtual2(double x) {
+    x = 5.0;
+  }
+}
+
+class NonVirtualsUser {
+  public void use_non_virtual1(NonVirtuals nv) {
+    nv.non_virtual1(1);
+  }
+
+  public void use_non_virtual2(NonVirtuals nv) {
+    nv.non_virtual2(1.0);
   }
 }
