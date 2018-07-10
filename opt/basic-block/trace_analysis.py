@@ -37,13 +37,14 @@ def main():
                 num_methods += 1
                 method_size_array.insert(len(method_size_array),
                     int(all_stats[2]))
+                num_virtual += int(all_stats[4])
             elif all_stats[0] == "B":
                 num_blocks += 1
                 num_instructions += int(all_stats[2])
                 fan_in += int(all_stats[4])
                 block_size_array.insert(len(method_size_array),
                     int(all_stats[2]))
-                num_virtual += int(all_stats[4])
+
     print "========Summary========="
     if trace:
         print "Num of Methods:  %d, Num of Blocks: %d" % (num_methods,

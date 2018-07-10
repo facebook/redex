@@ -217,7 +217,8 @@ void patch_method_count(DexClass& analysis_cls,
   }
 
   // TODO(minjang): If sput is deleted, insert a sput here again.
-  std::cout << "[InstrumentPass] warning: cannot patch const size." << std::endl;
+  std::cout << "[InstrumentPass] warning: cannot patch const size."
+            << std::endl;
   // std::cout << show(code) << std::endl;
 }
 
@@ -264,85 +265,98 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     exit(1);
   }
 
-  DexMethod* onMethodBegin =
-      find_analysis_method(*analysis_cls, m_onMethodBegin_name);
-  if (onMethodBegin == nullptr) {
-    std::cerr << "[InstrumentPass] error: cannot find " << m_onMethodBegin_name
-              << " in " << show(analysis_cls) << std::endl;
-    for (auto&& m : analysis_cls->get_dmethods()) {
-      std::cerr << " " << show(m) << std::endl;
+  if (m_instrumentation_strategy == "method_tracing") {
+
+    DexMethod* onMethodBegin =
+        find_analysis_method(*analysis_cls, m_onMethodBegin_name);
+    if (onMethodBegin == nullptr) {
+      std::cerr << "[InstrumentPass] error: cannot find "
+                << m_onMethodBegin_name << " in " << show(analysis_cls)
+                << std::endl;
+      for (auto&& m : analysis_cls->get_dmethods()) {
+        std::cerr << " " << show(m) << std::endl;
+      }
+      exit(1);
     }
-    exit(1);
+
+    TRACE(INSTRUMENT,
+          3,
+          "Loaded analysis class: %s (%s)\n",
+          m_analysis_class_name.c_str(),
+          analysis_cls->get_dex_location().c_str());
+
+    // Instrument and build the method id map, too.
+    auto scope = build_class_scope(stores);
+    std::unordered_map<DexMethod*, int /*id*/> method_id_map;
+    std::vector<DexMethod*> method_id_vector;
+    int index = 0;
+    int excluded = 0;
+    walk::methods(scope, [&](DexMethod* method) {
+      if (method->get_code() == nullptr) {
+        return;
+      }
+      if (method == onMethodBegin || method == analysis_cls->get_clinit()) {
+        ++excluded;
+        TRACE(INSTRUMENT, 2, "Excluding analysis method: %s\n", SHOW(method));
+        return;
+      }
+      const auto& cls_name = show(method->get_class());
+      if (!m_whitelist.empty() &&
+          !is_included(method->get_name()->str(), cls_name, m_whitelist)) {
+        return;
+      }
+
+      // In case of a conflict, when an entry is present in both blacklist
+      // and whitelist, the blacklist is given priority and the entry
+      // is not instrumented. Even in cases where a method is present
+      // in whitelist and corresponding class is blacklisted, the method
+      // is not instrumented.
+
+      if (is_excluded(cls_name, m_blacklist)) {
+        ++excluded;
+        TRACE(INSTRUMENT, 7, "Excluding: %s\n", SHOW(method));
+        return;
+      }
+
+      assert(!method_id_map.count(method));
+      method_id_map.emplace(method, ++index);
+      method_id_vector.push_back(method);
+      TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
+
+      // NOTE: Only for testing D8607258! We test the method index file is
+      // safely uploaded. So we enabled this pass but prevent actual
+      // instrumentation.
+      //
+      // instrument_onMethodBegin(method, index * m_num_stats_per_method,
+      //                         onMethodBegin);
+    });
+
+    TRACE(INSTRUMENT,
+          1,
+          "%d methods were instrumented (%d methods were excluded)\n",
+          index,
+          excluded);
+
+    // Patch stat array size.
+    patch_stat_array_size(*analysis_cls, "sStats",
+                          index * m_num_stats_per_method);
+    // Patch method count constant.
+    patch_method_count(*analysis_cls, "sMethodCount", index);
+
+    write_method_index_file(cfg.metafile(m_method_index_file_name),
+                            method_id_vector);
+
+    pm.incr_metric("Instrumented", index);
+    pm.incr_metric("Excluded", excluded);
+  } else if (m_instrumentation_strategy == "basic_block_tracing") {
+
+    TRACE(INSTRUMENT, 5, "Basic Block Instrumentation begins here.\n");
+    // TODO: For each indivdual basic block from every method, assign them an
+    // identifier and add a jump to onBBBegin() at the beginning. onBBBegin()
+    // will set the touch variable when a basic block is accessed at runtime.
+  } else {
+    std::cerr << "[InstrumentPass] Unknown option.";
   }
-
-  TRACE(INSTRUMENT,
-        3,
-        "Loaded analysis class: %s (%s)\n",
-        m_analysis_class_name.c_str(),
-        analysis_cls->get_dex_location().c_str());
-
-  // Instrument and build the method id map, too.
-  auto scope = build_class_scope(stores);
-  std::unordered_map<DexMethod*, int /*id*/> method_id_map;
-  std::vector<DexMethod*> method_id_vector;
-  int index = 0;
-  int excluded = 0;
-  walk::methods(scope, [&](DexMethod* method) {
-    if (method->get_code() == nullptr) {
-      return;
-    }
-    if (method == onMethodBegin || method == analysis_cls->get_clinit()) {
-      ++excluded;
-      TRACE(INSTRUMENT, 2, "Excluding analysis method: %s\n", SHOW(method));
-      return;
-    }
-    const auto& cls_name = show(method->get_class());
-    if (!m_whitelist.empty() &&
-        !is_included(method->get_name()->str(), cls_name, m_whitelist)) {
-      return;
-    }
-
-    // In case of a conflict, when an entry is present in both blacklist
-    // and whitelist, the blacklist is given priority and the entry
-    // is not instrumented. Even in cases where a method is present
-    // in whitelist and corresponding class is blacklisted, the method
-    // is not instrumented.
-
-    if (is_excluded(cls_name, m_blacklist)) {
-      ++excluded;
-      TRACE(INSTRUMENT, 7, "Excluding: %s\n", SHOW(method));
-      return;
-    }
-
-    assert(!method_id_map.count(method));
-    method_id_map.emplace(method, ++index);
-    method_id_vector.push_back(method);
-    TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
-
-    // NOTE: Only for testing D8607258! We test the method index file is safely
-    // uploaded. So we enabled this pass but prevent actual instrumentation.
-    //
-    // instrument_onMethodBegin(method, index * m_num_stats_per_method,
-    //                         onMethodBegin);
-  });
-
-  TRACE(INSTRUMENT,
-        1,
-        "%d methods were instrumented (%d methods were excluded)\n",
-        index,
-        excluded);
-
-  // Patch stat array size.
-  patch_stat_array_size(*analysis_cls, "sStats",
-                        index * m_num_stats_per_method);
-  // Patch method count constant.
-  patch_method_count(*analysis_cls, "sMethodCount", index);
-
-  write_method_index_file(cfg.metafile(m_method_index_file_name),
-                          method_id_vector);
-
-  pm.incr_metric("Instrumented", index);
-  pm.incr_metric("Excluded", excluded);
 }
 
 static InstrumentPass s_pass;

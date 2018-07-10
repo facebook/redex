@@ -22,6 +22,7 @@ class InstrumentPass : public Pass {
     pc.get("method_index_file_name", "instrument-methods-idx.txt",
            m_method_index_file_name);
 
+    pc.get("instrumetation_strategy", "", m_instrumentation_strategy);
     std::vector<std::string> list;
     pc.get("blacklist", {}, list);
     for (const auto& e : list) {
@@ -42,4 +43,5 @@ class InstrumentPass : public Pass {
   std::string m_method_index_file_name;
   std::unordered_set<std::string> m_blacklist;
   std::unordered_set<std::string> m_whitelist;
+  std::string m_instrumentation_strategy;
 };
