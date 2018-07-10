@@ -881,7 +881,9 @@ void process_proguard_rules(const ProguardMap& pg_map,
                hierarchy,
                process_assumenosideeffects,
                "assumenosideeffects",
-                /* process_external = */ true);
+               // This should be true. Setting it to false for now to fix a sev
+               // T31428168
+                /* process_external = */ false);
 
   // By default, keep all annotation classes.
   for (auto cls : classes) {
