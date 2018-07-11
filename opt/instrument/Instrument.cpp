@@ -188,7 +188,7 @@ void patch_stat_array_size(DexClass& analysis_cls,
     exit(1);
   }
 
-  TRACE(INSTRUMENT, 2, "%s array was patched: %lld\n", array_name, array_size);
+  TRACE(INSTRUMENT, 2, "%s array was patched: %d\n", array_name, array_size);
 }
 
 void patch_method_count(DexClass& analysis_cls,
@@ -197,29 +197,42 @@ void patch_method_count(DexClass& analysis_cls,
   DexMethod* clinit = analysis_cls.get_clinit();
   always_assert(clinit != nullptr);
 
-  // Similarly, find the sput with the given field name. Then, just add an
-  // additional const load instruction.
+  // Find the sput with the given field name.
   auto* code = clinit->get_code();
+  IRInstruction* sput_inst = nullptr;
+  IRList::iterator insert_point;
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
-    if (insn->opcode() != OPCODE_SPUT ||
-        insn->get_field()->get_name()->str() != field_name) {
-      continue;
+    if (insn->opcode() == OPCODE_SPUT &&
+        insn->get_field()->get_name()->str() == field_name) {
+      sput_inst = insn;
+      insert_point = code->iterator_to(mie);
+      break;
     }
-
-    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-    const_inst->set_literal(new_number);
-    const auto reg_dest = code->allocate_temp();
-    const_inst->set_dest(reg_dest);
-    insn->set_src(0, reg_dest);
-    code->insert_before(code->iterator_to(mie), const_inst);
-    return;
   }
 
-  // TODO(minjang): If sput is deleted, insert a sput here again.
-  std::cout << "[InstrumentPass] warning: cannot patch const size."
-            << std::endl;
-  // std::cout << show(code) << std::endl;
+  // SPUT can be null if the original field value was encoded in the
+  // static_values_off array. And consider simplifying using make_concrete.
+  if (sput_inst == nullptr) {
+    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it\n", field_name);
+    sput_inst = new IRInstruction(OPCODE_SPUT);
+    sput_inst->set_field(
+        DexField::make_field(DexType::make_type(analysis_cls.get_name()),
+                             DexString::make_string(field_name),
+                             DexType::make_type("I")));
+    insert_point =
+        code->insert_after(code->get_param_instructions().end(), sput_inst);
+  }
+
+  // Create a new const instruction just like patch_stat_array_size.
+  IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+  const_inst->set_literal(new_number);
+  const auto reg_dest = code->allocate_temp();
+  const_inst->set_dest(reg_dest);
+
+  sput_inst->set_src(0, reg_dest);
+  code->insert_before(insert_point, const_inst);
+  TRACE(INSTRUMENT, 2, "%s was patched: %d\n", field_name, new_number);
 }
 
 void write_method_index_file(const std::string& file_name,
@@ -228,7 +241,7 @@ void write_method_index_file(const std::string& file_name,
   for (size_t i = 0; i < method_id_vector.size(); ++i) {
     ofs << i + 1 << ", " << show(method_id_vector[i]) << std::endl;
   }
-  TRACE(INSTRUMENT, 2, "method index file was written to: %s",
+  TRACE(INSTRUMENT, 2, "method index file was written to: %s\n",
         file_name.c_str());
 }
 } // namespace
@@ -266,7 +279,6 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   }
 
   if (m_instrumentation_strategy == "method_tracing") {
-
     DexMethod* onMethodBegin =
         find_analysis_method(*analysis_cls, m_onMethodBegin_name);
     if (onMethodBegin == nullptr) {
@@ -311,7 +323,6 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       // is not instrumented. Even in cases where a method is present
       // in whitelist and corresponding class is blacklisted, the method
       // is not instrumented.
-
       if (is_excluded(cls_name, m_blacklist)) {
         ++excluded;
         TRACE(INSTRUMENT, 7, "Excluding: %s\n", SHOW(method));
@@ -349,7 +360,6 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.incr_metric("Instrumented", index);
     pm.incr_metric("Excluded", excluded);
   } else if (m_instrumentation_strategy == "basic_block_tracing") {
-
     TRACE(INSTRUMENT, 5, "Basic Block Instrumentation begins here.\n");
     // TODO: For each indivdual basic block from every method, assign them an
     // identifier and add a jump to onBBBegin() at the beginning. onBBBegin()
