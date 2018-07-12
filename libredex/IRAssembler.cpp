@@ -11,6 +11,7 @@
 #include <boost/optional/optional.hpp>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 using namespace sparta;
 
@@ -285,6 +286,30 @@ void handle_labels(IRCode* code,
   }
 }
 
+std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
+    const s_expr& insns) {
+  std::unordered_map<std::string, MethodItemEntry*> result;
+  for (size_t i = 0; i < insns.size(); ++i) {
+    std::string keyword;
+    s_expr tail;
+    if (s_patn({s_patn(&keyword)}, tail).match_with(insns[i])) {
+      if (keyword == ".catch") {
+        // Catch markers look like this:
+        // (.catch (this next) "LCatchType;")
+        // where next and "LCatchType;" are optional
+        std::string this_catch;
+        s_expr maybe_next, type_expr;
+        s_patn({s_patn({s_patn(&this_catch)}, maybe_next)}, type_expr)
+            .must_match(tail, "catch marker missing a name list");
+        result.emplace(
+            this_catch,
+            new MethodItemEntry(static_cast<DexType*>(nullptr)));
+      }
+    }
+  }
+  return result;
+}
+
 // Can we merge this target into the same label as the previous target?
 bool can_merge(IRList::const_iterator prev, IRList::const_iterator it) {
   always_assert(it->type == MFLOW_TARGET);
@@ -298,6 +323,31 @@ bool can_merge(IRList::const_iterator prev, IRList::const_iterator it) {
           it->target->case_key == prev->target->case_key);
 }
 
+s_expr create_try_expr(TryEntryType type, const std::string& catch_name) {
+  // (.try_start name) and (.try_end name)
+  const std::string& type_str = type == TRY_START ? ".try_start" : ".try_end";
+  return s_expr({s_expr(type_str), s_expr(catch_name)});
+}
+
+s_expr create_catch_expr(const MethodItemEntry* mie,
+                         const std::unordered_map<const MethodItemEntry*,
+                                                  std::string>& catch_names) {
+  // (.catch (this_name next_name) "LCatchType;")
+  // where next_name and the "LCatchType;" are optional
+  std::vector<s_expr> catch_name_exprs;
+  catch_name_exprs.emplace_back(catch_names.at(mie));
+  if (mie->centry->next != nullptr) {
+    catch_name_exprs.emplace_back(catch_names.at(mie->centry->next));
+  }
+  std::vector<s_expr> result;
+  result.emplace_back(".catch");
+  result.emplace_back(catch_name_exprs);
+  if (mie->centry->catch_type != nullptr) {
+    result.emplace_back(mie->centry->catch_type->get_name()->str());
+  }
+  return s_expr(result);
+}
+
 } // namespace
 
 namespace assembler {
@@ -305,14 +355,20 @@ namespace assembler {
 s_expr to_s_expr(const IRCode* code) {
   std::vector<s_expr> exprs;
   LabelRefs label_refs;
+  std::unordered_map<const MethodItemEntry*, std::string> catch_names;
 
   size_t label_ctr{0};
   auto generate_label_name = [&]() {
     return ":L" + std::to_string(label_ctr++);
   };
 
+  size_t catch_ctr{0};
+  auto generate_catch_name = [&]() {
+    return "c" + std::to_string(catch_ctr++);
+  };
+
   // Gather jump targets and give them string names
-  for (auto it = code->begin(); it != code->end(); ++it) {
+  for (auto it = code->cbegin(); it != code->cend(); ++it) {
     switch (it->type) {
       case MFLOW_TARGET: {
         auto bt = it->target;
@@ -335,7 +391,7 @@ s_expr to_s_expr(const IRCode* code) {
         break;
       }
       case MFLOW_CATCH:
-        always_assert_log(false, "Not yet implemented");
+        catch_names.emplace(&*it, generate_catch_name());
         break;
       default:
         break;
@@ -350,7 +406,12 @@ s_expr to_s_expr(const IRCode* code) {
         exprs.emplace_back(::to_s_expr(it->insn, label_refs));
         break;
       case MFLOW_TRY:
+        exprs.emplace_back(create_try_expr(
+            it->tentry->type, catch_names.at(it->tentry->catch_start)));
+        break;
       case MFLOW_CATCH:
+        exprs.emplace_back(create_catch_expr(&*it, catch_names));
+        break;
       case MFLOW_DEBUG:
         always_assert_log(false, "Not yet implemented");
       case MFLOW_POSITION:
@@ -426,12 +487,62 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   LabelRefs label_refs;
   boost::optional<uint16_t> max_reg;
 
+  // map from catch name to catch marker pointer
+  const auto& catches = get_catch_name_map(insns_expr);
+
   for (size_t i = 0; i < insns_expr.size(); ++i) {
     std::string keyword;
     s_expr tail;
     if (s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i])) {
       if (keyword == ".pos") {
         code->push_back(position_from_s_expr(tail));
+
+      } else if (keyword.substr(0, 4) == ".try") {
+        // Try markers look like this:
+        // (.try_start catch_name)
+        // (.try_end catch_name)
+        const auto& rest = keyword.substr(4, std::string::npos);
+        bool is_start = rest == "_start";
+        always_assert_log(is_start ^ (rest == "_end"),
+                          "try must be .try_start or .try_end");
+        std::string catch_name;
+        s_patn({s_patn(&catch_name)})
+            .must_match(tail, "try marker is missing a name");
+        always_assert(catch_name != "");
+        auto try_marker = new MethodItemEntry(is_start ? TRY_START : TRY_END,
+                                              catches.at(catch_name));
+        code->push_back(*try_marker);
+
+      } else if (keyword == ".catch") {
+        // Catch markers look like this:
+        // (.catch (this next) "LCatchType;")
+        // where next and "LCatchType;" are optional
+        std::string this_catch;
+        std::string next_catch;
+        s_expr type_expr;
+        // Check for having both this and next
+        if (!s_patn({s_patn({s_patn(&this_catch), s_patn(&next_catch)})},
+                    type_expr)
+                 .match_with(tail)) {
+          // There is no next catch. Match a single name, for example: (this)
+          next_catch = "";
+          s_patn({s_patn({s_patn(&this_catch)})}, type_expr)
+              .must_match(tail, "catch marker is missing a name");
+        }
+        // Get the type name, for example: "LCatchType;"
+        always_assert_log(this_catch != "", "catch marker is missing a name");
+        std::string type_name;
+        // nullptr is a valid catch type. It means catch all exceptions.
+        DexType* catch_type = nullptr;
+        if (s_patn({s_patn(&type_name)}).match_with(type_expr)) {
+          catch_type = DexType::make_type(DexString::make_string(type_name));
+        }
+        MethodItemEntry* catch_marker = catches.at(this_catch);
+        if (next_catch != "") {
+          catch_marker->centry->next = catches.at(next_catch);
+        }
+        code->push_back(*catch_marker);
+
       } else if (keyword[0] == ':') {
         const auto& label = keyword;
         always_assert_log(
@@ -451,6 +562,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         auto maybe_target = new MethodItemEntry(bt);
         label_defs.emplace(label, maybe_target);
         code->push_back(*maybe_target);
+
       } else {
         auto insn = instruction_from_s_expr(keyword, tail, &label_refs);
         always_assert(insn != nullptr);

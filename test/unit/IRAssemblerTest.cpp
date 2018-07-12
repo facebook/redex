@@ -209,3 +209,59 @@ TEST_F(IRAssemblerTest, diabolical_bad_order_switch) {
 
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
+
+TEST_F(IRAssemblerTest, try_catch_simplest) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a))
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_with_next) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a b) "LFoo;")
+      (const v1 1)
+      (return-void)
+
+      (.catch (b) "LBar;")
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_with_two_tries) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.try_start a)
+      (const v1 1)
+      (.try_end a)
+
+      (.catch (a))
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
