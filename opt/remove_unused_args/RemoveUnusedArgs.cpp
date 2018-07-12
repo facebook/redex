@@ -33,12 +33,19 @@ constexpr const char* METRIC_CALLSITE_ARGS_REMOVED = "callsite_args_removed";
 constexpr const char* METRIC_METHOD_PARAMS_REMOVED = "method_params_removed";
 constexpr const char* METRIC_METHODS_UPDATED = "method_signatures_updated";
 
-void RemoveArgs::run() {
-  m_num_callsite_args_removed = 0;
-  m_num_method_params_removed = 0;
-  m_num_methods_updated = 0;
-  update_meths_with_unused_args();
-  update_callsites();
+/**
+ * Returns metrics as listed above from running RemoveArgs:
+ * run() removes unused params from method signatures and param loads, then
+ * updates all affected callsites accordingly.
+ */
+RemoveArgs::PassStats RemoveArgs::run() {
+  RemoveArgs::PassStats pass_stats;
+  auto method_stats = update_meths_with_unused_args();
+  pass_stats.method_params_removed_count =
+      method_stats.method_params_removed_count;
+  pass_stats.methods_updated_count = method_stats.methods_updated_count;
+  pass_stats.callsite_args_removed_count = update_callsites();
+  return pass_stats;
 }
 
 /**
@@ -52,8 +59,8 @@ void RemoveArgs::run() {
  */
 std::deque<uint16_t> RemoveArgs::compute_live_args(
     DexMethod* method,
-    std::vector<IRInstruction*>& dead_insns,
-    size_t num_args) {
+    size_t num_args,
+    std::vector<IRInstruction*>* dead_insns) {
   auto code = method->get_code();
   code->build_cfg();
   auto& cfg = code->cfg();
@@ -80,7 +87,7 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
         // Mark live args live, and always mark the "this" arg live.
         live_arg_idxs.push_front(last_arg_idx);
       } else {
-        dead_insns.emplace_back(it->insn);
+        dead_insns->emplace_back(it->insn);
       }
       last_arg_idx--;
     }
@@ -157,78 +164,94 @@ bool RemoveArgs::update_method_signature(
     }
   }
 
-  m_num_methods_updated++;
   TRACE(ARGS, 3, "Method signature updated to %s\n", SHOW(method));
   return true;
 }
 
 /**
- * For methods that have unused arguments, record live argument registers
- * in m_live_regs_map.
+ * For methods that have unused arguments, record live argument registers.
  */
-void RemoveArgs::update_meths_with_unused_args() {
-  walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-    auto proto = method->get_proto();
-    auto num_args = proto->get_args()->size();
-    // For instance methods, num_args does not count the 'this' argument.
-    if (num_args == 0) {
-      // Nothing to do if the method doesn't have args to remove.
-      return;
-    }
+RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
+  return walk::parallel::reduce_methods<std::nullptr_t,
+                                        RemoveArgs::MethodStats>(
+      m_scope,
+      [&](std::nullptr_t, DexMethod* method) -> RemoveArgs::MethodStats {
+        auto method_stats = RemoveArgs::MethodStats();
+        if (method->get_code() == nullptr) {
+          return method_stats;
+        }
+        auto proto = method->get_proto();
+        auto num_args = proto->get_args()->size();
+        // For instance methods, num_args does not count the 'this' argument.
+        if (num_args == 0) {
+          // Nothing to do if the method doesn't have args to remove.
+          return method_stats;
+        }
 
-    if (!can_rename(method)) {
-      // Nothing to do if ProGuard says we can't change the method args.
-      TRACE(ARGS,
-            5,
-            "Method is disqualified from being updated by ProGuard rules: %s\n",
-            SHOW(method));
-      return;
-    }
+        if (!can_rename(method)) {
+          // Nothing to do if ProGuard says we can't change the method args.
+          TRACE(ARGS,
+                5,
+                "Method is disqualified from being updated by ProGuard rules: "
+                "%s\n",
+                SHOW(method));
+          return method_stats;
+        }
 
-    // If a method is devirtualizable, proceed with live arg computation.
-    auto virtual_scope = m_type_system.find_virtual_scope(method);
-    if (method->is_virtual() && !is_non_virtual_scope(virtual_scope)) {
-      // TODO: T31388603 -- Remove unused args for true virtuals.
-      return;
-    }
+        // If a method is devirtualizable, proceed with live arg computation.
+        auto virtual_scope = m_type_system.find_virtual_scope(method);
+        if (method->is_virtual() && !is_non_virtual_scope(virtual_scope)) {
+          // TODO: T31388603 -- Remove unused args for true virtuals.
+          return method_stats;
+        }
 
-    std::vector<IRInstruction*> dead_insns;
-    auto live_arg_idxs = compute_live_args(method, dead_insns, num_args);
-    if (dead_insns.empty()) {
-      // Nothing to do if there aren't removable arguments.
-      return;
-    }
+        std::vector<IRInstruction*> dead_insns;
+        auto live_arg_idxs = compute_live_args(method, num_args, &dead_insns);
+        if (dead_insns.empty()) {
+          // Nothing to do if there aren't removable arguments.
+          return method_stats;
+        }
 
-    if (!update_method_signature(method, live_arg_idxs)) {
-      // If we didn't update the signature, we don't want to update callsites.
-      return;
-    }
+        if (!update_method_signature(method, live_arg_idxs)) {
+          // If we didn't update the signature, we don't want to update
+          // callsites.
+          return method_stats;
+        }
 
-    // We update the method signature, so we must remove unused
-    // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-    for (auto dead_insn : dead_insns) {
-      method->get_code()->remove_opcode(dead_insn);
-    }
-    m_num_method_params_removed += dead_insns.size();
-    m_live_regs_map.emplace(method, live_arg_idxs);
-  });
+        // We update the method signature, so we must remove unused
+        // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
+        for (auto dead_insn : dead_insns) {
+          method->get_code()->remove_opcode(dead_insn);
+        }
+        m_live_arg_idxs_map.insert(std::make_pair(method, live_arg_idxs));
+        method_stats.methods_updated_count++;
+        method_stats.method_params_removed_count += dead_insns.size();
+        return method_stats;
+      },
+      [](RemoveArgs::MethodStats a, RemoveArgs::MethodStats b) {
+        a.method_params_removed_count += b.method_params_removed_count;
+        a.methods_updated_count += b.methods_updated_count;
+        return a;
+      },
+      [](int) { return nullptr; });
 }
 
 /**
  * Removes dead arguments from the given invoke instr if applicable.
+ * Returns the number of arguments removed.
  */
-void RemoveArgs::update_callsite(IRInstruction* instr) {
+size_t RemoveArgs::update_callsite(IRInstruction* instr) {
   auto method_ref = instr->get_method();
   if (!method_ref->is_def()) {
     // TODO: T31388603 -- Remove unused args for true virtuals.
-    return;
+    return 0;
   };
   DexMethod* method = resolve_method(method_ref, opcode_to_search(instr));
 
-  auto kv_pair = m_live_regs_map.find(method);
-  if (kv_pair == m_live_regs_map.end()) {
+  auto kv_pair = m_live_arg_idxs_map.find(method);
+  if (kv_pair == m_live_arg_idxs_map.end()) {
     // No removable arguments, so do nothing.
-    return;
+    return 0;
   }
   auto updated_srcs = kv_pair->second;
   for (size_t i = 0; i < updated_srcs.size(); ++i) {
@@ -236,24 +259,35 @@ void RemoveArgs::update_callsite(IRInstruction* instr) {
   }
   always_assert_log(instr->srcs_size() > updated_srcs.size(),
                     "In RemoveArgs, callsites always update to fewer args\n");
-  m_num_callsite_args_removed += instr->srcs_size() - updated_srcs.size();
+  auto callsite_args_removed = instr->srcs_size() - updated_srcs.size();
   instr->set_arg_word_count(updated_srcs.size());
+  return callsite_args_removed;
 }
 
 /**
  * Removes unused arguments at callsites and returns the number of arguments
  * removed.
  */
-void RemoveArgs::update_callsites() {
+size_t RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-    for (const auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
-        update_callsite(insn);
-      }
-    }
-  });
+  return walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+      m_scope,
+      [&](std::nullptr_t, DexMethod* method) -> size_t {
+        auto code = method->get_code();
+        if (code == nullptr) {
+          return 0;
+        }
+        size_t callsite_args_removed = 0;
+        for (const auto& mie : InstructionIterable(code)) {
+          auto insn = mie.insn;
+          if (is_invoke(insn->opcode())) {
+            callsite_args_removed += update_callsite(insn);
+          }
+        }
+        return callsite_args_removed;
+      },
+      [](size_t a, size_t b) { return a + b; },
+      [](int) { return nullptr; });
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
@@ -262,10 +296,10 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   RemoveArgs rm_args(scope);
-  rm_args.run();
-  size_t num_callsite_args_removed = rm_args.get_num_callsite_args_removed();
-  size_t num_method_params_removed = rm_args.get_num_method_params_removed();
-  size_t num_methods_updated = rm_args.get_num_methods_updated();
+  auto pass_stats = rm_args.run();
+  size_t num_callsite_args_removed = pass_stats.callsite_args_removed_count;
+  size_t num_method_params_removed = pass_stats.method_params_removed_count;
+  size_t num_methods_updated = pass_stats.methods_updated_count;
 
   TRACE(ARGS,
         1,

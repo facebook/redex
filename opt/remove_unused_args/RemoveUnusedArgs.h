@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "PassManager.h"
 #include "TypeSystem.h"
 
@@ -14,35 +15,35 @@ namespace remove_unused_args {
 
 class RemoveArgs {
  public:
+  struct MethodStats {
+    size_t method_params_removed_count{0};
+    size_t methods_updated_count{0};
+  };
+  struct PassStats {
+    size_t method_params_removed_count{0};
+    size_t methods_updated_count{0};
+    size_t callsite_args_removed_count{0};
+  };
+
   RemoveArgs(const Scope& scope) : m_scope(scope), m_type_system(scope){};
-  void run();
-  size_t get_num_callsite_args_removed() const {
-    return m_num_callsite_args_removed;
-  }
-  size_t get_num_method_params_removed() const {
-    return m_num_method_params_removed;
-  }
-  size_t get_num_methods_updated() const { return m_num_methods_updated; }
+  RemoveArgs::PassStats run();
   std::deque<uint16_t> compute_live_args(
       DexMethod* method,
-      std::vector<IRInstruction*>& dead_insns,
-      size_t num_args);
+      size_t num_args,
+      std::vector<IRInstruction*>* dead_insns);
 
  private:
   const Scope& m_scope;
   TypeSystem m_type_system;
-  std::unordered_map<DexMethod*, std::deque<uint16_t>> m_live_regs_map;
-  size_t m_num_callsite_args_removed;
-  size_t m_num_method_params_removed;
-  size_t m_num_methods_updated;
+  ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
 
   std::deque<DexType*> get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
   bool update_method_signature(DexMethod* method,
                                const std::deque<uint16_t>& live_args);
-  void update_meths_with_unused_args();
-  void update_callsite(IRInstruction* instr);
-  void update_callsites();
+  MethodStats update_meths_with_unused_args();
+  size_t update_callsite(IRInstruction* instr);
+  size_t update_callsites();
 };
 
 class RemoveUnusedArgsPass : public Pass {
