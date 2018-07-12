@@ -93,7 +93,12 @@ class IRCode {
   ~IRCode();
 
   bool structural_equals(const IRCode& other) {
-    return m_ir_list->structural_equals(*other.m_ir_list);
+    return m_ir_list->structural_equals(*other.m_ir_list, std::equal_to<const IRInstruction&>());
+  }
+
+  bool structural_equals(const IRCode& other,
+                         const InstructionEquality& instruction_equals) {
+    return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 
   uint16_t get_registers_size() const { return m_registers_size; }

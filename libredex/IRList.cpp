@@ -448,7 +448,9 @@ IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
   return std::distance(iterator_to(mie), begin());
 }
 
-bool IRList::structural_equals(const IRList& other) const {
+bool IRList::structural_equals(
+    const IRList& other,
+    const InstructionEquality& instruction_equals) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
@@ -471,7 +473,7 @@ bool IRList::structural_equals(const IRList& other) const {
     }
 
     if (it1->type == MFLOW_OPCODE) {
-      if (*it1->insn != *it2->insn) {
+      if (!instruction_equals(*it1->insn, *it2->insn)) {
         return false;
       }
     } else if (it1->type == MFLOW_TARGET) {

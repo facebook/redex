@@ -46,6 +46,8 @@ struct CatchEntry {
  */
 using SwitchIndices = std::set<int>;
 
+using InstructionEquality = std::function<bool(const IRInstruction&, const IRInstruction&)>;
+
 /*
  * Multi is where an opcode encodes more than
  * one branch end-point.  This is for packed
@@ -228,7 +230,9 @@ class IRList {
    */
   boost::sub_range<IRList> get_param_instructions();
 
-  bool structural_equals(const IRList& other) const;
+  bool structural_equals(
+      const IRList& other,
+      const InstructionEquality& instruction_equals) const;
 
   /* Passes memory ownership of "mie" to callee. */
   void push_back(MethodItemEntry& mie) { m_list.push_back(mie); }
