@@ -558,3 +558,268 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeVolatile) {
       )",
     true);
 }
+
+static void aputget_peep_hole_test(const std::string& code_str,
+                                   const std::string& expected_str) {
+  g_redex = new RedexContext();
+  ClassCreator creator(DexType::make_type("LFoo;"));
+  creator.set_super(get_object_type());
+
+  auto method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(code_str));
+  creator.add_method(method);
+
+  PeepholePass peephole_pass;
+  PassManager manager({&peephole_pass});
+  ConfigFiles config(Json::nullValue);
+  DexStore store("classes");
+  store.add_classes({creator.create()});
+  std::vector<DexStore> stores;
+  stores.emplace_back(std::move(store));
+  manager.run_passes(stores, {}, config);
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
+}
+
+static void aputget_peep_hole_test_negative(const std::string& code_str) {
+  aputget_peep_hole_test(code_str, code_str);
+}
+
+TEST(PeepholeTestA, RemoveArrayPutGetIntArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[I") ; create an array of int of length 1
+        (move-result-pseudo-object v2)
+        (aput v1 v2 v0) ; write 1 into first element of array
+        (aget v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[I") ; create an array of int of length 1
+         (move-result-pseudo-object v2)
+         (aput v1 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetByteArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[B") ; create an array of byte of length 1
+        (move-result-pseudo-object v2)
+        (aput-byte v1 v2 v0) ; write 1 into first element of array
+        (aget-byte v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[B") ; create an array of byte of length 1
+         (move-result-pseudo-object v2)
+         (aput-byte v1 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetBoolArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[Z") ; create an array of bool of length 1
+        (move-result-pseudo-object v2)
+        (aput-boolean v1 v2 v0) ; write 1 into first element of array
+        (aget-boolean v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[Z") ; create an array of bool of length 1
+         (move-result-pseudo-object v2)
+         (aput-boolean v1 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetCharArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[Z") ; create an array of char of length 1
+        (move-result-pseudo-object v2)
+        (aput-char v1 v2 v0) ; write 1 into first element of array
+        (aget-char v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[Z") ; create an array of char of length 1
+         (move-result-pseudo-object v2)
+         (aput-char v1 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetShortArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[S") ; create an array of short of length 1
+        (move-result-pseudo-object v2)
+        (aput-short v1 v2 v0) ; write 1 into first element of array
+        (aget-short v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[S") ; create an array of short of length 1
+         (move-result-pseudo-object v2)
+         (aput-short v1 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetWideArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+         (const v0 0)
+         (const v1 1)
+         (const-wide v3 1) ; Puts the double/long inside v3-v4
+         (new-array v1 "[J") ; create an array of wide of length 1
+         (move-result-pseudo-object v2)
+         (aput-wide v3 v2 v0) ; write 1 into first element of array
+         (aget-wide v2 v0) ;
+         (move-result-pseudo-wide v3)
+         (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (const-wide v3 1) ; Puts the double/long inside v3-v4
+         (new-array v1 "[J") ; create an array of wide of length 1
+         (move-result-pseudo-object v2)
+         (aput-wide v3 v2 v0) ; write 1 into first element of array
+         (return-void)
+        )
+      )");
+}
+TEST(PeepholeTestA, RemoveArrayPutGetObjectArray) {
+  aputget_peep_hole_test(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[I") ; create an array of int of length 1
+        (move-result-pseudo-object v2)
+        (new-array v1 "[[I") ; create an array of array of ints of length 1
+        (move-result-pseudo-object v3)
+        (aput-object v2 v3 v0) ; write array v2 into first element of array v3
+        (aget-object v3 v0)
+        (move-result-pseudo-object v2)
+        (return-void)
+       )
+     )",
+      R"(
+        (
+         (const v0 0)
+         (const v1 1)
+         (new-array v1 "[I") ; create an array of int of length 1
+         (move-result-pseudo-object v2)
+         (new-array v1 "[[I") ; create an array of array of ints of length 1
+         (move-result-pseudo-object v3)
+         (aput-object v2 v3 v0) ; write array v2 into first element of array v3
+         (return-void)
+        )
+      )");
+}
+
+TEST(PeepholeTestA, RemoveArrayPutGetNegativeIntByte) {
+  // Negative (aput & aget byte)
+  aputget_peep_hole_test_negative(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[I") ; create an array of int of length 1
+        (move-result-pseudo-object v2)
+        (aput v1 v2 v0) ; write 1 into first element of array
+        (aget-byte v2 v0)
+        (move-result-pseudo v1)
+        (return-void)
+       )
+    )");
+}
+
+TEST(PeepholeTestA, RemoveArrayPutGetNegativeCharByte) {
+  // Negative (aput char & aget byte)
+  aputget_peep_hole_test_negative(
+      R"(
+     (
+      (const v0 0)
+      (const v1 1)
+      (new-array v1 "[Z") ; create an array of char of length 1
+      (move-result-pseudo-object v2)
+      (aput-char v1 v2 v0) ; write 1 into first element of array
+      (aget-byte v2 v0)
+      (move-result-pseudo v1)
+      (return-void)
+     )
+   )");
+}
+
+TEST(PeepholeTestA, RemoveArrayPutGetNegativeRegMismatch) {
+  // Negative (different reg)
+  aputget_peep_hole_test_negative(
+      R"(
+       (
+        (const v0 0)
+        (const v1 1)
+        (new-array v1 "[I") ; create an array of int of length 1
+        (move-result-pseudo-object v2)
+        (aput v1 v2 v0) ; write 1 into first element of array
+        (aget v2 v0)
+        (move-result-pseudo v3)
+        (return-void)
+       )
+    )");
+}

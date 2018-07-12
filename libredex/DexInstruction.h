@@ -300,6 +300,10 @@ inline bool is_aget(IROpcode op) {
   return op >= OPCODE_AGET && op <= OPCODE_AGET_SHORT;
 }
 
+inline bool is_aput(IROpcode op) {
+  return op >= OPCODE_APUT && op <= OPCODE_APUT_SHORT;
+}
+
 inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }
