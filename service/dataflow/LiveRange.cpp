@@ -10,11 +10,8 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
-#include "ControlFlow.h"
 #include "IRCode.h"
-#include "MonotonicFixpointIterator.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
+#include "ReachingDefinitions.h"
 
 namespace {
 
@@ -76,77 +73,14 @@ void unify_defs(const UDChains& chains, DefSets* def_sets) {
   }
 }
 
-class DefsDomain final : public AbstractDomainReverseAdaptor<
-                             PatriciaTreeSetAbstractDomain<IRInstruction*>,
-                             DefsDomain> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via using
-  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
-  // compilers fail to catch this. So we insert a redundant '= default'.
-  DefsDomain() = default;
-
-  size_t size() const { return unwrap().size(); }
-
-  const PatriciaTreeSet<IRInstruction*>& elements() const {
-    return unwrap().elements();
-  }
-};
-
-class DefsEnvironment final
-    : public AbstractDomainReverseAdaptor<
-          PatriciaTreeMapAbstractEnvironment<reg_t, DefsDomain>,
-          DefsEnvironment> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  DefsDomain get(reg_t reg) { return unwrap().get(reg); }
-
-  DefsEnvironment& set(reg_t reg, const DefsDomain& value) {
-    unwrap().set(reg, value);
-    return *this;
-  }
-};
-
-class ReachingDefsFixpointIterator final
-    : public MonotonicFixpointIterator<cfg::GraphInterface, DefsEnvironment> {
- public:
-  using NodeId = cfg::Block*;
-
-  explicit ReachingDefsFixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
-
-  void analyze_node(const NodeId& block,
-                    DefsEnvironment* current_state) const override {
-    for (const auto& mie : InstructionIterable(block)) {
-      analyze_instruction(mie.insn, current_state);
-    }
-  }
-
-  void analyze_instruction(const IRInstruction* insn,
-                           DefsEnvironment* current_state) const {
-    if (insn->dests_size()) {
-      current_state->set(insn->dest(),
-                         DefsDomain(const_cast<IRInstruction*>(insn)));
-    }
-  }
-
-  DefsEnvironment analyze_edge(
-      const EdgeId&,
-      const DefsEnvironment& entry_state_at_source) const override {
-    return entry_state_at_source;
-  }
-};
-
 UDChains calculate_ud_chains(IRCode* code) {
   auto& cfg = code->cfg();
-  ReachingDefsFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(DefsEnvironment());
+  reaching_defs::FixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(reaching_defs::Environment());
   UDChains chains;
   for (cfg::Block* block : cfg.blocks()) {
-    DefsEnvironment defs_in = fixpoint_iter.get_entry_state_at(block);
+    reaching_defs::Environment defs_in =
+        fixpoint_iter.get_entry_state_at(block);
     for (const auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
