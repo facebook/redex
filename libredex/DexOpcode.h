@@ -58,6 +58,8 @@ inline bool is_switch(DexOpcode op) {
 
 bool is_goto(DexOpcode);
 
+bool is_move(DexOpcode);
+
 DexOpcode invert_conditional_branch(DexOpcode op);
 
 inline bool is_invoke_range(DexOpcode op) {

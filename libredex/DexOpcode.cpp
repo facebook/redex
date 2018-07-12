@@ -143,6 +143,10 @@ bool is_goto(DexOpcode op) {
   }
 }
 
+bool is_move(DexOpcode op) {
+  return op >= DOPCODE_MOVE && op <= DOPCODE_MOVE_OBJECT_16;
+}
+
 DexOpcode invert_conditional_branch(DexOpcode op) {
   switch (op) {
   case DOPCODE_IF_EQ:

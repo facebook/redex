@@ -154,6 +154,39 @@ DexMethodInfoMap load_dex_method_info(const std::string& dir) {
   return result;
 }
 
+using DexMethodMoveInfoMap =
+    std::unordered_map<std::string, // Method as string
+                       std::tuple<int, int>>; // #move, moves size
+
+DexMethodMoveInfoMap load_dex_method_move_info(const std::string& dir) {
+  DexStore root_store("dex");
+  DexStoresVector stores;
+
+  // Load root dexen
+  load_root_dexen(root_store, dir);
+  stores.emplace_back(std::move(root_store));
+  DexMethodMoveInfoMap result;
+
+  walk::methods(build_class_scope(stores), [&result](DexMethod* method) {
+    auto key = show(method);
+    always_assert(result.find(key) == end(result));
+    const auto* code = method->get_dex_code();
+    int num_moves = 0;
+    int moves_size = 0;
+    if (code) {
+      for (const auto& insn : code->get_instructions()) {
+        if (dex_opcode::is_move(insn->opcode())) {
+          num_moves++;
+          moves_size += insn->size();
+        }
+      }
+    }
+    result.emplace(key, std::make_tuple(num_moves, moves_size));
+  });
+
+  return result;
+}
+
 void dump_method_sizes_from_dexen_dir(const std::string& dexen_dir) {
   std::cout << "INFO: "
             << "Loading directory " << dexen_dir << " ... " << std::endl;
@@ -209,6 +242,18 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
   g_redex = A_context;
 }
 
+void dump_method_move_info_from_dex_dir(const std::string& dex_dir) {
+  std::cout << "INFO: "
+            << "Loading directory " << dex_dir << " ... " << std::endl;
+  auto info = load_dex_method_move_info(dex_dir);
+  std::cout << "INFO: " << info.size() << " method information loaded"
+            << std::endl;
+  for (const auto& pair : info) {
+    std::cout << pair.first << ": #moves = " << std::get<0>(pair.second)
+              << ", size = " << std::get<1>(pair.second) << std::endl;
+  }
+}
+
 class DiffMethodSizes : public Tool {
  public:
   DiffMethodSizes() : Tool("diff-method-sizes", "compare method sizes") {}
@@ -222,7 +267,10 @@ class DiffMethodSizes : public Tool {
         "dexendir,d",
         po::value<std::vector<std::string>>()->multitoken(),
         "dump all method sizes in the given dexen directory; if two dexen "
-        "directories are given, compare the method sizes");
+        "directories are given, compare the method sizes")(
+        "show-moves,s",
+        po::value<std::string>(),
+        "show number of move code and their size for each methods");
   }
 
   virtual void run(const po::variables_map& options) override {
@@ -243,6 +291,9 @@ class DiffMethodSizes : public Tool {
         std::cerr << "Only one or two --dexendir can be provided" << std::endl;
         break;
       }
+    } else if (!options["show-moves"].empty()) {
+      dump_method_move_info_from_dex_dir(
+          options["show-moves"].as<std::string>());
     } else {
       std::cerr << "No option or invalid option was given" << std::endl;
     }
