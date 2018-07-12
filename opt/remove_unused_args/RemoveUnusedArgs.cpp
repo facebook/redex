@@ -21,8 +21,6 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-// NOTE:
-//  TODO <anwangster> (*) indicates goal for next diff
 /**
  * The RemoveUnusedArgsPass finds method arguments that are not live in the
  * method body, removes those unused arguments from the method signature, and
@@ -93,13 +91,35 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
 }
 
 /**
+ * Returns an updated argument type list for the given method with the given
+ * live argument indices.
+ */
+std::deque<DexType*> RemoveArgs::get_live_arg_type_list(
+    DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
+  std::deque<DexType*> live_args;
+  auto args_list = method->get_proto()->get_args()->get_type_list();
+
+  for (uint16_t arg_num : live_arg_idxs) {
+    if (!is_static(method)) {
+      if (arg_num == 0) {
+        continue;
+      }
+      arg_num--;
+    }
+    live_args.push_back(args_list.at(arg_num));
+  }
+  return live_args;
+}
+
+/**
  * Returns true on successful update to the given method's signature, where
  * the updated args list is specified by live_args.
  */
-bool RemoveArgs::update_method_signature(DexMethod* method,
-                                         std::deque<DexType*> live_args) {
+bool RemoveArgs::update_method_signature(
+    DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
+  auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   auto updated_proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), live_args_list);
@@ -113,6 +133,30 @@ bool RemoveArgs::update_method_signature(DexMethod* method,
 
   DexMethodSpec spec(method->get_class(), method->get_name(), updated_proto);
   method->change(spec, /* rename on collision */ true);
+
+  // We must also update debug info when we change the method proto.
+  // We calculate this separately from live_args in case the method isn't
+  // changeable to avoid unnecessary computation.
+  auto code = method->get_code();
+  if (code) {
+    auto debug = code->get_debug_item();
+    if (debug) {
+      auto& param_names = debug->get_param_names();
+      auto type_list = updated_proto->get_args()->get_type_list();
+      // Keep only the param_names at the matching live argument indices.
+      // NOTE: The "this" argument isn't included in param_names, so
+      //       we must apply instance_offset to each param_names update.
+      size_t instance_offset = is_static(method) ? 0 : 1;
+      for (size_t i = instance_offset; i < live_arg_idxs.size(); ++i) {
+        param_names.at(i - instance_offset) =
+            param_names.at(live_arg_idxs.at(i) - instance_offset);
+      }
+      // The DexStrings at the end of param_names at indices >= (number of
+      // updated params) are now garbage and should be removed.
+      param_names.resize(live_args.size());
+    }
+  }
+
   m_num_methods_updated++;
   TRACE(ARGS, 3, "Method signature updated to %s\n", SHOW(method));
   return true;
@@ -136,8 +180,7 @@ void RemoveArgs::update_meths_with_unused_args() {
       // Nothing to do if ProGuard says we can't change the method args.
       TRACE(ARGS,
             5,
-            "Removable args found, but method is disqualified by ProGuard "
-            "rules: %s\n",
+            "Method is disqualified from being updated by ProGuard rules: %s\n",
             SHOW(method));
       return;
     }
@@ -145,32 +188,18 @@ void RemoveArgs::update_meths_with_unused_args() {
     // If a method is devirtualizable, proceed with live arg computation.
     auto virtual_scope = m_type_system.find_virtual_scope(method);
     if (method->is_virtual() && !is_non_virtual_scope(virtual_scope)) {
-      // TODO <anwangster> (*) deal with true virtual methods specially
+      // TODO: T31388603 -- Remove unused args for true virtuals.
       return;
     }
 
     std::vector<IRInstruction*> dead_insns;
     auto live_arg_idxs = compute_live_args(method, dead_insns, num_args);
-
-    // No removable arguments -> don't update method arg list.
     if (dead_insns.empty()) {
+      // Nothing to do if there aren't removable arguments.
       return;
     }
 
-    std::deque<DexType*> live_args;
-    auto args_list = proto->get_args()->get_type_list();
-
-    for (auto arg_num : live_arg_idxs) {
-      if (!is_static(method)) {
-        if (arg_num == 0) {
-          continue;
-        }
-        arg_num--;
-      }
-      live_args.push_back(args_list.at(arg_num));
-    }
-
-    if (!update_method_signature(method, std::move(live_args))) {
+    if (!update_method_signature(method, live_arg_idxs)) {
       // If we didn't update the signature, we don't want to update callsites.
       return;
     }
@@ -191,7 +220,7 @@ void RemoveArgs::update_meths_with_unused_args() {
 void RemoveArgs::update_callsite(IRInstruction* instr) {
   auto method_ref = instr->get_method();
   if (!method_ref->is_def()) {
-    // TODO <anwangster> deal with virtual methods separately
+    // TODO: T31388603 -- Remove unused args for true virtuals.
     return;
   };
   DexMethod* method = resolve_method(method_ref, opcode_to_search(instr));

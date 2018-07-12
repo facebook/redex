@@ -36,8 +36,10 @@ class RemoveArgs {
   size_t m_num_method_params_removed;
   size_t m_num_methods_updated;
 
+  std::deque<DexType*> get_live_arg_type_list(
+      DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
   bool update_method_signature(DexMethod* method,
-                               std::deque<DexType*> live_args);
+                               const std::deque<uint16_t>& live_args);
   void update_meths_with_unused_args();
   void update_callsite(IRInstruction* instr);
   void update_callsites();
