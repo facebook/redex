@@ -79,9 +79,8 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
   }
   code->build_cfg();
   const auto& blocks = code->cfg().blocks();
-
-  TRACE(INSTRUMENT, 5, "Number of Basic Blocks: %zu\n", blocks.size());
-
+  TRACE(INSTRUMENT, 5, "[%s] Number of Basic Blocks: %zu\n",
+        SHOW(method->get_name()), blocks.size());
   auto method_name_hash =
       (int32_t)(std::hash<std::string>{}(method->get_deobfuscated_name()));
   for (cfg::Block* block : blocks) {
@@ -89,7 +88,6 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
     // use a hash value of method name and add it to block id to
     // generate a unique identifier.
     size_t block_id = method_name_hash + block->id();
-
     IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
 
     // TODO: Investigate this crash. This was when block_id was a string.
@@ -428,7 +426,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     DexMethod* on_bb_begin =
         verify_instrumentation_method(*analysis_cls, m_analysis_method_name);
 
-    // TODO: For each indivdual basic block from every method, assign them an
+    // For each indivdual basic block from every method, assign them an
     // identifier and add a jump to on_bb_begin() at the beginning.
     // on_bb_begin() will set the touch variable when a basic block is accessed
     // at runtime.
@@ -436,11 +434,16 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       if (method == on_bb_begin || method == analysis_cls->get_clinit()) {
         return;
       }
+      const auto& cls_name = show(method->get_class());
+      if (!m_whitelist.empty() &&
+          !is_included(method->get_name()->str(), cls_name, m_whitelist)) {
+        return;
+      }
       instrument_on_bb_begin(method, on_bb_begin);
     });
 
   } else {
-    std::cerr << "[InstrumentPass] Unknown option.";
+    std::cerr << "[InstrumentPass] Unknown option.\n";
   }
 }
 
