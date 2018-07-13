@@ -52,10 +52,11 @@ TEST_F(PostVerify, InstrumentBBVerify) {
           // TODO: Verify that invoke_inst is at the beginning of block only.
         }
       }
-      // Verifies: Method "testFunc2" has 3 calls to on_bb_begin().
+      // Verifies: Method "testFunc2" has 1 call to on_bb_begin(). There are 3
+      // basic blocks in testFunc2, but only 1 qualifying one.
       // TODO: Verify if number of calls to on_bb_begin() is same as number of
       // qualifying basic blocks.
-      EXPECT_EQ(3, count_invoke);
+      EXPECT_EQ(1, count_invoke);
     }
   });
 }

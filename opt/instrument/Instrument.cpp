@@ -72,6 +72,14 @@ DexMethod* find_analysis_method(const DexClass& cls, const std::string& name) {
   return it == dmethods.end() ? nullptr : *it;
 }
 
+static size_t num_opcodes_bb(cfg::Block* block) {
+  size_t result = 0;
+  for (const auto& inst : InstructionIterable(block)) {
+    ++result;
+  }
+  return result;
+}
+
 void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
   IRCode* code = method->get_code();
   if (code == nullptr) {
@@ -81,6 +89,9 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
   const auto& blocks = code->cfg().blocks();
   TRACE(INSTRUMENT, 5, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());
+  if (blocks.size() == 1) {
+    return;
+  }
   auto method_name_hash =
       (int32_t)(std::hash<std::string>{}(method->get_deobfuscated_name()));
   for (cfg::Block* block : blocks) {
@@ -89,11 +100,6 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
     // generate a unique identifier.
     size_t block_id = method_name_hash + block->id();
     IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-
-    // TODO: Investigate this crash. This was when block_id was a string.
-    // const_inst->set_string(
-    //     DexString::make_string(std::to_string(block_id)));
-
     const_inst->set_literal(block_id);
 
     const auto reg_dest = code->allocate_temp();
@@ -105,9 +111,6 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
     invoke_inst->set_src(0, reg_dest);
 
     // Find where to insert the newy created instruction block.
-    // TODO: Do not instrument any block of size 1. - Overhead: Iterate through
-    // BB to get the size.
-
     auto insert_point = std::find_if_not(
         block->begin(), block->end(), [&](const MethodItemEntry& mie) {
           return mie.type == MFLOW_FALLTHROUGH ||
@@ -115,10 +118,14 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
                   opcode::is_internal(mie.insn->opcode()));
         });
 
-    // TODO: There are more cases to check here. Add them.
-    if (insert_point == block->end()) {
-      TRACE(INSTRUMENT, 5, "No instrumentation to block: %zu- %s\n", block_id,
-            SHOW(method->get_name()));
+    // We do not instrument a BB if :
+    // 1. It only has MFLOW_FALLTHROUGH or internal instructions.
+    // 2. BB has 1 in-degree and 1 out-degree.
+    // 3. BB has 0 or 1 opcodes.
+    if (insert_point == block->end() ||
+        (block->preds().size() <= 1 && block->succs().size() <= 1) ||
+        num_opcodes_bb(block) <= 1) {
+      TRACE(INSTRUMENT, 5, "No instrumentation to block: %zu\n", block_id);
       return;
     }
 
