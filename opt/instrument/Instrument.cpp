@@ -72,6 +72,65 @@ DexMethod* find_analysis_method(const DexClass& cls, const std::string& name) {
   return it == dmethods.end() ? nullptr : *it;
 }
 
+void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
+  IRCode* code = method->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  code->build_cfg();
+  const auto& blocks = code->cfg().blocks();
+
+  TRACE(INSTRUMENT, 5, "Number of Basic Blocks: %zu\n", blocks.size());
+
+  auto method_name_hash =
+      (int32_t)(std::hash<std::string>{}(method->get_deobfuscated_name()));
+  for (cfg::Block* block : blocks) {
+    // Individual Block can be identified by method name and block id. We can
+    // use a hash value of method name and add it to block id to
+    // generate a unique identifier.
+    size_t block_id = method_name_hash + block->id();
+
+    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+
+    // TODO: Investigate this crash. This was when block_id was a string.
+    // const_inst->set_string(
+    //     DexString::make_string(std::to_string(block_id)));
+
+    const_inst->set_literal(block_id);
+
+    const auto reg_dest = code->allocate_temp();
+    const_inst->set_dest(reg_dest);
+
+    IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke_inst->set_method(on_bb_begin);
+    invoke_inst->set_arg_word_count(1);
+    invoke_inst->set_src(0, reg_dest);
+
+    // Find where to insert the newy created instruction block.
+    // TODO: Do not instrument any block of size 1. - Overhead: Iterate through
+    // BB to get the size.
+
+    auto insert_point = std::find_if_not(
+        block->begin(), block->end(), [&](const MethodItemEntry& mie) {
+          return mie.type == MFLOW_FALLTHROUGH ||
+                 (mie.type == MFLOW_OPCODE &&
+                  opcode::is_internal(mie.insn->opcode()));
+        });
+
+    // TODO: There are more cases to check here. Add them.
+    if (insert_point == block->end()) {
+      TRACE(INSTRUMENT, 5, "No instrumentation to block: %zu- %s\n", block_id,
+            SHOW(method->get_name()));
+      return;
+    }
+
+    TRACE(INSTRUMENT, 5, "Adding instrumentation to block: %zu\n", block_id);
+    code->insert_before(code->insert_before(insert_point, invoke_inst),
+                        const_inst);
+
+  } // End of block loop.
+}
+
 void instrument_onMethodBegin(DexMethod* method,
                               int index,
                               const DexMethod* onMethodBegin) {
@@ -244,6 +303,20 @@ void write_method_index_file(const std::string& file_name,
   TRACE(INSTRUMENT, 2, "method index file was written to: %s\n",
         file_name.c_str());
 }
+DexMethod* verify_instrumentation_method(const DexClass& cls,
+                                         const std::string& method_name) {
+  DexMethod* function_to_insert = find_analysis_method(cls, method_name);
+  if (function_to_insert == nullptr) {
+    std::cerr << "[InstrumentPass] error: cannot find " << method_name << " in "
+              << show(cls) << std::endl;
+    for (auto&& m : cls.get_dmethods()) {
+      std::cerr << " " << show(m) << std::endl;
+    }
+    exit(1);
+  }
+  return function_to_insert;
+}
+
 } // namespace
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
@@ -278,19 +351,11 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     exit(1);
   }
 
+  auto scope = build_class_scope(stores);
+
   if (m_instrumentation_strategy == "method_tracing") {
     DexMethod* onMethodBegin =
-        find_analysis_method(*analysis_cls, m_onMethodBegin_name);
-    if (onMethodBegin == nullptr) {
-      std::cerr << "[InstrumentPass] error: cannot find "
-                << m_onMethodBegin_name << " in " << show(analysis_cls)
-                << std::endl;
-      for (auto&& m : analysis_cls->get_dmethods()) {
-        std::cerr << " " << show(m) << std::endl;
-      }
-      exit(1);
-    }
-
+        verify_instrumentation_method(*analysis_cls, m_analysis_method_name);
     TRACE(INSTRUMENT,
           3,
           "Loaded analysis class: %s (%s)\n",
@@ -298,7 +363,6 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
           analysis_cls->get_dex_location().c_str());
 
     // Instrument and build the method id map, too.
-    auto scope = build_class_scope(stores);
     std::unordered_map<DexMethod*, int /*id*/> method_id_map;
     std::vector<DexMethod*> method_id_vector;
     int index = 0;
@@ -361,9 +425,20 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.incr_metric("Excluded", excluded);
   } else if (m_instrumentation_strategy == "basic_block_tracing") {
     TRACE(INSTRUMENT, 5, "Basic Block Instrumentation begins here.\n");
+    DexMethod* on_bb_begin =
+        verify_instrumentation_method(*analysis_cls, m_analysis_method_name);
+
     // TODO: For each indivdual basic block from every method, assign them an
-    // identifier and add a jump to onBBBegin() at the beginning. onBBBegin()
-    // will set the touch variable when a basic block is accessed at runtime.
+    // identifier and add a jump to on_bb_begin() at the beginning.
+    // on_bb_begin() will set the touch variable when a basic block is accessed
+    // at runtime.
+    walk::methods(scope, [&](DexMethod* method) {
+      if (method == on_bb_begin || method == analysis_cls->get_clinit()) {
+        return;
+      }
+      instrument_on_bb_begin(method, on_bb_begin);
+    });
+
   } else {
     std::cerr << "[InstrumentPass] Unknown option.";
   }

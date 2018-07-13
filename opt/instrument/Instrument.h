@@ -17,12 +17,12 @@ class InstrumentPass : public Pass {
 
   virtual void configure_pass(const PassConfig& pc) override {
     pc.get("analysis_class_name", "", m_analysis_class_name);
-    pc.get("onMethodBegin_name", "", m_onMethodBegin_name);
+    pc.get("on_instrument_begin_name", "", m_analysis_method_name);
     pc.get("num_stats_per_method", 1, m_num_stats_per_method);
     pc.get("method_index_file_name", "instrument-methods-idx.txt",
            m_method_index_file_name);
 
-    pc.get("instrumetation_strategy", "", m_instrumentation_strategy);
+    pc.get("instrumentation_strategy", "", m_instrumentation_strategy);
     std::vector<std::string> list;
     pc.get("blacklist", {}, list);
     for (const auto& e : list) {
@@ -38,7 +38,7 @@ class InstrumentPass : public Pass {
 
  private:
   std::string m_analysis_class_name;
-  std::string m_onMethodBegin_name;
+  std::string m_analysis_method_name;
   int64_t m_num_stats_per_method;
   std::string m_method_index_file_name;
   std::unordered_set<std::string> m_blacklist;
