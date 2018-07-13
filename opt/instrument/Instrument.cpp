@@ -80,28 +80,34 @@ static size_t num_opcodes_bb(cfg::Block* block) {
   return result;
 }
 
-void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
+size_t instrument_on_bb_begin(DexMethod* method,
+                              DexMethod* on_bb_begin,
+                              size_t bb_id,
+                              std::unordered_map<std::string, int>& bb_id_map,
+                              std::vector<cfg::Block*>& bb_vector) {
   IRCode* code = method->get_code();
   if (code == nullptr) {
-    return;
+    return bb_id;
   }
   code->build_cfg();
   const auto& blocks = code->cfg().blocks();
   TRACE(INSTRUMENT, 5, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());
+
+  // Do not instrument if there is only one block in the method.
   if (blocks.size() == 1) {
-    return;
+    return bb_id;
   }
-  auto method_name_hash =
-      (int32_t)(std::hash<std::string>{}(method->get_deobfuscated_name()));
   for (cfg::Block* block : blocks) {
     // Individual Block can be identified by method name and block id. We can
-    // use a hash value of method name and add it to block id to
-    // generate a unique identifier.
-    size_t block_id = method_name_hash + block->id();
-    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-    const_inst->set_literal(block_id);
+    // concatenate the method name with the block id to
+    // generate a unique identifier. This is mapped to an integer index, which
+    // is used in map.
+    std::string block_id = std::string(method->get_deobfuscated_name()) +
+                           std::to_string(block->id());
 
+    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+    const_inst->set_literal(bb_id);
     const auto reg_dest = code->allocate_temp();
     const_inst->set_dest(reg_dest);
 
@@ -125,15 +131,21 @@ void instrument_on_bb_begin(DexMethod* method, DexMethod* on_bb_begin) {
     if (insert_point == block->end() ||
         (block->preds().size() <= 1 && block->succs().size() <= 1) ||
         num_opcodes_bb(block) <= 1) {
-      TRACE(INSTRUMENT, 5, "No instrumentation to block: %zu\n", block_id);
-      return;
+      TRACE(INSTRUMENT, 5, "No instrumentation to block: %s\n", SHOW(block_id));
+      return bb_id;
     }
 
-    TRACE(INSTRUMENT, 5, "Adding instrumentation to block: %zu\n", block_id);
+    TRACE(INSTRUMENT, 5, "Adding instrumentation to block: %s\n",
+          SHOW(block_id));
     code->insert_before(code->insert_before(insert_point, invoke_inst),
                         const_inst);
 
-  } // End of block loop.
+    assert(!bb_id_map.count(block_id));
+    bb_id_map.emplace(block_id, bb_id++);
+    bb_vector.push_back(block);
+    TRACE(INSTRUMENT, 3, "Id: %zu BB: %s\n", bb_id, SHOW(block_id));
+    } // End of block loop.
+    return bb_id;
 }
 
 void instrument_onMethodBegin(DexMethod* method,
@@ -437,6 +449,12 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     // identifier and add a jump to on_bb_begin() at the beginning.
     // on_bb_begin() will set the touch variable when a basic block is accessed
     // at runtime.
+    size_t bb_index = 0;
+    //Map Basic block identifier to its name(MethodName + BlockID).
+    std::unordered_map<std::string, int /*id*/> bb_id_map;
+    //This vector is used to get references to the blocks.
+    std::vector<cfg::Block*> bb_vector;
+
     walk::methods(scope, [&](DexMethod* method) {
       if (method == on_bb_begin || method == analysis_cls->get_clinit()) {
         return;
@@ -446,9 +464,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
           !is_included(method->get_name()->str(), cls_name, m_whitelist)) {
         return;
       }
-      instrument_on_bb_begin(method, on_bb_begin);
+      bb_index = instrument_on_bb_begin(method, on_bb_begin, bb_index,
+                                        bb_id_map, bb_vector);
     });
-
   } else {
     std::cerr << "[InstrumentPass] Unknown option.\n";
   }
