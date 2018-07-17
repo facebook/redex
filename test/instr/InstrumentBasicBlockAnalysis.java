@@ -8,11 +8,11 @@ package com.facebook.redextest;
 
 import java.util.HashMap;
 
-public class InstrumentBBAnalysis {
+public class InstrumentBasicBlockAnalysis {
 
-  private static final HashMap<Integer, Integer> bb_map = new HashMap<>();
+  private static final HashMap<Integer, Integer> bbMap = new HashMap<>();
 
-  public static void on_bb_begin(int block_id) {
-    bb_map.put(block_id, 1);
+  public static void onBasicBlockBegin(int blockId) {
+    bbMap.put(blockId, 1);
   }
 }

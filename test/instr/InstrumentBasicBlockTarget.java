@@ -8,7 +8,7 @@ package com.facebook.redextest;
 
 import java.util.*;
 
-public class InstrumentBBTarget {
+public class InstrumentBasicBlockTarget {
   public static void testFunc1() {
     int x = 1;
   }
@@ -33,7 +33,7 @@ public class InstrumentBBTarget {
       System.out.println("Not True :(");
     }
     System.out.println("After Test: " + temp_var);
-    InstrumentBBTarget.testFunc1();
+    InstrumentBasicBlockTarget.testFunc1();
   }
 
   private static String getCharForNumber(int i) {
@@ -63,7 +63,7 @@ public class InstrumentBBTarget {
     while (in++ < test_var) {
       System.out.println("In the loop: " + in);
       if (in == 20) {
-        InstrumentBBTarget.testFunc5();
+        InstrumentBasicBlockTarget.testFunc5();
       }
     }
     Long date_in_Long = getDateinLong();
@@ -78,12 +78,12 @@ public class InstrumentBBTarget {
    return dateVar + int_var;
  }
   public static void main(String args[]) {
-    boolean target = InstrumentBBTarget.testFunc2();
-    InstrumentBBTarget.testFunc1();
-    InstrumentBBTarget.testFunc3(target);
+    boolean target = InstrumentBasicBlockTarget.testFunc2();
+    InstrumentBasicBlockTarget.testFunc1();
+    InstrumentBasicBlockTarget.testFunc3(target);
     Random rand = new Random();
     int temp_var = rand.nextInt(25) + 1;
-    InstrumentBBTarget.testFunc4(temp_var);
-    InstrumentBBTarget.testFunc6(temp_var);
+    InstrumentBasicBlockTarget.testFunc4(temp_var);
+    InstrumentBasicBlockTarget.testFunc6(temp_var);
   }
 }
