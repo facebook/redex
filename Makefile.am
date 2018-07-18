@@ -243,6 +243,7 @@ redex_all_SOURCES = \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
+	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_simplification/StringIterator.cpp \
 	opt/string_simplification/StringSimplification.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \

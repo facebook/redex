@@ -83,6 +83,7 @@
   TM(SINK)               \
   TM(SINL)               \
   TM(SPLIT_RES)          \
+  TM(STATIC_RELO)        \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \
   TM(SYNT)               \
