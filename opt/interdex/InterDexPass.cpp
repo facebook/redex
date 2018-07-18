@@ -7,7 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#include "InterDex.h"
+#include "InterDexPass.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +48,7 @@ bool emit_canaries = false;
 int64_t linear_alloc_limit;
 std::unordered_set<DexClass*> mixed_mode_classes;
 
-void gather_refs(InterDexPass* pass,
+void gather_refs(interdex::InterDexPass* pass,
                  const DexClass* cls,
                  mrefs_t* mrefs,
                  frefs_t* frefs) {
@@ -234,7 +234,7 @@ unsigned estimate_linear_alloc(const DexClass* clazz) {
   return lasize;
 }
 
-bool should_skip_class(InterDexPass* pass, DexClass* clazz) {
+bool should_skip_class(interdex::InterDexPass* pass, DexClass* clazz) {
   for (const auto& plugin : pass->m_plugins) {
     if (plugin->should_skip_class(clazz)) {
       return true;
@@ -383,9 +383,9 @@ class InterDex {
   InterDex(
       const DexClassesVector& dexen,
       const std::string& mixed_mode_classes_file,
-      const std::unordered_set<DexStatus, std::hash<int>>&
+      const std::unordered_set<interdex::DexStatus, std::hash<int>>&
           mixed_mode_dex_statuses,
-      InterDexPass* pass,
+      interdex::InterDexPass* pass,
       ApkManager& apk_manager,
       ConfigFiles& cfg,
       bool static_prune_classes,
@@ -438,9 +438,9 @@ class InterDex {
 
   const DexClassesVector& m_dexen;
   const std::string& m_mixed_mode_classes_file;
-  const std::unordered_set<DexStatus, std::hash<int>>
+  const std::unordered_set<interdex::DexStatus, std::hash<int>>
     m_mixed_mode_dex_statuses;
-  InterDexPass* m_pass;
+  interdex::InterDexPass* m_pass;
   ApkManager& m_apk_manager;
   ConfigFiles& m_cfg;
   bool m_static_prune_classes;
@@ -976,36 +976,31 @@ void InterDex::emit_mixed_mode_classes(
 
 bool InterDex::is_mixed_mode_dex(const DexConfig& dconfig) {
   if (m_coldstart_dexes == 0 && dconfig.is_coldstart &&
-      m_mixed_mode_dex_statuses.count(FIRST_COLDSTART_DEX)) {
+      m_mixed_mode_dex_statuses.count(interdex::FIRST_COLDSTART_DEX)) {
     return true;
   }
 
   if (m_extended_set_dexes == 0 && dconfig.is_extended_set &&
-      m_mixed_mode_dex_statuses.count(FIRST_EXTENDED_DEX)) {
+      m_mixed_mode_dex_statuses.count(interdex::FIRST_EXTENDED_DEX)) {
     return true;
   }
 
   if (m_scroll_dexes == 0 && dconfig.has_scroll_cls &&
-      m_mixed_mode_dex_statuses.count(SCROLL_DEX)) {
+      m_mixed_mode_dex_statuses.count(interdex::SCROLL_DEX)) {
     return true;
   }
 
   return false;
 }
 
-} // namespace
-
-
-namespace {
-
-std::unordered_set<DexStatus, std::hash<int>> get_mixed_mode_dex_statuses(
+std::unordered_set<interdex::DexStatus, std::hash<int>> get_mixed_mode_dex_statuses(
     const std::vector<std::string>& mixed_mode_dex_statuses) {
-  std::unordered_set<DexStatus, std::hash<int>> res;
+  std::unordered_set<interdex::DexStatus, std::hash<int>> res;
 
-  static std::unordered_map<std::string, DexStatus> string_to_status = {
-    {"first_coldstart_dex", FIRST_COLDSTART_DEX},
-    {"first_extended_dex", FIRST_EXTENDED_DEX},
-    {"scroll_dex", SCROLL_DEX}};
+  static std::unordered_map<std::string, interdex::DexStatus> string_to_status = {
+    {"first_coldstart_dex", interdex::FIRST_COLDSTART_DEX},
+    {"first_extended_dex", interdex::FIRST_EXTENDED_DEX},
+    {"scroll_dex", interdex::SCROLL_DEX}};
 
   for (const std::string& mixed_mode_dex : mixed_mode_dex_statuses) {
     always_assert_log(string_to_status.count(mixed_mode_dex),
@@ -1018,6 +1013,8 @@ std::unordered_set<DexStatus, std::hash<int>> get_mixed_mode_dex_statuses(
 }
 
 } // namespace
+
+namespace interdex {
 
 void InterDexPass::configure_pass(const PassConfig& pc) {
   pc.get("static_prune", false, m_static_prune);
@@ -1085,3 +1082,5 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 }
 
 static InterDexPass s_pass;
+
+} // namespace interdex
