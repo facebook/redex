@@ -27,6 +27,10 @@ class PassConfig {
     param = m_config.get(name, (Json::Int64)dflt).asInt();
   }
 
+  void get(const char* name, size_t dflt, size_t& param) const {
+    param = m_config.get(name, (Json::UInt)dflt).asUInt();
+  }
+
   void get(
     const char* name,
     const std::string& dflt,
