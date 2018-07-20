@@ -120,6 +120,7 @@ libredex_la_SOURCES = \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/Mutators.cpp \
+	libredex/OptData.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PluginRegistry.cpp \
