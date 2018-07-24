@@ -77,6 +77,25 @@ void fix_colliding_method(
 
 namespace type_reference {
 
+std::string get_method_signature(const DexMethod* method) {
+  std::ostringstream ss;
+  auto proto = method->get_proto();
+  ss << show(proto->get_rtype()) << " ";
+  ss << method->get_simple_deobfuscated_name();
+  auto arg_list = proto->get_args();
+  if (arg_list->size() > 0) {
+    ss << "(";
+    auto que = arg_list->get_type_list();
+    for (auto t : que) {
+      ss << show(t) << ", ";
+    }
+    ss.seekp(-2, std::ios_base::end);
+    ss << ")";
+  }
+
+  return ss.str();
+}
+
 bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
   auto rtype = get_array_type_or_self(proto->get_rtype());
   if (targets.count(rtype) > 0) {
@@ -154,7 +173,9 @@ DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head) {
 
 void update_method_signature_type_references(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new) {
+    const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    boost::optional<std::unordered_map<DexMethod*, std::string>&>
+        method_debug_map) {
   std::unordered_map<DexMethod*, DexProto*> colliding_candidates;
   TypeSet mergeables;
   for (const auto& pair : old_to_new) {
@@ -165,6 +186,9 @@ void update_method_signature_type_references(
     auto proto = meth->get_proto();
     if (!proto_has_reference_to(proto, mergeables)) {
       return;
+    }
+    if (method_debug_map != boost::none) {
+      method_debug_map.get()[meth] = get_method_signature(meth);
     }
     auto new_proto = update_proto_reference(proto, old_to_new);
     DexMethodSpec spec;
