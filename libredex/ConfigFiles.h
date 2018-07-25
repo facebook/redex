@@ -21,8 +21,12 @@ class DexType;
 using MethodTuple = std::tuple<DexString*, DexString*, DexString*>;
 using MethodMap = std::map<MethodTuple, DexClass*>;
 
+/**
+ * ConfigFiles should be a readonly structure
+ */
 struct ConfigFiles {
   ConfigFiles(const Json::Value& config);
+  ConfigFiles(const Json::Value& config, const std::string& outdir);
 
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.size() == 0) {
@@ -42,38 +46,36 @@ struct ConfigFiles {
     return m_no_optimizations_annos;
   }
 
-  bool save_move_map() {
+  bool save_move_map() const {
     return m_move_map;
   }
 
-  const MethodMap& get_moved_methods_map() {
+  const MethodMap& get_moved_methods_map() const {
     return m_moved_methods_map;
   }
 
+  /* DEPRECATED! */
   void add_moved_methods(MethodTuple mt, DexClass* cls) {
     m_move_map = true;
     m_moved_methods_map[mt] = cls;
   }
 
-  std::string metafile(const std::string& basename) {
+  std::string metafile(const std::string& basename) const {
     if (basename.empty()) {
       return std::string();
     }
     return outdir + '/' + basename;
   }
 
-  ProguardMap& get_proguard_map() {
+  const ProguardMap& get_proguard_map() const {
     return m_proguard_map;
   }
 
-  std::string get_printseeds() {
-    return m_printseeds;
-  }
-
- public:
-  std::string outdir;
+  const std::string& get_printseeds() const { return m_printseeds; }
 
  private:
+  std::string outdir;
+
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
 

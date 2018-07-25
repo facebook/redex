@@ -34,6 +34,11 @@ ConfigFiles::ConfigFiles(const Json::Value& config) :
   }
 }
 
+ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
+    : ConfigFiles(config) {
+  this->outdir = outdir;
+}
+
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.

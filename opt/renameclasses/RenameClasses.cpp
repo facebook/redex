@@ -143,7 +143,6 @@ void rename_classes(
     std::vector<std::string>& pre_whitelist_patterns,
     std::vector<std::string>& post_whitelist_patterns,
     std::unordered_set<const DexType*>& untouchables,
-    ProguardMap& proguard_map,
     bool rename_annotations,
     PassManager& mgr) {
   unpackage_private(scope);
@@ -262,7 +261,7 @@ void RenameClassesPass::run_pass(
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
   rename_classes(
       scope, m_pre_filter_whitelist, m_post_filter_whitelist,
-      untouchables, cfg.get_proguard_map(), m_rename_annotations, mgr);
+      untouchables, m_rename_annotations, mgr);
   TRACE(RENAME, 1,
       "renamed classes: %d anon classes, %d from single char patterns, "
       "%d from multi char patterns\n",

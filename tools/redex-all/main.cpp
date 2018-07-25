@@ -588,14 +588,13 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    ConfigFiles cfg(args.config);
+    ConfigFiles cfg(args.config, args.out_dir);
     {
       Timer t("Deobfuscating dex elements");
       for (auto& store : stores) {
         apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
       }
     }
-    cfg.outdir = args.out_dir;
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode,

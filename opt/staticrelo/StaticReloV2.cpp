@@ -157,7 +157,6 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
     }
     for (const auto& mie : InstructionIterable(code)) {
       if (mie.insn->has_method()) {
-        MethodSearch methodsearch = opcode_to_search(mie.insn);
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
         }
