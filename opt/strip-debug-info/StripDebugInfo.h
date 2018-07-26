@@ -15,19 +15,19 @@ class StripDebugInfoPass : public Pass {
  public:
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("cls_whitelist", {}, m_cls_patterns);
-    pc.get("method_whitelist", {}, m_meth_patterns);
-    pc.get("use_whitelist", false, m_use_whitelist);
-    pc.get("drop_all_dbg_info", false, m_drop_all_dbg_info);
-    pc.get("drop_local_variables", false, m_drop_local_variables);
-    pc.get("drop_line_numbers", false, m_drop_line_nrs);
-    pc.get("drop_src_files", false, m_drop_src_files);
-    pc.get("drop_prologue_end", false, m_drop_prologue_end);
-    pc.get("drop_epilogue_begin", false, m_drop_epilogue_begin);
-    pc.get("drop_all_dbg_info_if_empty", false, m_drop_all_dbg_info_if_empty);
-    pc.get("drop_synth_aggressive", false, m_drop_synth_aggressive);
-    pc.get("drop_synth_conservative", false, m_drop_synth_conservative);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("cls_whitelist", {}, m_cls_patterns);
+    jw.get("method_whitelist", {}, m_meth_patterns);
+    jw.get("use_whitelist", false, m_use_whitelist);
+    jw.get("drop_all_dbg_info", false, m_drop_all_dbg_info);
+    jw.get("drop_local_variables", false, m_drop_local_variables);
+    jw.get("drop_line_numbers", false, m_drop_line_nrs);
+    jw.get("drop_src_files", false, m_drop_src_files);
+    jw.get("drop_prologue_end", false, m_drop_prologue_end);
+    jw.get("drop_epilogue_begin", false, m_drop_epilogue_begin);
+    jw.get("drop_all_dbg_info_if_empty", false, m_drop_all_dbg_info_if_empty);
+    jw.get("drop_synth_aggressive", false, m_drop_synth_aggressive);
+    jw.get("drop_synth_conservative", false, m_drop_synth_conservative);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

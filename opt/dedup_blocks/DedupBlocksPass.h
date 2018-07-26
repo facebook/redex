@@ -15,9 +15,9 @@ class DedupBlocksPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> method_black_list_names;
-    pc.get("method_black_list", {}, method_black_list_names);
+    jw.get("method_black_list", {}, method_black_list_names);
     for (std::string name : method_black_list_names) {
       auto meth = DexMethod::get_method(name);
       if (meth == nullptr || !meth->is_def()) continue;

@@ -1024,19 +1024,18 @@ std::unordered_set<interdex::DexStatus, std::hash<int>> get_mixed_mode_dex_statu
 
 namespace interdex {
 
-void InterDexPass::configure_pass(const PassConfig& pc) {
-  pc.get("static_prune", false, m_static_prune);
-  pc.get("emit_canaries", true, m_emit_canaries);
-  pc.get("normal_primary_dex", false, m_normal_primary_dex);
-  pc.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
-  pc.get("scroll_classes_file", "", m_mixed_mode_classes_file);
+void InterDexPass::configure_pass(const JsonWrapper& jw) {
+  jw.get("static_prune", false, m_static_prune);
+  jw.get("emit_canaries", true, m_emit_canaries);
+  jw.get("normal_primary_dex", false, m_normal_primary_dex);
+  jw.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
+  jw.get("scroll_classes_file", "", m_mixed_mode_classes_file);
 
-  pc.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
-  pc.get("can_touch_coldstart_extended_cls", false,
+  jw.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
+  jw.get("can_touch_coldstart_extended_cls", false,
          m_can_touch_coldstart_extended_cls);
 
-  pc.get("emit_scroll_set_marker", false,
-           m_emit_scroll_set_marker);
+  jw.get("emit_scroll_set_marker", false, m_emit_scroll_set_marker);
 
   always_assert_log(
       !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
@@ -1045,7 +1044,7 @@ void InterDexPass::configure_pass(const PassConfig& pc) {
       "to true\n");
 
   std::vector<std::string> mixed_mode_dexes;
-  pc.get("mixed_mode_dexes", {}, mixed_mode_dexes);
+  jw.get("mixed_mode_dexes", {}, mixed_mode_dexes);
   m_mixed_mode_dex_statuses = get_mixed_mode_dex_statuses(mixed_mode_dexes);
 }
 

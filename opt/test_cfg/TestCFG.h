@@ -15,5 +15,5 @@ class TestCFGPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& pc) override {}
+  virtual void configure_pass(const JsonWrapper& jw) override {}
 };

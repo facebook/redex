@@ -27,9 +27,9 @@ class FinalInlinePass : public Pass {
  public:
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> temp_config_list;
-    pc.get("black_list_annos", {}, temp_config_list);
+    jw.get("black_list_annos", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
       DexType* type = DexType::get_type(type_s.c_str());
       if (type != nullptr) {
@@ -38,7 +38,7 @@ class FinalInlinePass : public Pass {
     }
 
     temp_config_list.clear();
-    pc.get("black_list_types", {}, temp_config_list);
+    jw.get("black_list_types", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
       DexType* type = DexType::get_type(type_s.c_str());
       if (type != nullptr) {
@@ -47,7 +47,7 @@ class FinalInlinePass : public Pass {
     }
 
     temp_config_list.clear();
-    pc.get("keep_class_member_annos", {}, temp_config_list);
+    jw.get("keep_class_member_annos", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
       DexType* type = DexType::get_type(type_s.c_str());
       if (type != nullptr) {
@@ -55,11 +55,11 @@ class FinalInlinePass : public Pass {
       }
     }
 
-    pc.get("keep_class_members", {}, m_config.keep_class_members);
-    pc.get("remove_class_members", {}, m_config.remove_class_members);
-    pc.get(
+    jw.get("keep_class_members", {}, m_config.keep_class_members);
+    jw.get("remove_class_members", {}, m_config.remove_class_members);
+    jw.get(
         "replace_encodable_clinits", false, m_config.replace_encodable_clinits);
-    pc.get("propagate_static_finals", false, m_config.propagate_static_finals);
+    jw.get("propagate_static_finals", false, m_config.propagate_static_finals);
   }
 
   static size_t propagate_constants_for_test(Scope& scope,

@@ -15,15 +15,131 @@
 #include "Debug.h"
 #include "DexClass.h"
 
-ConfigFiles::ConfigFiles(const Json::Value& config) :
-    m_proguard_map(
-      config.get("proguard_map", "").asString()),
-    m_coldstart_class_filename(
-      config.get("coldstart_classes", "").asString()),
-    m_coldstart_method_filename(
-      config.get("coldstart_methods", "").asString()),
-    m_printseeds(config.get("printseeds", "").asString())
-{
+void JsonWrapper::get(const char* name, int64_t dflt, int64_t& param) const {
+  param = m_config.get(name, (Json::Int64)dflt).asInt();
+}
+
+void JsonWrapper::get(const char* name, size_t dflt, size_t& param) const {
+  param = m_config.get(name, (Json::UInt)dflt).asUInt();
+}
+
+void JsonWrapper::get(const char* name,
+                     const std::string& dflt,
+                     std::string& param) const {
+  param = m_config.get(name, dflt).asString();
+}
+
+void JsonWrapper::get(const char* name, bool dflt, bool& param) const {
+  auto val = m_config.get(name, dflt);
+
+  // Do some simple type conversions that folly used to do
+  if (val.isBool()) {
+    param = val.asBool();
+    return;
+  } else if (val.isInt()) {
+    auto valInt = val.asInt();
+    if (valInt == 0 || valInt == 1) {
+      param = (val.asInt() != 0);
+      return;
+    }
+  } else if (val.isString()) {
+    auto str = val.asString();
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](auto c) { return ::tolower(c); });
+    if (str == "0" || str == "false" || str == "off" || str == "no") {
+      param = false;
+      return;
+    } else if (str == "1" || str == "true" || str == "on" || str == "yes") {
+      param = true;
+      return;
+    }
+  }
+  throw std::runtime_error("Cannot convert JSON value to bool: " +
+                           val.asString());
+}
+
+void JsonWrapper::get(const char* name,
+                     const std::vector<std::string>& dflt,
+                     std::vector<std::string>& param) const {
+  auto it = m_config[name];
+  if (it == Json::nullValue) {
+    param = dflt;
+  } else {
+    param.clear();
+    for (auto const& str : it) {
+      param.emplace_back(str.asString());
+    }
+  }
+}
+
+void JsonWrapper::get(const char* name,
+                     const std::vector<std::string>& dflt,
+                     std::unordered_set<std::string>& param) const {
+  auto it = m_config[name];
+  param.clear();
+  if (it == Json::nullValue) {
+    param.insert(dflt.begin(), dflt.end());
+  } else {
+    for (auto const& str : it) {
+      param.emplace(str.asString());
+    }
+  }
+}
+
+void JsonWrapper::get(
+    const char* name,
+    const std::unordered_map<std::string, std::vector<std::string>>& dflt,
+    std::unordered_map<std::string, std::vector<std::string>>& param) const {
+  auto cfg = m_config[name];
+  param.clear();
+  if (cfg == Json::nullValue) {
+    param = dflt;
+  } else {
+    if (!cfg.isObject()) {
+      throw std::runtime_error("Cannot convert JSON value to object: " +
+                               cfg.asString());
+    }
+    for (auto it = cfg.begin(); it != cfg.end(); ++it) {
+      auto key = it.key();
+      if (!key.isString()) {
+        throw std::runtime_error("Cannot convert JSON value to string: " +
+                                 key.asString());
+      }
+      auto& val = *it;
+      if (!val.isArray()) {
+        throw std::runtime_error("Cannot convert JSON value to array: " +
+                                 val.asString());
+      }
+      for (auto& str : val) {
+        if (!str.isString()) {
+          throw std::runtime_error("Cannot convert JSON value to string: " +
+                                   str.asString());
+        }
+        param[key.asString()].push_back(str.asString());
+      }
+    }
+  }
+}
+
+void JsonWrapper::get(const char* name,
+                     const Json::Value dflt,
+                     Json::Value& param) const {
+  param = m_config.get(name, dflt);
+}
+
+const Json::Value& JsonWrapper::operator[](const char* name) const {
+  return m_config[name];
+}
+
+ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
+    : m_json(config),
+      outdir(outdir),
+      m_proguard_map(config.get("proguard_map", "").asString()),
+      m_coldstart_class_filename(
+          config.get("coldstart_classes", "").asString()),
+      m_coldstart_method_filename(
+          config.get("coldstart_methods", "").asString()),
+      m_printseeds(config.get("printseeds", "").asString()) {
   auto no_optimizations_anno = config["no_optimizations_annotations"];
   if (no_optimizations_anno != Json::nullValue) {
     for (auto const& config_anno_name : no_optimizations_anno) {
@@ -34,10 +150,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config) :
   }
 }
 
-ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
-    : ConfigFiles(config) {
-  this->outdir = outdir;
-}
+ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
 
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted

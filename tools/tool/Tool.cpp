@@ -148,7 +148,7 @@ DexStoresVector Tool::init(
     std::cout << "Initializing reachable classes" << std::endl;
   }
   Scope scope = build_class_scope(stores);
-  Json::Value config;
+  JsonWrapper config(Json::nullValue);
   redex::ProguardConfiguration pg_config;
   // TODO: Need to get this from a redex .config file
   std::unordered_set<DexType*> no_optimizations_anno;

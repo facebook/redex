@@ -13,10 +13,10 @@ class AccessMarkingPass : public Pass {
  public:
   AccessMarkingPass() : Pass("AccessMarkingPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("finalize_classes", true, m_finalize_classes);
-    pc.get("finalize_methods", true, m_finalize_methods);
-    pc.get("privatize_methods", true, m_privatize_methods);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("finalize_classes", true, m_finalize_classes);
+    jw.get("finalize_methods", true, m_finalize_methods);
+    jw.get("privatize_methods", true, m_privatize_methods);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

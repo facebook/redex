@@ -13,8 +13,9 @@ class RemoveBuildersPass : public Pass {
  public:
   RemoveBuildersPass() : Pass("RemoveBuildersPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("enable_buildee_constr_change", false, m_enable_buildee_constr_change);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("enable_buildee_constr_change", false,
+           m_enable_buildee_constr_change);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

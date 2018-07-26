@@ -15,9 +15,9 @@
 class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("live_range_splitting", false, m_allocator_config.use_splitting);
-    pc.get("use_spill_costs", false, m_allocator_config.use_spill_costs);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("live_range_splitting", false, m_allocator_config.use_splitting);
+    jw.get("use_spill_costs", false, m_allocator_config.use_spill_costs);
   }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

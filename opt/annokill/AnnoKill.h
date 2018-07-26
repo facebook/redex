@@ -89,14 +89,14 @@ class AnnoKillPass : public Pass {
   AnnoKillPass() : Pass("AnnoKillPass") {}
   explicit AnnoKillPass(const char* name) : Pass(name) {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("keep_annos", {}, m_keep_annos);
-    pc.get("kill_annos", {}, m_kill_annos);
-    pc.get("force_kill_annos", {}, m_force_kill_annos);
-    pc.get("kill_bad_signatures", false, m_kill_bad_signatures);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("keep_annos", {}, m_keep_annos);
+    jw.get("kill_annos", {}, m_kill_annos);
+    jw.get("force_kill_annos", {}, m_force_kill_annos);
+    jw.get("kill_bad_signatures", false, m_kill_bad_signatures);
     std::unordered_map<std::string, std::vector<std::string>> dflt;
-    pc.get("class_hierarchy_keep_annos", dflt, m_class_hierarchy_keep_annos);
-    pc.get("annotated_keep_annos", dflt, m_annotated_keep_annos);
+    jw.get("class_hierarchy_keep_annos", dflt, m_class_hierarchy_keep_annos);
+    jw.get("annotated_keep_annos", dflt, m_annotated_keep_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

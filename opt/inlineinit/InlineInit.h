@@ -21,9 +21,9 @@ class InlineInitPass : public Pass {
  public:
   InlineInitPass() : Pass("InlineInitPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> black_list;
-    pc.get("class_black_list", {}, black_list);
+    jw.get("class_black_list", {}, black_list);
     for (const auto& type_s : black_list) {
       m_inliner_config.caller_black_list.emplace(
           DexType::make_type(type_s.c_str()));

@@ -13,11 +13,11 @@ class Outliner : public Pass {
  public:
   Outliner() : Pass("Outliner") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     // N.B. we pretty much never want to outline the primary dex, but
     // we need to allow this to happen in some scenarios, e.g.
     // instrumentation tests, since they are single-dex affairs.
-    pc.get("outline_primary_dex", false, m_outline_primary_dex);
+    jw.get("outline_primary_dex", false, m_outline_primary_dex);
   }
 
   virtual void run_pass(DexStoresVector& stores,

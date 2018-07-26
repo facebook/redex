@@ -13,8 +13,8 @@
 
 using namespace constant_propagation;
 
-void ConstantPropagationPass::configure_pass(const PassConfig& pc) {
-  pc.get("replace_moves_with_consts",
+void ConstantPropagationPass::configure_pass(const JsonWrapper& jw) {
+  jw.get("replace_moves_with_consts",
          false,
          m_config.transform.replace_moves_with_consts);
 }

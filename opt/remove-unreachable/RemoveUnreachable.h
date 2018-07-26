@@ -13,10 +13,10 @@ class RemoveUnreachablePass : public Pass {
  public:
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("ignore_string_literals", {}, m_ignore_string_literals);
-    pc.get("ignore_string_literal_annos", {}, m_ignore_string_literal_annos);
-    pc.get("ignore_system_annos", {}, m_ignore_system_annos);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("ignore_string_literals", {}, m_ignore_string_literals);
+    jw.get("ignore_string_literal_annos", {}, m_ignore_string_literal_annos);
+    jw.get("ignore_system_annos", {}, m_ignore_system_annos);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

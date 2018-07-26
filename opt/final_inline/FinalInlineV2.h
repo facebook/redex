@@ -21,11 +21,11 @@ class FinalInlinePassV2 : public Pass {
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("aggressively_delete", true, m_config.aggressively_delete);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("aggressively_delete", true, m_config.aggressively_delete);
 
     std::vector<std::string> temp_config_list;
-    pc.get("black_list_types", {}, temp_config_list);
+    jw.get("black_list_types", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
       DexType* type = DexType::get_type(type_s.c_str());
       if (type != nullptr) {

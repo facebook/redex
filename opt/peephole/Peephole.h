@@ -16,8 +16,8 @@ class PeepholePass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("disabled_peepholes", {}, config.disabled_peepholes);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("disabled_peepholes", {}, config.disabled_peepholes);
   }
 
  private:

@@ -22,9 +22,9 @@ class DeadCodeEliminationPass final : public Pass {
       const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
       IRCode& code);
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     std::string external_summaries_file;
-    pc.get("external_summaries", "", external_summaries_file);
+    jw.get("external_summaries", "", external_summaries_file);
     if (external_summaries_file != "") {
       m_external_summaries_file = external_summaries_file;
     }

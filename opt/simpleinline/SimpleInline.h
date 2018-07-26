@@ -20,24 +20,24 @@ class SimpleInlinePass : public Pass {
  public:
   SimpleInlinePass() : Pass("SimpleInlinePass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("virtual", true, m_virtual_inline);
-    pc.get("throws", false, m_inliner_config.throws_inline);
-    pc.get("enforce_method_size_limit",
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("virtual", true, m_virtual_inline);
+    jw.get("throws", false, m_inliner_config.throws_inline);
+    jw.get("enforce_method_size_limit",
            true,
            m_inliner_config.enforce_method_size_limit);
-    pc.get("no_inline_annos", {}, m_no_inline_annos);
-    pc.get("force_inline_annos", {}, m_force_inline_annos);
-    pc.get("multiple_callers", false, m_multiple_callers);
+    jw.get("no_inline_annos", {}, m_no_inline_annos);
+    jw.get("force_inline_annos", {}, m_force_inline_annos);
+    jw.get("multiple_callers", false, m_multiple_callers);
 
     std::vector<std::string> black_list;
-    pc.get("black_list", {}, black_list);
+    jw.get("black_list", {}, black_list);
     for (const auto& type_s : black_list) {
       m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
     }
 
     std::vector<std::string> caller_black_list;
-    pc.get("caller_black_list", {}, caller_black_list);
+    jw.get("caller_black_list", {}, caller_black_list);
     for (const auto& type_s : caller_black_list) {
       m_inliner_config.caller_black_list.emplace(
           DexType::make_type(type_s.c_str()));

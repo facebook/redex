@@ -15,13 +15,13 @@ class PrintMembersPass : public Pass {
  public:
   PrintMembersPass() : Pass("PrintMembersPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("show_code", false, m_config.show_code);
-    pc.get("show_sfields", true, m_config.show_sfields);
-    pc.get("show_ifields", true, m_config.show_ifields);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("show_code", false, m_config.show_code);
+    jw.get("show_sfields", true, m_config.show_sfields);
+    jw.get("show_ifields", true, m_config.show_ifields);
 
     std::vector<std::string> classes;
-    pc.get("only_these_classes", {}, classes);
+    jw.get("only_these_classes", {}, classes);
     for (std::string& name : classes) {
       DexClass* c =
           type_class(DexType::get_type(DexString::get_string(name.c_str())));
@@ -31,7 +31,7 @@ class PrintMembersPass : public Pass {
     }
 
     std::vector<std::string> methods;
-    pc.get("only_these_methods", {}, methods);
+    jw.get("only_these_methods", {}, methods);
     for (std::string& name : methods) {
       DexMethodRef* m = DexMethod::get_method(name);
       if (m != nullptr && m->is_def()) {

@@ -35,7 +35,7 @@ class InterDexPass : public Pass {
     PluginRegistry::get().register_pass(INTERDEX_PASS_NAME, std::move(plugin));
   }
 
-  virtual void configure_pass(const PassConfig& pc) override;
+  virtual void configure_pass(const JsonWrapper& jw) override;
 
   virtual void run_pass(DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

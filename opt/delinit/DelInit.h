@@ -13,8 +13,8 @@ class DelInitPass : public Pass {
  public:
   DelInitPass() : Pass("DelInitPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("package_white_list", {}, m_package_filter);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("package_white_list", {}, m_package_filter);
   }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

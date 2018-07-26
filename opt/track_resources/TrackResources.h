@@ -13,9 +13,9 @@ class TrackResourcesPass : public Pass {
  public:
   TrackResourcesPass() : Pass("TrackResourcesPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("classes_to_track", {}, m_classes_to_track);
-    pc.get("tracked_fields_output", "", m_tracked_fields_output);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("classes_to_track", {}, m_classes_to_track);
+    jw.get("tracked_fields_output", "", m_tracked_fields_output);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

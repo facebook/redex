@@ -59,8 +59,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          bool verify_none_mode,
                          bool is_art_build)
-    : m_config(config),
-      m_apk_mgr(get_apk_dir(config)),
+    : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(pg_config),
@@ -129,8 +128,8 @@ void PassManager::run_passes(DexStoresVector& stores,
   Scope scope = build_class_scope(it);
   {
     Timer t("Initializing reachable classes");
-    init_reachable_classes(
-        scope, m_config, m_pg_config, cfg.get_no_optimizations_annos());
+    init_reachable_classes(scope, cfg.get_json_config(), m_pg_config,
+                           cfg.get_no_optimizations_annos());
   }
   {
     Timer t("Processing proguard rules");
@@ -188,7 +187,8 @@ void PassManager::run_passes(DexStoresVector& stores,
   }
 
   // Retrieve the type checker's settings.
-  auto type_checker_args = m_config["ir_type_checker"];
+  const Json::Value& type_checker_args =
+      cfg.get_json_config()["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
   // When verify_none is enabled, it's OK to have polymorphic constants.
@@ -250,7 +250,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->configure_pass(PassConfig(cfg[name_str]));
+      pass->configure_pass(JsonWrapper(cfg[name_str]));
       return;
     }
   }

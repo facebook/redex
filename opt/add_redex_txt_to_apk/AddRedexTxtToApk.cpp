@@ -15,11 +15,11 @@
 #include "Pass.h"
 #include "Warning.h"
 
-void AddRedexTxtToApkPass::run_pass(DexStoresVector& /* unused */, ConfigFiles& /* unused */, PassManager& mgr) {
-  const Json::Value& config = mgr.get_config();
-  PassConfig pc(config);
+void AddRedexTxtToApkPass::run_pass(DexStoresVector& /* unused */,
+                                    ConfigFiles& cfg,
+                                    PassManager& /* unused */) {
   std::string apk_dir;
-  pc.get("apk_dir", "", apk_dir);
+  cfg.get_json_config().get("apk_dir", "", apk_dir);
 
   if (!apk_dir.size()) {
     TRACE(ADD_REDEX_TXT, 2, "apk_dir not set, so not writing redex.txt\n");

@@ -47,7 +47,6 @@ class PassManager {
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
-  const Json::Value& get_config() const { return m_config; }
   bool verify_none_enabled() const { return m_verify_none_mode; }
   bool is_art_build() const { return m_art_build; }
 
@@ -86,7 +85,6 @@ class PassManager {
                                bool polymorphic_constants,
                                bool verify_moves);
 
-  Json::Value m_config;
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
