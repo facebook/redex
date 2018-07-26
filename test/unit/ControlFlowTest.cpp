@@ -356,7 +356,19 @@ TEST(ControlFlow, nullForwardIterators) {
 
   IRList::iterator a;
   IRList::iterator b;
-  EXPECT_TRUE(a == b);
+  EXPECT_EQ(a, b);
+  for (int i = 0; i < 100; i++) {
+    auto iterable = new cfg::InstructionIterable(cfg);
+    EXPECT_EQ(a, iterable->end().unwrap());
+    EXPECT_EQ(b, iterable->end().unwrap());
+    delete iterable;
+  }
+
+  for (int i = 0; i < 100; i++) {
+    auto iterator = new ir_list::InstructionIterator();
+    EXPECT_EQ(ir_list::InstructionIterator(), *iterator);
+    delete iterator;
+  }
 }
 
 TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
@@ -916,4 +928,39 @@ TEST(ControlFlow, branchingness) {
   }
   EXPECT_EQ(4, blocks_checked);
   delete g_redex;
+}
+
+TEST(ControlFlow, empty_first_block) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (goto :exit)
+
+      (add-int/lit8 v0 v0 1)
+
+      (:exit)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+
+  auto iterable = cfg::InstructionIterable(cfg);
+  std::vector<cfg::InstructionIterator> to_delete;
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST) {
+      // make the first block empty
+      to_delete.push_back(it);
+    }
+  }
+  for (const auto& it : to_delete) {
+    cfg.remove_opcode(it);
+  }
+
+  for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
+    std::cout << show(mie) << std::endl;
+  }
+
+  code->clear_cfg();
 }

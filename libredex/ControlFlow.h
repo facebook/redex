@@ -596,8 +596,13 @@ class InstructionIteratorImpl {
     always_assert(m_cfg.editable());
     if (is_begin) {
       m_block = m_cfg.m_blocks.begin();
-      m_it =
-          ir_list::InstructionIterableImpl<is_const>(m_block->second).begin();
+      if (m_block != m_cfg.m_blocks.end()) {
+        auto iterable = ir_list::InstructionIterableImpl<is_const>(m_block->second);
+        m_it = iterable.begin();
+        if (m_it == iterable.end()) {
+          to_next_block();
+        }
+      }
     } else {
       m_block = m_cfg.m_blocks.end();
     }
@@ -632,10 +637,11 @@ class InstructionIteratorImpl {
   }
 
   void assert_not_end() const {
-    always_assert(m_block != m_cfg.m_blocks.end());
-    always_assert(
+    always_assert_log(m_block != m_cfg.m_blocks.end(), "%s", SHOW(m_cfg));
+    always_assert_log(
         m_it !=
-        ir_list::InstructionIterableImpl<is_const>(m_block->second).end());
+            ir_list::InstructionIterableImpl<is_const>(m_block->second).end(),
+        "%s", SHOW(m_cfg));
   }
 
   Iterator unwrap() const {
