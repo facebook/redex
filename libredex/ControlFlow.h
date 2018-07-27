@@ -379,6 +379,8 @@ class ControlFlowGraph {
   // SIGABORT if there are dangling parent pointers to deleted DexPositions
   void no_dangling_dex_positions();
 
+  uint32_t num_opcodes() const;
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;

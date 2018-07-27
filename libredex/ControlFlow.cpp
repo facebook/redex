@@ -171,11 +171,18 @@ opcode::Branchingness Block::branchingness() {
 }
 
 uint32_t Block::num_opcodes() const {
-  uint32_t result = 0;
-  for (const auto& mie : ir_list::ConstInstructionIterable(m_entries)) {
-    ++result;
+  if (m_parent->editable()) {
+    return m_entries.count_opcodes();
+  } else {
+    uint32_t result = 0;
+    for (auto it = m_begin; it != m_end; ++it) {
+      if (it->type == MFLOW_OPCODE &&
+          !opcode::is_internal(it->insn->opcode())) {
+        ++result;
+      }
+    }
+    return result;
   }
-  return result;
 }
 
 bool Block::has_pred(Block* b, EdgeType t) const {
@@ -676,6 +683,14 @@ void ControlFlowGraph::no_dangling_dex_positions() {
       }
     }
   }
+}
+
+uint32_t ControlFlowGraph::num_opcodes() const {
+  uint32_t result = 0;
+  for (const auto& entry : m_blocks) {
+    result += entry.second->num_opcodes();
+  }
+  return result;
 }
 
 std::vector<Block*> ControlFlowGraph::order() {
