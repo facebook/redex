@@ -51,7 +51,7 @@ class JsonWrapper {
   const Json::Value& operator[](const char* name) const;
 
  private:
-  const Json::Value& m_config;
+  const Json::Value m_config;
 };
 
 /**
