@@ -7,14 +7,9 @@
 
 package com.facebook.redex.test.instr;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.fest.assertions.api.Assertions.assertThat;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-
-import static org.fest.assertions.api.Assertions.*;
-
-import org.junit.Before;
+import com.facebook.FooTextView;
 import org.junit.Test;
 
 interface IForceRename {
@@ -39,5 +34,6 @@ public class RenameClassesV2Test {
         Utils.demangle("com_facebook_redex_test_instr_ForceRename"));
     // Make sure, specifically, that it seems to abide the renamer's conventions
     assertThat(ForceRename.class.getPackage().getName()).isEqualTo("X");
+    assertThat(FooTextView.class.getPackage().getName()).isEqualTo("X");
   }
 }

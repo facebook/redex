@@ -701,6 +701,9 @@ void RenameClassesPassV2::eval_classes_post(
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& cfg,
                                     PassManager& mgr) {
+  auto json = cfg.get_json_config();
+  json.get("apk_dir", "", m_apk_dir);
+  TRACE(RENAME, 3, "APK Dir: %s\n", m_apk_dir.c_str());
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes(scope, class_hierarchy, cfg, m_rename_annotations, mgr);
