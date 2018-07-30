@@ -8,20 +8,30 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 
 enum OptReason : int {
   // Inline Passes
-  OPT_INLINED,
+  INLINED,
 
   // RemoveUnusedArgsPass
-  OPT_CALLSITE_ARGS_REMOVED,
-  OPT_METHOD_PARAMS_REMOVED,
+  CALLSITE_ARGS_REMOVED,
+  METHOD_PARAMS_REMOVED,
 };
 
-/**
- * TODO (anwangster) Categorizing these OPTS/NOPTS is annoying, but splitting
- * up the big OPT enum seems to create bigger issues.
- *
- * So we may use these functions to categorize in the future.
- */
-bool is_nopt(OptReason opt);
+enum NoptReason : int {
+  // Inline Passes
+  INL_CROSS_STORE_REFS,
+  INL_BLACKLISTED_CALLEE,
+  INL_BLACKLISTED_CALLER,
+  INL_EXTERN_CATCH,
+  INL_TOO_BIG,
+  INL_CREATE_VMETH,
+  INL_HAS_INVOKE_SUPER,
+  INL_UNKNOWN_VIRTUAL,
+  INL_UNKNOWN_FIELD,
+  INL_MULTIPLE_RETURNS,
+  INL_TOO_MANY_CALLERS,
+  INL_2_CALLERS_TOO_BIG,
+  INL_3_CALLERS_TOO_BIG,
+};

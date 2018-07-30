@@ -9,9 +9,12 @@
 #include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Mutators.h"
+#include "OptData.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"
+
+using namespace opt_metadata;
 
 namespace {
 
@@ -285,7 +288,7 @@ void MultiMethodInliner::inline_inlinables(
     auto callee = inlinable.first;
     auto insn = inlinable.second;
 
-    if (!is_inlinable(caller, callee, estimated_insn_size)) {
+    if (!is_inlinable(caller, callee, insn->insn, estimated_insn_size)) {
       continue;
     }
 
@@ -293,6 +296,10 @@ void MultiMethodInliner::inline_inlinables(
         SHOW(callee), caller->get_code()->get_registers_size(),
         SHOW(caller),
         callee->get_code()->get_registers_size());
+    // Logging before the call to inline_method to get the most relevant line
+    // number near insn before insn gets replaced. Should be ok as inline_method
+    // does not fail to inline.
+    log_opt(INLINED, caller, insn->insn);
     inliner::inline_method(caller->get_code(), callee->get_code(), insn);
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
@@ -311,18 +318,30 @@ void MultiMethodInliner::inline_inlinables(
  */
 bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const DexMethod* callee,
+                                      const IRInstruction* insn,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
   if (cross_store_reference(callee)) {
+    log_nopt(INL_CROSS_STORE_REFS, caller, insn);
     return false;
   }
-  if (is_blacklisted(callee)) return false;
-  if (caller_is_blacklisted(caller)) return false;
-  if (has_external_catch(callee)) return false;
-  if (cannot_inline_opcodes(caller, callee)) {
+  if (is_blacklisted(callee)) {
+    log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    return false;
+  }
+  if (caller_is_blacklisted(caller)) {
+    log_nopt(INL_BLACKLISTED_CALLER, caller);
+    return false;
+  }
+  if (has_external_catch(callee)) {
+    log_nopt(INL_EXTERN_CATCH, callee);
+    return false;
+  }
+  if (cannot_inline_opcodes(caller, callee, insn)) {
     return false;
   }
   if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+    log_nopt(INL_TOO_BIG, caller, insn);
     return false;
   }
 
@@ -417,14 +436,27 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
 bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
-                                               const DexMethod* callee) {
+                                               const DexMethod* callee,
+                                               const IRInstruction* invk_insn) {
   int ret_count = 0;
   for (const auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
-    if (create_vmethod(insn)) return true;
-    if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
-    if (unknown_virtual(insn, callee, caller)) return true;
-    if (unknown_field(insn, callee, caller)) return true;
+    if (create_vmethod(insn)) {
+      log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+      return true;
+    }
+    if (nonrelocatable_invoke_super(insn, callee, caller)) {
+      log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+      return true;
+    }
+    if (unknown_virtual(insn, callee, caller)) {
+      log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+      return true;
+    }
+    if (unknown_field(insn, callee, caller)) {
+      log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+      return true;
+    }
     if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
       info.throws++;
       return true;
@@ -437,6 +469,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
   // worry about creating branches from the multiple returns to the main code
   if (ret_count > 1) {
     info.multi_ret++;
+    log_nopt(INL_MULTIPLE_RETURNS, callee);
     return true;
   }
   return false;
@@ -692,12 +725,22 @@ void select_inlinable(
     for (auto callee : calls_group[2]) {
       if (callee->get_code()->count_opcodes() <= CODE_SIZE_2_CALLERS) {
         inlinable->insert(callee);
+      } else {
+        log_nopt(INL_2_CALLERS_TOO_BIG, callee);
       }
     }
     for (auto callee : calls_group[3]) {
       if (callee->get_code()->count_opcodes() <= CODE_SIZE_3_CALLERS) {
         inlinable->insert(callee);
+      } else {
+        log_nopt(INL_3_CALLERS_TOO_BIG, callee);
       }
+    }
+  }
+
+  for (size_t i = multiple_callers ? 2 : 4; i < MAX_COUNT; ++i) {
+    for (auto callee : calls_group[i]) {
+      log_nopt(INL_TOO_MANY_CALLERS, callee);
     }
   }
 }

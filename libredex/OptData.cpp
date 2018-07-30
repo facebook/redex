@@ -24,7 +24,6 @@
 #include "Trace.h"
 
 namespace {
-
 /**
  * Returns: true when a line number is successfully found.
  * Updates: line_num.
@@ -33,7 +32,9 @@ namespace {
  * When insn != null, we return the line number last encountered before
  * the given insn. The given method must have code when insn != null.
  */
-bool get_line_num(DexMethod* method, IRInstruction* insn, size_t* line_num) {
+bool get_line_num(const DexMethod* method,
+                  const IRInstruction* insn,
+                  size_t* line_num) {
   auto code = method->get_code();
   always_assert_log(!insn || insn && code,
                     "Logged method with instructions must contain code\n");
@@ -64,37 +65,45 @@ bool get_line_num(DexMethod* method, IRInstruction* insn, size_t* line_num) {
 
 namespace opt_metadata {
 
-bool log_enabled(TraceModule module) {
-  return OptDataMapper::get_instance().log_enabled(module);
-}
-
-void log_opt(OptReason opt, DexMethod* method, IRInstruction* insn) {
+void log_opt(OptReason opt,
+             const DexMethod* method,
+             const IRInstruction* insn) {
   OptDataMapper::get_instance().log_opt(opt, method, insn);
 }
 
-void log_opt(OptReason opt, DexMethod* method) {
+void log_nopt(NoptReason nopt,
+              const DexMethod* method,
+              const IRInstruction* insn) {
+  OptDataMapper::get_instance().log_nopt(nopt, method, insn);
+}
+
+void log_opt(OptReason opt, const DexMethod* method) {
   OptDataMapper::get_instance().log_opt(opt, method);
 }
 
-void log_opt(OptReason opt, DexClass* cls) {
+void log_nopt(NoptReason nopt, const DexMethod* method) {
+  OptDataMapper::get_instance().log_nopt(nopt, method);
+}
+
+void log_opt(OptReason opt, const DexClass* cls) {
   OptDataMapper::get_instance().log_opt(opt, cls);
 }
 
-InsnOptData::InsnOptData(DexMethod* method, IRInstruction* insn)
+void log_nopt(NoptReason nopt, const DexClass* cls) {
+  OptDataMapper::get_instance().log_nopt(nopt, cls);
+}
+
+InsnOptData::InsnOptData(const DexMethod* method, const IRInstruction* insn)
     : m_method(method), m_insn(insn) {
   m_has_line_num = get_line_num(method, insn, &m_line_num);
 }
 
-void InsnOptData::add_opt_data(OptReason opt) { m_opts.emplace_back(opt); }
-
-MethodOptData::MethodOptData(DexMethod* method) : m_method(method) {
+MethodOptData::MethodOptData(const DexMethod* method) : m_method(method) {
   m_has_line_num = get_line_num(m_method, nullptr, &m_line_num);
 }
 
-void MethodOptData::add_opt_data(OptReason opt) { m_opts.emplace_back(opt); }
-
 std::shared_ptr<InsnOptData> MethodOptData::get_insn_opt_data(
-    IRInstruction* insn) {
+    const IRInstruction* insn) {
   auto kv_pair = m_insn_opt_map.find(insn);
   if (kv_pair == m_insn_opt_map.end()) {
     auto insn_opt_data = std::make_shared<InsnOptData>(m_method, insn);
@@ -104,7 +113,7 @@ std::shared_ptr<InsnOptData> MethodOptData::get_insn_opt_data(
   return kv_pair->second;
 }
 
-ClassOptData::ClassOptData(DexClass* cls) : m_cls(cls) {
+ClassOptData::ClassOptData(const DexClass* cls) : m_cls(cls) {
   m_package = get_package_name(cls->get_type());
   auto source_file = cls->get_source_file();
   if (source_file != nullptr) {
@@ -113,10 +122,8 @@ ClassOptData::ClassOptData(DexClass* cls) : m_cls(cls) {
   }
 }
 
-void ClassOptData::add_opt_data(OptReason opt) { m_opts.emplace_back(opt); }
-
 std::shared_ptr<MethodOptData> ClassOptData::get_meth_opt_data(
-    DexMethod* method) {
+    const DexMethod* method) {
   auto kv_pair = m_meth_opt_map.find(method);
   if (kv_pair == m_meth_opt_map.end()) {
     auto meth_opt_data = std::make_shared<MethodOptData>(method);
@@ -138,82 +145,68 @@ std::shared_ptr<ClassOptData> OptDataMapper::get_cls_opt_data(
   return kv_pair->second;
 }
 
-bool OptDataMapper::log_enabled(TraceModule module) {
-  // TODO (anwangster)
-  // Add in class/method/insn filter here and call in write_opt_data, since it's
-  // probably better to see what info we have first before discarding.
-  return true;
-}
-
 void OptDataMapper::log_opt(OptReason opt,
-                            DexMethod* method,
-                            IRInstruction* insn) {
+                            const DexMethod* method,
+                            const IRInstruction* insn) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
   auto insn_opt_data = meth_opt_data->get_insn_opt_data(insn);
-  insn_opt_data->add_opt_data(opt);
+  insn_opt_data->m_opts.emplace_back(opt);
 }
 
-void OptDataMapper::log_opt(OptReason opt, DexMethod* method) {
+void OptDataMapper::log_nopt(NoptReason nopt,
+                             const DexMethod* method,
+                             const IRInstruction* insn) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
-  meth_opt_data->add_opt_data(opt);
+  auto insn_opt_data = meth_opt_data->get_insn_opt_data(insn);
+  insn_opt_data->m_nopts.emplace_back(nopt);
 }
 
-void OptDataMapper::log_opt(OptReason opt, DexClass* cls) {
+void OptDataMapper::log_opt(OptReason opt, const DexMethod* method) {
+  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  auto cls_opt_data = get_cls_opt_data(method->get_class());
+  auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
+  meth_opt_data->m_opts.emplace_back(opt);
+}
+
+void OptDataMapper::log_nopt(NoptReason nopt, const DexMethod* method) {
+  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  auto cls_opt_data = get_cls_opt_data(method->get_class());
+  auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
+  meth_opt_data->m_nopts.emplace_back(nopt);
+}
+
+void OptDataMapper::log_opt(OptReason opt, const DexClass* cls) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
   auto cls_opt_data = get_cls_opt_data(cls->get_type());
-  cls_opt_data->add_opt_data(opt);
+  cls_opt_data->m_opts.emplace_back(opt);
+}
+
+void OptDataMapper::log_nopt(NoptReason nopt, const DexClass* cls) {
+  std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  auto cls_opt_data = get_cls_opt_data(cls->get_type());
+  cls_opt_data->m_nopts.emplace_back(nopt);
 }
 
 /**
- * NOTE: We'd rather construct these messages here than in pass code, so that
- *       the set of possible messages is easily accessible in a centralized
- *       location. Also we save memory by avoiding intermediary string storage.
- *       Style here is still up in the air.
- * TODO (anwangster) Maybe outsource all messages to OptDataDefs.
+ * TODO (anwangster)
+ * Instead of a file, directly shove info into an xdb. Next diff.
+ * When shoving everything into the db, we're gonna let sql take care of
+ * counting opt.occurrences instead of us manually ticking up a number.
  */
-void OptDataMapper::write_insn_opt(std::shared_ptr<InsnOptData> insn_opt_data,
-                                   OptReason opt,
-                                   FILE* file) {
-  switch (opt) {
-  case OPT_INLINED:
-    static const char* s_opt_inlined = "[OPT] Inlined method\n";
-    fprintf(file, "%s", s_opt_inlined);
-    return;
-  case OPT_CALLSITE_ARGS_REMOVED:
-    static const char* s_opt_callsite_args_removed =
-        "[OPT] Updated callsite args for invoking updated method\n";
-    fprintf(file, "%s", s_opt_callsite_args_removed);
-    return;
-  default:
-    always_assert_log(false, "Tried to write a non-registered insn opt\n");
-  }
+void OptDataMapper::write_opt(OptReason reason, FILE* file) {
+  auto header = "[OPT]";
+  const auto& msg = get_opt_msg(reason);
+  fprintf(file, "%s %s", header, msg.c_str());
 }
 
-void OptDataMapper::write_meth_opt(std::shared_ptr<MethodOptData> meth_opt_data,
-                                   OptReason opt,
-                                   FILE* file) {
-  switch (opt) {
-  case OPT_METHOD_PARAMS_REMOVED:
-    static const char* s_opt_method_params_removed =
-        "[OPT] Removed unused params and updated method to %s\n";
-    fprintf(file, s_opt_method_params_removed, SHOW(meth_opt_data->m_method));
-    return;
-  default:
-    always_assert_log(false, "Tried to write a non-registered method opt\n");
-  }
-}
-
-void OptDataMapper::write_cls_opt(std::shared_ptr<ClassOptData> cls_opt_data,
-                                  OptReason opt,
-                                  FILE* file) {
-  switch (opt) {
-  default:
-    always_assert_log(false, "Tried to write a non-registered class opt\n");
-  }
+void OptDataMapper::write_nopt(NoptReason reason, FILE* file) {
+  auto header = "[NOPT]";
+  const auto& msg = get_nopt_msg(reason);
+  fprintf(file, "%s %s", header, msg.c_str());
 }
 
 void OptDataMapper::write_opt_data(const std::string& filename) {
@@ -240,7 +233,11 @@ void OptDataMapper::write_opt_data(const std::string& filename) {
     }
     for (auto cls_opt : cls_opt_data->m_opts) {
       fprintf(file, "\t");
-      write_cls_opt(cls_opt_data, cls_opt, file);
+      write_opt(cls_opt, file);
+    }
+    for (auto cls_nopt : cls_opt_data->m_nopts) {
+      fprintf(file, "\t");
+      write_nopt(cls_nopt, file);
     }
 
     // For every registered method in the class, output all its optimizations.
@@ -256,7 +253,11 @@ void OptDataMapper::write_opt_data(const std::string& filename) {
       }
       for (auto meth_opt : meth_opt_data->m_opts) {
         fprintf(file, "\t\t");
-        write_meth_opt(meth_opt_data, meth_opt, file);
+        write_opt(meth_opt, file);
+      }
+      for (auto meth_nopt : meth_opt_data->m_nopts) {
+        fprintf(file, "\t\t");
+        write_nopt(meth_nopt, file);
       }
 
       // For every registered insn in the method, output all its optimizations.
@@ -273,11 +274,79 @@ void OptDataMapper::write_opt_data(const std::string& filename) {
         }
         for (auto insn_opt : insn_opt_data->m_opts) {
           fprintf(file, "\t\t\t");
-          write_insn_opt(insn_opt_data, insn_opt, file);
+          write_opt(insn_opt, file);
+        }
+        for (auto insn_nopt : insn_opt_data->m_nopts) {
+          fprintf(file, "\t\t\t");
+          write_nopt(insn_nopt, file);
         }
       }
     }
   }
+}
+
+/**
+ * NOTE: We'd rather construct these messages here than in pass code, so that
+ *       the set of possible messages is easily accessible in a centralized
+ *       location. Also we save memory by avoiding intermediary string storage.
+ *       Style here is still up in the air.
+ */
+void OptDataMapper::init_opt_messages() {
+  std::unordered_map<int, std::string> opt_msg_map = {
+      {INLINED, "Inlined method\n"},
+      {CALLSITE_ARGS_REMOVED,
+       "Updated callsite args for invoking updated method\n"},
+      {METHOD_PARAMS_REMOVED,
+       "Removed unused params and updated method signature\n"}};
+  m_opt_msg_map = std::move(opt_msg_map);
+}
+
+void OptDataMapper::init_nopt_messages() {
+  std::unordered_map<int, std::string> nopt_msg_map = {
+      {INL_CROSS_STORE_REFS,
+       "Didn't inline: callee references a DexMember in a dex store different "
+       "from the caller's\n"},
+      {INL_BLACKLISTED_CALLEE, "Didn't inline blacklisted method\n"},
+      {INL_BLACKLISTED_CALLER, "Didn't inline into blacklisted method\n"},
+      {INL_EXTERN_CATCH,
+       "Didn't inline: callee has a non-public external catch type\n"},
+      {INL_TOO_BIG,
+       "Didn't inline: estimated inlined method size is too big\n"},
+      {INL_CREATE_VMETH,
+       "Didn't inline: callee contains invokes of methods not visible to the "
+       "caller\n"},
+      {INL_HAS_INVOKE_SUPER,
+       "Didn't inline: callee has a nonrelocatable super call\n"},
+      {INL_UNKNOWN_VIRTUAL,
+       "Didn't inline: callee contains calls to a non-public or unknown "
+       "virtual method\n"},
+      {INL_UNKNOWN_FIELD,
+       "Didn't inline: callee references a field unknown to the caller\n"},
+      {INL_MULTIPLE_RETURNS,
+       "Didn't inline: callee has multiple return points\n"},
+      {INL_TOO_MANY_CALLERS,
+       "Didn't inline: this method has too many callers\n"},
+      {INL_2_CALLERS_TOO_BIG,
+       "Didn't inline: this method has only 2 callers, but it's too big\n"},
+      {INL_3_CALLERS_TOO_BIG,
+       "Didn't inline: this method has only 3 callers, but it's too big\n"}};
+  m_nopt_msg_map = std::move(nopt_msg_map);
+}
+
+std::string OptDataMapper::get_opt_msg(OptReason reason) {
+  const auto& kv_pair = m_opt_msg_map.find(reason);
+  always_assert_log(kv_pair != m_opt_msg_map.end(),
+                    "Message not found for reason %s\n",
+                    reason);
+  return kv_pair->second;
+}
+
+std::string OptDataMapper::get_nopt_msg(NoptReason reason) {
+  const auto& kv_pair = m_nopt_msg_map.find(reason);
+  always_assert_log(kv_pair != m_nopt_msg_map.end(),
+                    "Message not found for reason %s\n",
+                    reason);
+  return kv_pair->second;
 }
 
 std::mutex OptDataMapper::s_opt_log_mutex;

@@ -23,13 +23,12 @@
  * To log an optimization/non-opt:
  *  1. Register a reason for an optimization:
  *     - Determine which level you want to log at: class/method/insn.
- *     - Add a value to the enum OptReason in OptDataDefs.h
- *     - In OptData.cpp, add a case w/message to the relevant
- *       write_(class/method/insn)_opt function.
- *  2. In your code, call
- *     - For insn-level: log_opt(opt, method, insn)
- *     - For method-level: log_opt(opt, method)
- *     - For class-level: log_opt(opt, cls)
+ *     - In OptDataDefs.h, add a value to the enum OptReason/NoptReason.
+ *     - In OptData.cpp, add a case w/message to init_opt/nopt_messages().
+ *  2. In your code, use the namespace opt_metadata to call
+ *     - For insn-level: log_opt/nopt(reason, method, insn)
+ *     - For method-level: log_opt/nopt(reason, method)
+ *     - For class-level: log_opt/nopt(reason, cls)
  */
 namespace opt_metadata {
 class InsnOptData;
@@ -40,7 +39,10 @@ class ClassOptData;
  * Per-instruction logging functions. We require each insn log to be
  * associated with a method.
  */
-void log_opt(OptReason opt, DexMethod* method, IRInstruction* insn);
+void log_opt(OptReason opt, const DexMethod* method, const IRInstruction* insn);
+void log_nopt(NoptReason opt,
+              const DexMethod* method,
+              const IRInstruction* insn);
 
 /**
  * Per-method logging functions.
@@ -48,14 +50,16 @@ void log_opt(OptReason opt, DexMethod* method, IRInstruction* insn);
  * For example: log_opt(opt, method1, method2) if methods interact
  *              with each other.
  */
-void log_opt(OptReason opt, DexMethod* method);
+void log_opt(OptReason opt, const DexMethod* method);
+void log_nopt(NoptReason opt, const DexMethod* method);
 
 /**
  * Per-class logging functions.
  * TODO (anwangster) Is class-class opt data needed?
  * For example: log_opt(opt, cls1, cls2) if classes interact with each other.
  */
-void log_opt(OptReason opt, DexClass* cls);
+void log_opt(OptReason opt, const DexClass* cls);
+void log_nopt(NoptReason opt, const DexClass* cls);
 
 /**
  * Stores per-insn optimization data.
@@ -65,15 +69,15 @@ class InsnOptData {
   friend class OptDataMapper;
 
  public:
-  InsnOptData(DexMethod* method, IRInstruction* insn);
-  void add_opt_data(OptReason opt);
+  InsnOptData(const DexMethod* method, const IRInstruction* insn);
 
  private:
-  DexMethod* m_method;
+  const DexMethod* m_method;
+  const IRInstruction* m_insn;
   bool m_has_line_num{false};
-  IRInstruction* m_insn;
   size_t m_line_num{0};
   std::vector<OptReason> m_opts;
+  std::vector<NoptReason> m_nopts;
 };
 
 /**
@@ -85,16 +89,16 @@ class MethodOptData {
   friend class OptDataMapper;
 
  public:
-  MethodOptData(DexMethod* method);
-  void add_opt_data(OptReason opt);
-  std::shared_ptr<InsnOptData> get_insn_opt_data(IRInstruction* insn);
+  MethodOptData(const DexMethod* method);
+  std::shared_ptr<InsnOptData> get_insn_opt_data(const IRInstruction* insn);
 
  private:
-  DexMethod* m_method;
+  const DexMethod* m_method;
   bool m_has_line_num{false};
   size_t m_line_num{0};
   std::vector<OptReason> m_opts;
-  std::unordered_map<IRInstruction*, std::shared_ptr<InsnOptData>>
+  std::vector<NoptReason> m_nopts;
+  std::unordered_map<const IRInstruction*, std::shared_ptr<InsnOptData>>
       m_insn_opt_map;
 };
 
@@ -105,17 +109,18 @@ class ClassOptData {
   friend class OptDataMapper;
 
  public:
-  ClassOptData(DexClass* cls);
-  void add_opt_data(OptReason opt);
-  std::shared_ptr<MethodOptData> get_meth_opt_data(DexMethod* method);
+  ClassOptData(const DexClass* cls);
+  std::shared_ptr<MethodOptData> get_meth_opt_data(const DexMethod* method);
 
  private:
-  DexClass* m_cls;
+  const DexClass* m_cls;
   bool m_has_srcfile{false};
   std::string m_package;
   std::string m_filename;
   std::vector<OptReason> m_opts;
-  std::unordered_map<DexMethod*, std::shared_ptr<MethodOptData>> m_meth_opt_map;
+  std::vector<NoptReason> m_nopts;
+  std::unordered_map<const DexMethod*, std::shared_ptr<MethodOptData>>
+      m_meth_opt_map;
 };
 
 /**
@@ -133,16 +138,18 @@ class OptDataMapper {
   void operator=(OptDataMapper const&) = delete;
 
   /**
-   * For now, every log attempt succeeds.
-   */
-  bool log_enabled(TraceModule module);
-
-  /**
    * Records the given opt and attributes it to the given class/method/insn.
    */
-  void log_opt(OptReason opt, DexMethod* method, IRInstruction* insn);
-  void log_opt(OptReason opt, DexMethod* method);
-  void log_opt(OptReason opt, DexClass* cls);
+  void log_opt(OptReason opt,
+               const DexMethod* method,
+               const IRInstruction* insn);
+  void log_nopt(NoptReason opt,
+                const DexMethod* method,
+                const IRInstruction* insn);
+  void log_opt(OptReason opt, const DexMethod* method);
+  void log_nopt(NoptReason opt, const DexMethod* method);
+  void log_opt(OptReason opt, const DexClass* cls);
+  void log_nopt(NoptReason opt, const DexClass* cls);
 
   /**
    * Writes the gathered optimization data in human-readable format. Relies on
@@ -151,9 +158,29 @@ class OptDataMapper {
   void write_opt_data(const std::string& filename);
 
  private:
-  std::unordered_map<DexClass*, std::shared_ptr<ClassOptData>> m_cls_opt_map;
+  std::unordered_map<const DexClass*, std::shared_ptr<ClassOptData>>
+      m_cls_opt_map;
+  std::unordered_map<int /*OptReason*/, std::string> m_opt_msg_map;
+  std::unordered_map<int /*NoptReason*/, std::string> m_nopt_msg_map;
 
-  OptDataMapper() {}
+  OptDataMapper() {
+    init_opt_messages();
+    init_nopt_messages();
+  }
+
+  /**
+   * NOTE: Register an optimization/non-opt message in this function.
+   * Adds messages to m_opt_msg_map.
+   */
+  void init_opt_messages();
+  void init_nopt_messages();
+
+  /**
+   * Returns the registered opt/non-opt message. Fails if given a
+   * non-registered reason.
+   */
+  std::string get_opt_msg(OptReason reason);
+  std::string get_nopt_msg(NoptReason reason);
 
   /**
    * Finds and returns a ClassOptData for the given class type. If the
@@ -161,28 +188,7 @@ class OptDataMapper {
    */
   std::shared_ptr<ClassOptData> get_cls_opt_data(DexType* cls_type);
 
-  /**
-   * For the given InsnOptData and opt code, write a useful optimization message
-   * to the given file.
-   */
-  void write_insn_opt(std::shared_ptr<InsnOptData> insn_opt_data,
-                      OptReason opt,
-                      FILE* file);
-
-  /**
-   * For the given MethodOptData and opt code, write a useful optimization
-   * message to the given file.
-   */
-  void write_meth_opt(std::shared_ptr<MethodOptData> meth_opt_data,
-                      OptReason opt,
-                      FILE* file);
-
-  /**
-   * For the given ClassOptData and opt code, write a useful optimization
-   * message to the given file.
-   */
-  void write_cls_opt(std::shared_ptr<ClassOptData> cls_opt_data,
-                     OptReason opt,
-                     FILE* file);
+  void write_opt(OptReason opt, FILE* file);
+  void write_nopt(NoptReason opt, FILE* file);
 };
 } // namespace opt_metadata

@@ -169,7 +169,7 @@ bool RemoveArgs::update_method_signature(
   }
 
   TRACE(ARGS, 3, "Method signature updated to %s\n", SHOW(method));
-  log_opt(OPT_METHOD_PARAMS_REMOVED, method);
+  log_opt(METHOD_PARAMS_REMOVED, method);
   return true;
 }
 
@@ -290,7 +290,7 @@ size_t RemoveArgs::update_callsites() {
           if (is_invoke(insn->opcode())) {
             size_t insn_args_removed = update_callsite(insn);
             if (insn_args_removed > 0) {
-              log_opt(OPT_CALLSITE_ARGS_REMOVED, method, insn);
+              log_opt(CALLSITE_ARGS_REMOVED, method, insn);
               callsite_args_removed += insn_args_removed;
             }
           }

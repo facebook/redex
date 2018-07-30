@@ -120,6 +120,7 @@ class MultiMethodInliner {
    */
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
+                    const IRInstruction* insn,
                     size_t estimated_insn_size);
 
 
@@ -147,7 +148,9 @@ class MultiMethodInliner {
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
    */
-  bool cannot_inline_opcodes(const DexMethod* caller, const DexMethod* callee);
+  bool cannot_inline_opcodes(const DexMethod* caller,
+                             const DexMethod* callee,
+                             const IRInstruction* invk_insn);
 
   /**
    * Return true if inlining would require a method called from the callee
