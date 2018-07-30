@@ -678,7 +678,8 @@ DexClassesVector InterDex::run() {
     emit_class(det, outdex, clazz, dconfig);
   }
 
-  if (last_end_marker_it == interdexorder.end()) {
+  if (mixed_mode_classes.size() > 0 &&
+      last_end_marker_it == interdexorder.end()) {
     // If we got here, we didn't find the delimiter -> emitting the mixed mode
     // classes here.
     TRACE(IDEX, 3, "Emitting the mixed mode dex after the interdex order.\n");
