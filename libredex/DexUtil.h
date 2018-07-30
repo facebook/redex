@@ -83,6 +83,11 @@ DexType* get_class_type();
 DexType* get_enum_type();
 
 /**
+ * Return the package for a valid DexType.
+ */
+std::string get_package_name(const DexType* type);
+
+/**
  * Return true if the type is a primitive.
  */
 bool is_primitive(const DexType* type);

@@ -674,7 +674,7 @@ def run_redex(args):
     copy_file_to_out_dir(dex_dir, args.out, 'type-erasure-mappings.txt', 'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'instrument-metadata.txt', 'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(dex_dir, args.out, 'cleanup-removed-classes.txt', 'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'opt.txt', 'opt info', 'redex-opt.txt')
+    copy_file_to_out_dir(dex_dir, args.out, 'opt-decisions.txt', 'opt info', 'redex-opt-decisions.txt')
 
     if config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all

@@ -17,9 +17,13 @@
 #include "IRCode.h"
 #include "Liveness.h"
 #include "Match.h"
+#include "OptData.h"
+#include "OptDataDefs.h"
 #include "TypeSystem.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
+
+using namespace opt_metadata;
 
 /**
  * The RemoveUnusedArgsPass finds method arguments that are not live in the
@@ -165,6 +169,7 @@ bool RemoveArgs::update_method_signature(
   }
 
   TRACE(ARGS, 3, "Method signature updated to %s\n", SHOW(method));
+  log_opt(OPT_METHOD_PARAMS_REMOVED, method);
   return true;
 }
 
@@ -283,7 +288,11 @@ size_t RemoveArgs::update_callsites() {
         for (const auto& mie : InstructionIterable(code)) {
           auto insn = mie.insn;
           if (is_invoke(insn->opcode())) {
-            callsite_args_removed += update_callsite(insn);
+            size_t insn_args_removed = update_callsite(insn);
+            if (insn_args_removed > 0) {
+              log_opt(OPT_CALLSITE_ARGS_REMOVED, method, insn);
+              callsite_args_removed += insn_args_removed;
+            }
           }
         }
         return callsite_args_removed;

@@ -70,6 +70,15 @@ DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
 }
 
+std::string get_package_name(const DexType* type) {
+  std::string name = std::string(type->get_name()->c_str());
+  always_assert_log(name.find("/") != std::string::npos,
+                    "Type name is not valid: %s\n",
+                    name.c_str());
+  unsigned long pos = name.find_last_of("/");
+  return name.substr(0, pos);
+}
+
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();
   switch (name[0]) {

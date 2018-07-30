@@ -660,10 +660,11 @@ int main(int argc, char* argv[]) {
           cfg.metafile(args.config.get("stats_output", "").asString());
       auto method_move_map =
           cfg.metafile(args.config.get("method_move_map", "").asString());
-      auto opt_output_path =
-          cfg.metafile(args.config.get("opt_output", "").asString());
+      auto opt_decisions_output_path =
+          cfg.metafile(args.config.get("opt_decisions_output", "").asString());
       pos_mapper->write_map();
-      OptDataMapper::get_instance().write_opt_data(opt_output_path);
+      opt_metadata::OptDataMapper::get_instance().write_opt_data(
+          opt_decisions_output_path);
       stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
       stats["output_stats"] = get_output_stats(output_totals,
                                                output_dexes_stats,
