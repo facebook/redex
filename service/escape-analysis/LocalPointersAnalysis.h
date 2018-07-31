@@ -130,37 +130,7 @@ class FixpointIterator final
     }
   }
 
-  void analyze_instruction(const IRInstruction* insn, Environment* env) const {
-    auto op = insn->opcode();
-    if (is_alloc_opcode(op)) {
-      env->set_nonescaping_pointer(RESULT_REGISTER, insn);
-    } else if (is_move(op)) {
-      env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
-    } else if (op == OPCODE_CHECK_CAST) {
-      env->set_pointers(RESULT_REGISTER, env->get_pointers(insn->src(0)));
-    } else if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
-      env->set_pointers(insn->dest(), env->get_pointers(RESULT_REGISTER));
-    } else if (insn->dests_size()) {
-      // Not all instruction dests are pointers. However, it is a safe
-      // over-approximation: as long as we correctly identify the pointers that
-      // don't escape, this analysis (as used by DCE) is sound. It is OK for
-      // our purposes to add redundant elements to the escaping set, though
-      // we may want to revisit and optimize this later.
-      env->set_escaping_pointer(insn->dest(), insn);
-    } else if (insn->has_move_result()) {
-      env->set_escaping_pointer(RESULT_REGISTER, insn);
-      if (is_invoke(op) || is_filled_new_array(op)) {
-        for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          env->set_may_escape(insn->src(i));
-        }
-      }
-    } else if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
-               op == OPCODE_IPUT_OBJECT) {
-      // Since we don't model instance fields / array elements, any pointers
-      // written to them must be treated as escaping.
-      env->set_may_escape(insn->src(0));
-    }
-  }
+  void analyze_instruction(const IRInstruction* insn, Environment* env) const;
 
   Environment analyze_edge(const EdgeId&,
                            const Environment& entry_env) const override {

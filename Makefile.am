@@ -69,7 +69,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
-  -I$(top_srcdir)/service/method-dedup \
+	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/shared \
@@ -264,9 +264,10 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
-  service/method-dedup/ConstantLifting.cpp \
-  service/method-dedup/MethodDedup.cpp \
-  service/method-dedup/TypeTags.cpp \
+	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/MethodDedup.cpp \
+	service/method-dedup/TypeTags.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
