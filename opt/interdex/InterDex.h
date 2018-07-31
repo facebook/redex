@@ -12,17 +12,12 @@
 #include "ApkManager.h"
 #include "DexClass.h"
 #include "InterDexPassPlugin.h"
+#include "MixedModeInfo.h"
 
 namespace interdex {
 
 using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
-
-enum DexStatus {
-  FIRST_COLDSTART_DEX = 0,
-  FIRST_EXTENDED_DEX = 1,
-  SCROLL_DEX = 2,
-};
 
 struct DexConfig {
   bool is_coldstart;
@@ -58,41 +53,45 @@ struct dex_emit_tracker {
 class InterDex {
  public:
   InterDex(const DexClassesVector& dexen,
-           const std::string& mixed_mode_classes_file,
-           const std::unordered_set<interdex::DexStatus, std::hash<int>>&
-               mixed_mode_dex_statuses,
            ApkManager& apk_manager,
            ConfigFiles& cfg,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
            bool static_prune_classes,
            bool normal_primary_dex,
-           bool can_touch_coldstart_cls,
-           bool can_touch_coldstart_extended_cls,
            bool emit_scroll_set_marker,
            bool emit_canaries)
       : m_dexen(dexen),
-        m_mixed_mode_classes_file(mixed_mode_classes_file),
-        m_mixed_mode_dex_statuses(mixed_mode_dex_statuses),
         m_apk_manager(apk_manager),
         m_cfg(cfg),
         m_plugins(plugins),
         m_linear_alloc_limit(linear_alloc_limit),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
-        m_can_touch_coldstart_cls(can_touch_coldstart_cls),
-        m_can_touch_coldstart_extended_cls(can_touch_coldstart_extended_cls),
         m_emit_scroll_set_marker(emit_scroll_set_marker),
         m_emit_canaries(emit_canaries) {}
 
   DexClassesVector run();
+
+  void set_mixed_mode_dex_statuses(
+      std::unordered_set<DexStatus, std::hash<int>>&& mixed_mode_dex_statuses) {
+    m_mixed_mode_info.set_mixed_mode_dex_statuses(
+        std::move(mixed_mode_dex_statuses));
+  }
+
+  void set_mixed_mode_classes(std::unordered_set<DexClass*>&& mixed_mode_classes,
+                              bool can_touch_coldstart_set,
+                              bool can_touch_coldstart_extended_set) {
+    m_mixed_mode_info.set_mixed_mode_classes(std::move(mixed_mode_classes),
+                                             can_touch_coldstart_set,
+                                             can_touch_coldstart_extended_set);
+  }
 
   size_t get_num_cold_start_set_dexes() const {
     return m_cold_start_set_dex_count;
   }
 
  private:
-  void get_mixed_mode_classes();
   void emit_mixed_mode_classes();
 
   bool is_mixed_mode_dex(const DexConfig& dconfig);
@@ -122,19 +121,17 @@ class InterDex {
                                bool can_touch_interdex_order);
 
   const DexClassesVector& m_dexen;
-  const std::string& m_mixed_mode_classes_file;
-  const std::unordered_set<interdex::DexStatus, std::hash<int>>
-      m_mixed_mode_dex_statuses;
+
   ApkManager& m_apk_manager;
   ConfigFiles& m_cfg;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   int64_t m_linear_alloc_limit;
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
-  bool m_can_touch_coldstart_cls;
-  bool m_can_touch_coldstart_extended_cls;
   bool m_emit_scroll_set_marker;
   bool m_emit_canaries;
+
+  MixedModeInfo m_mixed_mode_info;
 
   // Number of secondary dexes emitted.
   size_t m_secondary_dexes{0};
