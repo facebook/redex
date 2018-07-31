@@ -7,55 +7,28 @@
 
 #include "RemoveUnreadFields.h"
 
+#include "DexClass.h"
+#include "FieldOpTracker.h"
+#include "IRCode.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
 namespace remove_unread_fields {
 
-struct FieldStats {
-  // Number of instructions which read a field in the entire program.
-  size_t reads{0};
-  // Number of instructions which read this field outside of a <clinit> or
-  // <init>. This number is not actually used to guide field removal decisions
-  // for now.
-  size_t reads_outside_init{0};
-  // Number of instructions which write a field in the entire program.  This
-  // number is not actually used to guide field removal decisions for now.
-  size_t writes{0};
-};
+bool can_remove(DexField* field) {
+  // XXX(jezng): why is can_rename not a subset of can_delete?
+  return field != nullptr && !field->is_external() && can_delete(field) &&
+         can_rename(field);
+}
 
 void PassImpl::run_pass(DexStoresVector& stores,
                         ConfigFiles& cfg,
                         PassManager& mgr) {
 
   auto scope = build_class_scope(stores);
+  field_op_tracker::FieldStatsMap field_stats = field_op_tracker::analyze(scope);
 
-  // Gather the read/write counts.
-  std::unordered_map<DexField*, FieldStats> field_stats;
-  walk::opcodes(scope, [&](const DexMethod* method, const IRInstruction* insn) {
-    auto op = insn->opcode();
-    if (!insn->has_field()) {
-      return;
-    }
-    auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
-      return;
-    }
-    // XXX(jezng): why is can_rename not a subset of can_delete?
-    if (field->is_external() || !can_delete(field) || !can_rename(field)) {
-      return;
-    }
-    if (is_sget(op) || is_iget(op)) {
-      ++field_stats[field].reads;
-      if (!((is_clinit(method) || is_init(method)) &&
-            method->get_class() == field->get_class())) {
-        ++field_stats[field].reads_outside_init;
-      }
-    } else if (is_sput(op) || is_iput(op)) {
-      ++field_stats[field].writes;
-    }
-  });
-
+  uint32_t unread_fields = 0;
   for (auto& pair : field_stats) {
     auto* field = pair.first;
     auto& stats = pair.second;
@@ -67,10 +40,12 @@ void PassImpl::run_pass(DexStoresVector& stores,
           stats.reads_outside_init,
           stats.writes,
           is_synthetic(field));
-    if (stats.reads == 0) {
-      mgr.incr_metric("unread_fields", 1);
+    if (stats.reads == 0 && can_remove(field)) {
+      ++unread_fields;
     }
   }
+  TRACE(RMUF, 2, "unread_fields %u\n", unread_fields);
+  mgr.set_metric("unread_fields", unread_fields);
 
   // Remove the writes to unread fields.
   const auto& const_field_stats = field_stats;
@@ -82,13 +57,14 @@ void PassImpl::run_pass(DexStoresVector& stores,
             continue;
           }
           auto field = resolve_field(insn->get_field());
-          if (field == nullptr) {
+          if (!can_remove(field)) {
             continue;
           }
-          if (!const_field_stats.count(field)) {
+          auto it = const_field_stats.find(field);
+          if (it == const_field_stats.end()) {
             continue;
           }
-          if (const_field_stats.at(field).reads == 0) {
+          if (it->second.reads == 0) {
             TRACE(RMUF, 5, "Removing %s\n", SHOW(insn));
             code.remove_opcode(code.iterator_to(mie));
           }

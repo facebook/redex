@@ -11,6 +11,7 @@
 
 #include "ClassHierarchy.h"
 #include "DexUtil.h"
+#include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"
@@ -65,6 +66,23 @@ size_t mark_methods_final(const Scope& scope, const ClassHierarchy& ch) {
     }
   }
   return n_methods_finalized;
+}
+
+size_t mark_fields_final(const Scope& scope) {
+  field_op_tracker::FieldStatsMap field_stats =
+      field_op_tracker::analyze(scope);
+
+  size_t n_fields_finalized = 0;
+  for (auto& pair : field_stats) {
+    auto* field = pair.first;
+    auto& stats = pair.second;
+    if (stats.writes == 0 && !is_final(field) && !is_volatile(field) &&
+        !field->is_external()) {
+      set_final(field);
+      ++n_fields_finalized;
+    }
+  }
+  return n_fields_finalized;
 }
 
 std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
@@ -145,6 +163,11 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     auto n_methods_final = mark_methods_final(scope, ch);
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
+  }
+  if (m_finalize_fields) {
+    auto n_fields_final = mark_fields_final(scope);
+    pm.incr_metric("finalized_fields", n_fields_final);
+    TRACE(ACCESS, 1, "Finalized %lu fields\n", n_fields_final);
   }
   auto candidates = devirtualize(sm);
   auto dmethods = direct_methods(scope);

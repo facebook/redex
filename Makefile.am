@@ -86,7 +86,7 @@ noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
-  libredex/AnnoUtils.cpp \
+	libredex/AnnoUtils.cpp \
 	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
@@ -107,6 +107,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \

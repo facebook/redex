@@ -16,6 +16,7 @@ class AccessMarkingPass : public Pass {
   virtual void configure_pass(const JsonWrapper& jw) override {
     jw.get("finalize_classes", true, m_finalize_classes);
     jw.get("finalize_methods", true, m_finalize_methods);
+    jw.get("finalize_fields", false, m_finalize_fields);
     jw.get("privatize_methods", true, m_privatize_methods);
   }
 
@@ -24,5 +25,6 @@ class AccessMarkingPass : public Pass {
  private:
   bool m_finalize_classes;
   bool m_finalize_methods;
+  bool m_finalize_fields;
   bool m_privatize_methods;
 };
