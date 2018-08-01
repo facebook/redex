@@ -304,65 +304,25 @@ void summarize_all_method_effects(
   }
 }
 
-s_expr EffectSummary::to_s_expr() const {
+s_expr to_s_expr(const EffectSummary& summary) {
   std::vector<s_expr> s_exprs;
-  s_exprs.emplace_back(std::to_string(effects));
+  s_exprs.emplace_back(std::to_string(summary.effects));
   std::vector<s_expr> mod_param_s_exprs;
-  for (auto idx : modified_params) {
+  for (auto idx : summary.modified_params) {
     mod_param_s_exprs.emplace_back(idx);
   }
   s_exprs.emplace_back(mod_param_s_exprs);
   return s_expr(s_exprs);
 }
 
-boost::optional<EffectSummary> EffectSummary::from_s_expr(const s_expr& expr) {
-  if (expr.size() != 2) {
-    return boost::none;
-  }
+EffectSummary EffectSummary::from_s_expr(const s_expr& expr) {
   EffectSummary summary;
-  if (!expr[0].is_string()) {
-    return boost::none;
-  }
+  always_assert(expr.size() == 2);
+  always_assert(expr[0].is_string());
   summary.effects = std::stoi(expr[0].str());
-  if (!expr[1].is_list()) {
-    return boost::none;
-  }
+  always_assert(expr[1].is_list());
   for (size_t i = 0; i < expr[1].size(); ++i) {
     summary.modified_params.emplace(expr[1][i].get_int32());
   }
   return summary;
-}
-
-void load_effect_summaries(const std::string& filename,
-                           EffectSummaryMap* effect_summaries) {
-  std::ifstream file_input(filename);
-  s_expr_istream s_expr_input(file_input);
-  size_t load_count{0};
-  while (s_expr_input.good()) {
-    s_expr expr;
-    s_expr_input >> expr;
-    if (s_expr_input.eoi()) {
-      break;
-    }
-    always_assert_log(!s_expr_input.fail(), "%s\n",
-                      s_expr_input.what().c_str());
-    DexMethodRef* dex_method =
-        DexMethod::get_method(expr[0].get_string().c_str());
-    if (dex_method == nullptr) {
-      continue;
-    }
-    auto summary_opt = EffectSummary::from_s_expr(expr[1]);
-    always_assert_log(summary_opt, "Couldn't parse S-expression: %s\n",
-                      expr.str().c_str());
-    auto it = effect_summaries->find(dex_method);
-    if (it == effect_summaries->end()) {
-      effect_summaries->emplace(dex_method, *summary_opt);
-    } else {
-      TRACE(DEAD_CODE, 2, "Collision with summary for method %s\n",
-            SHOW(dex_method));
-    }
-    ++load_count;
-  }
-  TRACE(DEAD_CODE, 2, "Loaded %lu summaries from %s\n", load_count,
-        filename.c_str());
 }

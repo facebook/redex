@@ -64,10 +64,10 @@ struct EffectSummary {
     return a.effects == b.effects && a.modified_params == b.modified_params;
   }
 
-  sparta::s_expr to_s_expr() const;
-
-  static boost::optional<EffectSummary> from_s_expr(const sparta::s_expr&);
+  static EffectSummary from_s_expr(const sparta::s_expr&);
 };
+
+sparta::s_expr to_s_expr(const EffectSummary&);
 
 using EffectSummaryMap = std::unordered_map<const DexMethodRef*, EffectSummary>;
 
@@ -88,9 +88,3 @@ void summarize_all_method_effects(
     const Scope& scope,
     const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
     EffectSummaryMap* effect_summaries);
-
-/*
- * Load the serialized effect summaries from a file.
- */
-void load_effect_summaries(const std::string& filename,
-                           EffectSummaryMap* effect_summaries);

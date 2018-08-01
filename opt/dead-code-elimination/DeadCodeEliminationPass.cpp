@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "LocalPointersAnalysis.h"
+#include "SummarySerialization.h"
 #include "Transform.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
@@ -65,7 +66,8 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
 
   EffectSummaryMap effect_summaries;
   if (m_external_summaries_file) {
-    load_effect_summaries(*m_external_summaries_file, &effect_summaries);
+    std::ifstream file_input(*m_external_summaries_file);
+    summary_serialization::read(file_input, &effect_summaries);
   }
   summarize_all_method_effects(
       scope, non_overridden_virtuals, &effect_summaries);
