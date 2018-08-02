@@ -137,11 +137,19 @@ void Block::remove_opcode(const IRList::iterator& it) {
 
 opcode::Branchingness Block::branchingness() {
   always_assert(m_parent->editable());
+  const auto& last = get_last_insn();
 
-  if (succs().empty()) {
-    const auto& last = get_last_insn();
-    if (last != end() && is_return(last->insn->opcode())) {
-      return opcode::BRANCH_RETURN;
+  if (succs().empty() || (succs().size() == 1 &&
+                          m_parent->get_succ_edge_if(this, [](const Edge* e) {
+                            return e->type() == EDGE_GHOST;
+                          }) != nullptr)) {
+    if (last != end()) {
+      auto op = last->insn->opcode();
+      if (is_return(op)) {
+        return opcode::BRANCH_RETURN;
+      } else if (op == OPCODE_THROW) {
+        return opcode::BRANCH_THROW;
+      }
     }
     return opcode::BRANCH_NONE;
   }
@@ -155,7 +163,6 @@ opcode::Branchingness Block::branchingness() {
   if (m_parent->get_succ_edge_if(this, [](const Edge* e) {
         return e->type() == EDGE_BRANCH;
       }) != nullptr) {
-    const auto& last = get_last_insn();
     always_assert(last != end());
     auto br = opcode::branchingness(last->insn->opcode());
     always_assert(br == opcode::BRANCH_IF || br == opcode::BRANCH_SWITCH);
@@ -305,7 +312,6 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
   TryCatches try_catches;
-  std::vector<Block*> exit_blocks;
   Boundaries boundaries; // block boundaries (for editable == true)
 
   find_block_boundaries(
@@ -567,14 +573,18 @@ void ControlFlowGraph::remove_empty_blocks() {
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& succs = b->succs();
-    if (b->empty() && succs.size() > 0) {
+    if (!b->empty() || b == entry_block() || b == exit_block()) {
+      ++it;
+      continue;
+    }
+
+    if (succs.size() > 0) {
       always_assert_log(succs.size() == 1,
         "too many successors for empty block %d:\n%s", it->first, SHOW(*this));
       const auto& succ_edge = succs[0];
       Block* succ = succ_edge->target();
 
-      if (b == succ || // `b` follows itself: an infinite loop
-          b == entry_block()) { // can't redirect nonexistent predecessors
+      if (b == succ) { // `b` follows itself: an infinite loop
         ++it;
         continue;
       }
@@ -585,19 +595,13 @@ void ControlFlowGraph::remove_empty_blocks() {
 
       // Redirect from b's predecessors to b's successor (skipping b). We can't
       // move edges around while we iterate through the edge list though.
-      std::vector<Edge*> need_redirect(b->m_preds.begin(),
-                                                       b->m_preds.end());
+      std::vector<Edge*> need_redirect(b->m_preds.begin(), b->m_preds.end());
       for (const auto& pred_edge : need_redirect) {
         set_edge_target(pred_edge, succ);
       }
     }
-
-    if (b->empty()) {
-      delete b;
-      it = m_blocks.erase(it);
-    } else {
-      ++it;
-    }
+    delete b;
+    it = m_blocks.erase(it);
   }
 }
 
@@ -627,18 +631,30 @@ void ControlFlowGraph::sanity_check() {
           size_t num_succs = b->succs().size();
           auto op = last_mie.insn->opcode();
           if (is_conditional_branch(op) || is_switch(op)) {
-            always_assert_log(num_succs > 1, "block %d, %s", b->id(), SHOW(*this));
+            always_assert_log(num_succs > 1, "block %d, %s", b->id(),
+                              SHOW(*this));
           } else if (is_return(op)) {
-            always_assert_log(num_succs == 0, "block %d, %s", b->id(), SHOW(*this));
+            // Make sure we don't have any outgoing edges (except EDGE_GHOST)
+            auto real_succs = get_succ_edges_if(
+                b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
+            always_assert_log(real_succs.empty(), "block %d, %s", b->id(),
+                              SHOW(*this));
           } else if (is_throw(op)) {
             // A throw could end the method or go to a catch handler.
             // We don't have any useful assertions to make here.
           } else {
-            always_assert_log(num_succs > 0, "block %d, %s", b->id(), SHOW(*this));
+            always_assert_log(num_succs > 0, "block %d, %s", b->id(),
+                              SHOW(*this));
           }
         }
       }
     }
+  }
+
+  if (exit_block() != nullptr) {
+    always_assert_log(exit_block()->succs().empty(),
+                      "exit block has outgoing edges. block %d in \n%s",
+                      exit_block()->id(), SHOW(*this));
   }
 
   for (const auto& entry : m_blocks) {
@@ -1012,18 +1028,121 @@ Block* ControlFlowGraph::create_block() {
   return b;
 }
 
+// We create a small class here (instead of a recursive lambda) so we can
+// label visit with NO_SANITIZE_ADDRESS
+class ExitBlocks {
+ private:
+  uint32_t next_dfn{0};
+  std::stack<const Block*> stack;
+  // Depth-first number. Special values:
+  //   0 - unvisited
+  //   UINT32_MAX - visited and determined to be in a separate SCC
+  std::unordered_map<const Block*, uint32_t> dfns;
+  static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
+  // This is basically Tarjan's algorithm for finding SCCs. I pass around an
+  // extra has_exit value to determine if a given SCC has any successors.
+  using t = std::pair<uint32_t, bool>;
+
+ public:
+  std::vector<Block*> exit_blocks;
+
+  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
+  t visit(const Block* b) {
+    stack.push(b);
+    uint32_t head = dfns[b] = ++next_dfn;
+    // whether any vertex in the current SCC has a successor edge that points
+    // outside itself
+    bool has_exit{false};
+    for (auto& succ : b->succs()) {
+      uint32_t succ_dfn = dfns[succ->target()];
+      uint32_t min;
+      if (succ_dfn == 0) {
+        bool succ_has_exit;
+        std::tie(min, succ_has_exit) = visit(succ->target());
+        has_exit |= succ_has_exit;
+      } else {
+        has_exit |= succ_dfn == VISITED;
+        min = succ_dfn;
+      }
+      head = std::min(min, head);
+    }
+    if (head == dfns[b]) {
+      const Block* top{nullptr};
+      if (!has_exit) {
+        exit_blocks.push_back(const_cast<Block*>(b));
+        has_exit = true;
+      }
+      do {
+        top = stack.top();
+        stack.pop();
+        dfns[top] = VISITED;
+      } while (top != b);
+    }
+    return t(head, has_exit);
+  }
+};
+
+std::vector<Block*> ControlFlowGraph::real_exit_blocks(
+    bool include_infinite_loops) {
+  std::vector<Block*> result;
+  if (m_exit_block != nullptr && include_infinite_loops) {
+    auto ghosts = get_pred_edges_if(
+        m_exit_block, [](const Edge* e) { return e->type() == EDGE_GHOST; });
+    if (!ghosts.empty()) {
+      // The exit block is a ghost block, ignore it and get the real exit points.
+      for (auto e : ghosts) {
+        result.push_back(e->src());
+      }
+    } else {
+      // Empty ghosts means the method has a single exit point and
+      // calculate_exit_block didn't add a ghost block.
+      result.push_back(m_exit_block);
+    }
+  } else {
+    always_assert_log(!include_infinite_loops,
+                      "call calculate_exit_block first");
+    for (const auto& entry : m_blocks) {
+      Block* block = entry.second;
+      const auto& b = block->branchingness();
+      if (b == opcode::BRANCH_RETURN || b == opcode::BRANCH_THROW) {
+        result.push_back(block);
+      }
+    }
+  }
+  return result;
+}
+
+/*
+ * Find all exit blocks. Note that it's not as simple as looking for Blocks with
+ * return or throw opcodes; infinite loops are a valid way of terminating dex
+ * bytecode too. As such, we need to find all strongly connected components
+ * (SCCs) and vertices that lack successors. For SCCs that lack successors, any
+ * one of its vertices can be treated as an exit block; this implementation
+ * picks the head of the SCC.
+ */
 void ControlFlowGraph::calculate_exit_block() {
   if (m_exit_block != nullptr) {
-    return;
+    if (!m_editable) {
+      return;
+    }
+    if (get_pred_edge_if(m_exit_block, [](const Edge* e) {
+          return e->type() == EDGE_GHOST;
+        }) != nullptr) {
+      // Need to clear old exit block before recomputing the exit of a CFG
+      // with multiple exit points
+      remove_block(m_exit_block);
+      m_exit_block = nullptr;
+    }
   }
-  auto exit_blocks = find_exit_blocks(*this);
-  if (exit_blocks.size() == 1) {
-    m_exit_block = exit_blocks.at(0);
+
+  ExitBlocks eb;
+  eb.visit(entry_block());
+  if (eb.exit_blocks.size() == 1) {
+    m_exit_block = eb.exit_blocks[0];
   } else {
-    auto ghost_exit_block = create_block();
-    set_exit_block(ghost_exit_block);
-    for (auto* b : exit_blocks) {
-      add_edge(b, ghost_exit_block, EDGE_GOTO);
+    m_exit_block = create_block();
+    for (Block* b : eb.exit_blocks) {
+      add_edge(b, m_exit_block, EDGE_GHOST);
     }
   }
 }
@@ -1398,6 +1517,10 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
 }
 
 void ControlFlowGraph::remove_block(Block* block) {
+  if (block == entry_block()) {
+    always_assert(block->succs().size() == 1);
+    set_entry_block(block->succs()[0]->target());
+  }
   remove_pred_edges(block);
   remove_succ_edges(block);
   m_blocks.erase(block->id());
@@ -1424,74 +1547,6 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   }
   o << "}\n";
   return o;
-}
-
-// We create a small class here (instead of a recursive lambda) so we can
-// label visit with NO_SANITIZE_ADDRESS
-class ExitBlocks {
- private:
-  uint32_t next_dfn{0};
-  std::stack<const Block*> stack;
-  // Depth-first number. Special values:
-  //   0 - unvisited
-  //   UINT32_MAX - visited and determined to be in a separate SCC
-  std::unordered_map<const Block*, uint32_t> dfns;
-  static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
-  // This is basically Tarjan's algorithm for finding SCCs. I pass around an
-  // extra has_exit value to determine if a given SCC has any successors.
-  using t = std::pair<uint32_t, bool>;
-
- public:
-  std::vector<Block*> exit_blocks;
-
-  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
-  t visit(const Block* b) {
-    stack.push(b);
-    uint32_t head = dfns[b] = ++next_dfn;
-    // whether any vertex in the current SCC has a successor edge that points
-    // outside itself
-    bool has_exit{false};
-    for (auto& succ : b->succs()) {
-      uint32_t succ_dfn = dfns[succ->target()];
-      uint32_t min;
-      if (succ_dfn == 0) {
-        bool succ_has_exit;
-        std::tie(min, succ_has_exit) = visit(succ->target());
-        has_exit |= succ_has_exit;
-      } else {
-        has_exit |= succ_dfn == VISITED;
-        min = succ_dfn;
-      }
-      head = std::min(min, head);
-    }
-    if (head == dfns[b]) {
-      const Block* top{nullptr};
-      if (!has_exit) {
-        exit_blocks.push_back(const_cast<Block*>(b));
-        has_exit = true;
-      }
-      do {
-        top = stack.top();
-        stack.pop();
-        dfns[top] = VISITED;
-      } while (top != b);
-    }
-    return t(head, has_exit);
-  }
-};
-
-/*
- * Find all exit blocks. Note that it's not as simple as looking for BBs with
- * return or throw opcodes; infinite loops are a valid way of terminating dex
- * bytecode too. As such, we need to find all SCCs and vertices that lack
- * successors. For SCCs that lack successors, any one of its vertices can be
- * treated as an exit block; the implementation below picks the head of the
- * SCC.
- */
-std::vector<Block*> find_exit_blocks(const ControlFlowGraph& cfg) {
-  ExitBlocks eb{};
-  eb.visit(cfg.entry_block());
-  return eb.exit_blocks;
 }
 
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {

@@ -55,7 +55,18 @@
 
 namespace cfg {
 
-enum EdgeType { EDGE_GOTO, EDGE_BRANCH, EDGE_THROW, EDGE_TYPE_SIZE };
+enum EdgeType {
+  // The false branch of an if statement, default of a switch, or unconditional
+  // goto
+  EDGE_GOTO,
+  // The true branch of an if statement or non-default case of a switch
+  EDGE_BRANCH,
+  // The edges to a catch block
+  EDGE_THROW,
+  // A "fake" edge so that we can have a single exit block
+  EDGE_GHOST,
+  EDGE_TYPE_SIZE
+};
 
 class Block;
 class ControlFlowGraph;
@@ -276,9 +287,24 @@ class ControlFlowGraph {
   Block* exit_block() { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
+
+  /*
+   * If there is a single method exit point, this returns a vector holding the
+   * exit block. If there are multiple method exit points, this returns a vector
+   * of them, ignoring the "ghost" exit block introduced by
+   * `calculate_exit_block()`.
+   */
+  std::vector<Block*> real_exit_blocks(bool include_infinite_loops = false);
+
   /*
    * Determine where the exit block is. If there is more than one, create a
    * "ghost" block that is the successor to all of them.
+   *
+   * The exit blocks are not computed upon creation. It is left up to the user
+   * to call this method if they plan to use the exit block. If you make
+   * significant changes to this CFG in editable mode that effect the exit
+   * points of the method, you need to call this method again.
+   * TODO: detect changes and recompute when necessary.
    */
   void calculate_exit_block();
 
@@ -679,8 +705,6 @@ class InstructionIterableImpl {
 
   bool empty() { return begin() == end(); }
 };
-
-std::vector<Block*> find_exit_blocks(const ControlFlowGraph&);
 
 /*
  * Build a postorder sorted vector of blocks from the given CFG. Uses a

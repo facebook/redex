@@ -18,11 +18,7 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
   return os << b->id();
 }
 
-std::ostream& operator<<(std::ostream& os, const ControlFlowGraph& cfg) {
-  return cfg.write_dot_format(os);
-}
-
-}
+} // namespace cfg
 
 using namespace cfg;
 
@@ -31,8 +27,10 @@ TEST(ControlFlow, findExitBlocks) {
     ControlFlowGraph cfg;
     auto b0 = cfg.create_block();
     cfg.set_entry_block(b0);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b0}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b0})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b0);
   }
   {
@@ -41,8 +39,10 @@ TEST(ControlFlow, findExitBlocks) {
     auto b1 = cfg.create_block();
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b1}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b1})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b1);
   }
   {
@@ -52,8 +52,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.set_entry_block(b0);
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b0, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b0}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b0})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b0);
   }
   {
@@ -70,8 +72,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b0, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b2}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b2})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b2);
   }
   {
@@ -88,8 +92,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b0, b1, EDGE_GOTO);
     cfg.add_edge(b1, b2, EDGE_GOTO);
     cfg.add_edge(b2, b1, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b1}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b1})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b1);
   }
   {
@@ -114,9 +120,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b1, b2, EDGE_GOTO);
     cfg.add_edge(b2, b1, EDGE_GOTO);
     cfg.add_edge(b0, b3, EDGE_GOTO);
-    EXPECT_THAT(find_exit_blocks(cfg), ::testing::UnorderedElementsAre(b1, b3))
-        << cfg;
     cfg.calculate_exit_block();
+    EXPECT_THAT(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+                ::testing::UnorderedElementsAre(b1, b3))
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block()->id(), 4);
   }
   {
@@ -138,8 +145,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b2, b1, EDGE_GOTO);
     cfg.add_edge(b2, b3, EDGE_GOTO);
     cfg.add_edge(b3, b0, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b0}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b0})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b0);
   }
   {
@@ -167,9 +176,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b0, b3, EDGE_GOTO);
     cfg.add_edge(b3, b4, EDGE_GOTO);
     cfg.add_edge(b4, b3, EDGE_GOTO);
-    EXPECT_THAT(find_exit_blocks(cfg), ::testing::UnorderedElementsAre(b1, b3))
-        << cfg;
     cfg.calculate_exit_block();
+    EXPECT_THAT(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+                ::testing::UnorderedElementsAre(b1, b3))
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block()->id(), 5);
   }
   {
@@ -200,8 +210,10 @@ TEST(ControlFlow, findExitBlocks) {
     cfg.add_edge(b4, b3, EDGE_GOTO);
     cfg.add_edge(b4, b5, EDGE_GOTO);
     cfg.add_edge(b2, b5, EDGE_GOTO);
-    EXPECT_EQ(find_exit_blocks(cfg), std::vector<Block*>{b5}) << cfg;
     cfg.calculate_exit_block();
+    EXPECT_EQ(cfg.real_exit_blocks(/* include_infinite_loops */ true),
+              std::vector<Block*>{b5})
+        << show(cfg);
     EXPECT_EQ(cfg.exit_block(), b5);
   }
 }
@@ -800,9 +812,9 @@ TEST(ControlFlow, cleanup_after_deleting_branch) {
 
   code->build_cfg(true);
   auto& cfg = code->cfg();
-  cfg.delete_succ_edge_if(
-      cfg.entry_block(),
-      [](const cfg::Edge* e) { return e->type() == EDGE_BRANCH; });
+  cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
+    return e->type() == EDGE_BRANCH;
+  });
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -832,9 +844,9 @@ TEST(ControlFlow, cleanup_after_deleting_goto) {
   code->build_cfg(true);
 
   auto& cfg = code->cfg();
-  cfg.delete_succ_edge_if(
-      cfg.entry_block(),
-      [](const cfg::Edge* e) { return e->type() == EDGE_GOTO; });
+  cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
+    return e->type() == EDGE_GOTO;
+  });
 
   code->clear_cfg();
 
@@ -961,6 +973,50 @@ TEST(ControlFlow, empty_first_block) {
   for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
     std::cout << show(mie) << std::endl;
   }
+}
 
+TEST(ControlFlow, exit_blocks) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  EXPECT_EQ(2, cfg.real_exit_blocks().size());
+  code->clear_cfg();
+}
+
+TEST(ControlFlow, exit_blocks_change) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  code->build_cfg(true);
+  auto& cfg = code->cfg();
+  EXPECT_EQ(2, cfg.real_exit_blocks().size());
+
+  auto iterable = cfg::InstructionIterable(cfg);
+  std::vector<cfg::Block*> to_delete;
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_THROW) {
+      to_delete.push_back(it.block());
+    }
+  }
+  for (Block* b : to_delete) {
+    cfg.remove_block(b);
+  }
+
+  EXPECT_EQ(1, cfg.real_exit_blocks().size());
   code->clear_cfg();
 }
