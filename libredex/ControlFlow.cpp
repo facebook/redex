@@ -115,9 +115,7 @@ IRList::const_iterator Block::end() const {
 }
 
 bool Block::is_catch() const {
-  return m_parent->get_pred_edge_if(this, [](const Edge* e) {
-    return e->type() == EDGE_THROW;
-  }) != nullptr;
+  return m_parent->get_pred_edge_of_type(this, EDGE_THROW) != nullptr;
 }
 
 bool Block::same_try(Block* other) const {
@@ -139,10 +137,9 @@ opcode::Branchingness Block::branchingness() {
   always_assert(m_parent->editable());
   const auto& last = get_last_insn();
 
-  if (succs().empty() || (succs().size() == 1 &&
-                          m_parent->get_succ_edge_if(this, [](const Edge* e) {
-                            return e->type() == EDGE_GHOST;
-                          }) != nullptr)) {
+  if (succs().empty() ||
+      (succs().size() == 1 &&
+       m_parent->get_succ_edge_of_type(this, EDGE_GHOST) != nullptr)) {
     if (last != end()) {
       auto op = last->insn->opcode();
       if (is_return(op)) {
@@ -154,24 +151,18 @@ opcode::Branchingness Block::branchingness() {
     return opcode::BRANCH_NONE;
   }
 
-  if (m_parent->get_succ_edge_if(this, [](const Edge* e) {
-        return e->type() == EDGE_THROW;
-      }) != nullptr) {
+  if (m_parent->get_succ_edge_of_type(this, EDGE_THROW) != nullptr) {
     return opcode::BRANCH_THROW;
   }
 
-  if (m_parent->get_succ_edge_if(this, [](const Edge* e) {
-        return e->type() == EDGE_BRANCH;
-      }) != nullptr) {
+  if (m_parent->get_succ_edge_of_type(this, EDGE_BRANCH) != nullptr) {
     always_assert(last != end());
     auto br = opcode::branchingness(last->insn->opcode());
     always_assert(br == opcode::BRANCH_IF || br == opcode::BRANCH_SWITCH);
     return br;
   }
 
-  if (m_parent->get_succ_edge_if(this, [](const Edge* e) {
-        return e->type() == EDGE_GOTO;
-      }) != nullptr) {
+  if (m_parent->get_succ_edge_of_type(this, EDGE_GOTO) != nullptr) {
     return opcode::BRANCH_GOTO;
   }
   return opcode::BRANCH_NONE;
@@ -747,9 +738,7 @@ std::vector<Block*> ControlFlowGraph::order() {
     // If the GOTO edge leads to a block with a move-result(-pseudo), then that
     // block must be placed immediately after this one because we can't insert
     // anything between an instruction and its move-result(-pseudo).
-    auto goto_edge = get_succ_edge_if(b, [](const Edge* e) {
-      return e->type() == EDGE_GOTO;
-    });
+    auto goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
     while (goto_edge != nullptr) {
       // make sure we handle a chain of blocks that all start with move-results
       auto goto_block = goto_edge->target();
@@ -760,10 +749,7 @@ std::vector<Block*> ControlFlowGraph::order() {
           finished_blocks.count(goto_block->id()) == 0) {
         ordering.push_back(goto_block);
         finished_blocks.insert(goto_block->id());
-        goto_edge =
-            get_succ_edge_if(goto_block, [](const Edge* e) {
-              return e->type() == EDGE_GOTO;
-            });
+        goto_edge = get_succ_edge_of_type(goto_block, EDGE_GOTO);
       } else {
         goto_edge = nullptr;
       }
@@ -918,9 +904,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   always_assert(m_editable);
 
   using EdgeVector = std::vector<Edge*>;
-  EdgeVector throws = get_succ_edges_if(block, [](const Edge* e) {
-    return e->type() == EDGE_THROW;
-  });
+  EdgeVector throws = get_succ_edges_of_type(block, EDGE_THROW);
   if (throws.empty()) {
     // No need to create a catch if there are no throws
     return nullptr;
@@ -1091,8 +1075,7 @@ std::vector<Block*> ControlFlowGraph::real_exit_blocks(
     bool include_infinite_loops) {
   std::vector<Block*> result;
   if (m_exit_block != nullptr && include_infinite_loops) {
-    auto ghosts = get_pred_edges_if(
-        m_exit_block, [](const Edge* e) { return e->type() == EDGE_GHOST; });
+    auto ghosts = get_pred_edges_of_type(m_exit_block, EDGE_GHOST);
     if (!ghosts.empty()) {
       // The exit block is a ghost block, ignore it and get the real exit points.
       for (auto e : ghosts) {
@@ -1130,9 +1113,7 @@ void ControlFlowGraph::calculate_exit_block() {
     if (!m_editable) {
       return;
     }
-    if (get_pred_edge_if(m_exit_block, [](const Edge* e) {
-          return e->type() == EDGE_GHOST;
-        }) != nullptr) {
+    if (get_pred_edge_of_type(m_exit_block, EDGE_GHOST) != nullptr) {
       // Need to clear old exit block before recomputing the exit of a CFG
       // with multiple exit points
       remove_block(m_exit_block);
@@ -1375,6 +1356,29 @@ std::vector<Edge*> ControlFlowGraph::get_succ_edges_if(
   return result;
 }
 
+Edge* ControlFlowGraph::get_pred_edge_of_type(const Block* block,
+                                              EdgeType type) const {
+  return get_pred_edge_if(block,
+                          [type](const Edge* e) { return e->type() == type; });
+}
+
+Edge* ControlFlowGraph::get_succ_edge_of_type(const Block* block,
+                                              EdgeType type) const {
+  return get_succ_edge_if(block,
+                          [type](const Edge* e) { return e->type() == type; });
+}
+
+std::vector<Edge*> ControlFlowGraph::get_pred_edges_of_type(
+    const Block* block, EdgeType type) const {
+  return get_pred_edges_if(block,
+                           [type](const Edge* e) { return e->type() == type; });
+}
+std::vector<Edge*> ControlFlowGraph::get_succ_edges_of_type(
+    const Block* block, EdgeType type) const {
+  return get_succ_edges_if(block,
+                           [type](const Edge* e) { return e->type() == type; });
+}
+
 void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
   {
     always_assert(pred->succs().size() == 1);
@@ -1435,9 +1439,8 @@ void ControlFlowGraph::move_edge(Edge* edge,
 
 bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
                                               const Block* b2) const {
-  const auto& is_throw = [](const Edge* e) { return e->type() == EDGE_THROW; };
-  const auto& throws1 = get_succ_edges_if(b1, is_throw);
-  const auto& throws2 = get_succ_edges_if(b2, is_throw);
+  const auto& throws1 = get_succ_edges_of_type(b1, EDGE_THROW);
+  const auto& throws2 = get_succ_edges_of_type(b2, EDGE_THROW);
   if (throws1.size() != throws2.size()) {
     return false;
   }
@@ -1484,8 +1487,7 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
-      auto goto_edge = get_succ_edge_if(
-          block, [](const Edge* e) { return e->type() == EDGE_GOTO; });
+      auto goto_edge = get_succ_edge_of_type(block, EDGE_GOTO);
       auto move_result_block = goto_edge->target();
       auto first_it = move_result_block->get_first_insn();
       always_assert(first_it != move_result_block->end());

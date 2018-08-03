@@ -340,6 +340,19 @@ class ControlFlowGraph {
   std::vector<Edge*> get_succ_edges_if(
       const Block* block, const EdgePredicate& predicate) const;
 
+  // return the first edge of the given type
+  // or nullptr if no such edge exists
+  Edge* get_pred_edge_of_type(
+      const Block* block, EdgeType type) const;
+  Edge* get_succ_edge_of_type(
+      const Block* block, EdgeType type) const;
+
+  // return all edges of the given type
+  std::vector<Edge*> get_pred_edges_of_type(
+      const Block* block, EdgeType type) const;
+  std::vector<Edge*> get_succ_edges_of_type(
+      const Block* block, EdgeType type) const;
+
   // remove_..._edge:
   //   * These functions remove edges from the graph and free the memory
   //   * the `_if` functions take a predicate to decide which edges to delete
