@@ -8,6 +8,7 @@
 #include "StringConcatenator.h"
 
 #include <boost/optional.hpp>
+#include <map>
 #include <unordered_map>
 #include <utility>
 
@@ -23,19 +24,22 @@
  *
  * Here's an example <clinit> method that this method will optimize:
  *
- * public static final String PREFIX = "foo";
- * public static final String CONCATENATED = PREFIX + "bar";
+ *   public static final String PREFIX = "foo";
+ *   public static final String CONCATENATED = PREFIX + "bar";
  *
- * The output code should be:
+ * The output code should be equivalent to:
  *
  *   public static final PREFIX = "foo";
  *   public static final CONCATENATED = "foobar";
+ *
+ * The final values of the string fields are stored in the Dex file as
+ * DexEncodedValues
  *
  * This should be done after FinalInline pass to make sure input strings are
  * resolved.
  *
  * TODO: someday, this should probably be subsumed by a more general purpose
- * optimization, possible StringSimplificationPass.
+ * optimization, possibly StringSimplificationPass.
  */
 
 namespace {
@@ -76,39 +80,61 @@ class RegMap {
 
 struct Stats {
   uint32_t insns_removed{0};
-  uint32_t methods_rewritten{0};
+  uint32_t clinits_emptied{0};
   uint32_t string_fields_resolved{0};
 
   void operator+=(const Stats& stats) {
     insns_removed += stats.insns_removed;
-    methods_rewritten += stats.methods_rewritten;
+    clinits_emptied += stats.clinits_emptied;
     string_fields_resolved += stats.string_fields_resolved;
   }
 
   void report(PassManager& mgr) {
     mgr.set_metric("insns_removed", insns_removed);
-    mgr.set_metric("methods_rewritten", methods_rewritten);
+    mgr.set_metric("clinits_emptied", clinits_emptied);
     mgr.set_metric("string_fields_resolved", string_fields_resolved);
     TRACE(
         STR_CAT, 1,
         "insns removed: %d, methods rewritten %d, string fields resolved %d\n",
-        insns_removed, methods_rewritten, string_fields_resolved);
+        insns_removed, clinits_emptied, string_fields_resolved);
+  }
+};
+
+struct ConcatenatorConfig {
+  const DexType* string_builder;
+  const DexType* string;
+  const DexMethodRef* init_void;
+  const DexMethodRef* init_string;
+  const DexMethodRef* append;
+  const DexMethodRef* to_string;
+
+  ConcatenatorConfig() {
+    string_builder = DexType::get_type("Ljava/lang/StringBuilder;");
+    always_assert(string_builder != nullptr);
+    string = DexType::get_type("Ljava/lang/String;");
+    always_assert(string != nullptr);
+    init_void = DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V");
+    always_assert(init_void != nullptr);
+    init_string = DexMethod::get_method(
+        "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V");
+    always_assert(init_string != nullptr);
+    append = DexMethod::get_method(
+        "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
+        "StringBuilder;");
+    always_assert(append != nullptr);
+    to_string = DexMethod::get_method(
+        "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;");
+    always_assert(to_string != nullptr);
   }
 };
 
 class Concatenator {
 
   using BuilderStrMap = std::unordered_map<StrBuilderId, std::string>;
-  using FieldMap = std::unordered_map<DexFieldRef*, std::string>;
-  using FieldOrder = std::vector<std::pair<DexFieldRef*, MethodItemEntry*>>;
+  using FieldMap = std::map<DexFieldRef*, std::string, dexfields_comparator>;
 
   const Register RESULT_REGISTER = std::numeric_limits<Register>::max() - 1;
-  const DexType* m_string_builder;
-  const DexType* m_string;
-  const DexMethodRef* m_init_void;
-  const DexMethodRef* m_init_string;
-  const DexMethodRef* m_append;
-  const DexMethodRef* m_to_string;
+  const ConcatenatorConfig& m_config;
 
   /* match this (and similar) patterns:
    *
@@ -137,27 +163,32 @@ class Concatenator {
    */
   bool analyze(cfg::Block* block,
                const DexType* this_type,
-               FieldMap* fields_ptr,
-               FieldOrder* field_order) {
+               FieldMap* fields_ptr) {
     RegMap registers;
     BuilderStrMap builder_str;
     FieldMap& fields = *fields_ptr;
-    always_assert_log(fields.empty() && field_order->empty(),
-                      "should start with fresh field maps");
+    always_assert_log(fields.empty(), "should start with fresh field map");
 
     bool has_string_builder = false;
     bool has_to_string = false;
-    MethodItemEntry* last_pos = nullptr;
-    for (auto& mie : *block) {
-      if (mie.type == MFLOW_POSITION) {
-        last_pos = &mie;
-      }
-      if (mie.type != MFLOW_OPCODE) {
-        continue;
-      }
-
+    for (auto& mie : ir_list::InstructionIterable(block)) {
       auto insn = mie.insn;
       auto op = insn->opcode();
+
+      const auto& move = [&registers](Register dest, Register source) {
+        const auto& str_search = registers.find_string(source);
+        const auto& builder_search = registers.find_builder(source);
+        if (str_search != boost::none) {
+          always_assert(builder_search == boost::none);
+          registers.put_string(dest, *str_search);
+          return true;
+        } else if (builder_search != boost::none) {
+          always_assert(str_search == boost::none);
+          registers.put_builder(dest, *builder_search);
+          return true;
+        }
+        return false;
+      };
 
       // The bottom of this switch statement has a `return false`. This way, any
       // instructions that we don't expect force us to safely abort the
@@ -166,17 +197,16 @@ class Concatenator {
       //
       // TODO: allow static initializers that have other unrelated code
       switch (op) {
-      case OPCODE_MOVE_RESULT_OBJECT:
-      case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-        const auto& str_search = registers.find_string(RESULT_REGISTER);
-        const auto& builder_search = registers.find_builder(RESULT_REGISTER);
-        if (str_search != boost::none) {
-          always_assert(builder_search == boost::none);
-          registers.put_string(insn->dest(), *str_search);
+      case OPCODE_MOVE_OBJECT: {
+        bool success = move(insn->dest(), insn->src(0));
+        if (success) {
           continue;
-        } else if (builder_search != boost::none) {
-          always_assert(str_search == boost::none);
-          registers.put_builder(insn->dest(), *builder_search);
+        }
+        break;
+      } case OPCODE_MOVE_RESULT_OBJECT:
+      case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
+        bool success = move(insn->dest(), RESULT_REGISTER);
+        if (success) {
           continue;
         }
         break;
@@ -185,7 +215,7 @@ class Concatenator {
         registers.put_string(RESULT_REGISTER, insn->get_string()->str());
         continue;
       case OPCODE_NEW_INSTANCE:
-        if (insn->get_type() == m_string_builder) {
+        if (insn->get_type() == m_config.string_builder) {
           StrBuilderId new_id = builder_str.size();
           builder_str[new_id] = "";
           registers.put_builder(RESULT_REGISTER, new_id);
@@ -204,14 +234,13 @@ class Concatenator {
       }
       case OPCODE_SPUT_OBJECT: {
         const auto& field_ref = insn->get_field();
-        if (field_ref->get_type() == m_string &&
-            field_ref->get_class() == this_type && last_pos != nullptr) {
+        if (field_ref->get_type() == m_config.string &&
+            field_ref->get_class() == this_type) {
           const auto& field_def = resolve_field(field_ref, FieldSearch::Static);
           if (field_def != nullptr && is_final(field_def)) {
             const auto& str_search = registers.find_string(insn->src(0));
             if (str_search != boost::none) {
               fields[field_ref] = *str_search;
-              field_order->emplace_back(field_ref, last_pos);
               continue;
             }
           }
@@ -221,9 +250,9 @@ class Concatenator {
       case OPCODE_INVOKE_VIRTUAL:
       case OPCODE_INVOKE_DIRECT: {
         auto method = insn->get_method();
-        if (method == m_init_void) {
+        if (method == m_config.init_void) {
           continue;
-        } else if (method == m_init_string) {
+        } else if (method == m_config.init_string) {
           const auto& str_search = registers.find_string(insn->src(1));
           if (str_search != boost::none) {
             StrBuilderId new_id = builder_str.size();
@@ -231,7 +260,7 @@ class Concatenator {
             registers.put_builder(insn->src(0), new_id);
             continue;
           }
-        } else if (method == m_append) {
+        } else if (method == m_config.append) {
           auto builder_search = registers.find_builder(insn->src(0));
           const auto& string_search = registers.find_string(insn->src(1));
           if (builder_search != boost::none && string_search != boost::none) {
@@ -239,7 +268,7 @@ class Concatenator {
             registers.put_builder(RESULT_REGISTER, *builder_search);
             continue;
           }
-        } else if (method == m_to_string) {
+        } else if (method == m_config.to_string) {
           const auto& builder_search = registers.find_builder(insn->src(0));
           if (builder_search != boost::none) {
             registers.put_string(RESULT_REGISTER, builder_str[*builder_search]);
@@ -263,73 +292,31 @@ class Concatenator {
     return has_string_builder && has_to_string && !fields.empty();
   }
 
-  /* remove everything except the source code positions, then write new code
-   * that fills in fields with their known values at the end of the clinit.
+  /* Encode these string fields as `DexEncodedValue`s
    */
-  void rewrite(IRList* entries,
-               const FieldMap& fields,
-               const FieldOrder& field_order) {
-    std::unordered_set<MethodItemEntry*> positions;
-    for (const auto& pair : field_order) {
-      positions.insert(pair.second);
+  static void encode(const FieldMap& fields) {
+    for (const auto& entry : fields) {
+      DexField* field = resolve_field(entry.first, FieldSearch::Static);
+      always_assert(field != nullptr);
+      const std::string& str = entry.second;
+      field->make_concrete(
+          field->get_access(),
+          new DexEncodedValueString(DexString::make_string(str)));
     }
+  }
 
-    for (auto it = entries->begin(); it != entries->end();) {
-      if (positions.count(&*it) == 0) {
-        it = entries->erase(it);
-      } else {
-        ++it;
-      }
-    }
-
-    // FIXME: if two field loads share the same line, we'll reverse their order?
-    for (const auto& pair : field_order) {
-      // const-string "foobar"
-      // move-result-object v0
-      // sput v0 Lcom/Cls;.field;
-      DexFieldRef* field = pair.first;
-      IRList::iterator position = entries->iterator_to(*pair.second);
-
-      IRInstruction* string_load = new IRInstruction(OPCODE_CONST_STRING);
-      string_load->set_string(DexString::make_string(fields.at(field)));
-
-      IRInstruction* move_res =
-          new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-      move_res->set_dest(0);
-
-      IRInstruction* sput = new IRInstruction(OPCODE_SPUT_OBJECT);
-      sput->set_src(0, 0);
-      sput->set_field(field);
-
-      // insert in reverse order because we're inserting after a position that
-      // doesn't move
-      entries->insert_after(position, sput);
-      entries->insert_after(position, move_res);
-      entries->insert_after(position, string_load);
-    }
+  /* We clear the method but we do not delete it, for simplicity. If
+   * SimpleInline runs after this pass it can remove all references to this
+   * method and RemoveUnreachable can delete the method after that.
+   */
+  static void clear_method(IRList* entries) {
+    entries->clear_and_dispose();
     entries->push_back(
         *new MethodItemEntry(new IRInstruction(OPCODE_RETURN_VOID)));
   }
 
  public:
-  Concatenator() {
-    m_string_builder = DexType::get_type("Ljava/lang/StringBuilder;");
-    always_assert(m_string_builder != nullptr);
-    m_string = DexType::get_type("Ljava/lang/String;");
-    always_assert(m_string != nullptr);
-    m_init_void = DexMethod::get_method("Ljava/lang/StringBuilder;.<init>:()V");
-    always_assert(m_init_void != nullptr);
-    m_init_string = DexMethod::get_method(
-        "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V");
-    always_assert(m_init_string != nullptr);
-    m_append = DexMethod::get_method(
-        "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
-        "StringBuilder;");
-    always_assert(m_append != nullptr);
-    m_to_string = DexMethod::get_method(
-        "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;");
-    always_assert(m_to_string != nullptr);
-  }
+  Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
 
   Stats run(cfg::ControlFlowGraph* cfg, DexMethod* method) {
     Stats stats;
@@ -344,23 +331,19 @@ class Concatenator {
 
     FieldMap fields;
 
-    // We use this vector to make sure the output code writes the fields in the
-    // same order as the input code. This vector doesn't have duplicates because
-    // the fields are final, so they could only have one sput-object.
-    FieldOrder field_order;
-    bool can_opt = analyze(block, method->get_class(), &fields, &field_order);
+    bool can_opt = analyze(block, method->get_class(), &fields);
 
     if (!can_opt) {
       return stats;
     }
 
     const auto before_size = block->num_opcodes();
-    rewrite(&block->get_entries(), fields, field_order);
+    encode(fields);
+    clear_method(&block->get_entries());
     const auto after_size = block->num_opcodes();
 
-    always_assert(after_size < before_size);
     stats.insns_removed += before_size - after_size;
-    stats.methods_rewritten += 1;
+    stats.clinits_emptied += 1;
     stats.string_fields_resolved += fields.size();
 
     TRACE(STR_CAT, 2, "optimize %s from %d to %d\n", SHOW(method), before_size,
@@ -376,9 +359,10 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
                                       PassManager& mgr) {
   const bool DEBUG = false;
   const auto& scope = build_class_scope(stores);
+  const ConcatenatorConfig config{};
   Stats stats = walk::parallel::reduce_methods<std::nullptr_t, Stats, Scope>(
       scope,
-      [](std::nullptr_t, DexMethod* m) -> Stats {
+      [&config](std::nullptr_t, DexMethod* m) -> Stats {
         auto code = m->get_code();
         if (code == nullptr) {
           return Stats{};
@@ -390,7 +374,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         }
 
         code->build_cfg(/* editable */ true);
-        Stats stats = Concatenator{}.run(&code->cfg(), m);
+        Stats stats = Concatenator{config}.run(&code->cfg(), m);
         code->clear_cfg();
 
         return stats;
