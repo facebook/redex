@@ -209,6 +209,10 @@ class Block final {
   void remove_opcode(const ir_list::InstructionIterator&);
   void remove_opcode(const IRList::iterator& it);
 
+  // use this to make edits to the "straight-line" code in this block. Do not
+  // attempt to insert any control flow instructions
+  IRList& get_entries() { return m_entries; }
+
   opcode::Branchingness branchingness();
 
   // returns true if there are no MethodItemEntries (not IRInstructions)

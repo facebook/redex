@@ -595,6 +595,26 @@ void IRCode::clear_cfg() {
   }
 
   if (m_cfg->editable()) {
+    // update register size and linearize cfg
+    uint16_t num_regs = 0;
+    const auto& check = [&num_regs](uint16_t reg, bool is_wide) {
+      auto highest_in_use = reg + is_wide;
+      if (highest_in_use >= num_regs) {
+        // +1 because registers start at v0
+        num_regs = highest_in_use + 1;
+      }
+    };
+    for (const auto& mie : cfg::ConstInstructionIterable(*m_cfg)) {
+      auto insn = mie.insn;
+      if (insn->dests_size()) {
+        check(insn->dest(), insn->dest_is_wide());
+      }
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        check(insn->src(i), insn->src_is_wide(i));
+      }
+    }
+    m_registers_size = num_regs;
+
     m_ir_list = m_cfg->linearize();
   }
 

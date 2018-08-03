@@ -84,6 +84,7 @@
   TM(SINL)               \
   TM(SPLIT_RES)          \
   TM(STATIC_RELO)        \
+  TM(STR_CAT)            \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \
   TM(SYNT)               \

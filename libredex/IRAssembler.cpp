@@ -573,6 +573,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   }
   handle_labels(code.get(), label_defs, label_refs);
 
+  // FIXME: I don't think this handles wides correctly
   code->set_registers_size(max_reg ? *max_reg + 1 : 0);
 
   return code;
