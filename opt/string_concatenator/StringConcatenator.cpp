@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 #include <map>
+#include <mutex>
 #include <unordered_map>
 #include <utility>
 
@@ -128,6 +129,19 @@ struct ConcatenatorConfig {
   }
 };
 
+struct LockedMethodSet {
+  using Map = std::set<DexMethod*, dexmethods_comparator>;
+  std::mutex mutex;
+  Map map;
+
+  void insert(DexMethod* method) {
+    std::lock_guard<std::mutex> lock(mutex);
+    map.insert(method);
+  }
+
+  Map& get() { return map; }
+};
+
 class Concatenator {
 
   using BuilderStrMap = std::unordered_map<StrBuilderId, std::string>;
@@ -203,7 +217,8 @@ class Concatenator {
           continue;
         }
         break;
-      } case OPCODE_MOVE_RESULT_OBJECT:
+      }
+      case OPCODE_MOVE_RESULT_OBJECT:
       case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
         bool success = move(insn->dest(), RESULT_REGISTER);
         if (success) {
@@ -305,9 +320,7 @@ class Concatenator {
     }
   }
 
-  /* We clear the method but we do not delete it, for simplicity. If
-   * SimpleInline runs after this pass it can remove all references to this
-   * method and RemoveUnreachable can delete the method after that.
+  /* Clear out the code inside and remove the method from the class.
    */
   static void clear_method(IRList* entries) {
     entries->clear_and_dispose();
@@ -318,7 +331,9 @@ class Concatenator {
  public:
   Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
 
-  Stats run(cfg::ControlFlowGraph* cfg, DexMethod* method) {
+  Stats run(cfg::ControlFlowGraph* cfg,
+            DexMethod* method,
+            LockedMethodSet* methods_to_remove) {
     Stats stats;
     const auto& blocks = cfg->blocks();
     if (blocks.size() != 1) {
@@ -340,6 +355,7 @@ class Concatenator {
     const auto before_size = block->num_opcodes();
     encode(fields);
     clear_method(&block->get_entries());
+    methods_to_remove->insert(method);
     const auto after_size = block->num_opcodes();
 
     stats.insns_removed += before_size - after_size;
@@ -360,9 +376,10 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
   const bool DEBUG = false;
   const auto& scope = build_class_scope(stores);
   const ConcatenatorConfig config{};
+  LockedMethodSet methods_to_remove;
   Stats stats = walk::parallel::reduce_methods<std::nullptr_t, Stats, Scope>(
       scope,
-      [&config](std::nullptr_t, DexMethod* m) -> Stats {
+      [&config, &methods_to_remove](std::nullptr_t, DexMethod* m) -> Stats {
         auto code = m->get_code();
         if (code == nullptr) {
           return Stats{};
@@ -374,7 +391,8 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         }
 
         code->build_cfg(/* editable */ true);
-        Stats stats = Concatenator{config}.run(&code->cfg(), m);
+        Stats stats =
+            Concatenator{config}.run(&code->cfg(), m, &methods_to_remove);
         code->clear_cfg();
 
         return stats;
@@ -385,6 +403,16 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
       },
       [](int) { return nullptr; }, Stats{},
       DEBUG ? 1 : walk::parallel::default_num_threads());
+
+  for (DexMethod* method : methods_to_remove.get()) {
+    // We can delete the method without finding callsites because these are all
+    // <clinit> methods, which don't have explicit callsites
+    auto cls = type_class(method->get_class());
+    always_assert_log(cls != nullptr, "%s comes from an unknown class",
+                      SHOW(method));
+    cls->remove_method(method);
+  }
+
   stats.report(mgr);
 }
 
