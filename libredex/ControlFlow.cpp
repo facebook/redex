@@ -573,7 +573,7 @@ void ControlFlowGraph::remove_empty_blocks() {
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& succs = b->succs();
-    if (!b->empty() || b == entry_block() || b == exit_block()) {
+    if (!b->empty() || b == exit_block()) {
       ++it;
       continue;
     }
@@ -593,11 +593,16 @@ void ControlFlowGraph::remove_empty_blocks() {
       // Remove the one goto edge from b to succ
       remove_all_edges(b, succ);
 
-      // Redirect from b's predecessors to b's successor (skipping b). We can't
-      // move edges around while we iterate through the edge list though.
+      // Redirect from b's predecessors to b's successor (skipping b). We
+      // can't move edges around while we iterate through the edge list
+      // though.
       std::vector<Edge*> need_redirect(b->m_preds.begin(), b->m_preds.end());
-      for (const auto& pred_edge : need_redirect) {
+      for (Edge* pred_edge : need_redirect) {
         set_edge_target(pred_edge, succ);
+      }
+
+      if (b == entry_block()) {
+        m_entry_block = succ;
       }
     }
     delete b;
