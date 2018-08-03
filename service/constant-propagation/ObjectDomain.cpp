@@ -9,10 +9,17 @@
 
 namespace escape_domain_impl {
 
-Lattice lattice({EscapeState::BOTTOM, EscapeState::NOT_ESCAPED,
-                 EscapeState::MAY_ESCAPE},
-                {{EscapeState::BOTTOM, EscapeState::NOT_ESCAPED},
-                 {EscapeState::NOT_ESCAPED, EscapeState::MAY_ESCAPE}});
+/*
+ * This lattice is just a linear chain:
+ *
+ *   MAY_ESCAPE (Top) -> ONLY_PARAMETER_DEPENDENT -> NOT_ESCAPED -> BOTTOM
+ */
+Lattice lattice(
+    {EscapeState::BOTTOM, EscapeState::NOT_ESCAPED,
+     EscapeState::ONLY_PARAMETER_DEPENDENT, EscapeState::MAY_ESCAPE},
+    {{EscapeState::BOTTOM, EscapeState::NOT_ESCAPED},
+     {EscapeState::NOT_ESCAPED, EscapeState::ONLY_PARAMETER_DEPENDENT},
+     {EscapeState::ONLY_PARAMETER_DEPENDENT, EscapeState::MAY_ESCAPE}});
 
 } // namespace escape_domain_impl
 
@@ -21,6 +28,9 @@ std::ostream& operator<<(std::ostream& os, const EscapeDomain& dom) {
   switch (elem) {
   case EscapeState::MAY_ESCAPE:
     os << "MAY_ESCAPE";
+    break;
+  case EscapeState::ONLY_PARAMETER_DEPENDENT:
+    os << "ONLY_PARAMETER_DEPENDENT";
     break;
   case EscapeState::NOT_ESCAPED:
     os << "NOT_ESCAPED";

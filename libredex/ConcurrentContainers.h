@@ -156,6 +156,26 @@ class ConcurrentMap final
                                  Hash,
                                  n_slots> {
  public:
+  ConcurrentMap() = default;
+
+  template <typename InputIt>
+  ConcurrentMap(InputIt first, InputIt last) {
+    insert(first, last);
+  }
+
+  /*
+   * This operation is always thread-safe. Note that it returns a copy of Value
+   * rather than a reference since insertions from other threads may cause the
+   * hashtables to be resized. If you are reading from a ConcurrentMap that is
+   * not being concurrently modified, it will probably be faster to use
+   * `find()` to avoid the copy.
+   */
+  Value at(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    return this->get_container(slot).at(key);
+  }
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
@@ -175,6 +195,26 @@ class ConcurrentMap final
     for (const auto& entry : l) {
       insert(entry);
     }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename InputIt>
+  void insert(InputIt first, InputIt last) {
+    for (; first != last; ++first) {
+      insert(*first);
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  void insert_or_assign(const std::pair<Key, Value>& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    map[entry.first] = entry.second;
   }
 
   /*

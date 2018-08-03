@@ -108,6 +108,10 @@ class Graph final {
 
   const Node& entry() const { return m_entry; }
 
+  bool has_node(const DexMethod* m) const {
+    return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
+  }
+
   const Node& node(const DexMethod* m) const {
     if (m == nullptr) {
       return m_entry;

@@ -24,6 +24,8 @@
 
 enum class EscapeState {
   MAY_ESCAPE,
+  // An object which escapes iff its originating parameter does
+  ONLY_PARAMETER_DEPENDENT,
   NOT_ESCAPED,
   BOTTOM,
 };
@@ -31,7 +33,7 @@ enum class EscapeState {
 namespace escape_domain_impl {
 
 using Lattice = sparta::BitVectorLattice<EscapeState,
-                                         /* cardinality */ 3,
+                                         /* cardinality */ 4,
                                          boost::hash<EscapeState>>;
 
 extern Lattice lattice;

@@ -8,6 +8,10 @@
 #include "LocalPointersAnalysis.h"
 
 #include "DexUtil.h"
+#include "PatriciaTreeSet.h"
+#include "Resolver.h"
+#include "Walkers.h"
+#include "WorkQueue.h"
 
 using namespace local_pointers;
 
@@ -247,9 +251,42 @@ static void analyze_dest(const IRInstruction* insn,
   // as escaping pointers, it would bloat the size of our abstract domain and
   // incur a runtime performance tax.
   if (dest_may_be_pointer(insn)) {
-    env->set_escaping_pointer(dest, insn);
+    env->set_pointer_at(dest, insn, EscapeState::MAY_ESCAPE);
   } else {
     env->set_pointers(dest, PointerSet::top());
+  }
+}
+
+void escape_all_srcs(const IRInstruction* insn, Environment* env) {
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    env->set_may_escape(insn->src(i));
+  }
+}
+
+void analyze_invoke_with_summary(const EscapeSummary& summary,
+                                 const IRInstruction* insn,
+                                 Environment* env) {
+  for (auto src_idx : summary.escaping_parameters) {
+    env->set_may_escape(insn->src(src_idx));
+  }
+
+  switch (summary.returned_parameters.kind()) {
+  case sparta::AbstractValueKind::Value: {
+    PointerSet returned_ptrs;
+    for (auto src_idx : summary.returned_parameters.elements()) {
+      returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+    }
+    env->set_pointers(RESULT_REGISTER, returned_ptrs);
+    break;
+  }
+  case sparta::AbstractValueKind::Top: {
+    analyze_dest(insn, RESULT_REGISTER, env);
+    break;
+  }
+  case sparta::AbstractValueKind::Bottom: {
+    env->set_pointers(RESULT_REGISTER, PointerSet::bottom());
+    break;
+  }
   }
 }
 
@@ -260,8 +297,11 @@ namespace local_pointers {
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            Environment* env) const {
   auto op = insn->opcode();
-  if (is_alloc_opcode(op)) {
-    env->set_nonescaping_pointer(RESULT_REGISTER, insn);
+  if (op == IOPCODE_LOAD_PARAM_OBJECT) {
+    env->set_pointer_at(
+        insn->dest(), insn, EscapeState::ONLY_PARAMETER_DEPENDENT);
+  } else if (is_alloc_opcode(op)) {
+    env->set_pointer_at(RESULT_REGISTER, insn, EscapeState::NOT_ESCAPED);
   } else if (is_move(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
   } else if (op == OPCODE_CHECK_CAST) {
@@ -271,12 +311,19 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   } else if (insn->dests_size()) {
     analyze_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result()) {
-    analyze_dest(insn, RESULT_REGISTER, env);
-
-    if (is_invoke(op) || is_filled_new_array(op)) {
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        env->set_may_escape(insn->src(i));
+    if (is_filled_new_array(op)) {
+      escape_all_srcs(insn, env);
+      analyze_dest(insn, RESULT_REGISTER, env);
+    } else if (is_invoke(op)) {
+      if (m_invoke_to_summary_map.count(insn)) {
+        const auto& summary = m_invoke_to_summary_map.at(insn);
+        analyze_invoke_with_summary(summary, insn, env);
+      } else {
+        escape_all_srcs(insn, env);
+        analyze_dest(insn, RESULT_REGISTER, env);
       }
+    } else {
+      analyze_dest(insn, RESULT_REGISTER, env);
     }
   } else if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
              op == OPCODE_IPUT_OBJECT) {
@@ -284,6 +331,218 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
     // written to them must be treated as escaping.
     env->set_may_escape(insn->src(0));
   }
+}
+
+void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
+  // Deletion is actually really expensive due to the reference counts of the
+  // shared_ptrs in the Patricia trees, so we do it in parallel.
+  auto wq = workqueue_foreach<FixpointIterator*>(
+      [](FixpointIterator* fp_iter) { delete fp_iter; });
+  for (auto& pair : *map) {
+    wq.add_item(pair.second);
+  }
+  wq.run_all();
+}
+
+static void analyze_method_recursive(
+    const DexMethod* method,
+    const call_graph::Graph& call_graph,
+    sparta::PatriciaTreeSet<const DexMethodRef*> visiting,
+    FixpointIteratorMap* fp_iter_map,
+    SummaryCMap* summary_map) {
+  if (summary_map->count(method) != 0 || visiting.contains(method) ||
+      method->get_code() == nullptr) {
+    return;
+  }
+  visiting.insert(method);
+
+  std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
+  if (call_graph.has_node(method)) {
+    const auto& callee_edges = call_graph.node(method).callees();
+    for (const auto& edge : callee_edges) {
+      auto* callee = edge->callee();
+      analyze_method_recursive(
+          callee, call_graph, visiting, fp_iter_map, summary_map);
+      if (summary_map->count(callee) != 0) {
+        invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
+                                      summary_map->at(callee));
+      }
+    }
+  }
+
+  auto* code = method->get_code();
+  auto& cfg = code->cfg();
+  auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
+  fp_iter->run(Environment());
+  fp_iter_map->insert(std::make_pair(method, fp_iter));
+  summary_map->insert(
+      std::make_pair(method, get_escape_summary(*fp_iter, *code)));
+}
+
+FixpointIteratorMapPtr analyze_scope(const Scope& scope,
+                                     const call_graph::Graph& call_graph,
+                                     SummaryCMap* summary_map_ptr) {
+  FixpointIteratorMapPtr fp_iter_map(new FixpointIteratorMap());
+  SummaryCMap summary_map;
+  if (summary_map_ptr == nullptr) {
+    summary_map_ptr = &summary_map;
+  }
+  summary_map_ptr->insert(std::make_pair(
+      DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{}));
+
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+    sparta::PatriciaTreeSet<const DexMethodRef*> visiting;
+    analyze_method_recursive(method, call_graph, visiting, fp_iter_map.get(),
+                             summary_map_ptr);
+  });
+  return fp_iter_map;
+}
+
+/*
+ * Join over all possible return values.
+ */
+static PointerSet get_return_value(const FixpointIterator& fp_iter,
+                                   const IRCode& code) {
+  auto& cfg = code.cfg();
+  PointerSet rv = PointerSet::bottom();
+  for (auto* block : cfg.blocks()) {
+    auto last_insn_it = block->get_last_insn();
+    if (last_insn_it == block->end()) {
+      continue;
+    }
+    auto insn = last_insn_it->insn;
+    if (!is_return_value(insn->opcode())) {
+      continue;
+    }
+    const auto& state =
+        fp_iter.get_exit_state_at(const_cast<cfg::Block*>(block));
+    rv.join_with(state.get_pointers(insn->src(0)));
+  }
+  return rv;
+}
+
+EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
+                                 const IRCode& code) {
+  EscapeSummary summary;
+  auto& cfg = code.cfg();
+  // FIXME: fix cfg's GraphInterface so this const_cast isn't necessary
+  const auto& exit_state =
+      fp_iter.get_exit_state_at(const_cast<cfg::Block*>(cfg.exit_block()));
+  uint16_t idx{0};
+  std::unordered_map<const IRInstruction*, uint16_t> param_indexes;
+  for (auto& mie : InstructionIterable(code.get_param_instructions())) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+      param_indexes.emplace(insn, idx);
+
+      if (exit_state.get_pointee(insn).equals(
+              EscapeDomain(EscapeState::MAY_ESCAPE))) {
+        summary.escaping_parameters.emplace(idx);
+      }
+    }
+    ++idx;
+  }
+
+  auto returned_ptrs = get_return_value(fp_iter, code);
+  switch (returned_ptrs.kind()) {
+  case sparta::AbstractValueKind::Value: {
+    for (auto insn : returned_ptrs.elements()) {
+      if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+        summary.returned_parameters.add(param_indexes.at(insn));
+      } else {
+        // We are returning a pointer that did not originate from an input
+        // parameter. We have no way of representing these values in our
+        // summary, hence we set the return value to Top.
+        summary.returned_parameters.set_to_top();
+        break;
+      }
+    }
+    break;
+  }
+  case sparta::AbstractValueKind::Top: {
+    summary.returned_parameters.set_to_top();
+    break;
+  }
+  case sparta::AbstractValueKind::Bottom: {
+    summary.returned_parameters.set_to_bottom();
+    break;
+  }
+  }
+  return summary;
+}
+
+std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary) {
+  o << "Escaping parameters: ";
+  bool first{true};
+  for (auto p_idx : summary.escaping_parameters) {
+    if (!first) {
+      o << ", ";
+    }
+    o << p_idx;
+    first = false;
+  }
+  o << " Returned parameters: " << summary.returned_parameters;
+  return o;
+}
+
+sparta::s_expr to_s_expr(const EscapeSummary& summary) {
+  std::vector<sparta::s_expr> escaping_params_s_exprs;
+  std::vector<uint16_t> escaping_parameters(summary.escaping_parameters.begin(),
+                                            summary.escaping_parameters.end());
+  // Sort in order that the output is deterministic.
+  std::sort(escaping_parameters.begin(), escaping_parameters.end());
+  for (auto idx : escaping_parameters) {
+    escaping_params_s_exprs.emplace_back(idx);
+  }
+  sparta::s_expr returned_params_s_expr;
+  switch (summary.returned_parameters.kind()) {
+  case sparta::AbstractValueKind::Top:
+    returned_params_s_expr = sparta::s_expr("Top");
+    break;
+  case sparta::AbstractValueKind::Bottom:
+    returned_params_s_expr = sparta::s_expr("Bottom");
+    break;
+  case sparta::AbstractValueKind::Value: {
+    std::vector<sparta::s_expr> idx_s_exprs;
+    const auto& elems = summary.returned_parameters.elements();
+    std::vector<uint16_t> returned_parameters(elems.begin(), elems.end());
+    std::sort(returned_parameters.begin(), returned_parameters.end());
+    for (auto idx : returned_parameters) {
+      idx_s_exprs.emplace_back(idx);
+    }
+    returned_params_s_expr = sparta::s_expr(idx_s_exprs);
+    break;
+  }
+  }
+  return sparta::s_expr{sparta::s_expr(escaping_params_s_exprs),
+                        returned_params_s_expr};
+}
+
+EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
+  EscapeSummary summary;
+  always_assert(expr.is_list() && expr.size() == 2);
+  auto escaping_params_s_expr = expr[0];
+  always_assert(escaping_params_s_expr.is_list());
+  for (size_t i = 0; i < escaping_params_s_expr.size(); ++i) {
+    summary.escaping_parameters.emplace(escaping_params_s_expr[i].get_int32());
+  }
+  auto returned_params_s_expr = expr[1];
+  if (returned_params_s_expr.is_string()) {
+    const auto& s = returned_params_s_expr.get_string();
+    if (s == "Top") {
+      summary.returned_parameters.set_to_top();
+    } else if (s == "Bottom") {
+      summary.returned_parameters.set_to_bottom();
+    } else {
+      always_assert(false);
+    }
+  } else {
+    always_assert(returned_params_s_expr.is_list());
+    for (size_t i = 0; i < returned_params_s_expr.size(); ++i) {
+      summary.returned_parameters.add(returned_params_s_expr[i].get_int32());
+    }
+  }
+  return summary;
 }
 
 } // namespace local_pointers

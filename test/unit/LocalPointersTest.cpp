@@ -39,11 +39,11 @@ TEST_F(LocalPointersTest, domainOperations) {
   auto insn3 = (new IRInstruction(OPCODE_NEW_INSTANCE))
                    ->set_type(DexType::make_type("LBaz;"));
 
-  env1.set_nonescaping_pointer(0, insn1);
-  env2.set_escaping_pointer(0, insn1);
+  env1.set_pointer_at(0, insn1, EscapeState::NOT_ESCAPED);
+  env2.set_pointer_at(0, insn1, EscapeState::MAY_ESCAPE);
 
-  env1.set_nonescaping_pointer(1, insn1);
-  env2.set_nonescaping_pointer(1, insn2);
+  env1.set_pointer_at(1, insn1, EscapeState::NOT_ESCAPED);
+  env2.set_pointer_at(1, insn2, EscapeState::NOT_ESCAPED);
 
   auto joined_env = env1.join(env2);
 
@@ -66,6 +66,7 @@ TEST_F(LocalPointersTest, simple) {
      (if-nez v0 :true)
      (new-instance "LFoo;")
      (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
      (:true)
      (return-void)
     )
@@ -74,7 +75,14 @@ TEST_F(LocalPointersTest, simple) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  ptrs::FixpointIterator fp_iter(cfg);
+
+  ptrs::InvokeToSummaryMap invoke_to_summary_map;
+  for (const auto& mie : InstructionIterable(code.get())) {
+    if (is_invoke(mie.insn->opcode())) {
+      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+    }
+  }
+  ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
   auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
@@ -88,7 +96,7 @@ TEST_F(LocalPointersTest, simple) {
   for (auto insn : exit_env.get_pointers(0).elements()) {
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
       EXPECT_EQ(exit_env.get_pointee(insn),
-                EscapeDomain(EscapeState::MAY_ESCAPE));
+                EscapeDomain(EscapeState::ONLY_PARAMETER_DEPENDENT));
     } else if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       EXPECT_EQ(exit_env.get_pointee(insn),
                 EscapeDomain(EscapeState::NOT_ESCAPED));
@@ -104,6 +112,7 @@ TEST_F(LocalPointersTest, aliasEscape) {
      (if-nez v0 :true)
      (new-instance "LFoo;")
      (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
      (:true)
      (move-object v1 v0)
      (sput-object v1 "LFoo;.bar:LFoo;")
@@ -114,7 +123,14 @@ TEST_F(LocalPointersTest, aliasEscape) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
-  ptrs::FixpointIterator fp_iter(cfg);
+
+  ptrs::InvokeToSummaryMap invoke_to_summary_map;
+  for (const auto& mie : InstructionIterable(code.get())) {
+    if (is_invoke(mie.insn->opcode())) {
+      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+    }
+  }
+  ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
   auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
@@ -130,4 +146,69 @@ TEST_F(LocalPointersTest, aliasEscape) {
     EXPECT_EQ(exit_env.get_pointee(insn),
               EscapeDomain(EscapeState::MAY_ESCAPE));
   }
+}
+
+TEST_F(LocalPointersTest, generateEscapeSummary) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (sput-object v1 "LFoo;.bar:LFoo;")
+     (return v0)
+    )
+  )");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  ptrs::FixpointIterator fp_iter(cfg);
+  fp_iter.run(ptrs::Environment());
+
+  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet({0}));
+  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre(1));
+
+  // Test (de)serialization.
+  std::stringstream ss;
+  ss << to_s_expr(summary);
+  EXPECT_EQ(ss.str(), "((#1) (#0))");
+
+  sparta::s_expr_istream s_expr_in(ss);
+  sparta::s_expr summary_s_expr;
+  s_expr_in >> summary_s_expr;
+  auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
+  EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet({0}));
+  EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre(1));
+}
+
+TEST_F(LocalPointersTest, generateEscapeSummary2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (sget-object "LFoo;.bar:LFoo;")
+     (move-result-pseudo-object v0)
+     (return v0)
+    )
+  )");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  ptrs::FixpointIterator fp_iter(cfg);
+  fp_iter.run(ptrs::Environment());
+
+  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::top());
+  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre());
+
+  // Test (de)serialization.
+  std::stringstream ss;
+  ss << to_s_expr(summary);
+  EXPECT_EQ(ss.str(), "(() Top)");
+
+  sparta::s_expr_istream s_expr_in(ss);
+  sparta::s_expr summary_s_expr;
+  s_expr_in >> summary_s_expr;
+  auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
+  EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet::top());
+  EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre());
 }

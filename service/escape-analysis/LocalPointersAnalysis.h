@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <ostream>
+
+#include "CallGraph.h"
+#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "MonotonicFixpointIterator.h"
@@ -14,6 +18,7 @@
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
+#include "S_Expression.h"
 
 /*
  * This analysis identifies heap values that are allocated within a given
@@ -88,27 +93,16 @@ class Environment final
   }
 
   /*
-   * Set :reg to contain the single abstract pointer :insn, which points to an
-   * escaping value.
-   */
-  void set_escaping_pointer(reg_t reg, const IRInstruction* insn) {
-    apply<0>(
-        [&](PointerEnvironment* penv) { penv->set(reg, PointerSet(insn)); });
-    apply<1>([&](HeapDomain* heap) {
-      heap->set(insn, EscapeDomain(EscapeState::MAY_ESCAPE));
-    });
-  }
-
-  /*
    * Set :reg to contain the single abstract pointer :insn, which points to a
-   * non-escaping value.
+   * value with :escape_state.
    */
-  void set_nonescaping_pointer(reg_t reg, const IRInstruction* insn) {
+  void set_pointer_at(reg_t reg,
+                      const IRInstruction* insn,
+                      EscapeState escape_state) {
     apply<0>(
         [&](PointerEnvironment* penv) { penv->set(reg, PointerSet(insn)); });
-    apply<1>([&](HeapDomain* heap) {
-      heap->set(insn, EscapeDomain(EscapeState::NOT_ESCAPED));
-    });
+    apply<1>(
+        [&](HeapDomain* heap) { heap->set(insn, EscapeDomain(escape_state)); });
   }
 };
 
@@ -117,12 +111,46 @@ inline bool is_alloc_opcode(IROpcode op) {
          op == OPCODE_FILLED_NEW_ARRAY;
 }
 
+using ParamSet = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
+
+struct EscapeSummary {
+  // The elements of this set represent the indexes of the src registers that
+  // escape.
+  std::unordered_set<uint16_t> escaping_parameters;
+
+  // The indices of the src registers that are returned. This is useful for
+  // modeling methods that return `this`, though it is also able to model the
+  // general case. It is a set instead of a single value since a method may
+  // return different values depending on its inputs.
+  //
+  // Note that if only some of the returned values are parameters, this will be
+  // set to Top. A non-extremal value indicates that the return value must be
+  // an element of the set.
+  ParamSet returned_parameters;
+
+  EscapeSummary() = default;
+
+  EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
+
+  static EscapeSummary from_s_expr(const sparta::s_expr&);
+};
+
+std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary);
+
+sparta::s_expr to_s_expr(const EscapeSummary&);
+
+using InvokeToSummaryMap =
+    std::unordered_map<const IRInstruction*, EscapeSummary>;
+
 class FixpointIterator final
     : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
                                                Environment> {
  public:
-  FixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : MonotonicFixpointIterator(cfg) {}
+  FixpointIterator(
+      const cfg::ControlFlowGraph& cfg,
+      InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap())
+      : MonotonicFixpointIterator(cfg),
+        m_invoke_to_summary_map(invoke_to_summary_map) {}
 
   void analyze_node(const NodeId& block, Environment* env) const override {
     for (auto& mie : InstructionIterable(block)) {
@@ -136,6 +164,45 @@ class FixpointIterator final
                            const Environment& entry_env) const override {
     return entry_env;
   }
+
+ private:
+  // A map of the invoke instructions in the analyzed method to their respective
+  // summaries. If an invoke instruction is not present in the method, we treat
+  // it as an unknown method which could do anything (so all arguments may
+  // escape).
+  //
+  // By taking this map as a parameter -- instead of trying to resolve callsites
+  // ourselves -- we are able to switch easily between different call graph
+  // construction strategies.
+  InvokeToSummaryMap m_invoke_to_summary_map;
 };
+
+using FixpointIteratorMap =
+    ConcurrentMap<const DexMethodRef*, FixpointIterator*>;
+
+struct FixpointIteratorMapDeleter final {
+  void operator()(FixpointIteratorMap*);
+};
+
+using FixpointIteratorMapPtr =
+    std::unique_ptr<FixpointIteratorMap, FixpointIteratorMapDeleter>;
+
+using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
+
+using SummaryCMap = ConcurrentMap<const DexMethodRef*, EscapeSummary>;
+
+/*
+ * Analyze all methods in scope, making sure to analyze the callees before
+ * their callers.
+ *
+ * If a non-null SummaryCMap pointer is passed in, it will get populated
+ * with the escape summaries of the methods in scope.
+ */
+FixpointIteratorMapPtr analyze_scope(const Scope&,
+                                     const call_graph::Graph&,
+                                     SummaryCMap* = nullptr);
+
+EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
+                                 const IRCode& code);
 
 } // namespace local_pointers
