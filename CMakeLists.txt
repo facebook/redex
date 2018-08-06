@@ -19,6 +19,7 @@ file(GLOB includes
         "liblocator"
         "libresource"
         "shared"
+        "sparta/include"
         )
 
 include_directories(
