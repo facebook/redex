@@ -553,6 +553,12 @@ struct dexprotos_comparator {
   }
 };
 
+struct DebugLineItem {
+  uint32_t offset;
+  uint32_t line;
+  DebugLineItem(uint32_t offset, uint32_t line): offset(offset), line(line) {}
+};
+
 /*
  * Dex files encode debug information as a series of opcodes. Internally, we
  * convert the opcodes that delta-encode position into absolute DexPositions.
@@ -612,7 +618,10 @@ class DexDebugItem {
   void bind_positions(DexMethod* method, DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
-  int encode(DexOutputIdx* dodx, PositionMapper* pos_mapper, uint8_t* output);
+  int encode(DexOutputIdx* dodx,
+             PositionMapper* pos_mapper,
+             uint8_t* output,
+             std::vector<DebugLineItem>* line_info);
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;

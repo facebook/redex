@@ -198,7 +198,8 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
-    uint32_t* line_start) {
+    uint32_t* line_start,
+    std::vector<DebugLineItem>* line_info) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
   boost::optional<uint32_t> prev_line;
@@ -231,6 +232,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     // only emit the last position entry for a given address
     if (!positions.empty()) {
       auto line = pos_mapper->position_to_line(positions.back());
+      line_info->emplace_back(DebugLineItem(it->addr, line));
       int32_t line_delta;
       if (prev_line) {
         line_delta = line - *prev_line;
@@ -272,12 +274,14 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
 
 }
 
-int DexDebugItem::encode(DexOutputIdx* dodx, PositionMapper* pos_mapper,
-    uint8_t* output) {
+int DexDebugItem::encode(DexOutputIdx* dodx,
+                         PositionMapper* pos_mapper,
+                         uint8_t* output,
+                         std::vector<DebugLineItem>* line_info) {
   uint8_t* encdata = output;
   uint32_t line_start{0};
-  auto dbgops =
-      generate_debug_instructions(this, dodx, pos_mapper, &line_start);
+  auto dbgops = generate_debug_instructions(this, dodx, pos_mapper, &line_start,
+                                            line_info);
   encdata = write_uleb128(encdata, line_start);
   encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {

@@ -366,6 +366,8 @@ public:
   std::string m_bytecode_offset_filename;
   std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
+  std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::unordered_map<DexClass*, uint32_t> m_cdi_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
@@ -422,6 +424,8 @@ public:
     size_t dex_number,
     ConfigFiles& config_files,
     PositionMapper* pos_mapper,
+    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     const std::string& method_mapping_path,
     const std::string& class_mapping_path,
     const std::string& pg_mapping_path,
@@ -438,6 +442,8 @@ DexOutput::DexOutput(
   size_t dex_number,
   ConfigFiles& config_files,
   PositionMapper* pos_mapper,
+  std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
   const std::string& method_mapping_filename,
   const std::string& class_mapping_filename,
   const std::string& pg_mapping_filename,
@@ -451,7 +457,9 @@ DexOutput::DexOutput(
   m_gtypes = new GatheredTypes(classes);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
-  m_pos_mapper = pos_mapper,
+  m_pos_mapper = pos_mapper;
+  m_method_to_id = method_to_id;
+  m_code_debug_lines = code_debug_lines;
   m_method_mapping_filename = method_mapping_filename;
   m_class_mapping_filename = class_mapping_filename;
   m_pg_mapping_filename = pg_mapping_filename;
@@ -1027,9 +1035,15 @@ void DexOutput::generate_debug_items() {
     if (dbg == nullptr) continue;
     dbgcount++;
     // No align requirement for debug items.
-    int size = dbg->encode(dodx, m_pos_mapper, m_output + m_offset);
+    std::vector<DebugLineItem> debug_line_info;
+    int size =
+        dbg->encode(dodx, m_pos_mapper, m_output + m_offset, &debug_line_info);
     dci->debug_info_off = m_offset;
     m_offset += size;
+
+    if (m_code_debug_lines != nullptr) {
+      (*m_code_debug_lines)[dc] = debug_line_info;
+    }
   }
   insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
 }
@@ -1151,7 +1165,8 @@ namespace {
 void write_method_mapping(
   const std::string& filename,
   const DexOutputIdx* dodx,
-  uint8_t* dex_signature
+  uint8_t* dex_signature,
+  std::unordered_map<DexMethod*, uint64_t>* method_to_id
 ) {
   if (filename.empty()) return;
   FILE* fd = fopen(filename.c_str(), "a");
@@ -1209,6 +1224,16 @@ void write_method_mapping(
     // in little-endian (since that's faster to compute on-device).
     //
     uint32_t signature = *reinterpret_cast<uint32_t*>(dex_signature);
+
+    if (method_to_id != nullptr) {
+      if (resolved_method == method) {
+        // Not recording it if method reference is not referring to
+        // concrete method, otherwise will have key overlapped.
+        auto dexmethod = static_cast<DexMethod*>(resolved_method);
+        (*method_to_id)[dexmethod] =
+            ((uint64_t)idx << 32) | (uint64_t)signature;
+      }
+    }
 
     fprintf(fd, "%u %u %s %s\n",
             idx,
@@ -1428,7 +1453,8 @@ void DexOutput::write_symbol_files() {
   write_method_mapping(
     m_method_mapping_filename,
     dodx,
-    hdr.signature
+    hdr.signature,
+    m_method_to_id
   );
   write_class_mapping(
     m_class_mapping_filename,
@@ -1500,7 +1526,9 @@ write_classes_to_dex(
   size_t dex_number,
   ConfigFiles& cfg,
   const Json::Value& json_cfg,
-  PositionMapper* pos_mapper)
+  PositionMapper* pos_mapper,
+  std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
 {
   auto method_mapping_filename = cfg.metafile(
     json_cfg.get("method_mapping", "").asString());
@@ -1510,7 +1538,6 @@ write_classes_to_dex(
     json_cfg.get("proguard_map_output", "").asString());
   auto bytecode_offset_filename = cfg.metafile(
     json_cfg.get("bytecode_offset_map", "").asString());
-
   auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
@@ -1540,6 +1567,8 @@ write_classes_to_dex(
     dex_number,
     cfg,
     pos_mapper,
+    method_to_id,
+    code_debug_lines,
     method_mapping_filename,
     class_mapping_filename,
     pg_mapping_filename,

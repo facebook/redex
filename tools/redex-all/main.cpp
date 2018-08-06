@@ -51,6 +51,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "Timer.h"
+#include "Walkers.h"
 #include "Warning.h"
 
 namespace {
@@ -476,6 +477,83 @@ void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
     TRACE(MAIN, 1, "No method move map data structure!\n");
   }
 }
+
+void write_debug_line_mapping(
+    const std::string& debug_line_mapping_filename,
+    const std::string& debug_line_mapping_filename_v2,
+    const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
+    const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
+        code_debug_lines,
+    DexStoresVector& stores) {
+  if (debug_line_mapping_filename.empty() ||
+      debug_line_mapping_filename_v2.empty()) {
+    return;
+  }
+  /*
+   * Binary file format:
+   * magic number 0xfaceb000 (4 byte)
+   * number (m) of methods that has debug line info (4 byte)
+   * a list (m elements) of:
+   *   [ encoded method-id (8 byte), method debug info byte offset (4 byte),
+   *     method debug info byte size (4 byte) ]
+   *
+   * a list (m elements) of :
+   *   encoded method-id (8 byte)
+   *   a list (n elements) of:
+   *     [ memory offset (4 byte), line number (4 byte) ]
+   */
+  size_t bit_32_size = sizeof(uint32_t);
+  size_t bit_64_size = sizeof(uint64_t);
+  uint32_t num_method = code_debug_lines.size();
+  int offset = num_method + 2;
+  // Start of debug line info information would be after all of
+  // method-id => offset info, so set the start of offset to be after that.
+  int binary_offset =
+      2 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
+  std::ofstream ofs(debug_line_mapping_filename_v2.c_str(),
+                    std::ofstream::out | std::ofstream::trunc);
+  uint32_t magic = 0xfaceb000; // serves as endianess check
+  ofs.write((const char*)&magic, bit_32_size);
+  ofs.write((const char*)&num_method, bit_32_size);
+  FILE* fd = fopen(debug_line_mapping_filename.c_str(), "a");
+  std::ostringstream line_out;
+  std::stringstream readable_line_out;
+
+  auto scope = build_class_scope(stores);
+  walk::methods(scope, [&](DexMethod* method) {
+    auto dex_code = method->get_dex_code();
+    if (dex_code == nullptr ||
+        code_debug_lines.find(dex_code) == code_debug_lines.end()) {
+      return;
+    }
+
+    uint64_t method_id = method_to_id.at(method);
+    // write human readable file
+    fprintf(fd, "0x%016lx %u\n", method_id, offset);
+    readable_line_out << method->get_deobfuscated_name() << "\n";
+    // write method id => offset info for binary file
+    ofs.write((const char*)&method_id, bit_64_size);
+    ofs.write((const char*)&binary_offset, bit_32_size);
+
+    auto debug_lines = code_debug_lines.at(dex_code);
+    uint32_t num_line_info = debug_lines.size();
+    offset = offset + 1 + num_line_info;
+    uint32_t info_section_size = bit_64_size + num_line_info * 2 * bit_32_size;
+    ofs.write((const char*)&info_section_size, bit_32_size);
+    binary_offset = binary_offset + info_section_size;
+
+    // Generate debug line info for binary file.
+    line_out.write((const char*)&method_id, bit_64_size);
+    for (auto it = debug_lines.begin(); it != debug_lines.end(); ++it) {
+      line_out.write((const char*)&it->offset, bit_32_size);
+      line_out.write((const char*)&it->line, bit_32_size);
+      readable_line_out << it->offset << " " << it->line << "\n";
+    }
+  });
+  ofs << line_out.str();
+  fprintf(fd, "\n%s", readable_line_out.str().c_str());
+  fclose(fd);
+}
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -623,8 +701,15 @@ int main(int argc, char* argv[]) {
         cfg.metafile(args.config.get("line_number_map", "").asString());
     auto pos_output_v2 =
         cfg.metafile(args.config.get("line_number_map_v2", "").asString());
+    auto debug_line_mapping_filename =
+        cfg.metafile(args.config.get("debug_line_method_map", "").asString());
+    auto debug_line_mapping_filename_v2 = cfg.metafile(
+        args.config.get("debug_line_method_map_v2", "").asString());
+
     std::unique_ptr<PositionMapper> pos_mapper(
         PositionMapper::make(pos_output, pos_output_v2));
+    std::unordered_map<DexMethod*, uint64_t> method_to_id;
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
     for (auto& store : stores) {
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
@@ -642,13 +727,17 @@ int main(int argc, char* argv[]) {
           ss << (i + 2);
         }
         ss << ".dex";
-        auto this_dex_stats = write_classes_to_dex(ss.str(),
-                                                   &store.get_dexen()[i],
-                                                   locator_index,
-                                                   i,
-                                                   cfg,
-                                                   args.config,
-                                                   pos_mapper.get());
+        auto this_dex_stats = write_classes_to_dex(
+            ss.str(),
+            &store.get_dexen()[i],
+            locator_index,
+            i,
+            cfg,
+            args.config,
+            pos_mapper.get(),
+            debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
+            debug_line_mapping_filename_v2.empty() ? nullptr
+                                                   : &code_debug_lines);
         output_totals += this_dex_stats;
         output_dexes_stats.push_back(this_dex_stats);
       }
@@ -662,6 +751,9 @@ int main(int argc, char* argv[]) {
           cfg.metafile(args.config.get("method_move_map", "").asString());
       auto opt_decisions_output_path =
           cfg.metafile(args.config.get("opt_decisions_output", "").asString());
+      write_debug_line_mapping(debug_line_mapping_filename,
+                               debug_line_mapping_filename_v2, method_to_id,
+                               code_debug_lines, stores);
       pos_mapper->write_map();
       opt_metadata::OptDataMapper::get_instance().write_opt_data(
           opt_decisions_output_path);

@@ -96,7 +96,9 @@ dex_stats_t write_classes_to_dex(
   size_t dex_number,
   ConfigFiles& cfg,
   const Json::Value& json_cfg,
-  PositionMapper* line_mapper);
+  PositionMapper* line_mapper,
+  std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
