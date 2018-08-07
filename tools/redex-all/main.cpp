@@ -168,6 +168,17 @@ Json::Value default_config() {
   return cfg;
 }
 
+bool dir_is_writable(const std::string& dir) {
+  if (!boost::filesystem::is_directory(dir)) {
+    return false;
+  }
+#ifdef _MSC_VER
+  return _access(dir.c_str(), 2) == 0;
+#else
+  return access(dir.c_str(), W_OK) == 0;
+#endif
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -299,6 +310,11 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("outdir")) {
     args.out_dir = take_last(vm["outdir"]);
+    if (!dir_is_writable(args.out_dir)) {
+      std::cerr << "error: outdir is not a writable directory: " << args.out_dir
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 
   if (vm.count("proguard-config")) {
@@ -350,17 +366,6 @@ Arguments parse_args(int argc, char* argv[]) {
   TRACE(
       MAIN, 2, "Verify-none mode: %s\n", args.verify_none_mode ? "Yes" : "No");
   return args;
-}
-
-bool dir_is_writable(const std::string& dir) {
-  if (!boost::filesystem::is_directory(dir)) {
-    return false;
-  }
-#ifdef _MSC_VER
-  return _access(dir.c_str(), 2) == 0;
-#else
-  return access(dir.c_str(), W_OK) == 0;
-#endif
 }
 
 Json::Value get_stats(const dex_stats_t& stats) {
@@ -443,7 +448,7 @@ Json::Value get_output_stats(
   return d;
 }
 
-void output_moved_methods_map(const char* path, ConfigFiles& cfg) {
+void output_moved_methods_map(const char* path, const ConfigFiles& cfg) {
   // print out moved methods map
   if (cfg.save_move_map() && strcmp(path, "")) {
     FILE* fd = fopen(path, "w");
@@ -554,6 +559,97 @@ void write_debug_line_mapping(
   fprintf(fd, "\n%s", readable_line_out.str().c_str());
   fclose(fd);
 }
+
+/**
+ * Post processing steps: write dex and collect stats
+ */
+void redex_backend(const PassManager& manager,
+                   const Arguments& args,
+                   const ConfigFiles& cfg,
+                   DexStoresVector& stores,
+                   Json::Value& stats) {
+  instruction_lowering::Stats instruction_lowering_stats;
+  {
+    Timer t("Instruction lowering");
+    instruction_lowering_stats = instruction_lowering::run(stores);
+  }
+
+  TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+
+  LocatorIndex* locator_index = nullptr;
+  if (args.config.get("emit_locator_strings", false).asBool()) {
+    TRACE(LOC,
+          1,
+          "Will emit class-locator strings for classloader optimization\n");
+    locator_index = new LocatorIndex(make_locator_index(stores));
+  }
+
+  dex_stats_t output_totals;
+  std::vector<dex_stats_t> output_dexes_stats;
+
+  auto pos_output =
+      cfg.metafile(args.config.get("line_number_map", "").asString());
+  auto pos_output_v2 =
+      cfg.metafile(args.config.get("line_number_map_v2", "").asString());
+  auto debug_line_mapping_filename =
+     cfg.metafile(args.config.get("debug_line_method_map", "").asString());
+  auto debug_line_mapping_filename_v2 = cfg.metafile(
+     args.config.get("debug_line_method_map_v2", "").asString());
+
+  std::unique_ptr<PositionMapper> pos_mapper(
+      PositionMapper::make(pos_output, pos_output_v2));
+  std::unordered_map<DexMethod*, uint64_t> method_to_id;
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+  for (auto& store : stores) {
+    Timer t("Writing optimized dexes");
+    for (size_t i = 0; i < store.get_dexen().size(); i++) {
+      std::ostringstream ss;
+      ss << args.out_dir << "/" << store.get_name();
+      if (store.get_name().compare("classes") == 0) {
+        // primary/secondary dex store, primary has no numeral and secondaries
+        // start at 2
+        if (i > 0) {
+          ss << (i + 1);
+        }
+      } else {
+        // other dex stores do not have a primary,
+        // so it makes sense to start at 2
+        ss << (i + 2);
+      }
+      ss << ".dex";
+      auto this_dex_stats = write_classes_to_dex(ss.str(),
+          &store.get_dexen()[i],
+          locator_index,
+          i,
+          cfg,
+          args.config,
+          pos_mapper.get(),
+          debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
+          debug_line_mapping_filename_v2.empty() ? nullptr
+                                                 : &code_debug_lines);
+      output_totals += this_dex_stats;
+      output_dexes_stats.push_back(this_dex_stats);
+    }
+  }
+
+  {
+    Timer t("Writing stats");
+    auto method_move_map =
+        cfg.metafile(args.config.get("method_move_map", "").asString());
+    auto opt_decisions_output_path =
+        cfg.metafile(args.config.get("opt_decisions_output", "").asString());
+    write_debug_line_mapping(debug_line_mapping_filename,
+                             debug_line_mapping_filename_v2, method_to_id,
+                             code_debug_lines, stores);
+    pos_mapper->write_map();
+    opt_metadata::OptDataMapper::get_instance().write_opt_data(
+        opt_decisions_output_path);
+    stats["output_stats"] = get_output_stats(
+        output_totals, output_dexes_stats, manager, instruction_lowering_stats);
+    output_moved_methods_map(method_move_map.c_str(), cfg);
+    print_warning_summary();
+  }
+}
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -581,12 +677,6 @@ int main(int argc, char* argv[]) {
     // TODO: Make the command line -jarpath option like a colon separated
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
-
-    if (!dir_is_writable(args.out_dir)) {
-      std::cerr << "error: outdir is not a writable directory: " << args.out_dir
-                << std::endl;
-      exit(EXIT_FAILURE);
-    }
 
     RedexContext::set_next_release_gate(
         args.config.get("next_release_gate", false).asBool());
@@ -617,11 +707,10 @@ int main(int argc, char* argv[]) {
     DexStoresVector stores;
     stores.emplace_back(std::move(root_store));
 
-    dex_stats_t input_totals;
-    std::vector<dex_stats_t> input_dexes_stats;
-
     {
       Timer t("Load classes from dexes");
+      dex_stats_t input_totals;
+      std::vector<dex_stats_t> input_dexes_stats;
       for (const auto& filename : args.dex_files) {
         if (filename.size() >= 5 &&
             filename.compare(filename.size() - 4, 4, ".dex") == 0) {
@@ -646,6 +735,7 @@ int main(int argc, char* argv[]) {
           stores.emplace_back(std::move(store));
         }
       }
+      stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
     }
 
     Scope external_classes;
@@ -677,101 +767,20 @@ int main(int argc, char* argv[]) {
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode,
                         args.art_build);
-    instruction_lowering::Stats instruction_lowering_stats;
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, external_classes, cfg);
-      instruction_lowering_stats = instruction_lowering::run(stores);
     }
 
-    TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+    redex_backend(manager, args, cfg, stores, stats);
 
-    LocatorIndex* locator_index = nullptr;
-    if (args.config.get("emit_locator_strings", false).asBool()) {
-      TRACE(LOC,
-            1,
-            "Will emit class-locator strings for classloader optimization\n");
-      locator_index = new LocatorIndex(make_locator_index(stores));
-    }
-
-    dex_stats_t output_totals;
-    std::vector<dex_stats_t> output_dexes_stats;
-
-    auto pos_output =
-        cfg.metafile(args.config.get("line_number_map", "").asString());
-    auto pos_output_v2 =
-        cfg.metafile(args.config.get("line_number_map_v2", "").asString());
-    auto debug_line_mapping_filename =
-        cfg.metafile(args.config.get("debug_line_method_map", "").asString());
-    auto debug_line_mapping_filename_v2 = cfg.metafile(
-        args.config.get("debug_line_method_map_v2", "").asString());
-
-    std::unique_ptr<PositionMapper> pos_mapper(
-        PositionMapper::make(pos_output, pos_output_v2));
-    std::unordered_map<DexMethod*, uint64_t> method_to_id;
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-    for (auto& store : stores) {
-      Timer t("Writing optimized dexes");
-      for (size_t i = 0; i < store.get_dexen().size(); i++) {
-        std::ostringstream ss;
-        ss << args.out_dir << "/" << store.get_name();
-        if (store.get_name().compare("classes") == 0) {
-          // primary/secondary dex store, primary has no numeral and secondaries
-          // start at 2
-          if (i > 0) {
-            ss << (i + 1);
-          }
-        } else {
-          // other dex stores do not have a primary,
-          // so it makes sense to start at 2
-          ss << (i + 2);
-        }
-        ss << ".dex";
-        auto this_dex_stats = write_classes_to_dex(
-            ss.str(),
-            &store.get_dexen()[i],
-            locator_index,
-            i,
-            cfg,
-            args.config,
-            pos_mapper.get(),
-            debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
-            debug_line_mapping_filename_v2.empty() ? nullptr
-                                                   : &code_debug_lines);
-        output_totals += this_dex_stats;
-        output_dexes_stats.push_back(this_dex_stats);
-      }
-    }
-
-    {
-      Timer t("Writing stats");
-      stats_output_path =
-          cfg.metafile(args.config.get("stats_output", "").asString());
-      auto method_move_map =
-          cfg.metafile(args.config.get("method_move_map", "").asString());
-      auto opt_decisions_output_path =
-          cfg.metafile(args.config.get("opt_decisions_output", "").asString());
-      write_debug_line_mapping(debug_line_mapping_filename,
-                               debug_line_mapping_filename_v2, method_to_id,
-                               code_debug_lines, stores);
-      pos_mapper->write_map();
-      opt_metadata::OptDataMapper::get_instance().write_opt_data(
-          opt_decisions_output_path);
-      stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
-      stats["output_stats"] = get_output_stats(output_totals,
-                                               output_dexes_stats,
-                                               manager,
-                                               instruction_lowering_stats);
-      output_moved_methods_map(method_move_map.c_str(), cfg);
-      print_warning_summary();
-    }
+    stats_output_path =
+        cfg.metafile(args.config.get("stats_output", "").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;
     }
-    TRACE(MAIN, 1, "Done.\n");
   }
-
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
   Json::StyledStreamWriter writer;
@@ -780,5 +789,6 @@ int main(int argc, char* argv[]) {
     writer.write(out, stats);
   }
 
+  TRACE(MAIN, 1, "Done.\n");
   return 0;
 }

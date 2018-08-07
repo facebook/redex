@@ -374,7 +374,7 @@ public:
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
-  ConfigFiles& m_config_files;
+  const ConfigFiles& m_config_files;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data(SortMode mode = SortMode::DEFAULT);
@@ -422,7 +422,7 @@ public:
     DexClasses* classes,
     LocatorIndex* locator_index,
     size_t dex_number,
-    ConfigFiles& config_files,
+    const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -440,7 +440,7 @@ DexOutput::DexOutput(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  ConfigFiles& config_files,
+  const ConfigFiles& config_files,
   PositionMapper* pos_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -1524,7 +1524,7 @@ write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  ConfigFiles& cfg,
+  const ConfigFiles& cfg,
   const Json::Value& json_cfg,
   PositionMapper* pos_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
