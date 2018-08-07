@@ -103,67 +103,59 @@ def add_extra_environment_args(env):
     if 'MALLOC_PROFILE_PASS' in env and 'MALLOC_CONF' not in env:
         env['MALLOC_CONF'] = 'prof:true,prof_prefix:jeprof.out,prof_gdump:true,prof_active:false'
 
-def run_pass(
-        executable_path,
-        script_args,
-        config_path,
-        config_json,
-        apk_dir,
-        dex_dir,
-        dexfiles,
-        debugger,
-        ):
 
-    if executable_path is None:
+def run_redex_binary(state):
+
+    if state.args.redex_binary is None:
         try:
-            executable_path = subprocess.check_output(['which', 'redex-all']
+            state.args.redex_binary = subprocess.check_output(['which', 'redex-all']
                                                      ).rstrip().decode('ascii')
         except subprocess.CalledProcessError:
             pass
-    if executable_path is None:
+    if state.args.redex_binary is None:
         # __file__ can be /path/fb-redex.pex/redex.pyc
         dir_name = dirname(abspath(__file__))
         while not isdir(dir_name):
             dir_name = dirname(dir_name)
-        executable_path = join(dir_name, 'redex-all')
-    if not isfile(executable_path) or not os.access(executable_path, os.X_OK):
-        sys.exit('redex-all is not found or is not executable: ' + executable_path)
-    log('Running redex binary at ' + executable_path)
+        state.args.redex_binary = join(dir_name, 'redex-all')
+    if not isfile(state.args.redex_binary) or not os.access(state.args.redex_binary, os.X_OK):
+        sys.exit('redex-all is not found or is not executable: ' + state.args.redex_binary)
+    log('Running redex binary at ' + state.args.redex_binary)
 
-    args = [executable_path] + [
-        '--apkdir', apk_dir,
-        '--outdir', dex_dir]
-    if config_path:
-        args += ['--config', config_path]
+    args = [state.args.redex_binary] + [
+        '--apkdir', state.extracted_apk_dir,
+        '--outdir', state.dex_dir]
+    if state.args.config:
+        args += ['--config', state.args.config]
 
-    if script_args.verify_none_mode or config_json.get("verify_none_mode"):
+    if state.args.verify_none_mode or state.config_dict.get("verify_none_mode"):
         args += ['--verify-none-mode']
 
-    if script_args.is_art_build:
+    if state.args.is_art_build:
         args += ['--is-art-build']
 
-    if script_args.warn:
-        args += ['--warn', script_args.warn]
-    args += ['--proguard-config=' + x for x in script_args.proguard_configs]
-    if script_args.proguard_map:
-        args += ['-Sproguard_map=' + script_args.proguard_map]
+    if state.args.warn:
+        args += ['--warn', state.args.warn]
+    args += ['--proguard-config=' + x for x in state.args.proguard_configs]
+    if state.args.proguard_map:
+        args += ['-Sproguard_map=' + state.args.proguard_map]
 
-    args += ['--jarpath=' + x for x in script_args.jarpaths]
-    if script_args.printseeds:
-        args += ['--printseeds=' + script_args.printseeds]
-    args += ['-S' + x for x in script_args.passthru]
-    args += ['-J' + x for x in script_args.passthru_json]
+    args += ['--jarpath=' + x for x in state.args.jarpaths]
+    if state.args.printseeds:
+        args += ['--printseeds=' + state.args.printseeds]
+    args += ['-S' + x for x in state.args.passthru]
+    args += ['-J' + x for x in state.args.passthru_json]
 
-    args += dexfiles
+    args += state.dexen
 
-    if debugger == 'lldb':
+    if state.debugger == 'lldb':
         args = ['lldb', '--'] + args
-    elif debugger == 'gdb':
+    elif state.debugger == 'gdb':
         args = ['gdb', '--args'] + args
 
     start = timer()
 
-    if script_args.debug:
+    if state.args.debug:
         print(' '.join(map(quote, args)))
         sys.exit()
 
@@ -500,7 +492,24 @@ def remove_comments_from_line(l):
 def remove_comments(lines):
     return "".join([remove_comments_from_line(l) + "\n" for l in lines])
 
-def run_redex(args):
+
+class State(object):
+    # This structure is only used for passing arguments between prepare_redex,
+    # launch_redex_binary, finalize_redex
+    def __init__(self, application_modules, args, config_dict, debugger,
+            dex_dir, dexen, dex_mode, extracted_apk_dir, temporary_lib_file):
+        self.application_modules = application_modules
+        self.args = args
+        self.config_dict = config_dict
+        self.debugger = debugger
+        self.dex_dir = dex_dir
+        self.dexen = dexen
+        self.dex_mode = dex_mode
+        self.extracted_apk_dir = extracted_apk_dir
+        self.temporary_lib_file = temporary_lib_file
+
+
+def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
 
     extracted_apk_dir = None
@@ -533,7 +542,6 @@ def run_redex(args):
 
     if config is None:
         config_dict = {}
-        passes_list = []
     else:
         with open(config) as config_file:
             try:
@@ -542,7 +550,6 @@ def run_redex(args):
             except ValueError:
                 raise ValueError("Invalid JSON in ReDex config file: %s" %
                                  config_file.name)
-            passes_list = config_dict['redex']['passes']
 
     unpack_start_time = timer()
     if not extracted_apk_dir:
@@ -620,86 +627,95 @@ def run_redex(args):
     else:
         debugger = None
 
-    run_pass(binary,
-             args,
-             config,
-             config_dict,
-             extracted_apk_dir,
-             dex_dir,
-             dexen,
-             debugger)
+    return State(
+        application_modules=application_modules,
+        args=args,
+        config_dict=config_dict,
+        debugger=debugger,
+        dex_dir=dex_dir,
+        dexen=dexen,
+        dex_mode=dex_mode,
+        extracted_apk_dir=extracted_apk_dir,
+        temporary_lib_file=temporary_lib_file)
 
+
+def finalize_redex(state):
     # This file was just here so we could scan it for classnames, but we don't
     # want to pack it back up into the apk
-    if os.path.exists(temporary_lib_file):
-        os.remove(temporary_lib_file)
+    if os.path.exists(state.temporary_lib_file):
+        os.remove(state.temporary_lib_file)
 
     repack_start_time = timer()
 
     log('Repacking dex files')
-    have_locators = config_dict.get("emit_locator_strings")
+    have_locators = state.config_dict.get("emit_locator_strings")
     log("Emit Locator Strings: %s" % have_locators)
 
-    dex_mode.repackage(
-        extracted_apk_dir, dex_dir, have_locators, fast_repackage=args.dev
+    state.dex_mode.repackage(
+        state.extracted_apk_dir, state.dex_dir, have_locators, fast_repackage=state.args.dev
     )
 
     locator_store_id = 1
-    for module in application_modules:
+    for module in state.application_modules:
         log('repacking module: ' + module.get_name() + ' with id ' + str(locator_store_id))
         module.repackage(
-            extracted_apk_dir, dex_dir, have_locators, locator_store_id,
-            fast_repackage=args.dev
+            state.extracted_apk_dir, state.dex_dir, have_locators, locator_store_id,
+            fast_repackage=state.args.dev
         )
         locator_store_id = locator_store_id + 1
 
     log('Creating output apk')
-    create_output_apk(extracted_apk_dir, args.out, args.sign, args.keystore,
-            args.keyalias, args.keypass, args.ignore_zipalign, args.page_align_libs)
+    create_output_apk(state.extracted_apk_dir, state.args.out, state.args.sign, state.args.keystore,
+            state.args.keyalias, state.args.keypass, state.args.ignore_zipalign, state.args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
             timer() - repack_start_time))
-    copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
-    copy_file_to_out_dir(dex_dir, args.out, 'redex-line-number-map-v2', 'line number map v2', 'redex-line-number-map-v2')
-    copy_file_to_out_dir(dex_dir, args.out, 'stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'outliner-artifacts.bin', 'outliner artifacts', 'redex-outliner-artifacts.bin')
-    copy_file_to_out_dir(dex_dir, args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'bytecode_offset_map.txt', 'bytecode offset map', 'redex-bytecode-offset-map.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'resid-optres-mapping.json', 'resid map after optres pass', 'redex-resid-optres-mapping.json')
-    copy_file_to_out_dir(dex_dir, args.out, 'resid-dedup-mapping.json', 'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
-    copy_file_to_out_dir(dex_dir, args.out, 'resid-splitres-mapping.json', 'resid map after split pass', 'redex-resid-splitres-mapping.json')
-    copy_file_to_out_dir(dex_dir, args.out, 'type-erasure-mappings.txt', 'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'instrument-metadata.txt', 'metadata file for instrumentation', 'redex-instrument-metadata.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'cleanup-removed-classes.txt', 'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'opt-decisions.txt', 'opt info', 'redex-opt-decisions.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'redex-debug-line-map.txt', 'debug line map', 'redex-debug-line-map.txt')
-    copy_file_to_out_dir(dex_dir, args.out, 'redex-debug-line-map-v2', 'debug method id map', 'redex-debug-line-map-v2')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-line-number-map', 'line number map', 'redex-line-number-map')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-line-number-map-v2', 'line number map v2', 'redex-line-number-map-v2')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'stats.txt', 'stats', 'redex-stats.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'filename_mappings.txt', 'src strings map', 'redex-src-strings-map.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'outliner-artifacts.bin', 'outliner artifacts', 'redex-outliner-artifacts.bin')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'bytecode_offset_map.txt', 'bytecode offset map', 'redex-bytecode-offset-map.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'coldstart_fields_in_R_classes.txt', 'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-optres-mapping.json', 'resid map after optres pass', 'redex-resid-optres-mapping.json')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-dedup-mapping.json', 'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-splitres-mapping.json', 'resid map after split pass', 'redex-resid-splitres-mapping.json')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'type-erasure-mappings.txt', 'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt', 'metadata file for instrumentation', 'redex-instrument-metadata.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt', 'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'opt-decisions.txt', 'opt info', 'redex-opt-decisions.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map.txt', 'debug line map', 'redex-debug-line-map.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2', 'debug method id map', 'redex-debug-line-map-v2')
 
-    if config_dict.get('proguard_map_output', '') != '':
+    if state.config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all
         # if you enable ObfuscatePass, this needs to be overwrite
-        if config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
+        if state.config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
             overwrite_proguard_maps(
-                config_dict['proguard_map_output'],
-                args.out,
-                dex_dir,
-                args.proguard_map)
+                state.config_dict['proguard_map_output'],
+                state.args.out,
+                state.dex_dir,
+                state.args.proguard_map)
         else:
             merge_proguard_maps(
-                config_dict['proguard_map_output'],
-                args.input_apk,
-                args.out,
-                dex_dir,
-                args.proguard_map)
+                state.config_dict['proguard_map_output'],
+                state.args.input_apk,
+                state.args.out,
+                state.dex_dir,
+                state.args.proguard_map)
     else:
+        passes_list = state.config_dict['redex']['passes']
         assert 'RenameClassesPass' not in passes_list and\
                 'RenameClassesPassV2' not in passes_list
 
-    remove_temp_dirs()
 
+def run_redex(args):
+    state = prepare_redex(args)
+    run_redex_binary(state)
+    finalize_redex(state)
+    remove_temp_dirs()
 
 if __name__ == '__main__':
     patch_zip_file()
