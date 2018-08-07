@@ -73,7 +73,7 @@ class UsedVarsFixpointIterator final
 
   UsedVarsFixpointIterator(
       const local_pointers::FixpointIterator& pointers_fp_iter,
-      const EffectSummaryMap& effect_summaries,
+      const side_effects::SummaryMap& effect_summaries,
       const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
       const cfg::ControlFlowGraph& cfg);
 
@@ -115,7 +115,7 @@ class UsedVarsFixpointIterator final
  private:
   std::unordered_map<const IRInstruction*, local_pointers::Environment>
       m_insn_env_map;
-  const EffectSummaryMap& m_effect_summaries;
+  const side_effects::SummaryMap& m_effect_summaries;
   const std::unordered_set<const DexMethod*>& m_non_overridden_virtuals;
 };
 

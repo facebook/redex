@@ -13,25 +13,21 @@
 #include "LocalPointersAnalysis.h"
 #include "RedexTest.h"
 
+using namespace side_effects;
+
 namespace ptrs = local_pointers;
 
 class SideEffectSummaryTest : public RedexTest {};
 
-EffectSummary analyze_code_effects(const IRCode* code) {
-  EffectSummaryMap effect_summaries;
-  MethodRefCache mref_cache;
-  std::unordered_set<const DexMethod*> non_overridden_virtuals;
+Summary analyze_code_effects(const IRCode* code) {
+  InvokeToSummaryMap effect_summaries;
 
   const_cast<IRCode*>(code)->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
 
   ptrs::FixpointIterator ptrs_fp_iter(cfg);
   ptrs_fp_iter.run(ptrs::Environment());
-  return analyze_code_effects(effect_summaries,
-                              non_overridden_virtuals,
-                              ptrs_fp_iter,
-                              &mref_cache,
-                              code);
+  return analyze_code(effect_summaries, ptrs_fp_iter, code);
 }
 
 TEST_F(SideEffectSummaryTest, pure) {
@@ -42,7 +38,7 @@ TEST_F(SideEffectSummaryTest, pure) {
        (return v0)
       )
     )");
-    EXPECT_EQ(analyze_code_effects(code.get()), EffectSummary(EFF_NONE, {}));
+    EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_NONE, {}));
   }
 
   {
@@ -53,7 +49,7 @@ TEST_F(SideEffectSummaryTest, pure) {
        (return v0)
       )
     )");
-    EXPECT_EQ(analyze_code_effects(code.get()), EffectSummary(EFF_NONE, {}));
+    EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_NONE, {}));
   }
 }
 
@@ -67,7 +63,7 @@ TEST_F(SideEffectSummaryTest, modifiesParams) {
       (return-void)
     )
   )");
-  EXPECT_EQ(analyze_code_effects(code.get()), EffectSummary(EFF_NONE, {1}));
+  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_NONE, {1}));
 }
 
 TEST_F(SideEffectSummaryTest, throws) {
@@ -80,7 +76,7 @@ TEST_F(SideEffectSummaryTest, throws) {
     )
   )");
   EXPECT_EQ(analyze_code_effects(code.get()),
-            EffectSummary(EFF_THROWS | EFF_UNKNOWN_INVOKE, {}));
+            Summary(EFF_THROWS | EFF_UNKNOWN_INVOKE, {}));
 }
 
 TEST_F(SideEffectSummaryTest, locks) {
@@ -94,7 +90,7 @@ TEST_F(SideEffectSummaryTest, locks) {
       (return v1)
     )
   )");
-  EXPECT_EQ(analyze_code_effects(code.get()), EffectSummary(EFF_LOCKS, {}));
+  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_LOCKS, {}));
 }
 
 TEST_F(SideEffectSummaryTest, unknownWrite) {
@@ -105,6 +101,5 @@ TEST_F(SideEffectSummaryTest, unknownWrite) {
       (return-void)
     )
   )");
-  EXPECT_EQ(analyze_code_effects(code.get()),
-            EffectSummary(EFF_WRITE_MAY_ESCAPE, {}));
+  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_WRITE_MAY_ESCAPE, {}));
 }

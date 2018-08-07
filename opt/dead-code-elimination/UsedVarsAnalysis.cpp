@@ -112,7 +112,7 @@ std::string show_subset(const ptrs::Environment& env,
 
 UsedVarsFixpointIterator::UsedVarsFixpointIterator(
     const local_pointers::FixpointIterator& pointers_fp_iter,
-    const EffectSummaryMap& effect_summaries,
+    const side_effects::SummaryMap& effect_summaries,
     const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
     const cfg::ControlFlowGraph& cfg)
     : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
@@ -268,7 +268,8 @@ bool UsedVarsFixpointIterator::is_required(const IRInstruction* insn,
     // or if it mutates an argument that may later be read somewhere up the
     // callstack.
     auto& summary = m_effect_summaries.at(method);
-    if (summary.effects != EFF_NONE || used_vars.contains(RESULT_REGISTER)) {
+    if (summary.effects != side_effects::EFF_NONE ||
+        used_vars.contains(RESULT_REGISTER)) {
       return true;
     }
     const auto& env = m_insn_env_map.at(insn);

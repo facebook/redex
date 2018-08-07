@@ -22,10 +22,17 @@ class UsedVarsTest : public RedexTest {};
 
 std::unique_ptr<UsedVarsFixpointIterator> analyze(IRCode* code) {
   code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
   std::unordered_set<const DexMethod*> non_overridden_virtuals;
-  EffectSummaryMap effect_summaries;
-  return DeadCodeEliminationPass::analyze(
-      effect_summaries, non_overridden_virtuals, *code);
+  side_effects::SummaryMap effect_summaries;
+  ptrs::FixpointIterator pointers_fp_iter(cfg);
+  pointers_fp_iter.run(ptrs::Environment());
+  auto used_vars_fp_iter = std::make_unique<UsedVarsFixpointIterator>(
+      pointers_fp_iter, effect_summaries, non_overridden_virtuals, cfg);
+  used_vars_fp_iter->run(UsedVarsSet());
+  return used_vars_fp_iter;
 }
 
 std::vector<IRInstruction*> get_dead_instructions(IRCode* code) {

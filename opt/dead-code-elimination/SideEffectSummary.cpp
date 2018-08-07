@@ -11,6 +11,7 @@
 #include "ConcurrentContainers.h"
 #include "Walkers.h"
 
+using namespace side_effects;
 using namespace sparta;
 
 namespace ptrs = local_pointers;
@@ -25,18 +26,15 @@ using ParamInstructionMap =
 using PointersFixpointIteratorMap =
     ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>;
 
-class EffectSummaryBuilder final {
+using SummaryConcurrentMap = ConcurrentMap<const DexMethodRef*, Summary>;
+
+class SummaryBuilder final {
  public:
-  EffectSummaryBuilder(
-      const EffectSummaryMap& effect_summaries,
-      const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-      const ptrs::FixpointIterator& ptrs_fp_iter,
-      MethodRefCache* mref_cache,
-      const IRCode* code)
-      : m_effect_summaries(effect_summaries),
-        m_non_overridden_virtuals(non_overridden_virtuals),
+  SummaryBuilder(const InvokeToSummaryMap& invoke_to_summary_cmap,
+                 const ptrs::FixpointIterator& ptrs_fp_iter,
+                 const IRCode* code)
+      : m_invoke_to_summary_cmap(invoke_to_summary_cmap),
         m_ptrs_fp_iter(ptrs_fp_iter),
-        m_mref_cache(mref_cache),
         m_code(code) {
     auto idx = 0;
     for (auto& mie : InstructionIterable(code->get_param_instructions())) {
@@ -45,8 +43,8 @@ class EffectSummaryBuilder final {
     }
   }
 
-  EffectSummary build() {
-    EffectSummary summary;
+  Summary build() {
+    Summary summary;
 
     // Aggregate the effects of each individual instruction in the code object.
     auto& cfg = m_code->cfg();
@@ -68,7 +66,7 @@ class EffectSummaryBuilder final {
  private:
   void analyze_instruction_effects(const ptrs::Environment& env,
                                    const IRInstruction* insn,
-                                   EffectSummary* summary) {
+                                   Summary* summary) {
     auto op = insn->opcode();
     switch (op) {
     case OPCODE_THROW: {
@@ -123,24 +121,15 @@ class EffectSummaryBuilder final {
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL: {
-      TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn),
-                                   *m_mref_cache);
-      if (op == OPCODE_INVOKE_VIRTUAL &&
-          !m_non_overridden_virtuals.count(method)) {
-        summary->effects |= EFF_UNKNOWN_INVOKE;
-        break;
-      }
-      auto summ_it = m_effect_summaries.find(method);
-      if (summ_it == m_effect_summaries.end()) {
+      if (m_invoke_to_summary_cmap.count(insn)) {
+        const auto& callee_summary = m_invoke_to_summary_cmap.at(insn);
+        summary->effects |= callee_summary.effects;
+        for (auto idx : callee_summary.modified_params) {
+          classify_heap_write(env, insn->src(idx), summary);
+        }
+      } else {
         TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
         summary->effects |= EFF_UNKNOWN_INVOKE;
-        break;
-      }
-      auto& callee_summary = summ_it->second;
-      summary->effects |= callee_summary.effects;
-      for (auto idx : callee_summary.modified_params) {
-        classify_heap_write(env, insn->src(idx), summary);
       }
       break;
     }
@@ -156,113 +145,108 @@ class EffectSummaryBuilder final {
    */
   void classify_heap_write(const ptrs::Environment& env,
                            reg_t modified_ptr_reg,
-                           EffectSummary* summary) {
+                           Summary* summary) {
     auto pointers = env.get_pointers(modified_ptr_reg);
     if (!pointers.is_value()) {
       summary->effects |= EFF_WRITE_MAY_ESCAPE;
       return;
     }
     for (auto insn : pointers.elements()) {
-      if (opcode::is_load_param(insn->opcode())) {
-        summary->modified_params.emplace(m_param_insn_map.at(insn));
-      } else if (env.get_pointee(insn).equals(
-                     EscapeDomain(EscapeState::MAY_ESCAPE))) {
+      switch (env.get_pointee(insn).element()) {
+      case EscapeState::MAY_ESCAPE: {
         TRACE(DEAD_CODE, 3, "Escaping write to value allocated by %s\n",
               SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
+        break;
+      }
+      case EscapeState::ONLY_PARAMETER_DEPENDENT: {
+        summary->modified_params.emplace(m_param_insn_map.at(insn));
+        break;
+      }
+      case EscapeState::NOT_ESCAPED:
+      case EscapeState::BOTTOM:
+        break;
       }
     }
   }
 
   // Map of load-param instruction -> parameter index
   ParamInstructionMap m_param_insn_map;
-  const EffectSummaryMap& m_effect_summaries;
-  const std::unordered_set<const DexMethod*>& m_non_overridden_virtuals;
+  const InvokeToSummaryMap& m_invoke_to_summary_cmap;
   const ptrs::FixpointIterator& m_ptrs_fp_iter;
-  MethodRefCache* m_mref_cache;
   const IRCode* m_code;
 };
 
-} // namespace
+/*
+ * Analyze :method and insert its summary into :summary_cmap. Recursively
+ * analyze the callees if necessary. This method is thread-safe.
+ */
+void analyze_method_recursive(const DexMethod* method,
+                              const call_graph::Graph& call_graph,
+                              ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
+                              PatriciaTreeSet<const DexMethodRef*> visiting,
+                              SummaryConcurrentMap* summary_cmap) {
+  if (summary_cmap->count(method) != 0 || visiting.contains(method) ||
+      method->get_code() == nullptr) {
+    return;
+  }
+  visiting.insert(method);
 
-EffectSummary analyze_code_effects(
-    const EffectSummaryMap& effect_summaries,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    const ptrs::FixpointIterator& ptrs_fp_iter,
-    MethodRefCache* mref_cache,
-    const IRCode* code) {
-  return EffectSummaryBuilder(effect_summaries, non_overridden_virtuals,
-                              ptrs_fp_iter, mref_cache, code)
-      .build();
-}
-
-// TODO: Write a generic version of this algorithm, it seems useful in a number
-// of places.
-std::vector<DexMethod*> reverse_tsort_by_calls(
-    const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals) {
-  std::vector<DexMethod*> result;
-  std::unordered_set<const DexMethod*> visiting;
-  std::unordered_set<const DexMethod*> visited;
-  MethodRefCache mref_cache;
-  std::function<void(DexMethod*)> visit = [&](DexMethod* method) {
-    if (!method->get_code()) {
-      return;
-    }
-    if (visited.count(method)) {
-      return;
-    }
-    if (visiting.count(method)) {
-      return;
-    }
-    visiting.emplace(method);
-    for (auto& mie : InstructionIterable(method->get_code())) {
-      auto insn = mie.insn;
-      auto op = insn->opcode();
-      if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_STATIC ||
-          op == OPCODE_INVOKE_VIRTUAL) {
-        auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
-                                     mref_cache);
-        if (op == OPCODE_INVOKE_VIRTUAL &&
-            !non_overridden_virtuals.count(callee)) {
-          continue;
-        }
-        if (callee != nullptr) {
-          visit(callee);
-        }
+  std::unordered_map<const IRInstruction*, Summary> invoke_to_summary_cmap;
+  if (call_graph.has_node(method)) {
+    const auto& callee_edges = call_graph.node(method).callees();
+    for (const auto& edge : callee_edges) {
+      auto* callee = edge->callee();
+      analyze_method_recursive(callee, call_graph, ptrs_fp_iter_map, visiting,
+                               summary_cmap);
+      if (summary_cmap->count(callee) != 0) {
+        invoke_to_summary_cmap.emplace(edge->invoke_iterator()->insn,
+                                       summary_cmap->at(callee));
       }
     }
-    visiting.erase(method);
-    result.emplace_back(method);
-    visited.emplace(method);
-  };
-  walk::code(scope, [&](DexMethod* method, IRCode&) { visit(method); });
-  return result;
+  }
+
+  const auto* ptrs_fp_iter = ptrs_fp_iter_map.find(method)->second;
+  auto summary =
+      SummaryBuilder(invoke_to_summary_cmap, *ptrs_fp_iter, method->get_code())
+          .build();
+  summary_cmap->insert(std::make_pair(method, summary));
 }
 
-void analyze_methods(
-    const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    PointersFixpointIteratorMap& ptrs_fp_iter_map,
-    MethodRefCache* mref_cache,
-    EffectSummaryMap* effect_summaries) {
-  // We get better analysis results if we know the summaries of the callees, so
-  // we analyze the methods in reverse topological order.
-  for (auto* method : reverse_tsort_by_calls(scope, non_overridden_virtuals)) {
-    if (effect_summaries->count(method) != 0) {
-      continue;
-    }
-    if (!method->get_code()) {
-      (*effect_summaries)[method].effects |= EFF_UNKNOWN_INVOKE;
-      continue;
-    }
-    const auto& ptrs_fp_iter = ptrs_fp_iter_map.find(method)->second;
-    (*effect_summaries)[method] =
-        analyze_code_effects(*effect_summaries, non_overridden_virtuals,
-                             *ptrs_fp_iter, mref_cache, method->get_code());
+} // namespace
+
+namespace side_effects {
+
+Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
+                     const ptrs::FixpointIterator& ptrs_fp_iter,
+                     const IRCode* code) {
+  return SummaryBuilder(invoke_to_summary_cmap, ptrs_fp_iter, code).build();
+}
+
+void analyze_scope(const Scope& scope,
+                   const call_graph::Graph& call_graph,
+                   ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
+                       ptrs_fp_iter_map,
+                   SummaryMap* summary_map) {
+  // This method is special: the bytecode verifier requires that this method
+  // be called before a newly-allocated object gets used in any way. We can
+  // model this by treating the method as modifying its `this` parameter --
+  // changing it from uninitialized to initialized.
+  (*summary_map)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
+      Summary({0});
+
+  SummaryConcurrentMap summary_cmap;
+  for (auto& pair : *summary_map) {
+    summary_cmap.insert(pair);
+  }
+
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+    PatriciaTreeSet<const DexMethodRef*> visiting;
+    analyze_method_recursive(method, call_graph, ptrs_fp_iter_map, visiting,
+                             &summary_cmap);
 
     if (traceEnabled(DEAD_CODE, 3)) {
-      const auto& summary = effect_summaries->at(method);
+      const auto& summary = summary_cmap.at(method);
       TRACE(DEAD_CODE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
             summary.effects != EFF_NONE ? "has" : "does not have",
             summary.effects);
@@ -274,37 +258,14 @@ void analyze_methods(
         TRACE(DEAD_CODE, 3, "\n");
       }
     }
-  }
-}
-
-void summarize_all_method_effects(
-    const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    EffectSummaryMap* effect_summaries) {
-  // This method is special: the bytecode verifier requires that this method
-  // be called before a newly-allocated object gets used in any way. We can
-  // model this by treating the method as modifying its `this` parameter --
-  // changing it from uninitialized to initialized.
-  (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
-      EffectSummary({0});
-
-  PointersFixpointIteratorMap ptrs_fp_iter_map;
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    auto fp_iter = new ptrs::FixpointIterator(code.cfg());
-    fp_iter->run(ptrs::Environment());
-    ptrs_fp_iter_map.insert(std::make_pair(method, fp_iter));
   });
-  MethodRefCache mref_cache;
-  // TODO: This call iterates serially over all the methods; it's the biggest
-  // bottleneck of the pass & should be parallelized.
-  analyze_methods(scope, non_overridden_virtuals, ptrs_fp_iter_map, &mref_cache,
-                  effect_summaries);
-  for (auto& pair : ptrs_fp_iter_map) {
-    delete pair.second;
+
+  for (auto& pair : summary_cmap) {
+    summary_map->insert(pair);
   }
 }
 
-s_expr to_s_expr(const EffectSummary& summary) {
+s_expr to_s_expr(const Summary& summary) {
   std::vector<s_expr> s_exprs;
   s_exprs.emplace_back(std::to_string(summary.effects));
   std::vector<s_expr> mod_param_s_exprs;
@@ -315,8 +276,8 @@ s_expr to_s_expr(const EffectSummary& summary) {
   return s_expr(s_exprs);
 }
 
-EffectSummary EffectSummary::from_s_expr(const s_expr& expr) {
-  EffectSummary summary;
+Summary Summary::from_s_expr(const s_expr& expr) {
+  Summary summary;
   always_assert(expr.size() == 2);
   always_assert(expr[0].is_string());
   summary.effects = std::stoi(expr[0].str());
@@ -326,3 +287,5 @@ EffectSummary EffectSummary::from_s_expr(const s_expr& expr) {
   }
   return summary;
 }
+
+} // namespace side_effects

@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "LocalPointersAnalysis.h"
 #include "Resolver.h"
@@ -36,6 +37,8 @@
 
 using param_idx_t = uint16_t;
 
+namespace side_effects {
+
 enum Effects : size_t {
   EFF_NONE = 0,
   EFF_THROWS = 1,
@@ -44,47 +47,47 @@ enum Effects : size_t {
   EFF_UNKNOWN_INVOKE = 1 << 3,
 };
 
-struct EffectSummary {
+struct Summary {
   // Currently, DCE only checks if a method has EFF_NONE -- otherwise it is
   // never removable. It doesn't dig into the specific reasons for the side
   // effects.
   size_t effects{EFF_NONE};
   std::unordered_set<param_idx_t> modified_params;
 
-  EffectSummary() = default;
+  Summary() = default;
 
-  EffectSummary(size_t effects,
-                const std::initializer_list<param_idx_t>& modified_params)
+  Summary(size_t effects,
+          const std::initializer_list<param_idx_t>& modified_params)
       : effects(effects), modified_params(modified_params) {}
 
-  EffectSummary(const std::initializer_list<param_idx_t>& modified_params)
+  Summary(const std::initializer_list<param_idx_t>& modified_params)
       : modified_params(modified_params) {}
 
-  friend bool operator==(const EffectSummary& a, const EffectSummary& b) {
+  friend bool operator==(const Summary& a, const Summary& b) {
     return a.effects == b.effects && a.modified_params == b.modified_params;
   }
 
-  static EffectSummary from_s_expr(const sparta::s_expr&);
+  static Summary from_s_expr(const sparta::s_expr&);
 };
 
-sparta::s_expr to_s_expr(const EffectSummary&);
+sparta::s_expr to_s_expr(const Summary&);
 
-using EffectSummaryMap = std::unordered_map<const DexMethodRef*, EffectSummary>;
+using SummaryMap = std::unordered_map<const DexMethodRef*, Summary>;
 
-/*
- * Get the effect summary for a single code item.
- */
-EffectSummary analyze_code_effects(
-    const EffectSummaryMap& effect_summaries,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    const local_pointers::FixpointIterator& ptrs_fp_iter,
-    MethodRefCache*,
-    const IRCode*);
+using InvokeToSummaryMap = std::unordered_map<const IRInstruction*, Summary>;
+
+// For testing.
+Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
+                     const local_pointers::FixpointIterator& ptrs_fp_iter,
+                     const IRCode* code);
 
 /*
  * Get the effect summary for all methods in scope.
  */
-void summarize_all_method_effects(
+void analyze_scope(
     const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    EffectSummaryMap* effect_summaries);
+    const call_graph::Graph&,
+    ConcurrentMap<const DexMethodRef*, local_pointers::FixpointIterator*>&,
+    SummaryMap* effect_summaries);
+
+} // namespace side_effects

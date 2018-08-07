@@ -17,11 +17,6 @@ class DeadCodeEliminationPass final : public Pass {
  public:
   DeadCodeEliminationPass() : Pass("DeadCodeEliminationPass") {}
 
-  static std::unique_ptr<UsedVarsFixpointIterator> analyze(
-      const EffectSummaryMap& effect_summaries,
-      const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-      IRCode& code);
-
   virtual void configure_pass(const JsonWrapper& jw) override {
     std::string external_summaries_file;
     jw.get("external_summaries", "", external_summaries_file);

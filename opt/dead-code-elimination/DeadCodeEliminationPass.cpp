@@ -35,50 +35,91 @@
 
 namespace ptrs = local_pointers;
 
-std::unique_ptr<UsedVarsFixpointIterator> DeadCodeEliminationPass::analyze(
-    const EffectSummaryMap& effect_summaries,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-    IRCode& code) {
-  auto& cfg = code.cfg();
-  cfg.calculate_exit_block();
-  // First we do a forwards analysis to determine which registers hold
-  // locally-allocated pointers with non-escaping pointees..
-  ptrs::FixpointIterator pointers_fp_iter(cfg);
-  pointers_fp_iter.run(ptrs::Environment());
+class CallGraphStrategy final : public call_graph::BuildStrategy {
+ public:
+  CallGraphStrategy(const Scope& scope)
+      : m_scope(scope),
+        m_non_overridden_virtuals(find_non_overridden_virtuals(scope)) {}
 
-  // Then we use that information as part of the backwards used vars analysis
-  // to determine which locally-allocated pointers are being used.
-  auto used_vars_fp_iter = std::make_unique<UsedVarsFixpointIterator>(
-      pointers_fp_iter, effect_summaries, non_overridden_virtuals, cfg);
-  used_vars_fp_iter->run(UsedVarsSet());
+  call_graph::CallSites get_callsites(const DexMethod* method) const override {
+    call_graph::CallSites callsites;
+    auto* code = const_cast<IRCode*>(method->get_code());
+    if (code == nullptr) {
+      return callsites;
+    }
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        auto callee = resolve_method(
+            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        if (callee == nullptr || may_be_overridden(callee)) {
+          continue;
+        }
+        callsites.emplace_back(callee, code->iterator_to(mie));
+      }
+    }
+    return callsites;
+  }
 
-  return used_vars_fp_iter;
-}
+  // XXX(jezng): We make every single method a root in order that all methods
+  // are seen as reachable. Unreachable methods will not have `get_callsites`
+  // run on them and will not have their outgoing edges added to the call graph,
+  // which means that the dead code removal will not optimize them fully. I'm
+  // not sure why these "unreachable" methods are not ultimately removed by RMU,
+  // but as it stands, properly optimizing them is a size win for us.
+  std::vector<DexMethod*> get_roots() const override {
+    std::vector<DexMethod*> roots;
+
+    walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
+      roots.emplace_back(method);
+    });
+    return roots;
+  }
+
+ private:
+  bool may_be_overridden(DexMethod* method) const {
+    return method->is_virtual() && m_non_overridden_virtuals.count(method) == 0;
+  }
+
+  const Scope& m_scope;
+  std::unordered_set<const DexMethod*> m_non_overridden_virtuals;
+  mutable MethodRefCache m_resolved_refs;
+};
 
 void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles&,
                                        PassManager&) {
   auto scope = build_class_scope(stores);
-  walk::parallel::code(
-      scope, [&](const DexMethod* method, IRCode& code) { code.build_cfg(/* editable */ false); });
 
-  auto non_overridden_virtuals = find_non_overridden_virtuals(scope);
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    // The backwards uv::FixpointIterator analysis will need it later.
+    code.cfg().calculate_exit_block();
+  });
 
-  EffectSummaryMap effect_summaries;
+  auto call_graph = call_graph::Graph(CallGraphStrategy(scope));
+  auto ptrs_fp_iter_map = ptrs::analyze_scope(scope, call_graph);
+
+  side_effects::SummaryMap effect_summaries;
   if (m_external_summaries_file) {
     std::ifstream file_input(*m_external_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
-  summarize_all_method_effects(
-      scope, non_overridden_virtuals, &effect_summaries);
+  side_effects::analyze_scope(
+      scope, call_graph, *ptrs_fp_iter_map, &effect_summaries);
 
+  auto non_overridden_virtuals = find_non_overridden_virtuals(scope);
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    auto used_vars_fp_iter =
-        analyze(effect_summaries, non_overridden_virtuals, code);
+    auto ptrs_fp_iter = ptrs_fp_iter_map->find(method)->second;
+    UsedVarsFixpointIterator used_vars_fp_iter(*ptrs_fp_iter,
+                                               effect_summaries,
+                                               non_overridden_virtuals,
+                                               code.cfg());
+    used_vars_fp_iter.run(UsedVarsSet());
 
     TRACE(DEAD_CODE, 5, "Transforming %s\n", SHOW(method));
     TRACE(DEAD_CODE, 5, "Before:\n%s\n", SHOW(code.cfg()));
-    auto dead_instructions = get_dead_instructions(&code, *used_vars_fp_iter);
+    auto dead_instructions = get_dead_instructions(&code, used_vars_fp_iter);
     for (auto dead : dead_instructions) {
       code.remove_opcode(dead);
     }
