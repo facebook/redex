@@ -94,12 +94,14 @@ void log_nopt(NoptReason nopt, const DexClass* cls) {
 }
 
 InsnOptData::InsnOptData(const DexMethod* method, const IRInstruction* insn)
-    : m_method(method), m_insn(insn) {
+    : m_method(method) {
+  m_insn_orig = SHOW(insn);
   m_has_line_num = get_line_num(method, insn, &m_line_num);
 }
 
 MethodOptData::MethodOptData(const DexMethod* method) : m_method(method) {
-  m_has_line_num = get_line_num(m_method, nullptr, &m_line_num);
+  m_method_orig = SHOW(method);
+  m_has_line_num = get_line_num(method, nullptr, &m_line_num);
 }
 
 std::shared_ptr<InsnOptData> MethodOptData::get_insn_opt_data(
@@ -149,6 +151,8 @@ void OptDataMapper::log_opt(OptReason opt,
                             const DexMethod* method,
                             const IRInstruction* insn) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(method != nullptr, "Can't log null method\n");
+  always_assert_log(insn != nullptr, "Can't log null instruction\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
   auto insn_opt_data = meth_opt_data->get_insn_opt_data(insn);
@@ -159,6 +163,8 @@ void OptDataMapper::log_nopt(NoptReason nopt,
                              const DexMethod* method,
                              const IRInstruction* insn) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(method != nullptr, "Can't log null method\n");
+  always_assert_log(insn != nullptr, "Can't log null instruction\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
   auto insn_opt_data = meth_opt_data->get_insn_opt_data(insn);
@@ -167,6 +173,7 @@ void OptDataMapper::log_nopt(NoptReason nopt,
 
 void OptDataMapper::log_opt(OptReason opt, const DexMethod* method) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(method != nullptr, "Can't log null method\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
   meth_opt_data->m_opts.emplace_back(opt);
@@ -174,6 +181,7 @@ void OptDataMapper::log_opt(OptReason opt, const DexMethod* method) {
 
 void OptDataMapper::log_nopt(NoptReason nopt, const DexMethod* method) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(method != nullptr, "Can't log null method\n");
   auto cls_opt_data = get_cls_opt_data(method->get_class());
   auto meth_opt_data = cls_opt_data->get_meth_opt_data(method);
   meth_opt_data->m_nopts.emplace_back(nopt);
@@ -181,12 +189,14 @@ void OptDataMapper::log_nopt(NoptReason nopt, const DexMethod* method) {
 
 void OptDataMapper::log_opt(OptReason opt, const DexClass* cls) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(cls != nullptr, "Can't log null class\n");
   auto cls_opt_data = get_cls_opt_data(cls->get_type());
   cls_opt_data->m_opts.emplace_back(opt);
 }
 
 void OptDataMapper::log_nopt(NoptReason nopt, const DexClass* cls) {
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
+  always_assert_log(cls != nullptr, "Can't log null class\n");
   auto cls_opt_data = get_cls_opt_data(cls->get_type());
   cls_opt_data->m_nopts.emplace_back(nopt);
 }
@@ -247,9 +257,9 @@ void OptDataMapper::write_opt_data(const std::string& filename) {
         fprintf(file,
                 "\tline %lu: METHOD %s\n",
                 meth_opt_data->m_line_num,
-                SHOW(meth_opt_data->m_method));
+                meth_opt_data->m_method_orig.c_str());
       } else {
-        fprintf(file, "\tMETHOD %s\n", SHOW(meth_opt_data->m_method));
+        fprintf(file, "\tMETHOD %s\n", meth_opt_data->m_method_orig.c_str());
       }
       for (auto meth_opt : meth_opt_data->m_opts) {
         fprintf(file, "\t\t");
@@ -262,15 +272,15 @@ void OptDataMapper::write_opt_data(const std::string& filename) {
 
       // For every registered insn in the method, output all its optimizations.
       for (const auto& insn_pair : meth_opt_data->m_insn_opt_map) {
-        auto insn = insn_pair.first;
         auto insn_opt_data = insn_pair.second;
         if (insn_opt_data->m_has_line_num) {
           fprintf(file,
                   "\t\tline %lu: INSTRUCTION %s\n",
                   insn_opt_data->m_line_num,
-                  SHOW(insn));
+                  insn_opt_data->m_insn_orig.c_str());
         } else {
-          fprintf(file, "\t\tINSTRUCTION %s\n", SHOW(insn));
+          fprintf(file,
+                  "\t\tINSTRUCTION %s\n", insn_opt_data->m_insn_orig.c_str());
         }
         for (auto insn_opt : insn_opt_data->m_opts) {
           fprintf(file, "\t\t\t");

@@ -73,7 +73,7 @@ class InsnOptData {
 
  private:
   const DexMethod* m_method;
-  const IRInstruction* m_insn;
+  std::string m_insn_orig;
   bool m_has_line_num{false};
   size_t m_line_num{0};
   std::vector<OptReason> m_opts;
@@ -94,6 +94,7 @@ class MethodOptData {
 
  private:
   const DexMethod* m_method;
+  std::string m_method_orig;
   bool m_has_line_num{false};
   size_t m_line_num{0};
   std::vector<OptReason> m_opts;
