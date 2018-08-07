@@ -68,6 +68,7 @@ TEST_F(RemoveGotosTest, simplifySinglePath) {
   code->push_back(gt1.second);
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 1_v}));
   code->push_back(*gt2.first);
+  code->set_registers_size(4);
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
@@ -104,6 +105,7 @@ TEST_F(RemoveGotosTest, simplifyForwardsGoto) {
   code->push_back(gt.second);
   code->push_back(dasm(OPCODE_ADD_INT, {2_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
   m_method->get_code()->build_cfg();
   EXPECT_EQ(2, m_method->get_code()->cfg().blocks().size());
@@ -137,6 +139,7 @@ TEST_F(RemoveGotosTest, simplifyBackwardsGoto) {
   code->push_back(gt1.second);
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 1_v}));
   code->push_back(*gt2.first);
+  code->set_registers_size(3);
 
   m_method->get_code()->build_cfg();
   EXPECT_EQ(3, m_method->get_code()->cfg().blocks().size());
@@ -173,6 +176,7 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
   code->push_back(target);
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
   RemoveGotosPass().run(m_method);
 
@@ -191,6 +195,7 @@ TEST_F(RemoveGotosTest, preserveSimplifiedMethod) {
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_ADD_INT, {2_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
   RemoveGotosPass().run(m_method);
 

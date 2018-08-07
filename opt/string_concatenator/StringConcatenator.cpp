@@ -322,7 +322,8 @@ class Concatenator {
 
   /* Clear out the code inside and remove the method from the class.
    */
-  static void clear_method(IRList* entries) {
+  static void clear_method(cfg::ControlFlowGraph* cfg, IRList* entries) {
+    cfg->set_registers_size(0);
     entries->clear_and_dispose();
     entries->push_back(
         *new MethodItemEntry(new IRInstruction(OPCODE_RETURN_VOID)));
@@ -354,7 +355,7 @@ class Concatenator {
 
     const auto before_size = block->num_opcodes();
     encode(fields);
-    clear_method(&block->get_entries());
+    clear_method(cfg, &block->get_entries());
     methods_to_remove->insert(method);
     const auto after_size = block->num_opcodes();
 

@@ -532,6 +532,7 @@ TEST(ControlFlow, remove_non_branch) {
   for (auto& it : to_delete) {
     cfg.remove_opcode(it);
   }
+  cfg.recompute_registers_size();
 
   code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(R"(
@@ -557,6 +558,7 @@ void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
   for (auto& it : to_delete) {
     cfg.remove_opcode(it);
   }
+  cfg.recompute_registers_size();
 }
 
 TEST(ControlFlow, remove_non_branch_with_loop) {
@@ -884,6 +886,7 @@ TEST(ControlFlow, remove_sget) {
   for (auto& it : to_delete) {
     cfg.remove_opcode(it);
   }
+  cfg.recompute_registers_size();
 
   code->clear_cfg();
 
@@ -969,6 +972,7 @@ TEST(ControlFlow, empty_first_block) {
   for (const auto& it : to_delete) {
     cfg.remove_opcode(it);
   }
+  cfg.recompute_registers_size();
 
   for (const auto& mie : cfg::ConstInstructionIterable(code->cfg())) {
     std::cout << show(mie) << std::endl;
@@ -1016,6 +1020,7 @@ TEST(ControlFlow, exit_blocks_change) {
   for (Block* b : to_delete) {
     cfg.remove_block(b);
   }
+  cfg.recompute_registers_size();
 
   EXPECT_EQ(1, cfg.real_exit_blocks().size());
   code->clear_cfg();

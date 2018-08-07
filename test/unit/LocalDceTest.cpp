@@ -58,6 +58,7 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(0);
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
@@ -92,6 +93,7 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->set_registers_size(0);
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
@@ -122,6 +124,7 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->set_registers_size(0);
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
@@ -154,6 +157,7 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(1);
 
   LocalDcePass().run(code);
   instruction_lowering::lower(m_method);

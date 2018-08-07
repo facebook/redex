@@ -274,7 +274,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, bool editable = false);
+  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = false);
   ~ControlFlowGraph();
 
   /*
@@ -420,9 +420,31 @@ class ControlFlowGraph {
   void sanity_check();
 
   // SIGABORT if there are dangling parent pointers to deleted DexPositions
-  void no_dangling_dex_positions();
+  void no_dangling_dex_positions() const;
+
+  // SIGABORT if m_registers_size is wrong
+  void check_registers_size();
 
   uint32_t num_opcodes() const;
+
+  uint16_t allocate_temp() { return m_registers_size++; }
+
+  uint16_t allocate_wide_temp() {
+    uint16_t new_reg = m_registers_size;
+    m_registers_size += 2;
+    return new_reg;
+  }
+
+  uint16_t get_registers_size() const { return m_registers_size; }
+
+  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+
+  // Find the highest register in use and set m_registers_size
+  //
+  // Call this function after removing instructions that may have been the only
+  // use of the highest numbered register, or any other significant changes to
+  // the instructions.
+  void recompute_registers_size();
 
  private:
   using BranchToTargets =
@@ -559,6 +581,7 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
+  uint16_t m_registers_size{0};
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable;

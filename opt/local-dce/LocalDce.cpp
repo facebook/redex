@@ -213,6 +213,7 @@ void LocalDce::dce(IRCode* code) {
     b->remove_opcode(it);
   }
   auto unreachable_insn_count = cfg.remove_unreachable_blocks();
+  cfg.recompute_registers_size();
 
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;

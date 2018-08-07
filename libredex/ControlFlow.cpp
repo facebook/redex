@@ -296,8 +296,10 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
   return os;
 }
 
-ControlFlowGraph::ControlFlowGraph(IRList* ir, bool editable)
-    : m_editable(editable) {
+ControlFlowGraph::ControlFlowGraph(IRList* ir,
+                                   uint16_t registers_size,
+                                   bool editable)
+    : m_registers_size(registers_size), m_editable(editable) {
   always_assert_log(ir->size() > 0, "IRList contains no instructions");
 
   BranchToTargets branch_to_targets;
@@ -524,6 +526,8 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
   remove_empty_blocks();
+
+  recompute_registers_size();
 }
 
 // remove blocks with no predecessors
@@ -624,6 +628,7 @@ void ControlFlowGraph::sanity_check() {
       if (last_it != b->end()) {
         auto& last_mie = *last_it;
         if (last_mie.type == MFLOW_OPCODE) {
+          size_t num_preds = b->preds().size();
           size_t num_succs = b->succs().size();
           auto op = last_mie.insn->opcode();
           if (is_conditional_branch(op) || is_switch(op)) {
@@ -638,7 +643,9 @@ void ControlFlowGraph::sanity_check() {
           } else if (is_throw(op)) {
             // A throw could end the method or go to a catch handler.
             // We don't have any useful assertions to make here.
-          } else {
+          } else if (num_preds > 0) {
+            // Control Flow shouldn't just fall off the end of a block, unless
+            // it's an orphan block that's unreachable anyway
             always_assert_log(num_succs > 0, "block %d, %s", b->id(),
                               SHOW(*this));
           }
@@ -672,10 +679,42 @@ void ControlFlowGraph::sanity_check() {
     }
   }
 
+  if (m_editable) {
+    check_registers_size();
+  }
   no_dangling_dex_positions();
 }
 
-void ControlFlowGraph::no_dangling_dex_positions() {
+void ControlFlowGraph::check_registers_size() {
+  auto old_size = m_registers_size;
+  recompute_registers_size();
+  always_assert_log(m_registers_size == old_size,
+                    "used regs %d != old registers size %d. %s",
+                    m_registers_size, old_size, SHOW(*this));
+}
+
+void ControlFlowGraph::recompute_registers_size() {
+  uint16_t num_regs = 0;
+  const auto& check = [&num_regs](uint16_t reg, bool is_wide) {
+    auto highest_in_use = reg + is_wide;
+    if (highest_in_use >= num_regs) {
+      // +1 because registers start at v0
+      num_regs = highest_in_use + 1;
+    }
+  };
+  for (const auto& mie : cfg::ConstInstructionIterable(*this)) {
+    auto insn = mie.insn;
+    if (insn->dests_size()) {
+      check(insn->dest(), insn->dest_is_wide());
+    }
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      check(insn->src(i), insn->src_is_wide(i));
+    }
+  }
+  m_registers_size = num_regs;
+}
+
+void ControlFlowGraph::no_dangling_dex_positions() const {
   std::unordered_set<DexPosition*> positions;
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
