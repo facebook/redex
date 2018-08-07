@@ -3,6 +3,9 @@
           package="com.facebook.redex.test.instr"
           android:versionCode="1"
           android:versionName="1.0">
+  <uses-sdk
+      android:minSdkVersion="15"
+      android:targetSdkVersion="28"/>
   <instrumentation
       android:label="redex"
       android:name="android.support.test.runner.AndroidJUnitRunner"
